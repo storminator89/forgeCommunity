@@ -1,13 +1,16 @@
-"use client";
+"use client"
 
-import { useState } from 'react';
-import { Sidebar } from "@/components/Sidebar";
-import { UserNav } from "@/components/user-nav";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Menu, Send } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react'
+import { Sidebar } from "@/components/Sidebar"
+import { UserNav } from "@/components/user-nav"
+import { ThemeToggle } from "@/components/theme-toggle"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Card, CardContent } from "@/components/ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Send, Hash } from 'lucide-react'
 
 interface ChatMessage {
   id: string;
@@ -16,37 +19,61 @@ interface ChatMessage {
   timestamp: string;
 }
 
-interface ChatConversation {
+interface Channel {
   id: string;
   name: string;
-  lastMessage: string;
-  unreadCount: number;
 }
 
-const mockConversations: ChatConversation[] = [
-  { id: '1', name: 'Anna Schmidt', lastMessage: 'Wann ist das nächste Treffen?', unreadCount: 2 },
-  { id: '2', name: 'Max Mustermann', lastMessage: 'Danke für die Infos!', unreadCount: 0 },
-  { id: '3', name: 'Laura Weber', lastMessage: 'Können wir morgen telefonieren?', unreadCount: 1 },
-  // Fügen Sie hier weitere Mock-Konversationen hinzu
+const mockChannels: Channel[] = [
+  { id: '1', name: 'Allgemein' },
+  { id: '2', name: 'Entwicklung' },
+  { id: '3', name: 'Design' },
+  { id: '4', name: 'Marketing' },
 ];
 
-const mockMessages: ChatMessage[] = [
-  { id: '1', sender: 'Anna Schmidt', content: 'Hallo! Wie geht es dir?', timestamp: '10:30' },
-  { id: '2', sender: 'Sie', content: 'Hi Anna! Mir geht es gut, danke. Wie läuft dein Projekt?', timestamp: '10:32' },
-  { id: '3', sender: 'Anna Schmidt', content: 'Es läuft super! Wir machen gute Fortschritte.', timestamp: '10:35' },
-  { id: '4', sender: 'Anna Schmidt', content: 'Wann ist eigentlich unser nächstes Teamtreffen?', timestamp: '10:36' },
-  // Fügen Sie hier weitere Mock-Nachrichten hinzu
-];
+const mockDirectMessages: { [key: string]: ChatMessage[] } = {
+  'Anna Schmidt': [
+    { id: '1', sender: 'Anna Schmidt', content: 'Hallo! Wie geht es dir?', timestamp: '10:30' },
+    { id: '2', sender: 'Sie', content: 'Hi Anna! Mir geht es gut, danke. Wie läuft dein Projekt?', timestamp: '10:32' },
+    { id: '3', sender: 'Anna Schmidt', content: 'Es läuft super! Wir machen gute Fortschritte.', timestamp: '10:35' },
+    { id: '4', sender: 'Anna Schmidt', content: 'Wann ist eigentlich unser nächstes Teamtreffen?', timestamp: '10:36' },
+  ],
+  'Max Mustermann': [
+    { id: '1', sender: 'Max Mustermann', content: 'Hey, hast du die neuen Designs gesehen?', timestamp: '11:00' },
+    { id: '2', sender: 'Sie', content: 'Noch nicht, ich schaue gleich mal rein!', timestamp: '11:05' },
+  ],
+};
+
+const mockChannelMessages: { [key: string]: ChatMessage[] } = {
+  'Allgemein': [
+    { id: '1', sender: 'System', content: 'Willkommen im Allgemeinen Channel!', timestamp: '09:00' },
+    { id: '2', sender: 'Anna Schmidt', content: 'Hallo zusammen! Wie war euer Wochenende?', timestamp: '09:15' },
+  ],
+  'Entwicklung': [
+    { id: '1', sender: 'Max Mustermann', content: 'Hat jemand Erfahrung mit GraphQL?', timestamp: '10:00' },
+    { id: '2', sender: 'Laura Weber', content: 'Ja, ich habe es in meinem letzten Projekt verwendet. Was möchtest du wissen?', timestamp: '10:05' },
+  ],
+};
 
 export default function ChatPage() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [selectedConversation, setSelectedConversation] = useState<ChatConversation | null>(mockConversations[0]);
-  const [messages, setMessages] = useState<ChatMessage[]>(mockMessages);
+  const [activeTab, setActiveTab] = useState<'channels' | 'direct'>('channels');
+  const [selectedChannel, setSelectedChannel] = useState<Channel>(mockChannels[0]);
+  const [selectedDirectMessage, setSelectedDirectMessage] = useState<string>('Anna Schmidt');
+  const [messages, setMessages] = useState<ChatMessage[]>(mockChannelMessages[selectedChannel.name]);
   const [newMessage, setNewMessage] = useState('');
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const toggleSidebar = () => {
-    setIsSidebarOpen(!isSidebarOpen);
-  };
+  useEffect(() => {
+    if (activeTab === 'channels') {
+      setMessages(mockChannelMessages[selectedChannel.name] || []);
+    } else {
+      setMessages(mockDirectMessages[selectedDirectMessage] || []);
+    }
+  }, [activeTab, selectedChannel, selectedDirectMessage]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   const handleSendMessage = () => {
     if (newMessage.trim() !== '') {
@@ -62,17 +89,12 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-100 dark:bg-gray-900">
-      <Sidebar isOpen={isSidebarOpen} toggleSidebar={toggleSidebar} />
-      <div className="flex-1 flex flex-col">
-        <header className="bg-white dark:bg-gray-800 shadow-sm z-40 sticky top-0">
+    <div className="flex h-screen overflow-hidden bg-gray-100 dark:bg-gray-900">
+      <Sidebar />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <header className="bg-white dark:bg-gray-800 shadow-sm z-10">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-            <div className="flex items-center">
-              <Button variant="ghost" size="icon" className="lg:hidden mr-2" onClick={toggleSidebar}>
-                <Menu className="h-6 w-6" />
-              </Button>
-              <h2 className="text-xl font-bold text-gray-800 dark:text-white">Chat</h2>
-            </div>
+            <h2 className="text-2xl font-bold text-gray-800 dark:text-white ml-12 lg:ml-0">Chat</h2>
             <div className="flex items-center space-x-4">
               <ThemeToggle />
               <UserNav />
@@ -81,47 +103,79 @@ export default function ChatPage() {
         </header>
         <main className="flex-1 flex overflow-hidden">
           <div className="w-64 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-            <ScrollArea className="h-full">
-              {mockConversations.map((conversation) => (
-                <div
-                  key={conversation.id}
-                  className={`p-4 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 ${
-                    selectedConversation?.id === conversation.id ? 'bg-gray-100 dark:bg-gray-700' : ''
-                  }`}
-                  onClick={() => setSelectedConversation(conversation)}
-                >
-                  <h3 className="font-semibold text-gray-900 dark:text-white">{conversation.name}</h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-300 truncate">{conversation.lastMessage}</p>
-                  {conversation.unreadCount > 0 && (
-                    <span className="inline-block bg-blue-500 text-white text-xs px-2 py-1 rounded-full mt-1">
-                      {conversation.unreadCount}
-                    </span>
-                  )}
-                </div>
-              ))}
-            </ScrollArea>
+            <Tabs defaultValue="channels" className="w-full" onValueChange={(value) => setActiveTab(value as 'channels' | 'direct')}>
+              <TabsList className="w-full">
+                <TabsTrigger value="channels" className="w-1/2">Channels</TabsTrigger>
+                <TabsTrigger value="direct" className="w-1/2">Direkt</TabsTrigger>
+              </TabsList>
+              <TabsContent value="channels">
+                <ScrollArea className="h-[calc(100vh-10rem)]">
+                  {mockChannels.map((channel) => (
+                    <div
+                      key={channel.id}
+                      className={`p-4 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 ${
+                        selectedChannel.id === channel.id ? 'bg-gray-100 dark:bg-gray-700' : ''
+                      }`}
+                      onClick={() => setSelectedChannel(channel)}
+                    >
+                      <div className="flex items-center space-x-3">
+                        <Hash className="h-5 w-5 text-gray-500" />
+                        <span className="text-sm font-medium text-gray-900 dark:text-white">{channel.name}</span>
+                      </div>
+                    </div>
+                  ))}
+                </ScrollArea>
+              </TabsContent>
+              <TabsContent value="direct">
+                <ScrollArea className="h-[calc(100vh-10rem)]">
+                  {Object.keys(mockDirectMessages).map((name) => (
+                    <div
+                      key={name}
+                      className={`p-4 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 ${
+                        selectedDirectMessage === name ? 'bg-gray-100 dark:bg-gray-700' : ''
+                      }`}
+                      onClick={() => setSelectedDirectMessage(name)}
+                    >
+                      <div className="flex items-center space-x-3">
+                        <Avatar>
+                          <AvatarFallback>{name[0]}</AvatarFallback>
+                        </Avatar>
+                        <span className="text-sm font-medium text-gray-900 dark:text-white">{name}</span>
+                      </div>
+                    </div>
+                  ))}
+                </ScrollArea>
+              </TabsContent>
+            </Tabs>
           </div>
           <div className="flex-1 flex flex-col">
             <ScrollArea className="flex-1 p-4">
               {messages.map((message) => (
-                <div
+                <Card
                   key={message.id}
                   className={`mb-4 ${
-                    message.sender === 'Sie' ? 'text-right' : 'text-left'
+                    message.sender === 'Sie' ? 'ml-auto' : 'mr-auto'
                   }`}
                 >
-                  <div
-                    className={`inline-block p-2 rounded-lg ${
-                      message.sender === 'Sie'
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white'
-                    }`}
-                  >
-                    <p>{message.content}</p>
-                    <span className="text-xs opacity-75">{message.timestamp}</span>
-                  </div>
-                </div>
+                  <CardContent className="p-3">
+                    <div className={`flex items-start ${message.sender === 'Sie' ? 'justify-end' : 'justify-start'}`}>
+                      {message.sender !== 'Sie' && (
+                        <Avatar className="mr-2">
+                          <AvatarFallback>{message.sender[0]}</AvatarFallback>
+                        </Avatar>
+                      )}
+                      <div>
+                        <p className="text-sm font-medium text-gray-900 dark:text-white">{message.sender}</p>
+                        <p className={`text-sm ${message.sender === 'Sie' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-700 dark:text-gray-300'}`}>
+                          {message.content}
+                        </p>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">{message.timestamp}</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
               ))}
+              <div ref={messagesEndRef} />
             </ScrollArea>
             <div className="p-4 border-t border-gray-200 dark:border-gray-700">
               <div className="flex space-x-2">
