@@ -2,32 +2,51 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { Users, GraduationCap, Calendar, Info, Search, MessageCircle, Bell, Home, Menu } from 'lucide-react';
 import { useTheme } from 'next-themes';
+import { 
+  Home, 
+  Users, 
+  GraduationCap, 
+  Calendar, 
+  Info, 
+  Search, 
+  MessageCircle, 
+  Bell, 
+  Menu,
+  Settings,
+  HelpCircle,
+  LogOut
+} from 'lucide-react';
 
-const navItems = [
+const mainNavItems = [
   { name: 'Home', icon: Home, href: '/' },
   { name: 'Community', icon: Users, href: '/community' },
   { name: 'Kurse', icon: GraduationCap, href: '/courses' },
   { name: 'Events', icon: Calendar, href: '/events' },
-  { name: 'Mitglieder', icon: Users, href: '/members' },
-  { name: 'Über uns', icon: Info, href: '/about' },
+];
+
+const exploreNavItems = [
   { name: 'Suche', icon: Search, href: '/search' },
   { name: 'Chat', icon: MessageCircle, href: '/chat' },
+];
+
+const supportNavItems = [
+  { name: 'Über uns', icon: Info, href: '/about' },
+  { name: 'Hilfe', icon: HelpCircle, href: '/help' },
+];
+
+const userNavItems = [
+  { name: 'Einstellungen', icon: Settings, href: '/settings' },
   { name: 'Benachrichtigungen', icon: Bell, href: '/notifications' },
 ];
 
 interface SidebarProps {
-  isOpen?: boolean;
-  toggleSidebar?: () => void;
+  isOpen: boolean;
+  toggleSidebar: () => void;
 }
 
-export function Sidebar({ isOpen: propIsOpen, toggleSidebar: propToggleSidebar }: SidebarProps) {
-  const [localIsOpen, setLocalIsOpen] = useState(false);
+export function Sidebar({ isOpen, toggleSidebar }: SidebarProps) {
   const { theme } = useTheme();
-
-  const isOpen = propIsOpen !== undefined ? propIsOpen : localIsOpen;
-  const toggleSidebar = propToggleSidebar || (() => setLocalIsOpen(!localIsOpen));
 
   return (
     <>
@@ -36,7 +55,7 @@ export function Sidebar({ isOpen: propIsOpen, toggleSidebar: propToggleSidebar }
           <Menu size={24} />
         </button>
       </div>
-      <div className={`w-72 bg-gray-900 dark:bg-gray-800 text-white h-screen overflow-y-auto fixed lg:static transition-all duration-300 ease-in-out z-10 ${isOpen ? 'left-0' : '-left-72 lg:left-0'}`}>
+      <div className={`w-64 bg-white dark:bg-gray-800 text-gray-800 dark:text-white h-screen overflow-y-auto fixed lg:static transition-all duration-300 ease-in-out z-30 ${isOpen ? 'left-0' : '-left-64 lg:left-0'}`}>
         <div className="p-6">
           <div className="flex items-center space-x-3 mb-8">
             <div className="bg-blue-600 w-10 h-10 rounded-full flex items-center justify-center">
@@ -44,16 +63,59 @@ export function Sidebar({ isOpen: propIsOpen, toggleSidebar: propToggleSidebar }
             </div>
             <h1 className="text-2xl font-bold">ForgeCommunity</h1>
           </div>
-          <nav>
-            {navItems.map((item) => (
-              <Link key={item.name} href={item.href} className="flex items-center space-x-3 p-3 rounded-lg text-gray-300 hover:bg-gray-800 dark:hover:bg-gray-700 hover:text-white transition-colors duration-200">
-                <item.icon className="w-5 h-5 flex-shrink-0" />
-                <span className="font-medium">{item.name}</span>
-              </Link>
-            ))}
+          <nav className="space-y-6">
+            <div>
+              <h2 className="text-xs uppercase text-gray-500 dark:text-gray-400 font-semibold mb-2">Hauptmenü</h2>
+              <ul className="space-y-2">
+                {mainNavItems.map((item) => (
+                  <NavItem key={item.name} item={item} />
+                ))}
+              </ul>
+            </div>
+            <div>
+              <h2 className="text-xs uppercase text-gray-500 dark:text-gray-400 font-semibold mb-2">Entdecken</h2>
+              <ul className="space-y-2">
+                {exploreNavItems.map((item) => (
+                  <NavItem key={item.name} item={item} />
+                ))}
+              </ul>
+            </div>
+            <div>
+              <h2 className="text-xs uppercase text-gray-500 dark:text-gray-400 font-semibold mb-2">Support</h2>
+              <ul className="space-y-2">
+                {supportNavItems.map((item) => (
+                  <NavItem key={item.name} item={item} />
+                ))}
+              </ul>
+            </div>
+            <div>
+              <h2 className="text-xs uppercase text-gray-500 dark:text-gray-400 font-semibold mb-2">Benutzer</h2>
+              <ul className="space-y-2">
+                {userNavItems.map((item) => (
+                  <NavItem key={item.name} item={item} />
+                ))}
+              </ul>
+            </div>
           </nav>
+          <div className="mt-8 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <Link href="/logout" className="flex items-center space-x-3 p-2 rounded-lg text-red-600 hover:bg-red-100 dark:hover:bg-red-900 transition-colors duration-200">
+              <LogOut className="w-5 h-5 flex-shrink-0" />
+              <span className="font-medium">Abmelden</span>
+            </Link>
+          </div>
         </div>
       </div>
     </>
+  );
+}
+
+function NavItem({ item }) {
+  return (
+    <li>
+      <Link href={item.href} className="flex items-center space-x-3 p-2 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
+        <item.icon className="w-5 h-5 flex-shrink-0" />
+        <span className="font-medium">{item.name}</span>
+      </Link>
+    </li>
   );
 }
