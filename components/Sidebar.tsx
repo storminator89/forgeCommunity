@@ -13,6 +13,7 @@ import {
   MessageCircle, 
   Bell, 
   Menu,
+  X,
   Settings,
   HelpCircle,
   LogOut
@@ -40,28 +41,34 @@ const userNavItems = [
   { name: 'Benachrichtigungen', icon: Bell, href: '/notifications' },
 ];
 
-interface SidebarProps {
-  isOpen: boolean;
-  toggleSidebar: () => void;
-}
-
-export function Sidebar({ isOpen, toggleSidebar }: SidebarProps) {
+export function Sidebar() {
+  const [isOpen, setIsOpen] = useState(false);
   const { theme } = useTheme();
+
+  const toggleSidebar = () => {
+    setIsOpen(!isOpen);
+  };
 
   return (
     <>
-      <div className="lg:hidden fixed top-0 left-0 z-20 p-4">
-        <button onClick={toggleSidebar} className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
-          <Menu size={24} />
-        </button>
-      </div>
-      <div className={`w-64 bg-white dark:bg-gray-800 text-gray-800 dark:text-white h-screen overflow-y-auto fixed lg:static transition-all duration-300 ease-in-out z-30 ${isOpen ? 'left-0' : '-left-64 lg:left-0'}`}>
+      <button 
+        onClick={toggleSidebar} 
+        className="lg:hidden fixed top-4 left-4 z-20 p-2 rounded-md bg-white dark:bg-gray-800 shadow-md"
+      >
+        {isOpen ? <X size={24} /> : <Menu size={24} />}
+      </button>
+      <div className={`w-80 bg-white dark:bg-gray-800 text-gray-800 dark:text-white h-screen overflow-y-auto fixed lg:static transition-all duration-300 ease-in-out z-30 ${isOpen ? 'left-0' : '-left-80 lg:left-0'}`}>
         <div className="p-6">
-          <div className="flex items-center space-x-3 mb-8">
-            <div className="bg-blue-600 w-10 h-10 rounded-full flex items-center justify-center">
-              <span className="text-white font-bold text-xl">FC</span>
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center space-x-3">
+              <div className="bg-blue-600 w-10 h-10 rounded-full flex items-center justify-center">
+                <span className="text-white font-bold text-xl">FC</span>
+              </div>
+              <h1 className="text-2xl font-bold">ForgeCommunity</h1>
             </div>
-            <h1 className="text-2xl font-bold">ForgeCommunity</h1>
+            <button onClick={toggleSidebar} className="lg:hidden">
+              <X size={24} />
+            </button>
           </div>
           <nav className="space-y-6">
             <div>

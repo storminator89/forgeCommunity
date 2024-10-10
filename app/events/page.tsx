@@ -50,7 +50,6 @@ const eventsData: Event[] = [
 export default function Events() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const handlePreviousMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
   const handleNextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
@@ -69,22 +68,13 @@ export default function Events() {
     setSelectedEvent(null);
   };
 
-  const toggleSidebar = () => {
-    setIsSidebarOpen(!isSidebarOpen);
-  };
-
   return (
-    <div className="flex min-h-screen bg-gray-100 dark:bg-gray-900">
-      <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
-      <div className="flex-1 flex flex-col">
-        <header className="bg-white dark:bg-gray-800 shadow-sm z-40 sticky top-0">
+    <div className="flex h-screen overflow-hidden bg-gray-100 dark:bg-gray-900">
+      <Sidebar />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <header className="bg-white dark:bg-gray-800 shadow-sm z-10">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-            <div className="flex items-center">
-              <Button variant="ghost" size="icon" className="lg:hidden mr-2" onClick={toggleSidebar}>
-                <Menu className="h-6 w-6" />
-              </Button>
-              <h2 className="text-xl font-bold text-gray-800 dark:text-white">Events</h2>
-            </div>
+            <h2 className="text-2xl font-bold text-gray-800 dark:text-white ml-12 lg:ml-0">Events</h2>
             <div className="flex items-center space-x-4">
               <ThemeToggle />
               <UserNav />

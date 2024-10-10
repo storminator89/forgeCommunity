@@ -7,7 +7,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Menu, Search, Book, Calendar, Users, MessageSquare } from 'lucide-react';
+import { Search, Book, Calendar, Users, MessageSquare } from 'lucide-react';
 
 interface SearchResult {
   id: string;
@@ -28,11 +28,6 @@ const mockSearchResults: SearchResult[] = [
 export default function SearchPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('all');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-
-  const toggleSidebar = () => {
-    setIsSidebarOpen(!isSidebarOpen);
-  };
 
   const filteredResults = mockSearchResults.filter(result => 
     (activeTab === 'all' || result.type === activeTab) &&
@@ -51,17 +46,12 @@ export default function SearchPage() {
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-100 dark:bg-gray-900">
-      <Sidebar isOpen={isSidebarOpen} toggleSidebar={toggleSidebar} />
-      <div className="flex-1 flex flex-col">
-        <header className="bg-white dark:bg-gray-800 shadow-sm z-40 sticky top-0">
+    <div className="flex h-screen overflow-hidden bg-gray-100 dark:bg-gray-900">
+      <Sidebar />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <header className="bg-white dark:bg-gray-800 shadow-sm z-10">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-            <div className="flex items-center">
-              <Button variant="ghost" size="icon" className="lg:hidden mr-2" onClick={toggleSidebar}>
-                <Menu className="h-6 w-6" />
-              </Button>
-              <h2 className="text-xl font-bold text-gray-800 dark:text-white">Suche</h2>
-            </div>
+            <h2 className="text-2xl font-bold text-gray-800 dark:text-white ml-12 lg:ml-0">Suche</h2>
             <div className="flex items-center space-x-4">
               <ThemeToggle />
               <UserNav />

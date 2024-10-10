@@ -57,13 +57,12 @@ export default function Community() {
   const [commentingPostId, setCommentingPostId] = useState<string | null>(null)
 
   useEffect(() => {
-    // Ensure each post has a comments array
-    const postsWithComments = posts.map(post => ({
+    const postsWithVotesAndComments = posts.map(post => ({
       ...post,
-      votes: post.votes || 0,
-      comments: post.comments || []
+      votes: 0,
+      comments: []
     }));
-    setLocalPosts(postsWithComments as Post[]);
+    setLocalPosts(postsWithVotesAndComments as Post[]);
   }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -72,7 +71,7 @@ export default function Community() {
       id: String(localPosts.length + 1),
       title: newPost.title,
       content: newPost.content,
-      authorId: '1', // Annahme: Der aktuelle Benutzer hat die ID 1
+      authorId: '1',
       createdAt: new Date().toISOString(),
       votes: 0,
       comments: []
@@ -97,7 +96,7 @@ export default function Community() {
       if (post.id === postId) {
         const newCommentObj: Comment = {
           id: String(post.comments.length + 1),
-          authorId: '1', // Annahme: Der aktuelle Benutzer hat die ID 1
+          authorId: '1',
           content: newComment,
           createdAt: new Date().toISOString()
         }
@@ -110,12 +109,12 @@ export default function Community() {
   }
 
   return (
-    <div className="flex flex-col lg:flex-row min-h-screen bg-gray-100 dark:bg-gray-900">
+    <div className="flex h-screen overflow-hidden bg-gray-100 dark:bg-gray-900">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
         <header className="bg-white dark:bg-gray-800 shadow-sm z-10">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-            <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Community</h2>
+            <h2 className="text-2xl font-bold text-gray-800 dark:text-white ml-12 lg:ml-0">Community</h2>
             <div className="flex items-center space-x-4">
               <ThemeToggle />
               <UserNav />
@@ -162,12 +161,12 @@ export default function Community() {
                   )}
                 </div>
                 {localPosts.map((post) => (
-                  <Card key={post.id}>
+                  <Card key={post.id} className="overflow-hidden">
                     <CardHeader>
                       <CardTitle>{post.title}</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <div className="text-gray-600 dark:text-gray-300 mb-4" dangerouslySetInnerHTML={{ __html: post.content }} />
+                      <div className="prose dark:prose-invert max-w-none mb-4" dangerouslySetInnerHTML={{ __html: post.content }} />
                       <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
                         <div className="flex items-center space-x-2">
                           <Avatar className="h-8 w-8">
