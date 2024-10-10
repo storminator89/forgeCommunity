@@ -10,6 +10,7 @@
     pkgs.nodePackages.pnpm
     pkgs.bun
     pkgs.postgresql_16
+    pkgs.openssl
   ];
   # Sets environment variables in the workspace
   env = {};
