@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { useTheme } from 'next-themes';
+import { signOut } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import { 
   Home, 
   Users, 
@@ -44,9 +46,15 @@ const userNavItems = [
 export function Sidebar() {
   const [isOpen, setIsOpen] = useState(false);
   const { theme } = useTheme();
+  const router = useRouter();
 
   const toggleSidebar = () => {
     setIsOpen(!isOpen);
+  };
+
+  const handleLogout = async () => {
+    await signOut({ redirect: false });
+    router.push('/');
   };
 
   return (
@@ -105,10 +113,13 @@ export function Sidebar() {
             </div>
           </nav>
           <div className="mt-8 pt-4 border-t border-gray-200 dark:border-gray-700">
-            <Link href="/logout" className="flex items-center space-x-3 p-2 rounded-lg text-red-600 hover:bg-red-100 dark:hover:bg-red-900 transition-colors duration-200">
+            <button 
+              onClick={handleLogout}
+              className="flex items-center space-x-3 p-2 rounded-lg text-red-600 hover:bg-red-100 dark:hover:bg-red-900 transition-colors duration-200 w-full"
+            >
               <LogOut className="w-5 h-5 flex-shrink-0" />
               <span className="font-medium">Abmelden</span>
-            </Link>
+            </button>
           </div>
         </div>
       </div>

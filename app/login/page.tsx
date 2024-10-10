@@ -2,34 +2,53 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { signIn } from 'next-auth/react'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { ThemeToggle } from "@/components/theme-toggle"
 import Link from 'next/link'
-import { LogIn, ArrowLeft } from 'lucide-react'
+import { LogIn, ArrowLeft, Loader2 } from 'lucide-react'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    setIsLoading(true)
+
     try {
-      // Hier würden Sie normalerweise die Anmeldedaten an Ihren Server senden
-      // Für dieses Beispiel simulieren wir eine erfolgreiche Anmeldung
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      if (email === 'test@example.com' && password === 'password') {
-        router.push('/dashboard')
-      } else {
-        throw new Error('Ungültige Anmeldedaten')
+      const result = await signIn('credentials', {
+        redirect: false,
+        email,
+        password,
+      })
+
+      if (result?.error) {
+        setError('Anmeldung fehlgeschlagen. Bitte überprüfen Sie Ihre Eingaben.')
+      } else if (result?.ok) {
+        router.push('/community')
       }
     } catch (err) {
-      setError('Anmeldung fehlgeschlagen. Bitte überprüfen Sie Ihre Eingaben.')
+      setError('Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es später erneut.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleGoogleSignIn = async () => {
+    setIsLoading(true)
+    try {
+      await signIn('google', { callbackUrl: '/community' })
+    } catch (err) {
+      setError('Ein Fehler ist bei der Anmeldung mit Google aufgetreten.')
+      setIsLoading(false)
     }
   }
 
@@ -66,8 +85,13 @@ export default function LoginPage() {
               />
             </div>
             {error && <p className="text-red-500 text-sm">{error}</p>}
-            <Button type="submit" className="w-full">
-              <LogIn className="mr-2 h-4 w-4" /> Anmelden
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <LogIn className="mr-2 h-4 w-4" />
+              )}
+              Anmelden
             </Button>
           </form>
         </CardContent>
@@ -90,7 +114,7 @@ export default function LoginPage() {
               </span>
             </div>
           </div>
-          <Button variant="outline" className="w-full">
+          <Button variant="outline" className="w-full" onClick={handleGoogleSignIn} disabled={isLoading}>
             Mit Google anmelden
           </Button>
         </CardFooter>
@@ -99,6 +123,7 @@ export default function LoginPage() {
         <Link href="/" className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 flex items-center">
           <ArrowLeft className="mr-2 h-4 w-4" /> Zurück zur Startseite
         </Link>
+        <ThemeToggle />
       </div>
     </div>
   )
