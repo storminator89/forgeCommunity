@@ -74,9 +74,9 @@ export default function Events() {
   };
 
   return (
-    <div className="flex flex-col lg:flex-row min-h-screen bg-gray-100 dark:bg-gray-900">
+    <div className="flex min-h-screen bg-gray-100 dark:bg-gray-900">
       <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
-      <div className="flex-1 lg:ml-72">
+      <div className="flex-1 flex flex-col">
         <header className="bg-white dark:bg-gray-800 shadow-sm z-40 sticky top-0">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
             <div className="flex items-center">
@@ -91,29 +91,31 @@ export default function Events() {
             </div>
           </div>
         </header>
-        <main className="flex-1 overflow-y-auto bg-gray-100 dark:bg-gray-900 p-4">
-          <div className="max-w-4xl mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden">
-            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+        <main className="flex-1 overflow-y-auto p-4 lg:p-8">
+          <div className="max-w-6xl mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+            <div className="flex items-center justify-between p-4 lg:p-6 border-b border-gray-200 dark:border-gray-700">
               <Button variant="outline" size="sm" onClick={handlePreviousMonth}>
-                <ChevronLeft className="h-4 w-4" />
+                <ChevronLeft className="h-4 w-4 mr-2" />
+                Vorheriger
               </Button>
-              <h2 className="text-lg sm:text-xl font-semibold text-gray-800 dark:text-white">
+              <h2 className="text-lg lg:text-2xl font-semibold text-gray-800 dark:text-white">
                 {format(currentMonth, 'MMMM yyyy', { locale: de })}
               </h2>
               <Button variant="outline" size="sm" onClick={handleNextMonth}>
-                <ChevronRight className="h-4 w-4" />
+                Nächster
+                <ChevronRight className="h-4 w-4 ml-2" />
               </Button>
             </div>
             <div className="grid grid-cols-7 gap-px bg-gray-200 dark:bg-gray-700">
               {['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'].map((day) => (
-                <div key={day} className="text-center font-medium text-xs sm:text-sm py-2 bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+                <div key={day} className="text-center font-medium text-sm py-2 bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
                   {day}
                 </div>
               ))}
             </div>
             <div className="grid grid-cols-7 gap-px bg-gray-200 dark:bg-gray-700">
               {Array.from({ length: startingDayIndex }).map((_, index) => (
-                <div key={`empty-${index}`} className="bg-white dark:bg-gray-800 p-1 sm:p-2 h-16 sm:h-24" />
+                <div key={`empty-${index}`} className="bg-white dark:bg-gray-800 p-2 lg:p-4 h-24 lg:h-32" />
               ))}
               {days.map((day, dayIdx) => {
                 const dayEvents = eventsData.filter(event => isSameDay(day, event.date));
@@ -121,18 +123,18 @@ export default function Events() {
                   <div
                     key={day.toString()}
                     className={cn(
-                      "bg-white dark:bg-gray-800 p-1 sm:p-2 h-16 sm:h-24 overflow-y-auto",
+                      "bg-white dark:bg-gray-800 p-2 lg:p-4 h-24 lg:h-32 overflow-y-auto",
                       !isSameMonth(day, currentMonth) && "text-gray-400 dark:text-gray-600",
                       isSameDay(day, new Date()) && "bg-blue-50 dark:bg-blue-900"
                     )}
                   >
-                    <time dateTime={format(day, 'yyyy-MM-dd')} className="font-semibold text-xs sm:text-sm">
+                    <time dateTime={format(day, 'yyyy-MM-dd')} className="font-semibold text-sm lg:text-base">
                       {format(day, 'd')}
                     </time>
                     {dayEvents.map(event => (
                       <div
                         key={event.id}
-                        className="mt-1 px-1 py-0.5 text-xs rounded-md bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-200 cursor-pointer hover:bg-blue-200 dark:hover:bg-blue-700 transition-colors truncate"
+                        className="mt-1 px-2 py-1 text-xs lg:text-sm rounded-md bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-200 cursor-pointer hover:bg-blue-200 dark:hover:bg-blue-700 transition-colors truncate"
                         onClick={() => handleSelectEvent(event)}
                       >
                         {event.title}
@@ -146,7 +148,7 @@ export default function Events() {
         </main>
       </div>
       <Dialog open={!!selectedEvent} onOpenChange={handleCloseDialog}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>{selectedEvent?.title}</DialogTitle>
             <DialogDescription>

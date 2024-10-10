@@ -1,6 +1,7 @@
 "use client";
 
 import Link from 'next/link';
+import { useState } from 'react';
 import { Users, GraduationCap, Calendar, Info, Search, MessageCircle, Bell, Home, Menu } from 'lucide-react';
 import { useTheme } from 'next-themes';
 
@@ -17,17 +18,21 @@ const navItems = [
 ];
 
 interface SidebarProps {
-  isOpen: boolean;
-  setIsOpen: (isOpen: boolean) => void;
+  isOpen?: boolean;
+  toggleSidebar?: () => void;
 }
 
-export function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
+export function Sidebar({ isOpen: propIsOpen, toggleSidebar: propToggleSidebar }: SidebarProps) {
+  const [localIsOpen, setLocalIsOpen] = useState(false);
   const { theme } = useTheme();
+
+  const isOpen = propIsOpen !== undefined ? propIsOpen : localIsOpen;
+  const toggleSidebar = propToggleSidebar || (() => setLocalIsOpen(!localIsOpen));
 
   return (
     <>
       <div className="lg:hidden fixed top-0 left-0 z-20 p-4">
-        <button onClick={() => setIsOpen(!isOpen)} className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
+        <button onClick={toggleSidebar} className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
           <Menu size={24} />
         </button>
       </div>
