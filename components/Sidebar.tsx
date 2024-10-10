@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { Users, GraduationCap, Calendar, Info, Search, MessageCircle, Bell, Home, Menu } from 'lucide-react';
-import { useState } from 'react';
 import { useTheme } from 'next-themes';
 
 const navItems = [
@@ -17,8 +16,12 @@ const navItems = [
   { name: 'Benachrichtigungen', icon: Bell, href: '/notifications' },
 ];
 
-export function Sidebar() {
-  const [isOpen, setIsOpen] = useState(false);
+interface SidebarProps {
+  isOpen: boolean;
+  setIsOpen: (isOpen: boolean) => void;
+}
+
+export function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
   const { theme } = useTheme();
 
   return (
