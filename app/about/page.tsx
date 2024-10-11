@@ -14,10 +14,10 @@ interface TeamMember {
 }
 
 const teamMembers: TeamMember[] = [
-  { name: "Max Mustermann", role: "Gründer & CEO", image: "https://i.pravatar.cc/150?img=1" },
+  { name: "Sophie Becker", role: "Gründer & CEO", image: "https://i.pravatar.cc/150?img=1" },
   { name: "Anna Schmidt", role: "CTO", image: "https://i.pravatar.cc/150?img=2" },
   { name: "Lukas Weber", role: "Head of Design", image: "https://i.pravatar.cc/150?img=3" },
-  { name: "Sophie Becker", role: "Community Manager", image: "https://i.pravatar.cc/150?img=4" },
+  { name: "Patrick Meyhöfer", role: "Community Manager", image: "https://i.pravatar.cc/150?img=4" },
 ];
 
 export default function About() {

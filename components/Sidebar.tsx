@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { useTheme } from 'next-themes';
 import { signOut } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { 
   Home, 
   Users, 
@@ -18,35 +18,47 @@ import {
   X,
   Settings,
   HelpCircle,
-  LogOut
+  LogOut,
+  BookOpen,
+  Briefcase,
+  Award,
+  Library
 } from 'lucide-react';
 
-const mainNavItems = [
-  { name: 'Home', icon: Home, href: '/' },
-  { name: 'Community', icon: Users, href: '/community' },
-  { name: 'Kurse', icon: GraduationCap, href: '/courses' },
-  { name: 'Events', icon: Calendar, href: '/events' },
-];
-
-const exploreNavItems = [
-  { name: 'Suche', icon: Search, href: '/search' },
-  { name: 'Chat', icon: MessageCircle, href: '/chat' },
-];
-
-const supportNavItems = [
-  { name: 'Über uns', icon: Info, href: '/about' },
-  { name: 'Hilfe', icon: HelpCircle, href: '/help' },
-];
-
-const userNavItems = [
-  { name: 'Einstellungen', icon: Settings, href: '/settings' },
-  { name: 'Benachrichtigungen', icon: Bell, href: '/notifications' },
-];
+const navItems = {
+  main: [
+    { name: 'Home', icon: Home, href: '/' },
+    { name: 'Community', icon: Users, href: '/community' },
+  ],
+  learn: [
+    { name: 'Kurse', icon: GraduationCap, href: '/courses' },
+    { name: 'Events', icon: Calendar, href: '/events' },
+    { name: 'Ressourcen', icon: BookOpen, href: '/resources' },
+    { name: 'Wissensdatenbank', icon: Library, href: '/knowledgebase' },
+  ],
+  showcase: [
+    { name: 'Projekte', icon: Briefcase, href: '/showcases' },
+    { name: 'Skills', icon: Award, href: '/skills' },
+  ],
+  explore: [
+    { name: 'Suche', icon: Search, href: '/search' },
+    { name: 'Chat', icon: MessageCircle, href: '/chat' },
+  ],
+  support: [
+    { name: 'Über uns', icon: Info, href: '/about' },
+    { name: 'Hilfe', icon: HelpCircle, href: '/help' },
+  ],
+  user: [
+    { name: 'Einstellungen', icon: Settings, href: '/settings' },
+    { name: 'Benachrichtigungen', icon: Bell, href: '/notifications' },
+  ],
+};
 
 export function Sidebar() {
   const [isOpen, setIsOpen] = useState(false);
   const { theme } = useTheme();
   const router = useRouter();
+  const pathname = usePathname();
 
   const toggleSidebar = () => {
     setIsOpen(!isOpen);
@@ -79,38 +91,12 @@ export function Sidebar() {
             </button>
           </div>
           <nav className="space-y-6">
-            <div>
-              <h2 className="text-xs uppercase text-gray-500 dark:text-gray-400 font-semibold mb-2">Hauptmenü</h2>
-              <ul className="space-y-2">
-                {mainNavItems.map((item) => (
-                  <NavItem key={item.name} item={item} />
-                ))}
-              </ul>
-            </div>
-            <div>
-              <h2 className="text-xs uppercase text-gray-500 dark:text-gray-400 font-semibold mb-2">Entdecken</h2>
-              <ul className="space-y-2">
-                {exploreNavItems.map((item) => (
-                  <NavItem key={item.name} item={item} />
-                ))}
-              </ul>
-            </div>
-            <div>
-              <h2 className="text-xs uppercase text-gray-500 dark:text-gray-400 font-semibold mb-2">Support</h2>
-              <ul className="space-y-2">
-                {supportNavItems.map((item) => (
-                  <NavItem key={item.name} item={item} />
-                ))}
-              </ul>
-            </div>
-            <div>
-              <h2 className="text-xs uppercase text-gray-500 dark:text-gray-400 font-semibold mb-2">Benutzer</h2>
-              <ul className="space-y-2">
-                {userNavItems.map((item) => (
-                  <NavItem key={item.name} item={item} />
-                ))}
-              </ul>
-            </div>
+            <NavSection title="Hauptmenü" items={navItems.main} pathname={pathname} />
+            <NavSection title="Lernen" items={navItems.learn} pathname={pathname} />
+            <NavSection title="Showcase" items={navItems.showcase} pathname={pathname} />
+            <NavSection title="Entdecken" items={navItems.explore} pathname={pathname} />
+            <NavSection title="Support" items={navItems.support} pathname={pathname} />
+            <NavSection title="Benutzer" items={navItems.user} pathname={pathname} />
           </nav>
           <div className="mt-8 pt-4 border-t border-gray-200 dark:border-gray-700">
             <button 
@@ -127,11 +113,31 @@ export function Sidebar() {
   );
 }
 
-function NavItem({ item }) {
+function NavSection({ title, items, pathname }) {
+  return (
+    <div>
+      <h2 className="text-xs uppercase text-gray-500 dark:text-gray-400 font-semibold mb-2">{title}</h2>
+      <ul className="space-y-2">
+        {items.map((item) => (
+          <NavItem key={item.name} item={item} isActive={pathname === item.href} />
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function NavItem({ item, isActive }) {
   return (
     <li>
-      <Link href={item.href} className="flex items-center space-x-3 p-2 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
-        <item.icon className="w-5 h-5 flex-shrink-0" />
+      <Link 
+        href={item.href} 
+        className={`flex items-center space-x-3 p-2 rounded-lg transition-colors duration-200
+          ${isActive 
+            ? 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-200' 
+            : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
+          }`}
+      >
+        <item.icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-blue-600 dark:text-blue-400' : ''}`} />
         <span className="font-medium">{item.name}</span>
       </Link>
     </li>

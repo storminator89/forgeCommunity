@@ -7,9 +7,12 @@ import { UserNav } from "@/components/user-nav";
 import { Sidebar } from "@/components/Sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { ChevronLeft, ChevronRight, MapPin, Clock, Calendar as CalendarIcon, Menu } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ChevronLeft, ChevronRight, MapPin, Clock, Calendar as CalendarIcon, Search } from 'lucide-react';
 import { cn } from "@/lib/utils";
+import { motion } from 'framer-motion';
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 
 interface Event {
   id: number;
@@ -18,6 +21,7 @@ interface Event {
   description: string;
   location: string;
   time: string;
+  category: string;
 }
 
 const eventsData: Event[] = [
@@ -27,7 +31,8 @@ const eventsData: Event[] = [
     date: new Date(2024, 9, 15),
     description: 'Ein ganztägiger Workshop zu modernen Webentwicklungstechniken.',
     location: 'Online',
-    time: '10:00 - 16:00'
+    time: '10:00 - 16:00',
+    category: 'Webentwicklung'
   },
   {
     id: 2,
@@ -35,7 +40,8 @@ const eventsData: Event[] = [
     date: new Date(2024, 9, 20),
     description: 'Netzwerken und Austausch für Data Science Enthusiasten.',
     location: 'TechHub Berlin',
-    time: '18:00 - 20:00'
+    time: '18:00 - 20:00',
+    category: 'Data Science'
   },
   {
     id: 3,
@@ -43,13 +49,15 @@ const eventsData: Event[] = [
     date: new Date(2024, 10, 5),
     description: 'Dreitägige Konferenz über die neuesten Trends im UX Design.',
     location: 'Designzentrum Hamburg',
-    time: '09:00 - 17:00'
+    time: '09:00 - 17:00',
+    category: 'Design'
   },
 ];
 
 export default function Events() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const handlePreviousMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
   const handleNextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
@@ -60,29 +68,57 @@ export default function Events() {
 
   const days = eachDayOfInterval({ start: firstDayOfMonth, end: lastDayOfMonth });
 
-  const handleSelectEvent = (event: Event) => {
-    setSelectedEvent(event);
+  const handleSelectDate = (date: Date) => {
+    setSelectedDate(date);
   };
 
   const handleCloseDialog = () => {
-    setSelectedEvent(null);
+    setSelectedDate(null);
+  };
+
+  const filteredEvents = eventsData.filter(event =>
+    event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    event.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    event.category.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const getEventsForDate = (date: Date) => {
+    return filteredEvents.filter(event => isSameDay(date, event.date));
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-100 dark:bg-gray-900">
+    <div className="flex h-screen overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="bg-white dark:bg-gray-800 shadow-sm z-10">
+        <header className="bg-white dark:bg-gray-800 shadow-md z-10">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-            <h2 className="text-2xl font-bold text-gray-800 dark:text-white ml-12 lg:ml-0">Events</h2>
+            <h2 className="text-2xl font-bold text-gray-800 dark:text-white ml-12 lg:ml-0 flex items-center">
+              <CalendarIcon className="mr-2 h-6 w-6" />
+              Events
+            </h2>
             <div className="flex items-center space-x-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <Input
+                  type="text"
+                  placeholder="Suche nach Events..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 pr-4 py-2 w-64 rounded-full"
+                />
+              </div>
               <ThemeToggle />
               <UserNav />
             </div>
           </div>
         </header>
         <main className="flex-1 overflow-y-auto p-4 lg:p-8">
-          <div className="max-w-6xl mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+          <motion.div 
+            className="max-w-6xl mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+          >
             <div className="flex items-center justify-between p-4 lg:p-6 border-b border-gray-200 dark:border-gray-700">
               <Button variant="outline" size="sm" onClick={handlePreviousMonth}>
                 <ChevronLeft className="h-4 w-4 mr-2" />
@@ -108,59 +144,67 @@ export default function Events() {
                 <div key={`empty-${index}`} className="bg-white dark:bg-gray-800 p-2 lg:p-4 h-24 lg:h-32" />
               ))}
               {days.map((day, dayIdx) => {
-                const dayEvents = eventsData.filter(event => isSameDay(day, event.date));
+                const dayEvents = getEventsForDate(day);
+                const hasEvents = dayEvents.length > 0;
                 return (
                   <div
                     key={day.toString()}
                     className={cn(
-                      "bg-white dark:bg-gray-800 p-2 lg:p-4 h-24 lg:h-32 overflow-y-auto",
+                      "bg-white dark:bg-gray-800 p-2 lg:p-4 h-24 lg:h-32 relative cursor-pointer",
                       !isSameMonth(day, currentMonth) && "text-gray-400 dark:text-gray-600",
                       isSameDay(day, new Date()) && "bg-blue-50 dark:bg-blue-900"
                     )}
+                    onClick={() => handleSelectDate(day)}
                   >
-                    <time dateTime={format(day, 'yyyy-MM-dd')} className="font-semibold text-sm lg:text-base">
-                      {format(day, 'd')}
-                    </time>
-                    {dayEvents.map(event => (
-                      <div
-                        key={event.id}
-                        className="mt-1 px-2 py-1 text-xs lg:text-sm rounded-md bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-200 cursor-pointer hover:bg-blue-200 dark:hover:bg-blue-700 transition-colors truncate"
-                        onClick={() => handleSelectEvent(event)}
-                      >
-                        {event.title}
+                    <div className={cn(
+                      "w-8 h-8 flex items-center justify-center rounded-full",
+                      hasEvents && "bg-blue-500 text-white"
+                    )}>
+                      <time dateTime={format(day, 'yyyy-MM-dd')} className="font-semibold text-sm lg:text-base">
+                        {format(day, 'd')}
+                      </time>
+                    </div>
+                    {hasEvents && (
+                      <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        {dayEvents.length} Event{dayEvents.length > 1 ? 's' : ''}
                       </div>
-                    ))}
+                    )}
                   </div>
                 );
               })}
             </div>
-          </div>
+          </motion.div>
         </main>
       </div>
-      <Dialog open={!!selectedEvent} onOpenChange={handleCloseDialog}>
+      <Dialog open={!!selectedDate} onOpenChange={handleCloseDialog}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>{selectedEvent?.title}</DialogTitle>
-            <DialogDescription>
-              <div className="mt-2 space-y-2">
-                <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-                  <CalendarIcon className="mr-2 h-4 w-4 flex-shrink-0" />
-                  <span className="truncate">{selectedEvent?.date.toLocaleDateString('de-DE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
-                </div>
-                <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-                  <Clock className="mr-2 h-4 w-4 flex-shrink-0" />
-                  <span>{selectedEvent?.time}</span>
-                </div>
-                <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-                  <MapPin className="mr-2 h-4 w-4 flex-shrink-0" />
-                  <span className="truncate">{selectedEvent?.location}</span>
+            <DialogTitle>
+              {selectedDate && format(selectedDate, 'dd. MMMM yyyy', { locale: de })}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="mt-4 space-y-4">
+            {selectedDate && getEventsForDate(selectedDate).map((event) => (
+              <div key={event.id} className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold mb-2">{event.title}</h3>
+                <div className="space-y-2 text-sm text-gray-500 dark:text-gray-400">
+                  <div className="flex items-center">
+                    <Clock className="mr-2 h-4 w-4 flex-shrink-0" />
+                    <span>{event.time}</span>
+                  </div>
+                  <div className="flex items-center">
+                    <MapPin className="mr-2 h-4 w-4 flex-shrink-0" />
+                    <span>{event.location}</span>
+                  </div>
+                  <p>{event.description}</p>
+                  <Badge variant="secondary">{event.category}</Badge>
                 </div>
               </div>
-            </DialogDescription>
-          </DialogHeader>
-          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-            {selectedEvent?.description}
-          </p>
+            ))}
+            {selectedDate && getEventsForDate(selectedDate).length === 0 && (
+              <p className="text-center text-gray-500 dark:text-gray-400">Keine Events an diesem Tag.</p>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

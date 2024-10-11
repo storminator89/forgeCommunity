@@ -8,9 +8,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Send, Hash } from 'lucide-react'
+import { Send, Hash, Search, Paperclip, Smile } from 'lucide-react'
 
 interface ChatMessage {
   id: string;
@@ -90,19 +89,34 @@ export default function ChatPage() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-100 dark:bg-gray-900">
-      <Sidebar />
+      <Sidebar className="hidden md:block" />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="bg-white dark:bg-gray-800 shadow-sm z-10">
+        <header className="bg-white dark:bg-gray-800 shadow-md z-10">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-            <h2 className="text-2xl font-bold text-gray-800 dark:text-white ml-12 lg:ml-0">Chat</h2>
             <div className="flex items-center space-x-4">
+              <h2 className="text-2xl font-bold text-gray-800 dark:text-white">{activeTab === 'channels' ? `# ${selectedChannel.name}` : selectedDirectMessage}</h2>
+              <div className="hidden md:flex items-center space-x-2 text-gray-500 dark:text-gray-400">
+                <span className="text-sm">3 Mitglieder</span>
+                <span>•</span>
+                <span className="text-sm">2 online</span>
+              </div>
+            </div>
+            <div className="flex items-center space-x-4">
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Suchen..."
+                  className="pl-8 pr-4 py-2 rounded-md bg-gray-100 dark:bg-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
+              </div>
               <ThemeToggle />
               <UserNav />
             </div>
           </div>
         </header>
         <main className="flex-1 flex overflow-hidden">
-          <div className="w-64 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+          <div className="w-64 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hidden md:block">
             <Tabs defaultValue="channels" className="w-full" onValueChange={(value) => setActiveTab(value as 'channels' | 'direct')}>
               <TabsList className="w-full">
                 <TabsTrigger value="channels" className="w-1/2">Channels</TabsTrigger>
@@ -113,8 +127,8 @@ export default function ChatPage() {
                   {mockChannels.map((channel) => (
                     <div
                       key={channel.id}
-                      className={`p-4 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 ${
-                        selectedChannel.id === channel.id ? 'bg-gray-100 dark:bg-gray-700' : ''
+                      className={`p-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 ${
+                        selectedChannel.id === channel.id ? 'bg-gray-200 dark:bg-gray-600' : ''
                       }`}
                       onClick={() => setSelectedChannel(channel)}
                     >
@@ -131,8 +145,8 @@ export default function ChatPage() {
                   {Object.keys(mockDirectMessages).map((name) => (
                     <div
                       key={name}
-                      className={`p-4 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 ${
-                        selectedDirectMessage === name ? 'bg-gray-100 dark:bg-gray-700' : ''
+                      className={`p-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 ${
+                        selectedDirectMessage === name ? 'bg-gray-200 dark:bg-gray-600' : ''
                       }`}
                       onClick={() => setSelectedDirectMessage(name)}
                     >
@@ -148,44 +162,53 @@ export default function ChatPage() {
               </TabsContent>
             </Tabs>
           </div>
-          <div className="flex-1 flex flex-col">
+          <div className="flex-1 flex flex-col bg-white dark:bg-gray-900">
             <ScrollArea className="flex-1 p-4">
-              {messages.map((message) => (
-                <Card
+              {messages.map((message, index) => (
+                <div
                   key={message.id}
-                  className={`mb-4 ${
-                    message.sender === 'Sie' ? 'ml-auto' : 'mr-auto'
-                  }`}
+                  className={`flex ${message.sender === 'Sie' ? 'justify-end' : 'justify-start'} mb-4`}
                 >
-                  <CardContent className="p-3">
-                    <div className={`flex items-start ${message.sender === 'Sie' ? 'justify-end' : 'justify-start'}`}>
-                      {message.sender !== 'Sie' && (
-                        <Avatar className="mr-2">
-                          <AvatarFallback>{message.sender[0]}</AvatarFallback>
-                        </Avatar>
-                      )}
-                      <div>
-                        <p className="text-sm font-medium text-gray-900 dark:text-white">{message.sender}</p>
-                        <p className={`text-sm ${message.sender === 'Sie' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-700 dark:text-gray-300'}`}>
-                          {message.content}
-                        </p>
-                        <span className="text-xs text-gray-500 dark:text-gray-400">{message.timestamp}</span>
-                      </div>
+                  {message.sender !== 'Sie' && (index === 0 || messages[index - 1].sender !== message.sender) && (
+                    <Avatar className="mr-2 mt-1">
+                      <AvatarFallback>{message.sender[0]}</AvatarFallback>
+                    </Avatar>
+                  )}
+                  <div className={`flex flex-col ${message.sender === 'Sie' ? 'items-end' : 'items-start'}`}>
+                    {(index === 0 || messages[index - 1].sender !== message.sender) && (
+                      <span className="text-xs text-gray-500 dark:text-gray-400 mb-1">{message.sender}</span>
+                    )}
+                    <div
+                      className={`rounded-2xl px-4 py-2 max-w-md ${
+                        message.sender === 'Sie'
+                          ? 'bg-blue-500 text-white'
+                          : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white'
+                      }`}
+                    >
+                      <p className="text-sm">{message.content}</p>
                     </div>
-                  </CardContent>
-                </Card>
+                    <span className="text-xs text-gray-500 dark:text-gray-400 mt-1">{message.timestamp}</span>
+                  </div>
+                </div>
               ))}
               <div ref={messagesEndRef} />
             </ScrollArea>
-            <div className="p-4 border-t border-gray-200 dark:border-gray-700">
-              <div className="flex space-x-2">
+            <div className="p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+              <div className="flex items-center space-x-2">
+                <Button variant="ghost" size="icon">
+                  <Paperclip className="h-5 w-5 text-gray-500" />
+                </Button>
                 <Input
                   type="text"
                   placeholder="Schreiben Sie eine Nachricht..."
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                  className="flex-grow"
                 />
+                <Button variant="ghost" size="icon">
+                  <Smile className="h-5 w-5 text-gray-500" />
+                </Button>
                 <Button onClick={handleSendMessage}>
                   <Send className="h-4 w-4" />
                 </Button>
