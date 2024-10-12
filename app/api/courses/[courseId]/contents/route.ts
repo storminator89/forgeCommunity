@@ -1,3 +1,5 @@
+// app/api/courses/[courseId]/contents/route.ts
+
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { getServerSession } from "next-auth/next";
@@ -5,6 +7,7 @@ import { authOptions } from "../../../auth/[...nextauth]/options";
 
 const prisma = new PrismaClient();
 
+// GET-Methode zum Abrufen der Kursinhalte
 export async function GET(
   request: NextRequest,
   { params }: { params: { courseId: string } }
@@ -17,13 +20,25 @@ export async function GET(
       orderBy: { order: 'asc' },
     });
 
-    return NextResponse.json(contents);
+    // Gruppieren Sie die Inhalte in Haupt- und Unterinhalte
+    const groupedContents = contents.reduce((acc, content) => {
+      if (!content.parentId) {
+        acc.push({
+          ...content,
+          subContents: contents.filter(c => c.parentId === content.id)
+        });
+      }
+      return acc;
+    }, [] as any[]); // Typisierung anpassen, falls nötig
+
+    return NextResponse.json(groupedContents);
   } catch (error) {
     console.error('Failed to fetch course contents:', error);
     return NextResponse.json({ error: 'Failed to fetch course contents' }, { status: 500 });
   }
 }
 
+// POST-Methode zum Hinzufügen eines neuen Inhalts
 export async function POST(
   request: NextRequest,
   { params }: { params: { courseId: string } }
@@ -45,7 +60,7 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    const { title, type, content, order } = await request.json();
+    const { title, type, content, order, parentId } = await request.json();
 
     const newContent = await prisma.courseContent.create({
       data: {
@@ -53,6 +68,7 @@ export async function POST(
         type,
         content,
         order,
+        parentId,
         courseId,
       },
     });

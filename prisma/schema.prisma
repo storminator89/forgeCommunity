@@ -152,10 +152,13 @@ model CourseContent {
   id        String   @id @default(cuid())
   title     String
   type      ContentType
-  content   String   // Für Text-Inhalte oder URLs für Medieninhalte
+  content   String
   order     Int
   course    Course   @relation(fields: [courseId], references: [id])
   courseId  String
+  parent    CourseContent?  @relation("ParentChild", fields: [parentId], references: [id])
+  parentId  String?
+  children  CourseContent[] @relation("ParentChild")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
