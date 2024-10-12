@@ -1,4 +1,3 @@
-// types/next-auth.d.ts
 import NextAuth from "next-auth"
 
 declare module "next-auth" {
@@ -8,6 +7,7 @@ declare module "next-auth" {
       name?: string | null
       email?: string | null
       image?: string | null
+      role?: string | null
     }
   }
 
@@ -17,5 +17,6 @@ declare module "next-auth" {
     email?: string | null
     image?: string | null
     password?: string | null
+    role?: string | null
   }
 }

@@ -3,58 +3,32 @@
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Button } from "@/components/ui/button";
 import { UserNav } from "@/components/user-nav";
 import { Sidebar } from "@/components/Sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Input } from "@/components/ui/input";
-import { Clock, Calendar, Users, Search, BookOpen } from 'lucide-react';
+import { Clock, Calendar, Users, Search, BookOpen, PlusCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface Course {
-  id: number;
+  id: string;
   title: string;
   instructor: string;
   duration: string;
-  startDate: string;
+  startDate: string | null;
+  endDate: string | null;
   category: string;
   participants: number;
 }
 
-const coursesData: Course[] = [
-  { 
-    id: 1, 
-    title: "Einführung in React", 
-    instructor: "Max Mustermann", 
-    duration: "4 Wochen", 
-    startDate: "2024-11-01", 
-    category: "Webentwicklung",
-    participants: 45,
-  },
-  { 
-    id: 2, 
-    title: "Machine Learning Grundlagen", 
-    instructor: "Anna Schmidt", 
-    duration: "6 Wochen", 
-    startDate: "2024-11-15", 
-    category: "Data Science",
-    participants: 30,
-  },
-  { 
-    id: 3, 
-    title: "UX Design Prinzipien", 
-    instructor: "Lena Weber", 
-    duration: "3 Wochen", 
-    startDate: "2024-12-01", 
-    category: "Design",
-    participants: 25,
-  },
-];
-
 export default function CourseClient() {
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const { data: session, status } = useSession();
   const router = useRouter();
 
@@ -64,13 +38,32 @@ export default function CourseClient() {
     }
   }, [status, router]);
 
-  const filteredCourses = coursesData.filter(course =>
+  useEffect(() => {
+    const fetchCourses = async () => {
+      try {
+        const response = await fetch('/api/courses');
+        if (!response.ok) {
+          throw new Error('Failed to fetch courses');
+        }
+        const data = await response.json();
+        setCourses(data);
+      } catch (error) {
+        console.error('Error fetching courses:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchCourses();
+  }, []);
+
+  const filteredCourses = courses.filter(course =>
     course.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
     course.instructor.toLowerCase().includes(searchTerm.toLowerCase()) ||
     course.category.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  if (status === 'loading') {
+  if (status === 'loading' || isLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
         <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-blue-500"></div>
@@ -93,6 +86,12 @@ export default function CourseClient() {
               Entdecke unsere Kurse
             </h2>
             <div className="flex items-center space-x-4">
+              <Link href="/courses/new">
+                <Button variant="outline" className="flex items-center">
+                  <PlusCircle className="mr-2 h-4 w-4" />
+                  Neuer Kurs
+                </Button>
+              </Link>
               <ThemeToggle />
               <UserNav />
             </div>
@@ -164,26 +163,33 @@ function CourseCard({ course }: CourseCardProps) {
           <Clock className="w-4 h-4 mr-2" />
           <span>{course.duration}</span>
         </div>
-        <div className="flex items-center text-sm text-gray-500 dark:text-gray-400 mb-2">
-          <Calendar className="w-4 h-4 mr-2" />
-          <span>Startet am {new Date(course.startDate).toLocaleDateString('de-DE')}</span>
-        </div>
+        {course.startDate && (
+          <div className="flex items-center text-sm text-gray-500 dark:text-gray-400 mb-2">
+            <Calendar className="w-4 h-4 mr-2" />
+            <span>Startet am {new Date(course.startDate).toLocaleDateString('de-DE')}</span>
+          </div>
+        )}
         <div className="flex items-center text-sm text-gray-500 dark:text-gray-400 mb-4">
           <Users className="w-4 h-4 mr-2" />
           <span>{course.participants} Teilnehmer</span>
         </div>
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white transition-colors duration-300">
-                Kurs beitreten
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Klicken Sie hier, um sich für den Kurs anzumelden</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        <div className="mt-4 flex justify-between">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button className="flex-1 mr-2 bg-blue-600 hover:bg-blue-700 text-white transition-colors duration-300">
+                  Kurs beitreten
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Klicken Sie hier, um sich für den Kurs anzumelden</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <Link href={`/courses/${course.id}/contents`}>
+            <Button variant="outline">Inhalte anzeigen</Button>
+          </Link>
+        </div>
       </div>
     </motion.div>
   );
