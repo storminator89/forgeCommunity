@@ -2,8 +2,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]/options";
+import { writeFile, mkdir } from 'fs/promises';
+import path from 'path';
 
 const prisma = new PrismaClient();
+
+// Funktion zum Erstellen des Upload-Verzeichnisses, falls es nicht existiert
+async function ensureUploadDirectory() {
+  const uploadDir = path.join(process.cwd(), 'public', 'images', 'uploads');
+  try {
+    await mkdir(uploadDir, { recursive: true });
+  } catch (error) {
+    console.error('Failed to create upload directory:', error);
+  }
+}
 
 export async function GET() {
   try {
@@ -33,6 +45,7 @@ export async function GET() {
       endDate: course.endDate ? course.endDate.toISOString().split('T')[0] : null,
       category: course.description,
       participants: course.enrollments.length,
+      imageUrl: course.imageUrl,
     }));
 
     return NextResponse.json(formattedCourses);
@@ -50,8 +63,32 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = await request.json();
-    const { title, description, startDate, endDate, price, currency, maxStudents } = body;
+    // Ensure the upload directory exists
+    await ensureUploadDirectory();
+
+    const formData = await request.formData();
+    const title = formData.get('title') as string;
+    const description = formData.get('description') as string;
+    const startDate = formData.get('startDate') as string;
+    const endDate = formData.get('endDate') as string;
+    const price = formData.get('price') as string;
+    const currency = formData.get('currency') as string;
+    const maxStudents = formData.get('maxStudents') as string;
+    const image = formData.get('image') as File | null;
+
+    let imageUrl = null;
+    if (image) {
+      const bytes = await image.arrayBuffer();
+      const buffer = Buffer.from(bytes);
+
+      const uploadDir = path.join(process.cwd(), 'public', 'images', 'uploads');
+      const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1E9)}`;
+      const filename = `${uniqueSuffix}-${image.name}`;
+      const filepath = path.join(uploadDir, filename);
+
+      await writeFile(filepath, buffer);
+      imageUrl = `/images/uploads/${filename}`;
+    }
 
     const newCourse = await prisma.course.create({
       data: {
@@ -62,6 +99,7 @@ export async function POST(request: NextRequest) {
         price: parseFloat(price),
         currency,
         maxStudents: parseInt(maxStudents),
+        imageUrl,
         instructor: {
           connect: { id: session.user.id }
         }

@@ -4,15 +4,18 @@ import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Button } from "@/components/ui/button";
 import { UserNav } from "@/components/user-nav";
 import { Sidebar } from "@/components/Sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Input } from "@/components/ui/input";
-import { Clock, Calendar, Users, Search, BookOpen, PlusCircle } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Clock, Calendar, Users, Search, BookOpen, PlusCircle, Trash2, Filter } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 interface Course {
   id: string;
@@ -23,12 +26,15 @@ interface Course {
   endDate: string | null;
   category: string;
   participants: number;
+  imageUrl: string | null;
 }
 
 export default function CourseClient() {
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [categoryFilter, setCategoryFilter] = useState<string>('');
   const [courses, setCourses] = useState<Course[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [categories, setCategories] = useState<string[]>([]);
   const { data: session, status } = useSession();
   const router = useRouter();
 
@@ -47,6 +53,9 @@ export default function CourseClient() {
         }
         const data = await response.json();
         setCourses(data);
+        // Extract unique categories
+        const uniqueCategories = Array.from(new Set(data.map((course: Course) => course.category)));
+        setCategories(['Alle', ...uniqueCategories]);
       } catch (error) {
         console.error('Error fetching courses:', error);
       } finally {
@@ -58,10 +67,24 @@ export default function CourseClient() {
   }, []);
 
   const filteredCourses = courses.filter(course =>
-    course.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    course.instructor.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    course.category.toLowerCase().includes(searchTerm.toLowerCase())
+    (course.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    course.instructor.toLowerCase().includes(searchTerm.toLowerCase())) &&
+    (categoryFilter === '' || categoryFilter === 'Alle' || course.category === categoryFilter)
   );
+
+  const handleDeleteCourse = async (courseId: string) => {
+    try {
+      const response = await fetch(`/api/courses/${courseId}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) {
+        throw new Error('Failed to delete course');
+      }
+      setCourses(courses.filter(course => course.id !== courseId));
+    } catch (error) {
+      console.error('Error deleting course:', error);
+    }
+  };
 
   if (status === 'loading' || isLoading) {
     return (
@@ -99,15 +122,32 @@ export default function CourseClient() {
         </header>
         <main className="flex-1 overflow-y-auto">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <div className="mb-8 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-              <Input
-                type="text"
-                placeholder="Suche nach Kursen, Dozenten oder Kategorien"
-                value={searchTerm}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
-                className="w-full max-w-md mx-auto pl-10 pr-4 py-2 rounded-full"
-              />
+            <div className="mb-8 flex flex-col md:flex-row md:items-center md:space-x-4">
+              <div className="relative flex-grow mb-4 md:mb-0">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <Input
+                  type="text"
+                  placeholder="Suche nach Kursen oder Dozenten"
+                  value={searchTerm}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
+                  className="pl-10 pr-4 py-2 rounded-full w-full"
+                />
+              </div>
+              <div className="flex items-center space-x-2">
+                <Filter className="text-gray-400" />
+                <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Kategorie wählen" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((category) => (
+                      <SelectItem key={category} value={category}>
+                        {category}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <AnimatePresence>
               <motion.div 
@@ -117,7 +157,7 @@ export default function CourseClient() {
                 exit={{ opacity: 0 }}
               >
                 {filteredCourses.map((course) => (
-                  <CourseCard key={course.id} course={course} />
+                  <CourseCard key={course.id} course={course} onDelete={handleDeleteCourse} />
                 ))}
               </motion.div>
             </AnimatePresence>
@@ -129,7 +169,7 @@ export default function CourseClient() {
               >
                 <Search className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">Keine Kurse gefunden</h3>
-                <p className="text-gray-500 dark:text-gray-400">Versuchen Sie es mit anderen Suchbegriffen oder schauen Sie später wieder vorbei.</p>
+                <p className="text-gray-500 dark:text-gray-400">Versuchen Sie es mit anderen Suchbegriffen oder ändern Sie die Kategorie.</p>
               </motion.div>
             )}
           </div>
@@ -141,23 +181,61 @@ export default function CourseClient() {
 
 interface CourseCardProps {
   course: Course;
+  onDelete: (courseId: string) => void;
 }
 
-function CourseCard({ course }: CourseCardProps) {
+function CourseCard({ course, onDelete }: CourseCardProps) {
+  const router = useRouter();
+
+  const handleCourseAction = () => {
+    router.push(`/courses/${course.id}/contents`);
+  };
+
   return (
     <motion.div 
-      className="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden transition-all duration-300 hover:shadow-xl"
+      className="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden transition-all duration-300 hover:shadow-xl flex flex-col h-full"
       whileHover={{ scale: 1.03 }}
       whileTap={{ scale: 0.98 }}
     >
-      <div className="relative h-48">
-        <div className="w-full h-full bg-gradient-to-br from-blue-400 to-purple-500" />
-        <Badge className="absolute top-2 right-2" variant="secondary">
+      <div className="relative h-48 w-full">
+        {course.imageUrl ? (
+          <Image
+            src={course.imageUrl}
+            alt={course.title}
+            layout="fill"
+            objectFit="cover"
+            className="rounded-t-lg"
+          />
+        ) : (
+          <div className="w-full h-full bg-gradient-to-br from-blue-400 to-purple-500 rounded-t-lg" />
+        )}
+        <Badge className="absolute top-2 right-2 z-10" variant="secondary">
           {course.category}
         </Badge>
       </div>
-      <div className="p-6">
-        <h3 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">{course.title}</h3>
+      <div className="p-6 flex-grow flex flex-col">
+        <div className="flex justify-between items-start mb-2">
+          <h3 className="text-xl font-semibold text-gray-900 dark:text-white">{course.title}</h3>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="ghost" size="icon" className="text-gray-500 hover:text-red-500">
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Sind Sie sicher?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Diese Aktion kann nicht rückgängig gemacht werden. Der Kurs wird dauerhaft aus unserer Datenbank entfernt.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                <AlertDialogAction onClick={() => onDelete(course.id)}>Löschen</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
         <p className="text-gray-600 dark:text-gray-300 mb-4">{course.instructor}</p>
         <div className="flex items-center text-sm text-gray-500 dark:text-gray-400 mb-2">
           <Clock className="w-4 h-4 mr-2" />
@@ -173,22 +251,22 @@ function CourseCard({ course }: CourseCardProps) {
           <Users className="w-4 h-4 mr-2" />
           <span>{course.participants} Teilnehmer</span>
         </div>
-        <div className="mt-4 flex justify-between">
+        <div className="mt-auto">
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button className="flex-1 mr-2 bg-blue-600 hover:bg-blue-700 text-white transition-colors duration-300">
+                <Button 
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white transition-colors duration-300"
+                  onClick={handleCourseAction}
+                >
                   Kurs beitreten
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Klicken Sie hier, um sich für den Kurs anzumelden</p>
+                <p>Klicken Sie hier, um sich für den Kurs anzumelden und die Inhalte anzuzeigen</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
-          <Link href={`/courses/${course.id}/contents`}>
-            <Button variant="outline">Inhalte anzeigen</Button>
-          </Link>
         </div>
       </div>
     </motion.div>

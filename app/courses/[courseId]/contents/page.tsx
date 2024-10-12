@@ -56,7 +56,7 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
   const [selectedContentId, setSelectedContentId] = useState<string | null>(null);
   const [newContent, setNewContent] = useState<CourseContent>({ id: '', title: '', type: 'TEXT', content: '', order: 0, parentId: null });
   const [editingContentId, setEditingContentId] = useState<string | null>(null); // Track which content is being edited
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isTopicsSidebarOpen, setIsTopicsSidebarOpen] = useState(true); // Separate Zustand für die Lernpfad-Sidebar
   const [isAddingMainContent, setIsAddingMainContent] = useState(false);
   const [isAddingSubContent, setIsAddingSubContent] = useState(false);
   const [newMainContentTitle, setNewMainContentTitle] = useState('');
@@ -108,6 +108,18 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
   useEffect(() => {
     fetchContents();
   }, [fetchContents]);
+
+  // Alert-Nachrichten automatisch nach 3 Sekunden ausblenden
+  useEffect(() => {
+    if (alertMessage) {
+      const timer = setTimeout(() => {
+        setAlertMessage(null);
+      }, 3000); // 3000 Millisekunden = 3 Sekunden
+
+      // Bereinigung des Timers bei Änderung von alertMessage oder Unmount
+      return () => clearTimeout(timer);
+    }
+  }, [alertMessage]);
 
   // Handler zum Hinzufügen eines neuen Hauptthemas
   const handleMainContentSubmit = async (e: React.FormEvent) => {
@@ -470,8 +482,8 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
 
   return (
     <div className="flex flex-col lg:flex-row min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Sidebar */}
-      <Sidebar isOpen={isSidebarOpen} toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
+      {/* Erste Sidebar: Navigation */}
+      <Sidebar />
 
       {/* Hauptbereich */}
       <div className="flex-1 flex flex-col">
@@ -499,16 +511,19 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
             collisionDetection={closestCenter}
             onDragEnd={handleDragEnd}
           >
-            {/* Sidebar Bereich (Hauptthemen) */}
+            {/* Zweite Sidebar: Lernpfad */}
             <SortableContext
               items={mainContents.map(content => content.id)}
               strategy={verticalListSortingStrategy}
             >
               <div
-                className={`${isSidebarOpen ? 'w-1/4' : 'w-16'} bg-white dark:bg-gray-800 overflow-y-auto border-r border-gray-200 dark:border-gray-700 transition-all duration-300 relative`}
+                className={`${
+                  isTopicsSidebarOpen ? 'w-64' : 'w-0'
+                } bg-white dark:bg-gray-800 overflow-y-auto border-r border-gray-200 dark:border-gray-700 transition-all duration-300 ease-in-out relative`}
               >
-                <div className="p-4">
-                  {isSidebarOpen && <h3 className="text-lg font-semibold mb-4">Lernpfad</h3>}
+                {/* Inhalt der Lernpfad Sidebar */}
+                <div className={`p-4 ${isTopicsSidebarOpen ? 'block' : 'hidden'}`}>
+                  <h3 className="text-lg font-semibold mb-4">Lernpfad</h3>
                   <ul className="space-y-2">
                     {mainContents.map((content, index) => (
                       <SortableItem key={content.id} id={content.id}>
@@ -519,9 +534,9 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
                           <span className="flex items-center">
                             <GripVertical className="mr-2 h-4 w-4 cursor-grab" />
                             <span className="w-6 h-6 rounded-full bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300 flex items-center justify-center mr-2 text-sm font-medium">{index + 1}</span>
-                            {isSidebarOpen && <span className="truncate">{content.title}</span>}
+                            {isTopicsSidebarOpen && <span className="truncate">{content.title}</span>}
                           </span>
-                          {isSidebarOpen && (
+                          {isTopicsSidebarOpen && (
                             <div className="flex space-x-1">
                               <Button
                                 variant="ghost"
@@ -554,56 +569,54 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
                   </ul>
 
                   {/* Button zum Hinzufügen eines neuen Hauptthemas */}
-                  {isSidebarOpen && (
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button onClick={() => setIsAddingMainContent(true)} className="mt-4 w-full flex items-center">
-                          <PlusCircle className="mr-2 h-4 w-4" />
-                          Neues Hauptthema
-                        </Button>
-                      </DialogTrigger>
-                    </Dialog>
-                  )}
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button onClick={() => setIsAddingMainContent(true)} className="mt-4 w-full flex items-center">
+                        <PlusCircle className="mr-2 h-4 w-4" />
+                        Neues Hauptthema
+                      </Button>
+                    </DialogTrigger>
+                  </Dialog>
 
                   {/* Dialog zum Hinzufügen eines neuen Hauptthemas */}
-                  {isSidebarOpen && (
-                    <Dialog open={isAddingMainContent} onOpenChange={setIsAddingMainContent}>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Neues Hauptthema hinzufügen</DialogTitle>
-                        </DialogHeader>
-                        <form onSubmit={handleMainContentSubmit} className="space-y-4">
-                          <div>
-                            <Label htmlFor="mainContentTitle">Titel</Label>
-                            <Input
-                              id="mainContentTitle"
-                              value={newMainContentTitle}
-                              onChange={(e) => setNewMainContentTitle(e.target.value)}
-                              required
-                              placeholder="Titel des Hauptthemas"
-                            />
-                          </div>
-                          <div className="flex justify-end space-x-2">
-                            <Button type="button" variant="outline" onClick={() => setIsAddingMainContent(false)}>
-                              Abbrechen
-                            </Button>
-                            <Button type="submit">Hinzufügen</Button>
-                          </div>
-                        </form>
-                      </DialogContent>
-                    </Dialog>
-                  )}
+                  <Dialog open={isAddingMainContent} onOpenChange={setIsAddingMainContent}>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Neues Hauptthema hinzufügen</DialogTitle>
+                      </DialogHeader>
+                      <form onSubmit={handleMainContentSubmit} className="space-y-4">
+                        <div>
+                          <Label htmlFor="mainContentTitle">Titel</Label>
+                          <Input
+                            id="mainContentTitle"
+                            value={newMainContentTitle}
+                            onChange={(e) => setNewMainContentTitle(e.target.value)}
+                            required
+                            placeholder="Titel des Hauptthemas"
+                          />
+                        </div>
+                        <div className="flex justify-end space-x-2">
+                          <Button type="button" variant="outline" onClick={() => setIsAddingMainContent(false)}>
+                            Abbrechen
+                          </Button>
+                          <Button type="submit">Hinzufügen</Button>
+                        </div>
+                      </form>
+                    </DialogContent>
+                  </Dialog>
                 </div>
               </div>
             </SortableContext>
 
-            {/* Toggle Sidebar Button */}
+            {/* Toggle Sidebar Button für Lernpfad */}
             <button
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className={`absolute ${isSidebarOpen ? 'left-1/4' : 'left-16'} top-1/2 transform -translate-y-1/2 bg-white dark:bg-gray-800 p-2 rounded-r-md shadow-md z-20 transition-all duration-300`}
-              aria-label={isSidebarOpen ? "Sidebar schließen" : "Sidebar öffnen"}
+              onClick={() => setIsTopicsSidebarOpen(!isTopicsSidebarOpen)}
+              className={`absolute ${
+                isTopicsSidebarOpen ? 'left-64' : 'left-0'
+              } top-1/2 transform -translate-y-1/2 bg-white dark:bg-gray-800 p-2 rounded-r-md shadow-md z-20 transition-all duration-300`}
+              aria-label={isTopicsSidebarOpen ? "Lernpfad schließen" : "Lernpfad öffnen"}
             >
-              {isSidebarOpen ? <ChevronLeft /> : <ChevronRight />}
+              {isTopicsSidebarOpen ? <ChevronLeft /> : <ChevronRight />}
             </button>
 
             {/* Bereich für die Anzeige und Verwaltung von Inhalten */}
@@ -834,7 +847,7 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
                     )}
 
                     {/* Button zum Öffnen des Formulars zum Hinzufügen eines Unterthemas */}
-                    {!isAddingSubContent && isSidebarOpen && (
+                    {!isAddingSubContent && isTopicsSidebarOpen && (
                       <Button onClick={() => setIsAddingSubContent(true)} className="mt-4 flex items-center w-full">
                         <PlusCircle className="mr-2 h-4 w-4" />
                         Neues Unterthema

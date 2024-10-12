@@ -141,6 +141,7 @@ model Course {
   price        Float?
   currency     String?
   maxStudents  Int?
+  imageUrl     String?      
   enrollments  Enrollment[]
   lessons      Lesson[]
   contents     CourseContent[]

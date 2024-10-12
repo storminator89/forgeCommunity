@@ -11,7 +11,7 @@ import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { format } from "date-fns"
 import { de } from "date-fns/locale"
-import { CalendarIcon, X } from "lucide-react"
+import { CalendarIcon, X, Upload } from "lucide-react"
 import { Sidebar } from "@/components/Sidebar"
 import { UserNav } from "@/components/user-nav"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -24,9 +24,23 @@ export default function NewCoursePage() {
   const [price, setPrice] = useState('')
   const [currency, setCurrency] = useState('EUR')
   const [maxStudents, setMaxStudents] = useState('')
+  const [image, setImage] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
 
   const router = useRouter()
   const { data: session } = useSession()
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0]
+      setImage(file)
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -37,20 +51,19 @@ export default function NewCoursePage() {
     }
 
     try {
+      const formData = new FormData()
+      formData.append('title', title)
+      formData.append('description', description)
+      if (startDate) formData.append('startDate', startDate.toISOString())
+      if (endDate) formData.append('endDate', endDate.toISOString())
+      formData.append('price', price)
+      formData.append('currency', currency)
+      formData.append('maxStudents', maxStudents)
+      if (image) formData.append('image', image)
+
       const response = await fetch('/api/courses', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          title,
-          description,
-          startDate: startDate?.toISOString() || null,
-          endDate: endDate?.toISOString() || null,
-          price,
-          currency,
-          maxStudents,
-        }),
+        body: formData,
       })
 
       if (!response.ok) {
@@ -201,6 +214,23 @@ export default function NewCoursePage() {
                   placeholder="z.B. 20"
                   min="1"
                 />
+              </div>
+              <div>
+                <Label htmlFor="image">Kursbild</Label>
+                <div className="mt-1 flex items-center">
+                  <label htmlFor="image" className="cursor-pointer bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md font-medium text-blue-600 dark:text-blue-400 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500">
+                    <span className="flex items-center px-3 py-2">
+                      <Upload className="h-5 w-5 mr-2" />
+                      Bild auswählen
+                    </span>
+                    <input id="image" name="image" type="file" className="sr-only" onChange={handleImageChange} accept="image/*" />
+                  </label>
+                  {imagePreview && (
+                    <div className="ml-4">
+                      <img src={imagePreview} alt="Vorschau" className="h-20 w-20 object-cover rounded-md" />
+                    </div>
+                  )}
+                </div>
               </div>
               <Button type="submit" className="w-full">Kurs erstellen</Button>
             </form>

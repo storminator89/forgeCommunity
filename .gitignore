@@ -114,6 +114,12 @@ dist
 # Stores VSCode versions used for testing VSCode extensions
 .vscode-test
 
+# Ignore uploaded images
+public/images/uploads/*
+
+# But keep the uploads directory
+!public/images/uploads/.gitkeep
+
 # yarn v2
 .yarn/cache
 .yarn/unplugged
