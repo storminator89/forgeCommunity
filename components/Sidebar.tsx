@@ -1,7 +1,7 @@
+// components/Sidebar.tsx
 "use client";
 
 import Link from 'next/link';
-import { useState } from 'react';
 import { useTheme } from 'next-themes';
 import { signOut } from 'next-auth/react';
 import { useRouter, usePathname } from 'next/navigation';
@@ -24,6 +24,18 @@ import {
   Award,
   Library
 } from 'lucide-react';
+import { Button } from "@/components/ui/button";
+
+interface NavItem {
+  name: string;
+  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+  href: string;
+}
+
+interface SidebarProps {
+  isOpen: boolean;
+  toggleSidebar: () => void;
+}
 
 const navItems = {
   main: [
@@ -54,15 +66,10 @@ const navItems = {
   ],
 };
 
-export function Sidebar() {
-  const [isOpen, setIsOpen] = useState(false);
+export function Sidebar({ isOpen, toggleSidebar }: SidebarProps) {
   const { theme } = useTheme();
   const router = useRouter();
   const pathname = usePathname();
-
-  const toggleSidebar = () => {
-    setIsOpen(!isOpen);
-  };
 
   const handleLogout = async () => {
     await signOut({ redirect: false });
@@ -74,10 +81,11 @@ export function Sidebar() {
       <button 
         onClick={toggleSidebar} 
         className="lg:hidden fixed top-4 left-4 z-20 p-2 rounded-md bg-white dark:bg-gray-800 shadow-md"
+        aria-label={isOpen ? "Sidebar schließen" : "Sidebar öffnen"}
       >
         {isOpen ? <X size={24} /> : <Menu size={24} />}
       </button>
-      <div className={`w-80 bg-white dark:bg-gray-800 text-gray-800 dark:text-white h-screen overflow-y-auto fixed lg:static transition-all duration-300 ease-in-out z-30 ${isOpen ? 'left-0' : '-left-80 lg:left-0'}`}>
+      <div className={`fixed lg:static top-0 left-0 h-full transition-transform duration-300 ease-in-out z-30 ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'} w-80 bg-white dark:bg-gray-800 text-gray-800 dark:text-white overflow-y-auto border-r border-gray-200 dark:border-gray-700`}>
         <div className="p-6">
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center space-x-3">
@@ -113,7 +121,7 @@ export function Sidebar() {
   );
 }
 
-function NavSection({ title, items, pathname }) {
+function NavSection({ title, items, pathname }: { title: string; items: NavItem[]; pathname: string; }) {
   return (
     <div>
       <h2 className="text-xs uppercase text-gray-500 dark:text-gray-400 font-semibold mb-2">{title}</h2>
@@ -126,7 +134,7 @@ function NavSection({ title, items, pathname }) {
   );
 }
 
-function NavItem({ item, isActive }) {
+function NavItem({ item, isActive }: { item: NavItem; isActive: boolean; }) {
   return (
     <li>
       <Link 

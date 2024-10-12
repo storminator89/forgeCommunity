@@ -29,17 +29,31 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    const { title, type, content } = await request.json();
+    const { title, type, content, order, parentId } = await request.json();
 
-    // Optional: Validieren Sie die Eingabedaten hier
+    // Validierung der Eingabedaten (optional, aber empfohlen)
+    if (order !== undefined && typeof order !== 'number') {
+      return NextResponse.json({ error: 'Invalid order value' }, { status: 400 });
+    }
+
+    // Erstellen des Update-Datenobjekts dynamisch
+    const updateData: any = {
+      title,
+      type,
+      content,
+    };
+
+    if (order !== undefined) {
+      updateData.order = order;
+    }
+
+    if (parentId !== undefined) {
+      updateData.parentId = parentId;
+    }
 
     const updatedContent = await prisma.courseContent.update({
       where: { id: contentId },
-      data: {
-        title,
-        type,
-        content,
-      },
+      data: updateData,
     });
 
     return NextResponse.json(updatedContent, { status: 200 });
@@ -48,6 +62,7 @@ export async function PUT(
     return NextResponse.json({ error: 'Failed to update course content' }, { status: 500 });
   }
 }
+
 
 // DELETE-Methode zum Löschen eines Inhalts (bereits vorhanden)
 export async function DELETE(
