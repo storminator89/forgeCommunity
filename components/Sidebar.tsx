@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import { useSession } from 'next-auth/react';
 import { useTheme } from 'next-themes';
 import { signOut } from 'next-auth/react';
 import { useRouter, usePathname } from 'next/navigation';
@@ -22,7 +23,8 @@ import {
   BookOpen,
   Briefcase,
   Award,
-  Library
+  Library,
+  LayoutDashboard
 } from 'lucide-react';
 
 const navItems = {
@@ -52,6 +54,10 @@ const navItems = {
     { name: 'Einstellungen', icon: Settings, href: '/settings' },
     { name: 'Benachrichtigungen', icon: Bell, href: '/notifications' },
   ],
+  admin: [
+    { name: 'Dashboard', icon: LayoutDashboard, href: '/admin/dashboard' },
+    { name: 'Benutzerverwaltung', icon: Users, href: '/admin/users' },
+  ],
 };
 
 export function Sidebar() {
@@ -59,6 +65,7 @@ export function Sidebar() {
   const { theme } = useTheme();
   const router = useRouter();
   const pathname = usePathname();
+  const { data: session } = useSession();
 
   const toggleSidebar = () => {
     setIsOpen(!isOpen);
@@ -97,6 +104,9 @@ export function Sidebar() {
             <NavSection title="Entdecken" items={navItems.explore} pathname={pathname} />
             <NavSection title="Support" items={navItems.support} pathname={pathname} />
             <NavSection title="Benutzer" items={navItems.user} pathname={pathname} />
+            {session?.user?.role === 'ADMIN' && (
+              <NavSection title="Administration" items={navItems.admin} pathname={pathname} />
+            )}
           </nav>
           <div className="mt-8 pt-4 border-t border-gray-200 dark:border-gray-700">
             <button 

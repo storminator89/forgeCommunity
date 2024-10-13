@@ -39,6 +39,17 @@ model User {
   sessions           Session[]
 }
 
+model UserSettings {
+  id                   String  @id @default(cuid())
+  user                 User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId               String  @unique
+  emailNotifications   Boolean @default(true)
+  pushNotifications    Boolean @default(true)
+  twoFactorAuthEnabled Boolean @default(false)
+  theme                Theme   @default(LIGHT)
+  language             String  @default("en")
+}
+
 model Account {
   id                String  @id @default(cuid())
   userId            String
@@ -66,31 +77,12 @@ model Session {
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-model VerificationToken {
-  identifier String
-  token      String   @unique
-  expires    DateTime
-
-  @@unique([identifier, token])
-}
-
-model UserSettings {
-  id                   String  @id @default(cuid())
-  user                 User    @relation(fields: [userId], references: [id])
-  userId               String  @unique
-  emailNotifications   Boolean @default(true)
-  pushNotifications    Boolean @default(true)
-  twoFactorAuthEnabled Boolean @default(false)
-  theme                Theme   @default(LIGHT)
-  language             String  @default("en")
-}
-
 model Post {
   id        String    @id @default(cuid())
   title     String
   content   String
   published Boolean   @default(false)
-  author    User      @relation(fields: [authorId], references: [id])
+  author    User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
   authorId  String
   comments  Comment[]
   likes     Like[]
@@ -102,9 +94,9 @@ model Post {
 model Comment {
   id        String   @id @default(cuid())
   content   String
-  post      Post     @relation(fields: [postId], references: [id])
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
   postId    String
-  author    User     @relation(fields: [authorId], references: [id])
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
   authorId  String
   likes     Like[]
   createdAt DateTime @default(now())
@@ -113,11 +105,11 @@ model Comment {
 
 model Like {
   id        String   @id @default(cuid())
-  user      User     @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String
-  post      Post?    @relation(fields: [postId], references: [id])
+  post      Post?    @relation(fields: [postId], references: [id], onDelete: Cascade)
   postId    String?
-  comment   Comment? @relation(fields: [commentId], references: [id])
+  comment   Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
   commentId String?
   createdAt DateTime @default(now())
 
@@ -131,61 +123,55 @@ model Tag {
 }
 
 model Course {
-  id           String       @id @default(cuid())
+  id           String          @id @default(cuid())
   title        String
   description  String
-  instructor   User         @relation(fields: [instructorId], references: [id])
+  instructor   User            @relation(fields: [instructorId], references: [id], onDelete: Cascade)
   instructorId String
   startDate    DateTime?
   endDate      DateTime?
   price        Float?
   currency     String?
   maxStudents  Int?
-  imageUrl     String?      
+  imageUrl     String?
   enrollments  Enrollment[]
   lessons      Lesson[]
   contents     CourseContent[]
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
-}
-
-model CourseContent {
-  id        String   @id @default(cuid())
-  title     String
-  type      ContentType
-  content   String
-  order     Int
-  course    Course   @relation(fields: [courseId], references: [id])
-  courseId  String
-  parent    CourseContent?  @relation("ParentChild", fields: [parentId], references: [id])
-  parentId  String?
-  children  CourseContent[] @relation("ParentChild")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-enum ContentType {
-  TEXT
-  VIDEO
-  AUDIO
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
 }
 
 model Lesson {
   id            String   @id @default(cuid())
   title         String
   content       String
-  course        Course   @relation(fields: [courseId], references: [id])
+  course        Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
   courseId      String
   orderInCourse Int
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }
 
+model CourseContent {
+  id        String         @id @default(cuid())
+  title     String
+  type      ContentType
+  content   String
+  order     Int
+  course    Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  courseId  String
+  parent    CourseContent? @relation("ParentChild", fields: [parentId], references: [id])
+  parentId  String?
+  children  CourseContent[] @relation("ParentChild")
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+}
+
 model Enrollment {
   id          String    @id @default(cuid())
-  user        User      @relation(fields: [userId], references: [id])
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId      String
-  course      Course    @relation(fields: [courseId], references: [id])
+  course      Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
   courseId    String
   enrolledAt  DateTime  @default(now())
   completedAt DateTime?
@@ -207,9 +193,9 @@ model Event {
 
 model EventAttendee {
   id      String         @id @default(cuid())
-  event   Event          @relation(fields: [eventId], references: [id])
+  event   Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
   eventId String
-  user    User           @relation(fields: [userId], references: [id])
+  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId  String
   status  AttendeeStatus @default(REGISTERED)
 
@@ -228,9 +214,9 @@ model ChatChannel {
 
 model ChatMember {
   id        String      @id @default(cuid())
-  user      User        @relation(fields: [userId], references: [id])
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String
-  channel   ChatChannel @relation(fields: [channelId], references: [id])
+  channel   ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
   channelId String
   joinedAt  DateTime    @default(now())
 
@@ -240,16 +226,16 @@ model ChatMember {
 model ChatMessage {
   id        String      @id @default(cuid())
   content   String
-  channel   ChatChannel @relation(fields: [channelId], references: [id])
+  channel   ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
   channelId String
-  author    User        @relation(fields: [authorId], references: [id])
+  author    User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
   authorId  String
   createdAt DateTime    @default(now())
 }
 
 model Notification {
   id        String           @id @default(cuid())
-  user      User             @relation(fields: [userId], references: [id])
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String
   type      NotificationType
   content   String
@@ -267,9 +253,9 @@ model Badge {
 
 model UserBadge {
   id        String   @id @default(cuid())
-  user      User     @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String
-  badge     Badge    @relation(fields: [badgeId], references: [id])
+  badge     Badge    @relation(fields: [badgeId], references: [id], onDelete: Cascade)
   badgeId   String
   awardedAt DateTime @default(now())
 
@@ -284,9 +270,9 @@ model Skill {
 
 model UserSkill {
   id           String @id @default(cuid())
-  user         User   @relation(fields: [userId], references: [id])
+  user         User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId       String
-  skill        Skill  @relation(fields: [skillId], references: [id])
+  skill        Skill  @relation(fields: [skillId], references: [id], onDelete: Cascade)
   skillId      String
   level        Int
   endorsements Int    @default(0)
@@ -296,9 +282,9 @@ model UserSkill {
 
 model Follow {
   id          String   @id @default(cuid())
-  follower    User     @relation("Follower", fields: [followerId], references: [id])
+  follower    User     @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
   followerId  String
-  following   User     @relation("Following", fields: [followingId], references: [id])
+  following   User     @relation("Following", fields: [followingId], references: [id], onDelete: Cascade)
   followingId String
   createdAt   DateTime @default(now())
 
@@ -332,4 +318,10 @@ enum NotificationType {
   FOLLOW
   EVENT
   COURSE
+}
+
+enum ContentType {
+  TEXT
+  VIDEO
+  AUDIO
 }
