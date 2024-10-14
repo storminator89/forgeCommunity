@@ -187,8 +187,10 @@ model Event {
   location     String
   maxAttendees Int?
   attendees    EventAttendee[]
-  category     String         
-  time         String         
+  category     String
+  timezone     String   @default("Europe/Berlin")
+  startTime    String
+  endTime      String
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
 }
