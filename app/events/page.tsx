@@ -1,63 +1,68 @@
+// app/events/page.tsx
+
 "use client";
 
-import { useState } from 'react';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, getDay } from 'date-fns';
+import { useState, useEffect } from 'react';
+import { 
+  format, 
+  startOfMonth, 
+  endOfMonth, 
+  eachDayOfInterval, 
+  isSameMonth, 
+  isSameDay, 
+  addMonths, 
+  subMonths, 
+  getDay 
+} from 'date-fns';
 import { de } from 'date-fns/locale';
 import { UserNav } from "@/components/user-nav";
 import { Sidebar } from "@/components/Sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ChevronLeft, ChevronRight, MapPin, Clock, Calendar as CalendarIcon, Search } from 'lucide-react';
+import { 
+  ChevronLeft, 
+  ChevronRight, 
+  MapPin, 
+  Clock, 
+  Calendar as CalendarIcon, 
+  Search, 
+  Plus, 
+  Edit, 
+  Trash2 
+} from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { motion } from 'framer-motion';
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import EventForm from '@/components/EventForm';
+import { useToast } from '@/hooks/use-toast'; // Stellen Sie sicher, dass diese Hook vorhanden ist
 
 interface Event {
-  id: number;
+  id: string;
   title: string;
-  date: Date;
+  date: string; // ISO-String von der API
   description: string;
   location: string;
-  time: string;
-  category: string;
+  time?: string;
+  category?: string;
 }
-
-const eventsData: Event[] = [
-  {
-    id: 1,
-    title: 'Webentwicklung Workshop',
-    date: new Date(2024, 9, 15),
-    description: 'Ein ganztägiger Workshop zu modernen Webentwicklungstechniken.',
-    location: 'Online',
-    time: '10:00 - 16:00',
-    category: 'Webentwicklung'
-  },
-  {
-    id: 2,
-    title: 'Data Science Meetup',
-    date: new Date(2024, 9, 20),
-    description: 'Netzwerken und Austausch für Data Science Enthusiasten.',
-    location: 'TechHub Berlin',
-    time: '18:00 - 20:00',
-    category: 'Data Science'
-  },
-  {
-    id: 3,
-    title: 'UX Design Konferenz',
-    date: new Date(2024, 10, 5),
-    description: 'Dreitägige Konferenz über die neuesten Trends im UX Design.',
-    location: 'Designzentrum Hamburg',
-    time: '09:00 - 17:00',
-    category: 'Design'
-  },
-];
 
 export default function Events() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null); // Für Bearbeitung
   const [searchTerm, setSearchTerm] = useState('');
+  const [eventsData, setEventsData] = useState<Event[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const { toast } = useToast();
+  
+  // Benutzer-Session (optional, für Autorisierung)
+  // import { useSession } from 'next-auth/react';
+  // const { data: session } = useSession();
 
   const handlePreviousMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
   const handleNextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
@@ -70,21 +75,110 @@ export default function Events() {
 
   const handleSelectDate = (date: Date) => {
     setSelectedDate(date);
+    setSelectedEvent(null); // Zurücksetzen beim Auswählen eines neuen Datums
   };
 
   const handleCloseDialog = () => {
     setSelectedDate(null);
+    setSelectedEvent(null);
   };
+
+  const handleOpenAddDialog = () => {
+    setIsAddDialogOpen(true);
+  };
+
+  const handleCloseAddDialog = () => {
+    setIsAddDialogOpen(false);
+  };
+
+  const handleOpenEditDialog = (event: Event) => {
+    setSelectedEvent(event);
+    setIsEditDialogOpen(true);
+  };
+
+  const handleCloseEditDialog = () => {
+    setIsEditDialogOpen(false);
+    setSelectedEvent(null);
+  };
+
+  const fetchEvents = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/events');
+      if (!res.ok) {
+        throw new Error('Network response was not ok');
+      }
+      const data: Event[] = await res.json();
+      setEventsData(data);
+    } catch (err) {
+      console.error('Failed to fetch events:', err);
+      setError('Failed to fetch events');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchEvents();
+  }, []);
 
   const filteredEvents = eventsData.filter(event =>
     event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
     event.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    event.category.toLowerCase().includes(searchTerm.toLowerCase())
+    (event.category && event.category.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   const getEventsForDate = (date: Date) => {
-    return filteredEvents.filter(event => isSameDay(date, event.date));
+    return filteredEvents.filter(event => isSameDay(new Date(event.date), date));
   };
+
+  const handleDeleteEvent = async (id: string) => {
+    if (!confirm('Sind Sie sicher, dass Sie dieses Event löschen möchten?')) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/events/${id}`, {
+        method: 'DELETE',
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Etwas ist schief gelaufen');
+      }
+
+      toast({
+        title: 'Event gelöscht',
+        description: 'Das Event wurde erfolgreich gelöscht.',
+        variant: 'success',
+      });
+
+      fetchEvents();
+    } catch (error: any) {
+      console.error('Error deleting event:', error);
+      toast({
+        title: 'Fehler',
+        description: error.message || 'Etwas ist schief gelaufen.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <p className="text-gray-500 dark:text-gray-400">Lade Ereignisse...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <p className="text-red-500 dark:text-red-400">Fehler: {error}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
@@ -107,6 +201,20 @@ export default function Events() {
                   className="pl-10 pr-4 py-2 w-64 rounded-full"
                 />
               </div>
+              {/* "Add Event"-Button nur für Admins anzeigen */}
+              {/* Uncomment and adjust if using authentication
+              {session?.user?.role === 'ADMIN' && (
+                <Button variant="secondary" size="sm" onClick={handleOpenAddDialog} className="flex items-center">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Hinzufügen
+                </Button>
+              )}
+              */}
+              {/* Temporär den Button anzeigen, falls keine Authentifizierung vorhanden ist */}
+              <Button variant="secondary" size="sm" onClick={handleOpenAddDialog} className="flex items-center">
+                <Plus className="mr-2 h-4 w-4" />
+                Hinzufügen
+              </Button>
               <ThemeToggle />
               <UserNav />
             </div>
@@ -176,8 +284,43 @@ export default function Events() {
           </motion.div>
         </main>
       </div>
+
+      {/* Dialog für das Hinzufügen von Events */}
+      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Neues Event hinzufügen</DialogTitle>
+          </DialogHeader>
+          <div className="mt-4">
+            <EventForm
+              onSuccess={fetchEvents}
+              onClose={handleCloseAddDialog}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog für das Bearbeiten von Events */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Event bearbeiten</DialogTitle>
+          </DialogHeader>
+          <div className="mt-4">
+            {selectedEvent && (
+              <EventForm
+                initialData={selectedEvent}
+                onSuccess={fetchEvents}
+                onClose={handleCloseEditDialog}
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog für die Anzeige der Events an einem ausgewählten Datum */}
       <Dialog open={!!selectedDate} onOpenChange={handleCloseDialog}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
             <DialogTitle>
               {selectedDate && format(selectedDate, 'dd. MMMM yyyy', { locale: de })}
@@ -186,18 +329,46 @@ export default function Events() {
           <div className="mt-4 space-y-4">
             {selectedDate && getEventsForDate(selectedDate).map((event) => (
               <div key={event.id} className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
-                <h3 className="text-lg font-semibold mb-2">{event.title}</h3>
-                <div className="space-y-2 text-sm text-gray-500 dark:text-gray-400">
-                  <div className="flex items-center">
-                    <Clock className="mr-2 h-4 w-4 flex-shrink-0" />
-                    <span>{event.time}</span>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h3 className="text-lg font-semibold mb-2">{event.title}</h3>
+                    <div className="space-y-2 text-sm text-gray-500 dark:text-gray-400">
+                      {event.time && (
+                        <div className="flex items-center">
+                          <Clock className="mr-2 h-4 w-4 flex-shrink-0" />
+                          <span>{event.time}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center">
+                        <MapPin className="mr-2 h-4 w-4 flex-shrink-0" />
+                        <span>{event.location}</span>
+                      </div>
+                      <p>{event.description}</p>
+                      {event.category && <Badge variant="secondary">{event.category}</Badge>}
+                    </div>
                   </div>
-                  <div className="flex items-center">
-                    <MapPin className="mr-2 h-4 w-4 flex-shrink-0" />
-                    <span>{event.location}</span>
+                  {/* "Edit" und "Delete" Buttons nur für Admins anzeigen */}
+                  {/* Uncomment and adjust if using authentication
+                  {session?.user?.role === 'ADMIN' && (
+                    <div className="flex space-x-2">
+                      <Button variant="ghost" size="sm" onClick={() => handleOpenEditDialog(event)}>
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleDeleteEvent(event.id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                  */}
+                  {/* Temporär die Buttons anzeigen, falls keine Authentifizierung vorhanden ist */}
+                  <div className="flex space-x-2">
+                    <Button variant="ghost" size="sm" onClick={() => handleOpenEditDialog(event)}>
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => handleDeleteEvent(event.id)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
-                  <p>{event.description}</p>
-                  <Badge variant="secondary">{event.category}</Badge>
                 </div>
               </div>
             ))}
