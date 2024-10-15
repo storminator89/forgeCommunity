@@ -298,15 +298,16 @@ model Follow {
 }
 
 model Article {
-  id        String   @id @default(cuid())
-  title     String
-  content   String
-  category  String
-  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  authorId  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  tags      Tag[]    @relation("ArticleTags") // Relation-Name hinzugefügt
+  id            String   @id @default(cuid())
+  title         String
+  content       String
+  category      String
+  featuredImage String?  // Neues Feld für das Beitragsbild
+  author        User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  authorId      String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  tags          Tag[]    @relation("ArticleTags")
 }
 
 enum Role {

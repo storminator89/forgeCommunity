@@ -48,6 +48,7 @@
     "date-fns": "^3.6.0",
     "date-fns-tz": "^3.2.0",
     "embla-carousel-react": "^8.3.0",
+    "formidable": "^3.5.1",
     "framer-motion": "^11.11.8",
     "isomorphic-dompurify": "^2.16.0",
     "lucide-react": "^0.358.0",

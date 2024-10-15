@@ -15,12 +15,14 @@ import DOMPurify from 'isomorphic-dompurify';
 import { Card } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import Image from 'next/image';
 
 interface Article {
   id: string;
   title: string;
   content: string;
   category: string;
+  featuredImage: string | null;
   author: {
     id: string;
     name: string;
@@ -125,7 +127,7 @@ export default function ArticlePage() {
                 <Button
                   variant="outline"
                   onClick={() => router.push('/knowledgebase')}
-                  className="bg-black text-white hover:bg-gray-800"
+                  className="bg-black text-white hover:bg-gray-800 hover:text-white"
                 >
                   <ArrowLeft className="mr-2 h-4 w-4" /> Zurück zur Übersicht
                 </Button>
@@ -160,6 +162,17 @@ export default function ArticlePage() {
                   </div>
                 )}
               </div>
+              {article.featuredImage && (
+                <div className="mb-6">
+                  <Image
+                    src={article.featuredImage}
+                    alt={article.title}
+                    width={800}
+                    height={400}
+                    className="rounded-lg object-cover w-full"
+                  />
+                </div>
+              )}
               <h2 className="text-3xl font-bold text-gray-800 dark:text-white mb-4">{article.title}</h2>
               <div className="flex flex-wrap items-center text-sm text-gray-500 dark:text-gray-400 mb-4">
                 <User className="mr-2 h-4 w-4" />

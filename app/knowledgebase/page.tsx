@@ -1,25 +1,27 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { Sidebar } from "@/components/Sidebar";
 import { UserNav } from "@/components/user-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Search, Book, Plus, ChevronRight, Calendar, User } from 'lucide-react';
+import { Search, Book, Plus, ChevronRight, Calendar, User, Tag } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { motion, AnimatePresence } from 'framer-motion';
 import DOMPurify from 'isomorphic-dompurify';
+import Image from 'next/image';
 
 interface Article {
   id: string;
   title: string;
   content: string;
   category: string;
+  featuredImage: string | null;
   author: {
     id: string;
     name: string;
@@ -32,12 +34,14 @@ interface Article {
 export default function KnowledgeBase() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [selectedTag, setSelectedTag] = useState('All');
   const [articles, setArticles] = useState<Article[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
   const fetchArticles = async () => {
+    setIsLoading(true);
     try {
       const response = await fetch('/api/articles');
 
@@ -48,13 +52,8 @@ export default function KnowledgeBase() {
       const data = await response.json();
       console.log('Fetched articles data:', data);
 
-      if (Array.isArray(data)) {
-        setArticles(data);
-      } else if (Array.isArray(data.articles)) {
-        setArticles(data.articles);
-      } else {
-        throw new Error('Invalid data format: expected an array or an object with an "articles" array');
-      }
+      setArticles(data);
+      setError(null);
     } catch (error: any) {
       console.error('Error fetching articles:', error);
       setError(error.message || 'Fehler beim Laden der Artikel.');
@@ -69,35 +68,30 @@ export default function KnowledgeBase() {
   }, []);
 
   const categories = useMemo(() => 
-    ['All', ...new Set(Array.isArray(articles) ? articles.map(article => article.category) : [])],
+    ['All', ...new Set(articles.map(article => article.category))],
+    [articles]
+  );
+
+  const tags = useMemo(() => 
+    ['All', ...new Set(articles.flatMap(article => article.tags.map(tag => tag.name)))],
     [articles]
   );
 
   const filteredArticles = useMemo(() => 
-    Array.isArray(articles)
-      ? articles.filter(article =>
-          (selectedCategory === 'All' || article.category === selectedCategory) &&
-          (article.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            article.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            article.tags.some(tag => tag.name.toLowerCase().includes(searchTerm.toLowerCase())))
-        )
-      : [],
-    [articles, selectedCategory, searchTerm]
+    articles.filter(article =>
+      (selectedCategory === 'All' || article.category === selectedCategory) &&
+      (selectedTag === 'All' || article.tags.some(tag => tag.name === selectedTag)) &&
+      (article.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        article.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        article.tags.some(tag => tag.name.toLowerCase().includes(searchTerm.toLowerCase())))
+    ),
+    [articles, selectedCategory, selectedTag, searchTerm]
   );
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <p>Laden...</p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p className="text-red-500">Fehler: {error}</p>
-        <Button onClick={fetchArticles} className="ml-4">Erneut versuchen</Button>
       </div>
     );
   }
@@ -129,23 +123,37 @@ export default function KnowledgeBase() {
           </div>
         </header>
         <main className="flex-1 overflow-hidden p-4 lg:p-8">
-          <div className="flex justify-between items-center mb-6">
-            <nav>
-              <Tabs value={selectedCategory} onValueChange={setSelectedCategory} className="w-full">
-                <TabsList className="overflow-x-auto w-full">
-                  {categories.map((category) => (
-                    <TabsTrigger key={category} value={category} className="capitalize">
-                      {category}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-              </Tabs>
-            </nav>
-            <Link href="/knowledgebase/new-article">
-              <Button className="ml-4">
-                <Plus className="mr-2 h-4 w-4" /> Neuer Artikel
-              </Button>
-            </Link>
+          <div className="flex flex-col space-y-4 mb-6">
+            <div className="flex justify-between items-center">
+              <nav>
+                <Tabs value={selectedCategory} onValueChange={setSelectedCategory} className="w-full">
+                  <TabsList className="overflow-x-auto w-full">
+                    {categories.map((category) => (
+                      <TabsTrigger key={category} value={category} className="capitalize">
+                        {category}
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+                </Tabs>
+              </nav>
+              <Link href="/knowledgebase/new-article">
+                <Button className="ml-4">
+                  <Plus className="mr-2 h-4 w-4" /> Neuer Artikel
+                </Button>
+              </Link>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {tags.map((tag) => (
+                <Badge
+                  key={tag}
+                  variant={selectedTag === tag ? "default" : "secondary"}
+                  className="cursor-pointer"
+                  onClick={() => setSelectedTag(tag === selectedTag ? 'All' : tag)}
+                >
+                  <Tag className="mr-1 h-3 w-3" /> {tag}
+                </Badge>
+              ))}
+            </div>
           </div>
           <ScrollArea className="h-[calc(100vh-200px)]">
             <AnimatePresence>
@@ -167,33 +175,52 @@ export default function KnowledgeBase() {
                       transition={{ duration: 0.3 }}
                       className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300"
                     >
-                      <h3 className="text-2xl font-bold mb-2 text-gray-800 dark:text-white">
-                        <Link href={`/knowledgebase/${article.id}`}>
-                          {article.title}
-                        </Link>
-                      </h3>
-                      <div className="flex items-center text-sm text-gray-500 dark:text-gray-400 mb-4">
-                        <User className="mr-2 h-4 w-4" />
-                        <span className="mr-4">{article.author.name || article.author.email}</span>
-                        <Calendar className="mr-2 h-4 w-4" />
-                        <span>{new Date(article.createdAt).toLocaleDateString()}</span>
+                      <div className="flex flex-col md:flex-row">
+                        {article.featuredImage && (
+                          <div className="md:w-1/3 mb-4 md:mb-0 md:mr-6">
+                            <div className="relative w-full h-48">
+                              <Image
+                                src={article.featuredImage}
+                                alt={article.title}
+                                layout="fill"
+                                objectFit="cover"
+                                className="rounded-md"
+                              />
+                            </div>
+                          </div>
+                        )}
+                        <div className={`${article.featuredImage ? 'md:w-2/3' : 'w-full'}`}>
+                          <h3 className="text-2xl font-bold mb-2 text-gray-800 dark:text-white">
+                            <Link href={`/knowledgebase/${article.id}`}>
+                              {article.title}
+                            </Link>
+                          </h3>
+                          <div className="flex items-center text-sm text-gray-500 dark:text-gray-400 mb-4">
+                            <User className="mr-2 h-4 w-4" />
+                            <span className="mr-4">{article.author.name || article.author.email}</span>
+                            <Calendar className="mr-2 h-4 w-4" />
+                            <span>{new Date(article.createdAt).toLocaleDateString()}</span>
+                          </div>
+                          <div 
+                            className="text-gray-600 dark:text-gray-300 mb-4"
+                            dangerouslySetInnerHTML={{
+                              __html: DOMPurify.sanitize(article.content.substring(0, 150) + '...')
+                            }}
+                          />
+                          <div className="flex flex-wrap gap-2 mb-4">
+                            {article.tags.map((tag) => (
+                              <Badge key={tag.id} variant="secondary" className="cursor-pointer" onClick={() => setSelectedTag(tag.name)}>
+                                <Tag className="mr-1 h-3 w-3" /> {tag.name}
+                              </Badge>
+                            ))}
+                          </div>
+                          <Link href={`/knowledgebase/${article.id}`}>
+                            <Button variant="link">
+                              Weiterlesen <ChevronRight className="ml-2 h-4 w-4" />
+                            </Button>
+                          </Link>
+                        </div>
                       </div>
-                      <div 
-                        className="text-gray-600 dark:text-gray-300 mb-4"
-                        dangerouslySetInnerHTML={{
-                          __html: DOMPurify.sanitize(article.content.substring(0, 200) + '...')
-                        }}
-                      />
-                      <div className="flex flex-wrap gap-2 mb-4">
-                        {article.tags.map((tag) => (
-                          <Badge key={tag.id} variant="secondary">{tag.name}</Badge>
-                        ))}
-                      </div>
-                      <Link href={`/knowledgebase/${article.id}`}>
-                        <Button variant="link">
-                          Weiterlesen <ChevronRight className="ml-2 h-4 w-4" />
-                        </Button>
-                      </Link>
                     </motion.article>
                   ))
                 )}

@@ -1,9 +1,9 @@
-// app/api/articles/[id]/route.ts
-
-import { NextResponse } from 'next/server';
-import prisma from '@/lib/prisma'; // Passe den Pfad entsprechend an
+import { NextRequest, NextResponse } from 'next/server';
+import prisma from '@/lib/prisma';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/auth'; // Passe den Pfad entsprechend an
+import { authOptions } from '@/lib/auth';
+import { writeFile } from 'fs/promises';
+import path from 'path';
 
 export async function GET(
   req: Request,
@@ -34,7 +34,7 @@ export async function GET(
 }
 
 export async function PUT(
-  req: Request,
+  req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   const { id } = params;
@@ -43,13 +43,18 @@ export async function PUT(
     return NextResponse.json({ error: 'Nicht autorisiert.' }, { status: 401 });
   }
 
-  const { title, content, category, tags } = await req.json();
-
-  if (!title || !content || !category) {
-    return NextResponse.json({ error: 'Titel, Inhalt und Kategorie sind erforderlich.' }, { status: 400 });
-  }
-
   try {
+    const formData = await req.formData();
+    const title = formData.get('title') as string;
+    const content = formData.get('content') as string;
+    const category = formData.get('category') as string;
+    const tags = formData.getAll('tags') as string[];
+    const featuredImage = formData.get('featuredImage') as File | null;
+
+    if (!title || !content || !category) {
+      return NextResponse.json({ error: 'Titel, Inhalt und Kategorie sind erforderlich.' }, { status: 400 });
+    }
+
     // Überprüfe, ob der Artikel existiert
     const existingArticle = await prisma.article.findUnique({ where: { id } });
     if (!existingArticle) {
@@ -61,8 +66,19 @@ export async function PUT(
       return NextResponse.json({ error: 'Du bist nicht berechtigt, diesen Artikel zu bearbeiten.' }, { status: 403 });
     }
 
+    let featuredImagePath = existingArticle.featuredImage;
+    if (featuredImage) {
+      const bytes = await featuredImage.arrayBuffer();
+      const buffer = Buffer.from(bytes);
+
+      const fileName = `${Date.now()}_${featuredImage.name}`;
+      const filePath = path.join(process.cwd(), 'public', 'images', 'uploads', fileName);
+      await writeFile(filePath, buffer);
+      featuredImagePath = `/images/uploads/${fileName}`;
+    }
+
     // Verknüpfe Tags oder erstelle neue Tags, falls sie nicht existieren
-    const tagConnectOrCreate = tags?.map((tagName: string) => ({
+    const tagConnectOrCreate = tags.map((tagName: string) => ({
       where: { name: tagName },
       create: { name: tagName },
     }));
@@ -73,9 +89,10 @@ export async function PUT(
         title,
         content,
         category,
+        featuredImage: featuredImagePath,
         tags: {
           set: [], // Entfernt alle bestehenden Tags
-          connectOrCreate: tagConnectOrCreate || [],
+          connectOrCreate: tagConnectOrCreate,
         },
       },
       include: {

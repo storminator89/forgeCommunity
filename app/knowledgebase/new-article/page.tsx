@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import dynamic from 'next/dynamic';
@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { BookOpen, ArrowLeft } from 'lucide-react';
+import { BookOpen, ArrowLeft, Image, Upload } from 'lucide-react';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CategorySelect } from "@/components/CategorySelect";
 import { TagSelect } from "@/components/TagSelect";
@@ -24,11 +24,14 @@ import 'react-quill/dist/quill.snow.css';
 export default function NewArticle() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [category, setCategory] = useState('');
   const [tags, setTags] = useState<string[]>([]);
+  const [featuredImage, setFeaturedImage] = useState<File | null>(null);
+  const [featuredImagePreview, setFeaturedImagePreview] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [alert, setAlert] = useState<{ message: string; type: 'error' | 'success' } | null>(null);
   
@@ -95,25 +98,43 @@ export default function NewArticle() {
     setCategory(newCategory);
   };
 
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setFeaturedImage(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFeaturedImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-
+  
     if (!title || !content || !category) {
       setAlert({ message: 'Titel, Inhalt und Kategorie sind erforderlich.', type: 'error' });
       setIsSubmitting(false);
       return;
     }
-
+  
+    const formData = new FormData();
+    formData.append('title', title);
+    formData.append('content', content);
+    formData.append('category', category);
+    tags.forEach(tag => formData.append('tags', tag));
+    if (featuredImage) {
+      formData.append('featuredImage', featuredImage);
+    }
+  
     try {
       const response = await fetch('/api/articles', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ title, content, category, tags }),
+        body: formData,
       });
-
+  
       if (response.ok) {
         const article = await response.json();
         setAlert({ message: 'Artikel erfolgreich erstellt!', type: 'success' });
@@ -178,6 +199,32 @@ export default function NewArticle() {
                       className="text-lg py-2"
                       required
                     />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="featuredImage" className="text-xl font-semibold">Beitragsbild</Label>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="file"
+                        id="featuredImage"
+                        ref={fileInputRef}
+                        onChange={handleImageUpload}
+                        accept="image/*"
+                        className="hidden"
+                      />
+                      <Button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="flex items-center"
+                      >
+                        <Upload className="mr-2 h-4 w-4" />
+                        Bild auswählen
+                      </Button>
+                      {featuredImagePreview && (
+                        <div className="w-16 h-16 border rounded-md overflow-hidden">
+                          <img src={featuredImagePreview} alt="Vorschau" className="w-full h-full object-cover" />
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="content" className="text-xl font-semibold">Inhalt</Label>

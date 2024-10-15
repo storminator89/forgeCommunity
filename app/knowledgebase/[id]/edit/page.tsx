@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from "@/components/Sidebar";
 import { UserNav } from "@/components/user-nav";
@@ -13,11 +13,12 @@ import { useSession } from 'next-auth/react';
 import { useParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { Card } from "@/components/ui/card";
-import { AlertCircle, ArrowLeft, BookOpen } from 'lucide-react';
+import { AlertCircle, ArrowLeft, BookOpen, Upload } from 'lucide-react';
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CategorySelect } from "@/components/CategorySelect";
 import { TagSelect } from "@/components/TagSelect";
+import Image from 'next/image';
 
 const QuillEditor = dynamic(() => import('react-quill'), { ssr: false });
 import 'react-quill/dist/quill.snow.css';
@@ -38,6 +39,7 @@ interface Article {
   title: string;
   content: string;
   category: string;
+  featuredImage: string | null;
   author: Author;
   createdAt: string;
   tags: Tag[];
@@ -48,11 +50,14 @@ export default function EditArticle() {
   const router = useRouter();
   const params = useParams();
   const { id } = params;
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [category, setCategory] = useState('');
   const [tags, setTags] = useState<string[]>([]);
+  const [featuredImage, setFeaturedImage] = useState<File | null>(null);
+  const [featuredImagePreview, setFeaturedImagePreview] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [existingCategories, setExistingCategories] = useState<string[]>([]);
@@ -83,6 +88,9 @@ export default function EditArticle() {
         setContent(articleData.content);
         setCategory(articleData.category);
         setTags(articleData.tags.map(tag => tag.name));
+        if (articleData.featuredImage) {
+          setFeaturedImagePreview(articleData.featuredImage);
+        }
 
         if (metadataResponse.ok) {
           const metadataData = await metadataResponse.json();
@@ -128,6 +136,18 @@ export default function EditArticle() {
     setCategory(newCategory);
   };
 
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setFeaturedImage(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFeaturedImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -136,13 +156,19 @@ export default function EditArticle() {
       return;
     }
 
+    const formData = new FormData();
+    formData.append('title', title);
+    formData.append('content', content);
+    formData.append('category', category);
+    tags.forEach(tag => formData.append('tags', tag));
+    if (featuredImage) {
+      formData.append('featuredImage', featuredImage);
+    }
+
     try {
       const response = await fetch(`/api/articles/${id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ title, content, category, tags }),
+        body: formData,
       });
 
       if (response.ok) {
@@ -210,6 +236,38 @@ export default function EditArticle() {
                       className="text-lg py-2"
                       required
                     />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="featuredImage" className="text-xl font-semibold">Beitragsbild</Label>
+                    <div className="flex items-center space-x-4">
+                      <input
+                        type="file"
+                        id="featuredImage"
+                        ref={fileInputRef}
+                        onChange={handleImageUpload}
+                        accept="image/*"
+                        className="hidden"
+                      />
+                      <Button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="flex items-center"
+                      >
+                        <Upload className="mr-2 h-4 w-4" />
+                        Bild auswählen
+                      </Button>
+                      {featuredImagePreview && (
+                        <div className="w-24 h-24 relative">
+                          <Image
+                            src={featuredImagePreview}
+                            alt="Vorschau"
+                            layout="fill"
+                            objectFit="cover"
+                            className="rounded-md"
+                          />
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="content" className="text-xl font-semibold">Inhalt</Label>
