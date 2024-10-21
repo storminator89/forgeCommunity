@@ -50,46 +50,61 @@ enum ResourceType {
   COURSE
 }
 
+model Endorsement {
+  id          String   @id @default(cuid())
+  endorser    User     @relation("EndorsementsGiven", fields: [endorserId], references: [id])
+  endorserId  String
+  endorsed    User     @relation("EndorsementsReceived", fields: [endorsedId], references: [id])
+  endorsedId  String
+  createdAt   DateTime @default(now())
+
+  @@unique([endorserId, endorsedId])
+}
+
 model User {
-  id                 String    @id @default(cuid())
+  id                 String          @id @default(cuid())
   name               String?
-  email              String    @unique
+  email              String          @unique
   emailVerified      DateTime?
   password           String?
   image              String?
   bio                String?
-  role               Role      @default(USER)
+  title              String
+  contact            String
+  endorsements       Int             @default(0)
+  role               Role            @default(USER)
   verificationToken  String?
   resetPasswordToken String?
   lastLogin          DateTime?
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
-
-  posts           Post[]
-  comments        Comment[]
-  likePosts       LikePost[]
-  likeComments    LikeComment[]
-  likeProjects    LikeProject[]
-  projectComments ProjectComment[]
-  courses         Course[]
-  eventAttendees  EventAttendee[]
-  chatMessages    ChatMessage[]
-  notifications   Notification[]
-  badges          UserBadge[]
-  skills          UserSkill[]
-  followers       Follow[]         @relation("Following")
-  following       Follow[]         @relation("Follower")
-  userSettings    UserSettings?
-  enrollments     Enrollment[]
-  chatMemberships ChatMember[]
-  accounts        Account[]
-  sessions        Session[]
-  articles        Article[]
-  projects        Project[]
-
-  // Neues Feld hinzugefügt
-  resources Resource[] @relation("UserResources")
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  
+  posts              Post[]
+  comments           Comment[]
+  likePosts          LikePost[]
+  likeComments       LikeComment[]
+  likeProjects       LikeProject[]
+  projectComments    ProjectComment[]
+  courses            Course[]
+  eventAttendees     EventAttendee[]
+  chatMessages       ChatMessage[]
+  notifications      Notification[]
+  badges             UserBadge[]
+  skills             UserSkill[]
+  followers          Follow[]        @relation("Following")
+  following          Follow[]        @relation("Follower")
+  userSettings       UserSettings?
+  enrollments        Enrollment[]
+  chatMemberships    ChatMember[]
+  accounts           Account[]
+  sessions           Session[]
+  articles           Article[]
+  projects           Project[]
+  resources          Resource[]      @relation("UserResources")
+  endorsementsGiven   Endorsement[] @relation("EndorsementsGiven")
+  endorsementsReceived Endorsement[] @relation("EndorsementsReceived")
 }
+
 
 model UserSettings {
   id                   String  @id @default(cuid())
@@ -130,15 +145,15 @@ model Session {
 }
 
 model Post {
-  id        String   @id @default(cuid())
+  id        String     @id @default(cuid())
   title     String
   content   String
-  published Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  published Boolean    @default(false)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
 
-  author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  authorId String
+  author    User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  authorId  String
 
   comments  Comment[]
   likePosts LikePost[]
@@ -146,52 +161,52 @@ model Post {
 }
 
 model Comment {
-  id        String   @id @default(cuid())
-  content   String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String        @id @default(cuid())
+  content      String
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 
-  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
-  postId String
+  post         Post          @relation(fields: [postId], references: [id], onDelete: Cascade)
+  postId       String
 
-  author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  authorId String
+  author       User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  authorId     String
 
   likeComments LikeComment[]
 }
 
 model LikePost {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
+  id        String    @id @default(cuid())
+  createdAt DateTime  @default(now())
 
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
 
-  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
-  postId String
+  post      Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  postId    String
 
   @@unique([userId, postId], name: "user_post_unique")
 }
 
 model LikeComment {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
+  id        String    @id @default(cuid())
+  createdAt DateTime  @default(now())
 
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
 
-  comment   Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  comment   Comment   @relation(fields: [commentId], references: [id], onDelete: Cascade)
   commentId String
 
   @@unique([userId, commentId], name: "user_comment_unique")
 }
 
 model Tag {
-  id       String    @id @default(cuid())
-  name     String    @unique
-  posts    Post[]    @relation("PostTags")
-  articles Article[] @relation("ArticleTags")
-  projects Project[] @relation("ProjectTags")
+  id        String      @id @default(cuid())
+  name      String      @unique
+  posts     Post[]      @relation("PostTags")
+  articles  Article[]   @relation("ArticleTags")
+  projects  Project[]   @relation("ProjectTags")
 }
 
 model Course {
@@ -247,7 +262,7 @@ model Enrollment {
   courseId    String
   enrolledAt  DateTime  @default(now())
   completedAt DateTime?
-
+  
   @@unique([userId, courseId])
 }
 
@@ -339,9 +354,10 @@ model UserBadge {
 }
 
 model Skill {
-  id    String      @id @default(cuid())
-  name  String      @unique
-  users UserSkill[]
+  id        String      @id @default(cuid())
+  name      String      @unique
+  category  String
+  users     UserSkill[]
 }
 
 model UserSkill {
@@ -372,7 +388,7 @@ model Article {
   title         String
   content       String
   category      String
-  featuredImage String? // Optionales Feld für das Beitragsbild
+  featuredImage String?  // Optionales Feld für das Beitragsbild
   author        User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
   authorId      String
   createdAt     DateTime @default(now())
@@ -381,7 +397,7 @@ model Article {
 }
 
 model Project {
-  id           String           @id @default(cuid())
+  id           String          @id @default(cuid())
   title        String
   description  String
   category     String?
@@ -389,50 +405,50 @@ model Project {
   imageUrl     String?
   gradientFrom String
   gradientTo   String
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
-  author       User             @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  author       User            @relation(fields: [authorId], references: [id], onDelete: Cascade)
   authorId     String
-  tags         Tag[]            @relation("ProjectTags")
+  tags         Tag[]           @relation("ProjectTags")
   likes        LikeProject[]
   comments     ProjectComment[]
 }
 
 model LikeProject {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
+  id        String    @id @default(cuid())
+  createdAt DateTime  @default(now())
 
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
 
-  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   projectId String
 
   @@unique([userId, projectId], name: "user_project_unique")
 }
 
 model ProjectComment {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   content   String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
-  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   projectId String
 
-  author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  authorId String
+  author    User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  authorId  String
 }
 
 model Resource {
-  id        String       @id @default(cuid())
-  title     String
-  type      ResourceType
-  category  String
-  author    User         @relation("UserResources", fields: [authorId], references: [id], onDelete: Cascade)
-  authorId  String
-  url       String
-  color     String
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
+  id         String        @id @default(cuid())
+  title      String
+  type       ResourceType
+  category   String
+  author     User          @relation("UserResources", fields: [authorId], references: [id], onDelete: Cascade)
+  authorId   String
+  url        String
+  color      String
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
 }
