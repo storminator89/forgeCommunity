@@ -10,9 +10,9 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Bell, Lock, Globe, CheckCircle, XCircle, Code, Design, Database, Language, Edit, Trash } from 'lucide-react'
+import { Bell, Lock, Globe, CheckCircle, XCircle, Code, Design, Database, Languages, Edit, Trash } from 'lucide-react'
+import { ImageUpload } from "@/components/ImageUpload"
 import axios from 'axios'
 import { toast } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
@@ -33,10 +33,31 @@ interface UserSkill {
   skill: Skill
 }
 
+const SKILL_LEVELS = [
+  { label: 'Keine Kenntnisse', value: 0, color: 'bg-gray-300' },
+  { label: 'Beginner', value: 33, color: 'bg-blue-500' },
+  { label: 'Fortgeschritten', value: 66, color: 'bg-green-500' },
+  { label: 'Experte', value: 100, color: 'bg-purple-500' }
+] as const;
+
+// Hilfsfunktion um den nächstgelegenen Level zu finden
+const findNearestLevel = (value: number) => {
+  return SKILL_LEVELS.reduce((prev, curr) => {
+    return Math.abs(curr.value - value) < Math.abs(prev.value - value) ? curr : prev;
+  });
+};
+
+// Hilfsfunktion um den Label für einen Wert zu bekommen
+const getLevelLabel = (value: number) => {
+  return findNearestLevel(value).label;
+};
+
+
 export default function SettingsPage() {
   // Grundlegende Benutzerinformationen
   const [name, setName] = useState('Max Mustermann')
   const [email, setEmail] = useState('max.mustermann@example.com')
+  const [userImage, setUserImage] = useState<string | null>(null)
   const [language, setLanguage] = useState('de')
   const [emailNotifications, setEmailNotifications] = useState(true)
   const [pushNotifications, setPushNotifications] = useState(true)
@@ -54,17 +75,20 @@ export default function SettingsPage() {
 
   // Lade- und Fehlerzustände
   const [isLoading, setIsLoading] = useState(false)
-
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true)
       try {
-        const [skillsResponse, userSkillsResponse] = await Promise.all([
+        const [skillsResponse, userSkillsResponse, userResponse] = await Promise.all([
           axios.get('/api/skills'),
-          axios.get('/api/user/skills')
+          axios.get('/api/user/skills'),
+          axios.get('/api/user/profile')
         ])
         setAvailableSkills(skillsResponse.data)
         setUserSkills(userSkillsResponse.data)
+        setUserImage(userResponse.data.image)
+        setName(userResponse.data.name || '')
+        setEmail(userResponse.data.email || '')
       } catch (error) {
         console.error("Fehler beim Abrufen der Daten:", error)
         toast.error("Beim Laden der Daten ist ein Fehler aufgetreten.")
@@ -76,10 +100,25 @@ export default function SettingsPage() {
     fetchData()
   }, [])
 
+  const handleImageUpdate = async (newImageUrl: string) => {
+    setUserImage(newImageUrl)
+    try {
+      await axios.put('/api/user/profile', { image: newImageUrl })
+    } catch (error) {
+      console.error("Fehler beim Aktualisieren des Profilbilds:", error)
+      toast.error("Fehler beim Aktualisieren des Profilbilds")
+    }
+  }
+
   const handleSave = async () => {
     try {
-      // Hier würden Sie die Einstellungen speichern (z.B. via API)
-      // Beispiel: await axios.post('/api/user/settings', { name, email, language, ... })
+      await axios.put('/api/user/profile', {
+        name,
+        email,
+        language,
+        emailNotifications,
+        pushNotifications
+      })
       toast.success("Einstellungen erfolgreich gespeichert.")
     } catch (error) {
       console.error("Fehler beim Speichern der Einstellungen:", error)
@@ -97,8 +136,10 @@ export default function SettingsPage() {
           return
         }
 
-        // Neue Fähigkeit erstellen
-        const createSkillResponse = await axios.post('/api/skills', { name: newSkillName.trim(), category: 'Unkategorisiert' })
+        const createSkillResponse = await axios.post('/api/skills', {
+          name: newSkillName.trim(),
+          category: 'Unkategorisiert'
+        })
         skillId = createSkillResponse.data.id
       }
 
@@ -112,17 +153,10 @@ export default function SettingsPage() {
         return
       }
 
-      // Benutzerfähigkeit hinzufügen
       await axios.post('/api/user/skills', { skillId, level: newSkillLevel })
-
-      // Aktualisieren der Benutzerfähigkeiten
       const response = await axios.get('/api/user/skills')
       setUserSkills(response.data)
-
-      // Erfolgsmeldung
       toast.success("Fähigkeit erfolgreich hinzugefügt.")
-
-      // Zurücksetzen der Formularfelder
       setNewSkillId('')
       setNewSkillLevel(0)
       setNewSkillName('')
@@ -135,7 +169,6 @@ export default function SettingsPage() {
   const handleDeleteSkill = async (skillId: string) => {
     try {
       await axios.delete(`/api/user/skills/${skillId}`)
-      // Aktualisieren der Benutzerfähigkeiten
       const response = await axios.get('/api/user/skills')
       setUserSkills(response.data)
       toast.success("Fähigkeit erfolgreich gelöscht.")
@@ -155,7 +188,6 @@ export default function SettingsPage() {
       }
 
       await axios.put(`/api/user/skills/${editSkill.skillId}`, { level: editSkill.level })
-      // Aktualisieren der Benutzerfähigkeiten
       const response = await axios.get('/api/user/skills')
       setUserSkills(response.data)
       toast.success("Fähigkeit erfolgreich aktualisiert.")
@@ -167,7 +199,6 @@ export default function SettingsPage() {
     }
   }
 
-  // Funktion zum Abrufen des passenden Icons basierend auf der Kategorie oder dem Namen der Fähigkeit
   const getSkillIcon = (skillName: string) => {
     const name = skillName.toLowerCase()
     if (name.includes('javascript') || name.includes('typescript') || name.includes('python')) {
@@ -177,7 +208,7 @@ export default function SettingsPage() {
     } else if (name.includes('database') || name.includes('sql') || name.includes('mongodb')) {
       return <Database className="w-5 h-5 text-green-500" />
     } else if (name.includes('language') || name.includes('german') || name.includes('english')) {
-      return <Language className="w-5 h-5 text-yellow-500" />
+      return <Languages className="w-5 h-5 text-yellow-500" />
     }
     return <CheckCircle className="w-5 h-5 text-gray-500" />
   }
@@ -224,13 +255,10 @@ export default function SettingsPage() {
                     <CardDescription>Aktualisieren Sie Ihre Kontoinformationen hier.</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="flex items-center space-x-4">
-                      <Avatar className="w-20 h-20">
-                        <AvatarImage src="https://github.com/shadcn.png" />
-                        <AvatarFallback>MM</AvatarFallback>
-                      </Avatar>
-                      <Button variant="outline">Bild ändern</Button>
-                    </div>
+                    <ImageUpload
+                      currentImage={userImage}
+                      onImageUpdate={handleImageUpdate}
+                    />
                     <div className="space-y-2">
                       <Label htmlFor="name">Name</Label>
                       <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
@@ -342,22 +370,27 @@ export default function SettingsPage() {
                           {userSkills.map((userSkill) => (
                             <li key={userSkill.id} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-md shadow">
                               <div className="flex items-center space-x-4">
-                                {/* Dynamisches Icon basierend auf der Fähigkeit */}
                                 {getSkillIcon(userSkill.skill?.name || "")}
-                                {/* Fähigkeitsdetails */}
-                                <div>
-                                  <span className="font-medium text-gray-700 dark:text-gray-200">{userSkill.skill?.name || "Unbekannte Fähigkeit"}</span>
-                                  <div className="w-48 bg-gray-200 rounded-full dark:bg-gray-700 mt-1">
-                                    <div
-                                      className={`h-2 rounded-full ${userSkill.level > 66 ? 'bg-green-500' : userSkill.level > 33 ? 'bg-yellow-500' : 'bg-red-500'}`}
-                                      style={{ width: `${userSkill.level}%` }}
-                                    ></div>
+                                <div className="flex-1">
+                                  <span className="font-medium text-gray-700 dark:text-gray-200">
+                                    {userSkill.skill?.name || "Unbekannte Fähigkeit"}
+                                  </span>
+                                  <div className="mt-2">
+                                    <div className="flex items-center justify-between mb-1">
+                                      <span className="text-sm text-gray-600 dark:text-gray-400">
+                                        {getLevelLabel(userSkill.level)}
+                                      </span>
+                                    </div>
+                                    <div className="w-48 bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
+                                      <div
+                                        className={`h-2.5 rounded-full ${findNearestLevel(userSkill.level).color}`}
+                                        style={{ width: `${userSkill.level}%` }}
+                                      ></div>
+                                    </div>
                                   </div>
-                                  <span className="text-sm text-gray-600 dark:text-gray-400 mt-1 block">{userSkill.level}%</span>
                                 </div>
                               </div>
                               <div className="flex items-center space-x-2">
-                                {/* Bearbeiten und Löschen als Icons in schwarzen Buttons */}
                                 <Button
                                   variant="ghost"
                                   size="icon"
@@ -423,16 +456,22 @@ export default function SettingsPage() {
                         </div>
                       )}
                       <div>
-                        <Label htmlFor="new-skill-level">Level (%)</Label>
-                        <Input
-                          id="new-skill-level"
-                          type="number"
-                          min="0"
-                          max="100"
-                          placeholder="0 - 100"
-                          value={newSkillLevel}
-                          onChange={(e) => setNewSkillLevel(parseInt(e.target.value))}
-                        />
+                        <Label htmlFor="new-skill-level">Kenntnisstand</Label>
+                        <Select
+                          value={String(newSkillLevel)}
+                          onValueChange={(value) => setNewSkillLevel(Number(value))}
+                        >
+                          <SelectTrigger id="new-skill-level">
+                            <SelectValue placeholder="Wählen Sie Ihren Kenntnisstand" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {SKILL_LEVELS.map((level) => (
+                              <SelectItem key={level.value} value={String(level.value)}>
+                                {level.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                       <Button onClick={handleAddSkill}>Hinzufügen</Button>
                     </CardContent>
@@ -451,26 +490,36 @@ export default function SettingsPage() {
             <DialogHeader>
               <DialogTitle>Fähigkeit bearbeiten</DialogTitle>
               <DialogDescription>
-                Aktualisieren Sie das Level der Fähigkeit "{editSkill.skill?.name}".
+                Aktualisieren Sie den Kenntnisstand für "{editSkill.skill?.name}".
               </DialogDescription>
             </DialogHeader>
             <div className="mt-4 space-y-4">
-              <Label htmlFor="edit-skill-level">Level (%)</Label>
-              <Input
-                id="edit-skill-level"
-                type="number"
-                min="0"
-                max="100"
-                value={editSkill.level}
-                onChange={(e) => setEditSkill({ ...editSkill, level: parseInt(e.target.value) })}
-              />
+              <Label htmlFor="edit-skill-level">Kenntnisstand</Label>
+              <Select
+                value={String(editSkill.level)}
+                onValueChange={(value) => setEditSkill({ ...editSkill, level: Number(value) })}
+              >
+                <SelectTrigger id="edit-skill-level">
+                  <SelectValue placeholder="Wählen Sie Ihren Kenntnisstand" />
+                </SelectTrigger>
+                <SelectContent>
+                  {SKILL_LEVELS.map((level) => (
+                    <SelectItem key={level.value} value={String(level.value)}>
+                      {level.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <DialogFooter className="mt-6">
               <Button onClick={handleEditSkill}>Speichern</Button>
-              <Button variant="outline" onClick={() => setIsEditModalOpen(false)}>Abbrechen</Button>
+              <Button variant="outline" onClick={() => setIsEditModalOpen(false)}>
+                Abbrechen
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
       )}
     </div>
   )

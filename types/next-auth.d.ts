@@ -8,6 +8,22 @@ declare module "next-auth" {
       email?: string | null
       image?: string | null
       role?: string | null
+      title?: string | null
+      bio?: string | null
+      contact?: string | null
+      endorsements?: number
+      emailVerified?: Date | null
+      lastLogin?: Date | null
+      settings?: {
+        id: string
+        userId: string
+        emailNotifications: boolean
+        pushNotifications: boolean
+        theme: 'LIGHT' | 'DARK'
+        language: string
+        createdAt: Date
+        updatedAt: Date
+      } | null
     }
   }
 
@@ -18,5 +34,39 @@ declare module "next-auth" {
     image?: string | null
     password?: string | null
     role?: string | null
+    title?: string | null
+    bio?: string | null
+    contact?: string | null
+    endorsements?: number
+    emailVerified?: Date | null
+    lastLogin?: Date | null
+    verificationToken?: string | null
+    resetPasswordToken?: string | null
+    createdAt?: Date
+    updatedAt?: Date
+    settings?: {
+      id: string
+      userId: string
+      emailNotifications: boolean
+      pushNotifications: boolean
+      theme: 'LIGHT' | 'DARK'
+      language: string
+      createdAt: Date
+      updatedAt: Date
+    } | null
+  }
+
+  interface JWT {
+    id: string
+    role?: string | null
+    email?: string | null
+    name?: string | null
+    image?: string | null
+    title?: string | null
+    bio?: string | null
+    contact?: string | null
+    endorsements?: number
+    emailVerified?: Date | null
+    lastLogin?: Date | null
   }
 }

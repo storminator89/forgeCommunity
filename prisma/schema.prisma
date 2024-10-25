@@ -69,8 +69,8 @@ model User {
   password           String?
   image              String?
   bio                String?
-  title              String
-  contact            String
+  title              String?         // Optional machen
+  contact            String?         // Optional machen
   endorsements       Int             @default(0)
   role               Role            @default(USER)
   verificationToken  String?
@@ -104,6 +104,7 @@ model User {
   endorsementsGiven   Endorsement[] @relation("EndorsementsGiven")
   endorsementsReceived Endorsement[] @relation("EndorsementsReceived")
 }
+
 
 
 model UserSettings {
