@@ -10,7 +10,7 @@ interface ChatContextType {
   currentChannel: ChatChannel | null;
   messages: ChatMessage[];
   setCurrentChannel: (channel: ChatChannel) => void;
-  sendMessage: (content: string) => Promise<void>;
+  sendMessage: (content: string, imageFile?: File) => Promise<void>;
   editMessage: (input: EditMessageInput) => Promise<void>;
   createChannel: (input: CreateChannelInput) => Promise<void>;
   deleteChannel: (channelId: string) => Promise<void>;
@@ -132,31 +132,52 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const sendMessage = async (content: string) => {
+  const sendMessage = async (content: string, imageFile?: File) => {
     if (!currentChannel || !session?.user) return;
 
     const tempId = `temp-${Date.now()}`;
-    const optimisticMessage: ChatMessage = {
-      id: tempId,
-      content,
-      channelId: currentChannel.id,
-      author: {
-        id: session.user.id,
-        name: session.user.name,
-        image: session.user.image,
-      },
-      createdAt: new Date(),
-    };
-
-    setMessages(prev => [...prev, optimisticMessage]);
+    let imageUrl: string | undefined;
 
     try {
+      // Wenn ein Bild vorhanden ist, zuerst das Bild hochladen
+      if (imageFile) {
+        const formData = new FormData();
+        formData.append('file', imageFile);
+    
+        const uploadResponse = await fetch('/api/chat/upload', {  // Hier geändert
+            method: 'POST',
+            body: formData,
+        });
+    
+        if (!uploadResponse.ok) throw new Error('Failed to upload image');
+        const uploadData = await uploadResponse.json();
+        imageUrl = uploadData.filePath;
+    }
+
+      const optimisticMessage: ChatMessage = {
+        id: tempId,
+        content,
+        channelId: currentChannel.id,
+        author: {
+          id: session.user.id,
+          name: session.user.name,
+          image: session.user.image,
+        },
+        createdAt: new Date(),
+        messageType: imageUrl ? 'image' : 'text',
+        imageUrl,
+      };
+
+      setMessages(prev => [...prev, optimisticMessage]);
+
       const response = await fetch('/api/chat/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           content,
           channelId: currentChannel.id,
+          imageUrl,
+          messageType: imageUrl ? 'image' : 'text',
         }),
       });
 

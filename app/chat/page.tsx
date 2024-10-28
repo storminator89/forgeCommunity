@@ -12,6 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
+import { ImageModal } from "@/components/ui/image-modal"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,10 +26,11 @@ import {
 } from "@/components/ui/alert-dialog"
 import { useChat } from '@/contexts/ChatContext'
 import { useSession } from 'next-auth/react'
-import { Hash, Send, Plus, Pencil, Check, X, Trash2 } from 'lucide-react'
+import { Hash, Send, Plus, Pencil, Check, X, Trash2, ImageIcon, Maximize2 } from 'lucide-react'
 import { format } from 'date-fns'
 import { de } from 'date-fns/locale'
 import { ChatMessage } from '@/types/chat'
+import Image from 'next/image'
 
 export default function ChatPage() {
   const { data: session } = useSession()
@@ -51,8 +53,12 @@ export default function ChatPage() {
   const [isCreateChannelOpen, setIsCreateChannelOpen] = useState(false)
   const [editingMessage, setEditingMessage] = useState<string | null>(null)
   const [editContent, setEditContent] = useState('')
+  const [selectedImage, setSelectedImage] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [selectedImageForModal, setSelectedImageForModal] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const editInputRef = useRef<HTMLInputElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -64,10 +70,31 @@ export default function ChatPage() {
     }
   }, [editingMessage])
 
-  const handleSendMessage = () => {
-    if (newMessage.trim() !== '') {
-      sendMessage(newMessage)
+  useEffect(() => {
+    return () => {
+      if (imagePreview) {
+        URL.revokeObjectURL(imagePreview)
+      }
+    }
+  }, [imagePreview])
+
+  const handleSendMessage = async () => {
+    if (newMessage.trim() !== '' || selectedImage) {
+      await sendMessage(newMessage, selectedImage || undefined)
       setNewMessage('')
+      setSelectedImage(null)
+      setImagePreview(null)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    }
+  }
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setSelectedImage(file)
+      setImagePreview(URL.createObjectURL(file))
     }
   }
 
@@ -98,6 +125,14 @@ export default function ChatPage() {
     setEditContent('')
   }
 
+  const cancelImageUpload = () => {
+    setSelectedImage(null)
+    setImagePreview(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
   const canEditMessage = (message: ChatMessage) => {
     return session?.user?.id === message.author.id || session?.user?.role === 'ADMIN'
   }
@@ -105,6 +140,18 @@ export default function ChatPage() {
   if (!session) {
     return <div className="flex items-center justify-center h-screen">
       <p>Bitte melden Sie sich an, um den Chat zu nutzen.</p>
+    </div>
+  }
+
+  if (loading) {
+    return <div className="flex items-center justify-center h-screen">
+      <p>Laden...</p>
+    </div>
+  }
+
+  if (error) {
+    return <div className="flex items-center justify-center h-screen">
+      <p>Fehler: {error}</p>
     </div>
   }
 
@@ -176,15 +223,12 @@ export default function ChatPage() {
               {channels.map((channel) => (
                 <div
                   key={channel.id}
-                  className={`group px-4 py-2 cursor-pointer hover:bg-accent ${
-                    currentChannel?.id === channel.id ? 'bg-accent' : ''
-                  }`}
+                  className={`group px-4 py-2 cursor-pointer hover:bg-accent ${currentChannel?.id === channel.id ? 'bg-accent' : ''
+                    }`}
+                  onClick={() => setCurrentChannel(channel)} // Click-Handler auf dem äußeren div
                 >
                   <div className="flex items-center justify-between">
-                    <div 
-                      className="flex items-center space-x-2"
-                      onClick={() => setCurrentChannel(channel)}
-                    >
+                    <div className="flex items-center space-x-2">
                       <Hash className="h-4 w-4 text-muted-foreground" />
                       <span className="text-sm font-medium">{channel.name}</span>
                     </div>
@@ -195,6 +239,7 @@ export default function ChatPage() {
                             variant="ghost"
                             size="icon"
                             className="opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={(e) => e.stopPropagation()} // Verhindert Bubble-Up zum Parent
                           >
                             <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
@@ -203,16 +248,21 @@ export default function ChatPage() {
                           <AlertDialogHeader>
                             <AlertDialogTitle>Channel löschen</AlertDialogTitle>
                             <AlertDialogDescription>
-                              Möchten Sie wirklich den Channel "{channel.name}" löschen? 
+                              Möchten Sie wirklich den Channel "{channel.name}" löschen?
                               Diese Aktion kann nicht rückgängig gemacht werden.
                               Alle Nachrichten in diesem Channel werden ebenfalls gelöscht.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
-                            <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                            <AlertDialogCancel onClick={(e) => e.stopPropagation()}>
+                              Abbrechen
+                            </AlertDialogCancel>
                             <AlertDialogAction
                               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                              onClick={() => deleteChannel(channel.id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteChannel(channel.id);
+                              }}
                             >
                               Löschen
                             </AlertDialogAction>
@@ -267,9 +317,33 @@ export default function ChatPage() {
                         </div>
                       ) : (
                         <div className="group flex items-start">
-                          <p className="text-sm leading-relaxed flex-1">
-                            {message.content}
-                          </p>
+                          <div className="flex-1 space-y-2">
+                            <p className="text-sm leading-relaxed">
+                              {message.content}
+                            </p>
+                            {message.imageUrl && (
+                              <div className="relative inline-block group/image">
+                                <div className="relative max-w-lg">
+                                  <Image
+                                    src={message.imageUrl}
+                                    alt="Nachrichtenbild"
+                                    width={512}
+                                    height={512}
+                                    className="rounded-lg object-contain cursor-pointer"
+                                    onClick={() => setSelectedImageForModal(message.imageUrl)}
+                                  />
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="absolute top-2 right-2 opacity-0 group-hover/image:opacity-100 transition-opacity"
+                                    onClick={() => setSelectedImageForModal(message.imageUrl)}
+                                  >
+                                    <Maximize2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
                           {canEditMessage(message) && (
                             <Button
                               variant="ghost"
@@ -289,7 +363,27 @@ export default function ChatPage() {
               <div ref={messagesEndRef} />
             </ScrollArea>
 
-            <div className="p-4 border-t">
+            <div className="p-4 border-t space-y-4">
+              {imagePreview && (
+                <div className="relative inline-block">
+                  <div className="relative w-32 h-32">
+                    <Image
+                      src={imagePreview}
+                      alt="Vorschau"
+                      fill
+                      className="object-contain rounded-lg"
+                    />
+                    <Button
+                      variant="destructive"
+                      size="icon"
+                      className="absolute top-1 right-1"
+                      onClick={cancelImageUpload}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
               <div className="flex items-center space-x-2">
                 <Input
                   type="text"
@@ -299,9 +393,24 @@ export default function ChatPage() {
                   onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
                   disabled={!currentChannel}
                 />
-                <Button 
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  ref={fileInputRef}
+                  onChange={handleImageSelect}
+                />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={!currentChannel}
+                >
+                  <ImageIcon className="h-4 w-4" />
+                </Button>
+                <Button
                   onClick={handleSendMessage}
-                  disabled={!currentChannel || !newMessage.trim()}
+                  disabled={!currentChannel || (!newMessage.trim() && !selectedImage)}
                 >
                   <Send className="h-4 w-4" />
                 </Button>
@@ -310,6 +419,15 @@ export default function ChatPage() {
           </div>
         </div>
       </div>
+
+      {/* Image Modal */}
+      {selectedImageForModal && (
+        <ImageModal
+          isOpen={!!selectedImageForModal}
+          onClose={() => setSelectedImageForModal(null)}
+          imageUrl={selectedImageForModal}
+        />
+      )}
     </div>
   )
 }

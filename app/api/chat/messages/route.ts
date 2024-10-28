@@ -11,10 +11,13 @@ export async function POST(req: Request) {
       return new NextResponse('Unauthorized', { status: 401 });
     }
 
-    const { content, channelId } = await req.json();
+    const { content, channelId, imageUrl, messageType = 'text' } = await req.json();
 
-    if (!content || !channelId) {
-      return new NextResponse('Content and channelId are required', { status: 400 });
+    if (!content && !imageUrl) {
+      return new NextResponse('Content or image is required', { status: 400 });
+    }
+    if (!channelId) {
+      return new NextResponse('ChannelId is required', { status: 400 });
     }
 
     // Überprüfen, ob der Benutzer Zugang zum Channel hat
@@ -43,6 +46,8 @@ export async function POST(req: Request) {
         content,
         channelId,
         authorId: session.user.id,
+        imageUrl,
+        messageType,
       },
       include: {
         author: {

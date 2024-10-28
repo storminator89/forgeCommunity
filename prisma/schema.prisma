@@ -318,14 +318,16 @@ model ChatMember {
 }
 
 model ChatMessage {
-  id        String      @id @default(cuid())
-  content   String
-  channel   ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  channelId String
-  author    User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  authorId  String
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt  
+  id          String      @id @default(cuid())
+  content     String
+  channelId   String
+  channel     ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  authorId    String
+  author      User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  imageUrl    String?     
+  messageType String      @default("text") 
 }
 
 model Notification {
