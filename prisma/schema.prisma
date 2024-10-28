@@ -325,6 +325,7 @@ model ChatMessage {
   author    User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
   authorId  String
   createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt  
 }
 
 model Notification {

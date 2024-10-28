@@ -1,3 +1,4 @@
+// app/chat/page.tsx
 "use client"
 
 import { useState, useEffect, useRef } from 'react'
@@ -8,215 +9,307 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Send, Hash, Search, Paperclip, Smile } from 'lucide-react'
-
-interface ChatMessage {
-  id: string;
-  sender: string;
-  content: string;
-  timestamp: string;
-}
-
-interface Channel {
-  id: string;
-  name: string;
-}
-
-const mockChannels: Channel[] = [
-  { id: '1', name: 'Allgemein' },
-  { id: '2', name: 'Entwicklung' },
-  { id: '3', name: 'Design' },
-  { id: '4', name: 'Marketing' },
-];
-
-const mockDirectMessages: { [key: string]: ChatMessage[] } = {
-  'Anna Schmidt': [
-    { id: '1', sender: 'Anna Schmidt', content: 'Hallo! Wie geht es dir?', timestamp: '10:30' },
-    { id: '2', sender: 'Sie', content: 'Hi Anna! Mir geht es gut, danke. Wie läuft dein Projekt?', timestamp: '10:32' },
-    { id: '3', sender: 'Anna Schmidt', content: 'Es läuft super! Wir machen gute Fortschritte.', timestamp: '10:35' },
-    { id: '4', sender: 'Anna Schmidt', content: 'Wann ist eigentlich unser nächstes Teamtreffen?', timestamp: '10:36' },
-  ],
-  'Max Mustermann': [
-    { id: '1', sender: 'Max Mustermann', content: 'Hey, hast du die neuen Designs gesehen?', timestamp: '11:00' },
-    { id: '2', sender: 'Sie', content: 'Noch nicht, ich schaue gleich mal rein!', timestamp: '11:05' },
-  ],
-};
-
-const mockChannelMessages: { [key: string]: ChatMessage[] } = {
-  'Allgemein': [
-    { id: '1', sender: 'System', content: 'Willkommen im Allgemeinen Channel!', timestamp: '09:00' },
-    { id: '2', sender: 'Anna Schmidt', content: 'Hallo zusammen! Wie war euer Wochenende?', timestamp: '09:15' },
-  ],
-  'Entwicklung': [
-    { id: '1', sender: 'Max Mustermann', content: 'Hat jemand Erfahrung mit GraphQL?', timestamp: '10:00' },
-    { id: '2', sender: 'Laura Weber', content: 'Ja, ich habe es in meinem letzten Projekt verwendet. Was möchtest du wissen?', timestamp: '10:05' },
-  ],
-};
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import { useChat } from '@/contexts/ChatContext'
+import { useSession } from 'next-auth/react'
+import { Hash, Send, Plus, Pencil, Check, X, Trash2 } from 'lucide-react'
+import { format } from 'date-fns'
+import { de } from 'date-fns/locale'
+import { ChatMessage } from '@/types/chat'
 
 export default function ChatPage() {
-  const [activeTab, setActiveTab] = useState<'channels' | 'direct'>('channels');
-  const [selectedChannel, setSelectedChannel] = useState<Channel>(mockChannels[0]);
-  const [selectedDirectMessage, setSelectedDirectMessage] = useState<string>('Anna Schmidt');
-  const [messages, setMessages] = useState<ChatMessage[]>(mockChannelMessages[selectedChannel.name]);
-  const [newMessage, setNewMessage] = useState('');
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { data: session } = useSession()
+  const {
+    channels,
+    currentChannel,
+    messages,
+    setCurrentChannel,
+    sendMessage,
+    editMessage,
+    createChannel,
+    deleteChannel,
+    loading,
+    error
+  } = useChat()
+
+  const [newMessage, setNewMessage] = useState('')
+  const [newChannelName, setNewChannelName] = useState('')
+  const [isPrivate, setIsPrivate] = useState(false)
+  const [isCreateChannelOpen, setIsCreateChannelOpen] = useState(false)
+  const [editingMessage, setEditingMessage] = useState<string | null>(null)
+  const [editContent, setEditContent] = useState('')
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const editInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    if (activeTab === 'channels') {
-      setMessages(mockChannelMessages[selectedChannel.name] || []);
-    } else {
-      setMessages(mockDirectMessages[selectedDirectMessage] || []);
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [messages])
+
+  useEffect(() => {
+    if (editingMessage && editInputRef.current) {
+      editInputRef.current.focus()
     }
-  }, [activeTab, selectedChannel, selectedDirectMessage]);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [editingMessage])
 
   const handleSendMessage = () => {
     if (newMessage.trim() !== '') {
-      const newMsg: ChatMessage = {
-        id: (messages.length + 1).toString(),
-        sender: 'Sie',
-        content: newMessage,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      };
-      setMessages([...messages, newMsg]);
-      setNewMessage('');
+      sendMessage(newMessage)
+      setNewMessage('')
     }
-  };
+  }
+
+  const handleCreateChannel = async () => {
+    if (newChannelName.trim() !== '') {
+      await createChannel({ name: newChannelName, isPrivate })
+      setNewChannelName('')
+      setIsPrivate(false)
+      setIsCreateChannelOpen(false)
+    }
+  }
+
+  const handleStartEdit = (message: ChatMessage) => {
+    setEditingMessage(message.id)
+    setEditContent(message.content)
+  }
+
+  const handleSaveEdit = async () => {
+    if (editingMessage && editContent.trim() !== '') {
+      await editMessage({ messageId: editingMessage, content: editContent })
+      setEditingMessage(null)
+      setEditContent('')
+    }
+  }
+
+  const handleCancelEdit = () => {
+    setEditingMessage(null)
+    setEditContent('')
+  }
+
+  const canEditMessage = (message: ChatMessage) => {
+    return session?.user?.id === message.author.id || session?.user?.role === 'ADMIN'
+  }
+
+  if (!session) {
+    return <div className="flex items-center justify-center h-screen">
+      <p>Bitte melden Sie sich an, um den Chat zu nutzen.</p>
+    </div>
+  }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-100 dark:bg-gray-900">
+    <div className="flex h-screen overflow-hidden bg-background">
       <Sidebar className="hidden md:block" />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="bg-white dark:bg-gray-800 shadow-md z-10">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
+        <header className="border-b">
+          <div className="h-16 px-4 flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <h2 className="text-2xl font-bold text-gray-800 dark:text-white">{activeTab === 'channels' ? `# ${selectedChannel.name}` : selectedDirectMessage}</h2>
-              <div className="hidden md:flex items-center space-x-2 text-gray-500 dark:text-gray-400">
-                <span className="text-sm">3 Mitglieder</span>
-                <span>•</span>
-                <span className="text-sm">2 online</span>
-              </div>
+              <h2 className="text-lg font-semibold">
+                {currentChannel ? `# ${currentChannel.name}` : 'Wähle einen Channel'}
+              </h2>
+              {currentChannel && (
+                <div className="hidden md:flex items-center space-x-2 text-muted-foreground">
+                  <span className="text-sm">{currentChannel._count.members} Mitglieder</span>
+                </div>
+              )}
             </div>
             <div className="flex items-center space-x-4">
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Suchen..."
-                  className="pl-8 pr-4 py-2 rounded-md bg-gray-100 dark:bg-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
-              </div>
               <ThemeToggle />
               <UserNav />
             </div>
           </div>
         </header>
-        <main className="flex-1 flex overflow-hidden">
-          <div className="w-64 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hidden md:block">
-            <Tabs defaultValue="channels" className="w-full" onValueChange={(value) => setActiveTab(value as 'channels' | 'direct')}>
-              <TabsList className="w-full">
-                <TabsTrigger value="channels" className="w-1/2">Channels</TabsTrigger>
-                <TabsTrigger value="direct" className="w-1/2">Direkt</TabsTrigger>
-              </TabsList>
-              <TabsContent value="channels">
-                <ScrollArea className="h-[calc(100vh-10rem)]">
-                  {mockChannels.map((channel) => (
-                    <div
-                      key={channel.id}
-                      className={`p-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 ${
-                        selectedChannel.id === channel.id ? 'bg-gray-200 dark:bg-gray-600' : ''
-                      }`}
-                      onClick={() => setSelectedChannel(channel)}
-                    >
-                      <div className="flex items-center space-x-3">
-                        <Hash className="h-5 w-5 text-gray-500" />
-                        <span className="text-sm font-medium text-gray-900 dark:text-white">{channel.name}</span>
+
+        <div className="flex-1 flex overflow-hidden">
+          <div className="w-64 border-r bg-muted/50 hidden md:flex flex-col">
+            <div className="p-4 flex justify-between items-center">
+              <h3 className="font-semibold">Channels</h3>
+              {session.user.role === 'ADMIN' && (
+                <Dialog open={isCreateChannelOpen} onOpenChange={setIsCreateChannelOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="ghost" size="icon">
+                      <Plus className="h-5 w-5" />
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Neuen Channel erstellen</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="name">Channel Name</Label>
+                        <Input
+                          id="name"
+                          value={newChannelName}
+                          onChange={(e) => setNewChannelName(e.target.value)}
+                          placeholder="Channel Name eingeben"
+                        />
                       </div>
-                    </div>
-                  ))}
-                </ScrollArea>
-              </TabsContent>
-              <TabsContent value="direct">
-                <ScrollArea className="h-[calc(100vh-10rem)]">
-                  {Object.keys(mockDirectMessages).map((name) => (
-                    <div
-                      key={name}
-                      className={`p-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 ${
-                        selectedDirectMessage === name ? 'bg-gray-200 dark:bg-gray-600' : ''
-                      }`}
-                      onClick={() => setSelectedDirectMessage(name)}
-                    >
-                      <div className="flex items-center space-x-3">
-                        <Avatar>
-                          <AvatarFallback>{name[0]}</AvatarFallback>
-                        </Avatar>
-                        <span className="text-sm font-medium text-gray-900 dark:text-white">{name}</span>
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          id="private"
+                          checked={isPrivate}
+                          onCheckedChange={setIsPrivate}
+                        />
+                        <Label htmlFor="private">Privater Channel</Label>
                       </div>
+                      <Button onClick={handleCreateChannel} className="w-full">
+                        Channel erstellen
+                      </Button>
                     </div>
-                  ))}
-                </ScrollArea>
-              </TabsContent>
-            </Tabs>
-          </div>
-          <div className="flex-1 flex flex-col bg-white dark:bg-gray-900">
-            <ScrollArea className="flex-1 p-4">
-              {messages.map((message, index) => (
+                  </DialogContent>
+                </Dialog>
+              )}
+            </div>
+            <ScrollArea className="flex-1">
+              {channels.map((channel) => (
                 <div
-                  key={message.id}
-                  className={`flex ${message.sender === 'Sie' ? 'justify-end' : 'justify-start'} mb-4`}
+                  key={channel.id}
+                  className={`group px-4 py-2 cursor-pointer hover:bg-accent ${
+                    currentChannel?.id === channel.id ? 'bg-accent' : ''
+                  }`}
                 >
-                  {message.sender !== 'Sie' && (index === 0 || messages[index - 1].sender !== message.sender) && (
-                    <Avatar className="mr-2 mt-1">
-                      <AvatarFallback>{message.sender[0]}</AvatarFallback>
-                    </Avatar>
-                  )}
-                  <div className={`flex flex-col ${message.sender === 'Sie' ? 'items-end' : 'items-start'}`}>
-                    {(index === 0 || messages[index - 1].sender !== message.sender) && (
-                      <span className="text-xs text-gray-500 dark:text-gray-400 mb-1">{message.sender}</span>
-                    )}
-                    <div
-                      className={`rounded-2xl px-4 py-2 max-w-md ${
-                        message.sender === 'Sie'
-                          ? 'bg-blue-500 text-white'
-                          : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white'
-                      }`}
+                  <div className="flex items-center justify-between">
+                    <div 
+                      className="flex items-center space-x-2"
+                      onClick={() => setCurrentChannel(channel)}
                     >
-                      <p className="text-sm">{message.content}</p>
+                      <Hash className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium">{channel.name}</span>
                     </div>
-                    <span className="text-xs text-gray-500 dark:text-gray-400 mt-1">{message.timestamp}</span>
+                    {session.user.role === 'ADMIN' && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Channel löschen</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Möchten Sie wirklich den Channel "{channel.name}" löschen? 
+                              Diese Aktion kann nicht rückgängig gemacht werden.
+                              Alle Nachrichten in diesem Channel werden ebenfalls gelöscht.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                            <AlertDialogAction
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              onClick={() => deleteChannel(channel.id)}
+                            >
+                              Löschen
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </ScrollArea>
+          </div>
+
+          <div className="flex-1 flex flex-col">
+            <ScrollArea className="flex-1 p-4">
+              {messages.map((message) => (
+                <div key={message.id} className="mb-4">
+                  <div className="flex items-start space-x-3">
+                    <Avatar>
+                      <AvatarImage src={message.author.image || undefined} />
+                      <AvatarFallback>
+                        {message.author.name?.[0] || '?'}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 space-y-1">
+                      <div className="flex items-center space-x-2">
+                        <span className="font-semibold">
+                          {message.author.name}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {format(new Date(message.createdAt), 'PPp', { locale: de })}
+                        </span>
+                        {message.isEdited && (
+                          <span className="text-xs text-muted-foreground">(bearbeitet)</span>
+                        )}
+                      </div>
+                      {editingMessage === message.id ? (
+                        <div className="flex items-center space-x-2">
+                          <Input
+                            ref={editInputRef}
+                            value={editContent}
+                            onChange={(e) => setEditContent(e.target.value)}
+                            onKeyPress={(e) => e.key === 'Enter' && handleSaveEdit()}
+                            className="flex-1"
+                          />
+                          <Button size="icon" onClick={handleSaveEdit}>
+                            <Check className="h-4 w-4" />
+                          </Button>
+                          <Button size="icon" variant="ghost" onClick={handleCancelEdit}>
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="group flex items-start">
+                          <p className="text-sm leading-relaxed flex-1">
+                            {message.content}
+                          </p>
+                          {canEditMessage(message) && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={() => handleStartEdit(message)}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
               <div ref={messagesEndRef} />
             </ScrollArea>
-            <div className="p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+
+            <div className="p-4 border-t">
               <div className="flex items-center space-x-2">
-                <Button variant="ghost" size="icon">
-                  <Paperclip className="h-5 w-5 text-gray-500" />
-                </Button>
                 <Input
                   type="text"
-                  placeholder="Schreiben Sie eine Nachricht..."
+                  placeholder="Nachricht schreiben..."
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                  className="flex-grow"
+                  disabled={!currentChannel}
                 />
-                <Button variant="ghost" size="icon">
-                  <Smile className="h-5 w-5 text-gray-500" />
-                </Button>
-                <Button onClick={handleSendMessage}>
+                <Button 
+                  onClick={handleSendMessage}
+                  disabled={!currentChannel || !newMessage.trim()}
+                >
                   <Send className="h-4 w-4" />
                 </Button>
               </div>
             </div>
           </div>
-        </main>
+        </div>
       </div>
     </div>
-  );
+  )
 }
