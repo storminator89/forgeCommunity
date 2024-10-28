@@ -1,3 +1,4 @@
+// components/Sidebar.tsx
 "use client";
 
 import Link from 'next/link';
@@ -6,6 +7,7 @@ import { useSession } from 'next-auth/react';
 import { useTheme } from 'next-themes';
 import { signOut } from 'next-auth/react';
 import { useRouter, usePathname } from 'next/navigation';
+import { useNotifications } from "@/contexts/NotificationContext";
 import { 
   Home, 
   Users, 
@@ -26,6 +28,13 @@ import {
   Library,
   LayoutDashboard
 } from 'lucide-react';
+import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 const navItems = {
   main: [
@@ -137,19 +146,47 @@ function NavSection({ title, items, pathname }) {
 }
 
 function NavItem({ item, isActive }) {
-  return (
-    <li>
-      <Link 
-        href={item.href} 
-        className={`flex items-center space-x-3 p-2 rounded-lg transition-colors duration-200
-          ${isActive 
-            ? 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-200' 
-            : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
-          }`}
-      >
-        <item.icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-blue-600 dark:text-blue-400' : ''}`} />
-        <span className="font-medium">{item.name}</span>
-      </Link>
-    </li>
+  const { unreadCount } = useNotifications();
+  const isNotifications = item.name === 'Benachrichtigungen';
+
+  const content = (
+    <Link 
+      href={item.href} 
+      className={`flex items-center space-x-3 p-2 rounded-lg transition-colors duration-200 relative
+        ${isActive 
+          ? 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-200' 
+          : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
+        }`}
+    >
+      <item.icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-blue-600 dark:text-blue-400' : ''}`} />
+      <span className="font-medium">{item.name}</span>
+      {isNotifications && unreadCount > 0 && (
+        <Badge 
+          className="absolute -right-1 -top-1 min-w-[20px] h-5 flex items-center justify-center bg-red-500 text-white"
+          variant="default"
+        >
+          {unreadCount > 99 ? '99+' : unreadCount}
+        </Badge>
+      )}
+    </Link>
   );
+
+  if (isNotifications && unreadCount > 0) {
+    return (
+      <li>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              {content}
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              <p>{unreadCount} ungelesene Benachrichtigung{unreadCount !== 1 ? 'en' : ''}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </li>
+    );
+  }
+
+  return <li>{content}</li>;
 }
