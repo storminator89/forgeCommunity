@@ -33,6 +33,7 @@ import { toast } from 'react-toastify';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { Progress } from "@/components/ui/progress";
+import DOMPurify from 'isomorphic-dompurify';
 
 interface SearchResult {
   id: string;
@@ -92,6 +93,11 @@ interface SearchResponse {
     pages: number;
   };
 }
+
+const SafeHTML = ({ html }: { html: string }) => {
+  const sanitizedHtml = DOMPurify.sanitize(html);
+  return <div dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />;
+};
 
 export default function SearchPage() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -411,9 +417,9 @@ export default function SearchPage() {
                                   </div>
                                 )}
 
-                                <p className="text-sm text-gray-600 dark:text-gray-300 mt-1 line-clamp-2">
-                                  {result.description}
-                                </p>
+                                <div className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                                  <SafeHTML html={result.description} />
+                                </div>
 
                                 {result.category && (
                                   <Badge variant="secondary" className="mt-2">

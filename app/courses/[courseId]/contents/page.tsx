@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { H5PSelectionDialog } from '@/components/h5p/H5PSelectionDialog';
 
 // Dynamisches Laden von ReactQuill
 const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
@@ -44,7 +45,7 @@ import { SortableItem } from './SortableItem'; // SortableItem-Komponente
 interface CourseContent {
   id: string;
   title: string;
-  type: 'TEXT' | 'VIDEO' | 'AUDIO';
+  type: 'TEXT' | 'VIDEO' | 'AUDIO' | 'H5P';
   content: string;
   order: number;
   parentId: string | null;
@@ -65,6 +66,7 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
   const [confirmDelete, setConfirmDelete] = useState<{ open: boolean, content: CourseContent | null }>({ open: false, content: null });
   const { data: session, status } = useSession();
   const router = useRouter();
+  const [isH5PDialogOpen, setIsH5PDialogOpen] = useState(false);
 
   // Funktion zum Abrufen der Kursinhalte
   const fetchContents = useCallback(async () => {
@@ -342,6 +344,16 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
         );
       case 'AUDIO':
         return <audio src={content.content} controls className="w-full" />;
+      case 'H5P':
+        return (
+          <div className="relative" style={{ paddingBottom: '56.25%', height: 0 }}>
+            <iframe
+              src={`/h5p/embed/${content.content}`}
+              className="absolute top-0 left-0 w-full h-full rounded-lg shadow-md"
+              allowFullScreen
+            ></iframe>
+          </div>
+        );
       default:
         return <p>{content.content}</p>;
     }
@@ -458,6 +470,14 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
     }
   };
 
+  const handleH5PSelect = (h5pContent: any) => {
+    setNewContent(prev => ({
+      ...prev,
+      content: h5pContent.id, // Store H5P content ID
+      type: 'H5P'
+    }));
+    setIsH5PDialogOpen(false);
+  };
 
   // Ladeindikator anzeigen, während Inhalte geladen werden
   if (status === 'loading' || isLoading) {
@@ -479,6 +499,64 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
     null;
 
   const selectedSubContent = selectedMainContent?.subContents?.find(sub => sub.id === selectedContentId) || null;
+
+  const renderContentInput = (type: string) => {
+    switch (type) {
+      case 'TEXT':
+        return (
+          <ReactQuill
+            value={newContent.content}
+            onChange={(content) => setNewContent({ ...newContent, content })}
+            modules={{
+              toolbar: [
+                [{ 'header': [1, 2, false] }],
+                ['bold', 'italic', 'underline', 'strike', 'blockquote'],
+                [{ 'list': 'ordered' }, { 'list': 'bullet' }, { 'indent': '-1' }, { 'indent': '+1' }],
+                ['link', 'image'],
+                ['clean']
+              ],
+            }}
+            className="bg-white dark:bg-gray-700 rounded-md"
+          />
+        );
+      case 'VIDEO':
+        return (
+          <Input
+            value={newContent.content}
+            onChange={(e) => setNewContent({ ...newContent, content: e.target.value })}
+            placeholder="YouTube URL eingeben"
+          />
+        );
+      case 'AUDIO':
+        return (
+          <Input
+            value={newContent.content}
+            onChange={(e) => setNewContent({ ...newContent, content: e.target.value })}
+            placeholder="Audio URL eingeben"
+          />
+        );
+      case 'H5P':
+        return (
+          <div className="space-y-4">
+            <Button 
+              type="button"
+              onClick={() => setIsH5PDialogOpen(true)}
+              className="w-full"
+            >
+              H5P Inhaltstyp auswählen
+            </Button>
+            {newContent.content && (
+              <div className="p-4 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                <p className="font-medium">Ausgewählter H5P Inhaltstyp:</p>
+                <p className="text-sm text-gray-600 dark:text-gray-300">{newContent.content}</p>
+              </div>
+            )}
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
 
   return (
     <div className="flex flex-col lg:flex-row min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -719,40 +797,18 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
                                           <select
                                             id="editType"
                                             value={newContent.type}
-                                            onChange={(e) => setNewContent({ ...newContent, type: e.target.value as 'TEXT' | 'VIDEO' | 'AUDIO' })}
+                                            onChange={(e) => setNewContent({ ...newContent, type: e.target.value as 'TEXT' | 'VIDEO' | 'AUDIO' | 'H5P' })}
                                             className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
                                           >
                                             <option value="TEXT">Text</option>
                                             <option value="VIDEO">Video</option>
                                             <option value="AUDIO">Audio</option>
+                                            <option value="H5P">H5P Inhalt</option>
                                           </select>
                                         </div>
                                         <div>
                                           <Label htmlFor="editContent">Inhalt</Label>
-                                          {newContent.type === 'TEXT' ? (
-                                            <ReactQuill
-                                              value={newContent.content}
-                                              onChange={(content) => setNewContent({ ...newContent, content })}
-                                              modules={{
-                                                toolbar: [
-                                                  [{ 'header': [1, 2, false] }],
-                                                  ['bold', 'italic', 'underline', 'strike', 'blockquote'],
-                                                  [{ 'list': 'ordered' }, { 'list': 'bullet' }, { 'indent': '-1' }, { 'indent': '+1' }],
-                                                  ['link', 'image'],
-                                                  ['clean']
-                                                ],
-                                              }}
-                                              className="bg-white dark:bg-gray-700 rounded-md h-4/5" // Höhe auf 80% gesetzt
-                                            />
-                                          ) : (
-                                            <Input
-                                              id="editContent"
-                                              value={newContent.content}
-                                              onChange={(e) => setNewContent({ ...newContent, content: e.target.value })}
-                                              placeholder={newContent.type === 'VIDEO' ? "YouTube URL" : "Audio URL"}
-                                              required
-                                            />
-                                          )}
+                                          {renderContentInput(newContent.type)}
                                         </div>
                                         <div className="flex justify-end space-x-2">
                                           <Button type="button" variant="outline" onClick={() => {
@@ -798,40 +854,18 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
                             <select
                               id="type"
                               value={newContent.type}
-                              onChange={(e) => setNewContent({ ...newContent, type: e.target.value as 'TEXT' | 'VIDEO' | 'AUDIO' })}
+                              onChange={(e) => setNewContent({ ...newContent, type: e.target.value as 'TEXT' | 'VIDEO' | 'AUDIO' | 'H5P' })}
                               className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
                             >
                               <option value="TEXT">Text</option>
                               <option value="VIDEO">Video</option>
                               <option value="AUDIO">Audio</option>
+                              <option value="H5P">H5P Inhalt</option>
                             </select>
                           </div>
                           <div>
                             <Label htmlFor="content">Inhalt</Label>
-                            {newContent.type === 'TEXT' ? (
-                              <ReactQuill
-                                value={newContent.content}
-                                onChange={(content) => setNewContent({ ...newContent, content })}
-                                modules={{
-                                  toolbar: [
-                                    [{ 'header': [1, 2, false] }],
-                                    ['bold', 'italic', 'underline', 'strike', 'blockquote'],
-                                    [{ 'list': 'ordered' }, { 'list': 'bullet' }, { 'indent': '-1' }, { 'indent': '+1' }],
-                                    ['link', 'image'],
-                                    ['clean']
-                                  ],
-                                }}
-                                className="bg-white dark:bg-gray-700 rounded-md h-4/5" // Höhe auf 80% gesetzt
-                              />
-                            ) : (
-                              <Input
-                                id="content"
-                                value={newContent.content}
-                                onChange={(e) => setNewContent({ ...newContent, content: e.target.value })}
-                                placeholder={newContent.type === 'VIDEO' ? "YouTube URL" : "Audio URL"}
-                                required
-                              />
-                            )}
+                            {renderContentInput(newContent.type)}
                           </div>
                           {/* Buttons in einem separaten Container */}
                           <div className="flex justify-end space-x-2">
@@ -880,40 +914,18 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
                       <select
                         id="editType"
                         value={newContent.type}
-                        onChange={(e) => setNewContent({ ...newContent, type: e.target.value as 'TEXT' | 'VIDEO' | 'AUDIO' })}
+                        onChange={(e) => setNewContent({ ...newContent, type: e.target.value as 'TEXT' | 'VIDEO' | 'AUDIO' | 'H5P' })}
                         className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
                       >
                         <option value="TEXT">Text</option>
                         <option value="VIDEO">Video</option>
                         <option value="AUDIO">Audio</option>
+                        <option value="H5P">H5P Inhalt</option>
                       </select>
                     </div>
                     <div>
                       <Label htmlFor="editContent">Inhalt</Label>
-                      {newContent.type === 'TEXT' ? (
-                        <ReactQuill
-                          value={newContent.content}
-                          onChange={(content) => setNewContent({ ...newContent, content })}
-                          modules={{
-                            toolbar: [
-                              [{ 'header': [1, 2, false] }],
-                              ['bold', 'italic', 'underline', 'strike', 'blockquote'],
-                              [{ 'list': 'ordered' }, { 'list': 'bullet' }, { 'indent': '-1' }, { 'indent': '+1' }],
-                              ['link', 'image'],
-                              ['clean']
-                            ],
-                          }}
-                          className="bg-white dark:bg-gray-700 rounded-md h-4/5" // Höhe auf 80% gesetzt
-                        />
-                      ) : (
-                        <Input
-                          id="editContent"
-                          value={newContent.content}
-                          onChange={(e) => setNewContent({ ...newContent, content: e.target.value })}
-                          placeholder={newContent.type === 'VIDEO' ? "YouTube URL" : "Audio URL"}
-                          required
-                        />
-                      )}
+                      {renderContentInput(newContent.type)}
                     </div>
                     <div className="flex justify-end space-x-2">
                       <Button type="button" variant="outline" onClick={() => {
@@ -949,6 +961,11 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
                   </div>
                 </DialogContent>
               </Dialog>
+              <H5PSelectionDialog
+                open={isH5PDialogOpen}
+                onOpenChange={setIsH5PDialogOpen}
+                onSelect={handleH5PSelect}
+              />
             </div>
           </DndContext>
         </main>

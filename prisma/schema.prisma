@@ -43,6 +43,7 @@ enum ContentType {
   TEXT
   VIDEO
   AUDIO
+  H5P
 }
 
 enum ResourceType {
@@ -108,9 +109,8 @@ model User {
   resources          Resource[]      @relation("UserResources")
   endorsementsGiven   Endorsement[] @relation("EndorsementsGiven")
   endorsementsReceived Endorsement[] @relation("EndorsementsReceived")
+  h5pContents        H5PContent[]
 }
-
-
 
 model UserSettings {
   id                   String  @id @default(cuid())
@@ -398,6 +398,7 @@ model Article {
   content       String
   category      String
   featuredImage String?  // Optionales Feld für das Beitragsbild
+  isPublished   Boolean  @default(false) // Neues Feld
   author        User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
   authorId      String
   createdAt     DateTime @default(now())
@@ -460,4 +461,14 @@ model Resource {
   color      String
   createdAt  DateTime      @default(now())
   updatedAt  DateTime      @updatedAt
+}
+
+model H5PContent {
+  id          String    @id @default(cuid())
+  title       String
+  contentType String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
 }

@@ -10,6 +10,9 @@ import path from 'path';
 export async function GET() {
   try {
     const articles = await prisma.article.findMany({
+      where: {
+        isPublished: true  // Only fetch published articles
+      },
       include: {
         author: {
           select: { id: true, name: true, email: true },
@@ -40,6 +43,7 @@ export async function POST(req: NextRequest) {
     const category = formData.get('category') as string;
     const tags = formData.getAll('tags') as string[];
     const featuredImage = formData.get('featuredImage') as File | null;
+    const isPublished = formData.get('isPublished') === 'true'; // Neues Feld
 
     if (!title || !content || !category) {
       return NextResponse.json({ error: 'Titel, Inhalt und Kategorie sind erforderlich.' }, { status: 400 });
@@ -66,6 +70,7 @@ export async function POST(req: NextRequest) {
         title,
         content,
         category,
+        isPublished, // Neues Feld
         featuredImage: featuredImagePath,
         author: { connect: { email: session.user.email } },
         tags: {

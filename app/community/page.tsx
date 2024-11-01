@@ -21,12 +21,14 @@ import {
   ChevronDown,
   ChevronUp,
   Loader2,
-  Menu
+  Menu,
+  Send
 } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Skeleton } from "@/components/ui/skeleton"
+import { PointsAnimation } from "@/components/PointsAnimation"
 
 // Dynamisches Importieren von ReactQuill mit Ladezustand
 const ReactQuill = dynamic(() => import('react-quill'), {
@@ -114,14 +116,13 @@ interface Comment {
   isLiked: boolean
 }
 
-// Mock Daten für Leaderboard
-const leaderboardUsers: User[] = [
-  { id: '1', name: 'Max Mustermann', image: 'https://i.pravatar.cc/150?img=1', points: 1200 },
-  { id: '2', name: 'Anna Schmidt', image: 'https://i.pravatar.cc/150?img=2', points: 980 },
-  { id: '3', name: 'Lukas Weber', image: 'https://i.pravatar.cc/150?img=3', points: 850 },
-  { id: '4', name: 'Sophie Becker', image: 'https://i.pravatar.cc/150?img=4', points: 720 },
-  { id: '5', name: 'Tom Schulz', image: 'https://i.pravatar.cc/150?img=5', points: 650 },
-]
+// Add new interface for leaderboard users
+interface LeaderboardUser {
+  id: string
+  name: string
+  image: string | null
+  points: number
+}
 
 function Community() {
   // Hooks und State
@@ -136,6 +137,15 @@ function Community() {
   const [expandedComments, setExpandedComments] = useState<{ [key: string]: boolean }>({})
   const [notification, setNotification] = useState<{ type: 'success' | 'error', message: string } | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  // Add new state for leaderboard
+  const [leaderboardUsers, setLeaderboardUsers] = useState<LeaderboardUser[]>([])
+  const [isLeaderboardLoading, setIsLeaderboardLoading] = useState(true)
+
+  const [pointsAnimation, setPointsAnimation] = useState({
+    isVisible: false,
+    points: 0
+  })
 
   // Optimierte Fetch-Funktion mit Error Handling
   const fetchWithErrorHandling = async (url: string, options?: RequestInit) => {
@@ -176,9 +186,29 @@ function Community() {
     }
   }, [])
 
+  // Add new function to fetch leaderboard data
+  const fetchLeaderboard = useCallback(async () => {
+    try {
+      const response = await fetch('/api/leaderboard')
+      if (!response.ok) throw new Error('Failed to fetch leaderboard')
+      const data = await response.json()
+      setLeaderboardUsers(data)
+    } catch (error) {
+      console.error('Error fetching leaderboard:', error)
+      setNotification({ type: 'error', message: 'Fehler beim Laden des Leaderboards.' })
+    } finally {
+      setIsLeaderboardLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
     fetchPosts()
   }, [fetchPosts])
+
+  // Add leaderboard fetch to useEffect
+  useEffect(() => {
+    fetchLeaderboard()
+  }, [fetchLeaderboard])
 
   // Scroll zum bearbeiteten Post
   useEffect(() => {
@@ -194,6 +224,13 @@ function Community() {
       return () => clearTimeout(timer)
     }
   }, [notification])
+
+  // Helper function to show points animation and update leaderboard
+  const showPointsAndUpdateLeaderboard = (points: number) => {
+    setPointsAnimation({ isVisible: true, points })
+    // Update leaderboard after action
+    fetchLeaderboard()
+  }
 
   // Post erstellen/aktualisieren
   const handleSubmit = async (e: React.FormEvent) => {
@@ -227,6 +264,11 @@ function Community() {
       setIsEditing(false)
       setEditingPost(null)
 
+      // Show points animation for new post (10 points)
+      if (!editingPost) {
+        showPointsAndUpdateLeaderboard(10)
+      }
+
       setNotification({ type: 'success', message: editingPost ? 'Beitrag aktualisiert!' : 'Beitrag erstellt!' })
     } catch (error) {
       console.error("Fehler beim Erstellen/Aktualisieren des Beitrags:", error)
@@ -250,14 +292,15 @@ function Community() {
         : `/api/comments/${commentId}/like`
 
       const response = await fetchWithErrorHandling(endpoint, { method: 'POST' })
+      const isLikeAdded = response.message !== 'Like entfernt'
 
       if (type === 'post') {
         setLocalPosts(prev => prev.map(post => {
           if (post.id === postId) {
             return {
               ...post,
-              votes: response.message === 'Like entfernt' ? post.votes - 1 : post.votes + 1,
-              isLiked: response.message !== 'Like entfernt'
+              votes: isLikeAdded ? post.votes + 1 : post.votes - 1,
+              isLiked: isLikeAdded
             }
           }
           return post
@@ -269,8 +312,8 @@ function Community() {
               if (comment.id === commentId) {
                 return {
                   ...comment,
-                  votes: response.message === 'Like entfernt' ? comment.votes - 1 : comment.votes + 1,
-                  isLiked: response.message !== 'Like entfernt'
+                  votes: isLikeAdded ? comment.votes + 1 : comment.votes - 1,
+                  isLiked: isLikeAdded
                 }
               }
               return comment
@@ -279,6 +322,11 @@ function Community() {
           }
           return post
         }))
+      }
+
+      // Show points animation for new like (1 point)
+      if (isLikeAdded) {
+        showPointsAndUpdateLeaderboard(1)
       }
     } catch (error) {
       console.error("Fehler beim Toggle Like:", error)
@@ -324,6 +372,9 @@ function Community() {
 
       setNewComment(prev => ({ ...prev, [postId]: '' }))
       setCommentingPostId(null)
+
+      // Show points animation for new comment (5 points)
+      showPointsAndUpdateLeaderboard(5)
 
       setNotification({ type: 'success', message: 'Kommentar wurde hinzugefügt!' })
     } catch (error) {
@@ -712,31 +763,32 @@ function Community() {
                                     >
                                       {/* Kommentarformular */}
                                       <div className="bg-background dark:bg-gray-700 p-4 rounded-lg shadow-inner">
-                                        <Input
-                                          value={newComment[post.id] || ''}
-                                          onChange={(e) => setNewComment({
-                                            ...newComment,
-                                            [post.id]: e.target.value
-                                          })}
-                                          placeholder="Schreibe einen Kommentar..."
-                                          className="mb-3"
-                                          disabled={isLoading}
-                                          aria-label="Kommentar schreiben"
-                                        />
-                                        <Button
-                                          onClick={() => handleComment(post.id)}
-                                          disabled={isLoading}
-                                          className="w-full bg-green-600 hover:bg-green-700 text-white rounded-md flex items-center justify-center p-3 transition-colors duration-200"
-                                        >
-                                          {isLoading ? (
-                                            <>
-                                              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                                              Wird gesendet...
-                                            </>
-                                          ) : (
-                                            'Kommentar abschicken'
-                                          )}
-                                        </Button>
+                                        <div className="relative flex items-center">
+                                          <Input
+                                            value={newComment[post.id] || ''}
+                                            onChange={(e) => setNewComment({
+                                              ...newComment,
+                                              [post.id]: e.target.value
+                                            })}
+                                            placeholder="Schreibe einen Kommentar..."
+                                            className="pr-10"
+                                            disabled={isLoading}
+                                            aria-label="Kommentar schreiben"
+                                          />
+                                          <Button
+                                            onClick={() => handleComment(post.id)}
+                                            disabled={isLoading}
+                                            className="absolute right-2 p-1 hover:bg-gray-100 dark:hover:bg-gray-600 text-foreground rounded-full flex items-center justify-center transition-colors duration-200"
+                                            size="icon"
+                                            variant="ghost"
+                                          >
+                                            {isLoading ? (
+                                              <Loader2 className="h-4 w-4 animate-spin" />
+                                            ) : (
+                                              <Send className="h-4 w-4" />
+                                            )}
+                                          </Button>
+                                        </div>
                                       </div>
 
                                       {/* Kommentare Liste */}
@@ -820,42 +872,55 @@ function Community() {
                   </CardHeader>
                   <CardContent className="p-4">
                     <AnimatePresence>
-                      {leaderboardUsers.map((user, index) => (
-                        <motion.div
-                          key={user.id}
-                          initial={{ opacity: 0, x: -20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          exit={{ opacity: 0, x: 20 }}
-                          transition={{ delay: index * 0.05 }}
-                          className="flex items-center justify-between py-2 px-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors duration-200"
-                        >
-                          <div className="flex items-center space-x-3">
-                            <div className="w-8 text-center">
-                              {index === 0 && <Trophy className="h-5 w-5 text-yellow-500" />}
-                              {index === 1 && <Trophy className="h-5 w-5 text-gray-400" />}
-                              {index === 2 && <Trophy className="h-5 w-5 text-amber-700" />}
-                              {index > 2 && <span className="font-bold">{index + 1}.</span>}
+                      {isLeaderboardLoading ? (
+                        // Loading skeleton
+                        Array.from({ length: 5 }).map((_, index) => (
+                          <motion.div
+                            key={`skeleton-${index}`}
+                            className="flex items-center justify-between py-2 px-2"
+                          >
+                            <Skeleton className="h-8 w-8 rounded-full" />
+                            <Skeleton className="h-4 w-24" />
+                          </motion.div>
+                        ))
+                      ) : (
+                        leaderboardUsers.map((user, index) => (
+                          <motion.div
+                            key={user.id}
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: 20 }}
+                            transition={{ delay: index * 0.05 }}
+                            className="flex items-center justify-between py-2 px-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors duration-200"
+                          >
+                            <div className="flex items-center space-x-3">
+                              <div className="w-8 text-center">
+                                {index === 0 && <Trophy className="h-5 w-5 text-yellow-500" />}
+                                {index === 1 && <Trophy className="h-5 w-5 text-gray-400" />}
+                                {index === 2 && <Trophy className="h-5 w-5 text-amber-700" />}
+                                {index > 2 && <span className="font-bold">{index + 1}.</span>}
+                              </div>
+                              <Avatar className="h-8 w-8">
+                                <AvatarImage
+                                  src={user.image}
+                                  alt={user.name}
+                                  className="object-cover"
+                                />
+                                <AvatarFallback className="bg-gray-300 dark:bg-gray-600">
+                                  {user.name[0]}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span className="font-medium text-foreground dark:text-white truncate max-w-[160px]">
+                                {user.name}
+                              </span>
                             </div>
-                            <Avatar className="h-8 w-8">
-                              <AvatarImage
-                                src={user.image}
-                                alt={user.name}
-                                className="object-cover"
-                              />
-                              <AvatarFallback className="bg-gray-300 dark:bg-gray-600">
-                                {user.name[0]}
-                              </AvatarFallback>
-                            </Avatar>
-                            <span className="font-medium text-foreground dark:text-white truncate max-w-[120px]">
-                              {user.name}
-                            </span>
-                          </div>
-                          <div className="flex items-center space-x-1">
-                            <span className="font-semibold text-primary dark:text-primary-light">{user.points}</span>
-                            <span className="text-sm text-gray-500 dark:text-gray-400">Punkte</span>
-                          </div>
-                        </motion.div>
-                      ))}
+                            <div className="flex items-center space-x-1">
+                              <span className="font-semibold text-primary dark:text-primary-light">{user.points}</span>
+                              <span className="text-sm text-gray-500 dark:text-gray-400">Punkte</span>
+                            </div>
+                          </motion.div>
+                        ))
+                      )}
                     </AnimatePresence>
                   </CardContent>
                 </Card>
@@ -933,6 +998,11 @@ function Community() {
           </div>
         </main>
       </div>
+      <PointsAnimation
+        points={pointsAnimation.points}
+        isVisible={pointsAnimation.isVisible}
+        onComplete={() => setPointsAnimation({ isVisible: false, points: 0 })}
+      />
     </div>
   )
 }

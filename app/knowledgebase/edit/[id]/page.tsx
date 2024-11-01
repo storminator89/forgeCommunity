@@ -12,9 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Card } from "@/components/ui/card";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { BookOpen, ArrowLeft, Image, Upload, Loader2, BookmarkIcon, SendIcon } from 'lucide-react';
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { BookOpen, ArrowLeft, Upload, Loader2, BookmarkIcon, SendIcon } from 'lucide-react';
 import { CategorySelect } from "@/components/CategorySelect";
 import { TagSelect } from "@/components/TagSelect";
 import { toast } from 'sonner';
@@ -22,7 +20,7 @@ import { toast } from 'sonner';
 const QuillEditor = dynamic(() => import('react-quill'), { ssr: false });
 import 'react-quill/dist/quill.snow.css';
 
-export default function NewArticle() {
+export default function EditArticle({ params }: { params: { id: string } }) {
   const { data: session, status } = useSession();
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -34,155 +32,110 @@ export default function NewArticle() {
   const [featuredImage, setFeaturedImage] = useState<File | null>(null);
   const [featuredImagePreview, setFeaturedImagePreview] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [alert, setAlert] = useState<{ message: string; type: 'error' | 'success' } | null>(null);
-  const [isDraft, setIsDraft] = useState(false);
-  const maxTitleLength = 100;
-  
+  const [isLoading, setIsLoading] = useState(true);
   const [existingCategories, setExistingCategories] = useState<string[]>([]);
   const [existingTags, setExistingTags] = useState<string[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const maxTitleLength = 100;
 
   useEffect(() => {
-    if (status === 'loading') return;
     if (!session) {
       router.push('/login');
+      return;
     }
-  }, [session, status, router]);
 
-  useEffect(() => {
-    const fetchCategoriesAndTags = async () => {
+    const fetchArticle = async () => {
       setIsLoading(true);
       try {
-        const response = await fetch('/api/articles/categories-and-tags');
-        if (response.ok) {
-          const data = await response.json();
-          setExistingCategories(data.categories || []);
-          setExistingTags(data.tags || []);
-        } else {
-          console.error('Failed to fetch categories and tags');
-          setExistingCategories([]);
-          setExistingTags([]);
+        console.log('Fetching article with ID:', params.id); // Debug log
+
+        const [articleResponse, categoriesResponse] = await Promise.all([
+          fetch(`/api/articles/${params.id}`),
+          fetch('/api/articles/categories-and-tags')
+        ]);
+
+        if (!articleResponse.ok) {
+          throw new Error(`Article fetch failed: ${articleResponse.statusText}`);
+        }
+
+        const article = await articleResponse.json();
+        console.log('Fetched article:', article); // Debug log
+
+        if (!article) {
+          toast.error('Artikel nicht gefunden');
+          router.push('/knowledgebase/drafts');
+          return;
+        }
+
+        setTitle(article.title);
+        setContent(article.content);
+        setCategory(article.category);
+        setTags(article.tags.map((tag: { name: string }) => tag.name));
+        if (article.featuredImage) {
+          setFeaturedImagePreview(article.featuredImage);
+        }
+
+        // Kategorien und Tags setzen
+        if (categoriesResponse.ok) {
+          const { categories, tags } = await categoriesResponse.json();
+          setExistingCategories(categories);
+          setExistingTags(tags);
         }
       } catch (error) {
-        console.error('Error fetching categories and tags:', error);
-        setExistingCategories([]);
-        setExistingTags([]);
+        console.error('Error fetching article:', error);
+        toast.error('Fehler beim Laden des Artikels');
+        router.push('/knowledgebase/drafts');
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchCategoriesAndTags();
-  }, []);
+    fetchArticle();
+  }, [params.id, session, router]);
 
-  const handleAddTag = (tag: string) => {
-    if (!tags.includes(tag) && tags.length < 5) {
-      setTags([...tags, tag]);
-    } else if (tags.length >= 5) {
-      setAlert({ message: 'Maximal 5 Tags erlaubt.', type: 'error' });
-    }
-  };
-
-  const handleRemoveTag = (tagToRemove: string) => {
-    setTags(tags.filter(tag => tag !== tagToRemove));
-  };
-
-  const handleAddNewTag = (newTag: string) => {
-    if (!existingTags.includes(newTag)) {
-      setExistingTags([...existingTags, newTag]);
-    }
-    handleAddTag(newTag);
-  };
-
-  const handleAddNewCategory = (newCategory: string) => {
-    if (!existingCategories.includes(newCategory)) {
-      setExistingCategories([...existingCategories, newCategory]);
-    }
-    setCategory(newCategory);
-  };
-
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setFeaturedImage(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFeaturedImagePreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const submitArticle = async (asDraft: boolean) => {
+  const handleSubmit = async (asDraft: boolean) => {
     setIsSubmitting(true);
-  
+
     if (!title || !content || !category) {
       toast.error('Bitte füllen Sie alle erforderlichen Felder aus.');
       setIsSubmitting(false);
       return;
     }
-  
+
     const formData = new FormData();
     formData.append('title', title);
     formData.append('content', content);
     formData.append('category', category);
-    formData.append('isPublished', (!asDraft).toString()); // Geändert: isPublished ist das Gegenteil von asDraft
+    formData.append('isPublished', (!asDraft).toString());
     tags.forEach(tag => formData.append('tags', tag));
     if (featuredImage) {
       formData.append('featuredImage', featuredImage);
     }
-  
+
     try {
-      const response = await fetch('/api/articles', {
-        method: 'POST',
+      const response = await fetch(`/api/articles/${params.id}`, {
+        method: 'PUT',
         body: formData,
       });
-  
+
       if (response.ok) {
         const article = await response.json();
         toast.success(
           asDraft 
-            ? 'Artikel wurde als Entwurf gespeichert!' 
-            : 'Artikel wurde erfolgreich veröffentlicht!'
+            ? 'Entwurf wurde aktualisiert!' 
+            : 'Artikel wurde erfolgreich aktualisiert!'
         );
-        // Kurze Verzögerung für bessere UX
-        setTimeout(() => router.push(
-          asDraft 
-            ? '/knowledgebase/drafts' // Neue Route für Entwürfe
-            : `/knowledgebase/${article.id}`
-        ), 1000);
+        router.push(asDraft ? '/knowledgebase/drafts' : `/knowledgebase/${article.id}`);
       } else {
-        const error = await response.json();
-        throw new Error(error.error || 'Fehler beim Speichern.');
+        throw new Error('Fehler beim Aktualisieren');
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Ein Fehler ist aufgetreten.');
+      toast.error('Fehler beim Speichern des Artikels');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    await submitArticle(false);
-  };
-
-  const handleSaveDraft = async () => {
-    await submitArticle(true);
-  };
-
-  const quillModules = {
-    toolbar: [
-      [{ 'header': [1, 2, 3, false] }],
-      ['bold', 'italic', 'underline', 'strike'],
-      [{'list': 'ordered'}, {'list': 'bullet'}],
-      ['link', 'image'],
-      ['clean']
-    ],
-    clipboard: {
-      matchVisual: false // Prevents the deprecated mutation events
-    }
-  };
+  // Rest der Komponentenlogik (handleImageUpload, handleAddTag, etc.) wie in new-article/page.tsx
 
   if (isLoading) {
     return (
@@ -192,6 +145,9 @@ export default function NewArticle() {
     );
   }
 
+  // Der Rest des JSX ist sehr ähnlich wie in new-article/page.tsx
+  // Nur der Titel und die Buttons sollten angepasst werden
+
   return (
     <div className="flex flex-col lg:flex-row min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
       <Sidebar />
@@ -200,7 +156,7 @@ export default function NewArticle() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex items-center justify-between">
             <h2 className="text-3xl font-bold text-gray-800 dark:text-white flex items-center">
               <BookOpen className="mr-2 h-6 w-6" />
-              Neuer Artikel erstellen
+              Artikel bearbeiten
             </h2>
             <div className="flex items-center space-x-4">
               <ThemeToggle />
@@ -208,13 +164,14 @@ export default function NewArticle() {
             </div>
           </div>
         </header>
+
         <main className="flex-1 overflow-y-auto p-4 lg:p-8">
           <Card className="max-w-5xl mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-lg">
             <div className="p-6">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
                 <Button
                   variant="outline"
-                  onClick={() => router.push('/knowledgebase')}
+                  onClick={() => router.push('/knowledgebase/drafts')}
                   className="bg-transparent border-gray-300 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                 >
                   <ArrowLeft className="mr-2 h-4 w-4" /> Zurück
@@ -222,11 +179,10 @@ export default function NewArticle() {
                 <div className="flex items-center gap-2">
                   <Button
                     variant="outline"
-                    onClick={() => submitArticle(true)}
+                    onClick={() => handleSubmit(true)}
                     disabled={isSubmitting}
-                    type="button"
                   >
-                    {isSubmitting && isDraft ? (
+                    {isSubmitting ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         Speichere Entwurf...
@@ -239,11 +195,10 @@ export default function NewArticle() {
                     )}
                   </Button>
                   <Button
-                    onClick={() => submitArticle(false)}
+                    onClick={() => handleSubmit(false)}
                     disabled={isSubmitting}
-                    type="submit"
                   >
-                    {isSubmitting && !isDraft ? (
+                    {isSubmitting ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         Veröffentliche...
@@ -251,14 +206,14 @@ export default function NewArticle() {
                     ) : (
                       <>
                         <SendIcon className="mr-2 h-4 w-4" />
-                        Jetzt veröffentlichen
+                        Veröffentlichen
                       </>
                     )}
                   </Button>
                 </div>
               </div>
 
-              <form id="articleForm" onSubmit={handleSubmit} className="space-y-6">
+              <div className="space-y-6">
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
                     <Label htmlFor="title" className="text-lg font-semibold">
@@ -286,7 +241,6 @@ export default function NewArticle() {
                     <Button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="flex items-center"
                       variant="outline"
                     >
                       <Upload className="mr-2 h-4 w-4" />
@@ -295,7 +249,11 @@ export default function NewArticle() {
                     {featuredImagePreview && (
                       <div className="relative group">
                         <div className="w-20 h-20 border rounded-md overflow-hidden">
-                          <img src={featuredImagePreview} alt="Vorschau" className="w-full h-full object-cover" />
+                          <img 
+                            src={featuredImagePreview} 
+                            alt="Vorschau" 
+                            className="w-full h-full object-cover" 
+                          />
                         </div>
                         <Button
                           type="button"
@@ -313,9 +271,18 @@ export default function NewArticle() {
                     )}
                     <input
                       type="file"
-                      id="featuredImage"
                       ref={fileInputRef}
-                      onChange={handleImageUpload}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setFeaturedImage(file);
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            setFeaturedImagePreview(reader.result as string);
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
                       accept="image/*"
                       className="hidden"
                     />
@@ -323,41 +290,50 @@ export default function NewArticle() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="content" className="text-xl font-semibold">Inhalt</Label>
-                  <div className="h-96 border rounded-md overflow-hidden">
+                  <Label htmlFor="content" className="text-lg font-semibold">
+                    Inhalt <span className="text-red-500">*</span>
+                  </Label>
+                  <div className="min-h-[400px] border rounded-md">
                     <QuillEditor
                       value={content}
                       onChange={setContent}
-                      modules={quillModules}
                       className="h-full"
                       theme="snow"
                     />
                   </div>
                 </div>
-                <div className="space-y-2 mt-12">
+
+                <div className="space-y-2">
                   <CategorySelect
                     categories={existingCategories}
                     selectedCategory={category}
                     setSelectedCategory={setCategory}
-                    onAddCategory={handleAddNewCategory}
+                    onAddCategory={(newCategory) => {
+                      setExistingCategories([...existingCategories, newCategory]);
+                      setCategory(newCategory);
+                    }}
                   />
                 </div>
+
                 <div className="space-y-2">
                   <TagSelect
                     availableTags={existingTags}
                     selectedTags={tags}
-                    onTagSelect={handleAddTag}
-                    onTagRemove={handleRemoveTag}
-                    onAddTag={handleAddNewTag}
+                    onTagSelect={(tag) => {
+                      if (!tags.includes(tag)) {
+                        setTags([...tags, tag]);
+                      }
+                    }}
+                    onTagRemove={(tag) => {
+                      setTags(tags.filter((t) => t !== tag));
+                    }}
+                    onAddTag={(newTag) => {
+                      setExistingTags([...existingTags, newTag]);
+                      setTags([...tags, newTag]);
+                    }}
                   />
                 </div>
-                <Separator className="my-6" />
-                <div className="flex justify-end">
-                  <Button type="submit" disabled={isSubmitting} className="px-6 py-2 text-lg">
-                    {isSubmitting ? 'Wird erstellt...' : 'Artikel veröffentlichen'}
-                  </Button>
-                </div>
-              </form>
+              </div>
             </div>
           </Card>
         </main>

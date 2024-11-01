@@ -26,7 +26,8 @@ import {
   Briefcase,
   Award,
   Library,
-  LayoutDashboard
+  LayoutDashboard,
+  BookmarkIcon
 } from 'lucide-react';
 import { Badge } from "@/components/ui/badge";
 import {
@@ -46,6 +47,7 @@ const navItems = {
     { name: 'Events', icon: Calendar, href: '/events' },
     { name: 'Ressourcen', icon: BookOpen, href: '/resources' },
     { name: 'Wissensdatenbank', icon: Library, href: '/knowledgebase' },
+    { name: 'Meine Entwürfe', icon: BookmarkIcon, href: '/knowledgebase/drafts' },
   ],
   showcase: [
     { name: 'Projekte', icon: Briefcase, href: '/showcases' },

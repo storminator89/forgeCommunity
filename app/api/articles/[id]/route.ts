@@ -9,11 +9,11 @@ export async function GET(
   req: Request,
   { params }: { params: { id: string } }
 ) {
-  const { id } = params;
-
   try {
+    console.log('GET request for article ID:', params.id); // Debug log
+
     const article = await prisma.article.findUnique({
-      where: { id },
+      where: { id: params.id },
       include: {
         author: {
           select: { id: true, name: true, email: true },
@@ -23,13 +23,18 @@ export async function GET(
     });
 
     if (!article) {
-      return NextResponse.json({ error: 'Artikel nicht gefunden.' }, { status: 404 });
+      console.log('Article not found'); // Debug log
+      return NextResponse.json({ error: 'Artikel nicht gefunden' }, { status: 404 });
     }
 
-    return NextResponse.json(article, { status: 200 });
+    console.log('Found article:', article); // Debug log
+    return NextResponse.json(article);
   } catch (error) {
-    console.error(`GET /api/articles/${id} Error:`, error);
-    return NextResponse.json({ error: 'Fehler beim Abrufen des Artikels.' }, { status: 500 });
+    console.error('Error fetching article:', error);
+    return NextResponse.json(
+      { error: 'Fehler beim Abrufen des Artikels' },
+      { status: 500 }
+    );
   }
 }
 
