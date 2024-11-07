@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Search, Briefcase, ThumbsUp, MessageSquare, ExternalLink, Filter, Plus, Edit, Trash, Upload, ZoomIn } from 'lucide-react'; // Hinzufügen von ZoomIn
 import { motion, AnimatePresence } from 'framer-motion';
@@ -372,10 +372,11 @@ export default function ProjectShowcase() {
     <div className="flex h-screen overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="bg-white dark:bg-gray-800 shadow-md z-10">
+        {/* Header improvements */}
+        <header className="bg-white/80 backdrop-blur-sm dark:bg-gray-800/80 shadow-lg z-10 sticky top-0">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-            <h2 className="text-2xl font-bold text-gray-800 dark:text-white ml-12 lg:ml-0 flex items-center">
-              <Briefcase className="mr-2 h-6 w-6" />
+            <h2 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 ml-12 lg:ml-0 flex items-center">
+              <Briefcase className="mr-3 h-7 w-7" />
               Projekte-Showcase
             </h2>
             <div className="flex items-center space-x-4">
@@ -394,31 +395,36 @@ export default function ProjectShowcase() {
             </div>
           </div>
         </header>
+
         <main className="flex-1 overflow-y-auto p-4 lg:p-8">
-          <div className="flex justify-between items-center mb-6">
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList>
-                {categories.map((category) => (
-                  <TabsTrigger key={category} value={category} className="capitalize">
-                    {category}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
-            <div className="flex items-center space-x-2">
-              <Filter className="h-5 w-5 text-gray-500" />
-              <Select value={sortBy} onValueChange={setSortBy}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Sortieren nach" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="newest">Neueste</SelectItem>
-                  <SelectItem value="mostLiked">Meist geliked</SelectItem>
-                  <SelectItem value="mostCommented">Meist kommentiert</SelectItem>
-                </SelectContent>
-              </Select>
+          {/* Filter and sort improvements */}
+          <div className="bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm rounded-xl p-4 mb-6 shadow-sm">
+            <div className="flex justify-between items-center flex-wrap gap-4">
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                <TabsList>
+                  {categories.map((category) => (
+                    <TabsTrigger key={category} value={category} className="capitalize">
+                      {category}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
+              <div className="flex items-center space-x-2">
+                <Filter className="h-5 w-5 text-gray-500" />
+                <Select value={sortBy} onValueChange={setSortBy}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Sortieren nach" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="newest">Neueste</SelectItem>
+                    <SelectItem value="mostLiked">Meist geliked</SelectItem>
+                    <SelectItem value="mostCommented">Meist kommentiert</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
+
           {session && (
             <Button onClick={() => setIsSubmitDialogOpen(true)} className="mb-6 flex items-center">
               <Plus className="mr-2 h-4 w-4" /> Neues Projekt einreichen
@@ -426,63 +432,88 @@ export default function ProjectShowcase() {
           )}
           <AnimatePresence>
             <motion.div
-              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
             >
               {filteredProjects.map((project) => (
-                <motion.div key={project.id}
+                <motion.div
+                  key={project.id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
                   transition={{ duration: 0.3 }}
+                  className="group"
                 >
-                  <div
-                    className="relative group cursor-pointer h-full"
-                    onClick={() => router.push(`/projects/${project.id}`)} // Navigiere zur Detailseite
-                  >
-                    <Card className="h-full flex flex-col hover:shadow-lg transition-shadow duration-300">
-                      <CardHeader className="relative p-0">
+                  <Link href={`/projects/${project.id}`}>
+                    <Card className="h-full transform transition-all duration-300 hover:scale-[1.02] hover:shadow-xl bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
+                      <CardHeader className="relative p-0 overflow-hidden rounded-t-xl">
                         {project.imageUrl ? (
-                          <img
-                            src={project.imageUrl}
-                            alt={`${project.title} Vorschaubild`}
-                            className="w-full h-48 object-cover rounded-t-lg"
-                            style={{ objectFit: 'cover' }}
-                          />
+                          <div className="relative h-48 overflow-hidden">
+                            <img
+                              src={project.imageUrl}
+                              alt={`${project.title} Vorschaubild`}
+                              className="w-full h-full object-cover transform transition-transform duration-500 group-hover:scale-110"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                          </div>
                         ) : (
                           <div
-                            className="w-full h-48 rounded-t-lg"
+                            className="h-48 transform transition-transform duration-500 group-hover:scale-110"
                             style={{
                               background: `linear-gradient(135deg, ${project.gradientFrom}, ${project.gradientTo})`,
                             }}
                           />
                         )}
-                        <Badge className="absolute top-2 right-2" variant="secondary">
-                          {project.tags.map(tag => tag.name).join(', ')}
-                        </Badge>
-                        {/* Overlay mit Lupe-Icon beim Hover */}
-                        <div className="absolute inset-0 bg-black bg-opacity-40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-                          <ZoomIn className="text-white h-8 w-8" />
+                        <div className="absolute top-2 right-2 flex gap-2">
+                          {project.tags.map(tag => (
+                            <Badge
+                              key={tag.id}
+                              variant="secondary"
+                              className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm shadow-sm"
+                            >
+                              {tag.name}
+                            </Badge>
+                          ))}
                         </div>
                       </CardHeader>
-                      <CardContent className="flex-grow flex flex-col justify-between p-4">
+
+                      <CardContent className="p-5 space-y-4">
                         <div>
-                          <CardTitle className="text-xl mb-2">{project.title}</CardTitle>
-                          <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">{project.description}</p>
+                          <CardTitle className="text-xl font-bold mb-2 line-clamp-1">
+                            {project.title}
+                          </CardTitle>
+                          <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2">
+                            {project.description}
+                          </p>
                         </div>
-                        <div className="flex items-center justify-between mt-4">
-                          <div className="flex items-center space-x-2">
-                            <Avatar className="h-8 w-8">
+
+                        <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
+                          <div className="flex items-center space-x-3">
+                            <Avatar className="ring-2 ring-white dark:ring-gray-800">
                               <AvatarImage src={project.author.image || undefined} />
-                              <AvatarFallback>{project.author.name ? project.author.name.charAt(0) : 'U'}</AvatarFallback>
+                              <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-500">
+                                {project.author.name?.charAt(0)}
+                              </AvatarFallback>
                             </Avatar>
-                            <span className="text-sm font-medium">{project.author.name}</span>
+                            <div className="space-y-1">
+                              <p className="text-sm font-medium leading-none">
+                                {project.author.name}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {new Date(project.createdAt).toLocaleDateString()}
+                              </p>
+                            </div>
                           </div>
+
                           <div className="flex items-center space-x-4">
                             <button
-                              className={`flex items-center text-sm ${project.likes.some(like => like.userId === session?.user.id) ? 'text-blue-500' : 'text-gray-500 hover:text-blue-500'}`}
+                              className={`flex items-center space-x-1 transition-colors ${
+                                project.likes.some(like => like.userId === session?.user.id)
+                                  ? 'text-blue-500'
+                                  : 'text-gray-500 hover:text-blue-500'
+                              }`}
                               onClick={(e) => {
                                 e.stopPropagation(); // Verhindert das Navigieren zur Detailseite
                                 const userLike = project.likes.find(like => like.userId === session?.user.id);
@@ -493,41 +524,19 @@ export default function ProjectShowcase() {
                                 }
                               }}
                             >
-                              <ThumbsUp className="h-4 w-4 mr-1" />
-                              {project.likes.length}
+                              <ThumbsUp className="h-4 w-4" />
+                              <span>{project.likes.length}</span>
                             </button>
-                            <span className="flex items-center text-sm text-gray-500">
-                              <MessageSquare className="h-4 w-4 mr-1" />
-                              {project.comments.length}
-                            </span>
+                            
+                            <div className="flex items-center space-x-1 text-gray-500">
+                              <MessageSquare className="h-4 w-4" />
+                              <span>{project.comments.length}</span>
+                            </div>
                           </div>
                         </div>
-                        {/* Bearbeiten und Löschen Icons */}
-                        {session?.user.id === project.author.id && (
-                          <div className="flex justify-end space-x-2 mt-4">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation(); // Verhindert das Navigieren zur Detailseite
-                                handleOpenEditDialog(project);
-                              }}
-                              className="text-gray-500 hover:text-blue-500"
-                            >
-                              <Edit className="h-5 w-5" />
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation(); // Verhindert das Navigieren zur Detailseite
-                                handleOpenDeleteDialog(project);
-                              }}
-                              className="text-red-500 hover:text-red-700"
-                            >
-                              <Trash className="h-5 w-5" />
-                            </button>
-                          </div>
-                        )}
                       </CardContent>
                     </Card>
-                  </div>
+                  </Link>
                 </motion.div>
               ))}
             </motion.div>
@@ -537,92 +546,98 @@ export default function ProjectShowcase() {
 
       {/* Projekt-Details Dialog */}
       <Dialog open={!!selectedProject} onOpenChange={() => setSelectedProject(null)}>
-        <DialogContent className="sm:max-w-[625px]">
-          <DialogHeader>
-            <DialogTitle>{selectedProject?.title}</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
+        <DialogContent className="sm:max-w-[800px] p-0 overflow-hidden">
+          <div className="relative h-[300px]">
             {selectedProject?.imageUrl ? (
               <img
                 src={selectedProject.imageUrl}
-                alt={`${selectedProject.title} Vorschaubild`}
-                className="w-full h-64 object-cover rounded-lg"
+                alt={selectedProject.title}
+                className="w-full h-full object-cover"
               />
             ) : (
               <div
-                className="w-full h-64 rounded-lg"
+                className="w-full h-full"
                 style={{
-                  background: selectedProject ? `linear-gradient(135deg, ${selectedProject.gradientFrom}, ${selectedProject.gradientTo})` : '',
+                  background: selectedProject
+                    ? `linear-gradient(135deg, ${selectedProject.gradientFrom}, ${selectedProject.gradientTo})`
+                    : '',
                 }}
               />
             )}
-            <DialogDescription>
-              {selectedProject?.description}
-            </DialogDescription>
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
+            <DialogTitle className="absolute bottom-6 left-6 text-3xl font-bold text-white">
+              {selectedProject?.title}
+            </DialogTitle>
+          </div>
+
+          <div className="p-6 space-y-6">
+            <p className="text-gray-700 dark:text-gray-300">{selectedProject?.description}</p>
             <div className="flex flex-wrap gap-2">
               {selectedProject?.tags.map((tag) => (
-                <Badge key={tag.id} variant="secondary">{tag.name}</Badge>
+                <Badge key={tag.id} variant="secondary" className="capitalize">
+                  {tag.name}
+                </Badge>
               ))}
             </div>
             <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <Avatar className="h-8 w-8">
+              <div className="flex items-center space-x-3">
+                <Avatar className="h-10 w-10">
                   <AvatarImage src={selectedProject?.author.image || undefined} />
                   <AvatarFallback>{selectedProject?.author.name ? selectedProject.author.name.charAt(0) : 'U'}</AvatarFallback>
                 </Avatar>
-                <span className="text-sm font-medium">{selectedProject?.author.name}</span>
+                <span className="text-md font-medium text-gray-800 dark:text-gray-200">{selectedProject?.author.name}</span>
               </div>
-              <div className="flex items-center space-x-4">
-                <span className="flex items-center text-sm text-gray-500">
-                  <ThumbsUp className="h-4 w-4 mr-1" />
+              <div className="flex items-center space-x-6">
+                <span className="flex items-center text-sm text-gray-600 dark:text-gray-400">
+                  <ThumbsUp className="h-5 w-5 mr-1" />
                   {selectedProject?.likes.length}
                 </span>
-                <span className="flex items-center text-sm text-gray-500">
-                  <MessageSquare className="h-4 w-4 mr-1" />
+                <span className="flex items-center text-sm text-gray-600 dark:text-gray-400">
+                  <MessageSquare className="h-5 w-5 mr-1" />
                   {selectedProject?.comments.length}
                 </span>
               </div>
             </div>
             {/* Kommentare anzeigen */}
-            <div className="mt-4">
-              <h3 className="text-lg font-semibold mb-2">Kommentare</h3>
+            <div className="mt-6">
+              <h3 className="text-xl font-semibold mb-3">Kommentare</h3>
               {selectedProject?.comments.map(comment => (
-                <div key={comment.id} className="mb-2">
-                  <div className="flex items-center space-x-2">
-                    <Avatar className="h-6 w-6">
+                <div key={comment.id} className="mb-4 p-3 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                  <div className="flex items-center space-x-3 mb-2">
+                    <Avatar className="h-8 w-8">
                       <AvatarImage src={comment.author.image || undefined} />
                       <AvatarFallback>{comment.author.name ? comment.author.name.charAt(0) : 'U'}</AvatarFallback>
                     </Avatar>
-                    <span className="text-sm font-medium">{comment.author.name}</span>
-                    <span className="text-xs text-gray-500">{new Date(comment.createdAt).toLocaleString()}</span>
+                    <div>
+                      <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{comment.author.name}</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">{new Date(comment.createdAt).toLocaleString()}</span>
+                    </div>
                   </div>
-                  <p className="text-sm ml-8">{comment.content}</p>
+                  <p className="text-gray-700 dark:text-gray-300 ml-11">{comment.content}</p>
                 </div>
               ))}
             </div>
             {/* Kommentar hinzufügen */}
             {session && selectedProject && (
-              <div className="mt-4">
-                <h4 className="text-md font-semibold mb-2">Einen Kommentar hinzufügen</h4>
+              <div className="mt-6">
+                <h4 className="text-lg font-semibold mb-2">Einen Kommentar hinzufügen</h4>
                 <Textarea
                   placeholder="Dein Kommentar..."
-                  className="w-full"
+                  className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-gray-100"
                   value={commentContent}
                   onChange={(e) => setCommentContent(e.target.value)}
                 />
-                <Button className="mt-2" onClick={() => handleAddComment(selectedProject.id)}>
-                  Kommentar hinzufügen
-                </Button>
+                <Button className="mt-3 px-6 py-2">Kommentar hinzufügen</Button>
               </div>
             )}
           </div>
-          <DialogFooter>
+          <div className="flex justify-end mt-6">
             <Button asChild>
               <a href={selectedProject?.link} target="_blank" rel="noopener noreferrer" className="flex items-center">
-                Projekt ansehen <ExternalLink className="ml-2 h-4 w-4" />
+                Projekt ansehen <ExternalLink className="ml-2 h-5 w-5" />
               </a>
             </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -729,9 +744,9 @@ export default function ProjectShowcase() {
                   </div>
                 </div>
               </div>
-              <DialogFooter>
+              <div className="flex justify-end">
                 <Button type="submit">Projekt einreichen</Button>
-              </DialogFooter>
+              </div>
             </form>
           </DialogContent>
         </Dialog>
@@ -839,9 +854,9 @@ export default function ProjectShowcase() {
                   </div>
                 </div>
               </div>
-              <DialogFooter>
+              <div className="flex justify-end">
                 <Button type="submit">Projekt aktualisieren</Button>
-              </DialogFooter>
+              </div>
             </form>
           </DialogContent>
         </Dialog>
@@ -854,17 +869,17 @@ export default function ProjectShowcase() {
             <DialogHeader>
               <DialogTitle>Projekt löschen</DialogTitle>
             </DialogHeader>
-            <DialogDescription>
+            <p>
               Bist du sicher, dass du das Projekt "<strong>{projectToDelete.title}</strong>" löschen möchtest? Diese Aktion kann nicht rückgängig gemacht werden.
-            </DialogDescription>
-            <DialogFooter>
+            </p>
+            <div className="flex justify-end">
               <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
                 Abbrechen
               </Button>
               <Button variant="destructive" onClick={handleDeleteProject}>
                 Löschen
               </Button>
-            </DialogFooter>
+            </div>
           </DialogContent>
         </Dialog>
       )}

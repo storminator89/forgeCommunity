@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, Suspense } from 'react';
 import { Sidebar } from "@/components/Sidebar";
 import { UserNav } from "@/components/user-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -9,8 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Search, Award, Star, Mail, ExternalLink, Filter, ChevronUp, ChevronDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -42,6 +42,28 @@ interface Member {
   hasEndorsed?: boolean;
 }
 
+const MemberCardSkeleton = () => (
+  <Card className="h-full">
+    <CardHeader className="flex flex-row items-center space-x-4 pb-2">
+      <Skeleton className="h-16 w-16 rounded-full" />
+      <div className="space-y-2">
+        <Skeleton className="h-4 w-32" />
+        <Skeleton className="h-3 w-24" />
+      </div>
+    </CardHeader>
+    <CardContent>
+      <div className="space-y-4">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="space-y-2">
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="h-2 w-full" />
+          </div>
+        ))}
+      </div>
+    </CardContent>
+  </Card>
+);
+
 export default function SkillDirectory() {
   const { data: session } = useSession();
   const [skillsData, setSkillsData] = useState<Skill[]>([]);
@@ -54,71 +76,69 @@ export default function SkillDirectory() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedSkills, setExpandedSkills] = useState<{ [key: string]: boolean }>({});
+  const [isRetrying, setIsRetrying] = useState(false);
 
   const getSkillByName = (name: string): Skill | undefined => {
     return skillsData.find(skill => skill.name === name);
   };
 
-  useEffect(() => {
-    const fetchSkills = async () => {
-      try {
-        const response = await fetch('/api/skills');
-        if (!response.ok) {
-          throw new Error('Fehler beim Abrufen der Skills');
-        }
-        const data: Skill[] = await response.json();
-        setSkillsData(data);
-      } catch (err: any) {
-        console.error(err);
-        setError(err.message || 'Ein unerwarteter Fehler ist aufgetreten');
+  const fetchData = async () => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const [skillsResponse, membersResponse] = await Promise.all([
+        fetch('/api/skills'),
+        fetch('/api/members')
+      ]);
+
+      if (!skillsResponse.ok || !membersResponse.ok) {
+        throw new Error('Failed to fetch data');
       }
-    };
 
-    fetchSkills();
-  }, []);
+      const [skillsData, membersData] = await Promise.all([
+        skillsResponse.json() as Promise<Skill[]>,
+        membersResponse.json() as Promise<Member[]>
+      ]);
+
+      setSkillsData(skillsData);
+      setMembersData(membersData);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchMembers = async () => {
-      try {
-        const response = await fetch('/api/members');
-        if (!response.ok) {
-          throw new Error('Fehler beim Abrufen der Mitglieder');
-        }
-        const data: Member[] = await response.json();
-        setMembersData(data);
-        setIsLoading(false);
-      } catch (err: any) {
-        console.error(err);
-        setError(err.message || 'Ein unerwarteter Fehler ist aufgetreten');
-        setIsLoading(false);
-      }
-    };
-
-    fetchMembers();
+    fetchData();
   }, []);
 
   const categories = useMemo(() => ['All', ...Array.from(new Set(skillsData.map(skill => skill.category)))], [skillsData]);
 
   const filteredMembers = useMemo(() => {
     return membersData
-      .filter(member =>
-        (selectedCategory === 'All' || member.skills.some(s => {
-          const skill = getSkillByName(s.skillName);
-          return skill && skill.category === selectedCategory;
-        })) &&
-        (member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-         member.skills.some(s => s.skillName.toLowerCase().includes(searchTerm.toLowerCase())))
-      )
+      .filter(member => {
+        const matchesCategory = selectedCategory === 'All' || 
+          member.skills.some(s => {
+            const skill = getSkillByName(s.skillName);
+            return skill?.category === selectedCategory;
+          });
+
+        const searchTermLower = searchTerm.toLowerCase();
+        const matchesSearch = 
+          member.name.toLowerCase().includes(searchTermLower) ||
+          member.skills.some(s => s.skillName.toLowerCase().includes(searchTermLower));
+
+        return matchesCategory && matchesSearch;
+      })
       .sort((a, b) => {
-        let comparison = 0;
-        if (sortBy === 'endorsements') {
-          comparison = b.endorsements - a.endorsements;
-        } else if (sortBy === 'name') {
-          comparison = a.name.localeCompare(b.name);
-        }
+        const comparison = sortBy === 'endorsements' 
+          ? b.endorsements - a.endorsements
+          : a.name.localeCompare(b.name);
         return sortOrder === 'asc' ? comparison : -comparison;
       });
-  }, [membersData, selectedCategory, searchTerm, sortBy, sortOrder, skillsData]);
+  }, [membersData, selectedCategory, searchTerm, sortBy, sortOrder]);
 
   const toggleSortOrder = () => {
     setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
@@ -171,8 +191,17 @@ export default function SkillDirectory() {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p className="text-lg text-red-500">{error}</p>
+      <div className="flex flex-col items-center justify-center min-h-screen p-4">
+        <p className="text-lg text-red-500 mb-4">{error}</p>
+        <Button 
+          onClick={() => {
+            setIsRetrying(true);
+            fetchData().finally(() => setIsRetrying(false));
+          }}
+          disabled={isRetrying}
+        >
+          {isRetrying ? 'Retrying...' : 'Retry'}
+        </Button>
       </div>
     );
   }
@@ -204,21 +233,8 @@ export default function SkillDirectory() {
           </div>
         </header>
         <main className="flex-1 overflow-y-auto p-4 lg:p-8">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 space-y-4 sm:space-y-0">
-            <Tabs
-              value={selectedCategory}
-              onValueChange={(value) => setSelectedCategory(value)}
-              className="w-full sm:w-auto"
-            >
-              <TabsList className="grid grid-cols-3 sm:flex">
-                {categories.map((category) => (
-                  <TabsTrigger key={category} value={category} className="capitalize">
-                    {category}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
-            <div className="flex items-center space-x-2">
+          <div className="flex flex-col space-y-4 mb-6">
+            <div className="flex items-center justify-end space-x-2">
               <Filter className="h-5 w-5 text-gray-500" />
               <Select value={sortBy} onValueChange={setSortBy}>
                 <SelectTrigger className="w-[180px]">
@@ -242,22 +258,47 @@ export default function SkillDirectory() {
                 </Tooltip>
               </TooltipProvider>
             </div>
+
+            <Tabs
+              value={selectedCategory}
+              onValueChange={(value) => setSelectedCategory(value)}
+              className="w-full"
+            >
+              <TabsList className="inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground">
+                {categories.map((category) => (
+                  <TabsTrigger
+                    key={category}
+                    value={category}
+                    className="inline-flex items-center justify-center whitespace-nowrap px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+                  >
+                    {category}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
           </div>
-          <AnimatePresence>
+
+          <Suspense fallback={
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {[1, 2, 3, 4].map((i) => (
+                <MemberCardSkeleton key={i} />
+              ))}
+            </div>
+          }>
             <motion.div
+              layout
               className="grid grid-cols-1 lg:grid-cols-2 gap-6"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
             >
               {filteredMembers.map((member) => (
-                <motion.div key={member.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 0.3 }}
+                <motion.div
+                  key={member.id}
+                  layout
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  transition={{ duration: 0.2 }}
                 >
-                  <Card className="h-full flex flex-col hover:shadow-lg transition-shadow duration-300">
+                  <Card className="h-full hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1">
                     <CardHeader className="flex flex-row items-center space-x-4 pb-2">
                       <Avatar className="h-16 w-16">
                         <AvatarImage src={member.avatar} alt={member.name} />
@@ -291,13 +332,27 @@ export default function SkillDirectory() {
                           const skill = getSkillByName(skillName);
                           if (!skill) return null;
                           return (
-                            <div key={skill.id} className="space-y-1">
-                              <div className="flex justify-between">
-                                <Badge variant="outline">{skill.name}</Badge>
-                                <span className="text-sm text-gray-500">{level}%</span>
-                              </div>
-                              <Progress value={level} className="w-full" />
-                            </div>
+                            <TooltipProvider key={skill.id}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <div className="space-y-1">
+                                    <div className="flex justify-between">
+                                      <Badge 
+                                        variant="outline"
+                                        className="cursor-help transition-colors hover:bg-secondary"
+                                      >
+                                        {skill.name}
+                                      </Badge>
+                                      <span className="text-sm text-gray-500">{level}%</span>
+                                    </div>
+                                    <Progress value={level} className="w-full" />
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p className="text-sm">{skill.category}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                           );
                         })}
                       </div>
@@ -324,61 +379,82 @@ export default function SkillDirectory() {
                 </motion.div>
               ))}
             </motion.div>
-          </AnimatePresence>
+          </Suspense>
         </main>
       </div>
       <Dialog open={!!selectedMember} onOpenChange={() => setSelectedMember(null)}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{selectedMember?.name}</DialogTitle>
+            <DialogTitle className="text-2xl">{selectedMember?.name}</DialogTitle>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="flex items-center space-x-4">
-              <Avatar className="h-12 w-12">
-                <AvatarImage src={selectedMember?.avatar} alt={selectedMember?.name} />
-                <AvatarFallback>{selectedMember?.name[0]}</AvatarFallback>
-              </Avatar>
-              <div>
-                <h4 className="font-semibold">{selectedMember?.name}</h4>
-                <p className="text-sm text-gray-500">{selectedMember?.title}</p>
+          {selectedMember && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="grid gap-6 py-4"
+            >
+              <div className="flex items-center space-x-4">
+                <Avatar className="h-20 w-20">
+                  <AvatarImage src={selectedMember.avatar} alt={selectedMember.name} />
+                  <AvatarFallback>{selectedMember.name[0]}</AvatarFallback>
+                </Avatar>
+                <div className="space-y-1">
+                  <h4 className="text-xl font-semibold">{selectedMember.name}</h4>
+                  <p className="text-sm text-muted-foreground">{selectedMember.title}</p>
+                  <div className="flex items-center text-sm text-muted-foreground">
+                    <Star className="h-4 w-4 mr-1 text-yellow-500" />
+                    {selectedMember.endorsements} Empfehlungen
+                  </div>
+                </div>
               </div>
-            </div>
-            <p className="text-sm text-gray-600 dark:text-gray-300">{selectedMember?.bio}</p>
-            <div>
-              <h5 className="font-semibold mb-2">Skills:</h5>
+
               <div className="space-y-2">
-                {selectedMember?.skills.map(({ skillName, level }) => {
-                  const skill = getSkillByName(skillName);
-                  if (!skill) return null;
-                  return (
-                    <div key={skill.id} className="space-y-1">
-                      <div className="flex justify-between">
-                        <Badge variant="outline">{skill.name}</Badge>
-                        <span className="text-sm text-gray-500">{level}%</span>
-                      </div>
-                      <Progress value={level} className="w-full" />
-                    </div>
-                  );
-                })}
+                <h5 className="font-semibold text-lg">Über mich</h5>
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{selectedMember.bio}</p>
               </div>
-            </div>
-            <div className="flex items-center">
-              <Star className="h-4 w-4 mr-1 text-yellow-500" />
-              <span>{selectedMember?.endorsements} Empfehlungen</span>
-            </div>
-          </div>
-          <DialogFooter className="flex flex-col space-y-2">
-            <Button className="w-full" asChild>
-              <a href={`mailto:${selectedMember?.contact}`}>
-                <Mail className="mr-2 h-4 w-4" /> Kontaktieren
-              </a>
-            </Button>
-            <Button variant="outline" className="w-full" asChild>
-              <a href="#" target="_blank" rel="noopener noreferrer">
-                Vollständiges Profil <ExternalLink className="ml-2 h-4 w-4" />
-              </a>
-            </Button>
-          </DialogFooter>
+
+              <div className="space-y-4">
+                <h5 className="font-semibold text-lg">Skills & Expertise</h5>
+                <div className="grid gap-3">
+                  {selectedMember.skills.map(({ skillName, level }) => {
+                    const skill = getSkillByName(skillName);
+                    if (!skill) return null;
+                    return (
+                      <div key={skillName} className="space-y-1">
+                        <div className="flex justify-between">
+                          <Badge variant="outline" className="px-2 py-0.5">
+                            {skillName}
+                          </Badge>
+                          <span className="text-sm text-muted-foreground">{level}%</span>
+                        </div>
+                        <Progress value={level} className="h-2" />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t">
+                <Button
+                  variant="outline"
+                  onClick={() => window.location.href = `mailto:${selectedMember.contact}`}
+                  className="flex items-center gap-2"
+                >
+                  <Mail className="h-4 w-4" />
+                  Kontakt aufnehmen
+                </Button>
+                <Button
+                  variant="default"
+                  onClick={() => endorseMember(selectedMember.id)}
+                  disabled={selectedMember.hasEndorsed}
+                  className="flex items-center gap-2"
+                >
+                  <Star className="h-4 w-4" />
+                  {selectedMember.hasEndorsed ? 'Bereits empfohlen' : 'Empfehlen'}
+                </Button>
+              </div>
+            </motion.div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

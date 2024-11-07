@@ -20,97 +20,42 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Prüfe ob der Benutzer Admin ist
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { role: true }
-    })
-
-    if (!user || user.role !== 'ADMIN') {
-      return NextResponse.json(
-        { error: 'Keine Administratorrechte' },
-        { status: 403 }
-      )
-    }
-
     const users = await prisma.user.findMany({
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        image: true,
-        role: true,
-        title: true,
-        bio: true,
-        contact: true,
-        endorsements: true,
-        emailVerified: true,
-        lastLogin: true,
-        createdAt: true,
-        userSettings: {
-          select: {
-            emailNotifications: true,
-            pushNotifications: true,
-            theme: true,
-            language: true,
-          }
-        },
-        // Statistiken
-        posts: { select: { id: true } },
-        comments: { select: { id: true } },
-        likePosts: { select: { id: true } },
-        courses: { select: { id: true } },
-        projects: { select: { id: true } },
-        badges: {
-          select: {
-            badge: {
-              select: {
-                name: true,
-              }
-            },
-            awardedAt: true,
-          }
-        },
+      include: {
         skills: {
-          select: {
-            skill: {
-              select: {
-                name: true,
-              }
-            },
-            level: true,
+          include: {
+            skill: true,
           }
         },
+        userSettings: true,
+        _count: {
+          select: {
+            followers: true,
+            following: true,
+          }
+        }
       }
-    })
+    });
 
-    // Transformiere die Daten für die Frontend-Anzeige
     const transformedUsers = users.map(user => ({
-      ...user,
-      stats: {
-        postsCount: user.posts.length,
-        commentsCount: user.comments.length,
-        likesReceived: user.likePosts.length,
-        coursesCount: user.courses.length,
-        projectsCount: user.projects.length,
-      },
-      badges: user.badges.map(b => ({
-        name: b.badge.name,
-        awardedAt: b.awardedAt,
-      })),
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      image: user.image,
+      role: user.role,
+      title: user.title,
+      contact: user.contact,
+      createdAt: user.createdAt,
       skills: user.skills.map(s => ({
         name: s.skill.name,
-        level: s.level,
       })),
-      // Entferne die ursprünglichen Arrays
-      posts: undefined,
-      comments: undefined,
-      likePosts: undefined,
-      courses: undefined,
-      projects: undefined,
-    }))
+      stats: {
+        followersCount: user._count.followers,
+        followingCount: user._count.following,
+      }
+    }));
 
-    return NextResponse.json(transformedUsers)
+    return NextResponse.json(transformedUsers);
   } catch (error) {
     console.error('Error fetching users:', error)
     return NextResponse.json(

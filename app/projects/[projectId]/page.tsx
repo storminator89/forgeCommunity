@@ -294,7 +294,7 @@ export default function ProjectDetail() {
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
         <header className="bg-white dark:bg-gray-800 shadow-md z-10">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
+          <div className="max-w-7xl mx-auto px-6 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
             <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Projekt-Detail</h2>
             <div className="flex items-center space-x-4">
               <ThemeToggle />
@@ -306,7 +306,7 @@ export default function ProjectDetail() {
         {/* Hauptinhalt */}
         <main className="flex-1 overflow-y-auto p-4 lg:p-8">
           {project ? (
-            <div className="max-w-4xl mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+            <div className="max-w-4xl mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 space-y-6">
               {/* Projektbild */}
               <div className="relative">
                 {project.imageUrl ? (
@@ -329,13 +329,15 @@ export default function ProjectDetail() {
               </div>
 
               {/* Projektinformationen */}
-              <h1 className="text-3xl font-bold mt-4 text-gray-800 dark:text-white">{project.title}</h1>
-              <p className="mt-2 text-gray-600 dark:text-gray-300">{project.description}</p>
-              <p className="mt-2 text-gray-600 dark:text-gray-300"><strong>Kategorie:</strong> {project.category}</p>
-              <p className="mt-2 text-gray-600 dark:text-gray-300"><strong>Link:</strong> <a href={project.link} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">{project.link}</a></p>
+              <div className="space-y-4">
+                <h1 className="text-3xl font-bold text-gray-800 dark:text-white">{project.title}</h1>
+                <p className="text-gray-600 dark:text-gray-300">{project.description}</p>
+                <p className="text-gray-600 dark:text-gray-300"><strong>Kategorie:</strong> {project.category}</p>
+                <p className="text-gray-600 dark:text-gray-300"><strong>Link:</strong> <a href={project.link} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">{project.link}</a></p>
+              </div>
 
               {/* Autorinformationen */}
-              <div className="mt-4 flex items-center space-x-2">
+              <div className="flex items-center space-x-2">
                 <Avatar className="h-8 w-8">
                   <AvatarImage src={project.author.image || undefined} />
                   <AvatarFallback>{project.author.name ? project.author.name.charAt(0) : 'U'}</AvatarFallback>
@@ -344,7 +346,7 @@ export default function ProjectDetail() {
               </div>
 
               {/* Likes und Kommentare */}
-              <div className="mt-4 flex items-center space-x-4">
+              <div className="flex items-center space-x-4">
                 <button
                   className={`flex items-center text-sm ${project.likes.some(like => like.userId === session?.user.id) ? 'text-blue-500' : 'text-gray-500 hover:text-blue-500'}`}
                   onClick={project.likes.some(like => like.userId === session?.user.id) ? handleUnlike : handleLike}
@@ -360,7 +362,7 @@ export default function ProjectDetail() {
 
               {/* Aktionen: Bearbeiten und Löschen */}
               {session?.user.id === project.author.id && (
-                <div className="mt-6 flex space-x-2">
+                <div className="flex space-x-2">
                   <Button onClick={handleOpenEditDialog} variant="outline" className="flex items-center space-x-1">
                     <Edit className="h-4 w-4" /> <span>Bearbeiten</span>
                   </Button>
@@ -371,7 +373,7 @@ export default function ProjectDetail() {
               )}
 
               {/* Kommentare */}
-              <div className="mt-8">
+              <div>
                 <h2 className="text-2xl font-semibold text-gray-800 dark:text-white mb-4">Kommentare</h2>
                 {project.comments.length > 0 ? (
                   project.comments.map(comment => (
