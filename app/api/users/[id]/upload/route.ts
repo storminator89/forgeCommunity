@@ -2,9 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../auth/[...nextauth]/options';
-import { writeFile, mkdir } from 'fs/promises';
+import { writeFile, mkdir, unlink } from 'fs/promises';
 import path from 'path';
 import { existsSync } from 'fs';
+
+// New route segment config format
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 const prisma = new PrismaClient();
 
@@ -141,10 +145,3 @@ export async function POST(
       );
     }
   }
-
-// Konfiguriere maximale Dateigröße für den Route Handler
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};

@@ -147,7 +147,7 @@ export async function POST(request: NextRequest) {
 
     // Optional: Sende Willkommens-E-Mail
     try {
-      await sendWelcomeEmail(newUser.email, newUser.name)
+      await sendWelcomeEmail(newUser.email, newUser.name ?? 'User')
     } catch (emailError) {
       console.error('Error sending welcome email:', emailError)
       // Fehler beim E-Mail-Versand sollte den Benutzer nicht am Erstellen hindern
@@ -165,8 +165,9 @@ export async function POST(request: NextRequest) {
 }
 
 // Hilfsfunktion für Willkommens-E-Mail
-async function sendWelcomeEmail(email: string, name: string) {
+async function sendWelcomeEmail(email: string, name: string | null) {
+  const displayName = name ?? 'User'
   // Implementieren Sie hier Ihre E-Mail-Logik
   // Beispiel mit nodemailer oder einem E-Mail-Service Ihrer Wahl
-  console.log(`Welcome email would be sent to ${email} for ${name}`)
+  console.log(`Welcome email would be sent to ${email} for ${displayName}`)
 }

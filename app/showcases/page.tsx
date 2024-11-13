@@ -870,7 +870,7 @@ export default function ProjectShowcase() {
               <DialogTitle>Projekt löschen</DialogTitle>
             </DialogHeader>
             <p>
-              Bist du sicher, dass du das Projekt "<strong>{projectToDelete.title}</strong>" löschen möchtest? Diese Aktion kann nicht rückgängig gemacht werden.
+              Bist du sicher, dass du das Projekt &quot;{projectToDelete.title}&quot; löschen möchtest? Diese Aktion kann nicht rückgängig gemacht werden.
             </p>
             <div className="flex justify-end">
               <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
@@ -28,6 +28,11 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { H5PSelectionDialog } from '@/components/h5p/H5PSelectionDialog';
+import { NewMainTopicDialog } from './NewMainTopicDialog';
+import { SubContentForm } from './SubContentForm';
+import { ContentList } from './ContentList';
+import { ContentViewer } from './ContentViewer';
+import { ContentRenderer } from './ContentRenderer';
 
 // Dynamisches Laden von ReactQuill
 const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
@@ -35,12 +40,17 @@ import 'react-quill/dist/quill.snow.css';
 
 // Importieren von dnd-kit
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
+import type { UniqueIdentifier } from '@dnd-kit/core';
 import {
   arrayMove,
   SortableContext,
   verticalListSortingStrategy
 } from '@dnd-kit/sortable';
 import { SortableItem } from './SortableItem'; // SortableItem-Komponente
+
+// Importiere die neue Komponente
+import { EditContentForm } from './EditContentForm';
+import { CourseContentsSidebar } from './CourseContentsSidebar';
 
 interface CourseContent {
   id: string;
@@ -67,6 +77,37 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
   const { data: session, status } = useSession();
   const router = useRouter();
   const [isH5PDialogOpen, setIsH5PDialogOpen] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(256); // 256px = 16rem (w-64)
+  const isResizing = useRef(false);
+  const startX = useRef(0);
+  const startWidth = useRef(0);
+  const [inlineEditTitle, setInlineEditTitle] = useState<string>('');
+  const [isInlineEditing, setIsInlineEditing] = useState<string | null>(null);
+
+  const startResizing = (e: React.MouseEvent) => {
+    isResizing.current = true;
+    startX.current = e.pageX;
+    startWidth.current = sidebarWidth;
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', stopResizing);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  };
+
+  const handleMouseMove = (e: MouseEvent) => {
+    if (!isResizing.current) return;
+    const delta = e.pageX - startX.current;
+    const newWidth = Math.max(200, Math.min(500, startWidth.current + delta));
+    setSidebarWidth(newWidth);
+  };
+
+  const stopResizing = () => {
+    isResizing.current = false;
+    document.removeEventListener('mousemove', handleMouseMove);
+    document.removeEventListener('mouseup', stopResizing);
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  };
 
   // Funktion zum Abrufen der Kursinhalte
   const fetchContents = useCallback(async () => {
@@ -325,40 +366,6 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
     return url;
   };
 
-  // Funktion zum Rendern des Inhalts basierend auf dem Typ
-  const renderContent = (content: CourseContent) => {
-    switch (content.type) {
-      case 'TEXT':
-        return <div className="prose dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: content.content }} />;
-      case 'VIDEO':
-        return (
-          <div className="relative" style={{ paddingBottom: '56.25%', height: 0 }}>
-            <iframe
-              src={content.content}
-              frameBorder="0"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-              className="absolute top-0 left-0 w-full h-full rounded-lg shadow-md"
-            ></iframe>
-          </div>
-        );
-      case 'AUDIO':
-        return <audio src={content.content} controls className="w-full" />;
-      case 'H5P':
-        return (
-          <div className="relative" style={{ paddingBottom: '56.25%', height: 0 }}>
-            <iframe
-              src={`/h5p/embed/${content.content}`}
-              className="absolute top-0 left-0 w-full h-full rounded-lg shadow-md"
-              allowFullScreen
-            ></iframe>
-          </div>
-        );
-      default:
-        return <p>{content.content}</p>;
-    }
-  };
-
   // Funktion zum Abrufen des entsprechenden Icons basierend auf dem Typ
   const getContentTypeIcon = (type: string) => {
     switch (type) {
@@ -389,8 +396,8 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
 
     if (!over) return;
 
-    const activeId = active.id;
-    const overId = over.id;
+    const activeId = String(active.id);
+    const overId = String(over.id);
 
     if (activeId === overId) return;
 
@@ -558,12 +565,41 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
     }
   };
 
+  // Add new state for inline title editing near other state declarations
+  const handleInlineTitleUpdate = async (contentId: string, newTitle: string) => {
+    try {
+      const content = mainContents.find(c => c.id === contentId);
+      if (!content) return;
+
+      const response = await fetch(`/api/courses/${params.courseId}/contents/${contentId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...content,
+          title: newTitle,
+        }),
+      });
+
+      if (response.ok) {
+        setMainContents(prev => prev.map(c => 
+          c.id === contentId ? { ...c, title: newTitle } : c
+        ));
+        setAlertMessage({ type: 'success', message: 'Titel erfolgreich aktualisiert.' });
+      } else {
+        throw new Error('Failed to update title');
+      }
+    } catch (error) {
+      console.error('Error updating title:', error);
+      setAlertMessage({ type: 'error', message: 'Fehler beim Aktualisieren des Titels.' });
+    } finally {
+      setIsInlineEditing(null);
+      setInlineEditTitle('');
+    }
+  };
+
   return (
     <div className="flex flex-col lg:flex-row min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Erste Sidebar: Navigation */}
       <Sidebar />
-
-      {/* Hauptbereich */}
       <div className="flex-1 flex flex-col">
         {/* Header */}
         <header className="bg-white dark:bg-gray-800 shadow-md z-10">
@@ -589,109 +625,42 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
             collisionDetection={closestCenter}
             onDragEnd={handleDragEnd}
           >
-            {/* Zweite Sidebar: Lernpfad */}
             <SortableContext
-              items={mainContents.map(content => content.id)}
+              items={mainContents.map(content => String(content.id))}
               strategy={verticalListSortingStrategy}
             >
-              <div
-                className={`${
-                  isTopicsSidebarOpen ? 'w-64' : 'w-0'
-                } bg-white dark:bg-gray-800 overflow-y-auto border-r border-gray-200 dark:border-gray-700 transition-all duration-300 ease-in-out relative`}
-              >
-                {/* Inhalt der Lernpfad Sidebar */}
-                <div className={`p-4 ${isTopicsSidebarOpen ? 'block' : 'hidden'}`}>
-                  <h3 className="text-lg font-semibold mb-4">Lernpfad</h3>
-                  <ul className="space-y-2">
-                    {mainContents.map((content, index) => (
-                      <SortableItem key={content.id} id={content.id}>
-                        <li
-                          className={`p-2 rounded-md cursor-pointer flex justify-between items-center ${selectedContentId === content.id ? 'bg-gray-200 dark:bg-gray-700' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}`}
-                          onClick={() => setSelectedContentId(content.id)}
-                        >
-                          <span className="flex items-center">
-                            <GripVertical className="mr-2 h-4 w-4 cursor-grab" />
-                            <span className="w-6 h-6 rounded-full bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300 flex items-center justify-center mr-2 text-sm font-medium">{index + 1}</span>
-                            {isTopicsSidebarOpen && <span className="truncate">{content.title}</span>}
-                          </span>
-                          {isTopicsSidebarOpen && (
-                            <div className="flex space-x-1">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setEditingContentId(content.id);
-                                  setNewContent(content);
-                                }}
-                                aria-label="Bearbeiten"
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteContent(content);
-                                }}
-                                aria-label="Löschen"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          )}
-                        </li>
-                      </SortableItem>
-                    ))}
-                  </ul>
-
-                  {/* Button zum Hinzufügen eines neuen Hauptthemas */}
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button onClick={() => setIsAddingMainContent(true)} className="mt-4 w-full flex items-center">
-                        <PlusCircle className="mr-2 h-4 w-4" />
-                        Neues Hauptthema
-                      </Button>
-                    </DialogTrigger>
-                  </Dialog>
-
-                  {/* Dialog zum Hinzufügen eines neuen Hauptthemas */}
-                  <Dialog open={isAddingMainContent} onOpenChange={setIsAddingMainContent}>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Neues Hauptthema hinzufügen</DialogTitle>
-                      </DialogHeader>
-                      <form onSubmit={handleMainContentSubmit} className="space-y-4">
-                        <div>
-                          <Label htmlFor="mainContentTitle">Titel</Label>
-                          <Input
-                            id="mainContentTitle"
-                            value={newMainContentTitle}
-                            onChange={(e) => setNewMainContentTitle(e.target.value)}
-                            required
-                            placeholder="Titel des Hauptthemas"
-                          />
-                        </div>
-                        <div className="flex justify-end space-x-2">
-                          <Button type="button" variant="outline" onClick={() => setIsAddingMainContent(false)}>
-                            Abbrechen
-                          </Button>
-                          <Button type="submit">Hinzufügen</Button>
-                        </div>
-                      </form>
-                    </DialogContent>
-                  </Dialog>
-                </div>
-              </div>
+              <CourseContentsSidebar
+                mainContents={mainContents}
+                selectedContentId={selectedContentId}
+                isTopicsSidebarOpen={isTopicsSidebarOpen}
+                sidebarWidth={sidebarWidth}
+                isAddingMainContent={isAddingMainContent}
+                newMainContentTitle={newMainContentTitle}
+                isInlineEditing={isInlineEditing}
+                inlineEditTitle={inlineEditTitle}
+                onContentSelect={setSelectedContentId}
+                onEditClick={(content) => {
+                  setEditingContentId(content.id);
+                  setNewContent(content);
+                }}
+                onDeleteClick={handleDeleteContent}
+                onInlineEditSubmit={handleInlineTitleUpdate}
+                setIsInlineEditing={setIsInlineEditing}
+                setInlineEditTitle={setInlineEditTitle}
+                setIsAddingMainContent={setIsAddingMainContent}
+                onMainContentSubmit={handleMainContentSubmit}
+                setNewMainContentTitle={setNewMainContentTitle}
+                startResizing={startResizing}
+              />
             </SortableContext>
 
-            {/* Toggle Sidebar Button für Lernpfad */}
+            {/* Rest der Komponente bleibt unverändert */}
             <button
               onClick={() => setIsTopicsSidebarOpen(!isTopicsSidebarOpen)}
-              className={`absolute ${
-                isTopicsSidebarOpen ? 'left-64' : 'left-0'
-              } top-1/2 transform -translate-y-1/2 bg-white dark:bg-gray-800 p-2 rounded-r-md shadow-md z-20 transition-all duration-300`}
+              className="absolute top-1/2 transform -translate-y-1/2 bg-white dark:bg-gray-800 p-2 rounded-r-md shadow-md z-20 transition-all duration-300"
+              style={{ 
+                left: isTopicsSidebarOpen ? `${sidebarWidth}px` : '0px'
+              }}
               aria-label={isTopicsSidebarOpen ? "Lernpfad schließen" : "Lernpfad öffnen"}
             >
               {isTopicsSidebarOpen ? <ChevronLeft /> : <ChevronRight />}
@@ -738,7 +707,7 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
                     <div className="space-y-4">
                       {selectedMainContent.subContents && selectedMainContent.subContents.length > 0 ? (
                         <SortableContext
-                          items={selectedMainContent.subContents.map(sub => sub.id)}
+                          items={selectedMainContent.subContents.map(sub => String(sub.id))}
                           strategy={verticalListSortingStrategy}
                         >
                           <ul className="space-y-2">
@@ -748,7 +717,9 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
                                   <div className="flex justify-between items-center">
                                     <div className="flex items-center">
                                       <GripVertical className="mr-2 h-4 w-4 cursor-grab" />
-                                      <h4 className="text-xl font-semibold text-gray-700 dark:text-gray-200">{subContent.title}</h4>
+                                      <h4 className="text-xl font-semibold text-gray-700 dark:text-gray-200">
+                                        {subContent.title}
+                                      </h4>
                                     </div>
                                     <div className="flex space-x-2">
                                       <Button
@@ -772,56 +743,22 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
                                       </Button>
                                     </div>
                                   </div>
-                                  <p className="text-sm text-gray-500 mb-2 flex items-center">
-                                    {getContentTypeIcon(subContent.type)}
-                                    <span className="ml-2">{subContent.type}</span>
-                                  </p>
-                                  {renderContent(subContent)}
+                                  <ContentRenderer content={subContent} />
 
                                   {/* Inline-Bearbeitungsformular */}
                                   {editingContentId === subContent.id && (
                                     <div className="mt-4 bg-gray-50 dark:bg-gray-800 p-4 rounded-lg shadow">
-                                      <form onSubmit={(e) => handleContentUpdate(e, newContent)} className="space-y-4">
-                                        <div>
-                                          <Label htmlFor="editTitle">Titel</Label>
-                                          <Input
-                                            id="editTitle"
-                                            value={newContent.title}
-                                            onChange={(e) => setNewContent({ ...newContent, title: e.target.value })}
-                                            required
-                                            placeholder="Titel des Unterthemas"
-                                          />
-                                        </div>
-                                        <div>
-                                          <Label htmlFor="editType">Typ</Label>
-                                          <select
-                                            id="editType"
-                                            value={newContent.type}
-                                            onChange={(e) => setNewContent({ ...newContent, type: e.target.value as 'TEXT' | 'VIDEO' | 'AUDIO' | 'H5P' })}
-                                            className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-                                          >
-                                            <option value="TEXT">Text</option>
-                                            <option value="VIDEO">Video</option>
-                                            <option value="AUDIO">Audio</option>
-                                            <option value="H5P">H5P Inhalt</option>
-                                          </select>
-                                        </div>
-                                        <div>
-                                          <Label htmlFor="editContent">Inhalt</Label>
-                                          {renderContentInput(newContent.type)}
-                                        </div>
-                                        <div className="flex justify-end space-x-2">
-                                          <Button type="button" variant="outline" onClick={() => {
-                                            setEditingContentId(null);
-                                            setNewContent({ id: '', title: '', type: 'TEXT', content: '', order: 0, parentId: null });
-                                          }}>
-                                            Abbrechen
-                                          </Button>
-                                          <Button type="submit">
-                                            Aktualisieren
-                                          </Button>
-                                        </div>
-                                      </form>
+                                      <SubContentForm
+                                        content={newContent}
+                                        onContentChange={setNewContent}
+                                        onSubmit={(e) => handleContentUpdate(e, newContent)}
+                                        onCancel={() => {
+                                          setEditingContentId(null);
+                                          setNewContent({ id: '', title: '', type: 'TEXT', content: '', order: 0, parentId: null });
+                                        }}
+                                        isEditing={true}
+                                        onH5PDialogOpen={() => setIsH5PDialogOpen(true)}
+                                      />
                                     </div>
                                   )}
                                 </li>
@@ -838,45 +775,13 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
                     {isAddingSubContent && (
                       <div className="mt-6 bg-gray-50 dark:bg-gray-800 p-6 rounded-lg shadow">
                         <h4 className="text-xl font-semibold mb-4">Neues Unterthema hinzufügen</h4>
-                        <form onSubmit={handleSubContentSubmit} className="space-y-4">
-                          <div>
-                            <Label htmlFor="title">Titel</Label>
-                            <Input
-                              id="title"
-                              value={newContent.title}
-                              onChange={(e) => setNewContent({ ...newContent, title: e.target.value })}
-                              required
-                              placeholder="Titel des Unterthemas"
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor="type">Typ</Label>
-                            <select
-                              id="type"
-                              value={newContent.type}
-                              onChange={(e) => setNewContent({ ...newContent, type: e.target.value as 'TEXT' | 'VIDEO' | 'AUDIO' | 'H5P' })}
-                              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-                            >
-                              <option value="TEXT">Text</option>
-                              <option value="VIDEO">Video</option>
-                              <option value="AUDIO">Audio</option>
-                              <option value="H5P">H5P Inhalt</option>
-                            </select>
-                          </div>
-                          <div>
-                            <Label htmlFor="content">Inhalt</Label>
-                            {renderContentInput(newContent.type)}
-                          </div>
-                          {/* Buttons in einem separaten Container */}
-                          <div className="flex justify-end space-x-2">
-                            <Button type="button" variant="outline" onClick={() => setIsAddingSubContent(false)}>
-                              Abbrechen
-                            </Button>
-                            <Button type="submit">
-                              Hinzufügen
-                            </Button>
-                          </div>
-                        </form>
+                        <SubContentForm
+                          content={newContent}
+                          onContentChange={setNewContent}
+                          onSubmit={handleSubContentSubmit}
+                          onCancel={() => setIsAddingSubContent(false)}
+                          onH5PDialogOpen={() => setIsH5PDialogOpen(true)}
+                        />
                       </div>
                     )}
 
@@ -897,49 +802,16 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
 
               {/* Editieren eines Hauptthemas inline */}
               {editingContentId === selectedMainContent?.id && (
-                <div className="mt-4 bg-gray-50 dark:bg-gray-800 p-6 rounded-lg shadow">
-                  <form onSubmit={(e) => handleContentUpdate(e, newContent)} className="space-y-4">
-                    <div>
-                      <Label htmlFor="editTitle">Titel</Label>
-                      <Input
-                        id="editTitle"
-                        value={newContent.title}
-                        onChange={(e) => setNewContent({ ...newContent, title: e.target.value })}
-                        required
-                        placeholder="Titel des Hauptthemas"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="editType">Typ</Label>
-                      <select
-                        id="editType"
-                        value={newContent.type}
-                        onChange={(e) => setNewContent({ ...newContent, type: e.target.value as 'TEXT' | 'VIDEO' | 'AUDIO' | 'H5P' })}
-                        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-                      >
-                        <option value="TEXT">Text</option>
-                        <option value="VIDEO">Video</option>
-                        <option value="AUDIO">Audio</option>
-                        <option value="H5P">H5P Inhalt</option>
-                      </select>
-                    </div>
-                    <div>
-                      <Label htmlFor="editContent">Inhalt</Label>
-                      {renderContentInput(newContent.type)}
-                    </div>
-                    <div className="flex justify-end space-x-2">
-                      <Button type="button" variant="outline" onClick={() => {
-                        setEditingContentId(null);
-                        setNewContent({ id: '', title: '', type: 'TEXT', content: '', order: 0, parentId: null });
-                      }}>
-                        Abbrechen
-                      </Button>
-                      <Button type="submit">
-                        Aktualisieren
-                      </Button>
-                    </div>
-                  </form>
-                </div>
+                <EditContentForm
+                  content={newContent}
+                  onContentChange={setNewContent}
+                  onSubmit={(e) => handleContentUpdate(e, newContent)}
+                  onCancel={() => {
+                    setEditingContentId(null);
+                    setNewContent({ id: '', title: '', type: 'TEXT', content: '', order: 0, parentId: null });
+                  }}
+                  setIsH5PDialogOpen={setIsH5PDialogOpen}
+                />
               )}
 
               {/* Bestätigungsdialog für das Löschen */}

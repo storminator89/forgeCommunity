@@ -80,13 +80,14 @@ export async function POST(request: NextRequest) {
     if (image) {
       const bytes = await image.arrayBuffer();
       const buffer = Buffer.from(bytes);
+      const uint8Array = new Uint8Array(buffer);
 
       const uploadDir = path.join(process.cwd(), 'public', 'images', 'uploads');
       const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1E9)}`;
       const filename = `${uniqueSuffix}-${image.name}`;
       const filepath = path.join(uploadDir, filename);
 
-      await writeFile(filepath, buffer);
+      await writeFile(filepath, uint8Array);
       imageUrl = `/images/uploads/${filename}`;
     }
 

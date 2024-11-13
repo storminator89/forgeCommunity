@@ -248,7 +248,7 @@ export default function ChatPage() {
                           <AlertDialogHeader>
                             <AlertDialogTitle>Channel löschen</AlertDialogTitle>
                             <AlertDialogDescription>
-                              Möchten Sie wirklich den Channel "{channel.name}" löschen?
+                              Möchten Sie wirklich den Channel &quot;{channel.name}&quot; löschen?
                               Diese Aktion kann nicht rückgängig gemacht werden.
                               Alle Nachrichten in diesem Channel werden ebenfalls gelöscht.
                             </AlertDialogDescription>
@@ -282,9 +282,9 @@ export default function ChatPage() {
                 <div key={message.id} className="mb-4">
                   <div className="flex items-start space-x-3">
                     <Avatar>
-                      <AvatarImage src={message.author.image || undefined} />
+                      <AvatarImage src={message.author.image ?? undefined} />
                       <AvatarFallback>
-                        {message.author.name?.[0] || '?'}
+                        {message.author.name?.[0] ?? '?'}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 space-y-1">
@@ -325,18 +325,18 @@ export default function ChatPage() {
                               <div className="relative inline-block group/image">
                                 <div className="relative max-w-lg">
                                   <Image
-                                    src={message.imageUrl}
+                                    src={message.imageUrl ?? ''}
                                     alt="Nachrichtenbild"
                                     width={512}
                                     height={512}
                                     className="rounded-lg object-contain cursor-pointer"
-                                    onClick={() => setSelectedImageForModal(message.imageUrl)}
+                                    onClick={() => setSelectedImageForModal(message.imageUrl ?? null)}
                                   />
                                   <Button
                                     variant="ghost"
                                     size="icon"
                                     className="absolute top-2 right-2 opacity-0 group-hover/image:opacity-100 transition-opacity"
-                                    onClick={() => setSelectedImageForModal(message.imageUrl)}
+                                    onClick={() => setSelectedImageForModal(message.imageUrl ?? null)}
                                   >
                                     <Maximize2 className="h-4 w-4" />
                                   </Button>

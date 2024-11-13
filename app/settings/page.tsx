@@ -490,7 +490,7 @@ export default function SettingsPage() {
             <DialogHeader>
               <DialogTitle>Fähigkeit bearbeiten</DialogTitle>
               <DialogDescription>
-                Aktualisieren Sie den Kenntnisstand für "{editSkill.skill?.name}".
+                Aktualisieren Sie den Kenntnisstand für &quot;{editSkill.skill?.name}&quot;.
               </DialogDescription>
             </DialogHeader>
             <div className="mt-4 space-y-4">

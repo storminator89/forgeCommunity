@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Sidebar } from "@/components/Sidebar";
 import { ThemeToggle } from "@/components/theme-toggle"; 
 import { UserNav } from "@/components/user-nav"; 
+import Image from 'next/image';
 
 interface Tag {
   id: string;
@@ -50,6 +51,7 @@ interface Project {
   category: string;
   link: string;
   imageUrl?: string;
+  coverImage?: string;  // Add this property
   gradientFrom: string;
   gradientTo: string;
   createdAt: string;
@@ -92,29 +94,28 @@ export default function ProjectDetail() {
     console.log("Project ID:", projectId);
   }, [projectId]);
 
-  // Fetch project details
-  const fetchProject = async () => {
-    if (!projectId) {
-      console.error("Kein projectId gefunden in der URL.");
-      return;
-    }
-    try {
-      const res = await fetch(`/api/projects/${projectId}`);
-      if (!res.ok) {
-        throw new Error('Projekt nicht gefunden.');
-      }
-      const data: Project = await res.json();
-      setProject(data);
-    } catch (error: any) {
-      console.error('Error fetching project:', error);
-      alert('Fehler beim Abrufen des Projekts.');
-      router.push('/showcases'); // Navigiere zurück zur Projektliste bei Fehler
-    }
-  }
-
   useEffect(() => {
+    const fetchProject = async () => {
+      if (!projectId) {
+        console.error("Kein projectId gefunden in der URL.");
+        return;
+      }
+      try {
+        const res = await fetch(`/api/projects/${projectId}`);
+        if (!res.ok) {
+          throw new Error('Projekt nicht gefunden.');
+        }
+        const data: Project = await res.json();
+        setProject(data);
+      } catch (error: any) {
+        console.error('Error fetching project:', error);
+        alert('Fehler beim Abrufen des Projekts.');
+        router.push('/showcases'); // Navigiere zurück zur Projektliste bei Fehler
+      }
+    }
+
     fetchProject();
-  }, [projectId]);
+  }, [projectId, router]);
 
   // Handle adding a comment
   const handleAddComment = async () => {
@@ -308,24 +309,14 @@ export default function ProjectDetail() {
           {project ? (
             <div className="max-w-4xl mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 space-y-6">
               {/* Projektbild */}
-              <div className="relative">
-                {project.imageUrl ? (
-                  <img
-                    src={project.imageUrl}
-                    alt={`${project.title} Vorschaubild`}
-                    className="w-full h-64 object-cover rounded-lg"
-                  />
-                ) : (
-                  <div
-                    className="w-full h-64 rounded-lg"
-                    style={{
-                      background: `linear-gradient(135deg, ${project.gradientFrom}, ${project.gradientTo})`,
-                    }}
-                  />
-                )}
-                <Badge className="absolute top-2 left-2" variant="secondary">
-                  {project.tags.map(tag => tag.name).join(', ')}
-                </Badge>
+              <div className="relative w-full h-64 rounded-lg overflow-hidden">
+                <Image
+                  src={project.imageUrl || project.coverImage || '/placeholder.jpg'}
+                  alt={project.title}
+                  fill
+                  className="object-cover"
+                  priority
+                />
               </div>
 
               {/* Projektinformationen */}
@@ -526,7 +517,7 @@ export default function ProjectDetail() {
                       <DialogTitle>Projekt löschen</DialogTitle>
                     </DialogHeader>
                     <DialogDescription>
-                      Bist du sicher, dass du das Projekt "<strong>{projectToDelete.title}</strong>" löschen möchtest? Diese Aktion kann nicht rückgängig gemacht werden.
+                      Bist du sicher, dass du das Projekt &quot;{projectToDelete.title}&quot; löschen möchtest? Diese Aktion kann nicht rückgängig gemacht werden.
                     </DialogDescription>
                     <DialogFooter>
                       <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>

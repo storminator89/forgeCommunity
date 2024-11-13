@@ -14,7 +14,45 @@ import { motion } from 'framer-motion';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 
-export default function ProjectDetail({ params }: { params: { id: string } }) {
+interface Tag {
+  id: string;
+  name: string;
+}
+
+interface Like {
+  userId: string;
+}
+
+interface Comment {
+  id: string;
+  content: string;
+  createdAt: string;
+  author: {
+    name?: string;
+    image?: string;
+  };
+}
+
+interface Project {
+  id: string;
+  title: string;
+  description: string;
+  imageUrl?: string;
+  link?: string;
+  category?: string;
+  createdAt: string;
+  updatedAt: string;
+  author: {
+    id: string;
+    name?: string;
+    image?: string;
+  };
+  tags: Tag[];
+  likes: Like[];
+  comments: Comment[];
+}
+
+const ProjectDetail = ({ params }: { params: { id: string } }) => {
   const { data: session } = useSession();
   const router = useRouter();
   const [project, setProject] = useState<Project | null>(null);
@@ -22,6 +60,31 @@ export default function ProjectDetail({ params }: { params: { id: string } }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const handleLike = async (projectId?: string) => {
+    if (!projectId) return;
+    // Implement like functionality
+  };
+
+  const handleEdit = (project?: Project) => {
+    if (!project) return;
+    router.push(`/projects/${project.id}/edit`);
+  };
+
+  const handleDelete = async (project?: Project) => {
+    if (!project) return;
+    if (window.confirm('Are you sure you want to delete this project?')) {
+      try {
+        const res = await fetch(`/api/projects/${project.id}`, {
+          method: 'DELETE',
+        });
+        if (!res.ok) throw new Error('Failed to delete project');
+        router.push('/showcases');
+      } catch (error) {
+        console.error('Error deleting project:', error);
+      }
+    }
+  };
 
   useEffect(() => {
     const fetchProject = async () => {
@@ -69,17 +132,30 @@ export default function ProjectDetail({ params }: { params: { id: string } }) {
   if (!project) return null;
 
   const handleAddComment = async (projectId: string) => {
-    if (!commentContent.trim()) return;
+    if (!commentContent.trim() || !projectId) return;
     
     setIsSubmitting(true);
     setError(null);
     
     try {
-      // ... existing comment logic ...
+      const res = await fetch(`/api/projects/${projectId}/comments`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          content: commentContent,
+        }),
+      });
+
+      if (!res.ok) throw new Error('Failed to add comment');
       
-      // Clear input and show success feedback
+      const newComment = await res.json();
+      setProject(prev => prev ? {
+        ...prev,
+        comments: [...prev.comments, newComment]
+      } : null);
       setCommentContent('');
-      // You could add a toast notification here
     } catch (error) {
       setError('Failed to add comment. Please try again.');
     } finally {
@@ -181,7 +257,56 @@ export default function ProjectDetail({ params }: { params: { id: string } }) {
                 </div>
               </>
             ) : (
-              // ...similar structure for gradient fallback...
+              <>
+                <div className="absolute inset-0 bg-gradient-to-br from-gray-800 to-gray-900" />
+                <div className="relative h-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center">
+                  <div className="w-full md:w-2/3">
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.5 }}
+                      className="space-y-6"
+                    >
+                      <div className="flex flex-wrap gap-2">
+                        {project.tags.map((tag) => (
+                          <Badge 
+                            key={tag.id} 
+                            className="bg-white/10 hover:bg-white/20 text-white transition-colors duration-200"
+                          >
+                            {tag.name}
+                          </Badge>
+                        ))}
+                      </div>
+                      <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-tight">
+                        {project.title}
+                      </h1>
+                      <p className="text-xl text-gray-300 leading-relaxed max-w-2xl">
+                        {project.description}
+                      </p>
+                      <div className="flex items-center space-x-6">
+                        <div className="flex items-center">
+                          <Avatar className="h-12 w-12 ring-4 ring-white/10">
+                            <AvatarImage src={project.author.image || undefined} />
+                            <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-500">
+                              {project.author.name?.charAt(0)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="ml-3">
+                            <p className="text-white font-medium">{project.author.name}</p>
+                            <p className="text-gray-400 text-sm">
+                              {new Date(project.createdAt).toLocaleDateString('de-DE', {
+                                day: 'numeric',
+                                month: 'long',
+                                year: 'numeric'
+                              })}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  </div>
+                </div>
+              </>
             )}
           </div>
 
@@ -371,4 +496,7 @@ export default function ProjectDetail({ params }: { params: { id: string } }) {
       </div>
     </div>
   );
-}
+};
+
+export default ProjectDetail;
+

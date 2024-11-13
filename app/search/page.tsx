@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Sidebar } from "@/components/Sidebar";
 import { UserNav } from "@/components/user-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -383,8 +383,8 @@ export default function SearchPage() {
                           </h3>
                           <p className="text-gray-500 dark:text-gray-400">
                             {searchTerm 
-                              ? 'Versuchen Sie es mit anderen Suchbegriffen oder wählen Sie eine andere Kategorie.'
-                              : 'Suchen Sie nach Kursen, Events, Mitgliedern oder Beiträgen.'}
+                              ? "Versuchen Sie es mit anderen Suchbegriffen oder wählen Sie eine andere Kategorie."
+                              : "Suchen Sie nach Kursen, Events, Mitgliedern oder Beiträgen."}
                           </p>
                         </div>
                       ) : (

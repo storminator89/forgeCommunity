@@ -3,6 +3,7 @@
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { Sidebar } from "@/components/Sidebar";
 import { UserNav } from "@/components/user-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -252,7 +253,7 @@ export default function DraftsPage() {
                     <Search className="h-12 w-12 text-gray-400" />
                     <CardTitle>Keine Ergebnisse gefunden</CardTitle>
                     <CardDescription>
-                      Keine Entwürfe gefunden für "{searchQuery}"
+                      Keine Entwürfe gefunden für &quot;{searchQuery}&quot;
                     </CardDescription>
                   </div>
                 </Card>
@@ -282,9 +283,11 @@ export default function DraftsPage() {
                           </div>
                           {draft.featuredImage && (
                             <div className="w-20 h-20 rounded-md overflow-hidden flex-shrink-0">
-                              <img 
+                              <Image 
                                 src={draft.featuredImage} 
                                 alt={draft.title}
+                                width={80}
+                                height={80}
                                 className="w-full h-full object-cover"
                               />
                             </div>

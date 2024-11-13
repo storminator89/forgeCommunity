@@ -19,8 +19,8 @@ import { ThemeToggle } from "@/components/theme-toggle"
 export default function NewCoursePage() {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [startDate, setStartDate] = useState<Date | null>(null)
-  const [endDate, setEndDate] = useState<Date | null>(null)
+  const [startDate, setStartDate] = useState<Date | undefined>(undefined)
+  const [endDate, setEndDate] = useState<Date | undefined>(undefined)
   const [price, setPrice] = useState('')
   const [currency, setCurrency] = useState('EUR')
   const [maxStudents, setMaxStudents] = useState('')
@@ -126,7 +126,7 @@ export default function NewCoursePage() {
                             className="ml-auto h-4 w-4 opacity-50 hover:opacity-100"
                             onClick={(e) => {
                               e.stopPropagation()
-                              setStartDate(null)
+                              setStartDate(undefined)
                             }}
                           />
                         )}
@@ -137,7 +137,7 @@ export default function NewCoursePage() {
                       <Calendar
                         mode="single"
                         selected={startDate}
-                        onSelect={setStartDate}
+                        onSelect={(date) => setStartDate(date)}
                         locale={de}
                         initialFocus
                       />
@@ -155,7 +155,7 @@ export default function NewCoursePage() {
                             className="ml-auto h-4 w-4 opacity-50 hover:opacity-100"
                             onClick={(e) => {
                               e.stopPropagation()
-                              setEndDate(null)
+                              setEndDate(undefined)
                             }}
                           />
                         )}
@@ -166,7 +166,7 @@ export default function NewCoursePage() {
                       <Calendar
                         mode="single"
                         selected={endDate}
-                        onSelect={setEndDate}
+                        onSelect={(date) => setEndDate(date)}
                         locale={de}
                         initialFocus
                       />
