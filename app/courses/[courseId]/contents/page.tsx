@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
@@ -22,8 +22,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ArrowLeft,
-  Loader2,
-  GripVertical
+  Loader2
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -33,20 +32,12 @@ import { SubContentForm } from './SubContentForm';
 import { ContentList } from './ContentList';
 import { ContentViewer } from './ContentViewer';
 import { ContentRenderer } from './ContentRenderer';
+import { CourseHeader } from './CourseHeader';
+import { CourseMainContent } from './CourseMainContent';
 
 // Dynamisches Laden von ReactQuill
 const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
 import 'react-quill/dist/quill.snow.css';
-
-// Importieren von dnd-kit
-import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
-import type { UniqueIdentifier } from '@dnd-kit/core';
-import {
-  arrayMove,
-  SortableContext,
-  verticalListSortingStrategy
-} from '@dnd-kit/sortable';
-import { SortableItem } from './SortableItem'; // SortableItem-Komponente
 
 // Importiere die neue Komponente
 import { EditContentForm } from './EditContentForm';
@@ -84,6 +75,19 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
   const [inlineEditTitle, setInlineEditTitle] = useState<string>('');
   const [isInlineEditing, setIsInlineEditing] = useState<string | null>(null);
 
+  // Finden des ausgewählten Inhalts basierend auf selectedContentId
+  const selectedMainContent = useMemo(() => {
+    // First check if the content is a subcontent
+    for (const main of mainContents) {
+      if (main.subContents) {
+        const sub = main.subContents.find(sub => sub.id === selectedContentId);
+        if (sub) return sub;
+      }
+    }
+    // If not found in subcontents, check main contents
+    return mainContents.find(content => content.id === selectedContentId) || null;
+  }, [mainContents, selectedContentId]);
+
   const startResizing = (e: React.MouseEvent) => {
     isResizing.current = true;
     startX.current = e.pageX;
@@ -117,18 +121,8 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
       if (response.ok) {
         const data: CourseContent[] = await response.json();
         setMainContents(data);
-
-        // Nach dem Abrufen prüfen, ob die ausgewählte Content-ID noch existiert
-        if (selectedContentId) {
-          const exists = data.some(content =>
-            content.id === selectedContentId ||
-            content.subContents?.some(sub => sub.id === selectedContentId)
-          );
-          if (!exists) {
-            setSelectedContentId(data.length > 0 ? data[0].id : null);
-          }
-        } else {
-          setSelectedContentId(data.length > 0 ? data[0].id : null);
+        if (!selectedContentId && data.length > 0) {
+          setSelectedContentId(data[0].id);
         }
       } else {
         throw new Error('Failed to fetch contents');
@@ -139,14 +133,16 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
     } finally {
       setIsLoading(false);
     }
-  }, [params.courseId, selectedContentId]);
+  }, [params.courseId]);
 
   // Initiales Laden der Inhalte und Authentifizierung prüfen
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/');
+    } else {
+      fetchContents();
     }
-  }, [status, router]);
+  }, [status, router, fetchContents]);
 
   useEffect(() => {
     fetchContents();
@@ -277,15 +273,17 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
         setAlertMessage({ type: 'success', message: 'Inhalt erfolgreich aktualisiert.' });
 
         setMainContents(prev => prev.map(content => {
+          // If this is the main content being updated
           if (content.id === returnedContent.id) {
-            // Hauptthema aktualisieren (inkl. Typ und Inhalt)
-            if (returnedContent.parentId === null) {
-              return { ...content, ...returnedContent };
-            }
-            // Unterthema aktualisieren
+            return { ...content, ...returnedContent };
+          }
+          // If this content has subcontents, check if we need to update any of them
+          if (content.subContents?.length > 0) {
             return {
               ...content,
-              subContents: content.subContents?.map(sub => sub.id === returnedContent.id ? { ...sub, ...returnedContent } : sub)
+              subContents: content.subContents.map(sub =>
+                sub.id === returnedContent.id ? { ...sub, ...returnedContent } : sub
+              )
             };
           }
           return content;
@@ -328,31 +326,35 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
 
       setAlertMessage({ type: 'success', message: 'Inhalt erfolgreich gelöscht.' });
 
-      setMainContents(prev => prev.reduce((acc, c) => {
-        if (c.id === content.id) {
-          // Hauptinhalt löschen, inklusive Unterinhalte
-          return acc;
+      setMainContents(prev => {
+        // If deleting a main content
+        if (!content.parentId) {
+          return prev.filter(c => c.id !== content.id);
         }
-        if (c.subContents) {
-          const filteredSubContents = c.subContents.filter(sub => sub.id !== content.id);
-          acc.push({ ...c, subContents: filteredSubContents });
-        } else {
-          acc.push(c);
-        }
-        return acc;
-      }, [] as CourseContent[]));
+        
+        // If deleting a subtheme
+        return prev.map(main => {
+          if (main.subContents) {
+            return {
+              ...main,
+              subContents: main.subContents.filter(sub => sub.id !== content.id)
+            };
+          }
+          return main;
+        });
+      });
 
-      // Wenn der gelöschte Inhalt ausgewählt war, setze die Auswahl auf das erste vorhandene Hauptthema
-      if (content.id === selectedContentId) {
-        const remainingMain = mainContents.filter(c => c.id !== content.id);
-        setSelectedContentId(remainingMain.length > 0 ? remainingMain[0].id : null);
+      // Reset selected content if needed
+      if (selectedContentId === content.id) {
+        const firstMain = mainContents[0];
+        setSelectedContentId(firstMain ? firstMain.id : null);
       }
 
+      // Close the confirmation dialog
       setConfirmDelete({ open: false, content: null });
     } catch (error) {
       console.error('Error deleting content:', error);
       setAlertMessage({ type: 'error', message: 'Fehler beim Löschen des Inhalts.' });
-      setConfirmDelete({ open: false, content: null });
     }
   };
 
@@ -380,103 +382,129 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
     }
   };
 
-  // Initialisieren der Sensoren für dnd-kit
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 5,
-      },
-    })
-    // Sie können weitere Sensoren hinzufügen, z.B. KeyboardSensor
-  );
+  // Handler zum Verschieben eines Unterthemas nach oben
+  const handleMoveSubContentUp = async (mainContentId: string, subContentId: string) => {
+    const mainContent = mainContents.find(content => content.id === mainContentId);
+    if (!mainContent?.subContents) return;
 
-  // Drag-End-Handler für dnd-kit
-  const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
+    const currentIndex = mainContent.subContents.findIndex(sub => sub.id === subContentId);
+    if (currentIndex <= 0) return; // Already at the top
 
-    if (!over) return;
+    const newSubContents = [...mainContent.subContents];
+    const temp = newSubContents[currentIndex];
+    newSubContents[currentIndex] = newSubContents[currentIndex - 1];
+    newSubContents[currentIndex - 1] = temp;
 
-    const activeId = String(active.id);
-    const overId = String(over.id);
+    // Update the order property for the moved items
+    newSubContents[currentIndex].order = currentIndex + 1;
+    newSubContents[currentIndex - 1].order = currentIndex;
 
-    if (activeId === overId) return;
+    try {
+      // Update the order on the server
+      const updatePromises = [
+        fetch(`/api/courses/${params.courseId}/contents/${newSubContents[currentIndex].id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: newSubContents[currentIndex].title,
+            type: newSubContents[currentIndex].type,
+            content: newSubContents[currentIndex].content,
+            order: newSubContents[currentIndex].order,
+            parentId: mainContentId
+          }),
+        }),
+        fetch(`/api/courses/${params.courseId}/contents/${newSubContents[currentIndex - 1].id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: newSubContents[currentIndex - 1].title,
+            type: newSubContents[currentIndex - 1].type,
+            content: newSubContents[currentIndex - 1].content,
+            order: newSubContents[currentIndex - 1].order,
+            parentId: mainContentId
+          }),
+        })
+      ];
 
-    // Prüfen, ob die Drag-Aktion innerhalb der Hauptthemen oder Unterthemen stattfindet
-    const mainIds = mainContents.map(content => content.id);
-    const isMain = mainIds.includes(activeId) && mainIds.includes(overId);
-
-    if (isMain) {
-      const oldIndex = mainContents.findIndex(content => content.id === activeId);
-      const newIndex = mainContents.findIndex(content => content.id === overId);
-
-      const reordered = arrayMove(mainContents, oldIndex, newIndex);
-      setMainContents(reordered);
-
-      // Aktualisieren Sie die Reihenfolge auf dem Server
-      try {
-        const updatePromises = reordered.map((content, index) => {
-          return fetch(`/api/courses/${params.courseId}/contents/${content.id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              title: content.title,
-              type: content.type,
-              content: content.content,
-              order: index + 1,
-              parentId: null
-            }),
-          });
-        });
-
-        await Promise.all(updatePromises);
-        setAlertMessage({ type: 'success', message: 'Reihenfolge der Hauptthemen erfolgreich aktualisiert.' });
-      } catch (error) {
-        console.error('Error updating main contents order:', error);
-        setAlertMessage({ type: 'error', message: 'Fehler beim Aktualisieren der Reihenfolge der Hauptthemen.' });
-      }
-
-    } else {
-      // Handle Sub-Contents Dragging
-      const mainContent = mainContents.find(content => content.subContents?.some(sub => sub.id === activeId));
-      if (!mainContent || !mainContent.subContents) return;
-
-      const oldIndex = mainContent.subContents.findIndex(sub => sub.id === activeId);
-      const newIndex = mainContent.subContents.findIndex(sub => sub.id === overId);
-
-      const reorderedSubContents = arrayMove(mainContent.subContents, oldIndex, newIndex);
-
+      await Promise.all(updatePromises);
+      
+      // Update local state
       setMainContents(prev => prev.map(content => {
-        if (content.id === mainContent.id) {
-          return { ...content, subContents: reorderedSubContents };
+        if (content.id === mainContentId) {
+          return { ...content, subContents: newSubContents };
         }
         return content;
       }));
 
-      // Aktualisieren Sie die Reihenfolge auf dem Server
-      try {
-        const updatePromises = reorderedSubContents.map((sub, index) => {
-          return fetch(`/api/courses/${params.courseId}/contents/${sub.id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              title: sub.title,
-              type: sub.type,
-              content: sub.content,
-              order: index + 1,
-              parentId: mainContent.id
-            }),
-          });
-        });
-
-        await Promise.all(updatePromises);
-        setAlertMessage({ type: 'success', message: 'Reihenfolge der Unterthemen erfolgreich aktualisiert.' });
-      } catch (error) {
-        console.error('Error updating sub contents order:', error);
-        setAlertMessage({ type: 'error', message: 'Fehler beim Aktualisieren der Reihenfolge der Unterthemen.' });
-      }
+      setAlertMessage({ type: 'success', message: 'Reihenfolge erfolgreich aktualisiert.' });
+    } catch (error) {
+      console.error('Error updating sub contents order:', error);
+      setAlertMessage({ type: 'error', message: 'Fehler beim Aktualisieren der Reihenfolge.' });
     }
   };
 
+  // Handler zum Verschieben eines Unterthemas nach unten
+  const handleMoveSubContentDown = async (mainContentId: string, subContentId: string) => {
+    const mainContent = mainContents.find(content => content.id === mainContentId);
+    if (!mainContent?.subContents) return;
+
+    const currentIndex = mainContent.subContents.findIndex(sub => sub.id === subContentId);
+    if (currentIndex === -1 || currentIndex >= mainContent.subContents.length - 1) return; // Already at the bottom
+
+    const newSubContents = [...mainContent.subContents];
+    const temp = newSubContents[currentIndex];
+    newSubContents[currentIndex] = newSubContents[currentIndex + 1];
+    newSubContents[currentIndex + 1] = temp;
+
+    // Update the order property for the moved items
+    newSubContents[currentIndex].order = currentIndex + 1;
+    newSubContents[currentIndex + 1].order = currentIndex + 2;
+
+    try {
+      // Update the order on the server
+      const updatePromises = [
+        fetch(`/api/courses/${params.courseId}/contents/${newSubContents[currentIndex].id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: newSubContents[currentIndex].title,
+            type: newSubContents[currentIndex].type,
+            content: newSubContents[currentIndex].content,
+            order: newSubContents[currentIndex].order,
+            parentId: mainContentId
+          }),
+        }),
+        fetch(`/api/courses/${params.courseId}/contents/${newSubContents[currentIndex + 1].id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: newSubContents[currentIndex + 1].title,
+            type: newSubContents[currentIndex + 1].type,
+            content: newSubContents[currentIndex + 1].content,
+            order: newSubContents[currentIndex + 1].order,
+            parentId: mainContentId
+          }),
+        })
+      ];
+
+      await Promise.all(updatePromises);
+      
+      // Update local state
+      setMainContents(prev => prev.map(content => {
+        if (content.id === mainContentId) {
+          return { ...content, subContents: newSubContents };
+        }
+        return content;
+      }));
+
+      setAlertMessage({ type: 'success', message: 'Reihenfolge erfolgreich aktualisiert.' });
+    } catch (error) {
+      console.error('Error updating sub contents order:', error);
+      setAlertMessage({ type: 'error', message: 'Fehler beim Aktualisieren der Reihenfolge.' });
+    }
+  };
+
+  // Handler zum Hinzufügen eines neuen H5P-Inhalts
   const handleH5PSelect = (h5pContent: any) => {
     setNewContent(prev => ({
       ...prev,
@@ -499,13 +527,6 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
   if (!session) {
     return null;
   }
-
-  // Finden des ausgewählten Inhalts basierend auf selectedContentId
-  const selectedMainContent = mainContents.find(content => content.id === selectedContentId && content.parentId === null) ||
-    mainContents.find(content => content.subContents?.some(sub => sub.id === selectedContentId && sub.parentId === content.id)) ||
-    null;
-
-  const selectedSubContent = selectedMainContent?.subContents?.find(sub => sub.id === selectedContentId) || null;
 
   const renderContentInput = (type: string) => {
     switch (type) {
@@ -601,247 +622,100 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
     <div className="flex flex-col lg:flex-row min-h-screen bg-gray-50 dark:bg-gray-900">
       <Sidebar />
       <div className="flex-1 flex flex-col">
-        {/* Header */}
-        <header className="bg-white dark:bg-gray-800 shadow-md z-10">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-            <div className="flex items-center">
-              <Button variant="ghost" onClick={() => router.push('/courses')} className="mr-4 flex items-center">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                {/* Nur Icon, kein Text */}
-              </Button>
-              <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Kursinhalte</h2>
-            </div>
-            <div className="flex items-center space-x-4">
-              <ThemeToggle />
-              <UserNav />
-            </div>
-          </div>
-        </header>
+        <CourseHeader />
 
         {/* Hauptinhalt */}
         <main className="flex-1 overflow-hidden flex relative">
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
+          <CourseContentsSidebar
+            mainContents={mainContents}
+            selectedContentId={selectedContentId}
+            isTopicsSidebarOpen={isTopicsSidebarOpen}
+            sidebarWidth={sidebarWidth}
+            isAddingMainContent={isAddingMainContent}
+            newMainContentTitle={newMainContentTitle}
+            isInlineEditing={isInlineEditing}
+            inlineEditTitle={inlineEditTitle}
+            onContentSelect={setSelectedContentId}
+            onEditClick={(content) => {
+              setEditingContentId(content.id);
+              setNewContent(content);
+            }}
+            onDeleteClick={handleDeleteContent}
+            onInlineEditSubmit={handleInlineTitleUpdate}
+            setIsInlineEditing={setIsInlineEditing}
+            setInlineEditTitle={setInlineEditTitle}
+            setIsAddingMainContent={setIsAddingMainContent}
+            onMainContentSubmit={handleMainContentSubmit}
+            setNewMainContentTitle={setNewMainContentTitle}
+            startResizing={startResizing}
+            onMoveSubContentUp={handleMoveSubContentUp}
+            onMoveSubContentDown={handleMoveSubContentDown}
+          />
+
+          {/* Rest der Komponente bleibt unverändert */}
+          <button
+            onClick={() => setIsTopicsSidebarOpen(!isTopicsSidebarOpen)}
+            className="absolute top-1/2 transform -translate-y-1/2 bg-white dark:bg-gray-800 p-2 rounded-r-md shadow-md z-20 transition-all duration-300"
+            style={{ 
+              left: isTopicsSidebarOpen ? `${sidebarWidth}px` : '0px'
+            }}
+            aria-label={isTopicsSidebarOpen ? "Lernpfad schließen" : "Lernpfad öffnen"}
           >
-            <SortableContext
-              items={mainContents.map(content => String(content.id))}
-              strategy={verticalListSortingStrategy}
-            >
-              <CourseContentsSidebar
-                mainContents={mainContents}
-                selectedContentId={selectedContentId}
-                isTopicsSidebarOpen={isTopicsSidebarOpen}
-                sidebarWidth={sidebarWidth}
-                isAddingMainContent={isAddingMainContent}
-                newMainContentTitle={newMainContentTitle}
-                isInlineEditing={isInlineEditing}
-                inlineEditTitle={inlineEditTitle}
-                onContentSelect={setSelectedContentId}
-                onEditClick={(content) => {
-                  setEditingContentId(content.id);
-                  setNewContent(content);
-                }}
-                onDeleteClick={handleDeleteContent}
-                onInlineEditSubmit={handleInlineTitleUpdate}
-                setIsInlineEditing={setIsInlineEditing}
-                setInlineEditTitle={setInlineEditTitle}
-                setIsAddingMainContent={setIsAddingMainContent}
-                onMainContentSubmit={handleMainContentSubmit}
-                setNewMainContentTitle={setNewMainContentTitle}
-                startResizing={startResizing}
-              />
-            </SortableContext>
+            {isTopicsSidebarOpen ? <ChevronLeft /> : <ChevronRight />}
+          </button>
 
-            {/* Rest der Komponente bleibt unverändert */}
-            <button
-              onClick={() => setIsTopicsSidebarOpen(!isTopicsSidebarOpen)}
-              className="absolute top-1/2 transform -translate-y-1/2 bg-white dark:bg-gray-800 p-2 rounded-r-md shadow-md z-20 transition-all duration-300"
-              style={{ 
-                left: isTopicsSidebarOpen ? `${sidebarWidth}px` : '0px'
-              }}
-              aria-label={isTopicsSidebarOpen ? "Lernpfad schließen" : "Lernpfad öffnen"}
-            >
-              {isTopicsSidebarOpen ? <ChevronLeft /> : <ChevronRight />}
-            </button>
-
-            {/* Bereich für die Anzeige und Verwaltung von Inhalten */}
-            <div className="flex-1 p-6 overflow-y-auto relative">
-              {/* Alert Nachrichten */}
-              {alertMessage && (
-                <Alert variant={alertMessage.type === 'error' ? "destructive" : "default"} className="mb-4">
-                  <AlertTitle>{alertMessage.type === 'error' ? 'Fehler' : 'Erfolg'}</AlertTitle>
-                  <AlertDescription>{alertMessage.message}</AlertDescription>
-                </Alert>
-              )}
-
-              {/* Anzeige des ausgewählten Inhalts und dessen Unterthemen */}
-              {selectedMainContent ? (
-                <>
-                  <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow mb-6">
-                    <div className="flex justify-between items-center mb-4">
-                      <h3 className="text-2xl font-bold text-gray-800 dark:text-white">{selectedMainContent.title}</h3>
-                      <div className="flex space-x-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setEditingContentId(selectedMainContent.id);
-                            setNewContent(selectedMainContent);
-                          }}
-                          aria-label="Bearbeiten Hauptthema"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteContent(selectedMainContent)}
-                          aria-label="Löschen Hauptthema"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="space-y-4">
-                      {selectedMainContent.subContents && selectedMainContent.subContents.length > 0 ? (
-                        <SortableContext
-                          items={selectedMainContent.subContents.map(sub => String(sub.id))}
-                          strategy={verticalListSortingStrategy}
-                        >
-                          <ul className="space-y-2">
-                            {selectedMainContent.subContents.map((subContent, index) => (
-                              <SortableItem key={subContent.id} id={subContent.id}>
-                                <li className="border-t pt-4 flex flex-col">
-                                  <div className="flex justify-between items-center">
-                                    <div className="flex items-center">
-                                      <GripVertical className="mr-2 h-4 w-4 cursor-grab" />
-                                      <h4 className="text-xl font-semibold text-gray-700 dark:text-gray-200">
-                                        {subContent.title}
-                                      </h4>
-                                    </div>
-                                    <div className="flex space-x-2">
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => {
-                                          setEditingContentId(subContent.id);
-                                          setNewContent(subContent);
-                                        }}
-                                        aria-label="Bearbeiten Unterthema"
-                                      >
-                                        <Edit className="h-4 w-4" />
-                                      </Button>
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => handleDeleteContent(subContent)}
-                                        aria-label="Löschen Unterthema"
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </Button>
-                                    </div>
-                                  </div>
-                                  <ContentRenderer content={subContent} />
-
-                                  {/* Inline-Bearbeitungsformular */}
-                                  {editingContentId === subContent.id && (
-                                    <div className="mt-4 bg-gray-50 dark:bg-gray-800 p-4 rounded-lg shadow">
-                                      <SubContentForm
-                                        content={newContent}
-                                        onContentChange={setNewContent}
-                                        onSubmit={(e) => handleContentUpdate(e, newContent)}
-                                        onCancel={() => {
-                                          setEditingContentId(null);
-                                          setNewContent({ id: '', title: '', type: 'TEXT', content: '', order: 0, parentId: null });
-                                        }}
-                                        isEditing={true}
-                                        onH5PDialogOpen={() => setIsH5PDialogOpen(true)}
-                                      />
-                                    </div>
-                                  )}
-                                </li>
-                              </SortableItem>
-                            ))}
-                          </ul>
-                        </SortableContext>
-                      ) : (
-                        <p className="text-gray-500 dark:text-gray-400">Keine Unterthemen vorhanden.</p>
-                      )}
-                    </div>
-
-                    {/* Formular zum Hinzufügen eines Unterthemas */}
-                    {isAddingSubContent && (
-                      <div className="mt-6 bg-gray-50 dark:bg-gray-800 p-6 rounded-lg shadow">
-                        <h4 className="text-xl font-semibold mb-4">Neues Unterthema hinzufügen</h4>
-                        <SubContentForm
-                          content={newContent}
-                          onContentChange={setNewContent}
-                          onSubmit={handleSubContentSubmit}
-                          onCancel={() => setIsAddingSubContent(false)}
-                          onH5PDialogOpen={() => setIsH5PDialogOpen(true)}
-                        />
-                      </div>
-                    )}
-
-                    {/* Button zum Öffnen des Formulars zum Hinzufügen eines Unterthemas */}
-                    {!isAddingSubContent && isTopicsSidebarOpen && (
-                      <Button onClick={() => setIsAddingSubContent(true)} className="mt-4 flex items-center w-full">
-                        <PlusCircle className="mr-2 h-4 w-4" />
-                        Neues Unterthema
-                      </Button>
-                    )}
-                  </div>
-                </>
-              ) : (
-                <div className="flex items-center justify-center h-full">
-                  <p className="text-gray-500 dark:text-gray-400">Wählen Sie ein Hauptthema aus, um die Unterthemen anzuzeigen.</p>
-                </div>
-              )}
-
-              {/* Editieren eines Hauptthemas inline */}
-              {editingContentId === selectedMainContent?.id && (
-                <EditContentForm
-                  content={newContent}
-                  onContentChange={setNewContent}
-                  onSubmit={(e) => handleContentUpdate(e, newContent)}
-                  onCancel={() => {
-                    setEditingContentId(null);
-                    setNewContent({ id: '', title: '', type: 'TEXT', content: '', order: 0, parentId: null });
-                  }}
-                  setIsH5PDialogOpen={setIsH5PDialogOpen}
-                />
-              )}
-
-              {/* Bestätigungsdialog für das Löschen */}
-              <Dialog open={confirmDelete.open} onOpenChange={(open) => { if (!open) setConfirmDelete({ open: false, content: null }); }}>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Inhalt löschen</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <p>Möchten Sie diesen Inhalt wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.</p>
-                    <div className="flex justify-end space-x-2">
-                      <Button variant="outline" onClick={() => setConfirmDelete({ open: false, content: null })}>
-                        Abbrechen
-                      </Button>
-                      <Button variant="destructive" onClick={confirmDeleteContent}>
-                        Löschen
-                      </Button>
-                    </div>
-                  </div>
-                </DialogContent>
-              </Dialog>
-              <H5PSelectionDialog
-                open={isH5PDialogOpen}
-                onOpenChange={setIsH5PDialogOpen}
-                onSelect={handleH5PSelect}
-              />
-            </div>
-          </DndContext>
+          <CourseMainContent
+            alertMessage={alertMessage}
+            selectedMainContent={selectedMainContent}
+            editingContentId={editingContentId}
+            newContent={newContent}
+            isAddingSubContent={isAddingSubContent}
+            isTopicsSidebarOpen={isTopicsSidebarOpen}
+            onEditContent={(content) => {
+              setEditingContentId(content.id);
+              setNewContent(content);
+            }}
+            onDeleteContent={handleDeleteContent}
+            onContentUpdate={handleContentUpdate}
+            setEditingContentId={setEditingContentId}
+            setNewContent={setNewContent}
+            setIsAddingSubContent={setIsAddingSubContent}
+            handleSubContentSubmit={handleSubContentSubmit}
+            setIsH5PDialogOpen={setIsH5PDialogOpen}
+          />
         </main>
       </div>
+
+      {/* Bestätigungsdialog für das Löschen */}
+      <Dialog open={confirmDelete.open} onOpenChange={(open) => !open && setConfirmDelete({ open: false, content: null })}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Inhalt löschen</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p>Möchten Sie diesen Inhalt wirklich löschen?</p>
+            {confirmDelete.content?.parentId === null && confirmDelete.content?.subContents?.length > 0 && (
+              <p className="text-red-500 mt-2">
+                Achtung: Das Löschen dieses Hauptthemas wird auch alle zugehörigen Unterthemen löschen!
+              </p>
+            )}
+          </div>
+          <div className="flex justify-end space-x-2">
+            <Button
+              variant="outline"
+              onClick={() => setConfirmDelete({ open: false, content: null })}
+            >
+              Abbrechen
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDeleteContent}
+            >
+              Löschen
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

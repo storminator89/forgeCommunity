@@ -4,7 +4,6 @@ import { useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogTrigger } from "@/components/ui/dialog";
 import { PlusCircle } from 'lucide-react';
-import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { ContentList } from './ContentList';
 import { NewMainTopicDialog } from './NewMainTopicDialog';
 import { CourseContent } from './types';
@@ -28,6 +27,8 @@ interface CourseContentsSidebarProps {
   onMainContentSubmit: (e: React.FormEvent) => Promise<void>;
   setNewMainContentTitle: (title: string) => void;
   startResizing: (e: React.MouseEvent) => void;
+  onMoveSubContentUp?: (mainContentId: string, subContentId: string) => Promise<void>;
+  onMoveSubContentDown?: (mainContentId: string, subContentId: string) => Promise<void>;
 }
 
 export function CourseContentsSidebar({
@@ -48,7 +49,9 @@ export function CourseContentsSidebar({
   setIsAddingMainContent,
   onMainContentSubmit,
   setNewMainContentTitle,
-  startResizing
+  startResizing,
+  onMoveSubContentUp,
+  onMoveSubContentDown,
 }: CourseContentsSidebarProps) {
   return (
     <div
@@ -61,18 +64,41 @@ export function CourseContentsSidebar({
     >
       <div className={`p-4 ${isTopicsSidebarOpen ? 'block' : 'hidden'}`}>
         <h3 className="text-lg font-semibold mb-4">Lernpfad</h3>
-        <ContentList
-          contents={mainContents}
-          selectedContentId={selectedContentId}
-          onContentSelect={onContentSelect}
-          onEditClick={onEditClick}
-          onDeleteClick={onDeleteClick}
-          isInlineEditing={isInlineEditing}
-          inlineEditTitle={inlineEditTitle}
-          onInlineEditSubmit={onInlineEditSubmit}
-          setIsInlineEditing={setIsInlineEditing}
-          setInlineEditTitle={setInlineEditTitle}
-        />
+        {mainContents.map((mainContent) => (
+          <div key={mainContent.id} className="mb-4">
+            <ContentList
+              contents={[mainContent]}
+              selectedContentId={selectedContentId}
+              onContentSelect={onContentSelect}
+              onEditClick={onEditClick}
+              onDeleteClick={onDeleteClick}
+              isInlineEditing={isInlineEditing}
+              inlineEditTitle={inlineEditTitle}
+              onInlineEditSubmit={onInlineEditSubmit}
+              setIsInlineEditing={setIsInlineEditing}
+              setInlineEditTitle={setInlineEditTitle}
+            />
+            {mainContent.subContents && mainContent.subContents.length > 0 && (
+              <div className="ml-6 mt-2">
+                <ContentList
+                  contents={mainContent.subContents}
+                  selectedContentId={selectedContentId}
+                  onContentSelect={onContentSelect}
+                  onEditClick={onEditClick}
+                  onDeleteClick={onDeleteClick}
+                  isInlineEditing={isInlineEditing}
+                  inlineEditTitle={inlineEditTitle}
+                  onInlineEditSubmit={onInlineEditSubmit}
+                  setIsInlineEditing={setIsInlineEditing}
+                  setInlineEditTitle={setInlineEditTitle}
+                  onMoveUp={onMoveSubContentUp}
+                  onMoveDown={onMoveSubContentDown}
+                  mainContentId={mainContent.id}
+                />
+              </div>
+            )}
+          </div>
+        ))}
 
         <Dialog>
           <DialogTrigger asChild>
@@ -98,14 +124,11 @@ export function CourseContentsSidebar({
           onTitleChange={setNewMainContentTitle}
         />
       </div>
-
-      {/* Resize Handle */}
+      
       <div
-        className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 group"
+        className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize"
         onMouseDown={startResizing}
-      >
-        <div className="absolute right-0 top-1/2 transform -translate-y-1/2 w-1 h-8 bg-transparent group-hover:bg-blue-500 opacity-0 group-hover:opacity-100 transition-opacity" />
-      </div>
+      />
     </div>
   );
 }
