@@ -6,6 +6,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "../ui/dialog"; // Using relative path
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
@@ -84,6 +85,9 @@ export function H5PSelectionDialog({ open, onOpenChange, onSelect }: H5PSelectio
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogTrigger asChild>
+        <button className="hidden"></button>
+      </DialogTrigger>
       <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle>H5P Inhalt auswählen</DialogTitle>

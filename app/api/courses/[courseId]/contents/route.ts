@@ -62,12 +62,28 @@ export async function POST(
 
     const { title, type, content, order, parentId } = await request.json();
 
+    // If order is not provided, find the next available order number
+    let nextOrder = order;
+    if (typeof order !== 'number') {
+      const existingContents = await prisma.courseContent.findMany({
+        where: {
+          courseId,
+          parentId: parentId || null,
+        },
+        orderBy: {
+          order: 'desc',
+        },
+        take: 1,
+      });
+      nextOrder = existingContents.length > 0 ? existingContents[0].order + 1 : 1;
+    }
+
     const newContent = await prisma.courseContent.create({
       data: {
         title,
-        type,
-        content,
-        order,
+        type: type || 'TEXT',
+        content: content || '',
+        order: nextOrder,
         parentId,
         courseId,
       },

@@ -1,14 +1,15 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import dynamic from 'next/dynamic';
 import {
   Button
 } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Sidebar } from "@/components/Sidebar";
 import { UserNav } from "@/components/user-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -22,11 +23,11 @@ import {
   ChevronLeft,
   ChevronRight,
   ArrowLeft,
-  Loader2
+  Loader2,
+  Menu
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { H5PSelectionDialog } from '@/components/h5p/H5PSelectionDialog';
 import { NewMainTopicDialog } from './NewMainTopicDialog';
 import { SubContentForm } from './SubContentForm';
 import { ContentList } from './ContentList';
@@ -34,6 +35,7 @@ import { ContentViewer } from './ContentViewer';
 import { ContentRenderer } from './ContentRenderer';
 import { CourseHeader } from './CourseHeader';
 import { CourseMainContent } from './CourseMainContent';
+import { ContentForm } from './ContentForm'; // Import the new ContentForm component
 
 // Dynamisches Laden von ReactQuill
 const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
@@ -42,11 +44,22 @@ import 'react-quill/dist/quill.snow.css';
 // Importiere die neue Komponente
 import { EditContentForm } from './EditContentForm';
 import { CourseContentsSidebar } from './CourseContentsSidebar';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface CourseContent {
   id: string;
   title: string;
-  type: 'TEXT' | 'VIDEO' | 'AUDIO' | 'H5P';
+  type: 'TEXT' | 'VIDEO' | 'AUDIO';
   content: string;
   order: number;
   parentId: string | null;
@@ -54,26 +67,107 @@ interface CourseContent {
 }
 
 export default function CourseContentsPage({ params }: { params: { courseId: string } }) {
+  const router = useRouter();
+  const { data: session, status } = useSession();
   const [mainContents, setMainContents] = useState<CourseContent[]>([]);
   const [selectedContentId, setSelectedContentId] = useState<string | null>(null);
-  const [newContent, setNewContent] = useState<CourseContent>({ id: '', title: '', type: 'TEXT', content: '', order: 0, parentId: null });
-  const [editingContentId, setEditingContentId] = useState<string | null>(null); // Track which content is being edited
-  const [isTopicsSidebarOpen, setIsTopicsSidebarOpen] = useState(true); // Separate Zustand für die Lernpfad-Sidebar
-  const [isAddingMainContent, setIsAddingMainContent] = useState(false);
-  const [isAddingSubContent, setIsAddingSubContent] = useState(false);
+  const [isTopicsSidebarOpen, setIsTopicsSidebarOpen] = useState(true);
+  const [isAddingSubContent, setIsAddingSubContent] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; content: CourseContent | null }>({ open: false, content: null });
+  const [alertMessage, setAlertMessage] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [isInlineEditing, setIsInlineEditing] = useState(false);
+  const [inlineEditTitle, setInlineEditTitle] = useState('');
   const [newMainContentTitle, setNewMainContentTitle] = useState('');
-  const [alertMessage, setAlertMessage] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+  const [editingContentId, setEditingContentId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState<{ open: boolean, content: CourseContent | null }>({ open: false, content: null });
-  const { data: session, status } = useSession();
-  const router = useRouter();
-  const [isH5PDialogOpen, setIsH5PDialogOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+
+  const [newContent, setNewContent] = useState<CourseContent>({ id: '', title: '', type: 'TEXT', content: '', order: 0, parentId: null });
+  const [isAddingMainContent, setIsAddingMainContent] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(256); // 256px = 16rem (w-64)
   const isResizing = useRef(false);
   const startX = useRef(0);
   const startWidth = useRef(0);
-  const [inlineEditTitle, setInlineEditTitle] = useState<string>('');
-  const [isInlineEditing, setIsInlineEditing] = useState<string | null>(null);
+
+  // Utility function to find content by ID
+  const findContentById = useCallback((id: string, contents: CourseContent[]): CourseContent | null => {
+    for (const content of contents) {
+      if (content.id === id) {
+        return content;
+      }
+      if (content.subContents) {
+        const found = findContentById(id, content.subContents);
+        if (found) {
+          return found;
+        }
+      }
+    }
+    return null;
+  }, []);
+
+  // Utility function to update content order
+  const updateContentOrder = useCallback((
+    contents: CourseContent[],
+    draggedId: string,
+    targetId: string,
+    position: 'before' | 'after' | 'inside'
+  ): CourseContent[] => {
+    const newContents = [...contents];
+    const draggedContent = findContentById(draggedId, contents);
+    const targetContent = findContentById(targetId, contents);
+
+    if (!draggedContent || !targetContent) {
+      return contents;
+    }
+
+    // Remove dragged content from its current position
+    const removeFromParent = (parentContents: CourseContent[]) => {
+      const index = parentContents.findIndex(c => c.id === draggedId);
+      if (index !== -1) {
+        parentContents.splice(index, 1);
+        return true;
+      }
+      for (const content of parentContents) {
+        if (content.subContents && removeFromParent(content.subContents)) {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    removeFromParent(newContents);
+
+    // Add dragged content to new position
+    const addToTarget = () => {
+      if (position === 'inside' && targetContent) {
+        if (!targetContent.subContents) {
+          targetContent.subContents = [];
+        }
+        targetContent.subContents.push({ ...draggedContent, parentId: targetContent.id });
+        return;
+      }
+
+      const addToParent = (parentContents: CourseContent[]) => {
+        const targetIndex = parentContents.findIndex(c => c.id === targetId);
+        if (targetIndex !== -1) {
+          const insertIndex = position === 'before' ? targetIndex : targetIndex + 1;
+          parentContents.splice(insertIndex, 0, { ...draggedContent, parentId: targetContent.parentId });
+          return true;
+        }
+        for (const content of parentContents) {
+          if (content.subContents && addToParent(content.subContents)) {
+            return true;
+          }
+        }
+        return false;
+      };
+
+      addToParent(newContents);
+    };
+
+    addToTarget();
+    return newContents;
+  }, [findContentById]);
 
   // Finden des ausgewählten Inhalts basierend auf selectedContentId
   const selectedMainContent = useMemo(() => {
@@ -118,199 +212,262 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
     setIsLoading(true);
     try {
       const response = await fetch(`/api/courses/${params.courseId}/contents`);
-      if (response.ok) {
-        const data: CourseContent[] = await response.json();
-        setMainContents(data);
-        if (!selectedContentId && data.length > 0) {
-          setSelectedContentId(data[0].id);
-        }
-      } else {
+      if (!response.ok) {
         throw new Error('Failed to fetch contents');
       }
+      const data = await response.json();
+      setMainContents(data);
     } catch (error) {
       console.error('Error fetching contents:', error);
-      setAlertMessage({ type: 'error', message: 'Fehler beim Laden der Kursinhalte.' });
+      setAlertMessage({
+        type: 'error',
+        message: 'Failed to load course contents. Please try again.',
+      });
     } finally {
       setIsLoading(false);
     }
   }, [params.courseId]);
 
-  // Initiales Laden der Inhalte und Authentifizierung prüfen
   useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push('/');
-    } else {
+    if (status === 'authenticated') {
       fetchContents();
     }
-  }, [status, router, fetchContents]);
+  }, [status, fetchContents]);
 
   useEffect(() => {
     fetchContents();
   }, [fetchContents]);
 
-  // Alert-Nachrichten automatisch nach 3 Sekunden ausblenden
-  useEffect(() => {
-    if (alertMessage) {
-      const timer = setTimeout(() => {
-        setAlertMessage(null);
-      }, 3000); // 3000 Millisekunden = 3 Sekunden
-
-      // Bereinigung des Timers bei Änderung von alertMessage oder Unmount
-      return () => clearTimeout(timer);
-    }
-  }, [alertMessage]);
-
   // Handler zum Hinzufügen eines neuen Hauptthemas
-  const handleMainContentSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleMainContentSubmit = useCallback(async (title: string) => {
+    if (!title.trim()) return;
+    
     try {
       const response = await fetch(`/api/courses/${params.courseId}/contents`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
-          title: newMainContentTitle,
-          type: 'TEXT',
+          title: title.trim(),
+          type: 'TEXT', // Default type for main topics
           content: '',
-          order: mainContents.length + 1,
-          parentId: null
+          parentId: null,
         }),
       });
 
-      if (response.ok) {
-        const createdContent: CourseContent = await response.json();
-        setNewMainContentTitle('');
-        setAlertMessage({ type: 'success', message: 'Neues Hauptthema erfolgreich hinzugefügt.' });
-        setMainContents(prev => [...prev, { ...createdContent, subContents: [] }]);
-        setSelectedContentId(createdContent.id);
-        setIsAddingMainContent(false);
-      } else {
+      if (!response.ok) {
         throw new Error('Failed to create main content');
       }
+
+      const newContent = await response.json();
+      
+      // Update local state
+      setMainContents(prev => [...prev, newContent]);
+      setNewMainContentTitle('');
+      
+      setAlertMessage({
+        type: 'success',
+        message: 'Hauptthema erfolgreich erstellt.',
+      });
     } catch (error) {
       console.error('Error creating main content:', error);
-      setAlertMessage({ type: 'error', message: 'Fehler beim Hinzufügen des neuen Hauptthemas.' });
+      setAlertMessage({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Failed to create main content.',
+      });
     }
-  };
+  }, [params.courseId]);
 
   // Handler zum Hinzufügen eines neuen Unterthemas
-  const handleSubContentSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedContentId) {
-      setAlertMessage({ type: 'error', message: 'Kein Hauptthema ausgewählt.' });
-      return;
-    }
-    try {
-      let contentToSend = newContent.content;
-      if (newContent.type === 'VIDEO') {
-        contentToSend = getYouTubeEmbedUrl(newContent.content);
-      }
+  const handleContentSubmit = useCallback(async (title: string) => {
+    if (!isAddingSubContent || typeof isAddingSubContent !== 'string') return;
+    // Show type selector only for subtopics
+    setNewMainContentTitle(title);
+  }, [isAddingSubContent]);
 
+  // Handler for content type selection
+  const handleTypeSelection = useCallback(async (selectedType: 'TEXT' | 'VIDEO' | 'AUDIO') => {
+    try {
       const response = await fetch(`/api/courses/${params.courseId}/contents`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
-          title: newContent.title,
-          type: newContent.type,
-          content: contentToSend,
-          order: (mainContents.find(c => c.id === selectedContentId)?.subContents?.length || 0) + 1,
-          parentId: selectedContentId
+          title: newMainContentTitle,
+          type: selectedType,
+          content: '',
+          parentId: isAddingSubContent,
         }),
       });
 
-      if (response.ok) {
-        const createdSubContent: CourseContent = await response.json();
-        setNewContent({ id: '', title: '', type: 'TEXT', content: '', order: 0, parentId: null });
-        setAlertMessage({ type: 'success', message: 'Neues Unterthema erfolgreich hinzugefügt.' });
-
-        setMainContents(prev => prev.map(content => {
-          if (content.id === selectedContentId) {
-            return {
-              ...content,
-              subContents: [...(content.subContents || []), createdSubContent]
-            };
-          }
-          return content;
-        }));
-        setIsAddingSubContent(false);
-      } else {
-        throw new Error('Failed to create sub-content');
-      }
-    } catch (error) {
-      console.error('Error creating sub-content:', error);
-      setAlertMessage({ type: 'error', message: 'Fehler beim Hinzufügen des neuen Unterthemas.' });
-    }
-  };
-
-  // Handler zum Aktualisieren eines Inhalts (Hauptthema oder Unterthema)
-  const handleContentUpdate = async (e: React.FormEvent, updatedContent: CourseContent) => {
-    e.preventDefault();
-    try {
-      let contentToSend = updatedContent.content;
-      if (updatedContent.type === 'VIDEO') {
-        contentToSend = getYouTubeEmbedUrl(updatedContent.content);
+      if (!response.ok) {
+        throw new Error('Failed to create content');
       }
 
-      const payload: any = {
-        title: updatedContent.title,
-        type: updatedContent.type,
-        content: contentToSend,
-      };
-
-      // 'order' ist nur relevant, wenn es eine Änderung der Reihenfolge gab
-      // Falls Sie beim Bearbeiten eines Inhalts auch die Reihenfolge ändern möchten, fügen Sie 'order' hinzu
-      if (updatedContent.order !== undefined) {
-        payload.order = updatedContent.order;
-      }
-
-      const response = await fetch(`/api/courses/${params.courseId}/contents/${updatedContent.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+      const newContent = await response.json();
+      setMainContents(prev => {
+        if (isAddingSubContent) {
+          return prev.map(content =>
+            content.id === isAddingSubContent
+              ? {
+                  ...content,
+                  subContents: [...(content.subContents || []), newContent],
+                }
+              : content
+          );
+        } else {
+          return [...prev, newContent];
+        }
       });
 
-      if (response.ok) {
-        const returnedContent: CourseContent = await response.json();
-        setAlertMessage({ type: 'success', message: 'Inhalt erfolgreich aktualisiert.' });
+      setNewMainContentTitle('');
+      setIsAddingSubContent(null);
+      setAlertMessage({
+        type: 'success',
+        message: 'Content created successfully.',
+      });
+    } catch (error) {
+      console.error('Error creating content:', error);
+      setAlertMessage({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Failed to create content.',
+      });
+    }
+  }, [params.courseId, mainContents, newMainContentTitle, isAddingSubContent]);
 
-        setMainContents(prev => prev.map(content => {
-          // If this is the main content being updated
-          if (content.id === returnedContent.id) {
-            return { ...content, ...returnedContent };
+  const handleSubContentSubmit = useCallback(async (title: string) => {
+    if (!isAddingSubContent) return;
+
+    try {
+      // Find the parent content to determine the next order number
+      const parentContent = mainContents.find(content => content.id === isAddingSubContent);
+      const nextOrder = parentContent?.subContents ? parentContent.subContents.length + 1 : 1;
+
+      const response = await fetch(`/api/courses/${params.courseId}/contents`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title,
+          type: 'TEXT',
+          content: '',
+          parentId: isAddingSubContent,
+          order: nextOrder,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create subcontent');
+      }
+
+      const newSubContent = await response.json();
+      
+      setMainContents(prev =>
+        prev.map(content =>
+          content.id === isAddingSubContent
+            ? {
+                ...content,
+                subContents: [...(content.subContents || []), newSubContent],
+              }
+            : content
+        )
+      );
+      
+      setIsAddingSubContent(null);
+      setAlertMessage({
+        type: 'success',
+        message: 'Unterthema erfolgreich erstellt.',
+      });
+    } catch (error) {
+      console.error('Error creating subcontent:', error);
+      setAlertMessage({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Failed to create subcontent.',
+      });
+    }
+  }, [isAddingSubContent, params.courseId, mainContents]);
+
+  const handleAddSubContent = useCallback((mainContentId: string | null) => {
+    setIsAddingSubContent(mainContentId);
+  }, []);
+
+  // Handler zum Aktualisieren eines Inhalts (Hauptthema oder Unterthema)
+  const handleContentUpdate = useCallback(async (updatedContent: CourseContent) => {
+    try {
+      const response = await fetch(`/api/courses/${params.courseId}/contents/${updatedContent.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updatedContent),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update content');
+      }
+
+      const updatedData = await response.json();
+      
+      // Aktualisiere den State mit dem aktualisierten Inhalt
+      setMainContents(prev =>
+        prev.map(content => {
+          if (content.id === updatedContent.id) {
+            return updatedData;
           }
-          // If this content has subcontents, check if we need to update any of them
-          if (content.subContents?.length > 0) {
+          if (content.subContents) {
             return {
               ...content,
               subContents: content.subContents.map(sub =>
-                sub.id === returnedContent.id ? { ...sub, ...returnedContent } : sub
-              )
+                sub.id === updatedContent.id ? updatedData : sub
+              ),
             };
           }
           return content;
-        }));
+        })
+      );
 
-        // Aktualisiere den ausgewählten Inhalt, falls es das bearbeitete Element ist
-        if (selectedContentId === returnedContent.id) {
-          setSelectedContentId(returnedContent.id);
-        }
-
-        setEditingContentId(null); // Beende das Bearbeiten
-      } else {
-        throw new Error('Failed to update content');
-      }
+      setIsEditing(false);
+      setEditingContentId(null);
+      setAlertMessage({
+        type: 'success',
+        message: 'Inhalt erfolgreich aktualisiert.',
+      });
     } catch (error) {
       console.error('Error updating content:', error);
-      setAlertMessage({ type: 'error', message: 'Fehler beim Aktualisieren des Inhalts.' });
+      setAlertMessage({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Failed to update content.',
+      });
     }
-  };
+  }, [params.courseId]);
 
   // Handler zum Initiieren des Löschvorgangs
-  const handleDeleteContent = (content: CourseContent) => {
-    setConfirmDelete({ open: true, content });
-  };
+  const handleDeleteContent = useCallback(async (content: CourseContent) => {
+    try {
+      // Update local state
+      setMainContents(prev => prev.filter(c => c.id !== content.id));
+      
+      // Reset selected content if needed
+      if (selectedContentId === content.id) {
+        const firstMain = mainContents[0];
+        setSelectedContentId(firstMain ? firstMain.id : null);
+      }
+
+      setAlertMessage({ type: 'success', message: 'Inhalt erfolgreich gelöscht.' });
+    } catch (error) {
+      console.error('Error deleting content:', error);
+      setAlertMessage({ type: 'error', message: 'Fehler beim Löschen des Inhalts.' });
+      // Refresh contents to ensure consistency
+      fetchContents();
+    }
+  }, [mainContents, selectedContentId]);
 
   // Handler zum Bestätigen des Löschvorgangs
-  const confirmDeleteContent = async () => {
+  const confirmDeleteContent = useCallback(async () => {
     const content = confirmDelete.content;
     if (!content) return;
 
@@ -356,20 +513,35 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
       console.error('Error deleting content:', error);
       setAlertMessage({ type: 'error', message: 'Fehler beim Löschen des Inhalts.' });
     }
-  };
+  }, [params.courseId, mainContents, selectedContentId]);
 
-  // Funktion zum Konvertieren einer YouTube-URL in eine Embed-URL
-  const getYouTubeEmbedUrl = (url: string) => {
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-    const match = url.match(regExp);
-    if (match && match[2].length === 11) {
-      return `https://www.youtube.com/embed/${match[2]}`;
+  // Funktion zum Generieren des YouTube Embed Codes aus einer URL
+  const getYouTubeEmbedUrl = useCallback((url: string) => {
+    if (!url) return '';
+
+    try {
+      // Extract video ID from URL
+      let videoId = '';
+      
+      if (url.includes('youtu.be/')) {
+        videoId = url.split('youtu.be/')[1].split('?')[0];
+      } else if (url.includes('youtube.com')) {
+        const urlParams = new URLSearchParams(url.split('?')[1]);
+        videoId = urlParams.get('v') || '';
+      }
+
+      if (videoId) {
+        return `<iframe width="100%" height="100%" src="https://www.youtube.com/embed/${videoId}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`;
+      }
+    } catch (error) {
+      console.error('Error parsing YouTube URL:', error);
     }
+
     return url;
-  };
+  }, []);
 
   // Funktion zum Abrufen des entsprechenden Icons basierend auf dem Typ
-  const getContentTypeIcon = (type: string) => {
+  const getContentTypeIcon = useCallback((type: string) => {
     switch (type) {
       case 'TEXT':
         return <FileText className="h-4 w-4" />;
@@ -380,10 +552,10 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
       default:
         return null;
     }
-  };
+  }, []);
 
   // Handler zum Verschieben eines Unterthemas nach oben
-  const handleMoveSubContentUp = async (mainContentId: string, subContentId: string) => {
+  const handleMoveSubContentUp = useCallback(async (mainContentId: string, subContentId: string) => {
     const mainContent = mainContents.find(content => content.id === mainContentId);
     if (!mainContent?.subContents) return;
 
@@ -441,10 +613,10 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
       console.error('Error updating sub contents order:', error);
       setAlertMessage({ type: 'error', message: 'Fehler beim Aktualisieren der Reihenfolge.' });
     }
-  };
+  }, [params.courseId, mainContents]);
 
   // Handler zum Verschieben eines Unterthemas nach unten
-  const handleMoveSubContentDown = async (mainContentId: string, subContentId: string) => {
+  const handleMoveSubContentDown = useCallback(async (mainContentId: string, subContentId: string) => {
     const mainContent = mainContents.find(content => content.id === mainContentId);
     if (!mainContent?.subContents) return;
 
@@ -502,19 +674,111 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
       console.error('Error updating sub contents order:', error);
       setAlertMessage({ type: 'error', message: 'Fehler beim Aktualisieren der Reihenfolge.' });
     }
-  };
+  }, [params.courseId, mainContents]);
 
-  // Handler zum Hinzufügen eines neuen H5P-Inhalts
-  const handleH5PSelect = (h5pContent: any) => {
-    setNewContent(prev => ({
-      ...prev,
-      content: h5pContent.id, // Store H5P content ID
-      type: 'H5P'
-    }));
-    setIsH5PDialogOpen(false);
-  };
+  // Handler zum Bearbeiten eines Inhalts
+  const handleEditContent = useCallback((content: CourseContent) => {
+    setSelectedContentId(content.id);
+    setEditingContentId(content.id);
+  }, []);
 
-  // Ladeindikator anzeigen, während Inhalte geladen werden
+  // Handler for inline title editing
+  const handleInlineEditSubmit = useCallback(async (contentId: string, newTitle: string) => {
+    try {
+      const response = await fetch(`/api/courses/${params.courseId}/contents/${contentId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ title: newTitle }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update title');
+      }
+
+      // Update local state
+      setMainContents(mainContents.map(content => {
+        if (content.id === contentId) {
+          return { ...content, title: newTitle };
+        }
+        if (content.subContents) {
+          return {
+            ...content,
+            subContents: content.subContents.map(sub =>
+              sub.id === contentId ? { ...sub, title: newTitle } : sub
+            ),
+          };
+        }
+        return content;
+      }));
+
+      setAlertMessage({ type: 'success', message: 'Titel erfolgreich aktualisiert.' });
+    } catch (error) {
+      console.error('Error updating title:', error);
+      setAlertMessage({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Failed to update title.',
+      });
+    } finally {
+      setIsInlineEditing(false);
+      setInlineEditTitle('');
+    }
+  }, [params.courseId, mainContents]);
+
+  const handleContentSelect = useCallback((contentId: string) => {
+    setSelectedContentId(contentId);
+    // Find the selected content
+    const content = findContentById(contentId, mainContents);
+    // If content is empty, automatically enter edit mode
+    if (content && (!content.content || content.content.trim() === '')) {
+      setEditingContentId(contentId);
+    }
+  }, [mainContents, findContentById]);
+
+  const handleContentDrop = useCallback(async (draggedId: string, targetId: string, position: 'before' | 'after' | 'inside') => {
+    try {
+      const draggedContent = findContentById(draggedId, mainContents);
+      const targetContent = findContentById(targetId, mainContents);
+
+      if (!draggedContent || !targetContent) {
+        throw new Error('Content not found');
+      }
+
+      const updatedContents = updateContentOrder(mainContents, draggedId, targetId, position);
+      setMainContents(updatedContents);
+
+      // Update order on the server
+      const response = await fetch(`/api/courses/${params.courseId}/contents/reorder`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          draggedId,
+          targetId,
+          position,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update content order');
+      }
+
+      setAlertMessage({
+        type: 'success',
+        message: 'Content order updated successfully.',
+      });
+    } catch (error) {
+      console.error('Error updating content order:', error);
+      setAlertMessage({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Failed to update content order.',
+      });
+    }
+  }, [params.courseId, mainContents, findContentById, updateContentOrder]);
+
+  // Loading indicator while fetching contents
   if (status === 'loading' || isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -523,199 +787,152 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
     );
   }
 
-  // Kein Zugriff, wenn nicht authentifiziert
-  if (!session) {
+  // Redirect if not authenticated
+  if (status !== 'loading' && !session) {
+    router.push('/auth/signin');
     return null;
   }
 
-  const renderContentInput = (type: string) => {
-    switch (type) {
-      case 'TEXT':
-        return (
-          <ReactQuill
-            value={newContent.content}
-            onChange={(content) => setNewContent({ ...newContent, content })}
-            modules={{
-              toolbar: [
-                [{ 'header': [1, 2, false] }],
-                ['bold', 'italic', 'underline', 'strike', 'blockquote'],
-                [{ 'list': 'ordered' }, { 'list': 'bullet' }, { 'indent': '-1' }, { 'indent': '+1' }],
-                ['link', 'image'],
-                ['clean']
-              ],
-            }}
-            className="bg-white dark:bg-gray-700 rounded-md"
-          />
-        );
-      case 'VIDEO':
-        return (
-          <Input
-            value={newContent.content}
-            onChange={(e) => setNewContent({ ...newContent, content: e.target.value })}
-            placeholder="YouTube URL eingeben"
-          />
-        );
-      case 'AUDIO':
-        return (
-          <Input
-            value={newContent.content}
-            onChange={(e) => setNewContent({ ...newContent, content: e.target.value })}
-            placeholder="Audio URL eingeben"
-          />
-        );
-      case 'H5P':
-        return (
-          <div className="space-y-4">
-            <Button 
-              type="button"
-              onClick={() => setIsH5PDialogOpen(true)}
-              className="w-full"
-            >
-              H5P Inhaltstyp auswählen
-            </Button>
-            {newContent.content && (
-              <div className="p-4 bg-gray-100 dark:bg-gray-700 rounded-lg">
-                <p className="font-medium">Ausgewählter H5P Inhaltstyp:</p>
-                <p className="text-sm text-gray-600 dark:text-gray-300">{newContent.content}</p>
-              </div>
-            )}
-          </div>
-        );
-      default:
-        return null;
-    }
-  };
-
-  // Add new state for inline title editing near other state declarations
-  const handleInlineTitleUpdate = async (contentId: string, newTitle: string) => {
-    try {
-      const content = mainContents.find(c => c.id === contentId);
-      if (!content) return;
-
-      const response = await fetch(`/api/courses/${params.courseId}/contents/${contentId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...content,
-          title: newTitle,
-        }),
-      });
-
-      if (response.ok) {
-        setMainContents(prev => prev.map(c => 
-          c.id === contentId ? { ...c, title: newTitle } : c
-        ));
-        setAlertMessage({ type: 'success', message: 'Titel erfolgreich aktualisiert.' });
-      } else {
-        throw new Error('Failed to update title');
-      }
-    } catch (error) {
-      console.error('Error updating title:', error);
-      setAlertMessage({ type: 'error', message: 'Fehler beim Aktualisieren des Titels.' });
-    } finally {
-      setIsInlineEditing(null);
-      setInlineEditTitle('');
-    }
-  };
-
   return (
-    <div className="flex flex-col lg:flex-row min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="flex flex-col lg:flex-row h-screen overflow-hidden bg-background dark:bg-gray-900 transition-colors duration-300">
       <Sidebar />
-      <div className="flex-1 flex flex-col">
-        <CourseHeader />
+      
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Header */}
+        <header className="bg-background dark:bg-gray-800 shadow-md sticky top-0 z-40 transition-colors duration-300">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
+            <h2 className="text-3xl font-bold text-foreground dark:text-white transition-colors duration-300">Kurs</h2>
+            <div className="flex items-center space-x-4">
+              <ThemeToggle />
+              <UserNav />
+            </div>
+          </div>
+        </header>
 
-        {/* Hauptinhalt */}
-        <main className="flex-1 overflow-hidden flex relative">
-          <CourseContentsSidebar
-            mainContents={mainContents}
-            selectedContentId={selectedContentId}
-            isTopicsSidebarOpen={isTopicsSidebarOpen}
-            sidebarWidth={sidebarWidth}
-            isAddingMainContent={isAddingMainContent}
-            newMainContentTitle={newMainContentTitle}
-            isInlineEditing={isInlineEditing}
-            inlineEditTitle={inlineEditTitle}
-            onContentSelect={setSelectedContentId}
-            onEditClick={(content) => {
-              setEditingContentId(content.id);
-              setNewContent(content);
-            }}
-            onDeleteClick={handleDeleteContent}
-            onInlineEditSubmit={handleInlineTitleUpdate}
-            setIsInlineEditing={setIsInlineEditing}
-            setInlineEditTitle={setInlineEditTitle}
-            setIsAddingMainContent={setIsAddingMainContent}
-            onMainContentSubmit={handleMainContentSubmit}
-            setNewMainContentTitle={setNewMainContentTitle}
-            startResizing={startResizing}
-            onMoveSubContentUp={handleMoveSubContentUp}
-            onMoveSubContentDown={handleMoveSubContentDown}
-          />
+        {/* Main Content */}
+        <main className="flex-1 overflow-y-auto">
+          <div className="flex h-full">
+            <CourseContentsSidebar
+              mainContents={mainContents}
+              selectedContentId={selectedContentId}
+              isTopicsSidebarOpen={isTopicsSidebarOpen}
+              setIsTopicsSidebarOpen={setIsTopicsSidebarOpen}
+              onAddSubContent={handleAddSubContent}
+              onDeleteContent={handleDeleteContent}
+              onEditContent={handleEditContent}
+              onContentSelect={handleContentSelect}
+              onContentDrop={handleContentDrop}
+              onInlineEditSubmit={handleInlineEditSubmit}
+              setIsInlineEditing={setIsInlineEditing}
+              setInlineEditTitle={setInlineEditTitle}
+              onMainContentSubmit={handleMainContentSubmit}
+              onSubContentSubmit={handleSubContentSubmit}
+              setNewMainContentTitle={setNewMainContentTitle}
+              newMainContentTitle={newMainContentTitle}
+              startResizing={startResizing}
+              onMoveSubContentUp={handleMoveSubContentUp}
+              onMoveSubContentDown={handleMoveSubContentDown}
+              setMainContents={setMainContents}
+            />
 
-          {/* Rest der Komponente bleibt unverändert */}
-          <button
-            onClick={() => setIsTopicsSidebarOpen(!isTopicsSidebarOpen)}
-            className="absolute top-1/2 transform -translate-y-1/2 bg-white dark:bg-gray-800 p-2 rounded-r-md shadow-md z-20 transition-all duration-300"
-            style={{ 
-              left: isTopicsSidebarOpen ? `${sidebarWidth}px` : '0px'
-            }}
-            aria-label={isTopicsSidebarOpen ? "Lernpfad schließen" : "Lernpfad öffnen"}
-          >
-            {isTopicsSidebarOpen ? <ChevronLeft /> : <ChevronRight />}
-          </button>
+            <div className="flex-1 overflow-y-auto bg-gradient-to-b from-background to-accent/5">
+              {selectedMainContent ? (
+                <div className="max-w-5xl mx-auto w-full px-8 py-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-card to-card/80 rounded-xl border shadow-sm p-6 mb-6 relative overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-r from-primary/5 to-transparent opacity-50" />
+                    <div className="relative space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <h1 className="text-2xl font-semibold tracking-tight">
+                          {selectedMainContent.title}
+                        </h1>
+                      </div>
+                      <p className="text-sm text-muted-foreground flex items-center gap-2">
+                        <span className="inline-flex items-center gap-1.5 bg-primary/10 text-primary px-2 py-0.5 rounded-full text-xs font-medium">
+                          {selectedMainContent.type === 'TEXT' && "Textinhalt"}
+                          {selectedMainContent.type === 'VIDEO' && "Videoinhalt"}
+                          {selectedMainContent.type === 'AUDIO' && "Audioinhalt"}
+                          {selectedMainContent.type === 'H5P' && "Interaktiver Inhalt"}
+                        </span>
+                        <span className="text-xs">•</span>
+                        <span>Lerninhalt</span>
+                      </p>
+                    </div>
+                    <div className="relative flex items-center gap-3">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setEditingContentId(selectedMainContent.id);
+                          setIsEditing(true);
+                        }}
+                        className="hover:bg-primary/5 hover:text-primary transition-colors relative overflow-hidden group"
+                      >
+                        <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-primary/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <Edit className="h-4 w-4 mr-2" />
+                        <span className="relative">Bearbeiten</span>
+                      </Button>
+                    </div>
+                  </div>
 
-          <CourseMainContent
-            alertMessage={alertMessage}
-            selectedMainContent={selectedMainContent}
-            editingContentId={editingContentId}
-            newContent={newContent}
-            isAddingSubContent={isAddingSubContent}
-            isTopicsSidebarOpen={isTopicsSidebarOpen}
-            onEditContent={(content) => {
-              setEditingContentId(content.id);
-              setNewContent(content);
-            }}
-            onDeleteContent={handleDeleteContent}
-            onContentUpdate={handleContentUpdate}
-            setEditingContentId={setEditingContentId}
-            setNewContent={setNewContent}
-            setIsAddingSubContent={setIsAddingSubContent}
-            handleSubContentSubmit={handleSubContentSubmit}
-            setIsH5PDialogOpen={setIsH5PDialogOpen}
-          />
+                  <div className="relative">
+                    {isEditing && editingContentId === selectedMainContent.id ? (
+                      <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
+                        <EditContentForm
+                          content={selectedMainContent}
+                          onSubmit={handleContentUpdate}
+                          onContentChange={(updatedContent) => {
+                            const newContent = {
+                              ...selectedMainContent,
+                              ...updatedContent
+                            };
+                            
+                            setMainContents(prev =>
+                              prev.map(content => {
+                                if (content.id === selectedMainContent.id) {
+                                  return newContent;
+                                }
+                                if (content.subContents) {
+                                  return {
+                                    ...content,
+                                    subContents: content.subContents.map(sub =>
+                                      sub.id === selectedMainContent.id ? newContent : sub
+                                    ),
+                                  };
+                                }
+                                return content;
+                              })
+                            );
+                          }}
+                          onCancel={() => {
+                            setEditingContentId(null);
+                            setIsEditing(false);
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
+                        <ContentRenderer content={selectedMainContent} />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center space-y-4 max-w-md mx-auto p-8">
+                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-muted/80 to-muted/50 flex items-center justify-center mx-auto mb-6 shadow-sm">
+                      <FileText className="h-8 w-8 text-muted-foreground" />
+                    </div>
+                    <h2 className="text-2xl font-semibold">Wählen Sie einen Inhalt aus</h2>
+                    <p className="text-muted-foreground text-sm leading-relaxed max-w-sm mx-auto">
+                      Wählen Sie einen Inhalt aus der Seitenleiste aus, um ihn anzuzeigen. Sie können die Inhalte bearbeiten und neu anordnen.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </main>
       </div>
-
-      {/* Bestätigungsdialog für das Löschen */}
-      <Dialog open={confirmDelete.open} onOpenChange={(open) => !open && setConfirmDelete({ open: false, content: null })}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Inhalt löschen</DialogTitle>
-          </DialogHeader>
-          <div className="py-4">
-            <p>Möchten Sie diesen Inhalt wirklich löschen?</p>
-            {confirmDelete.content?.parentId === null && confirmDelete.content?.subContents?.length > 0 && (
-              <p className="text-red-500 mt-2">
-                Achtung: Das Löschen dieses Hauptthemas wird auch alle zugehörigen Unterthemen löschen!
-              </p>
-            )}
-          </div>
-          <div className="flex justify-end space-x-2">
-            <Button
-              variant="outline"
-              onClick={() => setConfirmDelete({ open: false, content: null })}
-            >
-              Abbrechen
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={confirmDeleteContent}
-            >
-              Löschen
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

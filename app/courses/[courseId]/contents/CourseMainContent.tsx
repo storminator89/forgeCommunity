@@ -2,9 +2,11 @@
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import { Edit, Trash2 } from 'lucide-react'
+import { Edit, Trash2, PlusCircle } from 'lucide-react'
 import { ContentRenderer } from './ContentRenderer'
 import { SubContentForm } from './SubContentForm'
+import { ContentTypeSelector } from './ContentTypeSelector'
+import { ContentEditor } from './ContentEditor'
 import { CourseContent } from './types'
 
 interface CourseMainContentProps {
@@ -12,16 +14,23 @@ interface CourseMainContentProps {
   selectedMainContent: CourseContent | null
   editingContentId: string | null
   newContent: CourseContent
-  isAddingSubContent: boolean
+  isAddingSubContent: string | null
+  isSelectingContentType: boolean
   isTopicsSidebarOpen: boolean
   onEditContent: (content: CourseContent) => void
   onDeleteContent: (content: CourseContent) => void
   onContentUpdate: (e: React.FormEvent, content: CourseContent) => void
   setEditingContentId: (id: string | null) => void
   setNewContent: (content: CourseContent) => void
-  setIsAddingSubContent: (isAdding: boolean) => void
-  handleSubContentSubmit: (e: React.FormEvent) => void
+  setIsAddingSubContent: (isAdding: string | null) => void
+  setIsSelectingContentType: (isSelecting: boolean) => void
+  handleSubContentSubmit: (title: string) => Promise<void>
   setIsH5PDialogOpen: (isOpen: boolean) => void
+  setMainContents: (contents: CourseContent[]) => void
+  setAlertMessage: (message: { type: 'success' | 'error'; message: string } | null) => void
+  mainContents: CourseContent[]
+  refreshContents: () => Promise<void>
+  refreshSingleContent: (contentId: string) => Promise<void>
 }
 
 export function CourseMainContent({
@@ -30,6 +39,7 @@ export function CourseMainContent({
   editingContentId,
   newContent,
   isAddingSubContent,
+  isSelectingContentType,
   isTopicsSidebarOpen,
   onEditContent,
   onDeleteContent,
@@ -37,21 +47,28 @@ export function CourseMainContent({
   setEditingContentId,
   setNewContent,
   setIsAddingSubContent,
+  setIsSelectingContentType,
   handleSubContentSubmit,
-  setIsH5PDialogOpen
+  setIsH5PDialogOpen,
+  setMainContents,
+  setAlertMessage,
+  mainContents,
+  refreshContents,
+  refreshSingleContent
 }: CourseMainContentProps) {
   return (
-    <div className="flex-1 p-6 overflow-y-auto relative">
-      {alertMessage && (
-        <Alert variant={alertMessage.type === 'error' ? "destructive" : "default"} className="mb-4">
-          <AlertTitle>{alertMessage.type === 'error' ? 'Fehler' : 'Erfolg'}</AlertTitle>
+    <div className="flex-1 h-full overflow-y-auto">
+      {/* Only show error messages */}
+      {alertMessage?.type === 'error' && (
+        <Alert variant="destructive" className="m-6 mb-4">
+          <AlertTitle>Fehler</AlertTitle>
           <AlertDescription>{alertMessage.message}</AlertDescription>
         </Alert>
       )}
 
       {selectedMainContent ? (
-        <>
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow mb-6">
+        <div className="p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-2xl font-bold text-gray-800 dark:text-white">{selectedMainContent.title}</h3>
               <div className="flex space-x-2">
@@ -59,7 +76,7 @@ export function CourseMainContent({
                   variant="ghost"
                   size="sm"
                   onClick={() => onEditContent(selectedMainContent)}
-                  aria-label="Bearbeiten Hauptthema"
+                  aria-label="Bearbeiten"
                 >
                   <Edit className="h-4 w-4" />
                 </Button>
@@ -67,22 +84,130 @@ export function CourseMainContent({
                   variant="ghost"
                   size="sm"
                   onClick={() => onDeleteContent(selectedMainContent)}
-                  aria-label="Löschen Hauptthema"
+                  aria-label="Löschen"
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </div>
             </div>
-            <div className="space-y-4">
-              {/* Show content only if it's a subtopic */}
+
+            {/* Content Type Selection when adding new content */}
+            {isAddingSubContent && (
+              <div className="mt-4 mb-6 w-full">
+                <h4 className="text-lg font-semibold mb-4">Wählen Sie den Inhaltstyp aus:</h4>
+                <ContentTypeSelector onSelectType={(type) => {
+                  setNewContent(prev => ({ ...prev, type }));
+                  setIsSelectingContentType(true);
+                }} />
+              </div>
+            )}
+
+            {/* Show SubContentForm only after type is selected */}
+            {isAddingSubContent && isSelectingContentType && (
+              <div className="mt-4">
+                <SubContentForm
+                  content={newContent}
+                  onContentChange={setNewContent}
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleSubContentSubmit(newContent.title);
+                  }}
+                  onCancel={() => {
+                    setIsAddingSubContent(null);
+                    setIsSelectingContentType(false);
+                    setNewContent({ id: '', title: '', type: 'TEXT', content: '', order: 0, parentId: null });
+                  }}
+                  onH5PDialogOpen={() => setIsH5PDialogOpen(true)}
+                />
+              </div>
+            )}
+
+            {/* Content Editor */}
+            {editingContentId === 'new' && selectedMainContent.parentId && (
+              <div className="mt-4 mb-6 w-full">
+                <h4 className="text-lg font-semibold mb-4">Inhalt erstellen</h4>
+                <ContentEditor
+                  content={newContent}
+                  onSave={async (content) => {
+                    try {
+                      // If we're editing a subtopic that already exists
+                      const response = await fetch(`/api/courses/${selectedMainContent.courseId}/contents/${selectedMainContent.id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          title: selectedMainContent.title,
+                          type: content.type,
+                          content: content.content,
+                          order: selectedMainContent.order
+                        }),
+                      });
+
+                      if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.message || 'Failed to save content');
+                      }
+
+                      const savedContent = await response.json();
+                      
+                      // Update the main contents with the updated content
+                      const updatedMainContents = mainContents.map(mainContent => {
+                        if (mainContent.id === selectedMainContent.parentId) {
+                          return {
+                            ...mainContent,
+                            subContents: (mainContent.subContents || []).map(sub => 
+                              sub.id === selectedMainContent.id ? savedContent : sub
+                            )
+                          };
+                        }
+                        return mainContent;
+                      });
+
+                      setMainContents(updatedMainContents);
+                      setEditingContentId(null);
+                      // Only refresh this specific content without showing success message
+                      await refreshSingleContent(selectedMainContent.id);
+                    } catch (error) {
+                      console.error('Error saving content:', error);
+                      setAlertMessage({
+                        type: 'error',
+                        message: error instanceof Error ? error.message : 'Fehler beim Speichern des Inhalts.'
+                      });
+                    }
+                  }}
+                  onCancel={() => {
+                    setEditingContentId(null);
+                    setNewContent({ id: '', title: '', type: 'TEXT', content: '', order: 0, parentId: null });
+                  }}
+                />
+              </div>
+            )}
+
+            <div className="space-y-4 w-full">
+              {/* Show content for subtopics */}
               {selectedMainContent.parentId && (
-                <div className="mt-4">
-                  <ContentRenderer content={selectedMainContent} />
-                </div>
+                <>
+                  {selectedMainContent.content ? (
+                    <div className="mt-4 w-full">
+                      <ContentRenderer content={selectedMainContent} />
+                    </div>
+                  ) : (
+                    <div className="mt-4 text-center p-8 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg w-full">
+                      <p className="text-gray-500 dark:text-gray-400 mb-4">Noch keine Inhalte vorhanden</p>
+                      <Button
+                        variant="outline"
+                        onClick={() => setIsAddingSubContent(selectedMainContent.id)}
+                        className="flex items-center space-x-2"
+                      >
+                        <PlusCircle className="h-4 w-4" />
+                        <span>Inhalt hinzufügen</span>
+                      </Button>
+                    </div>
+                  )}
+                </>
               )}
               
-              {/* Show subtopics list only if it's a main topic */}
-              {!selectedMainContent.parentId && selectedMainContent.subContents && selectedMainContent.subContents.length > 0 ? (
+              {/* Show subtopics list for main topics */}
+              {!selectedMainContent.parentId && selectedMainContent.subContents && selectedMainContent.subContents.length > 0 && (
                 <ul className="space-y-2">
                   {selectedMainContent.subContents.map((subContent) => (
                     <li key={subContent.id} className="border-t pt-4">
@@ -95,7 +220,7 @@ export function CourseMainContent({
                             variant="ghost"
                             size="sm"
                             onClick={() => onEditContent(subContent)}
-                            aria-label="Bearbeiten Unterthema"
+                            aria-label="Bearbeiten"
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
@@ -103,49 +228,27 @@ export function CourseMainContent({
                             variant="ghost"
                             size="sm"
                             onClick={() => onDeleteContent(subContent)}
-                            aria-label="Löschen Unterthema"
+                            aria-label="Löschen"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
                       </div>
+                      <div className="mt-4">
+                        <ContentRenderer content={subContent} />
+                      </div>
                     </li>
                   ))}
                 </ul>
-              ) : !selectedMainContent.parentId && (
-                <p className="text-gray-500 dark:text-gray-400">Keine Unterthemen vorhanden.</p>
               )}
             </div>
-
-            {isAddingSubContent && (
-              <div className="mt-6 bg-gray-50 dark:bg-gray-800 p-6 rounded-lg shadow">
-                <h4 className="text-xl font-semibold mb-4">Neues Unterthema hinzufügen</h4>
-                <SubContentForm
-                  content={newContent}
-                  onContentChange={setNewContent}
-                  onSubmit={handleSubContentSubmit}
-                  onCancel={() => setIsAddingSubContent(false)}
-                  onH5PDialogOpen={() => setIsH5PDialogOpen(true)}
-                />
-              </div>
-            )}
-
-            {!isAddingSubContent && isTopicsSidebarOpen && (
-              <Button
-                onClick={() => setIsAddingSubContent(true)}
-                className="mt-4 w-full"
-                variant="outline"
-              >
-                Neues Unterthema hinzufügen
-              </Button>
-            )}
           </div>
-        </>
+        </div>
       ) : (
-        <div className="text-center py-12">
-          <p className="text-gray-500 dark:text-gray-400">Wählen Sie ein Thema aus der linken Seitenleiste aus.</p>
+        <div className="text-center text-gray-500 dark:text-gray-400">
+          <p>Wählen Sie ein Thema aus der linken Seitenleiste aus</p>
         </div>
       )}
     </div>
-  )
+  );
 }

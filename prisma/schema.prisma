@@ -248,7 +248,7 @@ model Lesson {
 model CourseContent {
   id        String          @id @default(cuid())
   title     String
-  type      ContentType
+  type      ContentType?
   content   String
   order     Int
   course    Course          @relation(fields: [courseId], references: [id], onDelete: Cascade)

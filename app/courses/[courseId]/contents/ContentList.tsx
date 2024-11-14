@@ -19,6 +19,7 @@ interface ContentListProps {
   onMoveUp?: (mainContentId: string, subContentId: string) => Promise<void>;
   onMoveDown?: (mainContentId: string, subContentId: string) => Promise<void>;
   mainContentId?: string;
+  mainTopicIndex?: number;
 }
 
 export function ContentList({
@@ -35,6 +36,7 @@ export function ContentList({
   onMoveUp,
   onMoveDown,
   mainContentId,
+  mainTopicIndex,
 }: ContentListProps) {
   return (
     <div>
@@ -42,14 +44,20 @@ export function ContentList({
         {contents.map((content, index) => (
           <li
             key={content.id}
-            className={`p-2 rounded-md cursor-pointer flex justify-between items-center group
-              ${selectedContentId === content.id ? 'bg-gray-200 dark:bg-gray-700' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}`}
-            onClick={() => onContentSelect(content.id)}
+            className={`p-2 rounded-md ${mainContentId ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700' : ''} flex justify-between items-center group
+              ${selectedContentId === content.id ? 'bg-gray-200 dark:bg-gray-700' : ''}`}
+            onClick={() => mainContentId ? onContentSelect(content.id) : null}
           >
-            <span className="flex items-center flex-1">
-              <span className="w-6 h-6 rounded-full bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300 flex items-center justify-center mr-2 text-sm font-medium">
-                {index + 1}
-              </span>
+            <span className={`flex items-center flex-1 ${!mainContentId ? 'font-semibold' : ''}`}>
+              {!mainContentId ? (
+                <span className="w-6 h-6 rounded-full bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300 flex items-center justify-center mr-2 text-sm font-medium">
+                  {(mainTopicIndex ?? 0) + 1}
+                </span>
+              ) : (
+                <span className="w-6 h-6 flex items-center justify-center mr-2 text-sm font-medium">
+                  {String.fromCharCode(97 + index)}
+                </span>
+              )}
               {isInlineEditing === content.id ? (
                 <form 
                   onSubmit={(e) => {
