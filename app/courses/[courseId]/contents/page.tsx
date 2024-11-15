@@ -69,17 +69,37 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
   const [alertMessage, setAlertMessage] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [isInlineEditing, setIsInlineEditing] = useState<string | null>(null);
   const [inlineEditTitle, setInlineEditTitle] = useState('');
-  const [newMainContentTitle, setNewMainContentTitle] = useState('');
   const [editingContentId, setEditingContentId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [course, setCourse] = useState<{ id: string; name: string } | null>(null);
+  const [forceUpdateValue, setForceUpdateValue] = useState(0);
+  const [newMainContentTitle, setNewMainContentTitle] = useState("");
 
-  const [newContent, setNewContent] = useState<CourseContent>({ id: '', title: '', type: 'TEXT', content: '', order: 0, parentId: null });
-  const [isAddingMainContent, setIsAddingMainContent] = useState(false);
-  const [sidebarWidth, setSidebarWidth] = useState(256); // 256px = 16rem (w-64)
-  const isResizing = useRef(false);
-  const startX = useRef(0);
-  const startWidth = useRef(0);
+  // Fetch course data
+  const fetchCourse = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch(`/api/courses/${params.courseId}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch course');
+      }
+      const data = await response.json();
+      setCourse(data);
+    } catch (error) {
+      console.error('Error fetching course:', error);
+      setAlertMessage({
+        type: 'error',
+        message: 'Failed to load course information',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [params.courseId]);
+
+  useEffect(() => {
+    fetchCourse();
+  }, [fetchCourse]);
 
   // Utility function to find content by ID
   const findContentById = useCallback((id: string, contents: CourseContent[]): CourseContent | null => {
@@ -758,6 +778,21 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
     }
   };
 
+  const handleVisitedToggle = async (contentId: string) => {
+    // Update local state
+    setMainContents(prevContents => {
+      const newContents = [...prevContents];
+      const content = findContentById(newContents, contentId);
+      if (content) {
+        content.completed = !content.completed;
+      }
+      return newContents;
+    });
+
+    // Force sidebar to update
+    setForceUpdateValue(prev => prev + 1);
+  };
+
   // Loading indicator while fetching contents
   if (status === 'loading' || isLoading) {
     return (
@@ -781,7 +816,7 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
         {/* Header */}
         <header className="bg-background dark:bg-gray-800 shadow-md sticky top-0 z-40 transition-colors duration-300">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-            <h2 className="text-3xl font-bold text-foreground dark:text-white transition-colors duration-300">Kurs</h2>
+            <h2 className="text-3xl font-bold text-foreground dark:text-white transition-colors duration-300">{course?.name}</h2>
             <div className="flex items-center space-x-4">
               <ThemeToggle />
               <UserNav />
@@ -792,7 +827,7 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto">
           <div className="flex h-full">
-            <div className="relative flex">
+            <div className={`relative flex ${isTopicsSidebarOpen ? 'w-80' : 'w-0'} transition-all duration-300`}>
               <Button
                 variant="ghost"
                 size="icon"
@@ -801,29 +836,29 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
               >
                 {isTopicsSidebarOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
               </Button>
-              <CourseContentsSidebar
-                mainContents={mainContents}
-                selectedContentId={selectedContentId}
-                isTopicsSidebarOpen={isTopicsSidebarOpen}
-                setIsTopicsSidebarOpen={setIsTopicsSidebarOpen}
-                onAddSubContent={handleAddSubContent}
-                onDeleteContent={handleDeleteContent}
-                onEditContent={handleEditContent}
-                onContentSelect={handleContentSelect}
-                onContentDrop={handleContentDrop}
-                onInlineEditSubmit={handleInlineEditSubmit}
-                setIsInlineEditing={setIsInlineEditing}
-                setInlineEditTitle={setInlineEditTitle}
-                onMainContentSubmit={handleMainContentSubmit}
-                onSubContentSubmit={handleSubContentSubmit}
-                setNewMainContentTitle={setNewMainContentTitle}
-                newMainContentTitle={newMainContentTitle}
-                startResizing={startResizing}
-                onMoveSubContentUp={handleMoveSubContentUp}
-                onMoveSubContentDown={handleMoveSubContentDown}
-                setMainContents={setMainContents}
-                courseId={params.courseId}
-              />
+              <div className={`w-full overflow-hidden ${isTopicsSidebarOpen ? 'opacity-100' : 'opacity-0'} transition-opacity duration-300`}>
+                <CourseContentsSidebar
+                  contents={mainContents || []}
+                  selectedContentId={selectedContentId}
+                  onContentSelect={handleContentSelect}
+                  onEditClick={handleEditContent}
+                  onDeleteClick={handleDeleteContent}
+                  isInlineEditing={isInlineEditing}
+                  inlineEditTitle={inlineEditTitle}
+                  onInlineEditSubmit={handleInlineEditSubmit}
+                  setIsInlineEditing={setIsInlineEditing}
+                  setInlineEditTitle={setInlineEditTitle}
+                  onMoveUp={handleMoveSubContentUp}
+                  onMoveDown={handleMoveSubContentDown}
+                  mainContentId={null}
+                  mainTopicIndex={null}
+                  courseId={params.courseId}
+                  courseName={course?.name || ''}
+                  isLoading={isLoading}
+                  forceUpdate={forceUpdateValue}
+                  onVisitedToggle={handleVisitedToggle}
+                />
+              </div>
             </div>
             <div className="flex-1 overflow-y-auto bg-gradient-to-b from-background to-accent/5">
               {selectedMainContent ? (

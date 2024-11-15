@@ -1,10 +1,10 @@
 'use client'
 
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { PlusCircle, FileText, Video, Music, Box, ChevronRight, Pen, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
+import { PlusCircle, FileText, Video, Music, Box, ChevronRight, Pen, Trash2, ChevronUp, ChevronDown, Award } from 'lucide-react';
 import { ContentList } from './ContentList';
 import { NewMainTopicDialog } from './NewMainTopicDialog';
 import { NewSubTopicDialog } from './NewSubTopicDialog';
@@ -14,53 +14,49 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
+import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { isPageVisited } from './utils/visitedPages';
 
 interface CourseContentsSidebarProps {
-  mainContents: CourseContent[];
+  contents: CourseContent[];
   selectedContentId: string | null;
-  isTopicsSidebarOpen: boolean;
-  setIsTopicsSidebarOpen: (isOpen: boolean) => void;
-  onAddSubContent: (mainContentId: string | null) => void;
-  onDeleteContent: (content: CourseContent) => Promise<void>;
-  onEditContent: (content: CourseContent) => void;
-  onContentSelect: (id: string) => void;
-  onContentDrop: (draggedId: string, targetId: string, position: "before" | "after" | "inside") => Promise<void>;
+  onContentSelect: (contentId: string) => void;
+  onEditClick: (contentId: string) => void;
+  onDeleteClick: (content: CourseContent) => void;
+  isInlineEditing: string | null;
+  inlineEditTitle: string;
   onInlineEditSubmit: (contentId: string, newTitle: string) => void;
-  setIsInlineEditing: (id: string | null) => void;
+  setIsInlineEditing: (contentId: string | null) => void;
   setInlineEditTitle: (title: string) => void;
-  onMainContentSubmit: (title: string) => Promise<void>;
-  onSubContentSubmit: (title: string) => Promise<void>;
-  setNewMainContentTitle: (title: string) => void;
-  newMainContentTitle: string;
-  startResizing: (e: React.MouseEvent) => void;
-  onMoveSubContentUp?: (mainContentId: string, subContentId: string) => Promise<void>;
-  onMoveSubContentDown?: (mainContentId: string, subContentId: string) => Promise<void>;
-  setMainContents: React.Dispatch<React.SetStateAction<CourseContent[]>>;
+  onMoveUp: (contentId: string) => void;
+  onMoveDown: (contentId: string) => void;
+  mainContentId: string | null;
+  mainTopicIndex: number;
   courseId: string;
+  courseName: string;
+  isLoading: boolean;
+  forceUpdate?: boolean;
 }
 
 export function CourseContentsSidebar({
-  mainContents,
+  contents,
   selectedContentId,
-  isTopicsSidebarOpen,
-  setIsTopicsSidebarOpen,
-  onAddSubContent,
-  onDeleteContent,
-  onEditContent,
   onContentSelect,
-  onContentDrop,
+  onEditClick,
+  onDeleteClick,
+  isInlineEditing,
+  inlineEditTitle,
   onInlineEditSubmit,
   setIsInlineEditing,
   setInlineEditTitle,
-  onMainContentSubmit,
-  onSubContentSubmit,
-  setNewMainContentTitle,
-  newMainContentTitle,
-  startResizing,
-  onMoveSubContentUp,
-  onMoveSubContentDown,
-  setMainContents,
+  onMoveUp,
+  onMoveDown,
+  mainContentId,
+  mainTopicIndex,
   courseId,
+  courseName,
+  isLoading,
+  forceUpdate,
 }: CourseContentsSidebarProps) {
   const router = useRouter();
   const params = useParams();
@@ -72,6 +68,69 @@ export function CourseContentsSidebar({
   const [editingContentId, setEditingContentId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
+  const [newMainContentTitle, setNewMainContentTitle] = useState("");
+  const [mainContents, setMainContents] = useState<CourseContent[]>(contents || []);
+  const [isGeneratingCertificate, setIsGeneratingCertificate] = useState(false);
+  const [allTopicsCompleted, setAllTopicsCompleted] = useState(false);
+
+  useEffect(() => {
+    setMainContents(contents || []);
+  }, [contents]);
+
+  const checkCompletion = () => {
+    // Check if there are any main topics with subtopics
+    const hasTopicsWithSubtopics = contents.some(topic => 
+      topic.subContents && topic.subContents.length > 0
+    );
+
+    if (hasTopicsWithSubtopics) {
+      // Only consider topics with subtopics for completion
+      return contents.every(mainTopic => {
+        // Skip main topics without subtopics in this check
+        if (!mainTopic.subContents || mainTopic.subContents.length === 0) {
+          return true;
+        }
+
+        // Check if all subtopics are completed
+        return mainTopic.subContents.every(subTopic => 
+          isPageVisited(courseId, subTopic.id)
+        );
+      });
+    } else {
+      // If no topics have subtopics, check main topics directly
+      return contents.every(mainTopic => 
+        isPageVisited(courseId, mainTopic.id)
+      );
+    }
+  };
+
+  useEffect(() => {
+    // Update allTopicsCompleted state
+    const isCompleted = checkCompletion();
+    if (isCompleted !== allTopicsCompleted) {
+      setAllTopicsCompleted(isCompleted);
+    }
+  }, [contents, courseId, forceUpdate, allTopicsCompleted]);
+
+  useEffect(() => {
+    const handleVisitedPagesChange = (event: CustomEvent) => {
+      const { courseId: changedCourseId } = event.detail;
+      if (changedCourseId === courseId) {
+        const isCompleted = checkCompletion();
+        if (isCompleted !== allTopicsCompleted) {
+          setAllTopicsCompleted(isCompleted);
+        }
+      }
+    };
+
+    // Add event listener
+    window.addEventListener('visitedPagesChanged', handleVisitedPagesChange as EventListener);
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('visitedPagesChanged', handleVisitedPagesChange as EventListener);
+    };
+  }, [courseId, allTopicsCompleted, contents]);
 
   const toggleTopic = (topicId: string) => {
     const newExpanded = new Set(expandedTopics);
@@ -95,7 +154,7 @@ export function CourseContentsSidebar({
       }
 
       // Update parent's state
-      onDeleteContent(content);
+      onDeleteClick(content);
 
       // Update local state immediately
       setMainContents(prev => {
@@ -118,7 +177,7 @@ export function CourseContentsSidebar({
 
       // If the deleted content was selected, select the first available content
       if (selectedContentId === content.id) {
-        const firstContent = mainContents[0];
+        const firstContent = contents[0];
         if (firstContent) {
           onContentSelect(firstContent.id);
         }
@@ -146,19 +205,61 @@ export function CourseContentsSidebar({
     }
   };
 
+  const handleMainContentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMainContentTitle.trim()) return;
+
+    try {
+      setIsSubmitting(true);
+      const response = await fetch(`/api/courses/${courseId}/contents`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: newMainContentTitle,
+          type: 'MAIN',
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create main content');
+      }
+
+      const newContent = await response.json();
+      setMainContents(prev => [...prev, newContent]);
+      setNewMainContentTitle("");
+    } catch (error) {
+      console.error('Error creating main content:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <p>Loading...</p>
+      </div>
+    );
+  }
+
+  if (!contents) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <p>No content available</p>
+      </div>
+    );
+  }
+
   return (
     <div
-      style={{ 
-        width: isTopicsSidebarOpen ? '400px' : '0px',
-        minWidth: isTopicsSidebarOpen ? '400px' : '0px',
-        maxWidth: isTopicsSidebarOpen ? '500px' : '0px',
-      }}
       className="bg-white dark:bg-gray-800 overflow-y-auto border-r border-gray-200 dark:border-gray-700 transition-all duration-300 ease-in-out relative flex-shrink-0"
     >
-      <div className={`p-4 ${isTopicsSidebarOpen ? 'block' : 'hidden'}`}>
-        <h3 className="text-lg font-semibold mb-4">Lernpfad</h3>
+      <div className="p-4">
+        <h3 className="text-lg font-semibold mb-4">{courseName || 'Loading course...'}</h3>
         <div className="space-y-4">
-          {mainContents.map((content) => (
+          {mainContents.map((content, index) => (
             <div key={content.id} className="mb-4">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center flex-1">
@@ -262,19 +363,7 @@ export function CourseContentsSidebar({
                         <AlertDialogAction 
                           onClick={async () => {
                             try {
-                              const response = await fetch(`/api/courses/${params.courseId}/contents/${content.id}`, {
-                                method: 'DELETE',
-                              });
-
-                              if (!response.ok) {
-                                throw new Error('Failed to delete content');
-                              }
-
-                              // Update local state by removing the deleted content
-                              setMainContents(prev => prev.filter(c => c.id !== content.id));
-                              
-                              // Call the onDeleteContent prop to notify parent
-                              onDeleteContent(content);
+                              await handleDelete(content);
                             } catch (error) {
                               console.error('Error deleting content:', error);
                             }
@@ -291,37 +380,35 @@ export function CourseContentsSidebar({
               {expandedTopics.has(content.id) && (
                 <>
                   {content.subContents && content.subContents.length > 0 && (
-                    <div className="ml-6 space-y-1 mt-2 transition-all duration-300 ease-in-out">
+                    <div className="ml-6 space-y-1 mt-2">
                       <ContentList
-                        contents={content.subContents || []}
+                        contents={content.subContents}
                         selectedContentId={selectedContentId}
                         onContentSelect={onContentSelect}
-                        onEditClick={(content) => {
-                          setEditingContentId(content.id);
-                          setEditingTitle(content.title);
-                        }}
-                        onDeleteClick={handleDelete}
-                        isInlineEditing={editingContentId}
-                        inlineEditTitle={editingTitle}
-                        onInlineEditSubmit={handleInlineEdit}
-                        setIsInlineEditing={setEditingContentId}
-                        setInlineEditTitle={setEditingTitle}
-                        onMoveUp={onMoveSubContentUp}
-                        onMoveDown={onMoveSubContentDown}
+                        onEditClick={onEditClick}
+                        onDeleteClick={onDeleteClick}
+                        isInlineEditing={isInlineEditing}
+                        inlineEditTitle={inlineEditTitle}
+                        onInlineEditSubmit={onInlineEditSubmit}
+                        setIsInlineEditing={setIsInlineEditing}
+                        setInlineEditTitle={setInlineEditTitle}
+                        onMoveUp={onMoveUp}
+                        onMoveDown={onMoveDown}
                         mainContentId={content.id}
+                        mainTopicIndex={index}
                         courseId={courseId}
+                        courseName={courseName}
+                        isLoading={isLoading}
                       />
                     </div>
                   )}
-                  
+
                   <Dialog 
                     open={currentMainContentId === content.id} 
                     onOpenChange={(open) => {
                       if (!open) {
                         setCurrentMainContentId(null);
                         setNewSubtopicTitle("");
-                      } else {
-                        onAddSubContent(content.id);
                       }
                     }}
                   >
@@ -398,6 +485,7 @@ export function CourseContentsSidebar({
           ))}
         </div>
 
+        {/* Add new main topic button */}
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button 
@@ -416,20 +504,7 @@ export function CourseContentsSidebar({
               </DialogDescription>
             </DialogHeader>
 
-            <form onSubmit={async (e) => {
-              e.preventDefault();
-              if (!newMainContentTitle.trim()) return;
-              
-              setIsSubmitting(true);
-              try {
-                await onMainContentSubmit(newMainContentTitle);
-                setIsDialogOpen(false);
-              } catch (error) {
-                console.error('Error creating main topic:', error);
-              } finally {
-                setIsSubmitting(false);
-              }
-            }} className="space-y-4">
+            <form onSubmit={handleMainContentSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="mainTitle">Titel</Label>
                 <Input
@@ -458,6 +533,66 @@ export function CourseContentsSidebar({
             </form>
           </DialogContent>
         </Dialog>
+
+        {/* Certificate button at the bottom of the sidebar */}
+        {contents.length > 0 && (
+          <div className="mt-8 pt-4 border-t">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    onClick={async () => {
+                      try {
+                        setIsGeneratingCertificate(true);
+                        const response = await fetch(`/api/courses/${courseId}/certificate`, {
+                          method: 'POST',
+                        });
+                        
+                        if (!response.ok) {
+                          throw new Error('Failed to generate certificate');
+                        }
+                        
+                        const blob = await response.blob();
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `${courseName.replace(/\s+/g, '_')}_Certificate.pdf`;
+                        document.body.appendChild(a);
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                      } catch (error) {
+                        console.error('Error generating certificate:', error);
+                      } finally {
+                        setIsGeneratingCertificate(false);
+                      }
+                    }}
+                    className="w-full gap-2 bg-green-500 hover:bg-green-600"
+                    disabled={isGeneratingCertificate || !allTopicsCompleted}
+                  >
+                    {isGeneratingCertificate ? (
+                      <>Generiere Zertifikat...</>
+                    ) : (
+                      <>
+                        <Award className="w-4 h-4" />
+                        Zertifikat herunterladen
+                      </>
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {allTopicsCompleted ? (
+                    <p>Herzlichen Glückwunsch! Sie haben den Kurs erfolgreich abgeschlossen.</p>
+                  ) : (
+                    <div className="max-w-xs">
+                      <p className="font-semibold mb-1">Kurs noch nicht abgeschlossen</p>
+                      <p className="text-sm text-gray-500">Um das Zertifikat freizuschalten, müssen Sie alle Themen des Kurses abschließen. Markieren Sie die Themen als abgeschlossen, indem Sie auf den Kreis neben jedem Thema klicken.</p>
+                    </div>
+                  )}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+        )}
       </div>
     </div>
   );

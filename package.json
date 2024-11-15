@@ -58,6 +58,8 @@
     "framer-motion": "^11.11.8",
     "html-react-parser": "^5.1.18",
     "isomorphic-dompurify": "^2.16.0",
+    "jspdf": "^2.5.2",
+    "jspdf-autotable": "^3.8.4",
     "lucide-react": "^0.358.0",
     "luxon": "^3.5.0",
     "moment": "^2.30.1",

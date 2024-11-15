@@ -2,11 +2,28 @@
 
 import { CourseContent } from './types';
 import { Button } from "@/components/ui/button";
-import { Edit, Trash2, ChevronUp, ChevronDown, Check, Circle, BookOpen } from 'lucide-react';
+import { Edit, Trash2, ChevronUp, ChevronDown, Check, Circle, BookOpen, Download, Award } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import { isPageVisited, togglePageVisited, getVisitedPages } from './utils/visitedPages';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { cn } from "@/lib/utils";
+import { generateCertificate, CertificateData } from './utils/generateCertificate';
+import { useSession } from 'next-auth/react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { CourseProgress } from './components/CourseProgress';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface ContentListProps {
   contents: CourseContent[];
@@ -24,6 +41,9 @@ interface ContentListProps {
   mainContentId?: string;
   mainTopicIndex?: number;
   courseId: string;
+  courseName: string;
+  onVisitedToggle?: (contentId: string) => void;
+  onCompletionChange?: (isCompleted: boolean) => void;
 }
 
 export function ContentList({
@@ -42,51 +62,148 @@ export function ContentList({
   mainContentId,
   mainTopicIndex,
   courseId,
+  courseName,
+  onVisitedToggle,
+  onCompletionChange,
 }: ContentListProps) {
-  const [, setForceUpdate] = useState({});
+  const [forceUpdate, setForceUpdate] = useState({});
+  const [isGeneratingCertificate, setIsGeneratingCertificate] = useState(false);
+  const { data: session } = useSession();
 
-  // Calculate progress for the current section
-  const progress = useMemo(() => {
-    if (!contents.length) return 0;
-    const visitedCount = contents.filter(content => isPageVisited(courseId, content.id)).length;
-    return Math.round((visitedCount / contents.length) * 100);
-  }, [contents, courseId, getVisitedPages(courseId)]);
+  useEffect(() => {
+    if (!courseName) {
+      console.log('No course name available');
+      return;
+    }
+    console.log('ContentList received courseName:', courseName);
+  }, [courseName]);
+
+  // Ensure contents is never undefined
+  const safeContents = contents || [];
+
+  // Check if all main topics and subtopics are completed
+  const allTopicsCompleted = useMemo(() => {
+    // Debug: Log visited pages
+    const visitedPages = getVisitedPages(courseId);
+    console.log('\nAll visited pages:', visitedPages);
+
+    // First check if there are any main topics with subtopics
+    const hasTopicsWithSubtopics = safeContents.some(topic => 
+      topic.subContents && topic.subContents.length > 0
+    );
+
+    // If we have main topics with subtopics, we MUST check them
+    if (hasTopicsWithSubtopics) {
+      // Only consider topics with subtopics for completion
+      const isCompleted = safeContents.every(mainTopic => {
+        console.log('\nChecking main topic:', mainTopic.title);
+        
+        // Skip main topics without subtopics in this check
+        if (!mainTopic.subContents || mainTopic.subContents.length === 0) {
+          console.log(`Skipping main topic ${mainTopic.title} - no subtopics`);
+          return true;
+        }
+
+        // Check if all subtopics are completed
+        const subtopicsCompleted = mainTopic.subContents.every(subTopic => {
+          const isCompleted = isPageVisited(courseId, subTopic.id);
+          console.log(`Subtopic ${subTopic.title} (${subTopic.id}): ${isCompleted ? 'completed' : 'not completed'}`);
+          return isCompleted;
+        });
+
+        console.log(`Main topic ${mainTopic.title}: ${subtopicsCompleted ? 'all subtopics completed' : 'not all subtopics completed'}`);
+        return subtopicsCompleted;
+      });
+
+      console.log('\nFinal result - All topics with subtopics completed:', isCompleted);
+      return isCompleted;
+    } else {
+      // If no topics have subtopics, check main topics directly
+      const isCompleted = safeContents.every(mainTopic => {
+        const topicCompleted = isPageVisited(courseId, mainTopic.id);
+        console.log(`Main topic ${mainTopic.title} (${mainTopic.id}): ${topicCompleted ? 'completed' : 'not completed'}`);
+        return topicCompleted;
+      });
+
+      console.log('\nFinal result - All single topics completed:', isCompleted);
+      return isCompleted;
+    }
+  }, [safeContents, courseId, forceUpdate]);
+
+  useEffect(() => {
+    if (onCompletionChange) {
+      onCompletionChange(allTopicsCompleted);
+    }
+  }, [allTopicsCompleted, onCompletionChange]);
 
   const handleVisitedToggle = (e: React.MouseEvent, contentId: string) => {
     e.stopPropagation();
     togglePageVisited(courseId, contentId);
-    setForceUpdate({});
+    setForceUpdate({}); // Force update to recalculate completion status
+    
+    // Notify parent components about the change
+    if (onVisitedToggle) {
+      onVisitedToggle(contentId);
+    }
+    if (onCompletionChange) {
+      const newCompletionStatus = isPageVisited(courseId, contentId);
+      onCompletionChange(newCompletionStatus);
+    }
+  };
+
+  const handleCertificateDownload = async () => {
+    if (!session?.user?.name) {
+      console.error('No user name available');
+      return;
+    }
+    
+    if (!courseName) {
+      console.error('No course name available');
+      return;
+    }
+    
+    try {
+      console.log('Generating certificate with data:', {
+        userName: session.user.name,
+        courseName,
+        completionDate: new Date(),
+        courseId,
+      });
+      
+      setIsGeneratingCertificate(true);
+      const certificateData: CertificateData = {
+        userName: session.user.name,
+        courseName,
+        completionDate: new Date(),
+        courseId,
+      };
+      
+      const blob = await generateCertificate(certificateData);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${courseName.replace(/\s+/g, '-')}-Zertifikat.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error generating certificate:', error);
+    } finally {
+      setIsGeneratingCertificate(false);
+    }
   };
 
   return (
     <div className="space-y-4">
-      {/* Progress indicator for sections */}
-      {mainContentId && contents.length > 0 && (
-        <div className="px-2">
-          <div className="flex items-center justify-between text-sm mb-1.5">
-            <span className="text-muted-foreground">Fortschritt</span>
-            <span className="font-medium">{progress}%</span>
-          </div>
-          <div className="h-1.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
-            <div 
-              className={cn(
-                "h-full transition-all duration-500 ease-out rounded-full",
-                progress === 100 ? "bg-green-500" : "bg-primary"
-              )}
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-        </div>
-      )}
-
+      {/* Main content list */}
       <ul className="space-y-1">
-        {contents.map((content, index) => (
+        {safeContents.map((content, index) => (
           <li
             key={content.id}
             className={cn(
-              "rounded-lg transition-all duration-200",
-              mainContentId ? 'cursor-pointer hover:bg-accent/50' : '',
-              selectedContentId === content.id ? 'bg-accent shadow-sm' : ''
+              "relative",
+              selectedContentId === content.id && "bg-muted"
             )}
           >
             <div

@@ -25,6 +25,13 @@ export const togglePageVisited = (courseId: string, contentId: string) => {
   }
   
   localStorage.setItem(key, JSON.stringify(visitedPages));
+  
+  // Dispatch a custom event to notify listeners of the change
+  const event = new CustomEvent('visitedPagesChanged', {
+    detail: { courseId, contentId, isVisited: index === -1 }
+  });
+  window.dispatchEvent(event);
+  
   return index === -1; // returns true if page was marked as visited, false if unmarked
 };
 
