@@ -36,10 +36,13 @@ export async function PUT(
       return NextResponse.json({ error: 'Invalid order value' }, { status: 400 });
     }
 
+    // Map QUIZ type to TEXT for database compatibility
+    const dbType = type === 'QUIZ' ? 'TEXT' : type;
+
     // Erstellen des Update-Datenobjekts dynamisch
     const updateData: any = {
       title,
-      type,
+      type: dbType,
       content,
     };
 

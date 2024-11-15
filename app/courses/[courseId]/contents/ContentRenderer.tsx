@@ -1,12 +1,13 @@
 'use client'
 
 import { useState, useEffect } from 'react';
-import { CourseContent } from './types';
+import { CourseContent, QuizContent } from './types';
 import { Editor } from '@/components/Editor';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Pencil } from 'lucide-react';
+import { QuizRenderer } from './QuizRenderer';
 
 interface ContentRendererProps {
   content: CourseContent;
@@ -20,8 +21,10 @@ export function ContentRenderer({ content, isEditing: externalIsEditing, onSave,
   const [editedContent, setEditedContent] = useState('');
   
   useEffect(() => {
-    setEditedContent(content.content || '');
-  }, [content.id]);
+    if (content.type !== 'QUIZ') {
+      setEditedContent(content.content as string || '');
+    }
+  }, [content.id, content.type]);
 
   const isEditing = externalIsEditing ?? internalIsEditing;
 
@@ -39,6 +42,21 @@ export function ContentRenderer({ content, isEditing: externalIsEditing, onSave,
       handleEditToggle(false);
     }
   };
+
+  if (content.type === 'TEXT' && typeof content.content === 'string' && content.content.includes('"questions":[')) {
+    try {
+      const quizContent = JSON.parse(content.content) as QuizContent;
+      if (quizContent.questions) {
+        return <QuizRenderer content={quizContent} />;
+      }
+    } catch (e) {
+      console.error('Failed to parse quiz content:', e);
+    }
+  }
+
+  if (content.type === 'QUIZ') {
+    return <QuizRenderer content={content.content as QuizContent} />;
+  }
 
   if (isEditing) {
     return (
@@ -91,7 +109,7 @@ export function ContentRenderer({ content, isEditing: externalIsEditing, onSave,
       case 'TEXT':
         return (
           <div className="prose dark:prose-invert max-w-none p-6 bg-card rounded-lg">
-            <div dangerouslySetInnerHTML={{ __html: content.content }} />
+            <div dangerouslySetInnerHTML={{ __html: content.content as string }} />
           </div>
         );
 
@@ -116,7 +134,7 @@ export function ContentRenderer({ content, isEditing: externalIsEditing, onSave,
           <div className="bg-card rounded-lg p-6">
             <div className="relative" style={{ paddingBottom: '56.25%', height: 0 }}>
               <iframe
-                src={getYouTubeEmbedUrl(content.content)}
+                src={getYouTubeEmbedUrl(content.content as string)}
                 frameBorder="0"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
@@ -131,7 +149,7 @@ export function ContentRenderer({ content, isEditing: externalIsEditing, onSave,
         return (
           <div className="bg-card rounded-lg p-6">
             <audio 
-              src={content.content} 
+              src={content.content as string} 
               controls 
               className="w-full"
             />

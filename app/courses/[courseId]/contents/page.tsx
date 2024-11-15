@@ -75,6 +75,7 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
   const [course, setCourse] = useState<{ id: string; name: string } | null>(null);
   const [forceUpdateValue, setForceUpdateValue] = useState(0);
   const [newMainContentTitle, setNewMainContentTitle] = useState("");
+  const [currentMainContentId, setCurrentMainContentId] = useState<string | null>(null);
 
   // Fetch course data
   const fetchCourse = useCallback(async () => {
@@ -350,13 +351,9 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
   }, [params.courseId, mainContents, newMainContentTitle, isAddingSubContent]);
 
   const handleSubContentSubmit = useCallback(async (title: string) => {
-    if (!isAddingSubContent) return;
-
+    if (!currentMainContentId) return;
+    
     try {
-      // Find the parent content to determine the next order number
-      const parentContent = mainContents.find(content => content.id === isAddingSubContent);
-      const nextOrder = parentContent?.subContents ? parentContent.subContents.length + 1 : 1;
-
       const response = await fetch(`/api/courses/${params.courseId}/contents`, {
         method: 'POST',
         headers: {
@@ -366,46 +363,31 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
           title,
           type: 'TEXT',
           content: '',
-          parentId: isAddingSubContent,
-          order: nextOrder,
+          parentId: currentMainContentId,
         }),
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to create subcontent');
+        throw new Error('Failed to create subcontent');
       }
 
-      const newSubContent = await response.json();
+      // Refresh the contents
+      await fetchContents();
+      setForceUpdateValue(prev => prev + 1);
       
-      setMainContents(prev =>
-        prev.map(content =>
-          content.id === isAddingSubContent
-            ? {
-                ...content,
-                subContents: [...(content.subContents || []), newSubContent],
-              }
-            : content
-        )
-      );
-      
-      setIsAddingSubContent(null);
       setAlertMessage({
         type: 'success',
-        message: 'Unterthema erfolgreich erstellt.',
+        message: 'Unterthema erfolgreich erstellt',
       });
     } catch (error) {
       console.error('Error creating subcontent:', error);
       setAlertMessage({
         type: 'error',
-        message: error instanceof Error ? error.message : 'Failed to create subcontent.',
+        message: 'Fehler beim Erstellen des Unterthemas',
       });
+      throw error;
     }
-  }, [isAddingSubContent, params.courseId, mainContents]);
-
-  const handleAddSubContent = useCallback((mainContentId: string | null) => {
-    setIsAddingSubContent(mainContentId);
-  }, []);
+  }, [params.courseId, currentMainContentId, fetchContents]);
 
   // Handler zum Aktualisieren eines Inhalts (Hauptthema oder Unterthema)
   const handleContentUpdate = useCallback(async (updatedContent: CourseContent) => {
@@ -850,13 +832,15 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
                   setInlineEditTitle={setInlineEditTitle}
                   onMoveUp={handleMoveSubContentUp}
                   onMoveDown={handleMoveSubContentDown}
-                  mainContentId={null}
+                  mainContentId={currentMainContentId}
                   mainTopicIndex={null}
                   courseId={params.courseId}
                   courseName={course?.name || ''}
                   isLoading={isLoading}
                   forceUpdate={forceUpdateValue}
                   onVisitedToggle={handleVisitedToggle}
+                  onSubContentSubmit={handleSubContentSubmit}
+                  onMainContentSelect={setCurrentMainContentId}
                 />
               </div>
             </div>

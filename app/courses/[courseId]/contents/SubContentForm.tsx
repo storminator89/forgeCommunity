@@ -1,4 +1,3 @@
-
 'use client'
 
 import { Input } from "@/components/ui/input";
@@ -6,6 +5,8 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import dynamic from 'next/dynamic';
 import { CourseContent } from './types';
+import { QuizEditor } from './QuizEditor';
+import { ContentTypeSelector } from './ContentTypeSelector';
 
 const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
 import 'react-quill/dist/quill.snow.css';
@@ -80,6 +81,13 @@ export function SubContentForm({
             )}
           </div>
         );
+      case 'QUIZ':
+        return (
+          <QuizEditor
+            initialContent={content.content ? JSON.parse(content.content) : { questions: [], shuffleQuestions: false, passingScore: 70 }}
+            onSave={(quizContent) => onContentChange({ ...content, content: JSON.stringify(quizContent) })}
+          />
+        );
       default:
         return null;
     }
@@ -97,19 +105,15 @@ export function SubContentForm({
           placeholder="Titel des Unterthemas"
         />
       </div>
-      <div>
-        <Label htmlFor="type">Typ</Label>
-        <select
-          id="type"
-          value={content.type}
-          onChange={(e) => onContentChange({ ...content, type: e.target.value as 'TEXT' | 'VIDEO' | 'AUDIO' | 'H5P' })}
-          className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-        >
-          <option value="TEXT">Text</option>
-          <option value="VIDEO">Video</option>
-          <option value="AUDIO">Audio</option>
-          <option value="H5P">H5P Inhalt</option>
-        </select>
+      <div className="space-y-2">
+        <Label>Inhaltstyp</Label>
+        <ContentTypeSelector 
+          onSelectType={(type) => onContentChange({ 
+            ...content, 
+            type: type as 'TEXT' | 'VIDEO' | 'AUDIO' | 'H5P' | 'QUIZ', 
+            content: type === 'QUIZ' ? JSON.stringify({ questions: [], shuffleQuestions: false, passingScore: 70 }) : '' 
+          })} 
+        />
       </div>
       <div>
         <Label htmlFor="content">Inhalt</Label>

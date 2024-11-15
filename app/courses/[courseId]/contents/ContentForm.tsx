@@ -2,21 +2,23 @@ import { useState } from 'react'
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { FileText, Video, Music, Box } from 'lucide-react'
+import { FileText, Video, Music, Box, HelpCircle } from 'lucide-react'
 import { Editor } from '@/components/Editor'
+import { QuizEditor } from './QuizEditor'
+import { QuizContent } from './types'
 
 interface ContentFormProps {
-  onSubmit: (type: 'TEXT' | 'VIDEO' | 'AUDIO' | 'H5P', content: string) => Promise<void>
+  onSubmit: (type: 'TEXT' | 'VIDEO' | 'AUDIO' | 'H5P' | 'QUIZ', content: string) => Promise<void>
   mainContentId: string
 }
 
 export function ContentForm({ onSubmit, mainContentId }: ContentFormProps) {
-  const [selectedType, setSelectedType] = useState<'TEXT' | 'VIDEO' | 'AUDIO' | 'H5P' | null>(null)
+  const [selectedType, setSelectedType] = useState<'TEXT' | 'VIDEO' | 'AUDIO' | 'H5P' | 'QUIZ' | null>(null)
   const [content, setContent] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const handleSubmit = async () => {
-    if (!selectedType || !content) return
+    if (!selectedType) return
     setIsSubmitting(true)
     try {
       await onSubmit(selectedType, content)
@@ -24,6 +26,19 @@ export function ContentForm({ onSubmit, mainContentId }: ContentFormProps) {
       setContent('')
     } catch (error) {
       console.error('Error submitting content:', error)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleQuizSubmit = async (quizContent: QuizContent) => {
+    setIsSubmitting(true)
+    try {
+      await onSubmit('QUIZ', JSON.stringify(quizContent))
+      setSelectedType(null)
+      setContent('')
+    } catch (error) {
+      console.error('Error submitting quiz:', error)
     } finally {
       setIsSubmitting(false)
     }
@@ -64,6 +79,14 @@ export function ContentForm({ onSubmit, mainContentId }: ContentFormProps) {
           <Box className="h-8 w-8" />
           <span>H5P</span>
         </Button>
+        <Button
+          variant="outline"
+          className="flex flex-col items-center justify-center h-32 space-y-2"
+          onClick={() => setSelectedType('QUIZ')}
+        >
+          <HelpCircle className="h-8 w-8" />
+          <span>Quiz</span>
+        </Button>
       </div>
     )
   }
@@ -71,37 +94,45 @@ export function ContentForm({ onSubmit, mainContentId }: ContentFormProps) {
   return (
     <Card className="p-6">
       <div className="space-y-4">
-        {selectedType === 'TEXT' ? (
+        {selectedType === 'QUIZ' ? (
+          <QuizEditor onSave={handleQuizSubmit} />
+        ) : selectedType === 'TEXT' ? (
           <Editor content={content} onChange={setContent} />
         ) : (
           <Input
-            type="url"
+            type="text"
             placeholder={
-              selectedType === 'VIDEO' ? 'YouTube URL eingeben' :
-              selectedType === 'AUDIO' ? 'Audio URL eingeben' :
-              'H5P Content ID oder URL eingeben'
+              selectedType === 'VIDEO'
+                ? 'YouTube Video URL'
+                : selectedType === 'AUDIO'
+                ? 'Audio URL'
+                : 'H5P Embed Code'
             }
             value={content}
             onChange={(e) => setContent(e.target.value)}
           />
         )}
-        <div className="flex justify-end space-x-2">
-          <Button
-            variant="outline"
-            onClick={() => {
-              setSelectedType(null)
-              setContent('')
-            }}
-          >
-            Abbrechen
-          </Button>
-          <Button
-            onClick={handleSubmit}
-            disabled={!content || isSubmitting}
-          >
-            {isSubmitting ? 'Speichern...' : 'Speichern'}
-          </Button>
-        </div>
+
+        {selectedType !== 'QUIZ' && (
+          <div className="flex justify-end space-x-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSelectedType(null)
+                setContent('')
+              }}
+              disabled={isSubmitting}
+            >
+              Abbrechen
+            </Button>
+            <Button
+              onClick={handleSubmit}
+              disabled={isSubmitting || !content}
+            >
+              {isSubmitting ? 'Wird gespeichert...' : 'Speichern'}
+            </Button>
+          </div>
+        )}
       </div>
     </Card>
   )

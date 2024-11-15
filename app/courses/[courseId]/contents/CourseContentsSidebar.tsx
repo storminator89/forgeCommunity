@@ -36,6 +36,8 @@ interface CourseContentsSidebarProps {
   courseName: string;
   isLoading: boolean;
   forceUpdate?: boolean;
+  onSubContentSubmit: (title: string) => Promise<void>;
+  onMainContentSelect?: (contentId: string | null) => void;
 }
 
 export function CourseContentsSidebar({
@@ -57,12 +59,13 @@ export function CourseContentsSidebar({
   courseName,
   isLoading,
   forceUpdate,
+  onSubContentSubmit,
+  onMainContentSelect,
 }: CourseContentsSidebarProps) {
   const router = useRouter();
   const params = useParams();
   const [newSubtopicTitle, setNewSubtopicTitle] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [currentMainContentId, setCurrentMainContentId] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [expandedTopics, setExpandedTopics] = useState<Set<string>>(new Set());
   const [editingContentId, setEditingContentId] = useState<string | null>(null);
@@ -404,10 +407,10 @@ export function CourseContentsSidebar({
                   )}
 
                   <Dialog 
-                    open={currentMainContentId === content.id} 
+                    open={mainContentId === content.id} 
                     onOpenChange={(open) => {
                       if (!open) {
-                        setCurrentMainContentId(null);
+                        onMainContentSelect?.(null);
                         setNewSubtopicTitle("");
                       }
                     }}
@@ -416,7 +419,7 @@ export function CourseContentsSidebar({
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => setCurrentMainContentId(content.id)}
+                        onClick={() => onMainContentSelect?.(content.id)}
                         className="w-full flex items-center justify-center text-muted-foreground hover:text-foreground group border border-dashed border-gray-300 dark:border-gray-600 rounded-md py-2 mt-2"
                       >
                         <PlusCircle className="h-4 w-4 mr-2 group-hover:text-primary" />
@@ -439,7 +442,7 @@ export function CourseContentsSidebar({
                         onSubContentSubmit(newSubtopicTitle)
                           .then(() => {
                             setNewSubtopicTitle("");
-                            setCurrentMainContentId(null);
+                            onMainContentSelect?.(null);
                           })
                           .catch((error) => {
                             console.error('Error creating subtopic:', error);
@@ -463,7 +466,7 @@ export function CourseContentsSidebar({
                             type="button"
                             variant="outline"
                             onClick={() => {
-                              setCurrentMainContentId(null);
+                              onMainContentSelect?.(null);
                               setNewSubtopicTitle("");
                             }}
                           >
