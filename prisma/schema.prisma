@@ -110,6 +110,7 @@ model User {
   endorsementsGiven   Endorsement[] @relation("EndorsementsGiven")
   endorsementsReceived Endorsement[] @relation("EndorsementsReceived")
   h5pContents        H5PContent[]
+  certificates       Certificate[]
 }
 
 model UserSettings {
@@ -230,6 +231,7 @@ model Course {
   enrollments  Enrollment[]
   lessons      Lesson[]
   contents     CourseContent[]
+  certificates Certificate[]
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
 }
@@ -471,4 +473,18 @@ model H5PContent {
   updatedAt   DateTime  @updatedAt
   userId      String
   user        User      @relation(fields: [userId], references: [id])
+}
+
+model Certificate {
+  id          String    @id
+  user        User      @relation(fields: [userId], references: [id])
+  userId      String
+  course      Course    @relation(fields: [courseId], references: [id])
+  courseId    String
+  issuedAt    DateTime  @default(now())
+  courseName  String
+  userName    String
+  
+  @@index([userId])
+  @@index([courseId])
 }

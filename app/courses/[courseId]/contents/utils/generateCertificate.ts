@@ -1,11 +1,14 @@
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
+import { v4 as uuidv4 } from 'uuid';
+import QRCode from 'qrcode';
 
 export interface CertificateData {
   userName: string;
   courseName: string;
   completionDate: Date;
   courseId: string;
+  certificateId?: string;
 }
 
 export const generateCertificate = async (data: CertificateData): Promise<Blob> => {
@@ -13,6 +16,15 @@ export const generateCertificate = async (data: CertificateData): Promise<Blob> 
     if (!data.userName || !data.courseName) {
       throw new Error('Missing required certificate data');
     }
+
+    // Generate certificate ID if not provided
+    const certificateId = data.certificateId || uuidv4();
+    data.certificateId = certificateId;
+
+    // Create verification QR code with fallback URL
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000';
+    const verificationUrl = `${baseUrl}/verify-certificate/${certificateId}`;
+    const qrCodeDataUrl = await QRCode.toDataURL(verificationUrl);
 
     // Create PDF document
     const doc = new jsPDF({
@@ -77,11 +89,43 @@ export const generateCertificate = async (data: CertificateData): Promise<Blob> 
     const dateWidth = doc.getStringUnitWidth(dateText) * doc.getFontSize() / doc.internal.scaleFactor;
     doc.text(dateText, (width - dateWidth) / 2, 135);
 
+    // Add QR code
+    const qrSize = 30;
+    const qrX = width - 50;
+    const qrY = height - 50;
+    doc.addImage(qrCodeDataUrl, 'PNG', qrX, qrY, qrSize, qrSize);
+
+    // Add verification text and clickable URL
+    doc.setFontSize(10);
+    doc.setTextColor(128, 128, 128);
+    
+    // Add "Scan für Verifizierung" text
+    doc.text('Scan für\nVerifizierung', qrX + qrSize/2, qrY + qrSize + 5, { 
+      align: 'center'
+    });
+
+    // Add clickable URL
+    const urlY = qrY + qrSize + 15;
+    doc.setTextColor(0, 102, 204); // Set URL color to blue
+    doc.setDrawColor(0, 102, 204);
+    doc.setLineWidth(0.1);
+    
+    const shortUrl = verificationUrl.replace(/^https?:\/\//, ''); // Remove http:// or https://
+    const urlWidth = doc.getStringUnitWidth(shortUrl) * doc.getFontSize() / doc.internal.scaleFactor;
+    const urlX = qrX + qrSize/2 - urlWidth/2;
+    
+    doc.textWithLink(shortUrl, urlX, urlY, {
+      url: verificationUrl
+    });
+    
+    // Draw underline
+    doc.line(urlX, urlY + 1, urlX + urlWidth, urlY + 1);
+
     // Add certificate ID
     doc.setFontSize(10);
     doc.setTextColor(128, 128, 128);
-    const certificateId = `Zertifikat ID: ${data.courseId}-${Date.now()}`;
-    doc.text(certificateId, width - 15, height - 15, { align: 'right' });
+    const certificateIdText = `Zertifikat ID: ${certificateId}`;
+    doc.text(certificateIdText, width - 15, height - 15, { align: 'right' });
 
     return doc.output('blob');
   } catch (error) {
