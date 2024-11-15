@@ -56,6 +56,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { markPageAsVisited } from './utils/visitedPages';
 
 export default function CourseContentsPage({ params }: { params: { courseId: string } }) {
   const router = useRouter();
@@ -719,13 +720,14 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
 
   const handleContentSelect = useCallback((contentId: string) => {
     setSelectedContentId(contentId);
+    markPageAsVisited(params.courseId, contentId);
     // Find the selected content
     const content = findContentById(contentId, mainContents);
     // If content is empty, automatically enter edit mode
     if (content && (!content.content || content.content.trim() === '')) {
       setEditingContentId(contentId);
     }
-  }, [mainContents, findContentById]);
+  }, [params.courseId, mainContents, findContentById]);
 
   const handleContentDrop = async (draggedId: string, targetId: string, position: "before" | "after" | "inside") => {
     try {
@@ -820,6 +822,7 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
                 onMoveSubContentUp={handleMoveSubContentUp}
                 onMoveSubContentDown={handleMoveSubContentDown}
                 setMainContents={setMainContents}
+                courseId={params.courseId}
               />
             </div>
             <div className="flex-1 overflow-y-auto bg-gradient-to-b from-background to-accent/5">

@@ -36,6 +36,7 @@ interface CourseContentsSidebarProps {
   onMoveSubContentUp?: (mainContentId: string, subContentId: string) => Promise<void>;
   onMoveSubContentDown?: (mainContentId: string, subContentId: string) => Promise<void>;
   setMainContents: React.Dispatch<React.SetStateAction<CourseContent[]>>;
+  courseId: string;
 }
 
 export function CourseContentsSidebar({
@@ -59,6 +60,7 @@ export function CourseContentsSidebar({
   onMoveSubContentUp,
   onMoveSubContentDown,
   setMainContents,
+  courseId,
 }: CourseContentsSidebarProps) {
   const router = useRouter();
   const params = useParams();
@@ -132,6 +134,16 @@ export function CourseContentsSidebar({
     e.preventDefault();
     const draggedId = e.dataTransfer.getData('text/plain');
     onContentDrop(draggedId, targetId, position);
+  };
+
+  const handleInlineEdit = async (contentId: string, newTitle: string) => {
+    try {
+      await onInlineEditSubmit(contentId, newTitle);
+      setEditingContentId(null);
+      setEditingTitle('');
+    } catch (error) {
+      console.error('Error updating title:', error);
+    }
   };
 
   return (
@@ -280,125 +292,25 @@ export function CourseContentsSidebar({
                 <>
                   {content.subContents && content.subContents.length > 0 && (
                     <div className="ml-6 space-y-1 mt-2 transition-all duration-300 ease-in-out">
-                      {content.subContents.map((subContent) => (
-                        <div
-                          key={subContent.id}
-                          onClick={() => onContentSelect(subContent.id)}
-                          className={cn(
-                            "p-2 rounded-md cursor-pointer flex items-center space-x-2 group relative",
-                            "transition-all duration-200 ease-in-out",
-                            "hover:bg-accent/80 hover:translate-x-1",
-                            selectedContentId === subContent.id ? "bg-accent shadow-sm" : "hover:shadow-sm",
-                            "border border-transparent hover:border-accent/50"
-                          )}
-                        >
-                          <div className="flex items-center space-x-2 flex-1 min-w-0">
-                            {subContent.type === 'TEXT' && <FileText className="h-4 w-4 text-primary/70 shrink-0" />}
-                            {subContent.type === 'VIDEO' && <Video className="h-4 w-4 text-primary/70 shrink-0" />}
-                            {subContent.type === 'AUDIO' && <Music className="h-4 w-4 text-primary/70 shrink-0" />}
-                            {subContent.type === 'H5P' && <Box className="h-4 w-4 text-primary/70 shrink-0" />}
-                            {editingContentId === subContent.id ? (
-                              <Input
-                                type="text"
-                                value={editingTitle}
-                                onChange={(e) => setEditingTitle(e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    e.preventDefault();
-                                    onInlineEditSubmit(subContent.id, editingTitle);
-                                    setEditingContentId(null);
-                                    setEditingTitle("");
-                                  } else if (e.key === 'Escape') {
-                                    setEditingContentId(null);
-                                    setEditingTitle("");
-                                  }
-                                }}
-                                onBlur={() => {
-                                  setEditingContentId(null);
-                                  setEditingTitle("");
-                                }}
-                                className="flex-1 h-7 text-sm bg-transparent focus-visible:ring-1 focus-visible:ring-primary"
-                                autoFocus
-                              />
-                            ) : (
-                              <span className="flex-1 text-sm truncate">{subContent.title}</span>
-                            )}
-                          </div>
-                          
-                          <div className="flex items-center gap-1 absolute right-2 bg-background/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-md opacity-0 group-hover:opacity-100 transition-all duration-200 ease-in-out px-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6 hover:bg-accent/50"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (onMoveSubContentUp) {
-                                  onMoveSubContentUp(content.id, subContent.id);
-                                }
-                              }}
-                            >
-                              <ChevronUp className="h-3.5 w-3.5 text-muted-foreground hover:text-primary" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6 hover:bg-accent/50"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (onMoveSubContentDown) {
-                                  onMoveSubContentDown(content.id, subContent.id);
-                                }
-                              }}
-                            >
-                              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground hover:text-primary" />
-                            </Button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditingContentId(subContent.id);
-                                setEditingTitle(subContent.title);
-                              }}
-                              className="p-1 rounded-sm hover:bg-accent/50"
-                            >
-                              <Pen className="h-3.5 w-3.5 text-muted-foreground hover:text-primary" />
-                            </button>
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <button
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="p-1 rounded-sm hover:bg-accent/50"
-                                  disabled={isDeleting}
-                                >
-                                  <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
-                                </button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Inhalt löschen</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Möchten Sie diesen Inhalt wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel onClick={(e) => e.stopPropagation()}>
-                                    Abbrechen
-                                  </AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleDelete(subContent);
-                                    }}
-                                    className="bg-destructive hover:bg-destructive/90"
-                                    disabled={isDeleting}
-                                  >
-                                    {isDeleting ? 'Wird gelöscht...' : 'Löschen'}
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </div>
-                        </div>
-                      ))}
+                      <ContentList
+                        contents={content.subContents || []}
+                        selectedContentId={selectedContentId}
+                        onContentSelect={onContentSelect}
+                        onEditClick={(content) => {
+                          setEditingContentId(content.id);
+                          setEditingTitle(content.title);
+                        }}
+                        onDeleteClick={handleDelete}
+                        isInlineEditing={editingContentId}
+                        inlineEditTitle={editingTitle}
+                        onInlineEditSubmit={handleInlineEdit}
+                        setIsInlineEditing={setEditingContentId}
+                        setInlineEditTitle={setEditingTitle}
+                        onMoveUp={onMoveSubContentUp}
+                        onMoveDown={onMoveSubContentDown}
+                        mainContentId={content.id}
+                        courseId={courseId}
+                      />
                     </div>
                   )}
                   
