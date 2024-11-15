@@ -5,9 +5,11 @@ import dynamic from 'next/dynamic';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { CourseContent } from './types';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectGroup, SelectLabel, SelectItem } from "@/components/ui/select";
-import { FileText, Video, Music2, Layers, Expand, Info } from "lucide-react";
+import { FileText, Video, Music2, Layers, Info } from "lucide-react";
 import 'react-quill/dist/quill.snow.css';
 
 const ReactQuill = dynamic(() => import('react-quill'), { 
@@ -26,6 +28,7 @@ interface ContentFormData {
   title: string;
   type: 'TEXT' | 'VIDEO' | 'AUDIO' | 'H5P';
   content: string;
+  isHtmlMode?: boolean;
 }
 
 const quillModules = {
@@ -58,6 +61,7 @@ export const EditContentForm = ({
     title: content.title,
     type: content.type,
     content: content.content,
+    isHtmlMode: false
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -111,21 +115,29 @@ export const EditContentForm = ({
               <SelectContent>
                 <SelectGroup>
                   <SelectLabel>Verfügbare Typen</SelectLabel>
-                  <SelectItem value="TEXT" className="flex items-center gap-2">
-                    <FileText className="h-4 w-4" />
-                    <span>Text</span>
+                  <SelectItem value="TEXT" className="flex flex-col items-start gap-1 py-2">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4" />
+                      <span>Text</span>
+                    </div>
                   </SelectItem>
-                  <SelectItem value="VIDEO" className="flex items-center gap-2">
-                    <Video className="h-4 w-4" />
-                    <span>Video</span>
+                  <SelectItem value="VIDEO" className="flex flex-col items-start gap-1 py-2">
+                    <div className="flex items-center gap-2">
+                      <Video className="h-4 w-4" />
+                      <span>Video</span>
+                    </div>
                   </SelectItem>
-                  <SelectItem value="AUDIO" className="flex items-center gap-2">
-                    <Music2 className="h-4 w-4" />
-                    <span>Audio</span>
+                  <SelectItem value="AUDIO" className="flex flex-col items-start gap-1 py-2">
+                    <div className="flex items-center gap-2">
+                      <Music2 className="h-4 w-4" />
+                      <span>Audio</span>
+                    </div>
                   </SelectItem>
-                  <SelectItem value="H5P" className="flex items-center gap-2">
-                    <Layers className="h-4 w-4" />
-                    <span>H5P</span>
+                  <SelectItem value="H5P" className="flex flex-col items-start gap-1 py-2">
+                    <div className="flex items-center gap-2">
+                      <Layers className="h-4 w-4" />
+                      <span>H5P</span>
+                    </div>
                   </SelectItem>
                 </SelectGroup>
               </SelectContent>
@@ -133,76 +145,78 @@ export const EditContentForm = ({
           </div>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="content" className="text-sm font-medium">
-            Inhalt
-          </Label>
-          {formData.type === 'TEXT' ? (
-            <div className="relative rounded-lg border bg-background shadow-sm">
-              <div className="absolute right-2 top-2 z-10 flex items-center gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="h-7 px-2 text-xs hover:bg-primary/5 hover:text-primary transition-colors"
-                  onClick={() => {
-                    const textarea = document.getElementById('content') as HTMLTextAreaElement;
-                    if (textarea) {
-                      textarea.style.height = 'auto';
-                      textarea.style.height = textarea.scrollHeight + 'px';
-                    }
-                  }}
-                >
-                  <Expand className="h-3.5 w-3.5 mr-1" />
-                  Erweitern
-                </Button>
+        {formData.type === 'TEXT' && (
+          <div className="space-y-4">
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="html-mode"
+                checked={formData.isHtmlMode}
+                onCheckedChange={(checked) => setFormData({ ...formData, isHtmlMode: checked })}
+              />
+              <Label htmlFor="html-mode">HTML Mode</Label>
+            </div>
+            
+            {formData.isHtmlMode ? (
+              <div className="space-y-2">
+                <Label htmlFor="html-content">HTML Content</Label>
+                <Textarea
+                  id="html-content"
+                  value={formData.content}
+                  onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+                  className="min-h-[300px] font-mono"
+                  placeholder="<p>Your HTML content here...</p>"
+                />
+                <div className="prose dark:prose-invert max-w-none mt-4 p-4 border rounded-md">
+                  <div dangerouslySetInnerHTML={{ __html: formData.content }} />
+                </div>
               </div>
+            ) : (
               <ReactQuill
-                id="content"
-                name="content"
                 value={formData.content}
-                onChange={(value) => handleChange({ target: { name: 'content', value } } as any)}
+                onChange={(content) => setFormData({ ...formData, content })}
                 modules={quillModules}
                 formats={quillFormats}
-                theme="snow"
-                className="min-h-[200px] resize-none rounded-lg p-4 focus-visible:ring-primary"
-                placeholder="Geben Sie hier Ihren Textinhalt ein..."
+                className="bg-white dark:bg-gray-800"
               />
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <Input
-                id="content"
-                name="content"
-                value={formData.content}
-                onChange={handleChange}
-                className="w-full transition-shadow focus-visible:ring-primary"
-                placeholder={
-                  formData.type === 'VIDEO'
-                    ? 'Fügen Sie hier die Video-URL ein...'
-                    : formData.type === 'AUDIO'
-                    ? 'Fügen Sie hier die Audio-URL ein...'
-                    : 'Fügen Sie hier die H5P-ID ein...'
-                }
-              />
-              <div className="rounded-lg border bg-muted/50 p-4">
-                <div className="flex items-start gap-3">
-                  <div className="mt-0.5">
-                    <Info className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium">Hinweis zum {formData.type === 'VIDEO' ? 'Video' : formData.type === 'AUDIO' ? 'Audio' : 'H5P'}-Inhalt</p>
-                    <p className="text-sm text-muted-foreground">
-                      {formData.type === 'VIDEO' && 'Fügen Sie eine gültige Video-URL ein (z.B. YouTube, Vimeo).'}
-                      {formData.type === 'AUDIO' && 'Fügen Sie eine gültige Audio-URL ein (z.B. MP3, WAV).'}
-                      {formData.type === 'H5P' && 'Fügen Sie die H5P-Inhalts-ID ein.'}
-                    </p>
-                  </div>
+            )}
+          </div>
+        )}
+        {formData.type !== 'TEXT' && (
+          <div className="space-y-2">
+            <Label htmlFor="content" className="text-sm font-medium">
+              Inhalt
+            </Label>
+            <Input
+              id="content"
+              name="content"
+              value={formData.content}
+              onChange={handleChange}
+              className="w-full transition-shadow focus-visible:ring-primary"
+              placeholder={
+                formData.type === 'VIDEO'
+                  ? 'Fügen Sie hier die Video-URL ein...'
+                  : formData.type === 'AUDIO'
+                  ? 'Fügen Sie hier die Audio-URL ein...'
+                  : 'Fügen Sie hier die H5P-ID ein...'
+              }
+            />
+            <div className="rounded-lg border bg-muted/50 p-4">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5">
+                  <Info className="h-4 w-4 text-muted-foreground" />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">Hinweis zum {formData.type === 'VIDEO' ? 'Video' : formData.type === 'AUDIO' ? 'Audio' : 'H5P'}-Inhalt</p>
+                  <p className="text-sm text-muted-foreground">
+                    {formData.type === 'VIDEO' && 'Fügen Sie eine gültige Video-URL ein (z.B. YouTube, Vimeo).'}
+                    {formData.type === 'AUDIO' && 'Fügen Sie eine gültige Audio-URL ein (z.B. MP3, WAV).'}
+                    {formData.type === 'H5P' && 'Fügen Sie die H5P-Inhalts-ID ein.'}
+                  </p>
                 </div>
               </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       <div className="flex items-center justify-end gap-3 pt-4 border-t">

@@ -2,7 +2,7 @@
 "use client";
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, createContext, useContext } from 'react';
 import { useSession } from 'next-auth/react';
 import { useTheme } from 'next-themes';
 import { signOut } from 'next-auth/react';
@@ -27,7 +27,9 @@ import {
   Award,
   Library,
   LayoutDashboard,
-  BookmarkIcon
+  BookmarkIcon,
+  ChevronRight,
+  ChevronLeft
 } from 'lucide-react';
 import { Badge } from "@/components/ui/badge";
 import {
@@ -73,8 +75,11 @@ interface SidebarProps {
   className?: string;
 }
 
+const SidebarContext = createContext({ isCollapsed: false });
+
 export function Sidebar({ className }: SidebarProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const { theme } = useTheme();
   const router = useRouter();
   const pathname = usePathname();
@@ -84,31 +89,43 @@ export function Sidebar({ className }: SidebarProps) {
     setIsOpen(!isOpen);
   };
 
+  const toggleCollapse = () => {
+    setIsCollapsed(!isCollapsed);
+  };
+
   const handleLogout = async () => {
     await signOut({ redirect: false });
     router.push('/');
   };
 
   return (
-    <>
+    <SidebarContext.Provider value={{ isCollapsed }}>
       <button 
         onClick={toggleSidebar} 
         className="lg:hidden fixed top-4 left-4 z-20 p-2 rounded-md bg-white dark:bg-gray-800 shadow-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
       >
         {isOpen ? <X size={24} /> : <Menu size={24} />}
       </button>
-      <div className={`w-72 bg-white dark:bg-gray-800 text-gray-800 dark:text-white h-screen overflow-y-auto fixed lg:static transition-all duration-300 ease-in-out z-30 border-r border-gray-200 dark:border-gray-700 ${isOpen ? 'left-0' : '-left-72 lg:left-0'}`}>
+      <div className={`w-72 bg-white dark:bg-gray-800 text-gray-800 dark:text-white h-screen overflow-y-auto fixed lg:static transition-all duration-300 ease-in-out z-30 border-r border-gray-200 dark:border-gray-700 ${isOpen ? 'left-0' : '-left-72 lg:left-0'} ${isCollapsed ? 'lg:w-20' : 'lg:w-72'}`}>
         <div className="p-4">
           <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center space-x-3">
+            <div className={`flex items-center space-x-3 ${isCollapsed ? 'lg:justify-center' : ''}`}>
               <div className="bg-blue-600 w-8 h-8 rounded-lg flex items-center justify-center">
                 <span className="text-white font-bold text-lg">FC</span>
               </div>
-              <h1 className="text-xl font-bold">ForgeCommunity</h1>
+              {!isCollapsed && <h1 className="text-xl font-bold hidden lg:block">ForgeCommunity</h1>}
             </div>
-            <button onClick={toggleSidebar} className="lg:hidden hover:bg-gray-100 dark:hover:bg-gray-700 p-1 rounded-lg transition-colors">
-              <X size={20} />
-            </button>
+            <div className="flex items-center">
+              <button onClick={toggleSidebar} className="lg:hidden hover:bg-gray-100 dark:hover:bg-gray-700 p-1 rounded-lg transition-colors">
+                <X size={20} />
+              </button>
+              <button 
+                onClick={toggleCollapse} 
+                className="hidden lg:flex hover:bg-gray-100 dark:hover:bg-gray-700 p-1 rounded-lg transition-colors ml-2"
+              >
+                {isCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
+              </button>
+            </div>
           </div>
           <nav className="space-y-4">
             <NavSection title="Community" items={navItems.main} pathname={pathname} />
@@ -131,14 +148,18 @@ export function Sidebar({ className }: SidebarProps) {
           </div>
         </div>
       </div>
-    </>
+    </SidebarContext.Provider>
   );
 }
 
 function NavSection({ title, items, pathname }) {
+  const { isCollapsed } = useContext(SidebarContext);
+  
   return (
     <div>
-      <h2 className="text-xs uppercase text-gray-500 dark:text-gray-400 font-semibold mb-2">{title}</h2>
+      {!isCollapsed && (
+        <h2 className="text-xs uppercase text-gray-500 dark:text-gray-400 font-semibold mb-2">{title}</h2>
+      )}
       <ul className="space-y-2">
         {items.map((item) => (
           <NavItem key={item.name} item={item} isActive={pathname === item.href} />
@@ -150,6 +171,7 @@ function NavSection({ title, items, pathname }) {
 
 function NavItem({ item, isActive }) {
   const { unreadCount } = useNotifications();
+  const { isCollapsed } = useContext(SidebarContext);
   const isNotifications = item.name === 'Benachrichtigungen';
 
   const content = (
@@ -159,13 +181,13 @@ function NavItem({ item, isActive }) {
         ${isActive 
           ? 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-200' 
           : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
-        }`}
+        } ${isCollapsed ? 'justify-center' : ''}`}
     >
       <item.icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-blue-600 dark:text-blue-400' : ''}`} />
-      <span className="font-medium">{item.name}</span>
+      {!isCollapsed && <span className="font-medium">{item.name}</span>}
       {isNotifications && unreadCount > 0 && (
         <Badge 
-          className="absolute -right-1 -top-1 min-w-[20px] h-5 flex items-center justify-center bg-red-500 text-white"
+          className={`absolute ${isCollapsed ? 'top-0 right-0' : '-right-1 -top-1'} min-w-[20px] h-5 flex items-center justify-center bg-red-500 text-white`}
           variant="default"
         >
           {unreadCount > 99 ? '99+' : unreadCount}
@@ -182,8 +204,25 @@ function NavItem({ item, isActive }) {
             <TooltipTrigger asChild>
               {content}
             </TooltipTrigger>
-            <TooltipContent side="right">
+            <TooltipContent side={isCollapsed ? "right" : "top"}>
               <p>{unreadCount} ungelesene Benachrichtigung{unreadCount !== 1 ? 'en' : ''}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </li>
+    );
+  }
+
+  if (isCollapsed) {
+    return (
+      <li>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              {content}
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              <p>{item.name}</p>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>

@@ -21,10 +21,10 @@ interface CourseContentsSidebarProps {
   isTopicsSidebarOpen: boolean;
   setIsTopicsSidebarOpen: (isOpen: boolean) => void;
   onAddSubContent: (mainContentId: string | null) => void;
-  onDeleteContent: (content: CourseContent) => void;
+  onDeleteContent: (content: CourseContent) => Promise<void>;
   onEditContent: (content: CourseContent) => void;
   onContentSelect: (id: string) => void;
-  onContentDrop: (content: CourseContent) => void;
+  onContentDrop: (draggedId: string, targetId: string, position: "before" | "after" | "inside") => Promise<void>;
   onInlineEditSubmit: (contentId: string, newTitle: string) => void;
   setIsInlineEditing: (id: string | null) => void;
   setInlineEditTitle: (title: string) => void;
@@ -126,6 +126,12 @@ export function CourseContentsSidebar({
     } finally {
       setIsDeleting(false);
     }
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>, targetId: string, position: "before" | "after" | "inside") => {
+    e.preventDefault();
+    const draggedId = e.dataTransfer.getData('text/plain');
+    onContentDrop(draggedId, targetId, position);
   };
 
   return (

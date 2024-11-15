@@ -44,6 +44,7 @@ import 'react-quill/dist/quill.snow.css';
 // Importiere die neue Komponente
 import { EditContentForm } from './EditContentForm';
 import { CourseContentsSidebar } from './CourseContentsSidebar';
+import { CourseContent } from './types';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -56,16 +57,6 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-interface CourseContent {
-  id: string;
-  title: string;
-  type: 'TEXT' | 'VIDEO' | 'AUDIO';
-  content: string;
-  order: number;
-  parentId: string | null;
-  subContents?: CourseContent[];
-}
-
 export default function CourseContentsPage({ params }: { params: { courseId: string } }) {
   const router = useRouter();
   const { data: session, status } = useSession();
@@ -75,7 +66,7 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
   const [isAddingSubContent, setIsAddingSubContent] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; content: CourseContent | null }>({ open: false, content: null });
   const [alertMessage, setAlertMessage] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const [isInlineEditing, setIsInlineEditing] = useState(false);
+  const [isInlineEditing, setIsInlineEditing] = useState<string | null>(null);
   const [inlineEditTitle, setInlineEditTitle] = useState('');
   const [newMainContentTitle, setNewMainContentTitle] = useState('');
   const [editingContentId, setEditingContentId] = useState<string | null>(null);
@@ -721,7 +712,7 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
         message: error instanceof Error ? error.message : 'Failed to update title.',
       });
     } finally {
-      setIsInlineEditing(false);
+      setIsInlineEditing(null);
       setInlineEditTitle('');
     }
   }, [params.courseId, mainContents]);
@@ -736,47 +727,34 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
     }
   }, [mainContents, findContentById]);
 
-  const handleContentDrop = useCallback(async (draggedId: string, targetId: string, position: 'before' | 'after' | 'inside') => {
+  const handleContentDrop = async (draggedId: string, targetId: string, position: "before" | "after" | "inside") => {
     try {
-      const draggedContent = findContentById(draggedId, mainContents);
-      const targetContent = findContentById(targetId, mainContents);
-
-      if (!draggedContent || !targetContent) {
-        throw new Error('Content not found');
-      }
-
-      const updatedContents = updateContentOrder(mainContents, draggedId, targetId, position);
-      setMainContents(updatedContents);
-
-      // Update order on the server
-      const response = await fetch(`/api/courses/${params.courseId}/contents/reorder`, {
+      const response = await fetch(`/api/courses/${params.courseId}/contents/${draggedId}/move`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          draggedId,
           targetId,
           position,
         }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to update content order');
+        throw new Error('Failed to move content');
       }
 
-      setAlertMessage({
-        type: 'success',
-        message: 'Content order updated successfully.',
-      });
+      // Aktualisiere die lokale State nach erfolgreicher API-Anfrage
+      const updatedContents = await response.json();
+      setMainContents(updatedContents);
     } catch (error) {
-      console.error('Error updating content order:', error);
+      console.error('Error moving content:', error);
       setAlertMessage({
         type: 'error',
-        message: error instanceof Error ? error.message : 'Failed to update content order.',
+        message: 'Fehler beim Verschieben des Inhalts.',
       });
     }
-  }, [params.courseId, mainContents, findContentById, updateContentOrder]);
+  };
 
   // Loading indicator while fetching contents
   if (status === 'loading' || isLoading) {
@@ -788,7 +766,7 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
   }
 
   // Redirect if not authenticated
-  if (status !== 'loading' && !session) {
+  if (status === "unauthenticated") {
     router.push('/auth/signin');
     return null;
   }
@@ -812,29 +790,38 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto">
           <div className="flex h-full">
-            <CourseContentsSidebar
-              mainContents={mainContents}
-              selectedContentId={selectedContentId}
-              isTopicsSidebarOpen={isTopicsSidebarOpen}
-              setIsTopicsSidebarOpen={setIsTopicsSidebarOpen}
-              onAddSubContent={handleAddSubContent}
-              onDeleteContent={handleDeleteContent}
-              onEditContent={handleEditContent}
-              onContentSelect={handleContentSelect}
-              onContentDrop={handleContentDrop}
-              onInlineEditSubmit={handleInlineEditSubmit}
-              setIsInlineEditing={setIsInlineEditing}
-              setInlineEditTitle={setInlineEditTitle}
-              onMainContentSubmit={handleMainContentSubmit}
-              onSubContentSubmit={handleSubContentSubmit}
-              setNewMainContentTitle={setNewMainContentTitle}
-              newMainContentTitle={newMainContentTitle}
-              startResizing={startResizing}
-              onMoveSubContentUp={handleMoveSubContentUp}
-              onMoveSubContentDown={handleMoveSubContentDown}
-              setMainContents={setMainContents}
-            />
-
+            <div className="relative flex">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsTopicsSidebarOpen(!isTopicsSidebarOpen)}
+                className="absolute top-4 right-0 z-10 transform translate-x-1/2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-full shadow-sm"
+              >
+                {isTopicsSidebarOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+              </Button>
+              <CourseContentsSidebar
+                mainContents={mainContents}
+                selectedContentId={selectedContentId}
+                isTopicsSidebarOpen={isTopicsSidebarOpen}
+                setIsTopicsSidebarOpen={setIsTopicsSidebarOpen}
+                onAddSubContent={handleAddSubContent}
+                onDeleteContent={handleDeleteContent}
+                onEditContent={handleEditContent}
+                onContentSelect={handleContentSelect}
+                onContentDrop={handleContentDrop}
+                onInlineEditSubmit={handleInlineEditSubmit}
+                setIsInlineEditing={setIsInlineEditing}
+                setInlineEditTitle={setInlineEditTitle}
+                onMainContentSubmit={handleMainContentSubmit}
+                onSubContentSubmit={handleSubContentSubmit}
+                setNewMainContentTitle={setNewMainContentTitle}
+                newMainContentTitle={newMainContentTitle}
+                startResizing={startResizing}
+                onMoveSubContentUp={handleMoveSubContentUp}
+                onMoveSubContentDown={handleMoveSubContentDown}
+                setMainContents={setMainContents}
+              />
+            </div>
             <div className="flex-1 overflow-y-auto bg-gradient-to-b from-background to-accent/5">
               {selectedMainContent ? (
                 <div className="max-w-5xl mx-auto w-full px-8 py-6">
