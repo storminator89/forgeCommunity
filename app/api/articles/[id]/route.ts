@@ -55,6 +55,7 @@ export async function PUT(
     const category = formData.get('category') as string;
     const tags = formData.getAll('tags') as string[];
     const featuredImage = formData.get('featuredImage') as File | null;
+    const deleteImage = formData.get('deleteImage') === 'true';
 
     if (!title || !content || !category) {
       return NextResponse.json({ error: 'Titel, Inhalt und Kategorie sind erforderlich.' }, { status: 400 });
@@ -72,7 +73,13 @@ export async function PUT(
     }
 
     let featuredImagePath = existingArticle.featuredImage;
-    if (featuredImage) {
+
+    // Wenn das Bild gelöscht werden soll, setze den Pfad auf null
+    if (deleteImage) {
+      featuredImagePath = null;
+    } 
+    // Ansonsten, wenn ein neues Bild hochgeladen wurde, speichere es
+    else if (featuredImage) {
       const bytes = await featuredImage.arrayBuffer();
       const buffer = Buffer.from(bytes);
 

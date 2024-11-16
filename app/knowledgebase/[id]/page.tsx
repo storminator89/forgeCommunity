@@ -105,101 +105,129 @@ export default function ArticlePage() {
   const isAuthor = session?.user?.id === article.author.id;
 
   return (
-    <div className="flex flex-col lg:flex-row min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+    <div className="flex flex-col lg:flex-row min-h-screen bg-background">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="bg-white dark:bg-gray-800 shadow-md z-10">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row items-center justify-between">
-            <h1 className="text-3xl font-bold text-gray-800 dark:text-white flex items-center mb-4 sm:mb-0">
-              <BookOpen className="mr-2 h-6 w-6" />
-              Artikel Details
-            </h1>
+        <header className="bg-card shadow-sm z-10 sticky top-0 border-b">
+          <div className="container mx-auto px-6 py-3 flex flex-col sm:flex-row items-center justify-between">
             <div className="flex items-center space-x-4">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => router.push('/knowledgebase')}
+                className="hover:bg-accent transition-colors"
+              >
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Zurück
+              </Button>
+              <div className="h-4 w-px bg-border hidden sm:block" />
+              <h1 className="text-lg font-medium text-foreground hidden sm:block">
+                Knowledgebase
+              </h1>
+            </div>
+            <div className="flex items-center space-x-2">
               <ThemeToggle />
               <UserNav />
             </div>
           </div>
         </header>
-        <main className="flex-1 overflow-y-auto p-4 lg:p-8">
-          <Card className="max-w-4xl mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-lg">
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-6">
-                <Button
-                  variant="outline"
-                  onClick={() => router.push('/knowledgebase')}
-                  className="bg-black text-white hover:bg-gray-800 hover:text-white"
-                >
-                  <ArrowLeft className="mr-2 h-4 w-4" /> Zurück zur Übersicht
-                </Button>
-                {isAuthor && (
-                  <div className="flex space-x-2">
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
+
+        <main className="flex-1 overflow-y-auto bg-accent/5">
+          <div className="container mx-auto py-8 px-6">
+            <div className="max-w-5xl mx-auto">
+              <div className="grid gap-8">
+                {/* Titel und Meta-Informationen */}
+                <div className="space-y-6 bg-card p-8 rounded-lg shadow-sm">
+                  <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
+                    <div className="space-y-4 flex-1">
+                      <h1 className="text-4xl font-bold text-foreground tracking-tight">
+                        {article.title}
+                      </h1>
+                      
+                      <div className="flex items-center gap-4">
+                        <div className="flex items-center">
+                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                            <User className="h-5 w-5 text-primary" />
+                          </div>
+                          <div className="ml-3">
+                            <p className="font-medium text-foreground">
+                              {article.author.name || article.author.email}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(article.createdAt).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {isAuthor && (
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="group"
+                          asChild
+                        >
                           <Link href={`/knowledgebase/${article.id}/edit`}>
-                            <Button variant="outline" size="icon">
-                              <Edit className="h-4 w-4" />
-                            </Button>
+                            <Edit className="h-4 w-4 mr-2 group-hover:text-primary transition-colors" />
+                            Artikel bearbeiten
                           </Link>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Bearbeiten</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button variant="destructive" size="icon" onClick={handleDelete}>
-                            <Trash className="h-4 w-4" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Löschen</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleDelete}
+                          className="group text-destructive hover:text-destructive-foreground hover:bg-destructive"
+                        >
+                          <Trash className="h-4 w-4 mr-2" />
+                          Löschen
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 pt-4 border-t">
+                    <Badge variant="outline" className="text-xs px-3 py-1 rounded-full">
+                      <Tag className="mr-1.5 h-3 w-3" />
+                      {article.category}
+                    </Badge>
+                    {article.tags.map((tag) => (
+                      <Badge 
+                        key={tag.id} 
+                        variant="secondary" 
+                        className="text-xs px-3 py-1 rounded-full hover:bg-secondary/80 transition-colors"
+                      >
+                        {tag.name}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Artikel-Bild */}
+                {article.featuredImage && (
+                  <div className="relative aspect-video rounded-lg overflow-hidden bg-accent/10 shadow-sm">
+                    <Image
+                      src={article.featuredImage}
+                      alt={article.title}
+                      fill
+                      className="object-cover hover:scale-105 transition-transform duration-300"
+                      priority
+                    />
                   </div>
                 )}
-              </div>
-              {article.featuredImage && (
-                <div className="mb-6">
-                  <Image
-                    src={article.featuredImage}
-                    alt={article.title}
-                    width={800}
-                    height={400}
-                    className="rounded-lg object-cover w-full"
+
+                {/* Artikel-Inhalt */}
+                <Card className="p-8 lg:p-10 shadow-sm">
+                  <div 
+                    className="prose dark:prose-invert max-w-none prose-headings:scroll-mt-20 prose-headings:font-semibold prose-a:text-primary prose-img:rounded-lg prose-pre:bg-muted"
+                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(article.content) }}
                   />
-                </div>
-              )}
-              <h2 className="text-3xl font-bold text-gray-800 dark:text-white mb-4">{article.title}</h2>
-              <div className="flex flex-wrap items-center text-sm text-gray-500 dark:text-gray-400 mb-4">
-                <User className="mr-2 h-4 w-4" />
-                <span className="mr-4">{article.author.name || article.author.email}</span>
-                <Calendar className="mr-2 h-4 w-4" />
-                <span>{new Date(article.createdAt).toLocaleDateString()}</span>
+                </Card>
+
               </div>
-              <div className="flex items-center mb-6 flex-wrap">
-                <Badge variant="outline" className="mr-2 mb-2">
-                  <Tag className="mr-1 h-3 w-3" />
-                  {article.category}
-                </Badge>
-                {article.tags.map((tag) => (
-                  <Badge key={tag.id} variant="secondary" className="mr-2 mb-2">
-                    {tag.name}
-                  </Badge>
-                ))}
-              </div>
-              <Separator className="my-6" />
             </div>
-            <ScrollArea className="h-[calc(100vh-400px)] px-6">
-              <div 
-                className="prose dark:prose-invert max-w-none"
-                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(article.content) }}
-              />
-            </ScrollArea>
-          </Card>
+          </div>
         </main>
       </div>
     </div>

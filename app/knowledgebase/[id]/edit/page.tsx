@@ -58,6 +58,7 @@ export default function EditArticle() {
   const [tags, setTags] = useState<string[]>([]);
   const [featuredImage, setFeaturedImage] = useState<File | null>(null);
   const [featuredImagePreview, setFeaturedImagePreview] = useState<string>('');
+  const [isImageDeleted, setIsImageDeleted] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [existingCategories, setExistingCategories] = useState<string[]>([]);
@@ -161,6 +162,10 @@ export default function EditArticle() {
     formData.append('content', content);
     formData.append('category', category);
     tags.forEach(tag => formData.append('tags', tag));
+    
+    // Explizit markieren, wenn das Bild gelöscht werden soll
+    formData.append('deleteImage', isImageDeleted.toString());
+    
     if (featuredImage) {
       formData.append('featuredImage', featuredImage);
     }
@@ -192,129 +197,236 @@ export default function EditArticle() {
   }
 
   return (
-    <div className="flex flex-col lg:flex-row min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+    <div className="flex flex-col lg:flex-row min-h-screen bg-background">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="bg-white dark:bg-gray-800 shadow-md z-10">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row items-center justify-between">
-            <h1 className="text-3xl font-bold text-gray-800 dark:text-white flex items-center mb-4 sm:mb-0">
-              <BookOpen className="mr-2 h-6 w-6" />
-              Artikel bearbeiten
-            </h1>
+        <header className="bg-card shadow-sm z-10 sticky top-0 border-b">
+          <div className="container mx-auto px-6 py-3 flex flex-col sm:flex-row items-center justify-between">
             <div className="flex items-center space-x-4">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => router.push(`/knowledgebase/${id}`)}
+                className="hover:bg-accent transition-colors"
+              >
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Zurück
+              </Button>
+              <div className="h-4 w-px bg-border hidden sm:block" />
+              <h1 className="text-lg font-medium text-foreground hidden sm:block">
+                Artikel bearbeiten
+              </h1>
+            </div>
+            <div className="flex items-center space-x-2">
               <ThemeToggle />
               <UserNav />
             </div>
           </div>
         </header>
-        <main className="flex-1 overflow-y-auto p-4 lg:p-8">
-          <Card className="max-w-4xl mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-lg">
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-6">
-                <Button
-                  variant="outline"
-                  onClick={() => router.push(`/knowledgebase/${id}`)}
-                  className="bg-black text-white hover:bg-gray-800 hover:text-white"
-                >
-                  <ArrowLeft className="mr-2 h-4 w-4" /> Zurück zum Artikel
-                </Button>
-              </div>
+
+        <main className="flex-1 overflow-y-auto bg-accent/5">
+          <div className="container mx-auto py-8 px-6">
+            <div className="max-w-5xl mx-auto">
               {error && (
-                <Alert variant="destructive" className="mb-6">
+                <Alert variant="destructive" className="mb-6 animate-in slide-in-from-top-2">
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
               )}
-              <ScrollArea className="h-[calc(100vh-250px)]">
-                <form onSubmit={handleSubmit} className="space-y-8">
-                  <div className="space-y-2">
-                    <Label htmlFor="title" className="text-xl font-semibold">Titel</Label>
-                    <Input
-                      id="title"
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
-                      className="text-lg py-2"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="featuredImage" className="text-xl font-semibold">Beitragsbild</Label>
-                    <div className="flex items-center space-x-4">
-                      <input
-                        type="file"
-                        id="featuredImage"
-                        ref={fileInputRef}
-                        onChange={handleImageUpload}
-                        accept="image/*"
-                        className="hidden"
+              
+              <div className="grid gap-6">
+                <form onSubmit={handleSubmit}>
+                  {/* Titel */}
+                  <Card className="p-6 sm:p-8 shadow-sm mb-6 group hover:shadow-md transition-all">
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <Label 
+                          htmlFor="title" 
+                          className="text-lg font-semibold text-foreground flex items-center gap-2"
+                        >
+                          <span>Titel</span>
+                          <span className="text-xs text-muted-foreground font-normal">Erforderlich</span>
+                        </Label>
+                        <span className="text-xs text-muted-foreground">
+                          {title.length}/100 Zeichen
+                        </span>
+                      </div>
+                      <Input
+                        id="title"
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        className="text-lg py-2.5 px-3 bg-background transition-colors focus:ring-2 ring-offset-2 ring-primary/20"
+                        placeholder="Gib einen aussagekräftigen Titel ein..."
+                        maxLength={100}
+                        required
                       />
-                      <Button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="flex items-center"
-                      >
-                        <Upload className="mr-2 h-4 w-4" />
-                        Bild auswählen
-                      </Button>
-                      {featuredImagePreview && (
-                        <div className="w-24 h-24 relative">
-                          <Image
-                            src={featuredImagePreview}
-                            alt="Vorschau"
-                            layout="fill"
-                            objectFit="cover"
-                            className="rounded-md"
+                    </div>
+                  </Card>
+
+                  {/* Beitragsbild */}
+                  <Card className="p-6 sm:p-8 shadow-sm mb-6 group hover:shadow-md transition-all">
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <Label 
+                          htmlFor="featuredImage" 
+                          className="text-lg font-semibold text-foreground flex items-center gap-2"
+                        >
+                          <span>Beitragsbild</span>
+                          <span className="text-xs text-muted-foreground font-normal">Optional</span>
+                        </Label>
+                      </div>
+                      <div className="flex flex-col sm:flex-row items-start gap-6">
+                        <div className="space-y-4 w-full sm:w-auto">
+                          <input
+                            type="file"
+                            id="featuredImage"
+                            ref={fileInputRef}
+                            onChange={handleImageUpload}
+                            accept="image/*"
+                            className="hidden"
                           />
+                          <Button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            variant="outline"
+                            className="w-full sm:w-auto group hover:bg-primary hover:text-primary-foreground transition-all duration-200"
+                          >
+                            <Upload className="mr-2 h-4 w-4 group-hover:scale-110 transition-transform" />
+                            Bild auswählen
+                          </Button>
+                          <p className="text-xs text-muted-foreground">
+                            Empfohlene Größe: 1200x630px, Max. 5MB
+                          </p>
                         </div>
-                      )}
+                        {featuredImagePreview ? (
+                          <div className="relative w-full sm:w-[400px] aspect-video rounded-lg overflow-hidden bg-accent/10 group/image">
+                            <Image
+                              src={featuredImagePreview}
+                              alt="Vorschau"
+                              fill
+                              className="object-cover transition-transform group-hover/image:scale-105"
+                            />
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="sm"
+                              className="absolute top-2 right-2 opacity-0 group-hover/image:opacity-100 transition-opacity"
+                              onClick={() => {
+                                setFeaturedImage(null);
+                                setFeaturedImagePreview('');
+                                setIsImageDeleted(true);
+                              }}
+                            >
+                              Entfernen
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="w-full sm:w-[400px] aspect-video rounded-lg border-2 border-dashed border-muted-foreground/20 flex items-center justify-center">
+                            <p className="text-sm text-muted-foreground">Noch kein Bild ausgewählt</p>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="content" className="text-xl font-semibold">Inhalt</Label>
-                    <div className="h-96 border rounded-md overflow-hidden">
-                      <QuillEditor
-                        value={content}
-                        onChange={setContent}
-                        modules={{
-                          toolbar: [
-                            [{ 'header': [1, 2, 3, false] }],
-                            ['bold', 'italic', 'underline', 'strike'],
-                            [{'list': 'ordered'}, {'list': 'bullet'}],
-                            ['link', 'image'],
-                            ['clean']
-                          ],
-                        }}
-                        className="h-full"
-                      />
+                  </Card>
+
+                  {/* Inhalt */}
+                  <Card className="p-6 sm:p-8 shadow-sm mb-6 group hover:shadow-md transition-all">
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <Label 
+                          htmlFor="content" 
+                          className="text-lg font-semibold text-foreground flex items-center gap-2"
+                        >
+                          <span>Inhalt</span>
+                          <span className="text-xs text-muted-foreground font-normal">Erforderlich</span>
+                        </Label>
+                      </div>
+                      <div className="border rounded-lg overflow-hidden bg-background">
+                        <QuillEditor
+                          value={content}
+                          onChange={setContent}
+                          modules={{
+                            toolbar: [
+                              [{ 'header': [1, 2, 3, false] }],
+                              ['bold', 'italic', 'underline', 'strike'],
+                              [{'list': 'ordered'}, {'list': 'bullet'}],
+                              ['link', 'image', 'code-block'],
+                              ['clean']
+                            ],
+                          }}
+                          className="min-h-[400px]"
+                          placeholder="Schreibe hier deinen Artikel..."
+                        />
+                      </div>
                     </div>
-                  </div>
-                  <div className="space-y-2 mt-12">
-                    <CategorySelect
-                      categories={existingCategories}
-                      selectedCategory={category}
-                      setSelectedCategory={setCategory}
-                      onAddCategory={handleAddNewCategory}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <TagSelect
-                      availableTags={existingTags}
-                      selectedTags={tags}
-                      onTagSelect={handleAddTag}
-                      onTagRemove={handleRemoveTag}
-                      onAddTag={handleAddNewTag}
-                    />
-                  </div>
-                  <Separator className="my-6" />
-                  <div className="flex justify-end">
-                    <Button type="submit" className="px-6 py-2 text-lg">
-                      Artikel aktualisieren
-                    </Button>
+                  </Card>
+
+                  {/* Kategorie und Tags */}
+                  <Card className="p-6 sm:p-8 shadow-sm mb-6 group hover:shadow-md transition-all">
+                    <div className="space-y-8">
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-lg font-semibold text-foreground flex items-center gap-2">
+                            <span>Kategorie</span>
+                            <span className="text-xs text-muted-foreground font-normal">Erforderlich</span>
+                          </Label>
+                        </div>
+                        <CategorySelect
+                          categories={existingCategories}
+                          selectedCategory={category}
+                          setSelectedCategory={setCategory}
+                          onAddCategory={handleAddNewCategory}
+                        />
+                      </div>
+
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-lg font-semibold text-foreground flex items-center gap-2">
+                            <span>Tags</span>
+                            <span className="text-xs text-muted-foreground font-normal">
+                              {tags.length}/5 Tags
+                            </span>
+                          </Label>
+                        </div>
+                        <TagSelect
+                          availableTags={existingTags}
+                          selectedTags={tags}
+                          onTagSelect={handleAddTag}
+                          onTagRemove={handleRemoveTag}
+                          onAddTag={handleAddNewTag}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Füge bis zu 5 Tags hinzu, um deinen Artikel besser auffindbar zu machen
+                        </p>
+                      </div>
+                    </div>
+                  </Card>
+
+                  {/* Submit Button */}
+                  <div className="sticky bottom-0 bg-background/80 backdrop-blur-sm py-4 border-t mt-6">
+                    <div className="max-w-5xl mx-auto flex justify-end gap-3">
+                      <Button 
+                        type="button"
+                        variant="outline"
+                        size="lg"
+                        className="px-6"
+                        onClick={() => router.push(`/knowledgebase/${id}`)}
+                      >
+                        Abbrechen
+                      </Button>
+                      <Button 
+                        type="submit"
+                        size="lg"
+                        className="px-8 font-medium hover:bg-primary/90 transition-colors"
+                      >
+                        Artikel aktualisieren
+                      </Button>
+                    </div>
                   </div>
                 </form>
-              </ScrollArea>
+              </div>
             </div>
-          </Card>
+          </div>
         </main>
       </div>
     </div>
