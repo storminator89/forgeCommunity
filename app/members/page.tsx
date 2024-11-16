@@ -34,7 +34,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 
 interface Member {
@@ -60,6 +60,12 @@ export default function Members() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
+  const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
+
+  // Extrahiere einzigartige Skills und Rollen
+  const uniqueSkills = [...new Set(members.flatMap(m => m.skills))].sort();
+  const uniqueRoles = [...new Set(members.map(m => m.role))].sort();
 
   useEffect(() => {
     fetchMembers();
@@ -97,6 +103,7 @@ export default function Members() {
   const getSortedAndFilteredMembers = useCallback(() => {
     let result = [...members];
 
+    // Filter by search term
     if (searchTerm) {
       result = result.filter(member =>
         member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -106,6 +113,21 @@ export default function Members() {
       );
     }
 
+    // Filter by selected skills
+    if (selectedSkills.length > 0) {
+      result = result.filter(member =>
+        selectedSkills.every(skill => member.skills.includes(skill))
+      );
+    }
+
+    // Filter by selected roles
+    if (selectedRoles.length > 0) {
+      result = result.filter(member =>
+        selectedRoles.includes(member.role)
+      );
+    }
+
+    // Sort results
     result.sort((a, b) => {
       switch (sortBy) {
         case 'name':
@@ -126,7 +148,7 @@ export default function Members() {
     });
 
     return result;
-  }, [members, searchTerm, sortBy, sortOrder]);
+  }, [members, searchTerm, sortBy, sortOrder, selectedSkills, selectedRoles]);
 
   const filteredMembers = getSortedAndFilteredMembers();
 
@@ -167,207 +189,341 @@ export default function Members() {
               <ThemeToggle />
               <UserNav />
             </div>
-          </div>
+        </div>
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 lg:p-8">
-          <div className="max-w-7xl mx-auto space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              {[
-                { label: 'Alle Mitglieder', value: members.length },
-                { label: 'Aktive Mitglieder', value: members.filter(m => m.followers > 0).length },
-                { label: 'Durchschn. Skills', value: Math.round(members.reduce((acc, m) => acc + m.skills.length, 0) / members.length) },
-                { label: 'Neue diesen Monat', value: members.filter(m => new Date(m.joinedAt) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)).length }
-              ].map((stat, i) => (
-                <Card key={i} className="bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm">
-                  <CardContent className="p-4">
-                    <p className="text-sm text-gray-500 dark:text-gray-400">{stat.label}</p>
-                    <h3 className="text-2xl font-bold mt-1">{stat.value}</h3>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-
-            <div className="flex flex-col sm:flex-row items-center gap-4 bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm p-4 rounded-lg">
-              <div className="relative flex-1 max-w-md">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-                <Input
-                  type="text"
-                  placeholder="Suche nach Namen, Rollen, Skills oder Orten"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
+          <TooltipProvider>
+            <div className="max-w-7xl mx-auto space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {[
+                  { label: 'Alle Mitglieder', value: members.length },
+                  { label: 'Aktive Mitglieder', value: members.filter(m => m.followers > 0).length },
+                  { label: 'Durchschn. Skills', value: Math.round(members.reduce((acc, m) => acc + m.skills.length, 0) / members.length) },
+                  { label: 'Neue diesen Monat', value: members.filter(m => new Date(m.joinedAt) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)).length }
+                ].map((stat, i) => (
+                  <Card key={i} className="bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm">
+                    <CardContent className="p-4">
+                      <p className="text-sm text-gray-500 dark:text-gray-400">{stat.label}</p>
+                      <h3 className="text-2xl font-bold mt-1">{stat.value}</h3>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
-              
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="w-[180px]">
-                    <SlidersHorizontal className="w-4 h-4 mr-2" />
-                    Sortieren nach: {sortBy}
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-[180px]">
-                  <DropdownMenuItem onClick={() => handleSort('name')}>
-                    Name {sortBy === 'name' && (sortOrder === 'asc' ? '↑' : '↓')}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleSort('joinedAt')}>
-                    Datum {sortBy === 'joinedAt' && (sortOrder === 'asc' ? '↑' : '↓')}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleSort('followers')}>
-                    Follower {sortBy === 'followers' && (sortOrder === 'asc' ? '↑' : '↓')}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
 
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setViewMode('grid')}
-                  className={viewMode === 'grid' ? 'bg-primary/10' : ''}
-                >
-                  <LayoutGrid className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setViewMode('list')}
-                  className={viewMode === 'list' ? 'bg-primary/10' : ''}
-                >
-                  <List className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
+              <div className="flex flex-col sm:flex-row items-start gap-4 bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm p-4 rounded-lg">
+                <div className="flex-1 w-full space-y-4">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                    <Input
+                      type="text"
+                      placeholder="Suche nach Namen, Rollen, Skills oder Orten"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10 transition-all duration-200 border-2 focus:border-primary/50 hover:border-gray-400 dark:hover:border-gray-600 w-full"
+                      aria-label="Mitglieder durchsuchen"
+                    />
+                    {searchTerm && (
+                      <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                        <Badge variant="secondary" className="animate-fadeIn">
+                          {filteredMembers.length} {filteredMembers.length === 1 ? 'Ergebnis' : 'Ergebnisse'}
+                        </Badge>
+                      </div>
+                    )}
+                  </div>
 
-            <ScrollArea className="h-[calc(100vh-320px)]">
-              {isLoading ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {[...Array(6)].map((_, i) => (
-                    <Card key={`skeleton-${i}`} className="animate-pulse">
-                      <CardContent className="p-6">
-                        <div className="flex space-x-4">
-                          <div className="h-16 w-16 rounded-full bg-gray-200 dark:bg-gray-700" />
-                          <div className="flex-1 space-y-4">
-                            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
-                            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2" />
-                            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/4" />
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                  <div className="flex flex-wrap gap-2">
+                    {selectedSkills.length > 0 && (
+                      <div className="flex flex-wrap gap-2 animate-fadeIn">
+                        {selectedSkills.map(skill => (
+                          <Badge
+                            key={skill}
+                            variant="secondary"
+                            className="cursor-pointer hover:bg-destructive/20 transition-colors"
+                            onClick={() => setSelectedSkills(prev => prev.filter(s => s !== skill))}
+                          >
+                            {skill} ×
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                    {selectedRoles.length > 0 && (
+                      <div className="flex flex-wrap gap-2 animate-fadeIn">
+                        {selectedRoles.map(role => (
+                          <Badge
+                            key={role}
+                            variant="outline"
+                            className="cursor-pointer hover:bg-destructive/20 transition-colors"
+                            onClick={() => setSelectedRoles(prev => prev.filter(r => r !== role))}
+                          >
+                            {role} ×
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              ) : (
-                <div className={
-                  viewMode === 'grid' 
-                    ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-                    : "flex flex-col gap-4"
-                }>
-                  {filteredMembers.map((member, index) => (
-                    <motion.div
-                      key={member.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.3, delay: Math.min(index * 0.1, 1) }} // Cap the delay
-                    >
-                      <Card
-                        className="cursor-pointer hover:shadow-lg transition-all duration-200 hover:scale-[1.02]"
-                        onClick={() => navigateToProfile(member.id)}
+
+                <div className="flex items-center gap-2 sm:gap-4">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" className="min-w-[130px]">
+                        <SlidersHorizontal className="w-4 h-4 mr-2" />
+                        Filter
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-[200px] max-h-[400px] overflow-y-auto">
+                      <div className="p-2 border-b">
+                        <p className="text-sm font-medium mb-2">Skills</p>
+                        <div className="space-y-1">
+                          {uniqueSkills.map(skill => (
+                            <div
+                              key={skill}
+                              className="flex items-center hover:bg-accent rounded px-2 py-1 cursor-pointer transition-colors"
+                              onClick={() => setSelectedSkills(prev => 
+                                prev.includes(skill) ? prev.filter(s => s !== skill) : [...prev, skill]
+                              )}
+                            >
+                              <div className={`w-3 h-3 border rounded-sm mr-2 transition-colors ${
+                                selectedSkills.includes(skill) ? 'bg-primary border-primary' : 'border-input'
+                              }`} />
+                              <span className="text-sm">{skill}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="p-2">
+                        <p className="text-sm font-medium mb-2">Rollen</p>
+                        <div className="space-y-1">
+                          {uniqueRoles.map(role => (
+                            <div
+                              key={role}
+                              className="flex items-center hover:bg-accent rounded px-2 py-1 cursor-pointer transition-colors"
+                              onClick={() => setSelectedRoles(prev => 
+                                prev.includes(role) ? prev.filter(r => r !== role) : [...prev, role]
+                              )}
+                            >
+                              <div className={`w-3 h-3 border rounded-sm mr-2 transition-colors ${
+                                selectedRoles.includes(role) ? 'bg-primary border-primary' : 'border-input'
+                              }`} />
+                              <span className="text-sm">{role}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" className="min-w-[130px]">
+                        <SlidersHorizontal className="w-4 h-4 mr-2" />
+                        {sortBy === 'joinedAt' ? 'Datum' : 
+                         sortBy === 'followers' ? 'Follower' : 'Name'} {sortOrder === 'asc' ? '↑' : '↓'}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-[180px]">
+                      <DropdownMenuItem 
+                        onClick={() => handleSort('name')}
+                        className="flex items-center justify-between"
                       >
+                        Name {sortBy === 'name' && <span className="text-primary">{sortOrder === 'asc' ? '↑' : '↓'}</span>}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        onClick={() => handleSort('joinedAt')}
+                        className="flex items-center justify-between"
+                      >
+                        Datum {sortBy === 'joinedAt' && <span className="text-primary">{sortOrder === 'asc' ? '↑' : '↓'}</span>}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        onClick={() => handleSort('followers')}
+                        className="flex items-center justify-between"
+                      >
+                        Follower {sortBy === 'followers' && <span className="text-primary">{sortOrder === 'asc' ? '↑' : '↓'}</span>}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
+                  <div className="flex items-center gap-2">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setViewMode('grid')}
+                          className={viewMode === 'grid' ? 'bg-primary/10' : ''}
+                        >
+                          <LayoutGrid className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Grid-Ansicht</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setViewMode('list')}
+                          className={viewMode === 'list' ? 'bg-primary/10' : ''}
+                        >
+                          <List className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Listen-Ansicht</TooltipContent>
+                    </Tooltip>
+                  </div>
+                </div>
+              </div>
+
+              <ScrollArea className="h-[calc(100vh-320px)]">
+                {isLoading ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {[...Array(6)].map((_, i) => (
+                      <Card key={`skeleton-${i}`} className="animate-pulse">
                         <CardContent className="p-6">
                           <div className="flex space-x-4">
-                            <Avatar className="h-16 w-16">
-                              <AvatarImage src={member.image} alt={member.name} />
-                              <AvatarFallback>
-                                {member.name.slice(0, 2).toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between">
-                                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">
-                                  {member.name}
-                                </h3>
-                                <Badge variant="outline">{member.role}</Badge>
-                              </div>
-                              {member.title && (
-                                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                                  {member.title}
-                                </p>
-                              )}
-                              <div className="flex items-center gap-4 mt-2 text-sm text-gray-500 dark:text-gray-400">
-                                {member.location && (
-                                  <span className="flex items-center">
-                                    <MapPin className="h-4 w-4 mr-1" />
-                                    {member.location}
-                                  </span>
-                                )}
-                                <span className="flex items-center">
-                                  <Calendar className="h-4 w-4 mr-1" />
-                                  {format(new Date(member.joinedAt), 'MMM yyyy', { locale: de })}
-                                </span>
-                              </div>
+                            <div className="h-16 w-16 rounded-full bg-gray-200 dark:bg-gray-700" />
+                            <div className="flex-1 space-y-4">
+                              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
+                              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2" />
+                              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/4" />
                             </div>
-                          </div>
-
-                          <div className="mt-4">
-                            <div className="flex items-center gap-4 text-sm">
-                              <span className="flex items-center">
-                                <Users className="h-4 w-4 mr-1" />
-                                {member.followers} Follower
-                              </span>
-                              <span className="flex items-center">
-                                <Briefcase className="h-4 w-4 mr-1" />
-                                {member.skills.length} Skills
-                              </span>
-                            </div>
-                            {member.skills.length > 0 && (
-                              <div className="flex flex-wrap gap-2 mt-3">
-                                {member.skills.slice(0, 3).map((skill, index) => (
-                                  <Badge key={index} variant="secondary">
-                                    {skill}
-                                  </Badge>
-                                ))}
-                                {member.skills.length > 3 && (
-                                  <Badge variant="outline">
-                                    +{member.skills.length - 3}
-                                  </Badge>
-                                )}
-                              </div>
-                            )}
                           </div>
                         </CardContent>
                       </Card>
-                    </motion.div>
-                  ))}
-                </div>
-              )}
-              <ScrollBar />
-            </ScrollArea>
+                    ))}
+                  </div>
+                ) : (
+                  <div className={
+                    viewMode === 'grid' 
+                      ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+                      : "flex flex-col gap-4"
+                  }>
+                    {filteredMembers.map((member, index) => (
+                      <motion.div
+                        key={member.id}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3, delay: Math.min(index * 0.05, 0.5) }}
+                      >
+                        <Card
+                          className="group cursor-pointer transition-all duration-200 hover:shadow-lg dark:hover:shadow-primary/5 hover:scale-[1.02]"
+                          onClick={() => navigateToProfile(member.id)}
+                        >
+                          <CardContent className="p-6">
+                            <div className="flex space-x-4">
+                              <Avatar className="h-16 w-16 ring-2 ring-transparent group-hover:ring-primary/20 transition-all duration-200">
+                                <AvatarImage src={member.image} alt={member.name} />
+                                <AvatarFallback className="bg-primary/10">
+                                  {member.name.slice(0, 2).toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between">
+                                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">
+                                    {member.name}
+                                  </h3>
+                                  <Badge variant="outline">{member.role}</Badge>
+                                </div>
+                                {member.title && (
+                                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                                    {member.title}
+                                  </p>
+                                )}
+                                <div className="flex items-center gap-4 mt-2 text-sm text-gray-500 dark:text-gray-400">
+                                  {member.location && (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span className="flex items-center hover:text-primary transition-colors">
+                                          <MapPin className="h-4 w-4 mr-1" />
+                                          {member.location}
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent>Standort</TooltipContent>
+                                    </Tooltip>
+                                  )}
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span className="flex items-center hover:text-primary transition-colors">
+                                        <Calendar className="h-4 w-4 mr-1" />
+                                        {format(new Date(member.joinedAt), 'MMM yyyy', { locale: de })}
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Beitrittsdatum</TooltipContent>
+                                  </Tooltip>
+                                </div>
+                              </div>
+                            </div>
 
-            {showScrollTop && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed bottom-8 right-8"
-              >
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="secondary"
-                      size="icon"
-                      onClick={scrollToTop}
-                      className="rounded-full shadow-lg"
-                    >
-                      <ChevronUp className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Nach oben scrollen</TooltipContent>
-                </Tooltip>
-              </motion.div>
-            )}
-          </div>
+                            <div className="mt-4">
+                              <div className="flex items-center gap-4 text-sm">
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span className="flex items-center hover:text-primary transition-colors">
+                                      <Users className="h-4 w-4 mr-1" />
+                                      {member.followers} Follower
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Anzahl der Follower</TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span className="flex items-center hover:text-primary transition-colors">
+                                      <Briefcase className="h-4 w-4 mr-1" />
+                                      {member.skills.length} Skills
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Anzahl der Fähigkeiten</TooltipContent>
+                                </Tooltip>
+                              </div>
+                              {member.skills.length > 0 && (
+                                <div className="flex flex-wrap gap-2 mt-3">
+                                  {member.skills.slice(0, 3).map((skill, index) => (
+                                    <Badge key={index} variant="secondary">
+                                      {skill}
+                                    </Badge>
+                                  ))}
+                                  {member.skills.length > 3 && (
+                                    <Badge variant="outline">
+                                      +{member.skills.length - 3}
+                                    </Badge>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
+                <ScrollBar />
+              </ScrollArea>
+
+              {showScrollTop && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed bottom-8 right-8"
+                >
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="secondary"
+                        size="icon"
+                        onClick={scrollToTop}
+                        className="rounded-full shadow-lg"
+                      >
+                        <ChevronUp className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Nach oben scrollen</TooltipContent>
+                  </Tooltip>
+                </motion.div>
+              )}
+            </div>
+          </TooltipProvider>
         </main>
       </div>
     </div>
