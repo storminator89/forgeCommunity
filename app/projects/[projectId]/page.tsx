@@ -1,22 +1,22 @@
-// app/projects/[projectId]/page.tsx
-
 "use client";
 
 import { useRouter, useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ThumbsUp, MessageSquare, ExternalLink, Edit, Trash, Upload } from 'lucide-react';
+import { ThumbsUp, MessageSquare, ExternalLink, Edit, Trash, Upload, Share2, Bookmark, Calendar, User, Tag } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Sidebar } from "@/components/Sidebar";
-import { ThemeToggle } from "@/components/theme-toggle"; 
 import { UserNav } from "@/components/user-nav"; 
+import { ThemeToggle } from "@/components/theme-toggle";
 import Image from 'next/image';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface Tag {
   id: string;
@@ -51,7 +51,7 @@ interface Project {
   category: string;
   link: string;
   imageUrl?: string;
-  coverImage?: string;  // Add this property
+  coverImage?: string;  
   gradientFrom: string;
   gradientTo: string;
   createdAt: string;
@@ -63,14 +63,18 @@ interface Project {
 }
 
 export default function ProjectDetail() {
-  const params = useParams();
-  const projectId = params?.projectId;
-  const { data: session } = useSession();
   const router = useRouter();
-
+  const params = useParams();
+  const { data: session } = useSession();
   const [project, setProject] = useState<Project | null>(null);
-  const [commentContent, setCommentContent] = useState('');
+  const [comments, setComments] = useState<ProjectComment[]>([]);
+  const [newComment, setNewComment] = useState('');
+  const [isLiked, setIsLiked] = useState(false);
+  const [isBookmarked, setIsBookmarked] = useState(false);
+  const [activeTab, setActiveTab] = useState('overview');
+  const [isLoading, setIsLoading] = useState(true);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [editProjectData, setEditProjectData] = useState<{
     title: string,
     description: string,
@@ -86,56 +90,97 @@ export default function ProjectDetail() {
     link: '',
     image: null,
   });
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
-
-  // Debugging: Überprüfen, ob projectId korrekt ist
-  useEffect(() => {
-    console.log("Project ID:", projectId);
-  }, [projectId]);
 
   useEffect(() => {
     const fetchProject = async () => {
-      if (!projectId) {
+      if (!params?.projectId) {
         console.error("Kein projectId gefunden in der URL.");
         return;
       }
       try {
-        const res = await fetch(`/api/projects/${projectId}`);
+        const res = await fetch(`/api/projects/${params.projectId}`);
         if (!res.ok) {
           throw new Error('Projekt nicht gefunden.');
         }
         const data: Project = await res.json();
         setProject(data);
-      } catch (error: any) {
+        // Set initial comments from project data
+        setComments(data.comments || []);
+        // Check if user has liked the project
+        setIsLiked(data.likes?.some(like => like.userId === session?.user?.id) || false);
+      } catch (error) {
         console.error('Error fetching project:', error);
-        alert('Fehler beim Abrufen des Projekts.');
         router.push('/showcases'); // Navigiere zurück zur Projektliste bei Fehler
       }
     }
 
     fetchProject();
-  }, [projectId, router]);
+  }, [params, router, session?.user?.id]);
 
-  // Handle adding a comment
-  const handleAddComment = async () => {
-    if (!session) {
+  // Separate effect for loading comments
+  useEffect(() => {
+    const fetchComments = async () => {
+      if (!params?.projectId) return;
+      
+      try {
+        const res = await fetch(`/api/projects/${params.projectId}/comments`);
+        if (!res.ok) {
+          throw new Error('Fehler beim Laden der Kommentare.');
+        }
+        const data: ProjectComment[] = await res.json();
+        setComments(data);
+      } catch (error) {
+        console.error('Error fetching comments:', error);
+      }
+    };
+
+    fetchComments();
+  }, [params?.projectId]);
+
+  const handleLike = async () => {
+    if (!session || !project) {
+      alert('Bitte melde dich an, um zu liken.');
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/projects/${project.id}/like`, {
+        method: 'POST',
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Fehler beim Liken des Projekts.');
+      }
+
+      // Aktualisiere das Projekt in der Liste
+      const newLike: LikeProject = await res.json();
+      setProject(prev => prev ? { ...prev, likes: [...prev.likes, newLike] } : prev);
+      setIsLiked(true);
+    } catch (error) {
+      console.error('Error liking project:', error);
+      alert(error.message || 'Fehler beim Liken des Projekts.');
+    }
+  }
+
+  const handleComment = async () => {
+    if (!session || !project) {
       alert('Bitte melde dich an, um einen Kommentar hinzuzufügen.');
       return;
     }
 
-    if (!commentContent.trim()) {
+    if (!newComment.trim()) {
       alert('Kommentar darf nicht leer sein.');
       return;
     }
 
     try {
-      const res = await fetch(`/api/projects/${projectId}/comments`, {
+      const res = await fetch(`/api/projects/${project.id}/comments`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ content: commentContent }),
+        body: JSON.stringify({ content: newComment }),
       });
 
       if (!res.ok) {
@@ -143,16 +188,22 @@ export default function ProjectDetail() {
         throw new Error(errorData.error || 'Fehler beim Hinzufügen des Kommentars.');
       }
 
-      const newComment: ProjectComment = await res.json();
-      setProject(prev => prev ? { ...prev, comments: [...prev.comments, newComment] } : prev);
-      setCommentContent('');
-    } catch (error: any) {
+      const addedComment: ProjectComment = await res.json();
+      
+      // Update both comments and project state
+      setComments(prev => [...prev, addedComment]);
+      setProject(prev => prev ? {
+        ...prev,
+        comments: [...prev.comments, addedComment]
+      } : prev);
+      
+      setNewComment('');
+    } catch (error) {
       console.error('Error adding comment:', error);
       alert(error.message || 'Fehler beim Hinzufügen des Kommentars.');
     }
   }
 
-  // Handle editing a project
   const handleOpenEditDialog = () => {
     if (!project) return;
     setEditProjectData({
@@ -164,7 +215,12 @@ export default function ProjectDetail() {
       image: null,
     });
     setIsEditDialogOpen(true);
-  }
+  };
+
+  const handleOpenDeleteDialog = () => {
+    if (!project) return;
+    setIsDeleteDialogOpen(true);
+  };
 
   const handleSubmitEditProject = async () => {
     if (!project) return;
@@ -200,24 +256,17 @@ export default function ProjectDetail() {
       const updatedProject: Project = await res.json();
       setProject(updatedProject);
       setIsEditDialogOpen(false);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error updating project:', error);
       alert(error.message || 'Fehler beim Aktualisieren des Projekts.');
     }
-  }
-
-  // Handle deleting a project
-  const handleOpenDeleteDialog = () => {
-    if (!project) return;
-    setProjectToDelete(project);
-    setIsDeleteDialogOpen(true);
-  }
+  };
 
   const handleDeleteProject = async () => {
-    if (!projectToDelete) return;
+    if (!project) return;
 
     try {
-      const res = await fetch(`/api/projects/${projectToDelete.id}`, {
+      const res = await fetch(`/api/projects/${project.id}`, {
         method: 'DELETE',
       });
 
@@ -226,316 +275,393 @@ export default function ProjectDetail() {
         throw new Error(errorData.error || 'Fehler beim Löschen des Projekts.');
       }
 
-      // Navigiere zurück zur Projektliste
       router.push('/showcases');
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error deleting project:', error);
       alert(error.message || 'Fehler beim Löschen des Projekts.');
     }
-  }
+  };
 
-  // Handle like
-  const handleLike = async () => {
+  const handleShare = async () => {
+    if (!project) return;
+
+    const shareData = {
+      title: project.title,
+      text: project.description,
+      url: window.location.href
+    };
+
+    try {
+      if (navigator.share && navigator.canShare(shareData)) {
+        // Use Web Share API if available
+        await navigator.share(shareData);
+      } else {
+        // Fallback to copying URL
+        await navigator.clipboard.writeText(window.location.href);
+        alert('Link wurde in die Zwischenablage kopiert!');
+      }
+    } catch (error) {
+      console.error('Error sharing:', error);
+      // If clipboard fails, show the URL to manually copy
+      alert('Du kannst diese URL teilen: ' + window.location.href);
+    }
+  };
+
+  const handleBookmark = async () => {
     if (!session || !project) {
-      alert('Bitte melde dich an, um zu liken.');
+      alert('Bitte melde dich an, um das Projekt zu speichern.');
       return;
     }
 
     try {
-      const res = await fetch(`/api/projects/${project.id}/like`, {
-        method: 'POST',
+      const res = await fetch(`/api/projects/${project.id}/bookmark`, {
+        method: isBookmarked ? 'DELETE' : 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        }
       });
 
       if (!res.ok) {
         const errorData = await res.json();
-        throw new Error(errorData.error || 'Fehler beim Liken des Projekts.');
+        throw new Error(errorData.error || `Fehler beim ${isBookmarked ? 'Entfernen' : 'Hinzufügen'} des Lesezeichens.`);
       }
 
-      // Aktualisiere das Projekt in der Liste
-      const newLike: LikeProject = await res.json();
-      setProject(prev => prev ? { ...prev, likes: [...prev.likes, newLike] } : prev);
-    } catch (error: any) {
-      console.error('Error liking project:', error);
-      alert(error.message || 'Fehler beim Liken des Projekts.');
+      setIsBookmarked(!isBookmarked);
+      
+      // Show feedback to user
+      const message = isBookmarked 
+        ? 'Projekt wurde aus deinen Lesezeichen entfernt' 
+        : 'Projekt wurde zu deinen Lesezeichen hinzugefügt';
+      alert(message);
+
+    } catch (error) {
+      console.error('Error bookmarking project:', error);
+      alert(error.message || 'Fehler beim Speichern des Projekts.');
     }
-  }
+  };
 
-  // Handle unlike
-  const handleUnlike = async () => {
-    if (!session || !project) {
-      alert('Bitte melde dich an, um zu entliken.');
-      return;
-    }
+  // Check if project is bookmarked on load
+  useEffect(() => {
+    const checkBookmarkStatus = async () => {
+      if (!session?.user?.id || !project?.id) return;
 
-    try {
-      const res = await fetch(`/api/projects/${project.id}/like`, {
-        method: 'DELETE',
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || 'Fehler beim Entliken des Projekts.');
+      try {
+        const res = await fetch(`/api/projects/${project.id}/bookmark/status`);
+        if (!res.ok) {
+          throw new Error('Fehler beim Laden des Lesezeichen-Status.');
+        }
+        const { isBookmarked: bookmarkStatus } = await res.json();
+        setIsBookmarked(bookmarkStatus);
+      } catch (error) {
+        console.error('Error checking bookmark status:', error);
       }
+    };
 
-      // Aktualisiere das Projekt in der Liste
-      const removedLike: { id: string } = await res.json();
-      setProject(prev => prev ? { ...prev, likes: prev.likes.filter(like => like.id !== removedLike.id) } : prev);
-    } catch (error: any) {
-      console.error('Error unliking project:', error);
-      alert(error.message || 'Fehler beim Entliken des Projekts.');
-    }
-  }
+    checkBookmarkStatus();
+  }, [project?.id, session?.user?.id]);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+    <div className="flex h-screen overflow-hidden">
       {/* Sidebar */}
       <Sidebar />
 
-      {/* Hauptinhalt */}
+      {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="bg-white dark:bg-gray-800 shadow-md z-10">
-          <div className="max-w-7xl mx-auto px-6 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-            <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Projekt-Detail</h2>
-            <div className="flex items-center space-x-4">
-              <ThemeToggle />
-              <UserNav />
+        <header className="bg-card shadow-sm z-10 sticky top-0 border-b">
+          <div className="container mx-auto px-6 py-4">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center">
+                <div className="bg-primary/10 p-2 rounded-lg mr-3">
+                  <Tag className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <h1 className="text-2xl font-semibold text-foreground">Projekt-Detail</h1>
+                  <p className="text-sm text-muted-foreground">Projektinformationen und Updates</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <ThemeToggle />
+                <UserNav />
+              </div>
             </div>
           </div>
         </header>
 
-        {/* Hauptinhalt */}
-        <main className="flex-1 overflow-y-auto p-4 lg:p-8">
-          {project ? (
-            <div className="max-w-4xl mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 space-y-6">
-              {/* Projektbild */}
-              <div className="relative w-full h-64 rounded-lg overflow-hidden">
-                <Image
-                  src={project.imageUrl || project.coverImage || '/placeholder.jpg'}
-                  alt={project.title}
-                  fill
-                  className="object-cover"
-                  priority
-                />
-              </div>
-
-              {/* Projektinformationen */}
-              <div className="space-y-4">
-                <h1 className="text-3xl font-bold text-gray-800 dark:text-white">{project.title}</h1>
-                <p className="text-gray-600 dark:text-gray-300">{project.description}</p>
-                <p className="text-gray-600 dark:text-gray-300"><strong>Kategorie:</strong> {project.category}</p>
-                <p className="text-gray-600 dark:text-gray-300"><strong>Link:</strong> <a href={project.link} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">{project.link}</a></p>
-              </div>
-
-              {/* Autorinformationen */}
-              <div className="flex items-center space-x-2">
-                <Avatar className="h-8 w-8">
-                  <AvatarImage src={project.author.image || undefined} />
-                  <AvatarFallback>{project.author.name ? project.author.name.charAt(0) : 'U'}</AvatarFallback>
-                </Avatar>
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-200">{project.author.name}</span>
-              </div>
-
-              {/* Likes und Kommentare */}
-              <div className="flex items-center space-x-4">
-                <button
-                  className={`flex items-center text-sm ${project.likes.some(like => like.userId === session?.user.id) ? 'text-blue-500' : 'text-gray-500 hover:text-blue-500'}`}
-                  onClick={project.likes.some(like => like.userId === session?.user.id) ? handleUnlike : handleLike}
-                >
-                  <ThumbsUp className="h-5 w-5 mr-1" />
-                  {project.likes.length}
-                </button>
-                <span className="flex items-center text-sm text-gray-500">
-                  <MessageSquare className="h-5 w-5 mr-1" />
-                  {project.comments.length}
-                </span>
-              </div>
-
-              {/* Aktionen: Bearbeiten und Löschen */}
-              {session?.user.id === project.author.id && (
-                <div className="flex space-x-2">
-                  <Button onClick={handleOpenEditDialog} variant="outline" className="flex items-center space-x-1">
-                    <Edit className="h-4 w-4" /> <span>Bearbeiten</span>
-                  </Button>
-                  <Button onClick={handleOpenDeleteDialog} variant="destructive" className="flex items-center space-x-1">
-                    <Trash className="h-4 w-4" /> <span>Löschen</span>
-                  </Button>
-                </div>
-              )}
-
-              {/* Kommentare */}
-              <div>
-                <h2 className="text-2xl font-semibold text-gray-800 dark:text-white mb-4">Kommentare</h2>
-                {project.comments.length > 0 ? (
-                  project.comments.map(comment => (
-                    <div key={comment.id} className="mb-4">
-                      <div className="flex items-center space-x-2">
-                        <Avatar className="h-6 w-6">
-                          <AvatarImage src={comment.author?.image || undefined} />
-                          <AvatarFallback>{comment.author?.name ? comment.author.name.charAt(0) : 'U'}</AvatarFallback>
-                        </Avatar>
-                        <span className="text-sm font-medium text-gray-700 dark:text-gray-200">{comment.author?.name || 'Unbekannt'}</span>
-                        <span className="text-xs text-gray-500">{new Date(comment.createdAt).toLocaleString()}</span>
-                      </div>
-                      <p className="text-sm text-gray-600 dark:text-gray-300 ml-8">{comment.content}</p>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-gray-500 dark:text-gray-400">Keine Kommentare vorhanden.</p>
-                )}
-
-                {/* Kommentar hinzufügen */}
-                {session && (
-                  <div className="mt-6">
-                    <h3 className="text-lg font-medium text-gray-800 dark:text-white mb-2">Einen Kommentar hinzufügen</h3>
-                    <Textarea
-                      placeholder="Dein Kommentar..."
-                      className="w-full"
-                      value={commentContent}
-                      onChange={(e) => setCommentContent(e.target.value)}
-                    />
-                    <Button className="mt-2" onClick={handleAddComment}>
-                      Kommentar hinzufügen
-                    </Button>
-                  </div>
-                )}
-              </div>
-
-              {/* Bearbeiten Dialog */}
-              <Dialog open={isEditDialogOpen} onOpenChange={() => { setIsEditDialogOpen(false); setEditProjectData({ title: '', description: '', category: '', tags: [], link: '', image: null }); }}>
-                <DialogContent className="sm:max-w-[625px]">
-                  <DialogHeader>
-                    <DialogTitle>Projekt bearbeiten</DialogTitle>
-                  </DialogHeader>
-                  <form onSubmit={(e) => { e.preventDefault(); handleSubmitEditProject() }} encType="multipart/form-data">
-                    <div className="grid gap-4 py-4">
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="edit-title" className="text-right">
-                          Titel
-                        </Label>
-                        <Input
-                          id="edit-title"
-                          value={editProjectData.title}
-                          onChange={(e) => setEditProjectData({ ...editProjectData, title: e.target.value })}
-                          className="col-span-3"
-                          placeholder="Projekt Titel"
-                          required
-                        />
-                      </div>
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="edit-description" className="text-right">
-                          Beschreibung
-                        </Label>
-                        <Textarea
-                          id="edit-description"
-                          value={editProjectData.description}
-                          onChange={(e) => setEditProjectData({ ...editProjectData, description: e.target.value })}
-                          className="col-span-3"
-                          placeholder="Projekt Beschreibung"
-                          required
-                        />
-                      </div>
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="edit-category" className="text-right">
-                          Kategorie
-                        </Label>
-                        <Input
-                          id="edit-category"
-                          value={editProjectData.category}
-                          onChange={(e) => setEditProjectData({ ...editProjectData, category: e.target.value })}
-                          className="col-span-3"
-                          placeholder="Projekt Kategorie"
-                          required
-                        />
-                      </div>
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="edit-tags" className="text-right">
-                          Tags
-                        </Label>
-                        <Input
-                          id="edit-tags"
-                          value={editProjectData.tags.join(', ')}
-                          onChange={(e) => setEditProjectData({ ...editProjectData, tags: e.target.value.split(',').map(tag => tag.trim()) })}
-                          className="col-span-3"
-                          placeholder="Trennen Sie Tags mit Kommas"
-                        />
-                      </div>
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="edit-link" className="text-right">
-                          Projekt-Link
-                        </Label>
-                        <Input
-                          id="edit-link"
-                          value={editProjectData.link}
-                          onChange={(e) => setEditProjectData({ ...editProjectData, link: e.target.value })}
-                          className="col-span-3"
-                          placeholder="https://github.com/..."
-                          required
-                        />
-                      </div>
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="edit-image" className="text-right">
-                          Vorschaubild
-                        </Label>
-                        <div className="col-span-3">
-                          <label htmlFor="edit-image-upload" className="flex items-center justify-center w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm bg-white dark:bg-gray-700 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none">
-                            <Upload className="mr-2 h-5 w-5 text-gray-400" />
-                            {editProjectData.image ? editProjectData.image.name : 'Bild auswählen'}
-                          </label>
-                          <input
-                            type="file"
-                            id="edit-image-upload"
-                            accept="image/*"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) {
-                                setEditProjectData({ ...editProjectData, image: file });
-                              }
-                            }}
-                            className="hidden"
-                          />
-                          {editProjectData.image && (
-                            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                              Gewähltes Bild: {editProjectData.image.name}
-                            </p>
-                          )}
+        {/* Main scrollable content */}
+        <div className="flex-1 overflow-y-auto bg-background">
+          <AnimatePresence>
+            {project && (
+              <div className="container mx-auto py-6 px-4 max-w-5xl">
+                {/* Project Header */}
+                <div className="flex flex-col space-y-4 mb-8">
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <h1 className="text-4xl font-bold text-foreground mb-4">{project.title}</h1>
+                      <div className="flex flex-wrap items-center gap-4 text-muted-foreground">
+                        <div className="flex items-center">
+                          <Calendar className="w-4 h-4 mr-2" />
+                          <span>
+                            {new Date(project.createdAt).toLocaleDateString('de-DE', {
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric'
+                            })}
+                          </span>
+                        </div>
+                        <div className="flex items-center">
+                          <User className="w-4 h-4 mr-2" />
+                          <span>{project.author?.name || 'Anonym'}</span>
+                        </div>
+                        <div className="flex items-center">
+                          <Tag className="w-4 h-4 mr-2" />
+                          <span>{project.category}</span>
                         </div>
                       </div>
                     </div>
-                    <DialogFooter>
-                      <Button type="submit">Projekt aktualisieren</Button>
-                    </DialogFooter>
-                  </form>
-                </DialogContent>
-              </Dialog>
 
-              {/* Löschen Dialog */}
-              {projectToDelete && (
-                <Dialog open={isDeleteDialogOpen} onOpenChange={() => { setIsDeleteDialogOpen(false); setProjectToDelete(null); }}>
-                  <DialogContent className="sm:max-w-[400px]">
-                    <DialogHeader>
-                      <DialogTitle>Projekt löschen</DialogTitle>
-                    </DialogHeader>
-                    <DialogDescription>
-                      Bist du sicher, dass du das Projekt &quot;{projectToDelete.title}&quot; löschen möchtest? Diese Aktion kann nicht rückgängig gemacht werden.
-                    </DialogDescription>
-                    <DialogFooter>
-                      <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
-                        Abbrechen
+                    {/* Action Buttons */}
+                    <div className="flex items-center space-x-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex items-center"
+                        onClick={() => handleShare(project.id)}
+                      >
+                        <Share2 className="w-4 h-4 mr-2" />
+                        Teilen
                       </Button>
-                      <Button variant="destructive" onClick={handleDeleteProject}>
-                        Löschen
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              )}
-            </div>
-          ) : (
-            <p className="text-center text-gray-500 dark:text-gray-400">Projekt wird geladen...</p>
-          )}
-        </main>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Project Image */}
+                {project.image && (
+                  <div className="mb-8 rounded-lg overflow-hidden bg-muted">
+                    <Image
+                      src={project.image}
+                      alt={project.title}
+                      width={1200}
+                      height={600}
+                      className="w-full object-cover"
+                      priority
+                    />
+                  </div>
+                )}
+
+                {/* Project Content */}
+                <div className="space-y-8">
+                  {/* Description */}
+                  <div className="prose dark:prose-invert prose-slate max-w-none">
+                    <div
+                      dangerouslySetInnerHTML={{ __html: project.description }}
+                      className="[&>h2]:text-2xl [&>h2]:font-bold [&>h2]:text-foreground [&>h2]:mt-8 [&>h2]:mb-4
+                                 [&>p]:text-muted-foreground [&>p]:leading-relaxed [&>p]:mb-4
+                                 [&>ul]:list-disc [&>ul]:pl-6 [&>ul]:mb-4 [&>ul]:text-muted-foreground
+                                 [&>li]:mb-2
+                                 [&_strong]:text-foreground [&_strong]:font-semibold
+                                 [&_em]:text-muted-foreground [&_em]:italic
+                                 [&>h2]:flex [&>h2]:items-center [&>h2]:gap-2
+                                 [&>*:first-child]:mt-0"
+                    />
+                  </div>
+
+                  {/* Tags */}
+                  <div className="space-y-3 pt-4 border-t">
+                    <h3 className="text-lg font-semibold text-foreground">Tags</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {project.tags.map((tag) => (
+                        <Badge
+                          key={tag.id}
+                          variant="secondary"
+                          className="px-3 py-1.5 text-sm bg-secondary/50 hover:bg-secondary/70 transition-colors"
+                        >
+                          {tag.name}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Project Link */}
+                  <div className="space-y-3 pt-4 border-t">
+                    <h3 className="text-lg font-semibold text-foreground">Projekt Link</h3>
+                    <a
+                      href={project.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center text-primary hover:text-primary/80 transition-colors"
+                    >
+                      <ExternalLink className="w-4 h-4 mr-2" />
+                      {project.link}
+                    </a>
+                  </div>
+
+                  {/* Interactions Section */}
+                  <div className="pt-8 mt-8 border-t">
+                    <div className="flex items-center justify-between mb-6">
+                      <h3 className="text-2xl font-bold text-foreground">
+                        Community Feedback
+                      </h3>
+                      <div className="flex items-center space-x-4">
+                        <Button
+                          variant={isLiked ? "default" : "outline"}
+                          size="sm"
+                          onClick={handleLike}
+                          className="flex items-center space-x-2"
+                        >
+                          <ThumbsUp className="w-4 h-4" />
+                          <span>{project.likes.length}</span>
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Comments Section */}
+                    <div className="space-y-6">
+                      {session && (
+                        <div className="space-y-4">
+                          <Textarea
+                            placeholder="Teile deine Gedanken..."
+                            value={newComment}
+                            onChange={(e) => setNewComment(e.target.value)}
+                            className="min-h-[100px] bg-background"
+                          />
+                          <div className="flex justify-end">
+                            <Button
+                              type="button"
+                              onClick={handleComment}
+                              disabled={!newComment.trim()}
+                            >
+                              Kommentieren
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="space-y-4">
+                        {project.comments.map((comment) => (
+                          <div
+                            key={comment.id}
+                            className="p-4 rounded-lg border bg-card"
+                          >
+                            <div className="flex items-center gap-2 mb-2">
+                              <Avatar className="h-8 w-8">
+                                <AvatarImage src={comment.author.image} />
+                                <AvatarFallback>{comment.author.name[0]}</AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <p className="font-medium text-foreground">{comment.author.name}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  {new Date(comment.createdAt).toLocaleDateString('de-DE', {
+                                    year: 'numeric',
+                                    month: 'long',
+                                    day: 'numeric'
+                                  })}
+                                </p>
+                              </div>
+                            </div>
+                            <p className="text-foreground">{comment.content}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
+
+      {/* Edit Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Projekt bearbeiten</DialogTitle>
+            <DialogDescription>
+              Bearbeite die Details deines Projekts. Klicke auf Speichern, wenn du fertig bist.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="title">Titel</Label>
+              <Input
+                id="title"
+                value={editProjectData.title}
+                onChange={(e) => setEditProjectData(prev => ({ ...prev, title: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label htmlFor="description">Beschreibung</Label>
+              <Textarea
+                id="description"
+                value={editProjectData.description}
+                onChange={(e) => setEditProjectData(prev => ({ ...prev, description: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label htmlFor="category">Kategorie</Label>
+              <Input
+                id="category"
+                value={editProjectData.category}
+                onChange={(e) => setEditProjectData(prev => ({ ...prev, category: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label htmlFor="tags">Tags (kommagetrennt)</Label>
+              <Input
+                id="tags"
+                value={editProjectData.tags.join(', ')}
+                onChange={(e) => setEditProjectData(prev => ({ ...prev, tags: e.target.value.split(',').map(tag => tag.trim()) }))}
+              />
+            </div>
+            <div>
+              <Label htmlFor="link">Link</Label>
+              <Input
+                id="link"
+                value={editProjectData.link}
+                onChange={(e) => setEditProjectData(prev => ({ ...prev, link: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label htmlFor="image">Bild</Label>
+              <Input
+                id="image"
+                type="file"
+                accept="image/*"
+                onChange={(e) => setEditProjectData(prev => ({ ...prev, image: e.target.files?.[0] || null }))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+              Abbrechen
+            </Button>
+            <Button onClick={handleSubmitEditProject}>
+              Speichern
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Projekt löschen</DialogTitle>
+            <DialogDescription>
+              Bist du sicher, dass du dieses Projekt löschen möchtest? Diese Aktion kann nicht rückgängig gemacht werden.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+              Abbrechen
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteProject}>
+              Löschen
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -4,12 +4,18 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useSession } from 'next-auth/react';
 import { toast } from 'react-toastify';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Image from 'next/image';
+import dynamic from 'next/dynamic';
+import 'react-quill/dist/quill.snow.css';
+
+const ReactQuill = dynamic(() => import('react-quill'), {
+  ssr: false,
+  loading: () => <p>Loading editor...</p>,
+});
 
 const CATEGORIES = [
   "Web Development",
@@ -19,6 +25,23 @@ const CATEGORIES = [
   "Data Science",
   "Game Development",
   "Other"
+];
+
+const modules = {
+  toolbar: [
+    [{ 'header': [1, 2, false] }],
+    ['bold', 'italic', 'underline', 'strike', 'blockquote'],
+    [{'list': 'ordered'}, {'list': 'bullet'}],
+    ['link', 'code-block'],
+    ['clean']
+  ],
+};
+
+const formats = [
+  'header',
+  'bold', 'italic', 'underline', 'strike', 'blockquote',
+  'list', 'bullet',
+  'link', 'code-block'
 ];
 
 export default function NewProjectPage() {
@@ -120,21 +143,25 @@ export default function NewProjectPage() {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="description">
-            Beschreibung * 
-            <span className="text-sm text-gray-500 ml-2">
-              ({description.length}/500 Zeichen)
-            </span>
-          </Label>
-          <Textarea
-            id="description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Beschreibe dein Projekt ausführlich..."
-            className={`min-h-[150px] ${errors.description ? 'border-red-500' : ''}`}
-            maxLength={500}
-          />
-          {errors.description && <p className="text-red-500 text-sm">{errors.description}</p>}
+          <Label htmlFor="description">Beschreibung *</Label>
+          <div className="min-h-[300px] relative mb-12">
+            <ReactQuill
+              theme="snow"
+              value={description}
+              onChange={setDescription}
+              modules={modules}
+              formats={formats}
+              className="h-[250px] bg-white dark:bg-gray-900"
+              placeholder="Beschreibe dein Projekt..."
+              style={{ 
+                height: '250px',
+                backgroundColor: 'white',
+              }}
+            />
+          </div>
+          {errors.description && (
+            <p className="text-red-500 text-sm">{errors.description}</p>
+          )}
         </div>
 
         <div className="space-y-2">

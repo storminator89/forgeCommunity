@@ -16,11 +16,36 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Search, Briefcase, ThumbsUp, MessageSquare, ExternalLink, Filter, Plus, Edit, Trash, Upload, ZoomIn } from 'lucide-react'; // Hinzufügen von ZoomIn
+import { Search, Briefcase, ThumbsUp, MessageSquare, ExternalLink, Filter, Plus, Edit, Trash, Upload, ZoomIn } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { useSession } from 'next-auth/react';
+import dynamic from 'next/dynamic';
+import 'react-quill/dist/quill.snow.css';
+import '@/styles/quill-dark.css';
+
+const ReactQuill = dynamic(() => import('react-quill'), {
+  ssr: false,
+  loading: () => <p>Loading editor...</p>,
+});
+
+const modules = {
+  toolbar: [
+    [{ 'header': [1, 2, false] }],
+    ['bold', 'italic', 'underline', 'strike', 'blockquote'],
+    [{'list': 'ordered'}, {'list': 'bullet'}],
+    ['link', 'code-block'],
+    ['clean']
+  ],
+};
+
+const formats = [
+  'header',
+  'bold', 'italic', 'underline', 'strike', 'blockquote',
+  'list', 'bullet',
+  'link', 'code-block'
+];
 
 interface Tag {
   id: string;
@@ -65,6 +90,30 @@ interface Project {
   comments: ProjectComment[];
 }
 
+const defaultDescription = `<h2>🎯 Projektziel</h2>
+<p>Beschreibe kurz das Hauptziel deines Projekts...</p>
+
+<h2>💡 Besondere Features</h2>
+<ul>
+<li>Feature 1: ...</li>
+<li>Feature 2: ...</li>
+<li>Feature 3: ...</li>
+</ul>
+
+<h2>🛠️ Technologie-Stack</h2>
+<ul>
+<li>Frontend: ...</li>
+<li>Backend: ...</li>
+<li>Datenbank: ...</li>
+<li>Weitere Tools: ...</li>
+</ul>
+
+<h2>🌟 Was macht dein Projekt besonders?</h2>
+<p>Erkläre, was dein Projekt von anderen abhebt...</p>
+
+<h2>🔜 Nächste Schritte</h2>
+<p>Welche Features oder Verbesserungen sind als nächstes geplant?</p>`;
+
 export default function ProjectShowcase() {
   const { data: session } = useSession();
   const router = useRouter(); // Initialisieren des Routers
@@ -87,7 +136,7 @@ export default function ProjectShowcase() {
     image: File | null,
   }>({
     title: '',
-    description: '',
+    description: defaultDescription,
     category: '',
     tags: [],
     link: '',
@@ -109,6 +158,9 @@ export default function ProjectShowcase() {
     image: null,
   });
   const [commentContent, setCommentContent] = useState('');
+  const [currentTag, setCurrentTag] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   // Fetch all projects
   const fetchProjects = async () => {
@@ -149,6 +201,8 @@ export default function ProjectShowcase() {
       return;
     }
 
+    setIsSubmitting(true);
+
     try {
       const formData = new FormData();
       formData.append('title', newProject.title);
@@ -175,7 +229,7 @@ export default function ProjectShowcase() {
       setIsSubmitDialogOpen(false);
       setNewProject({
         title: '',
-        description: '',
+        description: defaultDescription,
         category: '',
         tags: [],
         link: '',
@@ -184,6 +238,8 @@ export default function ProjectShowcase() {
     } catch (error: any) {
       console.error('Error submitting project:', error);
       alert(error.message || 'Fehler beim Einreichen des Projekts.');
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -368,6 +424,40 @@ export default function ProjectShowcase() {
     }
   }
 
+  const handleAddTag = () => {
+    if (!currentTag.trim()) return;
+    setNewProject({ ...newProject, tags: [...newProject.tags, currentTag] });
+    setCurrentTag('');
+  }
+
+  const handleDeleteClick = (e: React.MouseEvent, project: Project) => {
+    e.preventDefault(); // Prevent navigation
+    e.stopPropagation(); // Prevent event bubbling
+    setProjectToDelete(project);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!projectToDelete) return;
+
+    try {
+      const res = await fetch(`/api/projects/${projectToDelete.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!res.ok) {
+        throw new Error('Fehler beim Löschen des Projekts');
+      }
+
+      setProjects(projects.filter(p => p.id !== projectToDelete.id));
+      setIsDeleteDialogOpen(false);
+      setProjectToDelete(null);
+    } catch (error) {
+      console.error('Error deleting project:', error);
+      alert('Fehler beim Löschen des Projekts');
+    }
+  };
+
   return (
     <div className="flex h-screen overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
       <Sidebar />
@@ -409,7 +499,34 @@ export default function ProjectShowcase() {
                   ))}
                 </TabsList>
               </Tabs>
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-2">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setViewMode('grid')}
+                    className={viewMode === 'grid' ? 'bg-primary/10' : ''}
+                  >
+                    <div className="grid grid-cols-2 gap-0.5">
+                      <div className="w-1.5 h-1.5 rounded-sm bg-current" />
+                      <div className="w-1.5 h-1.5 rounded-sm bg-current" />
+                      <div className="w-1.5 h-1.5 rounded-sm bg-current" />
+                      <div className="w-1.5 h-1.5 rounded-sm bg-current" />
+                    </div>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setViewMode('list')}
+                    className={viewMode === 'list' ? 'bg-primary/10' : ''}
+                  >
+                    <div className="flex flex-col gap-0.5">
+                      <div className="w-4 h-0.5 rounded-sm bg-current" />
+                      <div className="w-4 h-0.5 rounded-sm bg-current" />
+                      <div className="w-4 h-0.5 rounded-sm bg-current" />
+                    </div>
+                  </Button>
+                </div>
                 <Filter className="h-5 w-5 text-gray-500" />
                 <Select value={sortBy} onValueChange={setSortBy}>
                   <SelectTrigger className="w-[180px]">
@@ -426,121 +543,259 @@ export default function ProjectShowcase() {
           </div>
 
           {session && (
-            <Button onClick={() => setIsSubmitDialogOpen(true)} className="mb-6 flex items-center">
+            <Button 
+              onClick={() => setIsSubmitDialogOpen(true)} 
+              className="mb-6 flex items-center"
+            >
               <Plus className="mr-2 h-4 w-4" /> Neues Projekt einreichen
             </Button>
           )}
           <AnimatePresence>
-            <motion.div
-              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-            >
-              {filteredProjects.map((project) => (
-                <motion.div
-                  key={project.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 0.3 }}
-                  className="group"
-                >
-                  <Link href={`/projects/${project.id}`}>
-                    <Card className="h-full transform transition-all duration-300 hover:scale-[1.02] hover:shadow-xl bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
-                      <CardHeader className="relative p-0 overflow-hidden rounded-t-xl">
-                        {project.imageUrl ? (
-                          <div className="relative h-48 overflow-hidden">
-                            <img
-                              src={project.imageUrl}
-                              alt={`${project.title} Vorschaubild`}
-                              className="w-full h-full object-cover transform transition-transform duration-500 group-hover:scale-110"
-                            />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                          </div>
-                        ) : (
-                          <div
-                            className="h-48 transform transition-transform duration-500 group-hover:scale-110"
-                            style={{
-                              background: `linear-gradient(135deg, ${project.gradientFrom}, ${project.gradientTo})`,
-                            }}
-                          />
-                        )}
-                        <div className="absolute top-2 right-2 flex gap-2">
-                          {project.tags.map(tag => (
-                            <Badge
-                              key={tag.id}
-                              variant="secondary"
-                              className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm shadow-sm"
-                            >
-                              {tag.name}
-                            </Badge>
-                          ))}
-                        </div>
-                      </CardHeader>
-
-                      <CardContent className="p-5 space-y-4">
-                        <div>
-                          <CardTitle className="text-xl font-bold mb-2 line-clamp-1">
-                            {project.title}
-                          </CardTitle>
-                          <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2">
-                            {project.description}
-                          </p>
-                        </div>
-
-                        <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
-                          <div className="flex items-center space-x-3">
-                            <Avatar className="ring-2 ring-white dark:ring-gray-800">
-                              <AvatarImage src={project.author.image || undefined} />
-                              <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-500">
-                                {project.author.name?.charAt(0)}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="space-y-1">
-                              <p className="text-sm font-medium leading-none">
-                                {project.author.name}
-                              </p>
-                              <p className="text-xs text-gray-500">
-                                {new Date(project.createdAt).toLocaleDateString()}
-                              </p>
+            {viewMode === 'grid' ? (
+              <motion.div
+                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+              >
+                {filteredProjects.map((project) => (
+                  <motion.div
+                    key={project.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.3 }}
+                    className="group relative"
+                  >
+                    <Link href={`/projects/${project.id}`}>
+                      <Card className="h-full transform transition-all duration-300 hover:scale-[1.02] hover:shadow-xl bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
+                        <CardHeader className="relative p-0 overflow-hidden rounded-t-xl">
+                          {project.imageUrl ? (
+                            <div className="relative h-48 overflow-hidden">
+                              <img
+                                src={project.imageUrl}
+                                alt={`${project.title} Vorschaubild`}
+                                className="w-full h-full object-cover transform transition-transform duration-500 group-hover:scale-110"
+                              />
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                             </div>
-                          </div>
-
-                          <div className="flex items-center space-x-4">
-                            <button
-                              className={`flex items-center space-x-1 transition-colors ${
-                                project.likes.some(like => like.userId === session?.user.id)
-                                  ? 'text-blue-500'
-                                  : 'text-gray-500 hover:text-blue-500'
-                              }`}
-                              onClick={(e) => {
-                                e.stopPropagation(); // Verhindert das Navigieren zur Detailseite
-                                const userLike = project.likes.find(like => like.userId === session?.user.id);
-                                if (userLike) {
-                                  handleUnlike(project.id);
-                                } else {
-                                  handleLike(project.id);
-                                }
+                          ) : (
+                            <div
+                              className="h-48 transform transition-transform duration-500 group-hover:scale-110"
+                              style={{
+                                background: `linear-gradient(135deg, ${project.gradientFrom}, ${project.gradientTo})`,
                               }}
-                            >
-                              <ThumbsUp className="h-4 w-4" />
-                              <span>{project.likes.length}</span>
-                            </button>
-                            
-                            <div className="flex items-center space-x-1 text-gray-500">
-                              <MessageSquare className="h-4 w-4" />
-                              <span>{project.comments.length}</span>
+                            />
+                          )}
+                          <div className="absolute top-2 right-2 flex gap-2">
+                            {project.tags.map(tag => (
+                              <Badge
+                                key={tag.id}
+                                variant="secondary"
+                                className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm shadow-sm"
+                              >
+                                {tag.name}
+                              </Badge>
+                            ))}
+                          </div>
+                        </CardHeader>
+
+                        <CardContent className="p-5 space-y-4">
+                          <div>
+                            <CardTitle className="text-xl font-bold mb-2 line-clamp-1">
+                              {project.title}
+                            </CardTitle>
+                            <div 
+                              className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2 prose dark:prose-invert"
+                              dangerouslySetInnerHTML={{ __html: project.description }}
+                            />
+                          </div>
+
+                          <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
+                            <div className="flex items-center space-x-3">
+                              <Avatar className="ring-2 ring-white dark:ring-gray-800">
+                                <AvatarImage src={project.author.image || undefined} />
+                                <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-500">
+                                  {project.author.name?.charAt(0)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="space-y-1">
+                                <p className="text-sm font-medium leading-none">
+                                  {project.author.name}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  {new Date(project.createdAt).toLocaleDateString()}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center space-x-4">
+                              <button
+                                className={`flex items-center space-x-1 transition-colors ${
+                                  project.likes.some(like => like.userId === session?.user.id)
+                                    ? 'text-blue-500'
+                                    : 'text-gray-500 hover:text-blue-500'
+                                }`}
+                                onClick={(e) => {
+                                  e.stopPropagation(); // Verhindert das Navigieren zur Detailseite
+                                  const userLike = project.likes.find(like => like.userId === session?.user.id);
+                                  if (userLike) {
+                                    handleUnlike(project.id);
+                                  } else {
+                                    handleLike(project.id);
+                                  }
+                                }}
+                              >
+                                <ThumbsUp className="h-4 w-4" />
+                                <span>{project.likes.length}</span>
+                              </button>
+                              
+                              <div className="flex items-center space-x-1 text-gray-500">
+                                <MessageSquare className="h-4 w-4" />
+                                <span>{project.comments.length}</span>
+                              </div>
+                              {session?.user?.id === project.author.id && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="text-red-500 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/20"
+                                  onClick={(e) => handleDeleteClick(e, project)}
+                                >
+                                  <Trash className="h-4 w-4" />
+                                </Button>
+                              )}
                             </div>
                           </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </Link>
-                </motion.div>
-              ))}
-            </motion.div>
+                        </CardContent>
+                      </Card>
+                    </Link>
+                  </motion.div>
+                ))}
+              </motion.div>
+            ) : (
+              <motion.div
+                className="space-y-4"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+              >
+                {filteredProjects.map((project) => (
+                  <motion.div
+                    key={project.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <Link href={`/projects/${project.id}`}>
+                      <Card className="transform transition-all duration-300 hover:shadow-lg bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
+                        <CardContent className="p-4">
+                          <div className="flex items-start space-x-4">
+                            <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0">
+                              {project.imageUrl ? (
+                                <img
+                                  src={project.imageUrl}
+                                  alt={project.title}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div
+                                  className="w-full h-full"
+                                  style={{
+                                    background: `linear-gradient(135deg, ${project.gradientFrom}, ${project.gradientTo})`,
+                                  }}
+                                />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between">
+                                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                                  {project.title}
+                                </h3>
+                                <div className="flex items-center space-x-2">
+                                  <div className="flex items-center space-x-4">
+                                    <span className="flex items-center space-x-1 text-gray-500">
+                                      <ThumbsUp className="h-4 w-4" />
+                                      <span>{project.likes.length}</span>
+                                    </span>
+                                    <span className="flex items-center space-x-1 text-gray-500">
+                                      <MessageSquare className="h-4 w-4" />
+                                      <span>{project.comments.length}</span>
+                                    </span>
+                                  </div>
+                                  {session?.user?.id === project.author.id && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="text-red-500 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/20"
+                                      onClick={(e) => handleDeleteClick(e, project)}
+                                    >
+                                      <Trash className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                              <div 
+                                className="mt-1 text-sm text-gray-600 dark:text-gray-300 line-clamp-2 prose dark:prose-invert"
+                                dangerouslySetInnerHTML={{ __html: project.description }}
+                              />
+                              <div className="mt-2 flex items-center justify-between">
+                                <div className="flex items-center space-x-2">
+                                  <Avatar className="h-6 w-6">
+                                    <AvatarImage src={project.author.image || undefined} />
+                                    <AvatarFallback>
+                                      {project.author.name?.charAt(0)}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <span className="text-sm text-gray-500">
+                                    {project.author.name}
+                                  </span>
+                                </div>
+                                <div className="flex gap-2">
+                                  {project.tags.map(tag => (
+                                    <Badge
+                                      key={tag.id}
+                                      variant="secondary"
+                                      className="text-xs"
+                                    >
+                                      {tag.name}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </Link>
+                  </motion.div>
+                ))}
+              </motion.div>
+            )}
           </AnimatePresence>
+
+          {/* Delete Confirmation Dialog */}
+          <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Projekt löschen</DialogTitle>
+                <p className="text-sm text-muted-foreground">
+                  Bist du sicher, dass du dieses Projekt löschen möchtest? Diese Aktion kann nicht rückgängig gemacht werden.
+                </p>
+              </DialogHeader>
+              <div className="flex justify-end space-x-2">
+                <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+                  Abbrechen
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleDeleteConfirm}
+                >
+                  Löschen
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </main>
       </div>
 
@@ -574,7 +829,11 @@ export default function ProjectShowcase() {
             <p className="text-gray-700 dark:text-gray-300">{selectedProject?.description}</p>
             <div className="flex flex-wrap gap-2">
               {selectedProject?.tags.map((tag) => (
-                <Badge key={tag.id} variant="secondary" className="capitalize">
+                <Badge
+                  key={tag.id}
+                  variant="secondary"
+                  className="capitalize"
+                >
                   {tag.name}
                 </Badge>
               ))}
@@ -644,108 +903,194 @@ export default function ProjectShowcase() {
       {/* Neues Projekt Einreichen Dialog */}
       {session && (
         <Dialog open={isSubmitDialogOpen} onOpenChange={setIsSubmitDialogOpen}>
-          <DialogContent className="sm:max-w-[625px]">
-            <DialogHeader>
-              <DialogTitle>Neues Projekt einreichen</DialogTitle>
+          <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto p-6">
+            <DialogHeader className="space-y-3 pb-4 border-b">
+              <DialogTitle className="text-2xl font-bold">Neues Projekt einreichen</DialogTitle>
+              <p className="text-muted-foreground text-sm">
+                Teile dein Projekt mit der Community. Fülle alle erforderlichen Felder aus und stelle sicher, 
+                dass deine Projektbeschreibung aussagekräftig ist.
+              </p>
             </DialogHeader>
-            <form onSubmit={(e) => { e.preventDefault(); handleSubmitNewProject() }} encType="multipart/form-data">
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="title" className="text-right">
-                    Titel
+
+            <form onSubmit={(e) => { e.preventDefault(); handleSubmitNewProject() }} className="space-y-8 pt-4">
+              <div className="space-y-6">
+                {/* Titel Section */}
+                <div className="space-y-2">
+                  <Label htmlFor="title" className="text-base font-semibold">
+                    Titel <span className="text-red-500">*</span>
                   </Label>
                   <Input
                     id="title"
                     value={newProject.title}
                     onChange={(e) => setNewProject({ ...newProject, title: e.target.value })}
-                    className="col-span-3"
-                    placeholder="Projekt Titel"
+                    placeholder="Ein aussagekräftiger Titel für dein Projekt"
+                    className="h-11"
                     required
                   />
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="description" className="text-right">
-                    Beschreibung
+
+                {/* Description Section */}
+                <div className="space-y-2">
+                  <Label htmlFor="description" className="text-base font-semibold">
+                    Beschreibung <span className="text-red-500">*</span>
                   </Label>
-                  <Textarea
-                    id="description"
-                    value={newProject.description}
-                    onChange={(e) => setNewProject({ ...newProject, description: e.target.value })}
-                    className="col-span-3"
-                    placeholder="Projekt Beschreibung"
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="category" className="text-right">
-                    Kategorie
-                  </Label>
-                  <Input
-                    id="category"
-                    value={newProject.category}
-                    onChange={(e) => setNewProject({ ...newProject, category: e.target.value })}
-                    className="col-span-3"
-                    placeholder="Projekt Kategorie"
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="tags" className="text-right">
-                    Tags
-                  </Label>
-                  <Input
-                    id="tags"
-                    value={newProject.tags.join(', ')}
-                    onChange={(e) => setNewProject({ ...newProject, tags: e.target.value.split(',').map(tag => tag.trim()) })}
-                    className="col-span-3"
-                    placeholder="Trennen Sie Tags mit Kommas"
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="link" className="text-right">
-                    Projekt-Link
-                  </Label>
-                  <Input
-                    id="link"
-                    value={newProject.link}
-                    onChange={(e) => setNewProject({ ...newProject, link: e.target.value })}
-                    className="col-span-3"
-                    placeholder="https://github.com/..."
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="image" className="text-right">
-                    Vorschaubild
-                  </Label>
-                  <div className="col-span-3">
-                    <label htmlFor="image-upload" className="flex items-center justify-center w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm bg-white dark:bg-gray-700 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none">
-                      <Upload className="mr-2 h-5 w-5 text-gray-400" />
-                      {newProject.image ? newProject.image.name : 'Bild auswählen'}
-                    </label>
-                    <input
-                      type="file"
-                      id="image-upload"
-                      accept="image/*"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0]
-                        if (file) {
-                          setNewProject({ ...newProject, image: file })
-                        }
+                  <div className="min-h-[250px] relative border rounded-md">
+                    <ReactQuill
+                      theme="snow"
+                      value={newProject.description}
+                      onChange={(content) => setNewProject({ ...newProject, description: content })}
+                      modules={modules}
+                      formats={formats}
+                      className="h-[200px] bg-white dark:bg-gray-900 rounded-md"
+                      placeholder="Beschreibe dein Projekt ausführlich..."
+                      style={{ 
+                        height: '200px',
+                        backgroundColor: 'white',
                       }}
-                      className="hidden"
+                    />
+                  </div>
+                </div>
+
+                {/* Category and Tags Row */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Category Section */}
+                  <div className="space-y-2">
+                    <Label htmlFor="category" className="text-base font-semibold">
+                      Kategorie <span className="text-red-500">*</span>
+                    </Label>
+                    <Select 
+                      value={newProject.category} 
+                      onValueChange={(value) => setNewProject({ ...newProject, category: value })}
+                    >
+                      <SelectTrigger className="h-11">
+                        <SelectValue placeholder="Wähle eine Kategorie" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Webentwicklung">Webentwicklung</SelectItem>
+                        <SelectItem value="Mobile App Entwicklung">Mobile App Entwicklung</SelectItem>
+                        <SelectItem value="Künstliche Intelligenz">Künstliche Intelligenz</SelectItem>
+                        <SelectItem value="Machine Learning">Machine Learning</SelectItem>
+                        <SelectItem value="Data Science">Data Science</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Tags Section */}
+                  <div className="space-y-2">
+                    <Label htmlFor="tags" className="text-base font-semibold">
+                      Tags
+                    </Label>
+                    <div className="space-y-3">
+                      <div className="flex gap-2">
+                        <Input
+                          id="tags"
+                          value={currentTag}
+                          onChange={(e) => setCurrentTag(e.target.value)}
+                          placeholder="Tag eingeben und Enter drücken"
+                          className="h-11"
+                          onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddTag())}
+                        />
+                        <Button 
+                          type="button" 
+                          onClick={handleAddTag} 
+                          variant="outline"
+                          className="h-11 px-6"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {newProject.tags.map((tag) => (
+                          <Badge
+                            key={tag}
+                            variant="secondary"
+                            className="px-3 py-1 text-sm flex items-center gap-1 bg-secondary/30"
+                          >
+                            {tag}
+                            <button
+                              type="button"
+                              onClick={() => setNewProject({
+                                ...newProject,
+                                tags: newProject.tags.filter(t => t !== tag)
+                              })}
+                              className="hover:text-red-500 transition-colors"
+                            >
+                              ×
+                            </button>
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Link and Image Row */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Link Section */}
+                  <div className="space-y-2">
+                    <Label htmlFor="link" className="text-base font-semibold">
+                      Projekt-Link <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      id="link"
+                      value={newProject.link}
+                      onChange={(e) => setNewProject({ ...newProject, link: e.target.value })}
+                      placeholder="https://..."
+                      className="h-11"
                       required
                     />
+                  </div>
+
+                  {/* Image Section */}
+                  <div className="space-y-2">
+                    <Label htmlFor="image" className="text-base font-semibold">
+                      Vorschaubild
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        id="image"
+                        type="file"
+                        onChange={(e) => setNewProject({ 
+                          ...newProject, 
+                          image: e.target.files ? e.target.files[0] : null 
+                        })}
+                        accept="image/*"
+                        className="h-11 cursor-pointer file:cursor-pointer file:mr-4"
+                      />
+                    </div>
                     {newProject.image && (
-                      <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                        Gewähltes Bild: {newProject.image.name}
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Ausgewählt: {newProject.image.name}
                       </p>
                     )}
                   </div>
                 </div>
               </div>
-              <div className="flex justify-end">
-                <Button type="submit">Projekt einreichen</Button>
+
+              {/* Form Actions */}
+              <div className="flex justify-end gap-3 pt-4 border-t">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setIsSubmitDialogOpen(false)}
+                  className="h-11 px-6"
+                >
+                  Abbrechen
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={isSubmitting}
+                  className="h-11 px-8"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <span className="mr-2">Wird eingereicht...</span>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    </>
+                  ) : (
+                    'Projekt einreichen'
+                  )}
+                </Button>
               </div>
             </form>
           </DialogContent>
