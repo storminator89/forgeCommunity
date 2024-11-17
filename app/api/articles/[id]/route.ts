@@ -81,7 +81,7 @@ export async function PUT(
     // Ansonsten, wenn ein neues Bild hochgeladen wurde, speichere es
     else if (featuredImage) {
       const bytes = await featuredImage.arrayBuffer();
-      const buffer = Buffer.from(bytes);
+      const buffer = new Uint8Array(bytes);
 
       const fileName = `${Date.now()}_${featuredImage.name}`;
       const filePath = path.join(process.cwd(), 'public', 'images', 'uploads', fileName);
