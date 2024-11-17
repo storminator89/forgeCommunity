@@ -18,6 +18,7 @@ import {
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { motion, AnimatePresence } from 'framer-motion';
+import DOMPurify from 'dompurify';
 
 interface Activity {
   type: 'post' | 'comment' | 'project' | 'course';
@@ -119,6 +120,13 @@ export function ActivityFeed({ userId }: ActivityFeedProps) {
     }
   };
 
+  const sanitizeHtml = (html: string) => {
+    return DOMPurify.sanitize(html, {
+      ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'a'],
+      ALLOWED_ATTR: ['href', 'target'],
+    });
+  };
+
   const renderActivityContent = (activity: Activity) => {
     const author = activity.author || activity.instructor;
 
@@ -153,7 +161,7 @@ export function ActivityFeed({ userId }: ActivityFeedProps) {
             <div>
               <h4 className="font-medium">{activity.title}</h4>
               <p className="text-gray-600 dark:text-gray-300 line-clamp-2">
-                {activity.content}
+                <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(activity.content || '') }} />
               </p>
               {activity.stats && (
                 <div className="flex space-x-4 mt-2 text-sm text-gray-500">
@@ -176,7 +184,7 @@ export function ActivityFeed({ userId }: ActivityFeedProps) {
                 Hat auf <span className="font-medium">{activity.postTitle}</span> kommentiert:
               </p>
               <p className="text-gray-600 dark:text-gray-300 mt-1">
-                {activity.content}
+                <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(activity.content || '') }} />
               </p>
             </div>
           )}
@@ -185,7 +193,7 @@ export function ActivityFeed({ userId }: ActivityFeedProps) {
             <div>
               <h4 className="font-medium">{activity.title}</h4>
               <p className="text-gray-600 dark:text-gray-300 line-clamp-2">
-                {activity.description}
+                <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(activity.description || '') }} />
               </p>
               {activity.stats && (
                 <div className="flex space-x-4 mt-2 text-sm text-gray-500">
@@ -206,7 +214,7 @@ export function ActivityFeed({ userId }: ActivityFeedProps) {
             <div>
               <h4 className="font-medium">{activity.title}</h4>
               <p className="text-gray-600 dark:text-gray-300 line-clamp-2">
-                {activity.description}
+                <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(activity.description || '') }} />
               </p>
               {activity.stats && (
                 <div className="flex space-x-4 mt-2 text-sm text-gray-500">

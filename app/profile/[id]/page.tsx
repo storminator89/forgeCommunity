@@ -16,7 +16,6 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { ProfileEditor } from '@/components/profile/ProfileEditor';
 import { ActivityFeed } from '@/components/profile/ActivityFeed';
 import { ProjectsList } from '@/components/profile/ProjectsList';
-import { CoursesList } from '@/components/profile/CoursesList';
 import { FollowButton } from '@/components/profile/FollowButton';
 import { FollowersList } from '@/components/profile/FollowersList';
 import { toast } from 'react-toastify';
@@ -36,8 +35,6 @@ import {
   MessageSquare,
   Plus,
   Settings,
-  BookOpen,
-  GraduationCap,
   Heart,
   Star,
   CheckCircle,
@@ -96,16 +93,6 @@ export default function ProfilePage() {
       count: profile?.stats.posts || 0,
       label: 'Aktivität',
       icon: <MessageSquare className="h-4 w-4" />,
-    },
-    courses: {
-      count: profile?.stats.courses || 0,
-      label: profile?.role === 'INSTRUCTOR' ? 'Meine Kurse' : 'Eingeschriebene Kurse',
-      icon: <BookOpen className="h-4 w-4" />,
-    },
-    teaching: {
-      count: profile?.role === 'INSTRUCTOR' ? (profile?.stats.courses || 0) : 0,
-      label: 'Unterricht',
-      icon: <GraduationCap className="h-4 w-4" />,
     },
     projects: {
       count: profile?.stats.projects || 0,
@@ -365,7 +352,7 @@ export default function ProfilePage() {
                     </div>
                     <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg text-center">
                       <div className="text-2xl font-bold">{profile.endorsements}</div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">Endorsements</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Empfehlungen</p>
                     </div>
                     <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg text-center">
                       <div className="text-2xl font-bold">{profile.stats.projects}</div>
@@ -394,7 +381,6 @@ export default function ProfilePage() {
                       key={key}
                       value={key}
                       className="flex items-center space-x-2"
-                      disabled={key === 'teaching' && profile.role !== 'INSTRUCTOR'}
                     >
                       {icon}
                       <span>{label}</span>
@@ -441,7 +427,7 @@ export default function ProfilePage() {
                                   <span className="font-medium">{skill.name}</span>
                                   <div className="flex items-center space-x-2">
                                     <span className="text-sm text-gray-500">
-                                      {skill.endorsements} Endorsements
+                                      {skill.endorsements} Empfehlungen
                                     </span>
                                     {!profile.isCurrentUser && (
                                       <Button
@@ -473,7 +459,7 @@ export default function ProfilePage() {
                     {profile.role === 'INSTRUCTOR' && (
                       <Card className="md:col-span-2">
                         <CardHeader>
-                          <CardTitle>Lehrtätigkeit</CardTitle>
+                          <CardTitle>Expertise</CardTitle>
                         </CardHeader>
                         <CardContent>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -492,7 +478,7 @@ export default function ProfilePage() {
                               </div>
                             </div>
                             <div>
-                              <h4 className="font-medium mb-2">Expertise</h4>
+                              <h4 className="font-medium mb-2">Fachgebiete</h4>
                               <div className="flex flex-wrap gap-2">
                                 {profile.expertise?.map((exp) => (
                                   <Badge key={exp} variant="secondary">
@@ -500,33 +486,11 @@ export default function ProfilePage() {
                                   </Badge>
                                 )) || (
                                   <p className="text-gray-400 italic">
-                                    Keine Expertise-Bereiche angegeben
+                                    Keine Fachgebiete angegeben
                                   </p>
                                 )}
                               </div>
                             </div>
-                            {profile.averageRating && (
-                              <div className="md:col-span-2">
-                                <h4 className="font-medium mb-2">Bewertung als Instructor</h4>
-                                <div className="flex items-center space-x-2">
-                                  <div className="flex">
-                                    {[1, 2, 3, 4, 5].map((star) => (
-                                      <Star
-                                        key={star}
-                                        className={`h-5 w-5 ${
-                                          star <= profile.averageRating!
-                                            ? 'text-yellow-400 fill-current'
-                                            : 'text-gray-300'
-                                        }`}
-                                      />
-                                    ))}
-                                  </div>
-                                  <span className="text-sm text-gray-500">
-                                    ({profile.averageRating.toFixed(1)})
-                                  </span>
-                                </div>
-                              </div>
-                            )}
                           </div>
                         </CardContent>
                       </Card>
@@ -537,24 +501,6 @@ export default function ProfilePage() {
                 <TabsContent value="activity">
                   <ActivityFeed userId={profile.id} />
                 </TabsContent>
-
-                <TabsContent value="courses">
-                  <CoursesList
-                    userId={profile.id}
-                    isInstructor={profile.role === 'INSTRUCTOR'}
-                    showEnrolled={!profile.isCurrentUser || profile.role !== 'INSTRUCTOR'}
-                  />
-                </TabsContent>
-
-                {profile.role === 'INSTRUCTOR' && (
-                  <TabsContent value="teaching">
-                    <CoursesList
-                      userId={profile.id}
-                      isInstructor={true}
-                      showEnrolled={false}
-                    />
-                  </TabsContent>
-                )}
 
                 <TabsContent value="projects">
                   <ProjectsList
