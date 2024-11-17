@@ -221,7 +221,7 @@ export function CourseContentsSidebar({
         },
         body: JSON.stringify({
           title: newMainContentTitle,
-          type: 'MAIN',
+          type: 'TEXT',
         }),
       });
 
@@ -232,6 +232,7 @@ export function CourseContentsSidebar({
       const newContent = await response.json();
       setMainContents(prev => [...prev, newContent]);
       setNewMainContentTitle("");
+      setIsDialogOpen(false); // Close the dialog after successful submission
     } catch (error) {
       console.error('Error creating main content:', error);
     } finally {

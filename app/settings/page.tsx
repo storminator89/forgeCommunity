@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Bell, Lock, Globe, CheckCircle, XCircle, Code, Design, Database, Languages, Edit, Trash } from 'lucide-react'
+import { Bell, Lock, Globe, CheckCircle, XCircle, Code, Design, Database, Languages, Edit, Trash, Award, ExternalLink, Linkedin, Eye, User, Download } from 'lucide-react'
 import { ImageUpload } from "@/components/ImageUpload"
 import axios from 'axios'
 import { toast } from 'react-toastify'
@@ -31,6 +31,15 @@ interface UserSkill {
   level: number
   endorsements: number
   skill: Skill
+}
+
+interface Certificate {
+  id: string
+  courseId: string
+  courseName: string
+  issuedAt: string
+  userId: string
+  userName: string
 }
 
 const SKILL_LEVELS = [
@@ -69,6 +78,9 @@ export default function SettingsPage() {
   const [newSkillLevel, setNewSkillLevel] = useState<number>(0)
   const [newSkillName, setNewSkillName] = useState<string>('')
 
+  // Zertifikate-Verwaltung
+  const [certificates, setCertificates] = useState<Certificate[]>([])
+
   // Modale Zustände
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [editSkill, setEditSkill] = useState<UserSkill | null>(null)
@@ -79,16 +91,18 @@ export default function SettingsPage() {
     const fetchData = async () => {
       setIsLoading(true)
       try {
-        const [skillsResponse, userSkillsResponse, userResponse] = await Promise.all([
+        const [skillsResponse, userSkillsResponse, userResponse, certificatesResponse] = await Promise.all([
           axios.get('/api/skills'),
           axios.get('/api/user/skills'),
-          axios.get('/api/user/profile')
+          axios.get('/api/user/profile'),
+          axios.get('/api/user/certificates')
         ])
         setAvailableSkills(skillsResponse.data)
         setUserSkills(userSkillsResponse.data)
         setUserImage(userResponse.data.image)
         setName(userResponse.data.name || '')
         setEmail(userResponse.data.email || '')
+        setCertificates(certificatesResponse.data)
       } catch (error) {
         console.error("Fehler beim Abrufen der Daten:", error)
         toast.error("Beim Laden der Daten ist ein Fehler aufgetreten.")
@@ -234,16 +248,20 @@ export default function SettingsPage() {
             <Tabs defaultValue="account" className="w-full">
               <TabsList className="flex space-x-1 rounded-md bg-gray-200 p-1 dark:bg-gray-700 mb-6">
                 <TabsTrigger value="account" className="w-full">
-                  Konto
+                  <User className="w-4 h-4 mr-2" />
+                  Account
                 </TabsTrigger>
                 <TabsTrigger value="notifications" className="w-full">
+                  <Bell className="w-4 h-4 mr-2" />
                   Benachrichtigungen
                 </TabsTrigger>
-                <TabsTrigger value="privacy" className="w-full">
-                  Privatsphäre
-                </TabsTrigger>
                 <TabsTrigger value="skills" className="w-full">
+                  <Code className="w-4 h-4 mr-2" />
                   Fähigkeiten
+                </TabsTrigger>
+                <TabsTrigger value="certificates" className="w-full">
+                  <Award className="w-4 h-4 mr-2" />
+                  Zertifikate
                 </TabsTrigger>
               </TabsList>
 
@@ -477,6 +495,100 @@ export default function SettingsPage() {
                     </CardContent>
                   </Card>
                 </div>
+              </TabsContent>
+
+              {/* Zertifikate-Tab */}
+              <TabsContent value="certificates" className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center space-x-2">
+                      <Award className="w-6 h-6 text-primary" />
+                      <CardTitle>Meine Zertifikate</CardTitle>
+                    </div>
+                    <CardDescription>
+                      Hier findest du eine Übersicht über alle deine erworbenen Zertifikate.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {certificates.length === 0 ? (
+                      <div className="text-center py-6 text-gray-500">
+                        <Award className="w-12 h-12 mx-auto mb-2 text-gray-400" />
+                        Du hast noch keine Zertifikate erworben.
+                      </div>
+                    ) : (
+                      <div className="grid gap-4">
+                        {certificates.map((cert) => (
+                          <div
+                            key={cert.id}
+                            className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50"
+                          >
+                            <div className="flex items-start space-x-4">
+                              <Award className="w-8 h-8 mt-1 text-primary" />
+                              <div>
+                                <h3 className="font-medium">{cert.courseName}</h3>
+                                <p className="text-sm text-gray-500">
+                                  Ausgestellt am: {new Date(cert.issuedAt).toLocaleDateString('de-DE')}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => window.open(`/verify-certificate/${cert.id}`, '_blank')}
+                              >
+                                <Eye className="w-4 h-4 mr-2" />
+                                Anzeigen
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={async () => {
+                                  try {
+                                    const response = await fetch(`/api/courses/${cert.courseId}/certificate`, {
+                                      method: 'POST',
+                                    });
+                                    
+                                    if (!response.ok) {
+                                      throw new Error('Failed to generate certificate');
+                                    }
+                                    
+                                    const blob = await response.blob();
+                                    const url = window.URL.createObjectURL(blob);
+                                    const a = document.createElement('a');
+                                    a.href = url;
+                                    a.download = `${cert.courseName.replace(/\s+/g, '_')}_Certificate.pdf`;
+                                    document.body.appendChild(a);
+                                    a.click();
+                                    window.URL.revokeObjectURL(url);
+                                  } catch (error) {
+                                    console.error('Error downloading certificate:', error);
+                                    toast.error('Failed to download certificate');
+                                  }
+                                }}
+                              >
+                                <Download className="w-4 h-4 mr-2" />
+                                Download
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  const baseUrl = window.location.origin;
+                                  const verificationUrl = `${baseUrl}/verify-certificate/${cert.id}`;
+                                  window.open(`https://www.linkedin.com/profile/add?startTask=CERTIFICATION_NAME&name=${encodeURIComponent(cert.courseName)}&organizationName=Forge%20Community&issueYear=${new Date(cert.issuedAt).getFullYear()}&issueMonth=${new Date(cert.issuedAt).getMonth() + 1}&certUrl=${encodeURIComponent(verificationUrl)}`, '_blank');
+                                }}
+                              >
+                                <Linkedin className="w-4 h-4 mr-2" />
+                                Zu LinkedIn hinzufügen
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               </TabsContent>
             </Tabs>
           </div>
