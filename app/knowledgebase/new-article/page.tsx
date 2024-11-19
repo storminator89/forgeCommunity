@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { BookOpen, ArrowLeft, Image, Upload, Loader2, BookmarkIcon, SendIcon } from 'lucide-react';
+import { BookOpen, ArrowLeft, Image, Upload, Loader2, BookmarkIcon, SendIcon, Trash2, Book, Tag } from 'lucide-react';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CategorySelect } from "@/components/CategorySelect";
 import { TagSelect } from "@/components/TagSelect";
@@ -193,173 +193,216 @@ export default function NewArticle() {
   }
 
   return (
-    <div className="flex flex-col lg:flex-row min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+    <div className="flex flex-col lg:flex-row min-h-screen h-screen bg-gradient-to-br from-background to-background/80">
       <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="bg-white dark:bg-gray-800 shadow-md z-10">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex items-center justify-between">
-            <h2 className="text-3xl font-bold text-gray-800 dark:text-white flex items-center">
-              <BookOpen className="mr-2 h-6 w-6" />
-              Neuer Artikel erstellen
-            </h2>
-            <div className="flex items-center space-x-4">
-              <ThemeToggle />
-              <UserNav />
+      <div className="flex-1 flex flex-col h-screen overflow-hidden">
+        <header className="bg-card shadow-sm z-10 border-b backdrop-blur-sm">
+          <div className="container mx-auto px-6 py-5">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center">
+                <Button
+                  variant="ghost"
+                  onClick={() => router.push('/knowledgebase')}
+                  className="mr-4 hover:bg-background/60"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+                <div>
+                  <h1 className="text-2xl font-semibold text-foreground tracking-tight">Neuer Artikel</h1>
+                  <p className="text-sm text-muted-foreground mt-0.5">Erstelle einen neuen Wissensartikel</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <ThemeToggle />
+                <UserNav />
+              </div>
             </div>
           </div>
         </header>
-        <main className="flex-1 overflow-y-auto p-4 lg:p-8">
-          <Card className="max-w-5xl mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-lg">
-            <div className="p-6">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
-                <Button
-                  variant="outline"
-                  onClick={() => router.push('/knowledgebase')}
-                  className="bg-transparent border-gray-300 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                >
-                  <ArrowLeft className="mr-2 h-4 w-4" /> Zurück
-                </Button>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => submitArticle(true)}
-                    disabled={isSubmitting}
-                    type="button"
-                  >
-                    {isSubmitting && isDraft ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Speichere Entwurf...
-                      </>
-                    ) : (
-                      <>
-                        <BookmarkIcon className="mr-2 h-4 w-4" />
-                        Als Entwurf speichern
-                      </>
-                    )}
-                  </Button>
-                  <Button
-                    onClick={() => submitArticle(false)}
-                    disabled={isSubmitting}
-                    type="submit"
-                  >
-                    {isSubmitting && !isDraft ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Veröffentliche...
-                      </>
-                    ) : (
-                      <>
-                        <SendIcon className="mr-2 h-4 w-4" />
-                        Jetzt veröffentlichen
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </div>
 
-              <form id="articleForm" onSubmit={handleSubmit} className="space-y-6">
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <Label htmlFor="title" className="text-lg font-semibold">
-                      Titel <span className="text-red-500">*</span>
-                    </Label>
-                    <span className="text-sm text-gray-500">
-                      {title.length}/{maxTitleLength}
-                    </span>
-                  </div>
-                  <Input
-                    id="title"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value.slice(0, maxTitleLength))}
-                    className="text-lg py-2"
-                    placeholder="Geben Sie einen aussagekräftigen Titel ein"
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="featuredImage" className="text-lg font-semibold">
-                    Beitragsbild
-                  </Label>
-                  <div className="flex items-center gap-4">
-                    <Button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="flex items-center"
-                      variant="outline"
-                    >
-                      <Upload className="mr-2 h-4 w-4" />
-                      Bild auswählen
-                    </Button>
-                    {featuredImagePreview && (
-                      <div className="relative group">
-                        <div className="w-20 h-20 border rounded-md overflow-hidden">
-                          <img src={featuredImagePreview} alt="Vorschau" className="w-full h-full object-cover" />
+        <main className="flex-1 overflow-y-auto">
+          <ScrollArea className="h-full">
+            <div className="container mx-auto py-8 px-6">
+              <div className="max-w-7xl mx-auto">
+                <div className="grid lg:grid-cols-[1fr,300px] gap-6">
+                  {/* Hauptbereich - Editor */}
+                  <div className="space-y-6">
+                    <div className="bg-card rounded-xl shadow-sm border border-border/40 overflow-hidden">
+                      <div className="p-6 space-y-6">
+                        {/* Titel */}
+                        <div>
+                          <div className="flex justify-between items-center mb-2">
+                            <Label htmlFor="title" className="text-sm font-medium text-foreground">
+                              Titel <span className="text-destructive">*</span>
+                            </Label>
+                            <span className="text-xs text-muted-foreground">
+                              {title.length}/{maxTitleLength}
+                            </span>
+                          </div>
+                          <Input
+                            id="title"
+                            value={title}
+                            onChange={(e) => setTitle(e.target.value.slice(0, maxTitleLength))}
+                            className="text-lg py-2"
+                            placeholder="Geben Sie einen aussagekräftigen Titel ein"
+                            required
+                          />
                         </div>
+
+                        {/* Beitragsbild */}
+                        <div>
+                          <Label className="text-sm font-medium text-foreground mb-2 block">Beitragsbild</Label>
+                          <div className="flex items-center gap-4">
+                            <Button
+                              type="button"
+                              onClick={() => fileInputRef.current?.click()}
+                              variant="outline"
+                              className="hover:bg-muted"
+                            >
+                              <Upload className="mr-2 h-4 w-4" />
+                              Bild auswählen
+                            </Button>
+                            {featuredImagePreview && (
+                              <div className="relative group">
+                                <div className="w-20 h-20 rounded-lg overflow-hidden border border-border">
+                                  <img src={featuredImagePreview} alt="Vorschau" className="w-full h-full object-cover" />
+                                  <div className="absolute inset-0 bg-background/80 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="text-destructive hover:text-destructive/90"
+                                      onClick={() => {
+                                        setFeaturedImage(null);
+                                        setFeaturedImagePreview('');
+                                      }}
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            <input
+                              type="file"
+                              id="featuredImage"
+                              ref={fileInputRef}
+                              onChange={handleImageUpload}
+                              accept="image/*"
+                              className="hidden"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Editor */}
+                        <div>
+                          <Label className="text-sm font-medium text-foreground mb-2 block">Inhalt</Label>
+                          <div className="border rounded-lg overflow-hidden">
+                            <QuillEditor
+                              value={content}
+                              onChange={setContent}
+                              modules={quillModules}
+                              className="min-h-[400px]"
+                              theme="snow"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Seitenleiste - Metadaten */}
+                  <div className="space-y-6">
+                    {/* Aktionen */}
+                    <div className="bg-card rounded-xl shadow-sm border border-border/40 overflow-hidden">
+                      <div className="p-4 border-b border-border/40">
+                        <h2 className="font-semibold text-lg flex items-center">
+                          <BookOpen className="mr-2 h-5 w-5 text-primary" />
+                          Aktionen
+                        </h2>
+                      </div>
+                      <div className="p-4 space-y-3">
                         <Button
+                          variant="outline"
+                          onClick={() => submitArticle(true)}
+                          disabled={isSubmitting}
                           type="button"
-                          variant="destructive"
-                          size="sm"
-                          className="absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                          onClick={() => {
-                            setFeaturedImage(null);
-                            setFeaturedImagePreview('');
-                          }}
+                          className="w-full justify-start"
                         >
-                          ×
+                          {isSubmitting && isDraft ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Speichere...
+                            </>
+                          ) : (
+                            <>
+                              <BookmarkIcon className="mr-2 h-4 w-4" />
+                              Als Entwurf speichern
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          onClick={() => submitArticle(false)}
+                          disabled={isSubmitting}
+                          type="submit"
+                          className="w-full justify-start"
+                        >
+                          {isSubmitting && !isDraft ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Veröffentliche...
+                            </>
+                          ) : (
+                            <>
+                              <SendIcon className="mr-2 h-4 w-4" />
+                              Veröffentlichen
+                            </>
+                          )}
                         </Button>
                       </div>
-                    )}
-                    <input
-                      type="file"
-                      id="featuredImage"
-                      ref={fileInputRef}
-                      onChange={handleImageUpload}
-                      accept="image/*"
-                      className="hidden"
-                    />
-                  </div>
-                </div>
+                    </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="content" className="text-xl font-semibold">Inhalt</Label>
-                  <div className="h-96 border rounded-md overflow-hidden">
-                    <QuillEditor
-                      value={content}
-                      onChange={setContent}
-                      modules={quillModules}
-                      className="h-full"
-                      theme="snow"
-                    />
+                    {/* Kategorien */}
+                    <div className="bg-card rounded-xl shadow-sm border border-border/40 overflow-hidden">
+                      <div className="p-4 border-b border-border/40">
+                        <h2 className="font-semibold text-lg flex items-center">
+                          <Book className="mr-2 h-5 w-5 text-primary" />
+                          Kategorie
+                        </h2>
+                      </div>
+                      <div className="p-4">
+                        <CategorySelect
+                          categories={existingCategories}
+                          selectedCategory={category}
+                          setSelectedCategory={setCategory}
+                          onAddCategory={handleAddNewCategory}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Tags */}
+                    <div className="bg-card rounded-xl shadow-sm border border-border/40 overflow-hidden">
+                      <div className="p-4 border-b border-border/40">
+                        <h2 className="font-semibold text-lg flex items-center">
+                          <Tag className="mr-2 h-5 w-5 text-primary" />
+                          Tags
+                        </h2>
+                      </div>
+                      <div className="p-4">
+                        <TagSelect
+                          availableTags={existingTags}
+                          selectedTags={tags}
+                          onTagSelect={handleAddTag}
+                          onTagRemove={handleRemoveTag}
+                          onAddTag={handleAddNewTag}
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
-                <div className="space-y-2 mt-12">
-                  <CategorySelect
-                    categories={existingCategories}
-                    selectedCategory={category}
-                    setSelectedCategory={setCategory}
-                    onAddCategory={handleAddNewCategory}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <TagSelect
-                    availableTags={existingTags}
-                    selectedTags={tags}
-                    onTagSelect={handleAddTag}
-                    onTagRemove={handleRemoveTag}
-                    onAddTag={handleAddNewTag}
-                  />
-                </div>
-                <Separator className="my-6" />
-                <div className="flex justify-end">
-                  <Button type="submit" disabled={isSubmitting} className="px-6 py-2 text-lg">
-                    {isSubmitting ? 'Wird erstellt...' : 'Artikel veröffentlichen'}
-                  </Button>
-                </div>
-              </form>
+              </div>
             </div>
-          </Card>
+          </ScrollArea>
         </main>
       </div>
     </div>

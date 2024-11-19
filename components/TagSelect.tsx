@@ -33,50 +33,87 @@ export const TagSelect: React.FC<TagSelectProps> = ({
   };
 
   return (
-    <div className="space-y-2">
-      <Label htmlFor="tags" className="text-xl font-semibold block">Tags (max. 5)</Label>
-      <div className="flex flex-wrap gap-2 mb-2">
+    <div className="space-y-3">
+      <Label htmlFor="tags" className="text-sm font-medium">Tags (max. 5)</Label>
+      <div className="flex flex-wrap gap-2 mb-3">
         {selectedTags.map((tag) => (
-          <Badge key={tag} variant="secondary" className="text-sm py-1 px-2">
+          <Badge 
+            key={tag} 
+            variant="secondary" 
+            className="text-base py-1.5 px-3 hover:bg-secondary/80"
+          >
             {tag}
-            <button onClick={() => onTagRemove(tag)} className="ml-1 text-xs">
-              &times;
+            <button 
+              onClick={() => onTagRemove(tag)} 
+              className="ml-2 hover:text-destructive"
+            >
+              ×
             </button>
           </Badge>
         ))}
       </div>
       {!isAdding ? (
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center gap-3">
           <select
             id="tags"
             value=""
-            onChange={(e) => onTagSelect(e.target.value)}
-            className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring focus:border-blue-300"
+            onChange={(e) => {
+              if (e.target.value && selectedTags.length < 5) {
+                onTagSelect(e.target.value);
+                e.target.value = '';
+              }
+            }}
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={selectedTags.length >= 5}
           >
-            <option value="" disabled>Wähle einen Tag...</option>
-            {availableTags.filter(tag => !selectedTags.includes(tag)).map((tag) => (
-              <option key={tag} value={tag}>{tag}</option>
-            ))}
+            <option value="">Tag auswählen...</option>
+            {availableTags
+              .filter((tag) => !selectedTags.includes(tag))
+              .map((tag) => (
+                <option key={tag} value={tag}>{tag}</option>
+              ))}
           </select>
-          <Button type="button" onClick={() => setIsAdding(true)}>
-            Neuen hinzufügen
+          <Button 
+            type="button" 
+            onClick={() => setIsAdding(true)}
+            variant="outline"
+            size="sm"
+            disabled={selectedTags.length >= 5}
+          >
+            Neu
           </Button>
         </div>
       ) : (
-        <div className="flex items-center space-x-2">
+        <div className="space-y-3">
           <Input
-            id="new-tag"
+            type="text"
             value={newTag}
             onChange={(e) => setNewTag(e.target.value)}
             placeholder="Neuen Tag eingeben..."
-            className="flex-grow"
+            className="w-full h-10 text-base"
           />
-          <Button type="button" onClick={handleAddTag}>
-            Hinzufügen
-          </Button>
-          <Button variant="ghost" type="button" onClick={() => { setIsAdding(false); setNewTag(''); }}>
-            Abbrechen
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button 
+              type="button" 
+              onClick={handleAddTag}
+              size="default"
+              className="flex-1"
+            >
+              Hinzufügen
+            </Button>
+            <Button 
+              type="button" 
+              onClick={() => {
+                setIsAdding(false);
+                setNewTag('');
+              }}
+              variant="outline"
+              size="default"
+              className="flex-1"
+            >
+              Abbrechen
+            </Button>
+          </div>
         </div>
       )}
     </div>
