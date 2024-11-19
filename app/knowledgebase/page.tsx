@@ -97,9 +97,9 @@ export default function KnowledgeBase() {
   }
 
   return (
-    <div className="flex flex-col lg:flex-row min-h-screen bg-background">
+    <div className="flex flex-col lg:flex-row min-h-screen h-screen bg-gradient-to-br from-background to-background/80">
       <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col h-screen overflow-hidden">
         <header className="bg-card shadow-sm z-10 sticky top-0 border-b backdrop-blur-sm">
           <div className="container mx-auto px-6 py-5">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-5">
