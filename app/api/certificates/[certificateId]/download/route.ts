@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { db } from '@/lib/db';
+import prisma from '@/lib/prisma';
 import { jsPDF } from 'jspdf';
 import QRCode from 'qrcode';
 
@@ -17,7 +17,7 @@ export async function GET(
     }
 
     // Get the certificate from the database
-    const certificate = await db.certificate.findUnique({
+    const certificate = await prisma.certificate.findUnique({
       where: { 
         id: params.certificateId,
         userId: session.user.id // Ensure the certificate belongs to the user
