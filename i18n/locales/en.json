@@ -49,7 +49,43 @@
     "delete": "Delete",
     "save": "Save",
     "cancel": "Cancel",
-    "loadMore": "Load More"
+    "add": "Add User",
+    "refresh": "Refresh",
+    "user": "User",
+    "contact": "Contact",
+    "statusLabel": "Status",
+    "status": {
+      "verified": "Verified",
+      "notVerified": "Not Verified",
+      "active": "Active",
+      "inactive": "Inactive",
+      "neverLoggedIn": "Never logged in",
+      "lastActiveAt": "Last active on",
+      "at": "at",
+      "justActive": "Just now",
+      "minutesAgo": "minutes ago",
+      "hoursAgo": "hours ago",
+      "yesterday": "Yesterday",
+      "errorLoadingLastLogin": "Error loading last login"
+    },
+    "activity": "Activity",
+    "actions": "Actions",
+    "error": {
+      "loadUsers": "Error loading users",
+      "deleteUser": "Error deleting user"
+    },
+    "confirm": {
+      "deleteUser": "Are you sure you want to delete this user? This action cannot be undone."
+    },
+    "status": {
+      "verified": "Verified",
+      "notVerified": "Not Verified",
+      "active": "Active",
+      "inactive": "Inactive",
+      "neverLoggedIn": "Never logged in",
+      "lastActive": "Last active",
+      "registeredAt": "Registered at"
+    }
   },
   "home": {
     "hero": {
@@ -157,6 +193,95 @@
       "innovation": {
         "title": "Innovation",
         "description": "Continuous development and adaptation to community needs."
+      }
+    }
+  },
+  "admin": {
+    "navigation": {
+      "overview": "Overview",
+      "users": "Users",
+      "roles": "Roles",
+      "activity": "Activity",
+      "settings": "Settings",
+      "allUsers": "All Users"
+    },
+    "users": {
+      "title": "User Management",
+      "description": "Manage users and their roles in the ForgeCommunity platform",
+      "addUser": "Add User",
+      "editUser": "Edit User",
+      "deleteUser": "Delete User",
+      "deleteConfirm": "Are you sure you want to delete this user? This action cannot be undone.",
+      "status": {
+        "verified": "Verified",
+        "notVerified": "Not Verified",
+        "neverLoggedIn": "Never logged in"
+      },
+      "roles": {
+        "admin": "Administrator",
+        "moderator": "Moderator",
+        "instructor": "Instructor",
+        "user": "User"
+      },
+      "tabs": {
+        "overview": "Overview",
+        "activity": "Activity",
+        "settings": "Settings"
+      },
+      "error": {
+        "loadUsers": "An error occurred while loading users.",
+        "deleteUser": "Error deleting user"
+      },
+      "stats": {
+        "title": "User Statistics",
+        "totalUsers": "Total Users",
+        "admins": "Administrators",
+        "moderators": "Moderators",
+        "instructors": "Instructors",
+        "normalUsers": "Normal Users",
+        "verifiedUsers": "Verified Users",
+        "activeUsers": "Active Users (30 days)",
+        "posts": "Posts",
+        "comments": "Comments",
+        "likesReceived": "Likes Received",
+        "endorsements": "Endorsements",
+        "courses": "Courses",
+        "projects": "Projects"
+      },
+      "details": {
+        "title": "User Details",
+        "registeredAt": "Member since",
+        "lastActivity": "Last Activity",
+        "emailStatus": "Email Status",
+        "role": "Role",
+        "bio": "Biography",
+        "badges": "Achievements",
+        "neverLoggedIn": "Never"
+      },
+      "tabs": {
+        "overview": "Overview",
+        "activity": "Activity",
+        "skills": "Skills",
+        "settings": "Settings"
+      },
+      "settings": {
+        "emailNotifications": "Email Notifications",
+        "pushNotifications": "Push Notifications",
+        "theme": "Theme",
+        "language": "Language",
+        "receivesEmailNotifications": "Receives email notifications",
+        "receivesPushNotifications": "Receives push notifications",
+        "preferredTheme": "Preferred theme",
+        "preferredLanguage": "Preferred language",
+        "enabled": "Enabled",
+        "disabled": "Disabled"
+      },
+      "noSkills": "No skills specified",
+      "menu": {
+        "open": "Open menu",
+        "edit": "Edit user",
+        "delete": "Delete user",
+        "viewProfile": "View profile"
       }
     }
   }

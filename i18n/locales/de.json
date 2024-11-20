@@ -10,14 +10,14 @@
     "admin": "Admin Dashboard",
     "logout": "Abmelden",
     "resources": "Ressourcen",
-    "events": "Events",
-    "login": "Login",
+    "events": "Veranstaltungen",
+    "login": "Anmelden",
     "register": "Registrieren",
     "members": "Mitglieder",
     "knowledgebase": "Wissensdatenbank",
     "drafts": "Meine Entwürfe",
     "projects": "Projekte",
-    "skills": "Skills",
+    "skills": "Fähigkeiten",
     "search": "Suche",
     "chat": "Chat",
     "notifications": "Benachrichtigungen",
@@ -26,7 +26,7 @@
     "userManagement": "Benutzerverwaltung",
     "sections": {
       "main": "Community",
-      "content": "Inhalte",
+      "content": "Inhalt",
       "personal": "Persönlich",
       "interact": "Interaktion",
       "settings": "Einstellungen",
@@ -49,7 +49,43 @@
     "delete": "Löschen",
     "save": "Speichern",
     "cancel": "Abbrechen",
-    "loadMore": "Mehr laden"
+    "add": "Benutzer hinzufügen",
+    "refresh": "Aktualisieren",
+    "user": "Benutzer",
+    "contact": "Kontakt",
+    "statusLabel": "Status",
+    "status": {
+      "verified": "Verifiziert",
+      "notVerified": "Nicht verifiziert",
+      "active": "Aktiv",
+      "inactive": "Inaktiv",
+      "neverLoggedIn": "Nie eingeloggt",
+      "lastActiveAt": "Zuletzt aktiv am",
+      "at": "um",
+      "justActive": "Gerade eben",
+      "minutesAgo": "Minuten her",
+      "hoursAgo": "Stunden her",
+      "yesterday": "Gestern",
+      "errorLoadingLastLogin": "Fehler beim Laden des letzten Logins"
+    },
+    "activity": "Aktivität",
+    "actions": "Aktionen",
+    "error": {
+      "loadUsers": "Fehler beim Laden der Benutzer",
+      "deleteUser": "Fehler beim Löschen des Benutzers"
+    },
+    "confirm": {
+      "deleteUser": "Sind Sie sicher, dass Sie diesen Benutzer löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden."
+    },
+    "status": {
+      "verified": "Verifiziert",
+      "notVerified": "Nicht verifiziert",
+      "active": "Aktiv",
+      "inactive": "Inaktiv",
+      "neverLoggedIn": "Nie eingeloggt",
+      "lastActive": "Zuletzt aktiv",
+      "registeredAt": "Registriert am"
+    }
   },
   "home": {
     "hero": {
@@ -157,6 +193,112 @@
       "innovation": {
         "title": "Innovation",
         "description": "Kontinuierliche Weiterentwicklung und Anpassung an Community-Bedürfnisse."
+      }
+    }
+  },
+  "admin": {
+    "navigation": {
+      "overview": "Übersicht",
+      "users": "Benutzer",
+      "roles": "Rollen",
+      "activity": "Aktivität",
+      "settings": "Einstellungen",
+      "allUsers": "Alle Benutzer"
+    },
+    "dashboard": {
+      "title": "Dashboard",
+      "subtitle": "Übersicht über alle wichtigen Kennzahlen der Community",
+      "error": "Fehler beim Laden der Dashboard-Daten. Bitte versuchen Sie es später erneut.",
+      "noPermission": "Sie haben keine Berechtigung, diese Seite zu sehen.",
+      "cards": {
+        "users": "Benutzer",
+        "courses": "Kurse",
+        "events": "Events",
+        "posts": "Beiträge",
+        "showDetails": "Details anzeigen"
+      },
+      "sections": {
+        "recentActivity": "Letzte Aktivitäten",
+        "trends": "Community Trends"
+      }
+    },
+    "users": {
+      "title": "Benutzerverwaltung",
+      "description": "Verwalten Sie Benutzer und deren Rollen in der ForgeCommunity-Plattform",
+      "addUser": "Benutzer hinzufügen",
+      "editUser": "Benutzer bearbeiten",
+      "deleteUser": "Benutzer löschen",
+      "deleteConfirm": "Sind Sie sicher, dass Sie diesen Benutzer löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
+      "status": {
+        "verified": "Verifiziert",
+        "notVerified": "Nicht verifiziert",
+        "neverLoggedIn": "Noch nie eingeloggt"
+      },
+      "roles": {
+        "admin": "Administrator",
+        "moderator": "Moderator",
+        "instructor": "Instructor",
+        "user": "Benutzer"
+      },
+      "tabs": {
+        "overview": "Übersicht",
+        "activity": "Aktivität",
+        "settings": "Einstellungen"
+      },
+      "error": {
+        "loadUsers": "Beim Laden der Benutzer ist ein Fehler aufgetreten.",
+        "deleteUser": "Fehler beim Löschen des Benutzers"
+      },
+      "stats": {
+        "title": "Benutzerstatistiken",
+        "totalUsers": "Gesamtbenutzer",
+        "admins": "Administratoren",
+        "moderators": "Moderatoren",
+        "instructors": "Instruktoren",
+        "normalUsers": "Normale Benutzer",
+        "verifiedUsers": "Verifizierte Benutzer",
+        "activeUsers": "Aktive Benutzer (30 Tage)",
+        "posts": "Beiträge",
+        "comments": "Kommentare",
+        "likesReceived": "Erhaltene Likes",
+        "endorsements": "Empfehlungen",
+        "courses": "Kurse",
+        "projects": "Projekte"
+      },
+      "details": {
+        "title": "Benutzerdetails",
+        "registeredAt": "Mitglied seit",
+        "lastActivity": "Letzte Aktivität",
+        "emailStatus": "E-Mail Status",
+        "role": "Rolle",
+        "bio": "Biografie",
+        "badges": "Errungenschaften",
+        "neverLoggedIn": "Nie"
+      },
+      "tabs": {
+        "overview": "Übersicht",
+        "activity": "Aktivität",
+        "skills": "Fähigkeiten",
+        "settings": "Einstellungen"
+      },
+      "settings": {
+        "emailNotifications": "E-Mail Benachrichtigungen",
+        "pushNotifications": "Push-Benachrichtigungen",
+        "theme": "Theme",
+        "language": "Sprache",
+        "receivesEmailNotifications": "Erhält E-Mail Benachrichtigungen",
+        "receivesPushNotifications": "Erhält Push-Benachrichtigungen",
+        "preferredTheme": "Bevorzugtes Theme",
+        "preferredLanguage": "Bevorzugte Sprache",
+        "enabled": "Aktiviert",
+        "disabled": "Deaktiviert"
+      },
+      "noSkills": "Keine Fähigkeiten angegeben",
+      "menu": {
+        "open": "Menü öffnen",
+        "edit": "Benutzer bearbeiten",
+        "delete": "Benutzer löschen",
+        "viewProfile": "Profil anzeigen"
       }
     }
   }

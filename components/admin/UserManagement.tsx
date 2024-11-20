@@ -48,6 +48,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Sidebar } from "@/components/Sidebar";
 
 interface UserSettings {
   emailNotifications: boolean;
@@ -86,7 +87,12 @@ interface User {
   skills?: { name: string; level: number }[];
 }
 
-export default function UserManagement() {
+interface UserManagementProps {
+  dict: any;
+  lang: string;
+}
+
+export default function UserManagement({ dict, lang }: UserManagementProps) {
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -99,9 +105,9 @@ export default function UserManagement() {
 
   useEffect(() => {
     if (status === 'unauthenticated') {
-      router.push('/');
+      router.push(`/${lang}`);
     }
-  }, [status, router]);
+  }, [status, router, lang]);
 
   useEffect(() => {
     fetchUsers();
@@ -127,7 +133,7 @@ export default function UserManagement() {
       setUsers(data);
     } catch (error) {
       console.error("Error fetching users:", error);
-      toast.error("Beim Laden der Benutzer ist ein Fehler aufgetreten.");
+      toast.error(dict.admin.users.error.loadUsers);
     } finally {
       setIsLoading(false);
     }
@@ -152,14 +158,14 @@ export default function UserManagement() {
   };
 
   const handleDeleteUser = async (userId: string) => {
-    if (!confirm('Sind Sie sicher, dass Sie diesen Benutzer löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.')) {
+    if (!confirm(dict.admin.users.deleteConfirm)) {
       return;
     }
     try {
       const response = await fetch(`/api/admin/users/${userId}`, {
         method: 'DELETE',
       });
-      if (!response.ok) throw new Error('Failed to delete user');
+      if (!response.ok) throw new Error(dict.admin.users.error.deleteUser);
       setUsers(users.filter(user => user.id !== userId));
       if (selectedUser?.id === userId) {
         setSelectedUser(null);
@@ -184,15 +190,14 @@ export default function UserManagement() {
 
   const getVerificationStatus = (user: User) => {
     if (user.emailVerified) {
-      return <Badge variant="success">Verifiziert</Badge>;
+      return <Badge variant="success">{dict.common.status.verified}</Badge>;
     }
-    return <Badge variant="secondary">Nicht verifiziert</Badge>;
+    return <Badge variant="secondary">{dict.common.status.notVerified}</Badge>;
   };
 
   const getLastActiveStatus = (user: User) => {
     if (!user.lastLogin) {
-      console.log('No lastLogin for user:', user.email); // Debug-Log
-      return 'Noch nie eingeloggt';
+      return dict.common.status.neverLoggedIn;
     }
 
     try {
@@ -209,18 +214,18 @@ export default function UserManagement() {
         diffDays
       });
 
-      if (diffMinutes < 5) return 'Gerade aktiv';
-      if (diffMinutes < 60) return `Vor ${diffMinutes} Minuten aktiv`;
-      if (diffHours < 24) return `Vor ${diffHours} Stunden aktiv`;
-      if (diffDays === 1) return 'Gestern aktiv';
+      if (diffMinutes < 5) return dict.common.status.justActive;
+      if (diffMinutes < 60) return `${diffMinutes} ${dict.common.status.minutesAgo}`;
+      if (diffHours < 24) return `${diffHours} ${dict.common.status.hoursAgo}`;
+      if (diffDays === 1) return dict.common.status.yesterday;
 
-      return `Zuletzt aktiv am ${lastLogin.toLocaleDateString('de-DE')} um ${lastLogin.toLocaleTimeString('de-DE', {
+      return `${dict.common.status.lastActiveAt} ${lastLogin.toLocaleDateString(lang === 'de' ? 'de-DE' : 'en-US')} ${dict.common.status.at} ${lastLogin.toLocaleTimeString(lang === 'de' ? 'de-DE' : 'en-US', {
         hour: '2-digit',
         minute: '2-digit'
       })}`;
     } catch (error) {
       console.error('Error formatting lastLogin:', error);
-      return 'Fehler beim Laden des letzten Logins';
+      return dict.common.status.errorLoadingLastLogin;
     }
   };
 
@@ -245,42 +250,43 @@ export default function UserManagement() {
   }
 
   return (
-    <>
-      <header className="bg-white dark:bg-gray-800 shadow-sm z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-gray-800 dark:text-white flex items-center ml-12 lg:ml-0">
-            <Users className="mr-2 h-6 w-6" />
-            Benutzerverwaltung
-          </h2>
-          <div className="flex items-center space-x-4">
-            <ThemeToggle />
-            <UserNav />
-          </div>
-        </div>
-      </header>
+    <div className="flex h-screen">
+      <Sidebar />
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+          <header className="bg-white dark:bg-gray-800 shadow-sm z-10">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-gray-800 dark:text-white flex items-center ml-12 lg:ml-0">
+                <Users className="mr-2 h-6 w-6" />
+                {dict.navigation.userManagement}
+              </h2>
+              <div className="flex items-center space-x-4">
+                <ThemeToggle />
+                <UserNav />
+              </div>
+            </div>
+          </header>
 
-      <main className="flex-1 overflow-y-auto p-4 lg:p-8">
-        <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Hauptbereich - Benutzerliste */}
             <div className="lg:col-span-2 space-y-6">
               <Card className="bg-white dark:bg-gray-800">
                 <CardHeader>
                   <CardTitle className="text-gray-900 dark:text-gray-100 flex items-center justify-between">
-                    <span>Benutzer</span>
+                    <span>{dict.navigation.userManagement}</span>
                     <Button onClick={() => setIsAddUserOpen(true)}>
                       <UserPlus className="mr-2 h-4 w-4" />
-                      Neuer Benutzer
+                      {dict.common.add}
                     </Button>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="mb-4 flex items-center space-x-2">
-                    <div className="relative flex-grow">
+                    <div className="relative flex-1">
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                       <Input
                         type="text"
-                        placeholder="Suche nach Namen, E-Mail, Rolle oder Titel..."
+                        placeholder={dict.common.search}
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="pl-10 pr-4 py-2 w-full dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-400"
@@ -292,7 +298,7 @@ export default function UserManagement() {
                       className="dark:text-gray-100 dark:hover:bg-gray-700"
                     >
                       <RefreshCw className="mr-2 h-4 w-4" />
-                      Aktualisieren
+                      {dict.common.refresh}
                     </Button>
                   </div>
 
@@ -300,11 +306,11 @@ export default function UserManagement() {
                     <Table>
                       <TableHeader>
                         <TableRow className="dark:border-gray-700">
-                          <TableHead className="dark:text-gray-300">Benutzer</TableHead>
-                          <TableHead className="dark:text-gray-300">Kontakt</TableHead>
-                          <TableHead className="dark:text-gray-300">Status</TableHead>
-                          <TableHead className="dark:text-gray-300">Aktivität</TableHead>
-                          <TableHead className="text-right dark:text-gray-300">Aktionen</TableHead>
+                          <TableHead className="dark:text-gray-300">{dict.common.user}</TableHead>
+                          <TableHead className="dark:text-gray-300">{dict.common.contact}</TableHead>
+                          <TableHead className="dark:text-gray-300">{dict.common.statusLabel}</TableHead>
+                          <TableHead className="dark:text-gray-300">{dict.common.activity}</TableHead>
+                          <TableHead className="text-right dark:text-gray-300">{dict.common.actions}</TableHead>
                         </TableRow>
                       </TableHeader>
 
@@ -327,7 +333,7 @@ export default function UserManagement() {
                                   </Avatar>
                                   <div>
                                     <div className="font-medium">{user.name}</div>
-                                    <div className="text-sm text-gray-500 dark:text-gray-400">{user.title || 'Kein Titel'}</div>
+                                    <div className="text-sm text-gray-500 dark:text-gray-400">{user.title || dict.admin.users.noTitle}</div>
                                   </div>
                                 </div>
                               </TableCell>
@@ -356,7 +362,7 @@ export default function UserManagement() {
                                 <div className="text-sm">
                                   <div>{getLastActiveStatus(user)}</div>
                                   <div className="text-gray-500 dark:text-gray-400 text-xs mt-1">
-                                    Registriert: {new Date(user.createdAt).toLocaleDateString('de-DE')}
+                                    {dict.admin.users.registeredAt} {new Date(user.createdAt).toLocaleDateString('de-DE')}
                                   </div>
                                 </div>
                               </TableCell>
@@ -364,21 +370,21 @@ export default function UserManagement() {
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>
                                     <Button variant="ghost" className="h-8 w-8 p-0 dark:text-gray-300 dark:hover:bg-gray-700">
-                                      <span className="sr-only">Menü öffnen</span>
+                                      <span className="sr-only">{dict.admin.users.menu.open}</span>
                                       <MoreHorizontal className="h-4 w-4" />
                                     </Button>
                                   </DropdownMenuTrigger>
                                   <DropdownMenuContent align="end" className="dark:bg-gray-800 dark:border-gray-700">
-                                    <DropdownMenuLabel className="dark:text-gray-300">Aktionen</DropdownMenuLabel>
+                                    <DropdownMenuLabel className="dark:text-gray-300">{dict.common.actions}</DropdownMenuLabel>
                                     <DropdownMenuItem
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         handleEditUser(user);
                                       }}
-                                      className="dark:text-gray-300 dark:hover:bg-gray-700"
+                                      className="dark:hover:bg-gray-700"
                                     >
                                       <UserCog className="mr-2 h-4 w-4" />
-                                      Bearbeiten
+                                      {dict.common.edit}
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator className="dark:border-gray-700" />
                                     <DropdownMenuItem
@@ -389,7 +395,7 @@ export default function UserManagement() {
                                       className="text-red-600 dark:text-red-400 dark:hover:bg-gray-700"
                                     >
                                       <Trash2 className="mr-2 h-4 w-4" />
-                                      Löschen
+                                      {dict.common.delete}
                                     </DropdownMenuItem>
                                   </DropdownMenuContent>
                                 </DropdownMenu>
@@ -411,7 +417,7 @@ export default function UserManagement() {
                   {/* Benutzerdetails */}
                   <Card className="bg-white dark:bg-gray-800">
                     <CardHeader>
-                      <CardTitle className="text-gray-900 dark:text-gray-100">Benutzerdetails</CardTitle>
+                      <CardTitle className="text-gray-900 dark:text-gray-100">{dict.admin.users.details.title}</CardTitle>
                     </CardHeader>
                     <CardContent>
                       <div className="flex flex-col items-center space-y-4">
@@ -427,32 +433,32 @@ export default function UserManagement() {
 
                       <Tabs defaultValue="overview" className="mt-6">
                         <TabsList className="grid grid-cols-4 gap-4">
-                          <TabsTrigger value="overview">Übersicht</TabsTrigger>
-                          <TabsTrigger value="activity">Aktivität</TabsTrigger>
-                          <TabsTrigger value="skills">Skills</TabsTrigger>
-                          <TabsTrigger value="settings">Einstellungen</TabsTrigger>
+                          <TabsTrigger value="overview">{dict.admin.users.tabs.overview}</TabsTrigger>
+                          <TabsTrigger value="activity">{dict.admin.users.tabs.activity}</TabsTrigger>
+                          <TabsTrigger value="skills">{dict.admin.users.tabs.skills}</TabsTrigger>
+                          <TabsTrigger value="settings">{dict.admin.users.tabs.settings}</TabsTrigger>
                         </TabsList>
 
                         <TabsContent value="overview" className="mt-4 space-y-4">
                           <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                              <div className="text-sm text-gray-500 dark:text-gray-400">Mitglied seit</div>
+                              <div className="text-sm text-gray-500 dark:text-gray-400">{dict.admin.users.details.registeredAt}</div>
                               <div className="dark:text-gray-300">
                                 {new Date(selectedUser.createdAt).toLocaleDateString('de-DE')}
                               </div>
                             </div>
                             <div className="space-y-2">
-                              <div className="text-sm text-gray-500 dark:text-gray-400">Letzte Aktivität</div>
+                              <div className="text-sm text-gray-500 dark:text-gray-400">{dict.admin.users.details.lastActivity}</div>
                               <div className="dark:text-gray-300">
-                                {selectedUser.lastLogin ? new Date(selectedUser.lastLogin).toLocaleDateString('de-DE') : 'Nie'}
+                                {selectedUser.lastLogin ? new Date(selectedUser.lastLogin).toLocaleDateString('de-DE') : dict.admin.users.details.neverLoggedIn}
                               </div>
                             </div>
                             <div className="space-y-2">
-                              <div className="text-sm text-gray-500 dark:text-gray-400">E-Mail Status</div>
+                              <div className="text-sm text-gray-500 dark:text-gray-400">{dict.admin.users.details.emailStatus}</div>
                               <div>{getVerificationStatus(selectedUser)}</div>
                             </div>
                             <div className="space-y-2">
-                              <div className="text-sm text-gray-500 dark:text-gray-400">Rolle</div>
+                              <div className="text-sm text-gray-500 dark:text-gray-400">{dict.admin.users.details.role}</div>
                               <Badge variant={getRoleBadgeVariant(selectedUser.role)}>
                                 {selectedUser.role}
                               </Badge>
@@ -461,14 +467,14 @@ export default function UserManagement() {
 
                           {selectedUser.bio && (
                             <div className="space-y-2">
-                              <div className="text-sm text-gray-500 dark:text-gray-400">Biografie</div>
+                              <div className="text-sm text-gray-500 dark:text-gray-400">{dict.admin.users.details.bio}</div>
                               <p className="text-sm dark:text-gray-300">{selectedUser.bio}</p>
                             </div>
                           )}
 
                           {selectedUser.badges && selectedUser.badges.length > 0 && (
                             <div className="space-y-2">
-                              <div className="text-sm text-gray-500 dark:text-gray-400">Errungenschaften</div>
+                              <div className="text-sm text-gray-500 dark:text-gray-400">{dict.admin.users.details.badges}</div>
                               <div className="flex flex-wrap gap-2">
                                 {selectedUser.badges.map((badge, index) => (
                                   <Badge key={index} variant="outline" className="dark:border-gray-600">
@@ -488,7 +494,7 @@ export default function UserManagement() {
                                 <CardContent className="pt-6">
                                   <div className="flex items-center justify-between">
                                     <div className="space-y-1">
-                                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Beiträge</p>
+                                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{dict.admin.users.stats.posts}</p>
                                       <p className="text-2xl font-bold dark:text-gray-100">{selectedUser.stats.postsCount}</p>
                                     </div>
                                     <BookOpen className="h-8 w-8 text-gray-400" />
@@ -500,7 +506,7 @@ export default function UserManagement() {
                                 <CardContent className="pt-6">
                                   <div className="flex items-center justify-between">
                                     <div className="space-y-1">
-                                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Kommentare</p>
+                                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{dict.admin.users.stats.comments}</p>
                                       <p className="text-2xl font-bold dark:text-gray-100">{selectedUser.stats.commentsCount}</p>
                                     </div>
                                     <MessageSquare className="h-8 w-8 text-gray-400" />
@@ -512,7 +518,7 @@ export default function UserManagement() {
                                 <CardContent className="pt-6">
                                   <div className="flex items-center justify-between">
                                     <div className="space-y-1">
-                                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Likes erhalten</p>
+                                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{dict.admin.users.stats.likesReceived}</p>
                                       <p className="text-2xl font-bold dark:text-gray-100">{selectedUser.stats.likesReceived}</p>
                                     </div>
                                     <Heart className="h-8 w-8 text-gray-400" />
@@ -524,7 +530,7 @@ export default function UserManagement() {
                                 <CardContent className="pt-6">
                                   <div className="flex items-center justify-between">
                                     <div className="space-y-1">
-                                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Endorsements</p>
+                                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{dict.admin.users.stats.endorsements}</p>
                                       <p className="text-2xl font-bold dark:text-gray-100">{selectedUser.endorsements}</p>
                                     </div>
                                     <Star className="h-8 w-8 text-gray-400" />
@@ -536,7 +542,7 @@ export default function UserManagement() {
                                 <CardContent className="pt-6">
                                   <div className="flex items-center justify-between">
                                     <div className="space-y-1">
-                                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Kurse belegt</p>
+                                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{dict.admin.users.stats.courses}</p>
                                       <p className="text-2xl font-bold dark:text-gray-100">
                                         {selectedUser.stats.coursesCompleted} / {selectedUser.stats.coursesEnrolled}
                                       </p>
@@ -550,7 +556,7 @@ export default function UserManagement() {
                                 <CardContent className="pt-6">
                                   <div className="flex items-center justify-between">
                                     <div className="space-y-1">
-                                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Projekte</p>
+                                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{dict.admin.users.stats.projects}</p>
                                       <p className="text-2xl font-bold dark:text-gray-100">{selectedUser.stats.projectsCount}</p>
                                     </div>
                                     <Shield className="h-8 w-8 text-gray-400" />
@@ -565,29 +571,22 @@ export default function UserManagement() {
                           {selectedUser.skills && selectedUser.skills.length > 0 ? (
                             <div className="space-y-4">
                               {selectedUser.skills.map((skill, index) => (
-                                <div key={index} className="space-y-2">
-                                  <div className="flex justify-between items-center">
-                                    <span className="text-sm font-medium dark:text-gray-300">{skill.name}</span>
-                                    <span className="text-sm text-gray-500 dark:text-gray-400">
-                                      {skill.level}%
-                                    </span>
-                                  </div>
-                                  <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
-                                    <div
-                                      className={`h-2.5 rounded-full ${skill.level > 80 ? 'bg-green-500' :
-                                        skill.level > 60 ? 'bg-blue-500' :
-                                          skill.level > 40 ? 'bg-yellow-500' :
-                                            'bg-red-500'
-                                        }`}
-                                      style={{ width: `${skill.level}%` }}
-                                    ></div>
+                                <div key={index} className="flex items-center justify-between">
+                                  <span className="text-sm font-medium dark:text-gray-300">{skill.name}</span>
+                                  <div className="w-32">
+                                    <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full">
+                                      <div
+                                        className="h-2 bg-blue-500 rounded-full"
+                                        style={{ width: `${skill.level}%` }}
+                                      />
+                                    </div>
                                   </div>
                                 </div>
                               ))}
                             </div>
                           ) : (
                             <div className="text-center py-6 text-gray-500 dark:text-gray-400">
-                              Keine Fähigkeiten angegeben
+                              {dict.admin.users.noSkills}
                             </div>
                           )}
                         </TabsContent>
@@ -598,33 +597,33 @@ export default function UserManagement() {
                               <div className="space-y-4">
                                 <div className="flex items-center justify-between">
                                   <div className="space-y-0.5">
-                                    <div className="text-sm font-medium dark:text-gray-300">E-Mail Benachrichtigungen</div>
+                                    <div className="text-sm font-medium dark:text-gray-300">{dict.admin.users.settings.emailNotifications}</div>
                                     <div className="text-sm text-gray-500 dark:text-gray-400">
-                                      Erhält E-Mail Benachrichtigungen
+                                      {dict.admin.users.settings.receivesEmailNotifications}
                                     </div>
                                   </div>
                                   <Badge variant={selectedUser.settings.emailNotifications ? "success" : "secondary"}>
-                                    {selectedUser.settings.emailNotifications ? "Aktiviert" : "Deaktiviert"}
+                                    {selectedUser.settings.emailNotifications ? dict.admin.users.settings.enabled : dict.admin.users.settings.disabled}
                                   </Badge>
                                 </div>
 
                                 <div className="flex items-center justify-between">
                                   <div className="space-y-0.5">
-                                    <div className="text-sm font-medium dark:text-gray-300">Push Benachrichtigungen</div>
+                                    <div className="text-sm font-medium dark:text-gray-300">{dict.admin.users.settings.pushNotifications}</div>
                                     <div className="text-sm text-gray-500 dark:text-gray-400">
-                                      Erhält Push Benachrichtigungen
+                                      {dict.admin.users.settings.receivesPushNotifications}
                                     </div>
                                   </div>
                                   <Badge variant={selectedUser.settings.pushNotifications ? "success" : "secondary"}>
-                                    {selectedUser.settings.pushNotifications ? "Aktiviert" : "Deaktiviert"}
+                                    {selectedUser.settings.pushNotifications ? dict.admin.users.settings.enabled : dict.admin.users.settings.disabled}
                                   </Badge>
                                 </div>
 
                                 <div className="flex items-center justify-between">
                                   <div className="space-y-0.5">
-                                    <div className="text-sm font-medium dark:text-gray-300">Theme</div>
+                                    <div className="text-sm font-medium dark:text-gray-300">{dict.admin.users.settings.theme}</div>
                                     <div className="text-sm text-gray-500 dark:text-gray-400">
-                                      Bevorzugtes Theme
+                                      {dict.admin.users.settings.preferredTheme}
                                     </div>
                                   </div>
                                   <Badge>
@@ -634,9 +633,9 @@ export default function UserManagement() {
 
                                 <div className="flex items-center justify-between">
                                   <div className="space-y-0.5">
-                                    <div className="text-sm font-medium dark:text-gray-300">Sprache</div>
+                                    <div className="text-sm font-medium dark:text-gray-300">{dict.admin.users.settings.language}</div>
                                     <div className="text-sm text-gray-500 dark:text-gray-400">
-                                      Bevorzugte Sprache
+                                      {dict.admin.users.settings.preferredLanguage}
                                     </div>
                                   </div>
                                   <Badge>
@@ -656,47 +655,47 @@ export default function UserManagement() {
                 // Statistik-Karte, wenn kein Benutzer ausgewählt ist
                 <Card className="bg-white dark:bg-gray-800">
                   <CardHeader>
-                    <CardTitle className="text-gray-900 dark:text-gray-100">Benutzerstatistiken</CardTitle>
+                    <CardTitle className="text-gray-900 dark:text-gray-100">{dict.admin.users.stats.title}</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4">
                       <div className="flex justify-between dark:text-gray-300">
-                        <span>Gesamtbenutzer:</span>
+                        <span>{dict.admin.users.stats.totalUsers}</span>
                         <span className="font-semibold">{users.length}</span>
                       </div>
                       <div className="flex justify-between dark:text-gray-300">
-                        <span>Administratoren:</span>
+                        <span>{dict.admin.users.stats.admins}</span>
                         <span className="font-semibold">
                           {users.filter(u => u.role === 'ADMIN').length}
                         </span>
                       </div>
                       <div className="flex justify-between dark:text-gray-300">
-                        <span>Moderatoren:</span>
+                        <span>{dict.admin.users.stats.moderators}</span>
                         <span className="font-semibold">
                           {users.filter(u => u.role === 'MODERATOR').length}
                         </span>
                       </div>
                       <div className="flex justify-between dark:text-gray-300">
-                        <span>Instruktoren:</span>
+                        <span>{dict.admin.users.stats.instructors}</span>
                         <span className="font-semibold">
                           {users.filter(u => u.role === 'INSTRUCTOR').length}
                         </span>
                       </div>
                       <div className="flex justify-between dark:text-gray-300">
-                        <span>Normale Benutzer:</span>
+                        <span>{dict.admin.users.stats.normalUsers}</span>
                         <span className="font-semibold">
                           {users.filter(u => u.role === 'USER').length}
                         </span>
                       </div>
                       <div className="pt-4 border-t dark:border-gray-700">
                         <div className="flex justify-between dark:text-gray-300">
-                          <span>Verifizierte Benutzer:</span>
+                          <span>{dict.admin.users.stats.verifiedUsers}</span>
                           <span className="font-semibold">
                             {users.filter(u => u.emailVerified).length}
                           </span>
                         </div>
                         <div className="flex justify-between dark:text-gray-300 mt-2">
-                          <span>Aktive Benutzer (30 Tage):</span>
+                          <span>{dict.admin.users.stats.activeUsers}</span>
                           <span className="font-semibold">
                             {users.filter(u => {
                               if (!u.lastLogin) return false;
@@ -714,21 +713,25 @@ export default function UserManagement() {
             </div>
           </div>
         </div>
-      </main>
+      </div>
 
       {/* Dialoge */}
-      <AddUserDialog
-        isOpen={isAddUserOpen}
-        onClose={() => setIsAddUserOpen(false)}
-        onAddUser={handleAddUser}
-      />
+      {editingUser && (
+        <EditUserDialog
+          user={editingUser}
+          onClose={() => setEditingUser(null)}
+          onUpdate={handleUpdateUser}
+          dict={dict}
+        />
+      )}
 
-      <EditUserDialog
-        user={editingUser}
-        isOpen={!!editingUser}
-        onClose={() => setEditingUser(null)}
-        onUpdateUser={handleUpdateUser}
-      />
-    </>
+      {isAddUserOpen && (
+        <AddUserDialog
+          onClose={() => setIsAddUserOpen(false)}
+          onAdd={handleAddUser}
+          dict={dict}
+        />
+      )}
+    </div>
   );
 }
