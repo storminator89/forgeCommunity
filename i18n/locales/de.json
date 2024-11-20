@@ -138,5 +138,26 @@
     "likesReceived": "Likes erhalten",
     "comments": "Kommentare",
     "totalPoints": "Gesamtpunkte"
+  },
+  "about": {
+    "title": "Über ForgeCommunity",
+    "developer": {
+      "role": "Full Stack Entwickler",
+      "bio": "Leidenschaftlicher Entwickler mit Fokus auf moderne Webtechnologien und User Experience. Creator von ForgeCommunity."
+    },
+    "features": {
+      "community": {
+        "title": "Community First",
+        "description": "Entwickelt mit Fokus auf Benutzerfreundlichkeit und Community-Engagement."
+      },
+      "quality": {
+        "title": "Qualität",
+        "description": "Modernste Technologien und beste Entwicklungspraktiken für optimale Performance."
+      },
+      "innovation": {
+        "title": "Innovation",
+        "description": "Kontinuierliche Weiterentwicklung und Anpassung an Community-Bedürfnisse."
+      }
+    }
   }
 }

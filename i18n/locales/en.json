@@ -138,5 +138,26 @@
     "likesReceived": "Likes Received",
     "comments": "Comments",
     "totalPoints": "Total Points"
+  },
+  "about": {
+    "title": "About ForgeCommunity",
+    "developer": {
+      "role": "Full Stack Developer",
+      "bio": "Passionate developer focused on modern web technologies and user experience. Creator of ForgeCommunity."
+    },
+    "features": {
+      "community": {
+        "title": "Community First",
+        "description": "Developed with a focus on user-friendliness and community engagement."
+      },
+      "quality": {
+        "title": "Quality",
+        "description": "State-of-the-art technologies and best development practices for optimal performance."
+      },
+      "innovation": {
+        "title": "Innovation",
+        "description": "Continuous development and adaptation to community needs."
+      }
+    }
   }
 }
