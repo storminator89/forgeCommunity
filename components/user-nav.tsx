@@ -12,19 +12,28 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useSession, signOut } from "next-auth/react"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import { 
   User, 
   Settings, 
   LogOut, 
   Shield, 
   BookOpen, 
-  MessageSquare 
+  MessageSquare,
+  Globe
 } from "lucide-react"
+import { locales, getLocaleFromPathname, createLocalizedPathnameFromCurrent } from "@/i18n/settings"
+
+const languages = {
+  de: 'Deutsch',
+  en: 'English'
+} as const
 
 export function UserNav() {
   const { data: session } = useSession()
   const router = useRouter()
+  const pathname = usePathname()
+  const currentLocale = getLocaleFromPathname(pathname)
 
   const handleSignOut = async () => {
     await signOut({ 
@@ -63,6 +72,11 @@ export function UserNav() {
 
   const navigateToMessages = () => {
     router.push('/notifications')  
+  }
+
+  const switchLanguage = (locale: string) => {
+    const newPathname = createLocalizedPathnameFromCurrent(pathname, locale as any)
+    router.push(newPathname)
   }
 
   return (
@@ -145,6 +159,27 @@ export function UserNav() {
             </DropdownMenuGroup>
           </>
         )}
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuItem className="cursor-default">
+            <Globe className="mr-2 h-4 w-4" />
+            <span>Sprache</span>
+          </DropdownMenuItem>
+          {Object.entries(languages).map(([locale, label]) => (
+            <DropdownMenuItem
+              key={locale}
+              onClick={() => switchLanguage(locale)}
+              className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 pl-8"
+            >
+              <span className={currentLocale === locale ? "font-semibold" : ""}>
+                {label}
+              </span>
+              {currentLocale === locale && (
+                <span className="ml-2 text-xs text-muted-foreground">✓</span>
+              )}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem 
           onClick={handleSignOut}

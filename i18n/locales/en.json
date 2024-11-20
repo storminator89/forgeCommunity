@@ -1,0 +1,142 @@
+{
+  "navigation": {
+    "home": "Home",
+    "community": "Community",
+    "about": "About",
+    "profile": "Profile",
+    "settings": "Settings",
+    "courses": "My Courses",
+    "messages": "Messages",
+    "admin": "Admin Dashboard",
+    "logout": "Sign Out",
+    "resources": "Resources",
+    "events": "Events",
+    "login": "Login",
+    "register": "Register",
+    "members": "Members",
+    "knowledgebase": "Knowledge Base",
+    "drafts": "My Drafts",
+    "projects": "Projects",
+    "skills": "Skills",
+    "search": "Search",
+    "chat": "Chat",
+    "notifications": "Notifications",
+    "help": "Help",
+    "dashboard": "Dashboard",
+    "userManagement": "User Management",
+    "sections": {
+      "main": "Community",
+      "content": "Content",
+      "personal": "Personal",
+      "interact": "Interaction",
+      "settings": "Settings",
+      "admin": "Administration"
+    }
+  },
+  "common": {
+    "welcome": "Welcome",
+    "loading": "Loading...",
+    "language": "Language",
+    "search": "Search...",
+    "members": "Members",
+    "posts": "Posts",
+    "comments": "Comments",
+    "likes": "Likes",
+    "share": "Share",
+    "follow": "Follow",
+    "unfollow": "Unfollow",
+    "edit": "Edit",
+    "delete": "Delete",
+    "save": "Save",
+    "cancel": "Cancel",
+    "loadMore": "Load More"
+  },
+  "home": {
+    "hero": {
+      "title": "Discover, Learn, Connect",
+      "subtitle": "ForgeCommunity is your platform for growth, exchange, and collaboration. Join a community that shares your passion for learning and development.",
+      "cta": "Join Community"
+    },
+    "features": {
+      "title": "Our Features",
+      "community": {
+        "title": "Vibrant Community",
+        "description": "Connect with like-minded individuals and build valuable relationships in an active and supportive community."
+      },
+      "learning": {
+        "title": "Learning Resources",
+        "description": "Access high-quality courses and workshops for your personal and professional development. Learn from experts and expand your knowledge."
+      },
+      "events": {
+        "title": "Events",
+        "description": "Participate in exciting online and offline events. Network at workshops, webinars, and community meetups."
+      },
+      "forum": {
+        "title": "Discussion Forums",
+        "description": "Ask questions, share your knowledge, and engage in interesting discussions. Benefit from community exchange."
+      }
+    },
+    "platform": {
+      "title": "A Look at Our Platform"
+    },
+    "cta": {
+      "title": "Ready to Get Started?",
+      "subtitle": "Become part of our growing community and start your learning journey today. Register for free and get instant access to all features.",
+      "button": "Register Now for Free"
+    }
+  },
+  "community": {
+    "title": "Community",
+    "subtitle": "Discover interesting discussions and connect with other members",
+    "categories": {
+      "all": "All",
+      "discussions": "Discussions",
+      "questions": "Questions",
+      "projects": "Projects",
+      "events": "Events"
+    },
+    "filters": {
+      "latest": "Latest",
+      "popular": "Popular",
+      "unanswered": "Unanswered",
+      "following": "Following"
+    },
+    "actions": {
+      "newPost": "New Post",
+      "newDiscussion": "New Discussion",
+      "askQuestion": "Ask Question"
+    },
+    "placeholders": {
+      "search": "Search community...",
+      "noResults": "No results found",
+      "loading": "Loading posts..."
+    },
+    "postForm": {
+      "title": "Title",
+      "titlePlaceholder": "Give your post a title",
+      "titleRequired": "Title is required",
+      "content": "Content",
+      "contentPlaceholder": "What would you like to share?",
+      "cancel": "Cancel",
+      "publish": "Publish Post",
+      "update": "Update Post",
+      "processing": "Processing..."
+    },
+    "editPost": "Edit Post",
+    "deletePost": "Delete Post",
+    "likePost": "Like Post",
+    "removeLike": "Remove Like",
+    "likeComment": "Like Comment",
+    "showComments": "Show Comments",
+    "hideComments": "Hide Comments",
+    "commentPlaceholder": "Write a comment...",
+    "comment": "Write Comment",
+    "leaderboard": "Leaderboard",
+    "points": "Points",
+    "stats": "Your Statistics",
+    "posts": "Posts",
+    "likesReceived": "Likes Received",
+    "comments": "Comments",
+    "totalPoints": "Total Points"
+  }
+}

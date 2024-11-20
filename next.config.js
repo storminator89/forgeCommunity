@@ -14,17 +14,23 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
 
+  // Production Build Konfiguration
+  output: 'standalone',
+  images: {
+    unoptimized: true,
+    domains: [
+      'lh3.googleusercontent.com',
+      'avatars.githubusercontent.com',
+      'github.com',
+      'res.cloudinary.com'
+    ],
+  },
+
   // Experimentelle Features
   experimental: {
     optimizeCss: {
       enabled: true
     }
-  },
-
-  // Production Build Konfiguration
-  output: 'standalone',
-  images: {
-    unoptimized: true
   },
 
   // Webpack-Optimierungen

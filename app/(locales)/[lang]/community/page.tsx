@@ -22,13 +22,18 @@ import {
   ChevronUp,
   Loader2,
   Menu,
-  Send
+  Send,
+  Search,
+  Filter
 } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Skeleton } from "@/components/ui/skeleton"
 import { PointsAnimation } from "@/components/PointsAnimation"
+import { LoadingSpinner } from "@/components/loading-spinner"
+import type { Locale } from "@/i18n/settings"
+import { getDictionary } from "@/i18n/getDictionary"
 
 // Dynamisches Importieren von ReactQuill mit Ladezustand
 const ReactQuill = dynamic(() => import('react-quill'), {
@@ -124,10 +129,16 @@ interface LeaderboardUser {
   points: number
 }
 
-function Community() {
-  // Hooks und State
+interface Props {
+  params: {
+    lang: Locale
+  }
+}
+
+function Community({ params: { lang } }: Props) {
+  const [dict, setDict] = useState<any>(null)
+  const [isLoading, setIsLoading] = useState(true)
   const { data: session } = useSession()
-  const [isLoading, setIsLoading] = useState(false)
   const [localPosts, setLocalPosts] = useState<Post[]>([])
   const [newPost, setNewPost] = useState({ title: '', content: '' })
   const [isEditing, setIsEditing] = useState(false)
@@ -418,6 +429,25 @@ function Community() {
     }))
   }
 
+  // Load dictionary
+  useEffect(() => {
+    const loadDictionary = async () => {
+      try {
+        setIsLoading(true)
+        const dictionary = await getDictionary(lang)
+        setDict(dictionary)
+      } catch (error) {
+        console.error('Error loading dictionary:', error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    loadDictionary()
+  }, [lang])
+
+  if (isLoading) return <LoadingSpinner />
+  if (!dict) return null
+
   // Render-Funktionen für bessere Übersichtlichkeit
   const renderPostForm = () => (
     <motion.div
@@ -430,12 +460,12 @@ function Community() {
       <form onSubmit={handleSubmit} className="space-y-6 bg-background dark:bg-gray-800 p-8 rounded-lg shadow-lg transition-colors duration-300">
         {/* Titel */}
         <div>
-          <Label htmlFor="title" className="block text-sm font-medium text-foreground">Titel</Label>
+          <Label htmlFor="title" className="block text-sm font-medium text-foreground">{dict.community.postForm.title}</Label>
           <Input
             id="title"
             value={newPost.title}
             onChange={(e) => setNewPost({ ...newPost, title: e.target.value })}
-            placeholder="Gib deinem Beitrag einen Titel"
+            placeholder={dict.community.postForm.titlePlaceholder}
             required
             disabled={isLoading}
             className={`mt-1 block w-full p-3 border ${
@@ -446,19 +476,19 @@ function Community() {
           />
           {!newPost.title && (
             <span id="title-error" className="text-red-500 text-xs">
-              Titel ist erforderlich.
+              {dict.community.postForm.titleRequired}
             </span>
           )}
         </div>
 
         {/* Inhalt */}
         <div>
-          <Label htmlFor="content" className="block text-sm font-medium text-foreground">Inhalt</Label>
+          <Label htmlFor="content" className="block text-sm font-medium text-foreground">{dict.community.postForm.content}</Label>
           <ReactQuill
             theme="snow"
             value={newPost.content}
             onChange={(content) => setNewPost({ ...newPost, content })}
-            placeholder="Was möchtest du mitteilen?"
+            placeholder={dict.community.postForm.contentPlaceholder}
             modules={EDITOR_MODULES}
             formats={EDITOR_FORMATS}
             readOnly={isLoading} // 'disabled' durch 'readOnly' ersetzt
@@ -478,20 +508,20 @@ function Community() {
             disabled={isLoading}
             className="px-4 py-2 border border-border rounded-md text-foreground hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200"
           >
-            Abbrechen
+            {dict.community.postForm.cancel}
           </Button>
           <Button
             type="submit"
             disabled={isLoading}
-            className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark flex items-center transition-transform transform active:scale-95 duration-200"
+            className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark flex items-center transition-transform transform hover:scale-105 duration-200 active:scale-95"
           >
             {isLoading ? (
               <>
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                Wird verarbeitet...
+                {dict.community.postForm.processing}
               </>
             ) : (
-              editingPost ? 'Beitrag aktualisieren' : 'Beitrag veröffentlichen'
+              editingPost ? dict.community.postForm.update : dict.community.postForm.publish
             )}
           </Button>
         </div>
@@ -524,7 +554,9 @@ function Community() {
         {/* Header */}
         <header className="bg-background dark:bg-gray-800 shadow-md sticky top-0 z-40 transition-colors duration-300">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-            <h2 className="text-3xl font-bold text-foreground dark:text-white transition-colors duration-300">Community</h2>
+            <h2 className="text-3xl font-bold text-foreground dark:text-white transition-colors duration-300">
+              {dict.community.title}
+            </h2>
             <div className="flex items-center space-x-4">
               <ThemeToggle />
               <UserNav />
@@ -560,7 +592,7 @@ function Community() {
                         disabled={isLoading}
                       >
                         <PlusCircle className="mr-2 h-5 w-5" />
-                        Neuer Beitrag
+                        {dict.community.newPost}
                       </Button>
                     </motion.div>
                   ) : (
@@ -619,13 +651,13 @@ function Community() {
                                           }}
                                           className="hover:bg-gray-200 dark:hover:bg-gray-600 p-2 rounded-full transition-colors duration-200"
                                           disabled={isLoading}
-                                          aria-label="Beitrag bearbeiten"
+                                          aria-label={dict.community.editPost}
                                         >
                                           <Edit className="h-4 w-4 text-primary" />
                                         </Button>
                                       </TooltipTrigger>
                                       <TooltipContent>
-                                        <p>Beitrag bearbeiten</p>
+                                        <p>{dict.community.editPost}</p>
                                       </TooltipContent>
                                     </Tooltip>
                                   </TooltipProvider>
@@ -640,13 +672,13 @@ function Community() {
                                           onClick={() => handleDeletePost(post.id)}
                                           className="hover:bg-red-200 dark:hover:bg-red-600 p-2 rounded-full transition-colors duration-200"
                                           disabled={isLoading}
-                                          aria-label="Beitrag löschen"
+                                          aria-label={dict.community.deletePost}
                                         >
                                           <Trash className="h-4 w-4 text-red-500" />
                                         </Button>
                                       </TooltipTrigger>
                                       <TooltipContent>
-                                        <p>Beitrag löschen</p>
+                                        <p>{dict.community.deletePost}</p>
                                       </TooltipContent>
                                     </Tooltip>
                                   </TooltipProvider>
@@ -707,14 +739,14 @@ function Community() {
                                             post.isLiked ? 'text-primary' : 'text-gray-500'
                                           }`}
                                           disabled={isLoading}
-                                          aria-label={post.isLiked ? 'Like entfernen' : 'Beitrag liken'}
+                                          aria-label={post.isLiked ? dict.community.removeLike : dict.community.likePost}
                                         >
                                           <ThumbsUp className="h-4 w-4" />
                                           <span>{post.votes}</span>
                                         </Button>
                                       </TooltipTrigger>
                                       <TooltipContent>
-                                        <p>{post.isLiked ? 'Like entfernen' : 'Beitrag liken'}</p>
+                                        <p>{post.isLiked ? dict.community.removeLike : dict.community.likePost}</p>
                                       </TooltipContent>
                                     </Tooltip>
                                   </TooltipProvider>
@@ -728,7 +760,7 @@ function Community() {
                                           size="sm"
                                           onClick={() => toggleComments(post.id)}
                                           className="hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center space-x-1 rounded-md p-2 transition-colors duration-200"
-                                          aria-label={expandedComments[post.id] ? 'Kommentare ausblenden' : 'Kommentare anzeigen'}
+                                          aria-label={expandedComments[post.id] ? dict.community.hideComments : dict.community.showComments}
                                         >
                                           <MessageSquare className="h-4 w-4" />
                                           <span>{post.comments.length}</span>
@@ -742,8 +774,8 @@ function Community() {
                                       <TooltipContent>
                                         <p>
                                           {expandedComments[post.id] ?
-                                            'Kommentare ausblenden' :
-                                            'Kommentare anzeigen'
+                                            dict.community.hideComments :
+                                            dict.community.showComments
                                           }
                                         </p>
                                       </TooltipContent>
@@ -770,10 +802,10 @@ function Community() {
                                               ...newComment,
                                               [post.id]: e.target.value
                                             })}
-                                            placeholder="Schreibe einen Kommentar..."
+                                            placeholder={dict.community.commentPlaceholder}
                                             className="pr-10"
                                             disabled={isLoading}
-                                            aria-label="Kommentar schreiben"
+                                            aria-label={dict.community.comment}
                                           />
                                           <Button
                                             onClick={() => handleComment(post.id)}
@@ -832,14 +864,14 @@ function Community() {
                                                         comment.isLiked ? 'text-primary' : 'text-gray-500'
                                                       }`}
                                                       disabled={isLoading}
-                                                      aria-label={comment.isLiked ? 'Like entfernen' : 'Kommentar liken'}
+                                                      aria-label={comment.isLiked ? dict.community.removeLike : dict.community.likeComment}
                                                     >
                                                       <ThumbsUp className="h-4 w-4" />
                                                       <span>{comment.votes}</span>
                                                     </Button>
                                                   </TooltipTrigger>
                                                   <TooltipContent>
-                                                    <p>{comment.isLiked ? 'Like entfernen' : 'Kommentar liken'}</p>
+                                                    <p>{comment.isLiked ? dict.community.removeLike : dict.community.likeComment}</p>
                                                   </TooltipContent>
                                                 </Tooltip>
                                               </TooltipProvider>
@@ -867,7 +899,7 @@ function Community() {
                   <CardHeader className="p-4 border-b border-border dark:border-gray-600">
                     <CardTitle className="flex items-center text-lg font-semibold text-foreground dark:text-white">
                       <Trophy className="h-6 w-6 text-yellow-500 mr-2" />
-                      Leaderboard
+                      {dict.community.leaderboard}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-4">
@@ -916,7 +948,7 @@ function Community() {
                             </div>
                             <div className="flex items-center space-x-1">
                               <span className="font-semibold text-primary dark:text-primary-light">{user.points}</span>
-                              <span className="text-sm text-gray-500 dark:text-gray-400">Punkte</span>
+                              <span className="text-sm text-gray-500 dark:text-gray-400">{dict.community.points}</span>
                             </div>
                           </motion.div>
                         ))
@@ -930,7 +962,7 @@ function Community() {
                   <CardHeader className="p-4 border-b border-border dark:border-gray-600">
                     <CardTitle className="flex items-center text-lg font-semibold text-foreground dark:text-white">
                       <Award className="h-6 w-6 text-purple-500 mr-2" />
-                      Deine Statistiken
+                      {dict.community.stats}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-4">
@@ -944,7 +976,7 @@ function Community() {
                       <div className="flex justify-between items-center p-3 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200">
                         <div className="flex items-center space-x-2">
                           <PlusCircle className="h-5 w-5 text-blue-500" />
-                          <span className="text-sm font-medium text-foreground dark:text-white">Beiträge</span>
+                          <span className="text-sm font-medium text-foreground dark:text-white">{dict.community.posts}</span>
                         </div>
                         <span className="font-semibold text-primary bg-gray-200 dark:bg-gray-600 px-3 py-1 rounded-full">
                           {localPosts.filter(post => post.authorId === session?.user.id).length}
@@ -955,7 +987,7 @@ function Community() {
                       <div className="flex justify-between items-center p-3 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200">
                         <div className="flex items-center space-x-2">
                           <ThumbsUp className="h-5 w-5 text-green-500" />
-                          <span className="text-sm font-medium text-foreground dark:text-white">Likes erhalten</span>
+                          <span className="text-sm font-medium text-foreground dark:text-white">{dict.community.likesReceived}</span>
                         </div>
                         <span className="font-semibold text-green-600 bg-gray-200 dark:bg-gray-600 px-3 py-1 rounded-full">
                           {localPosts
@@ -968,7 +1000,7 @@ function Community() {
                       <div className="flex justify-between items-center p-3 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200">
                         <div className="flex items-center space-x-2">
                           <MessageSquare className="h-5 w-5 text-orange-500" />
-                          <span className="text-sm font-medium text-foreground dark:text-white">Kommentare</span>
+                          <span className="text-sm font-medium text-foreground dark:text-white">{dict.community.comments}</span>
                         </div>
                         <span className="font-semibold text-orange-600 bg-gray-200 dark:bg-gray-600 px-3 py-1 rounded-full">
                           {localPosts.reduce((acc, post) =>
@@ -982,7 +1014,7 @@ function Community() {
                       <div className="flex justify-between items-center p-3 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200">
                         <div className="flex items-center space-x-2">
                           <Award className="h-5 w-5 text-purple-500" />
-                          <span className="text-sm font-medium text-foreground dark:text-white">Gesamtpunkte</span>
+                          <span className="text-sm font-medium text-foreground dark:text-white">{dict.community.totalPoints}</span>
                         </div>
                         <span className="font-semibold text-purple-600 bg-gray-200 dark:bg-gray-600 px-3 py-1 rounded-full">
                           {leaderboardUsers.find(

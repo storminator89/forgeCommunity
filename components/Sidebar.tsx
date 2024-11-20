@@ -1,13 +1,14 @@
-// components/Sidebar.tsx
 "use client";
 
 import Link from 'next/link';
-import { useState, createContext, useContext } from 'react';
+import { useState, createContext, useContext, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useTheme } from 'next-themes';
 import { signOut } from 'next-auth/react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useNotifications } from "@/contexts/NotificationContext";
+import type { Locale } from "@/i18n/settings";
+import { getDictionary } from "@/i18n/getDictionary";
 import { 
   Home, 
   Users, 
@@ -38,6 +39,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+
+interface SidebarProps {
+  className?: string;
+}
+
+const SidebarContext = createContext({ isCollapsed: false });
 
 const navItems = {
   main: [
@@ -71,19 +78,56 @@ const navItems = {
   ],
 };
 
-interface SidebarProps {
-  className?: string;
-}
-
-const SidebarContext = createContext({ isCollapsed: false });
-
 export function Sidebar({ className }: SidebarProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [dict, setDict] = useState<any>(null);
   const { theme } = useTheme();
   const router = useRouter();
   const pathname = usePathname();
   const { data: session } = useSession();
+
+  // Extrahiere die Sprache aus dem Pathname
+  const lang = pathname?.split('/')[1] as Locale || 'de';
+
+  useEffect(() => {
+    const loadDictionary = async () => {
+      const dictionary = await getDictionary(lang);
+      setDict(dictionary);
+      
+      // Aktualisiere die navItems mit den Übersetzungen
+      navItems.main = [
+        { name: dictionary.navigation.community, icon: Users, href: `/${lang}/community` },
+        { name: dictionary.navigation.members, icon: Users, href: `/${lang}/members` },
+      ];
+      navItems.content = [
+        { name: dictionary.navigation.courses, icon: GraduationCap, href: `/${lang}/courses` },
+        { name: dictionary.navigation.events, icon: Calendar, href: `/${lang}/events` },
+        { name: dictionary.navigation.knowledgebase, icon: Library, href: `/${lang}/knowledgebase` },
+        { name: dictionary.navigation.resources, icon: BookOpen, href: `/${lang}/resources` },
+      ];
+      navItems.personal = [
+        { name: dictionary.navigation.drafts, icon: BookmarkIcon, href: `/${lang}/knowledgebase/drafts` },
+        { name: dictionary.navigation.projects, icon: Briefcase, href: `/${lang}/showcases` },
+        { name: dictionary.navigation.skills, icon: Award, href: `/${lang}/skills` },
+      ];
+      navItems.interact = [
+        { name: dictionary.navigation.search, icon: Search, href: `/${lang}/search` },
+        { name: dictionary.navigation.chat, icon: MessageCircle, href: `/${lang}/chat` },
+        { name: dictionary.navigation.notifications, icon: Bell, href: `/${lang}/notifications` },
+      ];
+      navItems.settings = [
+        { name: dictionary.navigation.settings, icon: Settings, href: `/${lang}/settings` },
+        { name: dictionary.navigation.help, icon: HelpCircle, href: `/${lang}/help` },
+        { name: dictionary.navigation.about, icon: Info, href: `/${lang}/about` },
+      ];
+      navItems.admin = [
+        { name: dictionary.navigation.dashboard, icon: LayoutDashboard, href: `/${lang}/admin/dashboard` },
+        { name: dictionary.navigation.userManagement, icon: Users, href: `/${lang}/admin/users` },
+      ];
+    };
+    loadDictionary();
+  }, [lang]); // Reagiere auf Änderungen der Sprache
 
   const toggleSidebar = () => {
     setIsOpen(!isOpen);
@@ -95,8 +139,10 @@ export function Sidebar({ className }: SidebarProps) {
 
   const handleLogout = async () => {
     await signOut({ redirect: false });
-    router.push('/');
+    router.push(`/${lang}`);
   };
+
+  if (!dict) return null;
 
   return (
     <SidebarContext.Provider value={{ isCollapsed }}>
@@ -128,13 +174,13 @@ export function Sidebar({ className }: SidebarProps) {
             </div>
           </div>
           <nav className="space-y-4">
-            <NavSection title="Community" items={navItems.main} pathname={pathname} />
-            <NavSection title="Inhalte" items={navItems.content} pathname={pathname} />
-            <NavSection title="Persönlich" items={navItems.personal} pathname={pathname} />
-            <NavSection title="Interaktion" items={navItems.interact} pathname={pathname} />
-            <NavSection title="Einstellungen" items={navItems.settings} pathname={pathname} />
+            <NavSection title={dict.navigation.sections.main} items={navItems.main} pathname={pathname} />
+            <NavSection title={dict.navigation.sections.content} items={navItems.content} pathname={pathname} />
+            <NavSection title={dict.navigation.sections.personal} items={navItems.personal} pathname={pathname} />
+            <NavSection title={dict.navigation.sections.interact} items={navItems.interact} pathname={pathname} />
+            <NavSection title={dict.navigation.sections.settings} items={navItems.settings} pathname={pathname} />
             {session?.user?.role === 'ADMIN' && (
-              <NavSection title="Administration" items={navItems.admin} pathname={pathname} />
+              <NavSection title={dict.navigation.sections.admin} items={navItems.admin} pathname={pathname} />
             )}
           </nav>
           <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
@@ -143,7 +189,7 @@ export function Sidebar({ className }: SidebarProps) {
               className="flex items-center space-x-3 p-2 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all duration-200 w-full group"
             >
               <LogOut className="w-5 h-5 flex-shrink-0 group-hover:scale-110 transition-transform" />
-              <span className="font-medium">Abmelden</span>
+              <span className="font-medium">{dict.navigation.logout}</span>
             </button>
           </div>
         </div>
@@ -152,83 +198,57 @@ export function Sidebar({ className }: SidebarProps) {
   );
 }
 
-function NavSection({ title, items, pathname }) {
+function NavSection({ title, items, pathname }: { title: string, items: any[], pathname: string }) {
   const { isCollapsed } = useContext(SidebarContext);
-  
+
+  if (!items?.length) return null;
+
   return (
     <div>
       {!isCollapsed && (
-        <h2 className="text-xs uppercase text-gray-500 dark:text-gray-400 font-semibold mb-2">{title}</h2>
+        <h2 className="px-2 mb-2 text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400">
+          {title}
+        </h2>
       )}
-      <ul className="space-y-2">
+      <div className="space-y-1">
         {items.map((item) => (
-          <NavItem key={item.name} item={item} isActive={pathname === item.href} />
+          <NavItem key={item.href} item={item} isActive={pathname === item.href} />
         ))}
-      </ul>
+      </div>
     </div>
   );
 }
 
-function NavItem({ item, isActive }) {
-  const { unreadCount } = useNotifications();
+function NavItem({ item, isActive }: { item: any, isActive: boolean }) {
   const { isCollapsed } = useContext(SidebarContext);
-  const isNotifications = item.name === 'Benachrichtigungen';
+  const Icon = item.icon;
 
   const content = (
-    <Link 
-      href={item.href} 
-      className={`flex items-center space-x-3 p-2 rounded-lg transition-colors duration-200 relative
-        ${isActive 
-          ? 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-200' 
-          : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
-        } ${isCollapsed ? 'justify-center' : ''}`}
+    <Link
+      href={item.href}
+      className={`flex items-center space-x-3 p-2 rounded-lg transition-all duration-200 group ${
+        isActive
+          ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
+          : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+      }`}
     >
-      <item.icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-blue-600 dark:text-blue-400' : ''}`} />
+      <Icon className={`w-5 h-5 flex-shrink-0 ${
+        isActive ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'
+      } group-hover:scale-110 transition-transform`} />
       {!isCollapsed && <span className="font-medium">{item.name}</span>}
-      {isNotifications && unreadCount > 0 && (
-        <Badge 
-          className={`absolute ${isCollapsed ? 'top-0 right-0' : '-right-1 -top-1'} min-w-[20px] h-5 flex items-center justify-center bg-red-500 text-white`}
-          variant="default"
-        >
-          {unreadCount > 99 ? '99+' : unreadCount}
-        </Badge>
-      )}
     </Link>
   );
 
-  if (isNotifications && unreadCount > 0) {
-    return (
-      <li>
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              {content}
-            </TooltipTrigger>
-            <TooltipContent side={isCollapsed ? "right" : "top"}>
-              <p>{unreadCount} ungelesene Benachrichtigung{unreadCount !== 1 ? 'en' : ''}</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      </li>
-    );
-  }
-
-  if (isCollapsed) {
-    return (
-      <li>
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              {content}
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              <p>{item.name}</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      </li>
-    );
-  }
-
-  return <li>{content}</li>;
+  return isCollapsed ? (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          {content}
+        </TooltipTrigger>
+        <TooltipContent side="right">
+          <p>{item.name}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  ) : content;
 }

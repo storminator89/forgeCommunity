@@ -1,0 +1,142 @@
+{
+  "navigation": {
+    "home": "Startseite",
+    "community": "Community",
+    "about": "Über uns",
+    "profile": "Profil",
+    "settings": "Einstellungen",
+    "courses": "Meine Kurse",
+    "messages": "Nachrichten",
+    "admin": "Admin Dashboard",
+    "logout": "Abmelden",
+    "resources": "Ressourcen",
+    "events": "Events",
+    "login": "Login",
+    "register": "Registrieren",
+    "members": "Mitglieder",
+    "knowledgebase": "Wissensdatenbank",
+    "drafts": "Meine Entwürfe",
+    "projects": "Projekte",
+    "skills": "Skills",
+    "search": "Suche",
+    "chat": "Chat",
+    "notifications": "Benachrichtigungen",
+    "help": "Hilfe",
+    "dashboard": "Dashboard",
+    "userManagement": "Benutzerverwaltung",
+    "sections": {
+      "main": "Community",
+      "content": "Inhalte",
+      "personal": "Persönlich",
+      "interact": "Interaktion",
+      "settings": "Einstellungen",
+      "admin": "Administration"
+    }
+  },
+  "common": {
+    "welcome": "Willkommen",
+    "loading": "Laden...",
+    "language": "Sprache",
+    "search": "Suchen...",
+    "members": "Mitglieder",
+    "posts": "Beiträge",
+    "comments": "Kommentare",
+    "likes": "Likes",
+    "share": "Teilen",
+    "follow": "Folgen",
+    "unfollow": "Nicht mehr folgen",
+    "edit": "Bearbeiten",
+    "delete": "Löschen",
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "loadMore": "Mehr laden"
+  },
+  "home": {
+    "hero": {
+      "title": "Entdecke, Lerne, Verbinde",
+      "subtitle": "ForgeCommunity ist deine Plattform für Wachstum, Austausch und Zusammenarbeit. Trete einer Community bei, die deine Leidenschaft für Lernen und Entwicklung teilt.",
+      "cta": "Zur Community"
+    },
+    "features": {
+      "title": "Unsere Features",
+      "community": {
+        "title": "Lebendige Community",
+        "description": "Tausche dich mit Gleichgesinnten aus und knüpfe wertvolle Kontakte in einer aktiven und unterstützenden Gemeinschaft."
+      },
+      "learning": {
+        "title": "Lernressourcen",
+        "description": "Zugang zu hochwertigen Kursen und Workshops für deine persönliche und berufliche Entwicklung. Lerne von Experten und erweitere dein Wissen."
+      },
+      "events": {
+        "title": "Events",
+        "description": "Nimm an spannenden Online- und Offline-Veranstaltungen teil. Vernetze dich bei Workshops, Webinaren und Community-Treffen."
+      },
+      "forum": {
+        "title": "Diskussionsforen",
+        "description": "Stelle Fragen, teile dein Wissen und beteilige dich an interessanten Diskussionen. Profitiere vom Austausch mit der Community."
+      }
+    },
+    "platform": {
+      "title": "Ein Blick in unsere Plattform"
+    },
+    "cta": {
+      "title": "Bereit loszulegen?",
+      "subtitle": "Werde Teil unserer wachsenden Community und starte deine Lernreise noch heute. Registriere dich kostenlos und erhalte sofortigen Zugang zu allen Features.",
+      "button": "Jetzt kostenlos registrieren"
+    }
+  },
+  "community": {
+    "title": "Community",
+    "subtitle": "Entdecke interessante Diskussionen und verbinde dich mit anderen Mitgliedern",
+    "categories": {
+      "all": "Alle",
+      "discussions": "Diskussionen",
+      "questions": "Fragen",
+      "projects": "Projekte",
+      "events": "Events"
+    },
+    "filters": {
+      "latest": "Neueste",
+      "popular": "Beliebt",
+      "unanswered": "Unbeantwortet",
+      "following": "Folge ich"
+    },
+    "actions": {
+      "newPost": "Neuer Beitrag",
+      "newDiscussion": "Neue Diskussion",
+      "askQuestion": "Frage stellen"
+    },
+    "placeholders": {
+      "search": "Community durchsuchen...",
+      "noResults": "Keine Ergebnisse gefunden",
+      "loading": "Beiträge werden geladen..."
+    },
+    "postForm": {
+      "title": "Titel",
+      "titlePlaceholder": "Gib deinem Beitrag einen Titel",
+      "titleRequired": "Titel ist erforderlich",
+      "content": "Inhalt",
+      "contentPlaceholder": "Was möchtest du mitteilen?",
+      "cancel": "Abbrechen",
+      "publish": "Beitrag veröffentlichen",
+      "update": "Beitrag aktualisieren",
+      "processing": "Wird verarbeitet..."
+    },
+    "editPost": "Beitrag bearbeiten",
+    "deletePost": "Beitrag löschen",
+    "likePost": "Beitrag liken",
+    "removeLike": "Like entfernen",
+    "likeComment": "Kommentar liken",
+    "showComments": "Kommentare anzeigen",
+    "hideComments": "Kommentare ausblenden",
+    "commentPlaceholder": "Schreibe einen Kommentar...",
+    "comment": "Kommentar schreiben",
+    "leaderboard": "Leaderboard",
+    "points": "Punkte",
+    "stats": "Deine Statistiken",
+    "posts": "Beiträge",
+    "likesReceived": "Likes erhalten",
+    "comments": "Kommentare",
+    "totalPoints": "Gesamtpunkte"
+  }
+}
