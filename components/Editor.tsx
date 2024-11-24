@@ -17,7 +17,7 @@ import {
 } from 'lucide-react'
 
 interface EditorProps {
-  content: string
+  content: string | null | undefined
   onChange: (content: string) => void
   placeholder?: string
 }
@@ -98,13 +98,12 @@ const MenuBar = ({ editor }: { editor: any }) => {
 
 export function Editor({ content, onChange, placeholder = 'Beginnen Sie hier mit der Eingabe...' }: EditorProps) {
   const editor = useEditor({
-    extensions: [
-      StarterKit,
-    ],
-    content: content,
+    extensions: [StarterKit],
+    content: content || '',
     editorProps: {
       attributes: {
-        class: 'prose dark:prose-invert prose-sm sm:prose-base lg:prose-lg xl:prose-xl p-4 focus:outline-none min-h-[200px]',
+        class: 'min-h-[150px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
+        'data-testid': 'editor-content',
       },
     },
     onUpdate: ({ editor }) => {
@@ -114,7 +113,7 @@ export function Editor({ content, onChange, placeholder = 'Beginnen Sie hier mit
 
   useEffect(() => {
     if (editor && content !== editor.getHTML()) {
-      editor.commands.setContent(content)
+      editor.commands.setContent(content || '')
     }
   }, [content, editor])
 
