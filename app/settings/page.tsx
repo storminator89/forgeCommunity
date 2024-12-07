@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Bell, Lock, Globe, CheckCircle, XCircle, Code, Design, Database, Languages, Edit, Trash, Award, ExternalLink, Linkedin, Eye, User, Download } from 'lucide-react'
+import { Bell, Lock, Globe, CheckCircle, XCircle, Code, Database, Languages, Edit, Trash, Award, ExternalLink, Linkedin, Eye, User, Download, Layout } from 'lucide-react'
 import { ImageUpload } from "@/components/ImageUpload"
 import axios from 'axios'
 import { toast } from 'react-toastify'
@@ -218,7 +218,7 @@ export default function SettingsPage() {
     if (name.includes('javascript') || name.includes('typescript') || name.includes('python')) {
       return <Code className="w-5 h-5 text-blue-500" />
     } else if (name.includes('design') || name.includes('ui') || name.includes('ux')) {
-      return <Design className="w-5 h-5 text-pink-500" />
+      return <Layout className="w-5 h-5 text-pink-500" />
     } else if (name.includes('database') || name.includes('sql') || name.includes('mongodb')) {
       return <Database className="w-5 h-5 text-green-500" />
     } else if (name.includes('language') || name.includes('german') || name.includes('english')) {

@@ -15,7 +15,7 @@ export default function Home() {
 
   return (
     <div className="h-screen overflow-y-scroll snap-y snap-mandatory">
-      <header className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-md shadow-md z-50 fixed top-0 w-full">
+      <header className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-md shadow-md z-50 fixed top-0 w-full h-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
           <div className="flex items-center space-x-8">
             <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">ForgeCommunity</h2>
@@ -38,10 +38,10 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="pt-16">
+      <main>
         <section 
           ref={heroRef}
-          className="min-h-screen snap-start flex items-center justify-center bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-pink-500/10 animate-gradient"
+          className="h-screen pt-24 snap-start flex items-center justify-center bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-pink-500/10 animate-gradient"
         >
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
             <div className={`transform transition-all duration-1000 ${heroInView ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
@@ -67,14 +67,14 @@ export default function Home() {
         
         <section 
           ref={featuresRef}
-          className="min-h-screen snap-start flex items-center justify-center bg-gradient-to-r from-green-500/10 via-teal-500/10 to-blue-500/10 animate-gradient"
+          className="min-h-screen pt-32 snap-start bg-gradient-to-r from-green-500/10 via-teal-500/10 to-blue-500/10 animate-gradient"
         >
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className={`transform transition-all duration-1000 ${featuresInView ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
-              <h2 className="text-5xl md:text-6xl font-bold text-center text-gray-900 dark:text-white mb-20">
+            <div className={`transform transition-all duration-1000 ${featuresInView ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'} pt-16`}>
+              <h2 className="text-5xl md:text-6xl font-bold text-center text-gray-900 dark:text-white mb-12">
                 Unsere Features
               </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-16 max-w-6xl mx-auto">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto">
                 <FeatureCard 
                   icon={Users} 
                   title="Lebendige Community" 
@@ -102,19 +102,18 @@ export default function Home() {
 
         <section 
           ref={screenshotRef}
-          className="min-h-screen snap-start flex items-center justify-center bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-blue-500/10 animate-gradient"
+          className="min-h-screen pt-32 snap-start bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-blue-500/10 animate-gradient"
         >
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className={`transform transition-all duration-1000 ${screenshotInView ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
-              <h2 className="text-5xl md:text-6xl font-bold text-center text-gray-900 dark:text-white mb-16">
+            <div className={`transform transition-all duration-1000 ${screenshotInView ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'} pt-16`}>
+              <h2 className="text-5xl md:text-6xl font-bold text-center text-gray-900 dark:text-white mb-12">
                 Ein Blick in unsere Plattform
               </h2>
               <div className="flex justify-center relative group">
                 <img 
                   src="/images/screenshot.png" 
                   alt="ForgeCommunity Screenshot" 
-                  className="rounded-xl shadow-2xl max-w-full h-auto transform transition-transform duration-500 group-hover:scale-[1.02]"
-                  style={{ maxWidth: '90%' }}
+                  className="rounded-xl shadow-2xl max-w-full h-auto max-h-[60vh] object-contain"
                 />
                 <div className="absolute inset-0 rounded-xl bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
               </div>
@@ -124,10 +123,10 @@ export default function Home() {
 
         <section 
           ref={ctaRef}
-          className="min-h-screen snap-start flex items-center justify-center bg-gradient-to-r from-blue-600 to-blue-800 dark:from-blue-800 dark:to-blue-900"
+          className="min-h-screen pt-32 snap-start bg-gradient-to-r from-blue-600 to-blue-800 dark:from-blue-800 dark:to-blue-900"
         >
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className={`transform transition-all duration-1000 ${ctaInView ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
+            <div className={`transform transition-all duration-1000 ${ctaInView ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'} pt-16`}>
               <div className="text-center text-white">
                 <h2 className="text-5xl md:text-6xl font-bold mb-10">Bereit loszulegen?</h2>
                 <p className="text-2xl md:text-3xl mb-12 max-w-3xl mx-auto leading-relaxed">
