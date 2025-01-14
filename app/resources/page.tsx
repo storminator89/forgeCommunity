@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Book, File, Video, Link, Search, Plus, Menu } from 'lucide-react';
+import { Book, File, Video, Link, Search, Plus, Menu, Edit } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import { useSession } from 'next-auth/react';
@@ -64,6 +64,8 @@ export default function ResourceLibrary() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedTab, setSelectedTab] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editResource, setEditResource] = useState<Resource | null>(null);
 
   useEffect(() => {
     fetchResources();
@@ -128,6 +130,33 @@ export default function ResourceLibrary() {
     } catch (error) {
       console.error('Fehler beim Löschen der Ressource:', error);
       toast.error('Fehler beim Löschen der Ressource.');
+    }
+  };
+
+  const handleEditResource = (resource: Resource) => {
+    setEditResource(resource);
+    setIsEditDialogOpen(true);
+  };
+
+  const handleUpdateResource = async () => {
+    if (!editResource?.title || !editResource?.url) {
+      toast.error('Titel und URL sind erforderlich.');
+      return;
+    }
+
+    try {
+      const response = await axios.put(`/api/resources`, {
+        id: editResource.id,
+        title: editResource.title,
+        url: editResource.url,
+      });
+
+      setResources(resources.map(resource => resource.id === editResource.id ? response.data : resource));
+      setIsEditDialogOpen(false);
+      toast.success('Ressource erfolgreich aktualisiert!');
+    } catch (error: any) {
+      console.error('Fehler beim Aktualisieren der Ressource:', error);
+      toast.error('Fehler beim Aktualisieren der Ressource.');
     }
   };
 
@@ -281,19 +310,19 @@ export default function ResourceLibrary() {
                 <TabsTrigger value="others" className="text-gray-700 dark:text-gray-300">Andere</TabsTrigger>
               </TabsList>
               <TabsContent value="all">
-                <ResourceGrid resources={paginatedResources} onDelete={handleDeleteResource} />
+                <ResourceGrid resources={paginatedResources} onDelete={handleDeleteResource} onEdit={handleEditResource} />
               </TabsContent>
               <TabsContent value="articles">
-                <ResourceGrid resources={paginatedResources.filter(r => r.type === 'ARTICLE')} onDelete={handleDeleteResource} />
+                <ResourceGrid resources={paginatedResources.filter(r => r.type === 'ARTICLE')} onDelete={handleDeleteResource} onEdit={handleEditResource} />
               </TabsContent>
               <TabsContent value="videos">
-                <ResourceGrid resources={paginatedResources.filter(r => r.type === 'VIDEO')} onDelete={handleDeleteResource} />
+                <ResourceGrid resources={paginatedResources.filter(r => r.type === 'VIDEO')} onDelete={handleDeleteResource} onEdit={handleEditResource} />
               </TabsContent>
               <TabsContent value="ebooks">
-                <ResourceGrid resources={paginatedResources.filter(r => r.type === 'EBOOK')} onDelete={handleDeleteResource} />
+                <ResourceGrid resources={paginatedResources.filter(r => r.type === 'EBOOK')} onDelete={handleDeleteResource} onEdit={handleEditResource} />
               </TabsContent>
               <TabsContent value="others">
-                <ResourceGrid resources={paginatedResources.filter(r => !['ARTICLE', 'VIDEO', 'EBOOK'].includes(r.type))} onDelete={handleDeleteResource} />
+                <ResourceGrid resources={paginatedResources.filter(r => !['ARTICLE', 'VIDEO', 'EBOOK'].includes(r.type))} onDelete={handleDeleteResource} onEdit={handleEditResource} />
               </TabsContent>
             </Tabs>
             {totalPages > 1 && (
@@ -302,11 +331,43 @@ export default function ResourceLibrary() {
           </div>
         </main>
       </div>
+      {editResource && (
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-semibold">Ressource bearbeiten</DialogTitle>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="edit-title" className="text-gray-700 dark:text-gray-300">Titel</Label>
+                <Input
+                  id="edit-title"
+                  value={editResource.title}
+                  onChange={(e) => setEditResource({ ...editResource, title: e.target.value })}
+                  className="dark:bg-gray-700 dark:text-white"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-url" className="text-gray-700 dark:text-gray-300">URL</Label>
+                <Input
+                  id="edit-url"
+                  value={editResource.url}
+                  onChange={(e) => setEditResource({ ...editResource, url: e.target.value })}
+                  className="dark:bg-gray-700 dark:text-white"
+                />
+              </div>
+            </div>
+            <Button onClick={handleUpdateResource} className="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white">
+              Aktualisieren
+            </Button>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
 
-function ResourceGrid({ resources, onDelete }: { resources: Resource[]; onDelete: (id: string) => void }) {
+function ResourceGrid({ resources, onDelete, onEdit }: { resources: Resource[]; onDelete: (id: string) => void; onEdit: (resource: Resource) => void }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
       <AnimatePresence>
@@ -324,17 +385,26 @@ function ResourceGrid({ resources, onDelete }: { resources: Resource[]; onDelete
                   {getIcon(resource.type)}
                   <h3 className="text-xl font-semibold text-white dark:text-gray-200">{resource.title}</h3>
                 </div>
-                <Button
-                  variant="ghost"
-                  onClick={() => onDelete(resource.id)}
-                  className="text-white dark:text-gray-200 hover:text-red-500 transition-colors duration-200"
-                  aria-label="Ressource löschen"
-                >
-                  {/* Aktualisiertes SVG-Icon für das Löschen */}
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </Button>
+                <div className="flex space-x-2">
+                  <Button
+                    variant="ghost"
+                    onClick={() => onEdit(resource)}
+                    className="text-white dark:text-gray-200 hover:text-yellow-500 transition-colors duration-200"
+                    aria-label="Ressource bearbeiten"
+                  >
+                    <Edit className="h-6 w-6" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => onDelete(resource.id)}
+                    className="text-white dark:text-gray-200 hover:text-red-500 transition-colors duration-200"
+                    aria-label="Ressource löschen"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </Button>
+                </div>
               </div>
               <CardContent className="p-4">
                 <div className="flex items-center space-x-2 mb-2">
