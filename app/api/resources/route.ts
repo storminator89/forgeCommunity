@@ -1,5 +1,3 @@
-// app/api/resources/route.ts
-
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../auth/[...nextauth]/options';
@@ -79,5 +77,46 @@ export async function POST(request: Request) {
     }
     console.error('Error creating resource:', error);
     return NextResponse.json({ error: 'Fehler beim Erstellen der Ressource.' }, { status: 500 });
+  }
+}
+
+export async function PUT(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session || !session.user) {
+    return NextResponse.json({ error: 'Nicht autorisiert.' }, { status: 401 });
+  }
+
+  try {
+    const body = await request.json();
+    const { id, title, url } = body;
+
+    if (!id || !title || !url) {
+      return NextResponse.json({ error: 'ID, Titel und URL sind erforderlich.' }, { status: 400 });
+    }
+
+    const resource = await prisma.resource.findUnique({
+      where: { id },
+    });
+
+    if (!resource) {
+      return NextResponse.json({ error: 'Ressource nicht gefunden.' }, { status: 404 });
+    }
+
+    if (resource.authorId !== session.user.id) {
+      return NextResponse.json({ error: 'Nicht autorisiert.' }, { status: 403 });
+    }
+
+    const updatedResource = await prisma.resource.update({
+      where: { id },
+      data: {
+        title,
+        url,
+      },
+    });
+
+    return NextResponse.json(updatedResource, { status: 200 });
+  } catch (error: any) {
+    console.error('Error updating resource:', error);
+    return NextResponse.json({ error: 'Fehler beim Aktualisieren der Ressource.' }, { status: 500 });
   }
 }
