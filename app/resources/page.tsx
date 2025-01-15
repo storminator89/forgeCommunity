@@ -51,6 +51,7 @@ const ITEMS_PER_PAGE = 9; // Anzahl der Ressourcen pro Seite
 
 export default function ResourceLibrary() {
   const { data: session } = useSession();
+  const [isAdmin, setIsAdmin] = useState(false);
   const [resources, setResources] = useState<Resource[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [newResource, setNewResource] = useState({
@@ -69,7 +70,8 @@ export default function ResourceLibrary() {
 
   useEffect(() => {
     fetchResources();
-  }, []);
+    checkAdminStatus();
+  }, [session]);
 
   const fetchResources = async () => {
     try {
@@ -78,6 +80,17 @@ export default function ResourceLibrary() {
     } catch (error) {
       console.error('Fehler beim Abrufen der Ressourcen:', error);
       toast.error('Fehler beim Abrufen der Ressourcen.');
+    }
+  };
+
+  const checkAdminStatus = async () => {
+    if (session?.user?.id) {
+      try {
+        const response = await axios.get(`/api/users/${session.user.id}/role`);
+        setIsAdmin(response.data.role === 'ADMIN');
+      } catch (error) {
+        console.error('Fehler beim Prüfen des Admin-Status:', error);
+      }
     }
   };
 
@@ -145,13 +158,14 @@ export default function ResourceLibrary() {
     }
 
     try {
-      const response = await axios.put(`/api/resources`, {
-        id: editResource.id,
+      const response = await axios.put(`/api/resources/${editResource.id}`, {
         title: editResource.title,
         url: editResource.url,
       });
 
-      setResources(resources.map(resource => resource.id === editResource.id ? response.data : resource));
+      setResources(resources.map(resource => 
+        resource.id === editResource.id ? response.data : resource
+      ));
       setIsEditDialogOpen(false);
       toast.success('Ressource erfolgreich aktualisiert!');
     } catch (error: any) {
@@ -310,19 +324,49 @@ export default function ResourceLibrary() {
                 <TabsTrigger value="others" className="text-gray-700 dark:text-gray-300">Andere</TabsTrigger>
               </TabsList>
               <TabsContent value="all">
-                <ResourceGrid resources={paginatedResources} onDelete={handleDeleteResource} onEdit={handleEditResource} />
+                <ResourceGrid 
+                  resources={paginatedResources} 
+                  onDelete={handleDeleteResource} 
+                  onEdit={handleEditResource}
+                  isAdmin={isAdmin}
+                  currentUserId={session?.user?.id}
+                />
               </TabsContent>
               <TabsContent value="articles">
-                <ResourceGrid resources={paginatedResources.filter(r => r.type === 'ARTICLE')} onDelete={handleDeleteResource} onEdit={handleEditResource} />
+                <ResourceGrid 
+                  resources={paginatedResources.filter(r => r.type === 'ARTICLE')} 
+                  onDelete={handleDeleteResource} 
+                  onEdit={handleEditResource}
+                  isAdmin={isAdmin}
+                  currentUserId={session?.user?.id}
+                />
               </TabsContent>
               <TabsContent value="videos">
-                <ResourceGrid resources={paginatedResources.filter(r => r.type === 'VIDEO')} onDelete={handleDeleteResource} onEdit={handleEditResource} />
+                <ResourceGrid 
+                  resources={paginatedResources.filter(r => r.type === 'VIDEO')} 
+                  onDelete={handleDeleteResource} 
+                  onEdit={handleEditResource}
+                  isAdmin={isAdmin}
+                  currentUserId={session?.user?.id}
+                />
               </TabsContent>
               <TabsContent value="ebooks">
-                <ResourceGrid resources={paginatedResources.filter(r => r.type === 'EBOOK')} onDelete={handleDeleteResource} onEdit={handleEditResource} />
+                <ResourceGrid 
+                  resources={paginatedResources.filter(r => r.type === 'EBOOK')} 
+                  onDelete={handleDeleteResource} 
+                  onEdit={handleEditResource}
+                  isAdmin={isAdmin}
+                  currentUserId={session?.user?.id}
+                />
               </TabsContent>
               <TabsContent value="others">
-                <ResourceGrid resources={paginatedResources.filter(r => !['ARTICLE', 'VIDEO', 'EBOOK'].includes(r.type))} onDelete={handleDeleteResource} onEdit={handleEditResource} />
+                <ResourceGrid 
+                  resources={paginatedResources.filter(r => !['ARTICLE', 'VIDEO', 'EBOOK'].includes(r.type))} 
+                  onDelete={handleDeleteResource} 
+                  onEdit={handleEditResource}
+                  isAdmin={isAdmin}
+                  currentUserId={session?.user?.id}
+                />
               </TabsContent>
             </Tabs>
             {totalPages > 1 && (
@@ -367,7 +411,23 @@ export default function ResourceLibrary() {
   );
 }
 
-function ResourceGrid({ resources, onDelete, onEdit }: { resources: Resource[]; onDelete: (id: string) => void; onEdit: (resource: Resource) => void }) {
+function ResourceGrid({ 
+  resources, 
+  onDelete, 
+  onEdit, 
+  isAdmin,
+  currentUserId 
+}: { 
+  resources: Resource[]; 
+  onDelete: (id: string) => void; 
+  onEdit: (resource: Resource) => void;
+  isAdmin: boolean;
+  currentUserId?: string;
+}) {
+  const canModifyResource = (resource: Resource) => {
+    return isAdmin || resource.author.id === currentUserId;
+  };
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
       <AnimatePresence>
@@ -386,24 +446,28 @@ function ResourceGrid({ resources, onDelete, onEdit }: { resources: Resource[]; 
                   <h3 className="text-xl font-semibold text-white dark:text-gray-200">{resource.title}</h3>
                 </div>
                 <div className="flex space-x-2">
-                  <Button
-                    variant="ghost"
-                    onClick={() => onEdit(resource)}
-                    className="text-white dark:text-gray-200 hover:text-yellow-500 transition-colors duration-200"
-                    aria-label="Ressource bearbeiten"
-                  >
-                    <Edit className="h-6 w-6" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    onClick={() => onDelete(resource.id)}
-                    className="text-white dark:text-gray-200 hover:text-red-500 transition-colors duration-200"
-                    aria-label="Ressource löschen"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </Button>
+                  {canModifyResource(resource) && (
+                    <>
+                      <Button
+                        variant="ghost"
+                        onClick={() => onEdit(resource)}
+                        className="text-white dark:text-gray-200 hover:text-yellow-500 transition-colors duration-200"
+                        aria-label="Ressource bearbeiten"
+                      >
+                        <Edit className="h-6 w-6" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        onClick={() => onDelete(resource.id)}
+                        className="text-white dark:text-gray-200 hover:text-red-500 transition-colors duration-200"
+                        aria-label="Ressource löschen"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
               <CardContent className="p-4">

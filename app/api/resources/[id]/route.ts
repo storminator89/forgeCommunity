@@ -17,6 +17,14 @@ const resourceUpdateSchema = z.object({
   color: z.string().min(1).optional(),
 });
 
+async function isAdmin(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { role: true },
+  });
+  return user?.role === 'ADMIN';
+}
+
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   const { id } = params;
 
@@ -46,32 +54,49 @@ export async function GET(request: Request, { params }: { params: { id: string }
 }
 
 export async function PUT(request: Request, { params }: { params: { id: string } }) {
-  const { id } = params;
   const session = await getServerSession(authOptions);
-  if (!session || !session.user) {
+  if (!session?.user?.id) {
     return NextResponse.json({ error: 'Nicht autorisiert.' }, { status: 401 });
   }
 
   try {
     const body = await request.json();
-    const parsed = resourceUpdateSchema.parse(body);
+    const { title, url } = body;
+    const { id } = params;
 
-    // Überprüfen, ob die Ressource existiert und dem aktuellen Benutzer gehört
-    const existingResource = await prisma.resource.findUnique({
+    if (!title || !url) {
+      return NextResponse.json({ error: 'Titel und URL sind erforderlich.' }, { status: 400 });
+    }
+
+    const resource = await prisma.resource.findUnique({
       where: { id },
+      include: {
+        author: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
     });
 
-    if (!existingResource) {
+    if (!resource) {
       return NextResponse.json({ error: 'Ressource nicht gefunden.' }, { status: 404 });
     }
 
-    if (existingResource.authorId !== session.user.id && session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Nicht autorisiert, diese Ressource zu bearbeiten.' }, { status: 403 });
+    // Prüfen ob User Admin ist oder Autor der Ressource
+    const isUserAdmin = await isAdmin(session.user.id);
+    if (!isUserAdmin && resource.author.id !== session.user.id) {
+      return NextResponse.json({ error: 'Nicht autorisiert.' }, { status: 403 });
     }
 
     const updatedResource = await prisma.resource.update({
       where: { id },
-      data: parsed,
+      data: {
+        title,
+        url,
+      },
       include: {
         author: {
           select: {
@@ -84,42 +109,57 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     });
 
     return NextResponse.json(updatedResource, { status: 200 });
-  } catch (error: any) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: error.errors }, { status: 400 });
-    }
+  } catch (error) {
     console.error('Error updating resource:', error);
-    return NextResponse.json({ error: 'Fehler beim Aktualisieren der Ressource.' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Fehler beim Aktualisieren der Ressource.' },
+      { status: 500 }
+    );
   }
 }
 
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
-  const { id } = params;
+export async function DELETE(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
   const session = await getServerSession(authOptions);
-  if (!session || !session.user) {
+  if (!session?.user?.id) {
     return NextResponse.json({ error: 'Nicht autorisiert.' }, { status: 401 });
   }
 
   try {
-    const existingResource = await prisma.resource.findUnique({
+    const { id } = params;
+    const resource = await prisma.resource.findUnique({
       where: { id },
+      include: {
+        author: {
+          select: {
+            id: true,
+          },
+        },
+      },
     });
 
-    if (!existingResource) {
+    if (!resource) {
       return NextResponse.json({ error: 'Ressource nicht gefunden.' }, { status: 404 });
     }
 
-    if (existingResource.authorId !== session.user.id && session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Nicht autorisiert, diese Ressource zu löschen.' }, { status: 403 });
+    // Prüfen ob User Admin ist oder Autor der Ressource
+    const isUserAdmin = await isAdmin(session.user.id);
+    if (!isUserAdmin && resource.author.id !== session.user.id) {
+      return NextResponse.json({ error: 'Nicht autorisiert.' }, { status: 403 });
     }
 
     await prisma.resource.delete({
       where: { id },
     });
 
-    return NextResponse.json({ message: 'Ressource gelöscht.' }, { status: 200 });
+    return NextResponse.json({ success: true }, { status: 200 });
   } catch (error) {
     console.error('Error deleting resource:', error);
-    return NextResponse.json({ error: 'Fehler beim Löschen der Ressource.' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Fehler beim Löschen der Ressource.' },
+      { status: 500 }
+    );
   }
 }
