@@ -11,12 +11,18 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Book, File, Video, Link, Search, Plus, Menu, Edit } from 'lucide-react';
+import { Book, File, Video, Link, Search, Plus, Menu, Edit, Share2, Copy, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import { useSession } from 'next-auth/react';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 enum ResourceType {
   ARTICLE = 'ARTICLE',
@@ -48,6 +54,19 @@ const categories = ["Web Development", "Data Science", "Design", "Mobile Develop
 const types = ["ARTICLE", "VIDEO", "EBOOK", "PODCAST", "COURSE"];
 
 const ITEMS_PER_PAGE = 9; // Anzahl der Ressourcen pro Seite
+
+const shareResource = async (resource: Resource, platform: string) => {
+  const shareUrl = encodeURIComponent(`${window.location.origin}/resources/${resource.id}`);
+  const shareTitle = encodeURIComponent(resource.title);
+  
+  const shareUrls = {
+    twitter: `https://twitter.com/intent/tweet?text=${shareTitle}&url=${shareUrl}`,
+    linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${shareUrl}`,
+    facebook: `https://www.facebook.com/sharer/sharer.php?u=${shareUrl}`,
+  };
+
+  window.open(shareUrls[platform as keyof typeof shareUrls], '_blank');
+};
 
 export default function ResourceLibrary() {
   const { data: session } = useSession();
@@ -424,6 +443,15 @@ function ResourceGrid({
   isAdmin: boolean;
   currentUserId?: string;
 }) {
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleCopyLink = async (resource: Resource) => {
+    const shareUrl = `${window.location.origin}/resources/${resource.id}`;
+    await navigator.clipboard.writeText(shareUrl);
+    setCopiedId(resource.id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
   const canModifyResource = (resource: Resource) => {
     return isAdmin || resource.author.id === currentUserId;
   };
@@ -477,10 +505,45 @@ function ResourceGrid({
                   </span>
                 </div>
                 <p className="text-sm text-gray-700 dark:text-gray-400">von {resource.author.name || resource.author.email}</p>
-                <a href={resource.url} target="_blank" rel="noopener noreferrer" className="mt-4 inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors duration-200">
-                  <Link className="mr-2 h-5 w-5" />
-                  Ressource öffnen
-                </a>
+                <div className="flex items-center space-x-2 mt-4">
+                  <a href={resource.url} target="_blank" rel="noopener noreferrer" className="flex-1 inline-flex items-center justify-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors duration-200">
+                    <Link className="mr-2 h-5 w-5" />
+                    Ressource öffnen
+                  </a>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="icon">
+                        <Share2 className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => shareResource(resource, 'twitter')}>
+                        Auf Twitter teilen
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => shareResource(resource, 'linkedin')}>
+                        Auf LinkedIn teilen
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => shareResource(resource, 'facebook')}>
+                        Auf Facebook teilen
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleCopyLink(resource)}>
+                        <div className="flex items-center">
+                          {copiedId === resource.id ? (
+                            <>
+                              <Check className="h-4 w-4 mr-2" />
+                              Link kopiert!
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="h-4 w-4 mr-2" />
+                              Link kopieren
+                            </>
+                          )}
+                        </div>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </CardContent>
             </Card>
           </motion.div>
