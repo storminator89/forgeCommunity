@@ -7,110 +7,84 @@ import { authOptions } from "../../../../auth/[...nextauth]/options";
 
 const prisma = new PrismaClient();
 
-// PUT-Methode zum Aktualisieren eines Inhalts
-export async function PUT(
+export async function DELETE(
   request: NextRequest,
-  { params }: { params: { courseId: string, contentId: string } }
+  { params }: { params: { courseId: string; contentId: string } }
 ) {
-  const { courseId, contentId } = params;
-  const session = await getServerSession(authOptions);
-
-  if (!session || !session.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
+  console.log('DELETE request received for content:', params.contentId);
+  
   try {
-    const course = await prisma.course.findUnique({
-      where: { id: courseId },
-      select: { instructorId: true },
+    const session = await getServerSession(authOptions);
+    console.log('Session:', session);
+    
+    if (!session?.user?.id) {
+      console.log('Unauthorized - no valid session');
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Log before deleting subcontent
+    console.log('Checking for subcontents to delete');
+    const subcontents = await prisma.courseContent.findMany({
+      where: { parentId: params.contentId }
     });
+    console.log('Found subcontents:', subcontents);
 
-    if (!course || course.instructorId !== session.user.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    // Erst Unterinhalte löschen, falls vorhanden
+    if (subcontents.length > 0) {
+      console.log('Deleting subcontents');
+      await prisma.courseContent.deleteMany({
+        where: { parentId: params.contentId }
+      });
     }
 
-    const { title, type, content, order, parentId } = await request.json();
-
-    // Validierung der Eingabedaten (optional, aber empfohlen)
-    if (order !== undefined && typeof order !== 'number') {
-      return NextResponse.json({ error: 'Invalid order value' }, { status: 400 });
-    }
-
-    // Map QUIZ type to TEXT for database compatibility
-    const dbType = type === 'QUIZ' ? 'TEXT' : type;
-
-    // Erstellen des Update-Datenobjekts dynamisch
-    const updateData: any = {
-      title,
-      type: dbType,
-      content,
-    };
-
-    if (order !== undefined) {
-      updateData.order = order;
-    }
-
-    if (parentId !== undefined) {
-      updateData.parentId = parentId;
-    }
-
-    const updatedContent = await prisma.courseContent.update({
-      where: { id: contentId },
-      data: updateData,
+    // Dann den Hauptinhalt löschen
+    console.log('Deleting main content');
+    const deletedContent = await prisma.courseContent.delete({
+      where: { id: params.contentId },
     });
+    console.log('Deleted content:', deletedContent);
 
-    return NextResponse.json(updatedContent, { status: 200 });
+    return NextResponse.json({ 
+      success: true, 
+      message: 'Content deleted successfully',
+      deletedContent 
+    });
   } catch (error) {
-    console.error('Failed to update course content:', error);
-    return NextResponse.json({ error: 'Failed to update course content' }, { status: 500 });
+    console.error('Error in DELETE operation:', error);
+    return NextResponse.json({ 
+      error: 'Failed to delete content',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 });
+  } finally {
+    await prisma.$disconnect();
   }
 }
 
-
-// DELETE-Methode zum Löschen eines Inhalts (bereits vorhanden)
-export async function DELETE(
+export async function PUT(
   request: NextRequest,
-  { params }: { params: { courseId: string, contentId: string } }
+  { params }: { params: { courseId: string; contentId: string } }
 ) {
-  const { courseId, contentId } = params;
-  const session = await getServerSession(authOptions);
-
-  if (!session || !session.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   try {
-    const course = await prisma.course.findUnique({
-      where: { id: courseId },
-      select: { instructorId: true },
-    });
-
-    if (!course || course.instructorId !== session.user.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Überprüfen Sie, ob der Inhalt existiert
-    const content = await prisma.courseContent.findUnique({
-      where: { id: contentId },
+    const body = await request.json();
+    const { title } = body;
+
+    const updatedContent = await prisma.courseContent.update({
+      where: {
+        id: params.contentId,
+      },
+      data: {
+        title,
+      },
     });
 
-    if (!content) {
-      return NextResponse.json({ error: 'Content not found' }, { status: 404 });
-    }
-
-    // Löschen Sie zuerst alle Unterinhalte, falls vorhanden
-    await prisma.courseContent.deleteMany({
-      where: { parentId: contentId },
-    });
-
-    // Dann löschen Sie den Hauptinhalt
-    await prisma.courseContent.delete({
-      where: { id: contentId },
-    });
-
-    return NextResponse.json({ message: 'Content deleted successfully' }, { status: 200 });
+    return NextResponse.json(updatedContent);
   } catch (error) {
-    console.error('Failed to delete course content:', error);
-    return NextResponse.json({ error: 'Failed to delete course content' }, { status: 500 });
+    console.error('Error updating content:', error);
+    return NextResponse.json({ error: 'Failed to update content' }, { status: 500 });
   }
 }

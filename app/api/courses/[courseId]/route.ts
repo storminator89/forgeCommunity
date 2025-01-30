@@ -102,68 +102,85 @@ export async function DELETE(
 ) {
   try {
     const session = await getServerSession(authOptions);
-    console.log('Session:', session); // Debug log
-
+    
     if (!session || !session.user?.id) {
-      console.log('Unauthorized - No valid session'); // Debug log
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const courseId = params.courseId;
-    console.log('Deleting course with ID:', courseId); // Debug log
 
     if (!courseId) {
-      console.log('No courseId provided'); // Debug log
       return NextResponse.json({ error: 'Course ID is required' }, { status: 400 });
     }
 
-    // Überprüfen, ob der Benutzer der Kursleiter ist
+    // Fetch the course with instructor info
     const course = await prisma.course.findUnique({
       where: { id: courseId },
       include: { instructor: true },
     });
 
-    console.log('Found course:', course); // Debug log
-
     if (!course) {
-      console.log('Course not found for ID:', courseId); // Debug log
       return NextResponse.json({ error: 'Course not found' }, { status: 404 });
     }
 
+    // Check authorization
     if (session.user.role !== 'ADMIN' && course.instructor.id !== session.user.id) {
-      console.log('Unauthorized to delete this course'); // Debug log
       return NextResponse.json({ error: 'Unauthorized to delete this course' }, { status: 403 });
     }
 
-    // Löschen aller abhängigen Datensätze
-    await prisma.$transaction(async (prisma) => {
-      // Löschen aller Einschreibungen für diesen Kurs
-      await prisma.enrollment.deleteMany({
-        where: { courseId: courseId },
+    // Delete all related records in the correct order
+    await prisma.$transaction(async (tx) => {
+      // Delete certificates first
+      await tx.certificate.deleteMany({
+        where: { courseId },
       });
 
-      // Löschen aller Lektionen für diesen Kurs
-      await prisma.lesson.deleteMany({
-        where: { courseId: courseId },
+      // Delete enrollments
+      await tx.enrollment.deleteMany({
+        where: { courseId },
       });
 
-      // Löschen aller Kursinhalte für diesen Kurs
-      await prisma.courseContent.deleteMany({
-        where: { courseId: courseId },
+      // Delete course contents (handle nested contents first)
+      const contents = await tx.courseContent.findMany({
+        where: { courseId },
+        select: { id: true },
+      });
+      
+      // Delete child contents first
+      await tx.courseContent.deleteMany({
+        where: {
+          courseId,
+          parentId: { not: null },
+        },
+      });
+      
+      // Then delete parent contents
+      await tx.courseContent.deleteMany({
+        where: {
+          courseId,
+          parentId: null,
+        },
       });
 
-      // Kurs löschen
-      await prisma.course.delete({
+      // Delete lessons
+      await tx.lesson.deleteMany({
+        where: { courseId },
+      });
+
+      // Finally delete the course
+      await tx.course.delete({
         where: { id: courseId },
       });
     });
 
-    console.log('Course and all related data deleted successfully'); // Debug log
-    return NextResponse.json({ message: 'Course and all related data deleted successfully' }, { status: 200 });
+    return NextResponse.json({ message: 'Course and all related data deleted successfully' });
   } catch (error) {
-    console.error('Detailed error in course deletion:', error);
+    console.error('Error deleting course:', error);
     return NextResponse.json(
-      { error: 'Failed to delete course', details: error instanceof Error ? error.message : 'Unknown error' },
+      { 
+        error: 'Failed to delete course', 
+        details: error instanceof Error ? error.message : 'Unknown error' 
+      },
       { status: 500 }
     );
   } finally {

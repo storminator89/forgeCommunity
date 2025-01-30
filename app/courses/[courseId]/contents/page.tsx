@@ -452,6 +452,11 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
       }
 
       setAlertMessage({ type: 'success', message: 'Inhalt erfolgreich gelöscht.' });
+
+      // Nach erfolgreichem Löschen alle Inhalte neu laden
+      await fetchContents();
+      // Seite neu rendern
+      window.location.reload();
     } catch (error) {
       console.error('Error deleting content:', error);
       setAlertMessage({ type: 'error', message: 'Fehler beim Löschen des Inhalts.' });

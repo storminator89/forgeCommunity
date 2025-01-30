@@ -24,6 +24,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
 
 interface ContentListProps {
   contents: CourseContent[];
@@ -194,9 +195,76 @@ export function ContentList({
     }
   };
 
+  const handleDelete = async (content: CourseContent) => {
+    try {
+      console.log('ContentList: Starting delete operation for subcontent:', content);
+      const response = await fetch(`/api/courses/${courseId}/contents/${content.id}`, {
+        method: 'DELETE',
+      });
+
+      console.log('Delete response status:', response.status);
+      const responseData = await response.json();
+      console.log('Delete response data:', responseData);
+
+      if (!response.ok) {
+        throw new Error(`Failed to delete content: ${responseData.error || 'Unknown error'}`);
+      }
+
+      // Sofortige UI-Aktualisierung durch Aufruf des Parent-Handlers
+      await onDeleteClick(content);
+
+      // Dialog schließen (falls offen)
+      const dialog = document.querySelector('[role="alertdialog"]');
+      if (dialog) {
+        const closeButton = dialog.querySelector('button[data-state="closed"]');
+        closeButton?.click();
+      }
+
+      // Parent aktualisieren und neu rendern
+      if (mainContentId) {
+        window.dispatchEvent(new CustomEvent('refreshSidebar', {
+          detail: { mainContentId }
+        }));
+      }
+
+    } catch (error) {
+      console.error('Error in ContentList delete handler:', error);
+    }
+  };
+
+  const handleMoveContent = async (direction: 'up' | 'down', content: CourseContent) => {
+    if (!mainContentId) return;
+
+    try {
+      const response = await fetch(`/api/courses/${courseId}/contents/${content.id}/reorder`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          direction,
+          mainContentId
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update order');
+      }
+
+      // Rest der UI-Aktualisierung bleibt gleich
+      if (direction === 'up') {
+        onMoveUp?.(mainContentId, content.id);
+      } else {
+        onMoveDown?.(mainContentId, content.id);
+      }
+
+    } catch (error) {
+      console.error('Error updating content order:', error);
+    }
+  };
+
   return (
     <div className="space-y-4">
-      {/* Main content list */}
       <ul className="space-y-1">
         {safeContents.map((content, index) => (
           <li
@@ -205,60 +273,66 @@ export function ContentList({
               "relative",
               selectedContentId === content.id && "bg-muted"
             )}
+            onClick={() => onContentSelect(content.id)}
           >
-            <div
-              className="p-2 flex items-center group/item"
-              onClick={() => mainContentId ? onContentSelect(content.id) : null}
-            >
-              <div className="flex items-center flex-1 min-w-0">
-                {!mainContentId ? (
-                  <div className="flex items-center space-x-3">
-                    <span className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-medium">
-                      {(mainTopicIndex ?? 0) + 1}
-                    </span>
-                    <span className="font-medium truncate">{content.title}</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center space-x-3 min-w-0">
-                    <button
-                      onClick={(e) => handleVisitedToggle(e, content.id)}
-                      className={cn(
-                        "w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200 relative group/check",
-                        isPageVisited(courseId, content.id) 
-                          ? "bg-green-500/10 text-green-500 hover:bg-green-500/20" 
-                          : "bg-gray-100 dark:bg-gray-800 text-muted-foreground hover:bg-gray-200 dark:hover:bg-gray-700"
-                      )}
-                    >
-                      {isPageVisited(courseId, content.id) ? (
-                        <Check className="w-4 h-4 transition-transform duration-200 group-hover/check:scale-110" />
-                      ) : (
-                        <BookOpen className="w-4 h-4 transition-transform duration-200 group-hover/check:scale-110" />
-                      )}
-                      <span className="absolute -top-9 left-1/2 transform -translate-x-1/2 px-2 py-1 bg-popover rounded-md text-xs font-medium text-popover-foreground shadow-md opacity-0 group-hover/check:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none border">
-                        {isPageVisited(courseId, content.id) ? 'Als ungelesen markieren' : 'Als gelesen markieren'}
-                      </span>
-                    </button>
-                    <span className={cn(
-                      "truncate text-sm",
-                      isPageVisited(courseId, content.id) && "text-muted-foreground line-through decoration-[1.5px]"
-                    )}>
-                      {content.title}
-                    </span>
-                  </div>
+            <div className="p-2 flex items-center group/item hover:bg-accent hover:text-accent-foreground">
+              {/* Visited/Progress indicator */}
+              <button
+                onClick={(e) => handleVisitedToggle(e, content.id)}
+                className={cn(
+                  "w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200 relative group/check",
+                  isPageVisited(courseId, content.id) 
+                    ? "bg-green-500/10 text-green-500 hover:bg-green-500/20" 
+                    : "bg-gray-100 dark:bg-gray-800 text-muted-foreground hover:bg-gray-200 dark:hover:bg-gray-700"
                 )}
-              </div>
+              >
+                {isPageVisited(courseId, content.id) ? (
+                  <Check className="w-4 h-4" />
+                ) : (
+                  <BookOpen className="w-4 h-4" />
+                )}
+              </button>
+
+              {/* Content title with inline editing */}
+              {isInlineEditing === content.id ? (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    onInlineEditSubmit(content.id, inlineEditTitle);
+                  }}
+                  className="flex-1 ml-2"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Input
+                    type="text"
+                    value={inlineEditTitle}
+                    onChange={(e) => setInlineEditTitle(e.target.value)}
+                    onBlur={() => {
+                      if (inlineEditTitle.trim() !== '') {
+                        onInlineEditSubmit(content.id, inlineEditTitle);
+                      }
+                      setIsInlineEditing(null);
+                    }}
+                    className="h-7 py-1 px-2 text-sm"
+                    autoFocus
+                  />
+                </form>
+              ) : (
+                <span className="flex-1 ml-2">{content.title}</span>
+              )}
 
               {/* Action buttons */}
-              <div className="flex items-center gap-1 ml-2">
-                {onMoveUp && onMoveDown && (
-                  <div className="opacity-0 group-hover/item:opacity-100 transition-opacity duration-200 flex items-center">
+              <div className="opacity-0 group-hover/item:opacity-100 transition-opacity duration-200 flex items-center gap-1">
+                {/* Move up/down buttons if provided */}
+                {onMoveUp && onMoveDown && mainContentId && (
+                  <>
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-7 w-7 hover:bg-accent"
+                      className="h-7 w-7"
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (onMoveUp) onMoveUp(mainContentId!, content.id);
+                        handleMoveContent('up', content);
                       }}
                     >
                       <ChevronUp className="h-4 w-4" />
@@ -266,40 +340,61 @@ export function ContentList({
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-7 w-7 hover:bg-accent"
+                      className="h-7 w-7"
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (onMoveDown) onMoveDown(mainContentId!, content.id);
+                        handleMoveContent('down', content);
                       }}
                     >
                       <ChevronDown className="h-4 w-4" />
                     </Button>
-                  </div>
+                  </>
                 )}
-                <div className="opacity-0 group-hover/item:opacity-100 transition-opacity duration-200 flex items-center">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 hover:bg-accent"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onEditClick(content);
-                    }}
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 hover:bg-accent"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDeleteClick(content);
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
+
+                {/* Edit button */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsInlineEditing(content.id);
+                    setInlineEditTitle(content.title);
+                    console.log(`Editing content with ID: ${content.id}`);
+                  }}
+                >
+                  <Edit className="h-4 w-4" />
+                </Button>
+
+                {/* Delete button */}
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Unterthema löschen</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Möchten Sie dieses Unterthema wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                      <AlertDialogAction 
+                        onClick={() => handleDelete(content)}
+                      >
+                        Löschen
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             </div>
           </li>

@@ -135,6 +135,30 @@ export function CourseContentsSidebar({
     };
   }, [courseId, allTopicsCompleted, contents]);
 
+  // Hinzufügen eines Event Listeners für die Sidebar-Aktualisierung
+  useEffect(() => {
+    const handleRefresh = (event: CustomEvent) => {
+      const { mainContentId } = event.detail;
+      // Neu laden der Inhalte für das Hauptthema
+      const parent = mainContents.find(c => c.id === mainContentId);
+      if (parent) {
+        setMainContents(prev => 
+          prev.map(c => c.id === mainContentId ? {
+            ...c,
+            subContents: (c.subContents || []).filter(sub => 
+              sub.id !== selectedContentId
+            )
+          } : c)
+        );
+      }
+    };
+
+    window.addEventListener('refreshSidebar', handleRefresh as EventListener);
+    return () => {
+      window.removeEventListener('refreshSidebar', handleRefresh as EventListener);
+    };
+  }, [mainContents, selectedContentId]);
+
   const toggleTopic = (topicId: string) => {
     const newExpanded = new Set(expandedTopics);
     if (newExpanded.has(topicId)) {
@@ -147,48 +171,89 @@ export function CourseContentsSidebar({
 
   const handleDelete = async (content: CourseContent) => {
     try {
+      console.log('Starting delete operation for content:', content);
       setIsDeleting(true);
-      const response = await fetch(`/api/courses/${params.courseId}/contents/${content.id}`, {
+      
+      const response = await fetch(`/api/courses/${courseId}/contents/${content.id}`, {
         method: 'DELETE',
       });
 
+      console.log('Delete response status:', response.status);
+      const responseData = await response.json();
+      console.log('Delete response data:', responseData);
+
       if (!response.ok) {
-        throw new Error('Failed to delete content');
+        throw new Error(`Failed to delete content: ${responseData.error || 'Unknown error'}`);
       }
 
+      console.log('Delete successful, updating UI');
       // Update parent's state
       onDeleteClick(content);
-
-      // Update local state immediately
+      
+      // Update local state - handle both main topics and subtopics
       setMainContents(prev => {
-        // If deleting a main content
         if (!content.parentId) {
+          console.log('Removing main topic');
           return prev.filter(c => c.id !== content.id);
+        } else {
+          console.log('Removing subtopic');
+          return prev.map(main => ({
+            ...main,
+            subContents: main.subContents?.filter(sub => sub.id !== content.id) || []
+          }));
         }
-        
-        // If deleting a subcontent
-        return prev.map(main => {
-          if (main.subContents) {
-            return {
-              ...main,
-              subContents: main.subContents.filter(sub => sub.id !== content.id)
-            };
-          }
-          return main;
-        });
       });
 
-      // If the deleted content was selected, select the first available content
+      console.log('Updated mainContents after deletion:', mainContents);
+
       if (selectedContentId === content.id) {
-        const firstContent = contents[0];
-        if (firstContent) {
-          onContentSelect(firstContent.id);
-        }
+        console.log('Resetting selected content');
+        onContentSelect('');
       }
+
+      // Sidebar anschließend neu laden
+      router.refresh();
+
     } catch (error) {
       console.error('Error deleting content:', error);
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleEdit = async (contentId: string, newTitle: string) => {
+    try {
+      const response = await fetch(`/api/courses/${courseId}/contents/${contentId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ title: newTitle }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update content');
+      }
+
+      // Update local state for both main topics and subtopics
+      setMainContents(prev => 
+        prev.map(main => {
+          if (main.id === contentId) {
+            return { ...main, title: newTitle };
+          }
+          if (main.subContents) {
+            return {
+              ...main,
+              subContents: main.subContents.map(sub =>
+                sub.id === contentId ? { ...sub, title: newTitle } : sub
+              )
+            };
+          }
+          return main;
+        })
+      );
+    } catch (error) {
+      console.error('Error updating content:', error);
     }
   };
 
@@ -200,9 +265,30 @@ export function CourseContentsSidebar({
 
   const handleInlineEdit = async (contentId: string, newTitle: string) => {
     try {
-      await onInlineEditSubmit(contentId, newTitle);
-      setEditingContentId(null);
-      setEditingTitle('');
+      const response = await fetch(`/api/courses/${courseId}/contents/${contentId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ title: newTitle }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update title');
+      }
+
+      // Update local state
+      setMainContents(prev =>
+        prev.map(c =>
+          c.id === contentId
+            ? { ...c, title: newTitle }
+            : c
+        )
+      );
+
+      // Update parent state
+      onEditClick(contentId);
+
     } catch (error) {
       console.error('Error updating title:', error);
     }
@@ -237,6 +323,31 @@ export function CourseContentsSidebar({
       console.error('Error creating main content:', error);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteContent = async (content: CourseContent) => {
+    try {
+      // Update local state immediately
+      setMainContents(prev => {
+        const updated = prev.map(main => {
+          if (main.id === content.parentId) {
+            // Wenn es ein Unterthema ist
+            return {
+              ...main,
+              subContents: main.subContents?.filter(sub => sub.id !== content.id) || []
+            };
+          }
+          return main;
+        });
+        return updated;
+      });
+
+      // Rufe den übergebenen onDeleteClick Handler auf
+      await onDeleteClick(content);
+
+    } catch (error) {
+      console.error('Error handling content deletion:', error);
     }
   };
 
@@ -282,55 +393,37 @@ export function CourseContentsSidebar({
                   </Button>
                   {editingContentId === content.id ? (
                     <form
-                      onSubmit={async (e) => {
+                      onSubmit={(e) => {
                         e.preventDefault();
-                        try {
-                          const response = await fetch(`/api/courses/${params.courseId}/contents/${content.id}`, {
-                            method: 'PUT',
-                            headers: {
-                              'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({
-                              title: editingTitle,
-                            }),
-                          });
-
-                          if (!response.ok) {
-                            throw new Error('Failed to update title');
-                          }
-
-                          // Update local state
-                          setMainContents(prev =>
-                            prev.map(c =>
-                              c.id === content.id
-                                ? { ...c, title: editingTitle }
-                                : c
-                            )
-                          );
-
-                          setEditingContentId(null);
-                          setEditingTitle('');
-                          onInlineEditSubmit(content.id, editingTitle);
-                        } catch (error) {
-                          console.error('Error updating title:', error);
-                        }
+                        handleInlineEdit(content.id, editingTitle);
+                        setEditingContentId(null);
                       }}
-                      className="flex-1"
+                      className="flex-1 ml-1"
                     >
                       <Input
                         type="text"
                         value={editingTitle}
                         onChange={(e) => setEditingTitle(e.target.value)}
                         onBlur={() => {
+                          if (editingTitle.trim() !== '') {
+                            handleInlineEdit(content.id, editingTitle);
+                          }
                           setEditingContentId(null);
-                          setEditingTitle('');
                         }}
                         className="h-6 py-1 px-2 text-sm"
                         autoFocus
                       />
                     </form>
                   ) : (
-                    <span className="font-semibold ml-1">{content.title}</span>
+                    <span 
+                      className="font-semibold ml-1 cursor-pointer hover:text-blue-500"
+                      onClick={() => {
+                        setEditingContentId(content.id);
+                        setEditingTitle(content.title);
+                      }}
+                    >
+                      {content.title}
+                    </span>
                   )}
                 </div>
                 <div className="flex items-center gap-1">
@@ -365,15 +458,10 @@ export function CourseContentsSidebar({
                       <AlertDialogFooter>
                         <AlertDialogCancel>Abbrechen</AlertDialogCancel>
                         <AlertDialogAction 
-                          onClick={async () => {
-                            try {
-                              await handleDelete(content);
-                            } catch (error) {
-                              console.error('Error deleting content:', error);
-                            }
-                          }}
+                          onClick={() => handleDelete(content)}
+                          disabled={isDeleting}
                         >
-                          Löschen
+                          {isDeleting ? "Wird gelöscht..." : "Löschen"}
                         </AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
@@ -390,7 +478,7 @@ export function CourseContentsSidebar({
                         selectedContentId={selectedContentId}
                         onContentSelect={onContentSelect}
                         onEditClick={onEditClick}
-                        onDeleteClick={onDeleteClick}
+                        onDeleteClick={handleDeleteContent} // Übergebe den neuen Handler
                         isInlineEditing={isInlineEditing}
                         inlineEditTitle={inlineEditTitle}
                         onInlineEditSubmit={onInlineEditSubmit}
