@@ -182,13 +182,6 @@ export default function UserManagement() {
     }
   };
 
-  const getVerificationStatus = (user: User) => {
-    if (user.emailVerified) {
-      return <Badge variant="success">Verifiziert</Badge>;
-    }
-    return <Badge variant="secondary">Nicht verifiziert</Badge>;
-  };
-
   const getLastActiveStatus = (user: User) => {
     if (!user.lastLogin) {
       console.log('No lastLogin for user:', user.email); // Debug-Log
@@ -349,7 +342,6 @@ export default function UserManagement() {
                                   <Badge variant={getRoleBadgeVariant(user.role)}>
                                     {user.role}
                                   </Badge>
-                                  <div>{getVerificationStatus(user)}</div>
                                 </div>
                               </TableCell>
                               <TableCell className="dark:text-gray-300">
@@ -449,7 +441,6 @@ export default function UserManagement() {
                             </div>
                             <div className="space-y-2">
                               <div className="text-sm text-gray-500 dark:text-gray-400">E-Mail Status</div>
-                              <div>{getVerificationStatus(selectedUser)}</div>
                             </div>
                             <div className="space-y-2">
                               <div className="text-sm text-gray-500 dark:text-gray-400">Rolle</div>
@@ -689,12 +680,6 @@ export default function UserManagement() {
                         </span>
                       </div>
                       <div className="pt-4 border-t dark:border-gray-700">
-                        <div className="flex justify-between dark:text-gray-300">
-                          <span>Verifizierte Benutzer:</span>
-                          <span className="font-semibold">
-                            {users.filter(u => u.emailVerified).length}
-                          </span>
-                        </div>
                         <div className="flex justify-between dark:text-gray-300 mt-2">
                           <span>Aktive Benutzer (30 Tage):</span>
                           <span className="font-semibold">

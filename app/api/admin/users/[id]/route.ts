@@ -350,6 +350,41 @@ export async function DELETE(
         where: { userId: params.id }
       })
 
+      // Lösche verknüpfte Kurse des Users
+      await prisma.course.deleteMany({
+        where: { instructorId: params.id } 
+      })
+
+      // Lösche verknüpfte Projekte des Users
+      await prisma.project.deleteMany({
+        where: { authorId: params.id }  // Changed from userId to authorId
+      })
+
+      // Lösche alle Posts des Users
+      await prisma.post.deleteMany({
+        where: { authorId: params.id }
+      })
+
+      // Lösche die Artikel des Users
+      await prisma.article.deleteMany({
+        where: { authorId: params.id }
+      })
+
+      // Lösche die Ressourcen des Users
+      await prisma.resource.deleteMany({
+        where: { authorId: params.id }
+      })
+
+      // Lösche die H5P-Inhalte des Users
+      await prisma.h5PContent.deleteMany({
+        where: { userId: params.id }
+      })
+
+      // Lösche die Zertifikate des Users
+      await prisma.certificate.deleteMany({
+        where: { userId: params.id }
+      })
+
       // Lösche den Benutzer selbst
       await prisma.user.delete({
         where: { id: params.id }
