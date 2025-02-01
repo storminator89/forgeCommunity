@@ -15,9 +15,25 @@ const resourceSchema = z.object({
   color: z.string().min(1),
 });
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const page = parseInt(searchParams.get('page') || '1');
+    const limit = parseInt(searchParams.get('limit') || '9');
+    const search = searchParams.get('search') || '';
+
+    const skip = (page - 1) * limit;
+
+    const whereClause = search ? {
+      OR: [
+        { title: { contains: search, mode: 'insensitive' } },
+        { category: { contains: search, mode: 'insensitive' } },
+        { author: { name: { contains: search, mode: 'insensitive' } } }
+      ]
+    } : {};
+
     const resources = await prisma.resource.findMany({
+      where: whereClause,
       include: {
         author: {
           select: {
@@ -30,11 +46,23 @@ export async function GET() {
       orderBy: {
         createdAt: 'desc',
       },
+      take: limit,
+      skip: skip,
     });
-    return NextResponse.json(resources, { status: 200 });
+
+    const total = await prisma.resource.count({ where: whereClause });
+
+    return NextResponse.json({
+      resources,
+      hasMore: skip + resources.length < total,
+      total
+    }, { status: 200 });
   } catch (error) {
     console.error('Error fetching resources:', error);
-    return NextResponse.json({ error: 'Fehler beim Abrufen der Ressourcen.' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Fehler beim Abrufen der Ressourcen.' }, 
+      { status: 500 }
+    );
   }
 }
 

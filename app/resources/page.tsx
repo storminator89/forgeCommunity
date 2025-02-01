@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Book, File, Video, Link, Search, Plus, Menu, Edit, Share2, Copy, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -23,6 +22,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useInView } from 'react-intersection-observer';
 
 enum ResourceType {
   ARTICLE = 'ARTICLE',
@@ -82,25 +82,77 @@ export default function ResourceLibrary() {
   });
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [selectedTab, setSelectedTab] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editResource, setEditResource] = useState<Resource | null>(null);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [displayedResources, setDisplayedResources] = useState<Resource[]>([]);
+  const [loading, setLoading] = useState(false);
+  
+  const { ref, inView } = useInView({
+    threshold: 0,
+  });
 
   useEffect(() => {
-    fetchResources();
-    checkAdminStatus();
-  }, [session]);
+    const initialFetch = async () => {
+      await fetchResources();
+    };
+    initialFetch();
+  }, []);
 
-  const fetchResources = async () => {
+  useEffect(() => {
+    if (inView && hasMore && !loading) {
+      loadMore();
+    }
+  }, [inView, hasMore, loading]);
+
+  const fetchResources = async (pageNumber = 1) => {
     try {
-      const response = await axios.get('/api/resources');
-      setResources(response.data);
+      setLoading(true);
+      const response = await axios.get('/api/resources', {
+        params: {
+          page: pageNumber,
+          limit: ITEMS_PER_PAGE,
+          search: searchTerm
+        }
+      });
+      
+      if (pageNumber === 1) {
+        setDisplayedResources(response.data.resources);
+      } else {
+        // Füge nur neue, eindeutige Ressourcen hinzu
+        setDisplayedResources(prev => {
+          const existingIds = new Set(prev.map(r => r.id));
+          const newResources = response.data.resources.filter(
+            (resource: Resource) => !existingIds.has(resource.id)
+          );
+          return [...prev, ...newResources];
+        });
+      }
+      
+      setHasMore(response.data.hasMore);
     } catch (error) {
       console.error('Fehler beim Abrufen der Ressourcen:', error);
       toast.error('Fehler beim Abrufen der Ressourcen.');
+    } finally {
+      setLoading(false);
     }
   };
+
+  const loadMore = () => {
+    if (loading || !hasMore) return;
+    
+    const nextPage = Math.floor(displayedResources.length / ITEMS_PER_PAGE) + 1;
+    fetchResources(nextPage);
+  };
+
+  const handleSearch = debounce((event: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(event.target.value);
+    setPage(1);
+    setDisplayedResources([]);
+    fetchResources(1);
+  }, 300);
 
   const checkAdminStatus = async () => {
     if (session?.user?.id) {
@@ -111,11 +163,6 @@ export default function ResourceLibrary() {
         console.error('Fehler beim Prüfen des Admin-Status:', error);
       }
     }
-  };
-
-  const handleSearch = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchTerm(event.target.value);
-    setCurrentPage(1); // Zurück zur ersten Seite bei neuer Suche
   };
 
   const handleAddResource = async () => {
@@ -205,6 +252,13 @@ export default function ResourceLibrary() {
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
   };
+
+  useEffect(() => {
+    setPage(1);
+    setDisplayedResources([]);
+    setHasMore(true);
+    fetchResources(1);
+  }, [searchTerm]);
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-100 dark:bg-gray-900">
@@ -334,63 +388,23 @@ export default function ResourceLibrary() {
                 </Dialog>
               )}
             </div>
-            <Tabs defaultValue="all" value={selectedTab} onValueChange={setSelectedTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-5 bg-white dark:bg-gray-800 rounded-lg p-1 shadow">
-                <TabsTrigger value="all" className="text-gray-700 dark:text-gray-300">Alle</TabsTrigger>
-                <TabsTrigger value="articles" className="text-gray-700 dark:text-gray-300">Artikel</TabsTrigger>
-                <TabsTrigger value="videos" className="text-gray-700 dark:text-gray-300">Videos</TabsTrigger>
-                <TabsTrigger value="ebooks" className="text-gray-700 dark:text-gray-300">E-Books</TabsTrigger>
-                <TabsTrigger value="others" className="text-gray-700 dark:text-gray-300">Andere</TabsTrigger>
-              </TabsList>
-              <TabsContent value="all">
-                <ResourceGrid 
-                  resources={paginatedResources} 
-                  onDelete={handleDeleteResource} 
-                  onEdit={handleEditResource}
-                  isAdmin={isAdmin}
-                  currentUserId={session?.user?.id}
-                />
-              </TabsContent>
-              <TabsContent value="articles">
-                <ResourceGrid 
-                  resources={paginatedResources.filter(r => r.type === 'ARTICLE')} 
-                  onDelete={handleDeleteResource} 
-                  onEdit={handleEditResource}
-                  isAdmin={isAdmin}
-                  currentUserId={session?.user?.id}
-                />
-              </TabsContent>
-              <TabsContent value="videos">
-                <ResourceGrid 
-                  resources={paginatedResources.filter(r => r.type === 'VIDEO')} 
-                  onDelete={handleDeleteResource} 
-                  onEdit={handleEditResource}
-                  isAdmin={isAdmin}
-                  currentUserId={session?.user?.id}
-                />
-              </TabsContent>
-              <TabsContent value="ebooks">
-                <ResourceGrid 
-                  resources={paginatedResources.filter(r => r.type === 'EBOOK')} 
-                  onDelete={handleDeleteResource} 
-                  onEdit={handleEditResource}
-                  isAdmin={isAdmin}
-                  currentUserId={session?.user?.id}
-                />
-              </TabsContent>
-              <TabsContent value="others">
-                <ResourceGrid 
-                  resources={paginatedResources.filter(r => !['ARTICLE', 'VIDEO', 'EBOOK'].includes(r.type))} 
-                  onDelete={handleDeleteResource} 
-                  onEdit={handleEditResource}
-                  isAdmin={isAdmin}
-                  currentUserId={session?.user?.id}
-                />
-              </TabsContent>
-            </Tabs>
-            {totalPages > 1 && (
-              <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={handlePageChange} />
-            )}
+            <div className="mt-6">
+              <ResourceGrid 
+                resources={displayedResources}
+                onDelete={handleDeleteResource} 
+                onEdit={handleEditResource}
+                isAdmin={isAdmin}
+                currentUserId={session?.user?.id}
+              />
+              {hasMore && !loading && (
+                <div ref={ref} className="h-10" /> // Unsichtbarer Trigger für Intersection Observer
+              )}
+              {loading && (
+                <div className="flex justify-center p-4">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                </div>
+              )}
+            </div>
           </div>
         </main>
       </div>
@@ -565,50 +579,14 @@ function getIcon(type: ResourceType) {
   }
 }
 
-interface PaginationProps {
-  currentPage: number;
-  totalPages: number;
-  onPageChange: (page: number) => void;
-}
-
-function Pagination({ currentPage, totalPages, onPageChange }: PaginationProps) {
-  const pages = [];
-
-  for (let i = 1; i <= totalPages; i++) {
-    pages.push(i);
-  }
-
-  return (
-    <div className="flex justify-center mt-6 space-x-2">
-      <Button
-        variant="ghost"
-        onClick={() => onPageChange(currentPage - 1)}
-        disabled={currentPage === 1}
-        className="disabled:opacity-50"
-        aria-label="Vorherige Seite"
-      >
-        Zurück
-      </Button>
-      {pages.map(page => (
-        <Button
-          key={page}
-          variant={page === currentPage ? "primary" : "ghost"}
-          onClick={() => onPageChange(page)}
-          className={page === currentPage ? "bg-blue-600 text-white" : ""}
-          aria-label={`Seite ${page}`}
-        >
-          {page}
-        </Button>
-      ))}
-      <Button
-        variant="ghost"
-        onClick={() => onPageChange(currentPage + 1)}
-        disabled={currentPage === totalPages}
-        className="disabled:opacity-50"
-        aria-label="Nächste Seite"
-      >
-        Weiter
-      </Button>
-    </div>
-  );
+// Helfer-Funktion für Debouncing
+function debounce<T extends (...args: any[]) => any>(
+  func: T,
+  wait: number
+): (...args: Parameters<T>) => void {
+  let timeout: NodeJS.Timeout;
+  return (...args: Parameters<T>) => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func(...args), wait);
+  };
 }
