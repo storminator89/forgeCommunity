@@ -147,12 +147,20 @@ export default function ResourceLibrary() {
     fetchResources(nextPage);
   };
 
-  const handleSearch = debounce((event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSearchInput = (event: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(event.target.value);
-    setPage(1);
-    setDisplayedResources([]);
-    fetchResources(1);
-  }, 300);
+  };
+
+  useEffect(() => {
+    const debouncedSearch = setTimeout(() => {
+      setPage(1);
+      setDisplayedResources([]);
+      setHasMore(true);
+      fetchResources(1);
+    }, 300);
+
+    return () => clearTimeout(debouncedSearch);
+  }, [searchTerm]);
 
   const checkAdminStatus = async () => {
     if (session?.user?.id) {
@@ -181,7 +189,8 @@ export default function ResourceLibrary() {
       };
 
       const response = await axios.post('/api/resources', resourceToAdd);
-      setResources([response.data, ...resources]);
+      // Füge neue Ressource am Anfang der displayedResources hinzu
+      setDisplayedResources(prev => [response.data, ...prev]);
       setNewResource({
         title: '',
         type: 'ARTICLE',
@@ -204,7 +213,8 @@ export default function ResourceLibrary() {
 
     try {
       await axios.delete(`/api/resources/${id}`);
-      setResources(resources.filter(resource => resource.id !== id));
+      // Entferne die Ressource aus displayedResources
+      setDisplayedResources(prev => prev.filter(resource => resource.id !== id));
       toast.success('Ressource erfolgreich gelöscht!');
     } catch (error) {
       console.error('Fehler beim Löschen der Ressource:', error);
@@ -229,9 +239,12 @@ export default function ResourceLibrary() {
         url: editResource.url,
       });
 
-      setResources(resources.map(resource => 
-        resource.id === editResource.id ? response.data : resource
-      ));
+      // Aktualisiere die Ressource in displayedResources
+      setDisplayedResources(prev => 
+        prev.map(resource => 
+          resource.id === editResource.id ? response.data : resource
+        )
+      );
       setIsEditDialogOpen(false);
       toast.success('Ressource erfolgreich aktualisiert!');
     } catch (error: any) {
@@ -252,13 +265,6 @@ export default function ResourceLibrary() {
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
   };
-
-  useEffect(() => {
-    setPage(1);
-    setDisplayedResources([]);
-    setHasMore(true);
-    fetchResources(1);
-  }, [searchTerm]);
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-100 dark:bg-gray-900">
@@ -289,7 +295,7 @@ export default function ResourceLibrary() {
                     type="text"
                     placeholder="Suche nach Ressourcen..."
                     value={searchTerm}
-                    onChange={handleSearch}
+                    onChange={handleSearchInput}
                     className="pl-10 pr-4 py-2 w-full border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-white"
                   />
                 </div>
@@ -577,16 +583,4 @@ function getIcon(type: ResourceType) {
     case ResourceType.COURSE: return <Book className={iconClass} />;
     default: return <Link className={iconClass} />;
   }
-}
-
-// Helfer-Funktion für Debouncing
-function debounce<T extends (...args: any[]) => any>(
-  func: T,
-  wait: number
-): (...args: Parameters<T>) => void {
-  let timeout: NodeJS.Timeout;
-  return (...args: Parameters<T>) => {
-    clearTimeout(timeout);
-    timeout = setTimeout(() => func(...args), wait);
-  };
 }
