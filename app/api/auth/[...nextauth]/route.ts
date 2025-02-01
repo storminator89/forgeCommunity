@@ -1,4 +1,4 @@
-  import NextAuth from "next-auth"
+import NextAuth from "next-auth"
 import CredentialsProvider from "next-auth/providers/credentials"
 import GoogleProvider from "next-auth/providers/google"
 import { PrismaAdapter } from "@next-auth/prisma-adapter"
@@ -13,6 +13,20 @@ const handler = NextAuth({
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      // Aktualisiere lastLogin auch für Google-Login
+      async profile(profile) {
+        const user = await prisma.user.update({
+          where: { email: profile.email },
+          data: { lastLogin: new Date() }
+        })
+        return {
+          id: profile.sub,
+          name: profile.name,
+          email: profile.email,
+          image: profile.picture,
+          role: user.role
+        }
+      }
     }),
     CredentialsProvider({
       name: 'Credentials',
@@ -42,6 +56,12 @@ const handler = NextAuth({
           console.log("Invalid password")
           return null
         }
+
+        // Aktualisiere lastLogin beim erfolgreichen Login
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { lastLogin: new Date() }
+        })
 
         return {
           id: user.id,

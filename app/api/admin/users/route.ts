@@ -46,6 +46,7 @@ export async function GET(request: NextRequest) {
       title: user.title,
       contact: user.contact,
       createdAt: user.createdAt,
+      lastLogin: user.lastLogin, // Stelle sicher, dass lastLogin inkludiert ist
       skills: user.skills.map(s => ({
         name: s.skill.name,
       })),

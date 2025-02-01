@@ -183,24 +183,21 @@ export default function UserManagement() {
   };
 
   const getLastActiveStatus = (user: User) => {
-    if (!user.lastLogin) {
-      console.log('No lastLogin for user:', user.email); // Debug-Log
+    if (!user?.lastLogin) {
       return 'Noch nie eingeloggt';
     }
 
     try {
       const lastLogin = new Date(user.lastLogin);
+      if (isNaN(lastLogin.getTime())) {
+        console.error('Invalid lastLogin date:', user.lastLogin);
+        return 'Ungültiges Datum';
+      }
+
       const now = new Date();
       const diffMinutes = Math.floor((now.getTime() - lastLogin.getTime()) / (1000 * 60));
       const diffHours = Math.floor(diffMinutes / 60);
       const diffDays = Math.floor(diffHours / 24);
-
-      console.log('Last login details:', { // Debug-Log
-        lastLogin,
-        diffMinutes,
-        diffHours,
-        diffDays
-      });
 
       if (diffMinutes < 5) return 'Gerade aktiv';
       if (diffMinutes < 60) return `Vor ${diffMinutes} Minuten aktiv`;
