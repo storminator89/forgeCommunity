@@ -71,14 +71,18 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { title } = body;
+    const { title, type, content, order, parentId } = body;
 
     const updatedContent = await prisma.courseContent.update({
       where: {
         id: params.contentId,
       },
       data: {
-        title,
+        ...(title !== undefined && { title }),
+        ...(type !== undefined && { type }),
+        ...(content !== undefined && { content }),
+        ...(order !== undefined && { order }),
+        ...(parentId !== undefined && { parentId })
       },
     });
 
