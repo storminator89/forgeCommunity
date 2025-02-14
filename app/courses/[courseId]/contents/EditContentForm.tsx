@@ -91,9 +91,9 @@ export function EditContentForm({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6 p-6 bg-card rounded-lg border shadow-sm">
       <div className="space-y-2">
-        <Label htmlFor="title">Titel</Label>
+        <Label htmlFor="title" className="text-base font-semibold">Titel</Label>
         <Input
           id="title"
           value={formData.title}
@@ -102,11 +102,12 @@ export function EditContentForm({
             onContentChange({ ...initialContent, title: e.target.value });
           }}
           placeholder="Titel des Inhalts"
+          className="w-full"
         />
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="type">Inhaltstyp</Label>
+        <Label htmlFor="type" className="text-base font-semibold">Inhaltstyp</Label>
         <Select
           value={formData.type}
           onValueChange={(value: 'TEXT' | 'VIDEO' | 'AUDIO' | 'H5P' | 'QUIZ') => {
@@ -122,7 +123,7 @@ export function EditContentForm({
             });
           }}
         >
-          <SelectTrigger>
+          <SelectTrigger className="w-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -163,16 +164,18 @@ export function EditContentForm({
         </Select>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-3">
         {formData.type === 'QUIZ' ? (
-          <QuizEditor
-            initialContent={JSON.parse(formData.content)}
-            onSave={handleQuizChange}
-          />
+          <div className="bg-background rounded-md p-4">
+            <QuizEditor
+              initialContent={JSON.parse(formData.content)}
+              onSave={handleQuizChange}
+            />
+          </div>
         ) : formData.type === 'TEXT' ? (
-          <>
-            <div className="flex items-center justify-between mb-2">
-              <Label>Inhalt</Label>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-base font-semibold">Inhalt</Label>
               <div className="flex items-center space-x-2">
                 <Label htmlFor="html-mode" className="text-sm">HTML-Modus</Label>
                 <Switch
@@ -184,31 +187,33 @@ export function EditContentForm({
                 />
               </div>
             </div>
-            {formData.isHtmlMode ? (
-              <Textarea
-                value={formData.content}
-                onChange={(e) => {
-                  setFormData(prev => ({ ...prev, content: e.target.value }));
-                  onContentChange({ ...initialContent, content: e.target.value });
-                }}
-                className="min-h-[200px] font-mono"
-              />
-            ) : (
-              <ReactQuill
-                value={formData.content}
-                onChange={(content) => {
-                  setFormData(prev => ({ ...prev, content }));
-                  onContentChange({ ...initialContent, content });
-                }}
-                modules={quillModules}
-                formats={quillFormats}
-                className="bg-background"
-              />
-            )}
-          </>
+            <div className="bg-background rounded-md">
+              {formData.isHtmlMode ? (
+                <Textarea
+                  value={formData.content}
+                  onChange={(e) => {
+                    setFormData(prev => ({ ...prev, content: e.target.value }));
+                    onContentChange({ ...initialContent, content: e.target.value });
+                  }}
+                  className="min-h-[200px] font-mono"
+                />
+              ) : (
+                <ReactQuill
+                  value={formData.content}
+                  onChange={(content) => {
+                    setFormData(prev => ({ ...prev, content }));
+                    onContentChange({ ...initialContent, content });
+                  }}
+                  modules={quillModules}
+                  formats={quillFormats}
+                  className="bg-background rounded-md [&_.ql-toolbar]:rounded-t-md [&_.ql-container]:rounded-b-md"
+                />
+              )}
+            </div>
+          </div>
         ) : (
-          <>
-            <Label>URL oder Embed-Code</Label>
+          <div className="space-y-2">
+            <Label className="text-base font-semibold">URL oder Embed-Code</Label>
             <Input
               value={formData.content}
               onChange={(e) => {
@@ -222,12 +227,13 @@ export function EditContentForm({
                   ? 'Audio URL'
                   : 'H5P Embed Code'
               }
+              className="w-full"
             />
-          </>
+          </div>
         )}
       </div>
 
-      <div className="flex justify-end space-x-2">
+      <div className="flex justify-end space-x-3 pt-4 border-t">
         <Button
           variant="outline"
           onClick={onCancel}
