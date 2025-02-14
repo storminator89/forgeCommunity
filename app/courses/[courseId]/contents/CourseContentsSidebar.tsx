@@ -16,6 +16,8 @@ import { cn } from "@/lib/utils";
 import { AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { isPageVisited } from './utils/visitedPages';
+import { motion } from 'framer-motion';
+import { CheckCircle } from 'lucide-react';
 
 interface CourseContentsSidebarProps {
   contents: CourseContent[];
@@ -171,48 +173,30 @@ export function CourseContentsSidebar({
 
   const handleDelete = async (content: CourseContent) => {
     try {
-      console.log('Starting delete operation for content:', content);
       setIsDeleting(true);
       
+      // API-Aufruf zum Löschen
       const response = await fetch(`/api/courses/${courseId}/contents/${content.id}`, {
         method: 'DELETE',
       });
 
-      console.log('Delete response status:', response.status);
-      const responseData = await response.json();
-      console.log('Delete response data:', responseData);
-
       if (!response.ok) {
-        throw new Error(`Failed to delete content: ${responseData.error || 'Unknown error'}`);
+        throw new Error('Failed to delete content');
       }
 
-      console.log('Delete successful, updating UI');
-      // Update parent's state
-      onDeleteClick(content);
-      
-      // Update local state - handle both main topics and subtopics
-      setMainContents(prev => {
-        if (!content.parentId) {
-          console.log('Removing main topic');
-          return prev.filter(c => c.id !== content.id);
-        } else {
-          console.log('Removing subtopic');
-          return prev.map(main => ({
+      // Update local state
+      setMainContents(prev => prev.map(main => {
+        if (main.id === content.parentId) {
+          return {
             ...main,
-            subContents: main.subContents?.filter(sub => sub.id !== content.id) || []
-          }));
+            subContents: (main.subContents || []).filter(sub => sub.id !== content.id)
+          };
         }
-      });
+        return main;
+      }));
 
-      console.log('Updated mainContents after deletion:', mainContents);
-
-      if (selectedContentId === content.id) {
-        console.log('Resetting selected content');
-        onContentSelect('');
-      }
-
-      // Sidebar anschließend neu laden
-      router.refresh();
+      // Call the parent's delete handler
+      onDeleteClick(content);
 
     } catch (error) {
       console.error('Error deleting content:', error);
@@ -351,6 +335,41 @@ export function CourseContentsSidebar({
     }
   };
 
+  const handleSubContentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSubtopicTitle.trim()) return;
+    
+    try {
+      setIsSubmitting(true);
+      const newContent = await onSubContentSubmit(newSubtopicTitle);
+      
+      // Update local state immediately
+      if (newContent) {
+        const parentContent = mainContents.find(c => c.id === mainContentId);
+        if (parentContent) {
+          setMainContents(prev => prev.map(c => 
+            c.id === mainContentId
+              ? {
+                  ...c,
+                  subContents: [...(c.subContents || []), newContent]
+                }
+              : c
+          ));
+        }
+      }
+
+      setNewSubtopicTitle("");
+      onMainContentSelect?.(null);
+      
+      // Automatically expand the parent topic
+      setExpandedTopics(prev => new Set(prev).add(mainContentId));
+    } catch (error) {
+      console.error('Error creating subtopic:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-screen">
@@ -368,21 +387,26 @@ export function CourseContentsSidebar({
   }
 
   return (
-    <div
-      className="bg-white dark:bg-gray-800 overflow-y-auto border-r border-gray-200 dark:border-gray-700 transition-all duration-300 ease-in-out relative flex-shrink-0"
-    >
-      <div className="p-4">
-        <h3 className="text-lg font-semibold mb-4">{courseName || 'Loading course...'}</h3>
+    <div className="bg-gradient-to-br from-background/95 to-background/50 dark:from-gray-900/95 dark:to-gray-900/50 border-r border-border/50 overflow-y-auto transition-all duration-300 ease-in-out relative flex-shrink-0 backdrop-blur-sm">
+      <div className="p-6 space-y-6">
+        <div className="space-y-2">
+          <h3 className="text-xl font-bold text-foreground dark:text-white">{courseName || 'Loading course...'}</h3>
+          <p className="text-sm text-primary font-medium">Kursübersicht</p>
+        </div>
+        
         <div className="space-y-4">
           {mainContents.map((content, index) => (
-            <div key={content.id} className="mb-4">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center flex-1">
+            <div key={content.id} className="group relative rounded-lg overflow-hidden transition-all duration-200 hover:bg-accent/5">
+              <div className="flex items-center justify-between p-2 group/topic">
+                <div className="flex items-center gap-2.5 flex-1 min-w-0">
                   <Button
                     variant="ghost"
                     size="icon"
                     onClick={() => toggleTopic(content.id)}
-                    className="h-6 w-6"
+                    className={cn(
+                      "h-7 w-7 flex-shrink-0 hover:bg-primary/10 hover:text-primary transition-all duration-200",
+                      expandedTopics.has(content.id) && "bg-primary/10 text-primary shadow-sm"
+                    )}
                   >
                     <ChevronRight
                       className={cn(
@@ -391,46 +415,71 @@ export function CourseContentsSidebar({
                       )}
                     />
                   </Button>
-                  {editingContentId === content.id ? (
-                    <form
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        handleInlineEdit(content.id, editingTitle);
-                        setEditingContentId(null);
-                      }}
-                      className="flex-1 ml-1"
-                    >
-                      <Input
-                        type="text"
-                        value={editingTitle}
-                        onChange={(e) => setEditingTitle(e.target.value)}
-                        onBlur={() => {
-                          if (editingTitle.trim() !== '') {
-                            handleInlineEdit(content.id, editingTitle);
-                          }
+                  <div className={cn(
+                    "flex-1 min-w-0 py-1 px-2 rounded-md transition-all duration-200 hover:bg-primary/5 flex items-center gap-2",
+                    expandedTopics.has(content.id) && "bg-primary/5"
+                  )}>
+                    {editingContentId === content.id ? (
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          handleInlineEdit(content.id, editingTitle);
                           setEditingContentId(null);
                         }}
-                        className="h-6 py-1 px-2 text-sm"
-                        autoFocus
-                      />
-                    </form>
-                  ) : (
-                    <span 
-                      className="font-semibold ml-1 cursor-pointer hover:text-blue-500"
-                      onClick={() => {
-                        setEditingContentId(content.id);
-                        setEditingTitle(content.title);
-                      }}
-                    >
-                      {content.title}
-                    </span>
-                  )}
+                        className="flex-1 min-w-0"
+                      >
+                        <Input
+                          type="text"
+                          value={editingTitle}
+                          onChange={(e) => setEditingTitle(e.target.value)}
+                          onBlur={() => {
+                            if (editingTitle.trim() !== '') {
+                              handleInlineEdit(content.id, editingTitle);
+                            }
+                            setEditingContentId(null);
+                          }}
+                          className="h-8 text-sm bg-background border-primary/30 focus:border-primary focus:ring-primary/20 font-medium"
+                          autoFocus
+                        />
+                      </form>
+                    ) : (
+                      <div className="flex items-center justify-between gap-2 w-full">
+                        <span 
+                          className="font-semibold text-sm cursor-pointer text-foreground hover:text-primary transition-colors duration-200 truncate"
+                          onClick={() => {
+                            setEditingContentId(content.id);
+                            setEditingTitle(content.title);
+                          }}
+                        >
+                          {content.title}
+                        </span>
+                        {content.subContents?.every(sub => isPageVisited(courseId, sub.id)) && content.subContents.length > 0 && (
+                          <div className="flex items-center gap-1.5 bg-green-100 dark:bg-green-500/20 text-green-600 dark:text-green-400 px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0">
+                            <CheckCircle className="h-3.5 w-3.5" />
+                            <span>100%</span>
+                          </div>
+                        )}
+                        {content.subContents?.some(sub => isPageVisited(courseId, sub.id)) && 
+                          !content.subContents?.every(sub => isPageVisited(courseId, sub.id)) && (
+                          <div className="flex items-center gap-1.5 bg-background dark:bg-gray-800 text-muted-foreground px-2 py-0.5 rounded-full text-xs font-medium border border-border flex-shrink-0">
+                            {(() => {
+                              const total = content.subContents?.length || 0;
+                              const completed = content.subContents?.filter(sub => isPageVisited(courseId, sub.id)).length || 0;
+                              const percentage = Math.round((completed / total) * 100);
+                              return `${percentage}%`;
+                            })()}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div className="flex items-center gap-1">
+                
+                <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-all duration-200 flex-shrink-0">
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-6 w-6"
+                    className="h-7 w-7 hover:bg-primary/10 hover:text-primary transition-all duration-200"
                     onClick={() => {
                       setEditingContentId(content.id);
                       setEditingTitle(content.title);
@@ -443,7 +492,7 @@ export function CourseContentsSidebar({
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-6 w-6"
+                        className="h-7 w-7 hover:bg-destructive/10 hover:text-destructive transition-all duration-200"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -456,10 +505,13 @@ export function CourseContentsSidebar({
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
-                        <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                        <AlertDialogCancel className="bg-background/50 hover:bg-background border-border/50 hover:border-border transition-colors duration-200">
+                          Abbrechen
+                        </AlertDialogCancel>
                         <AlertDialogAction 
                           onClick={() => handleDelete(content)}
                           disabled={isDeleting}
+                          className="bg-destructive hover:bg-destructive/90 transition-colors duration-200"
                         >
                           {isDeleting ? "Wird gelöscht..." : "Löschen"}
                         </AlertDialogAction>
@@ -470,15 +522,16 @@ export function CourseContentsSidebar({
               </div>
 
               {expandedTopics.has(content.id) && (
-                <>
+                <div className="pl-9 pr-2 pb-2">
                   {content.subContents && content.subContents.length > 0 && (
-                    <div className="ml-6 space-y-1 mt-2">
+                    <div className="relative space-y-1">
+                      <div className="absolute -left-4 top-0 bottom-0 w-[2px] bg-gradient-to-b from-primary/5 via-primary/20 to-primary/5 rounded-full" />
                       <ContentList
                         contents={content.subContents}
                         selectedContentId={selectedContentId}
                         onContentSelect={onContentSelect}
                         onEditClick={onEditClick}
-                        onDeleteClick={handleDeleteContent} // Übergebe den neuen Handler
+                        onDeleteClick={handleDeleteContent}
                         isInlineEditing={isInlineEditing}
                         inlineEditTitle={inlineEditTitle}
                         onInlineEditSubmit={onInlineEditSubmit}
@@ -506,16 +559,16 @@ export function CourseContentsSidebar({
                   >
                     <DialogTrigger asChild>
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
                         onClick={() => onMainContentSelect?.(content.id)}
-                        className="w-full flex items-center justify-center text-muted-foreground hover:text-foreground group border border-dashed border-gray-300 dark:border-gray-600 rounded-md py-2 mt-2"
+                        className="w-full mt-2 bg-background hover:bg-primary/5 text-foreground hover:text-primary font-medium border-primary/20 hover:border-primary shadow-sm hover:shadow group flex items-center justify-center transition-all duration-200"
                       >
-                        <PlusCircle className="h-4 w-4 mr-2 group-hover:text-primary" />
-                        Unterthema hinzufügen
+                        <PlusCircle className="h-4 w-4 mr-2 text-primary group-hover:scale-110 transition-all duration-200" />
+                        <span>Unterthema hinzufügen</span>
                       </Button>
                     </DialogTrigger>
-                    <DialogContent>
+                    <DialogContent className="sm:max-w-md">
                       <DialogHeader>
                         <DialogTitle>Neues Unterthema erstellen</DialogTitle>
                         <DialogDescription>
@@ -523,23 +576,7 @@ export function CourseContentsSidebar({
                         </DialogDescription>
                       </DialogHeader>
 
-                      <form onSubmit={(e) => {
-                        e.preventDefault();
-                        if (!newSubtopicTitle.trim()) return;
-                        
-                        setIsSubmitting(true);
-                        onSubContentSubmit(newSubtopicTitle)
-                          .then(() => {
-                            setNewSubtopicTitle("");
-                            onMainContentSelect?.(null);
-                          })
-                          .catch((error) => {
-                            console.error('Error creating subtopic:', error);
-                          })
-                          .finally(() => {
-                            setIsSubmitting(false);
-                          });
-                      }} className="space-y-4">
+                      <form onSubmit={handleSubContentSubmit} className="space-y-4">
                         <div className="space-y-2">
                           <Label htmlFor="title">Titel</Label>
                           <Input
@@ -547,6 +584,7 @@ export function CourseContentsSidebar({
                             value={newSubtopicTitle}
                             onChange={(e) => setNewSubtopicTitle(e.target.value)}
                             placeholder="Titel des Unterthemas"
+                            className="bg-background/50 border-border/50 focus:border-primary/50"
                           />
                         </div>
 
@@ -558,12 +596,14 @@ export function CourseContentsSidebar({
                               onMainContentSelect?.(null);
                               setNewSubtopicTitle("");
                             }}
+                            className="bg-background/50 hover:bg-background border-border/50 hover:border-border"
                           >
                             Abbrechen
                           </Button>
                           <Button
                             type="submit"
                             disabled={!newSubtopicTitle.trim() || isSubmitting}
+                            className="bg-primary hover:bg-primary/90"
                           >
                             {isSubmitting ? "Wird erstellt..." : "Erstellen"}
                           </Button>
@@ -571,7 +611,7 @@ export function CourseContentsSidebar({
                       </form>
                     </DialogContent>
                   </Dialog>
-                </>
+                </div>
               )}
             </div>
           ))}
@@ -582,13 +622,13 @@ export function CourseContentsSidebar({
           <DialogTrigger asChild>
             <Button 
               onClick={() => setIsDialogOpen(true)} 
-              className="mt-4 w-full flex items-center"
+              className="w-full group bg-background hover:bg-primary/10 text-foreground hover:text-primary font-medium border border-border hover:border-primary shadow-sm hover:shadow transition-all duration-200"
             >
-              <PlusCircle className="mr-2 h-4 w-4" />
+              <PlusCircle className="mr-2 h-4 w-4 text-primary group-hover:scale-110 transition-all duration-200" />
               Neues Hauptthema
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>Neues Hauptthema</DialogTitle>
               <DialogDescription>
@@ -604,6 +644,7 @@ export function CourseContentsSidebar({
                   value={newMainContentTitle}
                   onChange={(e) => setNewMainContentTitle(e.target.value)}
                   placeholder="Titel des Hauptthemas"
+                  className="bg-background/50 border-border/50 focus:border-primary/50"
                 />
               </div>
 
@@ -612,12 +653,14 @@ export function CourseContentsSidebar({
                   type="button"
                   variant="outline"
                   onClick={() => setIsDialogOpen(false)}
+                  className="bg-background/50 hover:bg-background border-border/50 hover:border-border"
                 >
                   Abbrechen
                 </Button>
                 <Button
                   type="submit"
                   disabled={!newMainContentTitle || newMainContentTitle.length === 0 || isSubmitting}
+                  className="bg-primary hover:bg-primary/90"
                 >
                   {isSubmitting ? "Wird erstellt..." : "Erstellen"}
                 </Button>
@@ -628,7 +671,7 @@ export function CourseContentsSidebar({
 
         {/* Certificate button at the bottom of the sidebar */}
         {contents.length > 0 && (
-          <div className="mt-8 pt-4 border-t">
+          <div className="mt-8 pt-4 border-t border-border/50">
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -658,26 +701,32 @@ export function CourseContentsSidebar({
                         setIsGeneratingCertificate(false);
                       }
                     }}
-                    className="w-full gap-2 bg-green-500 hover:bg-green-600"
+                    className={cn(
+                      "w-full gap-2 group transition-all duration-200",
+                      allTopicsCompleted
+                        ? "bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white"
+                        : "bg-muted/50 text-muted-foreground cursor-not-allowed"
+                    )}
                     disabled={isGeneratingCertificate || !allTopicsCompleted}
                   >
                     {isGeneratingCertificate ? (
                       <>Generiere Zertifikat...</>
                     ) : (
-                      <>
+                      <div className="flex items-center gap-2">
                         <Award className="w-4 h-4" />
-                        Zertifikat herunterladen
-                      </>
+                        Zertifikat
+                      </div>
                     )}
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>
+                <TooltipContent className="max-w-xs p-4">
                   {allTopicsCompleted ? (
-                    <p>Herzlichen Glückwunsch! Sie haben den Kurs erfolgreich abgeschlossen.</p>
+                    <div className="space-y-2">
+                      <p className="font-medium text-green-500">Kurs abgeschlossen</p>
+                    </div>
                   ) : (
-                    <div className="max-w-xs">
-                      <p className="font-semibold mb-1">Kurs noch nicht abgeschlossen</p>
-                      <p className="text-sm text-gray-500">Um das Zertifikat freizuschalten, müssen Sie alle Themen des Kurses abschließen. Markieren Sie die Themen als abgeschlossen, indem Sie auf den Kreis neben jedem Thema klicken.</p>
+                    <div className="space-y-2">
+                      <p className="font-medium text-muted-foreground">Schließen Sie zuerst alle Themen ab</p>
                     </div>
                   )}
                 </TooltipContent>

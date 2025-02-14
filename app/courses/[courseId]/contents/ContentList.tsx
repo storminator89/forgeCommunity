@@ -1,50 +1,32 @@
 'use client'
 
-import { CourseContent } from './types';
-import { Button } from "@/components/ui/button";
-import { Edit, Trash2, ChevronUp, ChevronDown, Check, Circle, BookOpen, Download, Award } from 'lucide-react';
-import { Input } from "@/components/ui/input";
-import { isPageVisited, togglePageVisited, getVisitedPages } from './utils/visitedPages';
-import { useState, useMemo, useEffect } from 'react';
-import { cn } from "@/lib/utils";
-import { generateCertificate, CertificateData } from './utils/generateCertificate';
-import { useSession } from 'next-auth/react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { CourseProgress } from './components/CourseProgress';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
+import { useState } from 'react'
+import { CourseContent } from './types'
+import { FileText, ChevronUp, ChevronDown, Pen, Trash2, CheckCircle } from 'lucide-react'
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { cn } from "@/lib/utils"
+import { AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog"
+import { isPageVisited } from './utils/visitedPages'
+import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 
 interface ContentListProps {
   contents: CourseContent[];
   selectedContentId: string | null;
-  onContentSelect: (id: string) => void;
-  onEditClick: (content: CourseContent) => void;
+  onContentSelect: (contentId: string) => void;
+  onEditClick: (contentId: string) => void;
   onDeleteClick: (content: CourseContent) => void;
   isInlineEditing: string | null;
   inlineEditTitle: string;
-  onInlineEditSubmit: (contentId: string, newTitle: string) => Promise<void>;
-  setIsInlineEditing: (id: string | null) => void;
+  onInlineEditSubmit: (contentId: string, newTitle: string) => void;
+  setIsInlineEditing: (contentId: string | null) => void;
   setInlineEditTitle: (title: string) => void;
-  onMoveUp?: (mainContentId: string, subContentId: string) => Promise<void>;
-  onMoveDown?: (mainContentId: string, subContentId: string) => Promise<void>;
-  mainContentId?: string;
-  mainTopicIndex?: number;
+  onMoveUp: (mainContentId: string, contentId: string) => void;
+  onMoveDown: (mainContentId: string, contentId: string) => void;
+  mainContentId: string;
+  mainTopicIndex: number;
   courseId: string;
-  courseName: string;
-  onVisitedToggle?: (contentId: string) => void;
-  onCompletionChange?: (isCompleted: boolean) => void;
+  isLoading?: boolean;
 }
 
 export function ContentList({
@@ -63,343 +45,160 @@ export function ContentList({
   mainContentId,
   mainTopicIndex,
   courseId,
-  courseName,
-  onVisitedToggle,
-  onCompletionChange,
+  isLoading = false,
 }: ContentListProps) {
-  const [forceUpdate, setForceUpdate] = useState({});
-  const [isGeneratingCertificate, setIsGeneratingCertificate] = useState(false);
-  const { data: session } = useSession();
-
-  useEffect(() => {
-    if (!courseName) {
-      console.log('No course name available');
-      return;
-    }
-    console.log('ContentList received courseName:', courseName);
-  }, [courseName]);
-
-  // Ensure contents is never undefined
-  const safeContents = contents || [];
-
-  // Check if all main topics and subtopics are completed
-  const allTopicsCompleted = useMemo(() => {
-    // Debug: Log visited pages
-    const visitedPages = getVisitedPages(courseId);
-    console.log('\nAll visited pages:', visitedPages);
-
-    // First check if there are any main topics with subtopics
-    const hasTopicsWithSubtopics = safeContents.some(topic => 
-      topic.subContents && topic.subContents.length > 0
-    );
-
-    // If we have main topics with subtopics, we MUST check them
-    if (hasTopicsWithSubtopics) {
-      // Only consider topics with subtopics for completion
-      const isCompleted = safeContents.every(mainTopic => {
-        console.log('\nChecking main topic:', mainTopic.title);
-        
-        // Skip main topics without subtopics in this check
-        if (!mainTopic.subContents || mainTopic.subContents.length === 0) {
-          console.log(`Skipping main topic ${mainTopic.title} - no subtopics`);
-          return true;
-        }
-
-        // Check if all subtopics are completed
-        const subtopicsCompleted = mainTopic.subContents.every(subTopic => {
-          const isCompleted = isPageVisited(courseId, subTopic.id);
-          console.log(`Subtopic ${subTopic.title} (${subTopic.id}): ${isCompleted ? 'completed' : 'not completed'}`);
-          return isCompleted;
-        });
-
-        console.log(`Main topic ${mainTopic.title}: ${subtopicsCompleted ? 'all subtopics completed' : 'not all subtopics completed'}`);
-        return subtopicsCompleted;
-      });
-
-      console.log('\nFinal result - All topics with subtopics completed:', isCompleted);
-      return isCompleted;
-    } else {
-      // If no topics have subtopics, check main topics directly
-      const isCompleted = safeContents.every(mainTopic => {
-        const topicCompleted = isPageVisited(courseId, mainTopic.id);
-        console.log(`Main topic ${mainTopic.title} (${mainTopic.id}): ${topicCompleted ? 'completed' : 'not completed'}`);
-        return topicCompleted;
-      });
-
-      console.log('\nFinal result - All single topics completed:', isCompleted);
-      return isCompleted;
-    }
-  }, [safeContents, courseId, forceUpdate]);
-
-  useEffect(() => {
-    if (onCompletionChange) {
-      onCompletionChange(allTopicsCompleted);
-    }
-  }, [allTopicsCompleted, onCompletionChange]);
-
-  const handleVisitedToggle = (e: React.MouseEvent, contentId: string) => {
-    e.stopPropagation();
-    togglePageVisited(courseId, contentId);
-    setForceUpdate({}); // Force update to recalculate completion status
-    
-    // Notify parent components about the change
-    if (onVisitedToggle) {
-      onVisitedToggle(contentId);
-    }
-    if (onCompletionChange) {
-      const newCompletionStatus = isPageVisited(courseId, contentId);
-      onCompletionChange(newCompletionStatus);
-    }
-  };
-
-  const handleCertificateDownload = async () => {
-    if (!session?.user?.name) {
-      console.error('No user name available');
-      return;
-    }
-    
-    if (!courseName) {
-      console.error('No course name available');
-      return;
-    }
-    
-    try {
-      console.log('Generating certificate with data:', {
-        userName: session.user.name,
-        courseName,
-        completionDate: new Date(),
-        courseId,
-      });
-      
-      setIsGeneratingCertificate(true);
-      const certificateData: CertificateData = {
-        userName: session.user.name,
-        courseName,
-        completionDate: new Date(),
-        courseId,
-      };
-      
-      const blob = await generateCertificate(certificateData);
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${courseName.replace(/\s+/g, '-')}-Zertifikat.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('Error generating certificate:', error);
-    } finally {
-      setIsGeneratingCertificate(false);
-    }
-  };
-
-  const handleDelete = async (content: CourseContent) => {
-    try {
-      console.log('ContentList: Starting delete operation for subcontent:', content);
-      const response = await fetch(`/api/courses/${courseId}/contents/${content.id}`, {
-        method: 'DELETE',
-      });
-
-      console.log('Delete response status:', response.status);
-      const responseData = await response.json();
-      console.log('Delete response data:', responseData);
-
-      if (!response.ok) {
-        throw new Error(`Failed to delete content: ${responseData.error || 'Unknown error'}`);
-      }
-
-      // Sofortige UI-Aktualisierung durch Aufruf des Parent-Handlers
-      await onDeleteClick(content);
-
-      // Dialog schließen (falls offen)
-      const dialog = document.querySelector('[role="alertdialog"]');
-      if (dialog) {
-        const closeButton = dialog.querySelector('button[data-state="closed"]');
-        closeButton?.click();
-      }
-
-      // Parent aktualisieren und neu rendern
-      if (mainContentId) {
-        window.dispatchEvent(new CustomEvent('refreshSidebar', {
-          detail: { mainContentId }
-        }));
-      }
-
-    } catch (error) {
-      console.error('Error in ContentList delete handler:', error);
-    }
-  };
-
-  const handleMoveContent = async (direction: 'up' | 'down', content: CourseContent) => {
-    if (!mainContentId) return;
-
-    try {
-      const response = await fetch(`/api/courses/${courseId}/contents/${content.id}/reorder`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          direction,
-          mainContentId
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update order');
-      }
-
-      // Rest der UI-Aktualisierung bleibt gleich
-      if (direction === 'up') {
-        onMoveUp?.(mainContentId, content.id);
-      } else {
-        onMoveDown?.(mainContentId, content.id);
-      }
-
-    } catch (error) {
-      console.error('Error updating content order:', error);
-    }
-  };
+  const [isDeletingId, setIsDeletingId] = useState<string | null>(null);
 
   return (
-    <div className="space-y-4">
-      <ul className="space-y-1">
-        {safeContents.map((content, index) => (
-          <li
-            key={content.id}
-            className={cn(
-              "relative",
-              selectedContentId === content.id && "bg-muted"
-            )}
-            onClick={() => onContentSelect(content.id)}
-          >
-            <div className="p-2 flex items-center group/item hover:bg-accent hover:text-accent-foreground">
-              {/* Visited/Progress indicator */}
-              <button
-                onClick={(e) => handleVisitedToggle(e, content.id)}
-                className={cn(
-                  "w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200 relative group/check",
-                  isPageVisited(courseId, content.id) 
-                    ? "bg-green-500/10 text-green-500 hover:bg-green-500/20" 
-                    : "bg-gray-100 dark:bg-gray-800 text-muted-foreground hover:bg-gray-200 dark:hover:bg-gray-700"
-                )}
-              >
-                {isPageVisited(courseId, content.id) ? (
-                  <Check className="w-4 h-4" />
-                ) : (
-                  <BookOpen className="w-4 h-4" />
-                )}
-              </button>
-
-              {/* Content title with inline editing */}
-              {isInlineEditing === content.id ? (
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
+    <div>
+      {contents.map((content, index) => (
+        <div
+          key={content.id}
+          className={cn(
+            "relative group flex items-center justify-between py-2 px-3 rounded-md transition-all duration-200",
+            selectedContentId === content.id && "bg-primary/10 text-primary font-medium shadow-sm",
+            "hover:bg-primary/5 hover:shadow-sm"
+          )}
+        >
+          <div className="flex items-center gap-2.5 flex-1 min-w-0">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={cn(
+                      "h-7 w-7 flex-shrink-0 p-0 relative bg-background hover:bg-primary/10 border border-primary/20 hover:border-primary shadow-sm hover:shadow transition-all duration-200",
+                      selectedContentId === content.id && "text-primary border-primary bg-primary/5",
+                      isPageVisited(courseId, content.id) && "border-green-500/50 bg-green-50 dark:bg-green-500/10"
+                    )}
+                    onClick={() => onContentSelect(content.id)}
+                  >
+                    {isPageVisited(courseId, content.id) ? (
+                      <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                    ) : (
+                      <FileText className="h-4 w-4" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="right" className="bg-white dark:bg-gray-800 border border-border shadow-lg p-2">
+                  <div className="text-xs font-medium">
+                    {isPageVisited(courseId, content.id) ? (
+                      <div className="flex items-center gap-2 text-green-500">
+                        <span>Gelesen</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <span>Ungelesen</span>
+                      </div>
+                    )}
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            {isInlineEditing === content.id ? (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (inlineEditTitle.trim()) {
                     onInlineEditSubmit(content.id, inlineEditTitle);
+                  }
+                }}
+                className="flex-1 min-w-0"
+              >
+                <Input
+                  value={inlineEditTitle}
+                  onChange={(e) => setInlineEditTitle(e.target.value)}
+                  onBlur={() => {
+                    if (inlineEditTitle.trim()) {
+                      onInlineEditSubmit(content.id, inlineEditTitle);
+                    }
+                    setIsInlineEditing(null);
                   }}
-                  className="flex-1 ml-2"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <Input
-                    type="text"
-                    value={inlineEditTitle}
-                    onChange={(e) => setInlineEditTitle(e.target.value)}
-                    onBlur={() => {
-                      if (inlineEditTitle.trim() !== '') {
-                        onInlineEditSubmit(content.id, inlineEditTitle);
-                      }
-                      setIsInlineEditing(null);
-                    }}
-                    className="h-7 py-1 px-2 text-sm"
-                    autoFocus
-                  />
-                </form>
-              ) : (
-                <span className="flex-1 ml-2">{content.title}</span>
-              )}
-
-              {/* Action buttons */}
-              <div className="opacity-0 group-hover/item:opacity-100 transition-opacity duration-200 flex items-center gap-1">
-                {/* Move up/down buttons if provided */}
-                {onMoveUp && onMoveDown && mainContentId && (
-                  <>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleMoveContent('up', content);
+                  className="h-8 text-sm bg-background/80 border-primary/30 focus:border-primary focus:ring-primary/20 font-medium shadow-sm"
+                  autoFocus
+                />
+              </form>
+            ) : (
+              <span 
+                className="text-sm cursor-pointer font-medium text-foreground hover:text-primary transition-colors duration-200 truncate"
+                onClick={() => onContentSelect(content.id)}
+              >
+                {content.title}
+              </span>
+            )}
+          </div>
+          
+          <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-all duration-200 flex-shrink-0">
+            {index > 0 && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 hover:bg-primary/10 hover:text-primary transition-all duration-200"
+                onClick={() => onMoveUp(mainContentId, content.id)}
+              >
+                <ChevronUp className="h-4 w-4" />
+              </Button>
+            )}
+            {index < contents.length - 1 && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 hover:bg-primary/10 hover:text-primary transition-all duration-200"
+                onClick={() => onMoveDown(mainContentId, content.id)}
+              >
+                <ChevronDown className="h-4 w-4" />
+              </Button>
+            )}
+            <div className="flex items-center gap-1.5 ml-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 hover:bg-primary/10 hover:text-primary transition-all duration-200"
+                onClick={() => {
+                  setIsInlineEditing(content.id);
+                  setInlineEditTitle(content.title);
+                }}
+              >
+                <Pen className="h-4 w-4" />
+              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 hover:bg-destructive/10 hover:text-destructive transition-all duration-200"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Unterthema löschen</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Möchten Sie dieses Unterthema wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel className="bg-background hover:bg-accent text-foreground hover:text-foreground border-border hover:border-accent transition-all duration-200">
+                      Abbrechen
+                    </AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => {
+                        onDeleteClick(content);
+                        // Lokaler State wird durch Parent-Komponenten aktualisiert
                       }}
+                      className="bg-destructive hover:bg-destructive/90 text-destructive-foreground transition-colors duration-200"
                     >
-                      <ChevronUp className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleMoveContent('down', content);
-                      }}
-                    >
-                      <ChevronDown className="h-4 w-4" />
-                    </Button>
-                  </>
-                )}
-
-                {/* Edit button */}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsInlineEditing(content.id);
-                    setInlineEditTitle(content.title);
-                    console.log(`Editing content with ID: ${content.id}`);
-                  }}
-                >
-                  <Edit className="h-4 w-4" />
-                </Button>
-
-                {/* Delete button */}
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent onClick={(e) => e.stopPropagation()}>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Unterthema löschen</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Möchten Sie dieses Unterthema wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Abbrechen</AlertDialogCancel>
-                      <AlertDialogAction 
-                        onClick={() => handleDelete(content)}
-                      >
-                        Löschen
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </div>
+                      Löschen
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
-          </li>
-        ))}
-      </ul>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

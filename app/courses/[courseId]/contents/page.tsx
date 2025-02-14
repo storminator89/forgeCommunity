@@ -1,62 +1,21 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
-import { useSession } from 'next-auth/react';
-import dynamic from 'next/dynamic';
-import {
-  Button
-} from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Sidebar } from "@/components/Sidebar";
-import { UserNav } from "@/components/user-nav";
-import { ThemeToggle } from "@/components/theme-toggle";
-import {
-  PlusCircle,
-  Edit,
-  Trash2,
-  FileText,
-  Video,
-  Music,
-  ChevronLeft,
-  ChevronRight,
-  ArrowLeft,
-  Loader2,
-  Menu
-} from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { NewMainTopicDialog } from './NewMainTopicDialog';
-import { SubContentForm } from './SubContentForm';
-import { ContentList } from './ContentList';
-import { ContentViewer } from './ContentViewer';
-import { ContentRenderer } from './ContentRenderer';
-import { CourseHeader } from './CourseHeader';
-import { CourseMainContent } from './CourseMainContent';
-import { ContentForm } from './ContentForm'; // Import the new ContentForm component
-
-// Dynamisches Laden von ReactQuill
-const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
-import 'react-quill/dist/quill.snow.css';
-
-// Importiere die neue Komponente
-import { EditContentForm } from './EditContentForm';
-import { CourseContentsSidebar } from './CourseContentsSidebar';
-import { CourseContent } from './types';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { markPageAsVisited } from './utils/visitedPages';
+import { useCallback, useEffect, useState, useMemo, useRef } from 'react'
+import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
+import dynamic from 'next/dynamic'
+import { Button } from "@/components/ui/button"
+import { ThemeToggle } from "@/components/theme-toggle"
+import { UserNav } from "@/components/user-nav"
+import { Sidebar } from "@/components/Sidebar"
+import { CourseContentsSidebar } from './CourseContentsSidebar'
+import { EditContentForm } from './EditContentForm'
+import { ContentRenderer } from './ContentRenderer'
+import { CourseContent } from './types'
+import { markPageAsVisited } from './utils/visitedPages'
+import { ChevronLeft, ChevronRight, Edit, FileText, Video, Music, Box } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 export default function CourseContentsPage({ params }: { params: { courseId: string } }) {
   const router = useRouter();
@@ -76,6 +35,11 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
   const [forceUpdateValue, setForceUpdateValue] = useState(0);
   const [newMainContentTitle, setNewMainContentTitle] = useState("");
   const [currentMainContentId, setCurrentMainContentId] = useState<string | null>(null);
+  const [expandedTopics, setExpandedTopics] = useState<Set<string>>(new Set());
+  const [sidebarWidth, setSidebarWidth] = useState(300);
+  const isResizing = useRef(false);
+  const startX = useRef(0);
+  const startWidth = useRef(0);
 
   // Fetch course data
   const fetchCourse = useCallback(async () => {
@@ -103,13 +67,13 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
   }, [fetchCourse]);
 
   // Utility function to find content by ID
-  const findContentById = useCallback((id: string, contents: CourseContent[]): CourseContent | null => {
-    for (const content of contents) {
-      if (content.id === id) {
+  const findContentById = useCallback((contentId: string, contentsToSearch: CourseContent[]): CourseContent | null => {
+    for (const content of contentsToSearch) {
+      if (content.id === contentId) {
         return content;
       }
       if (content.subContents) {
-        const found = findContentById(id, content.subContents);
+        const found = findContentById(contentId, content.subContents);
         if (found) {
           return found;
         }
@@ -251,6 +215,20 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
     fetchContents();
   }, [fetchContents]);
 
+  // Add this to your existing useEffect block or create a new one
+  useEffect(() => {
+    const expandTopicForSelectedContent = () => {
+      if (selectedContentId) {
+        const content = findContentById(selectedContentId, mainContents);
+        if (content?.parentId) {
+          setExpandedTopics(prev => new Set([...prev, content.parentId]));
+        }
+      }
+    };
+
+    expandTopicForSelectedContent();
+  }, [selectedContentId, mainContents, findContentById]);
+
   // Handler zum Hinzufügen eines neuen Hauptthemas
   const handleMainContentSubmit = useCallback(async (title: string) => {
     if (!title.trim()) return;
@@ -371,14 +349,27 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
         throw new Error('Failed to create subcontent');
       }
 
-      // Refresh the contents
-      await fetchContents();
+      const newContent = await response.json();
+      
+      // Update the local state directly
+      setMainContents(prev => prev.map(content => {
+        if (content.id === currentMainContentId) {
+          return {
+            ...content,
+            subContents: [...(content.subContents || []), newContent]
+          };
+        }
+        return content;
+      }));
+
       setForceUpdateValue(prev => prev + 1);
       
       setAlertMessage({
         type: 'success',
         message: 'Unterthema erfolgreich erstellt',
       });
+
+      return newContent;
     } catch (error) {
       console.error('Error creating subcontent:', error);
       setAlertMessage({
@@ -387,7 +378,7 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
       });
       throw error;
     }
-  }, [params.courseId, currentMainContentId, fetchContents]);
+  }, [params.courseId, currentMainContentId]);
 
   // Handler zum Aktualisieren eines Inhalts (Hauptthema oder Unterthema)
   const handleContentUpdate = useCallback(async (updatedContent: CourseContent) => {
@@ -442,28 +433,62 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
   // Handler zum Initiieren des Löschvorgangs
   const handleDeleteContent = useCallback(async (content: CourseContent) => {
     try {
-      // Update local state
-      setMainContents(prev => prev.filter(c => c.id !== content.id));
-      
-      // Reset selected content if needed
-      if (selectedContentId === content.id) {
-        const firstMain = mainContents[0];
-        setSelectedContentId(firstMain ? firstMain.id : null);
+      // Sofortige lokale State-Aktualisierung für bessere UX
+      setMainContents(prev => {
+        // Kopie des States erstellen
+        const newContents = [...prev];
+        
+        // Hauptthema finden, das das zu löschende Unterthema enthält
+        const parentIndex = newContents.findIndex(main => 
+          main.subContents?.some(sub => sub.id === content.id)
+        );
+        
+        if (parentIndex !== -1) {
+          // Unterthema aus dem subContents Array filtern
+          newContents[parentIndex] = {
+            ...newContents[parentIndex],
+            subContents: newContents[parentIndex].subContents?.filter(
+              sub => sub.id !== content.id
+            ) || []
+          };
+        }
+        
+        return newContents;
+      });
+
+      // API-Aufruf zum Löschen
+      const response = await fetch(`/api/courses/${params.courseId}/contents/${content.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete content');
+        // Bei Fehler könnten wir hier den State wiederherstellen
       }
 
-      setAlertMessage({ type: 'success', message: 'Inhalt erfolgreich gelöscht.' });
+      // Selected Content zurücksetzen wenn das gelöschte Element ausgewählt war
+      if (selectedContentId === content.id) {
+        setSelectedContentId(null);
+        setEditingContentId(null);
+        setIsEditing(false);
+      }
 
-      // Nach erfolgreichem Löschen alle Inhalte neu laden
-      await fetchContents();
-      // Seite neu rendern
-      window.location.reload();
+      setAlertMessage({
+        type: 'success',
+        message: 'Unterthema erfolgreich gelöscht'
+      });
+
     } catch (error) {
       console.error('Error deleting content:', error);
-      setAlertMessage({ type: 'error', message: 'Fehler beim Löschen des Inhalts.' });
-      // Refresh contents to ensure consistency
-      fetchContents();
+      setAlertMessage({
+        type: 'error',
+        message: 'Fehler beim Löschen des Unterthemas'
+      });
+      
+      // Optional: State wiederherstellen bei Fehler
+      await fetchContents();
     }
-  }, [mainContents, selectedContentId]);
+  }, [params.courseId, selectedContentId, fetchContents]);
 
   // Handler zum Bestätigen des Löschvorgangs
   const confirmDeleteContent = useCallback(async () => {
@@ -727,12 +752,30 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
 
   const handleContentSelect = useCallback((contentId: string) => {
     setSelectedContentId(contentId);
-    markPageAsVisited(params.courseId, contentId);
+    
+    // Mark as visited if it's not null
+    if (contentId) {
+      markPageAsVisited(params.courseId, contentId);
+    }
+    
     // Find the selected content
     const content = findContentById(contentId, mainContents);
+    
     // If content is empty, automatically enter edit mode
     if (content && (!content.content || content.content.trim() === '')) {
       setEditingContentId(contentId);
+      setIsEditing(true);
+    } else {
+      setEditingContentId(null);
+      setIsEditing(false);
+    }
+    
+    // Ensure parent topic is expanded when selecting content
+    if (content?.parentId) {
+      const parentContent = findContentById(content.parentId, mainContents);
+      if (parentContent) {
+        setExpandedTopics(prev => new Set([...prev, parentContent.id]));
+      }
     }
   }, [params.courseId, mainContents, findContentById]);
 
@@ -780,6 +823,19 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
     setForceUpdateValue(prev => prev + 1);
   };
 
+  // Add this function to handle topic expansion
+  const toggleTopic = useCallback((topicId: string) => {
+    setExpandedTopics(prev => {
+      const newExpanded = new Set(prev);
+      if (newExpanded.has(topicId)) {
+        newExpanded.delete(topicId);
+      } else {
+        newExpanded.add(topicId);
+      }
+      return newExpanded;
+    });
+  }, []);
+
   // Loading indicator while fetching contents
   if (status === 'loading' || isLoading) {
     return (
@@ -796,14 +852,20 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
   }
 
   return (
-    <div className="flex flex-col lg:flex-row h-screen overflow-hidden bg-background dark:bg-gray-900 transition-colors duration-300">
+    <div className="flex flex-col lg:flex-row h-screen overflow-hidden bg-gradient-to-br from-background via-background/95 to-accent/10 dark:from-gray-900 dark:via-gray-900/95 dark:to-gray-800/10 transition-all duration-300">
       <Sidebar />
       
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="bg-background dark:bg-gray-800 shadow-md sticky top-0 z-40 transition-colors duration-300">
+        <header className="bg-background/80 dark:bg-gray-800/80 backdrop-blur-lg border-b border-border/40 shadow-sm sticky top-0 z-40 transition-colors duration-300">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-            <h2 className="text-3xl font-bold text-foreground dark:text-white transition-colors duration-300">{course?.name}</h2>
+            <div className="flex items-center space-x-4">
+              <h2 className="text-3xl font-bold bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent transition-colors duration-300">{course?.name}</h2>
+              <div className="hidden sm:flex items-center">
+                <span className="text-xs text-primary/90">•</span>
+                <span className="ml-2 text-sm font-semibold text-primary">Kursinhalt</span>
+              </div>
+            </div>
             <div className="flex items-center space-x-4">
               <ThemeToggle />
               <UserNav />
@@ -814,16 +876,24 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto">
           <div className="flex h-full">
-            <div className={`relative flex ${isTopicsSidebarOpen ? 'w-80' : 'w-0'} transition-all duration-300`}>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setIsTopicsSidebarOpen(!isTopicsSidebarOpen)}
-                className="absolute top-4 right-0 z-10 transform translate-x-1/2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-full shadow-sm"
-              >
-                {isTopicsSidebarOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-              </Button>
-              <div className={`w-full overflow-hidden ${isTopicsSidebarOpen ? 'opacity-100' : 'opacity-0'} transition-opacity duration-300`}>
+            <div 
+              className="relative transition-all duration-300 ease-in-out"
+              style={{ width: isTopicsSidebarOpen ? `${sidebarWidth}px` : '0px' }}
+            >
+              <div className="absolute -right-4 top-4 z-50">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setIsTopicsSidebarOpen(!isTopicsSidebarOpen)}
+                  className="bg-background dark:bg-gray-800 border border-primary/20 hover:border-primary/50 rounded-full shadow-sm hover:shadow-md transition-all duration-200 text-primary/80 hover:text-primary"
+                >
+                  {isTopicsSidebarOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                </Button>
+              </div>
+              <div className={cn(
+                "h-full overflow-hidden transition-all duration-300",
+                isTopicsSidebarOpen ? "opacity-100 w-full" : "opacity-0 w-0"
+              )}>
                 <CourseContentsSidebar
                   contents={mainContents || []}
                   selectedContentId={selectedContentId}
@@ -848,101 +918,138 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
                   onMainContentSelect={setCurrentMainContentId}
                 />
               </div>
+              <div
+                className="absolute top-0 right-0 h-full w-2 cursor-col-resize bg-transparent"
+                onMouseDown={startResizing}
+              />
             </div>
-            <div className="flex-1 overflow-y-auto bg-gradient-to-b from-background to-accent/5">
-              {selectedMainContent ? (
-                <div className="max-w-5xl mx-auto w-full px-8 py-6">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-card to-card/80 rounded-xl border shadow-sm p-6 mb-6 relative overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-r from-primary/5 to-transparent opacity-50" />
-                    <div className="relative space-y-1.5">
-                      <div className="flex items-center gap-2">
-                        <h1 className="text-2xl font-semibold tracking-tight">
-                          {selectedMainContent.title}
-                        </h1>
+            
+            <div className={cn(
+              "flex-1 overflow-y-auto transition-all duration-300 ease-in-out",
+              !isTopicsSidebarOpen && "px-4 md:px-8 lg:px-12"
+            )}>
+              <div className={cn(
+                "h-full transition-all duration-300 ease-in-out",
+                !isTopicsSidebarOpen ? "max-w-4xl mx-auto" : "max-w-full"
+              )}>
+                {selectedMainContent ? (
+                  <div className={cn(
+                    "w-full transition-all duration-300 ease-in-out",
+                    isTopicsSidebarOpen ? "px-6 py-6" : "px-0 py-6"
+                  )}>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-card to-card/80 rounded-xl border border-border/50 shadow-sm p-6 mb-6 relative overflow-hidden group">
+                      <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-primary/3 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                      <div className="relative space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <h1 className="text-2xl font-semibold tracking-tight">
+                            {selectedMainContent.title}
+                          </h1>
+                        </div>
+                        <p className="text-sm text-muted-foreground flex items-center gap-2">
+                          <span className="inline-flex items-center gap-1.5 bg-gradient-to-r from-primary/10 to-primary/5 text-primary px-3 py-1 rounded-full text-xs font-medium">
+                            {selectedMainContent.type === 'TEXT' && (
+                              <>
+                                <FileText className="h-3.5 w-3.5" />
+                                Textinhalt
+                              </>
+                            )}
+                            {selectedMainContent.type === 'VIDEO' && (
+                              <>
+                                <Video className="h-3.5 w-3.5" />
+                                Videoinhalt
+                              </>
+                            )}
+                            {selectedMainContent.type === 'AUDIO' && (
+                              <>
+                                <Music className="h-3.5 w-3.5" />
+                                Audioinhalt
+                              </>
+                            )}
+                            {selectedMainContent.type === 'H5P' && (
+                              <>
+                                <Box className="h-3.5 w-3.5" />
+                                Interaktiver Inhalt
+                              </>
+                            )}
+                          </span>
+                          <span className="text-xs">•</span>
+                          <span>Lerninhalt</span>
+                        </p>
                       </div>
-                      <p className="text-sm text-muted-foreground flex items-center gap-2">
-                        <span className="inline-flex items-center gap-1.5 bg-primary/10 text-primary px-2 py-0.5 rounded-full text-xs font-medium">
-                          {selectedMainContent.type === 'TEXT' && "Textinhalt"}
-                          {selectedMainContent.type === 'VIDEO' && "Videoinhalt"}
-                          {selectedMainContent.type === 'AUDIO' && "Audioinhalt"}
-                          {selectedMainContent.type === 'H5P' && "Interaktiver Inhalt"}
-                        </span>
-                        <span className="text-xs">•</span>
-                        <span>Lerninhalt</span>
+                      <div className="relative flex items-center gap-3">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setEditingContentId(selectedMainContent.id);
+                            setIsEditing(true);
+                          }}
+                          className="group/btn bg-background/50 hover:bg-primary/5 hover:text-primary border-border/50 transition-all duration-200"
+                        >
+                          <Edit className="h-4 w-4 mr-2 transition-transform duration-200 group-hover/btn:scale-110" />
+                          <span>Bearbeiten</span>
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="relative">
+                      {isEditing && editingContentId === selectedMainContent.id ? (
+                        <div className="bg-card rounded-xl border border-border/50 shadow-sm overflow-hidden backdrop-blur-sm">
+                          <EditContentForm
+                            content={selectedMainContent}
+                            onSubmit={handleContentUpdate}
+                            onContentChange={(updatedContent) => {
+                              const newContent = {
+                                ...selectedMainContent,
+                                ...updatedContent
+                              };
+                              
+                              setMainContents(prev =>
+                                prev.map(content => {
+                                  if (content.id === selectedMainContent.id) {
+                                    return newContent;
+                                  }
+                                  if (content.subContents) {
+                                    return {
+                                      ...content,
+                                      subContents: content.subContents.map(sub =>
+                                        sub.id === selectedMainContent.id ? newContent : sub
+                                      ),
+                                    };
+                                  }
+                                  return content;
+                                })
+                              );
+                            }}
+                            onCancel={() => {
+                              setEditingContentId(null);
+                              setIsEditing(false);
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        <div className="bg-card rounded-xl border border-border/50 shadow-sm overflow-hidden backdrop-blur-sm">
+                          <ContentRenderer content={selectedMainContent} />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-center space-y-4 max-w-md mx-auto p-8">
+                      <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-muted/80 to-muted/50 flex items-center justify-center mx-auto mb-6 shadow-sm">
+                        <FileText className="h-10 w-10 text-muted-foreground" />
+                      </div>
+                      <h2 className="text-2xl font-semibold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+                        Wählen Sie einen Inhalt aus
+                      </h2>
+                      <p className="text-muted-foreground text-sm leading-relaxed max-w-sm mx-auto">
+                        Wählen Sie einen Inhalt aus der Seitenleiste aus, um ihn anzuzeigen. Sie können die Inhalte bearbeiten und neu anordnen.
                       </p>
                     </div>
-                    <div className="relative flex items-center gap-3">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setEditingContentId(selectedMainContent.id);
-                          setIsEditing(true);
-                        }}
-                        className="hover:bg-primary/5 hover:text-primary transition-colors relative overflow-hidden group"
-                      >
-                        <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-primary/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                        <Edit className="h-4 w-4 mr-2" />
-                        <span className="relative">Bearbeiten</span>
-                      </Button>
-                    </div>
                   </div>
-
-                  <div className="relative">
-                    {isEditing && editingContentId === selectedMainContent.id ? (
-                      <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
-                        <EditContentForm
-                          content={selectedMainContent}
-                          onSubmit={handleContentUpdate}
-                          onContentChange={(updatedContent) => {
-                            const newContent = {
-                              ...selectedMainContent,
-                              ...updatedContent
-                            };
-                            
-                            setMainContents(prev =>
-                              prev.map(content => {
-                                if (content.id === selectedMainContent.id) {
-                                  return newContent;
-                                }
-                                if (content.subContents) {
-                                  return {
-                                    ...content,
-                                    subContents: content.subContents.map(sub =>
-                                      sub.id === selectedMainContent.id ? newContent : sub
-                                    ),
-                                  };
-                                }
-                                return content;
-                              })
-                            );
-                          }}
-                          onCancel={() => {
-                            setEditingContentId(null);
-                            setIsEditing(false);
-                          }}
-                        />
-                      </div>
-                    ) : (
-                      <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
-                        <ContentRenderer content={selectedMainContent} />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-center justify-center h-full">
-                  <div className="text-center space-y-4 max-w-md mx-auto p-8">
-                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-muted/80 to-muted/50 flex items-center justify-center mx-auto mb-6 shadow-sm">
-                      <FileText className="h-8 w-8 text-muted-foreground" />
-                    </div>
-                    <h2 className="text-2xl font-semibold">Wählen Sie einen Inhalt aus</h2>
-                    <p className="text-muted-foreground text-sm leading-relaxed max-w-sm mx-auto">
-                      Wählen Sie einen Inhalt aus der Seitenleiste aus, um ihn anzuzeigen. Sie können die Inhalte bearbeiten und neu anordnen.
-                    </p>
-                  </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
         </main>

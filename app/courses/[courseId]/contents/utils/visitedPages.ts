@@ -1,48 +1,61 @@
-export const getVisitedPagesKey = (courseId: string) => `visited-pages-${courseId}`;
+const VISITED_PAGES_KEY = 'visitedPages';
 
-export const markPageAsVisited = (courseId: string, contentId: string) => {
+interface VisitedPages {
+  [courseId: string]: {
+    [contentId: string]: boolean;
+  };
+}
+
+function getVisitedPages(): VisitedPages {
+  if (typeof window === 'undefined') return {};
+  
+  try {
+    const stored = localStorage.getItem(VISITED_PAGES_KEY);
+    return stored ? JSON.parse(stored) : {};
+  } catch (error) {
+    console.error('Error loading visited pages:', error);
+    return {};
+  }
+}
+
+function saveVisitedPages(pages: VisitedPages) {
   if (typeof window === 'undefined') return;
   
-  const key = getVisitedPagesKey(courseId);
-  const visitedPages = getVisitedPages(courseId);
-  if (!visitedPages.includes(contentId)) {
-    visitedPages.push(contentId);
-    localStorage.setItem(key, JSON.stringify(visitedPages));
+  try {
+    localStorage.setItem(VISITED_PAGES_KEY, JSON.stringify(pages));
+    window.dispatchEvent(new CustomEvent('visitedPagesChanged', {
+      detail: { courseId: Object.keys(pages)[0] }
+    }));
+  } catch (error) {
+    console.error('Error saving visited pages:', error);
   }
-};
+}
 
-export const togglePageVisited = (courseId: string, contentId: string) => {
-  if (typeof window === 'undefined') return;
+export function isPageVisited(courseId: string, contentId: string): boolean {
+  const visitedPages = getVisitedPages();
+  return !!(visitedPages[courseId]?.[contentId]);
+}
+
+export function markPageAsVisited(courseId: string, contentId: string) {
+  const visitedPages = getVisitedPages();
   
-  const key = getVisitedPagesKey(courseId);
-  const visitedPages = getVisitedPages(courseId);
-  const index = visitedPages.indexOf(contentId);
-  
-  if (index === -1) {
-    visitedPages.push(contentId);
-  } else {
-    visitedPages.splice(index, 1);
+  if (!visitedPages[courseId]) {
+    visitedPages[courseId] = {};
   }
   
-  localStorage.setItem(key, JSON.stringify(visitedPages));
-  
-  // Dispatch a custom event to notify listeners of the change
-  const event = new CustomEvent('visitedPagesChanged', {
-    detail: { courseId, contentId, isVisited: index === -1 }
-  });
-  window.dispatchEvent(event);
-  
-  return index === -1; // returns true if page was marked as visited, false if unmarked
-};
+  visitedPages[courseId][contentId] = true;
+  saveVisitedPages(visitedPages);
+}
 
-export const getVisitedPages = (courseId: string): string[] => {
-  if (typeof window === 'undefined') return [];
+export function unmarkPageAsVisited(courseId: string, contentId: string) {
+  const visitedPages = getVisitedPages();
   
-  const key = getVisitedPagesKey(courseId);
-  const visitedPages = localStorage.getItem(key);
-  return visitedPages ? JSON.parse(visitedPages) : [];
-};
+  if (visitedPages[courseId]?.[contentId]) {
+    delete visitedPages[courseId][contentId];
+    saveVisitedPages(visitedPages);
+  }
+}
 
-export const isPageVisited = (courseId: string, contentId: string): boolean => {
-  return getVisitedPages(courseId).includes(contentId);
-};
+export function areAllPagesVisited(courseId: string, contentIds: string[]): boolean {
+  return contentIds.every(id => isPageVisited(courseId, id));
+}

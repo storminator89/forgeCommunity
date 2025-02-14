@@ -91,9 +91,11 @@ export function EditContentForm({
   };
 
   return (
-    <div className="space-y-6 p-6 bg-card rounded-lg border shadow-sm">
-      <div className="space-y-2">
-        <Label htmlFor="title" className="text-base font-semibold">Titel</Label>
+    <div className="space-y-8 p-8 bg-gradient-to-br from-card to-card/95 rounded-lg border border-border/50 shadow-sm">
+      <div className="space-y-3">
+        <Label htmlFor="title" className="text-lg font-semibold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+          Titel
+        </Label>
         <Input
           id="title"
           value={formData.title}
@@ -102,12 +104,14 @@ export function EditContentForm({
             onContentChange({ ...initialContent, title: e.target.value });
           }}
           placeholder="Titel des Inhalts"
-          className="w-full"
+          className="w-full bg-background/50 border-border/50 focus:border-primary/50 transition-all duration-200"
         />
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="type" className="text-base font-semibold">Inhaltstyp</Label>
+      <div className="space-y-3">
+        <Label htmlFor="type" className="text-lg font-semibold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+          Inhaltstyp
+        </Label>
         <Select
           value={formData.type}
           onValueChange={(value: 'TEXT' | 'VIDEO' | 'AUDIO' | 'H5P' | 'QUIZ') => {
@@ -123,39 +127,49 @@ export function EditContentForm({
             });
           }}
         >
-          <SelectTrigger className="w-full">
+          <SelectTrigger className="w-full bg-background/50 border-border/50 focus:border-primary/50 transition-all duration-200">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             <SelectGroup>
-              <SelectLabel>Wähle einen Inhaltstyp</SelectLabel>
-              <SelectItem value="TEXT">
-                <div className="flex items-center">
-                  <FileText className="w-4 h-4 mr-2" />
+              <SelectLabel className="text-sm font-medium text-muted-foreground">Wähle einen Inhaltstyp</SelectLabel>
+              <SelectItem value="TEXT" className="group">
+                <div className="flex items-center space-x-3">
+                  <div className="p-1.5 rounded-md bg-primary/5 text-primary group-hover:bg-primary/10 transition-colors duration-200">
+                    <FileText className="w-4 h-4" />
+                  </div>
                   <span>Text</span>
                 </div>
               </SelectItem>
-              <SelectItem value="VIDEO">
-                <div className="flex items-center">
-                  <Video className="w-4 h-4 mr-2" />
+              <SelectItem value="VIDEO" className="group">
+                <div className="flex items-center space-x-3">
+                  <div className="p-1.5 rounded-md bg-primary/5 text-primary group-hover:bg-primary/10 transition-colors duration-200">
+                    <Video className="w-4 h-4" />
+                  </div>
                   <span>Video</span>
                 </div>
               </SelectItem>
-              <SelectItem value="AUDIO">
-                <div className="flex items-center">
-                  <Music2 className="w-4 h-4 mr-2" />
+              <SelectItem value="AUDIO" className="group">
+                <div className="flex items-center space-x-3">
+                  <div className="p-1.5 rounded-md bg-primary/5 text-primary group-hover:bg-primary/10 transition-colors duration-200">
+                    <Music2 className="w-4 h-4" />
+                  </div>
                   <span>Audio</span>
                 </div>
               </SelectItem>
-              <SelectItem value="H5P">
-                <div className="flex items-center">
-                  <Layers className="w-4 h-4 mr-2" />
+              <SelectItem value="H5P" className="group">
+                <div className="flex items-center space-x-3">
+                  <div className="p-1.5 rounded-md bg-primary/5 text-primary group-hover:bg-primary/10 transition-colors duration-200">
+                    <Layers className="w-4 h-4" />
+                  </div>
                   <span>H5P</span>
                 </div>
               </SelectItem>
-              <SelectItem value="QUIZ">
-                <div className="flex items-center">
-                  <HelpCircle className="w-4 h-4 mr-2" />
+              <SelectItem value="QUIZ" className="group">
+                <div className="flex items-center space-x-3">
+                  <div className="p-1.5 rounded-md bg-primary/5 text-primary group-hover:bg-primary/10 transition-colors duration-200">
+                    <HelpCircle className="w-4 h-4" />
+                  </div>
                   <span>Quiz</span>
                 </div>
               </SelectItem>
@@ -164,30 +178,33 @@ export function EditContentForm({
         </Select>
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-4">
         {formData.type === 'QUIZ' ? (
-          <div className="bg-background rounded-md p-4">
+          <div className="bg-background/50 rounded-lg p-6 border border-border/50">
             <QuizEditor
               initialContent={JSON.parse(formData.content)}
               onSave={handleQuizChange}
             />
           </div>
         ) : formData.type === 'TEXT' ? (
-          <div className="space-y-3">
+          <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <Label className="text-base font-semibold">Inhalt</Label>
-              <div className="flex items-center space-x-2">
-                <Label htmlFor="html-mode" className="text-sm">HTML-Modus</Label>
+              <Label className="text-lg font-semibold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+                Inhalt
+              </Label>
+              <div className="flex items-center space-x-3">
+                <Label htmlFor="html-mode" className="text-sm text-muted-foreground">HTML-Modus</Label>
                 <Switch
                   id="html-mode"
                   checked={formData.isHtmlMode}
                   onCheckedChange={(checked) => {
                     setFormData(prev => ({ ...prev, isHtmlMode: checked }));
                   }}
+                  className="data-[state=checked]:bg-primary"
                 />
               </div>
             </div>
-            <div className="bg-background rounded-md">
+            <div className="bg-background/50 rounded-lg border border-border/50 overflow-hidden">
               {formData.isHtmlMode ? (
                 <Textarea
                   value={formData.content}
@@ -195,25 +212,29 @@ export function EditContentForm({
                     setFormData(prev => ({ ...prev, content: e.target.value }));
                     onContentChange({ ...initialContent, content: e.target.value });
                   }}
-                  className="min-h-[200px] font-mono"
+                  className="min-h-[300px] font-mono p-4 bg-transparent focus:border-primary/50"
                 />
               ) : (
-                <ReactQuill
-                  value={formData.content}
-                  onChange={(content) => {
-                    setFormData(prev => ({ ...prev, content }));
-                    onContentChange({ ...initialContent, content });
-                  }}
-                  modules={quillModules}
-                  formats={quillFormats}
-                  className="bg-background rounded-md [&_.ql-toolbar]:rounded-t-md [&_.ql-container]:rounded-b-md"
-                />
+                <div className="[&_.ql-toolbar]:border-border/50 [&_.ql-container]:border-border/50">
+                  <ReactQuill
+                    value={formData.content}
+                    onChange={(content) => {
+                      setFormData(prev => ({ ...prev, content }));
+                      onContentChange({ ...initialContent, content });
+                    }}
+                    modules={quillModules}
+                    formats={quillFormats}
+                    className="bg-transparent [&_.ql-toolbar]:bg-background/80 [&_.ql-container]:bg-background/50 [&_.ql-editor]:min-h-[250px]"
+                  />
+                </div>
               )}
             </div>
           </div>
         ) : (
-          <div className="space-y-2">
-            <Label className="text-base font-semibold">URL oder Embed-Code</Label>
+          <div className="space-y-3">
+            <Label className="text-lg font-semibold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+              URL oder Embed-Code
+            </Label>
             <Input
               value={formData.content}
               onChange={(e) => {
@@ -227,21 +248,23 @@ export function EditContentForm({
                   ? 'Audio URL'
                   : 'H5P Embed Code'
               }
-              className="w-full"
+              className="w-full bg-background/50 border-border/50 focus:border-primary/50 transition-all duration-200"
             />
           </div>
         )}
       </div>
 
-      <div className="flex justify-end space-x-3 pt-4 border-t">
+      <div className="flex justify-end items-center space-x-4 pt-6 border-t border-border/50">
         <Button
           variant="outline"
           onClick={onCancel}
+          className="bg-background/50 hover:bg-background border-border/50 hover:border-border transition-colors duration-200"
         >
           Abbrechen
         </Button>
         <Button
           onClick={() => onSubmit({ ...initialContent, ...formData })}
+          className="bg-primary hover:bg-primary/90 text-primary-foreground transition-colors duration-200"
         >
           Speichern
         </Button>
