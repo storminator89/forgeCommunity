@@ -1,11 +1,7 @@
-// app/api/posts/[postId]/comments/route.ts
-
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'// Korrigierter Pfad
-
-const prisma = new PrismaClient()
+import prisma from '@/lib/prisma'
+import { getServerSession } from 'next-auth/next'
+import { authOptions } from '@/lib/auth'
 
 export async function POST(req: NextRequest, { params }: { params: { postId: string } }) {
   try {
@@ -33,26 +29,36 @@ export async function POST(req: NextRequest, { params }: { params: { postId: str
     const newComment = await prisma.comment.create({
       data: {
         content,
-        postId: postId,
+        postId,
         authorId: session.user.id,
       },
       include: {
         author: {
           select: { id: true, name: true, image: true },
         },
+        likeComments: true
       },
     })
 
-    return NextResponse.json(newComment, { status: 201 })
+    // Format comment for response
+    const formattedComment = {
+      ...newComment,
+      votes: 0,
+      isLiked: false
+    }
+
+    return NextResponse.json(formattedComment)
   } catch (error) {
-    console.error(error)
-    return NextResponse.json({ error: 'Fehler beim Hinzufügen des Kommentars' }, { status: 500 })
+    console.error('Fehler beim Erstellen des Kommentars:', error)
+    return NextResponse.json({ error: 'Fehler beim Erstellen des Kommentars' }, { status: 500 })
   }
 }
 
 export async function GET(req: NextRequest, { params }: { params: { postId: string } }) {
   try {
     const { postId } = params
+    const session = await getServerSession(authOptions)
+    const userId = session?.user?.id
 
     const comments = await prisma.comment.findMany({
       where: { postId },
@@ -65,19 +71,15 @@ export async function GET(req: NextRequest, { params }: { params: { postId: stri
       orderBy: { createdAt: 'desc' },
     })
 
-    // Füge die Like-Informationen hinzu
-    const session = await getServerSession(authOptions)
-    const userId = session?.user?.id
-
-    const mappedComments = comments.map(comment => ({
+    const formattedComments = comments.map(comment => ({
       ...comment,
       votes: comment.likeComments.length,
       isLiked: userId ? comment.likeComments.some(like => like.userId === userId) : false,
     }))
 
-    return NextResponse.json(mappedComments)
+    return NextResponse.json(formattedComments)
   } catch (error) {
-    console.error(error)
+    console.error('Fehler beim Abrufen der Kommentare:', error)
     return NextResponse.json({ error: 'Fehler beim Abrufen der Kommentare' }, { status: 500 })
   }
 }

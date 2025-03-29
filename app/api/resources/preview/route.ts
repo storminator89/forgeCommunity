@@ -3,7 +3,20 @@ import { getLinkPreview } from 'link-preview-js';
 
 const getPdfMetadata = async (url: string) => {
   try {
-    const response = await fetch(url, { method: 'HEAD' });
+    const response = await fetch(url, { 
+      method: 'HEAD',
+      redirect: 'manual',
+      credentials: 'same-origin',
+      signal: AbortSignal.timeout(5000)
+    }).catch(e => {
+      console.error('Fetch error:', e);
+      return null;
+    });
+    
+    if (response.status >= 300 && response.status < 400) {
+      return null; // Weiterleitungen ignorieren
+    }
+    
     if (!response.ok) return null;
 
     const contentType = response.headers.get('content-type');
@@ -39,7 +52,19 @@ const getVideoMetadata = async (url: string) => {
         ? urlObj.pathname.slice(1)
         : urlObj.searchParams.get('v');
       
-      const response = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`);
+      const response = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`, {
+        redirect: 'manual',
+        credentials: 'same-origin',
+        signal: AbortSignal.timeout(5000)
+      }).catch(e => {
+        console.error('YouTube fetch error:', e);
+        return null;
+      });
+      
+      if (response.status >= 300 && response.status < 400) {
+        return null; // Weiterleitungen ignorieren
+      }
+      
       if (response.ok) {
         const data = await response.json();
         return {
@@ -54,7 +79,19 @@ const getVideoMetadata = async (url: string) => {
     // Vimeo
     if (urlObj.hostname.includes('vimeo.com')) {
       const videoId = urlObj.pathname.split('/')[1];
-      const response = await fetch(`https://vimeo.com/api/oembed.json?url=https://vimeo.com/${videoId}`);
+      const response = await fetch(`https://vimeo.com/api/oembed.json?url=https://vimeo.com/${videoId}`, {
+        redirect: 'manual',
+        credentials: 'same-origin',
+        signal: AbortSignal.timeout(5000)
+      }).catch(e => {
+        console.error('Vimeo fetch error:', e);
+        return null;
+      });
+      
+      if (response.status >= 300 && response.status < 400) {
+        return null; // Weiterleitungen ignorieren
+      }
+      
       if (response.ok) {
         const data = await response.json();
         return {

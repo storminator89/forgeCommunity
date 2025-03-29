@@ -6,8 +6,15 @@ export function useInView(options = {}) {
 
   useEffect(() => {
     const observer = new IntersectionObserver(([entry]) => {
-      setIsInView(entry.isIntersecting);
-    }, { threshold: 0.1, ...options });
+      // Verwende requestAnimationFrame für flüssigere Übergänge
+      requestAnimationFrame(() => {
+        setIsInView(entry.isIntersecting);
+      });
+    }, { 
+      threshold: 0.15, 
+      rootMargin: '0px',
+      ...options 
+    });
 
     const currentRef = ref.current;
     if (currentRef) {
