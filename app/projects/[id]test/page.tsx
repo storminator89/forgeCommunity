@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from "@/components/Sidebar";
 import { UserNav } from "@/components/user-nav";
@@ -13,6 +13,7 @@ import { ThumbsUp, MessageSquare, ExternalLink, Edit, Trash, ArrowLeft, Loader2 
 import { motion } from 'framer-motion';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
+import Image from 'next/image';
 
 interface Tag {
   id: string;
@@ -52,7 +53,8 @@ interface Project {
   comments: Comment[];
 }
 
-const ProjectDetail = ({ params }: { params: { id: string } }) => {
+const ProjectDetail = ({ params }: { params: Promise<{ id: string }> }) => {
+  const { id } = use(params);
   const { data: session } = useSession();
   const router = useRouter();
   const [project, setProject] = useState<Project | null>(null);
@@ -89,7 +91,7 @@ const ProjectDetail = ({ params }: { params: { id: string } }) => {
   useEffect(() => {
     const fetchProject = async () => {
       try {
-        const res = await fetch(`/api/projects/${params.id}`);
+        const res = await fetch(`/api/projects/${id}`);
         if (!res.ok) throw new Error('Project not found');
         const data = await res.json();
         setProject(data);
@@ -102,7 +104,7 @@ const ProjectDetail = ({ params }: { params: { id: string } }) => {
     };
 
     fetchProject();
-  }, [params.id]);
+  }, [id, router]);
 
   if (isLoading) {
     return (
@@ -133,10 +135,10 @@ const ProjectDetail = ({ params }: { params: { id: string } }) => {
 
   const handleAddComment = async (projectId: string) => {
     if (!commentContent.trim() || !projectId) return;
-    
+
     setIsSubmitting(true);
     setError(null);
-    
+
     try {
       const res = await fetch(`/api/projects/${projectId}/comments`, {
         method: 'POST',
@@ -149,7 +151,7 @@ const ProjectDetail = ({ params }: { params: { id: string } }) => {
       });
 
       if (!res.ok) throw new Error('Failed to add comment');
-      
+
       const newComment = await res.json();
       setProject(prev => prev ? {
         ...prev,
@@ -172,8 +174,8 @@ const ProjectDetail = ({ params }: { params: { id: string } }) => {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-8">
-                <Link 
-                  href="/showcases" 
+                <Link
+                  href="/showcases"
                   className="group flex items-center text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 transition-all duration-200"
                 >
                   <div className="relative w-8 h-8 mr-2 rounded-full bg-gray-100 dark:bg-gray-700 group-hover:bg-blue-50 dark:group-hover:bg-blue-900/30 transition-colors duration-200 flex items-center justify-center">
@@ -201,10 +203,11 @@ const ProjectDetail = ({ params }: { params: { id: string } }) => {
             {project?.imageUrl ? (
               <>
                 <div className="absolute inset-0 overflow-hidden">
-                  <img
+                  <Image
                     src={project.imageUrl}
                     alt={project.title}
-                    className="w-full h-full object-cover transform scale-105 filter blur-sm opacity-40"
+                    fill
+                    className="object-cover transform scale-105 filter blur-sm opacity-40"
                   />
                 </div>
                 <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-gray-900/80 to-transparent" />
@@ -218,8 +221,8 @@ const ProjectDetail = ({ params }: { params: { id: string } }) => {
                     >
                       <div className="flex flex-wrap gap-2">
                         {project.tags.map((tag) => (
-                          <Badge 
-                            key={tag.id} 
+                          <Badge
+                            key={tag.id}
                             className="bg-white/10 hover:bg-white/20 text-white transition-colors duration-200"
                           >
                             {tag.name}
@@ -269,8 +272,8 @@ const ProjectDetail = ({ params }: { params: { id: string } }) => {
                     >
                       <div className="flex flex-wrap gap-2">
                         {project.tags.map((tag) => (
-                          <Badge 
-                            key={tag.id} 
+                          <Badge
+                            key={tag.id}
                             className="bg-white/10 hover:bg-white/20 text-white transition-colors duration-200"
                           >
                             {tag.name}
@@ -338,7 +341,7 @@ const ProjectDetail = ({ params }: { params: { id: string } }) => {
                       ({project?.comments.length})
                     </motion.span>
                   </h2>
-                  
+
                   {session && (
                     <div className="mb-8">
                       <Textarea
@@ -351,7 +354,7 @@ const ProjectDetail = ({ params }: { params: { id: string } }) => {
                       {error && (
                         <p className="text-red-500 text-sm mb-2">{error}</p>
                       )}
-                      <Button 
+                      <Button
                         onClick={() => handleAddComment(project?.id)}
                         className="bg-blue-500 hover:bg-blue-600 transition-all duration-200"
                         disabled={isSubmitting || !commentContent.trim()}
@@ -413,11 +416,10 @@ const ProjectDetail = ({ params }: { params: { id: string } }) => {
                 <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
                   <div className="flex items-center justify-between mb-6">
                     <div className="flex items-center space-x-2">
-                      <ThumbsUp className={`h-5 w-5 ${
-                        project?.likes.some((like) => like.userId === session?.user?.id)
-                          ? 'text-blue-500'
-                          : 'text-gray-400'
-                      }`} />
+                      <ThumbsUp className={`h-5 w-5 ${project?.likes.some((like) => like.userId === session?.user?.id)
+                        ? 'text-blue-500'
+                        : 'text-gray-400'
+                        }`} />
                       <span className="font-medium">{project?.likes.length} Likes</span>
                     </div>
                     <Button
@@ -434,8 +436,8 @@ const ProjectDetail = ({ params }: { params: { id: string } }) => {
                   </div>
 
                   <div className="space-y-4">
-                    <Button 
-                      asChild 
+                    <Button
+                      asChild
                       className="w-full bg-blue-500 hover:bg-blue-600 transition-colors"
                     >
                       <a

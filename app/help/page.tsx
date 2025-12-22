@@ -33,12 +33,12 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Label } from "@/components/ui/label"
-import { 
-  Search, 
-  Book, 
-  MessageSquare, 
-  Users, 
-  Settings, 
+import {
+  Search,
+  Book,
+  MessageSquare,
+  Users,
+  Settings,
   Mail,
   Video,
   Shield,
@@ -290,123 +290,124 @@ interface ContactFormData {
 }
 
 export default function HelpPage() {
-    const [searchQuery, setSearchQuery] = useState('')
-    const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
-    const [contactForm, setContactForm] = useState<ContactFormData>({
-      email: '',
-      subject: '',
-      message: '',
-      priority: 'medium',
-      category: 'general'
-    })
-    const [isSubmitting, setIsSubmitting] = useState(false)
-    const [searchHistory, setSearchHistory] = useState<string[]>([])
-    const [recentlyViewed, setRecentlyViewed] = useState<string[]>([])
-    const [activeTab, setActiveTab] = useState('all')
-    
-    // Suche mit Debounce
-    useEffect(() => {
-      const timer = setTimeout(() => {
-        if (searchQuery && !searchHistory.includes(searchQuery)) {
-          setSearchHistory(prev => [searchQuery, ...prev].slice(0, 5))
-        }
-      }, 1000)
-  
-      return () => clearTimeout(timer)
-    }, [searchQuery])
-  
-    // Kürzlich angesehene Artikel speichern
-    const trackViewedArticle = (question: string) => {
-      setRecentlyViewed(prev => {
-        const updated = [question, ...prev.filter(q => q !== question)].slice(0, 5)
-        localStorage.setItem('recentlyViewed', JSON.stringify(updated))
-        return updated
-      })
-    }
-  
-    // Laden der kürzlich angesehenen Artikel beim Start
-    useEffect(() => {
-      const saved = localStorage.getItem('recentlyViewed')
-      if (saved) {
-        setRecentlyViewed(JSON.parse(saved))
+  const [searchQuery, setSearchQuery] = useState('')
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
+  const [contactForm, setContactForm] = useState<ContactFormData>({
+    email: '',
+    subject: '',
+    message: '',
+    priority: 'medium',
+    category: 'general'
+  })
+
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [searchHistory, setSearchHistory] = useState<string[]>([])
+  const [recentlyViewed, setRecentlyViewed] = useState<string[]>([])
+  const [activeTab, setActiveTab] = useState('all')
+
+  // Suche mit Debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchQuery && !searchHistory.includes(searchQuery)) {
+        setSearchHistory(prev => [searchQuery, ...prev].slice(0, 5))
       }
-    }, [])
-  
-    const filteredCategories = helpCategories.filter(category => {
-      const matchesSearch = 
-        category.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        category.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        category.faqs.some(faq => 
-          faq.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          faq.answer.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          faq.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()))
-        )
-      return matchesSearch && (!selectedCategory || category.title === selectedCategory)
+    }, 1000)
+
+    return () => clearTimeout(timer)
+  }, [searchQuery, searchHistory])
+
+  // Kürzlich angesehene Artikel speichern
+  const trackViewedArticle = (question: string) => {
+    setRecentlyViewed(prev => {
+      const updated = [question, ...prev.filter(q => q !== question)].slice(0, 5)
+      localStorage.setItem('recentlyViewed', JSON.stringify(updated))
+      return updated
     })
-  
-    const handleContactSubmit = async (e: React.FormEvent) => {
-      e.preventDefault()
-      setIsSubmitting(true)
-      
-      try {
-        // Simuliere API-Aufruf
-        await new Promise(resolve => setTimeout(resolve, 1500))
-        
-        console.log("Support-Anfrage gesendet:", contactForm)
-        
-        setContactForm({
-          email: '',
-          subject: '',
-          message: '',
-          priority: 'medium',
-          category: 'general'
-        })
-  
-        // Erfolgsmeldung anzeigen
-        alert('Ihre Anfrage wurde erfolgreich gesendet. Wir melden uns in Kürze bei Ihnen.')
-      } catch (error) {
-        console.error('Fehler beim Senden der Anfrage:', error)
-        alert('Es gab einen Fehler beim Senden Ihrer Anfrage. Bitte versuchen Sie es später erneut.')
-      } finally {
-        setIsSubmitting(false)
-      }
+  }
+
+  // Laden der kürzlich angesehenen Artikel beim Start
+  useEffect(() => {
+    const saved = localStorage.getItem('recentlyViewed')
+    if (saved) {
+      setRecentlyViewed(JSON.parse(saved))
     }
-  
-    const handleHelpful = (categoryIndex: number, faqIndex: number) => {
-      // Simuliere API-Aufruf für Feedback
-      console.log("Feedback registriert für:", {
-        category: helpCategories[categoryIndex].title,
-        question: helpCategories[categoryIndex].faqs[faqIndex].question
+  }, [])
+
+  const filteredCategories = helpCategories.filter(category => {
+    const matchesSearch =
+      category.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      category.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      category.faqs.some(faq =>
+        faq.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        faq.answer.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        faq.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()))
+      )
+    return matchesSearch && (!selectedCategory || category.title === selectedCategory)
+  })
+
+  const handleContactSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsSubmitting(true)
+
+    try {
+      // Simuliere API-Aufruf
+      await new Promise(resolve => setTimeout(resolve, 1500))
+
+      console.log("Support-Anfrage gesendet:", contactForm)
+
+      setContactForm({
+        email: '',
+        subject: '',
+        message: '',
+        priority: 'medium',
+        category: 'general'
       })
-      
-      // Optimistisches Update
-      const updatedCategories = [...helpCategories]
-      updatedCategories[categoryIndex].faqs[faqIndex].helpful += 1
-      
-      // Feedback-Bestätigung
-      alert('Danke für Ihr Feedback!')
+
+      // Erfolgsmeldung anzeigen
+      alert('Ihre Anfrage wurde erfolgreich gesendet. Wir melden uns in Kürze bei Ihnen.')
+    } catch (error) {
+      console.error('Fehler beim Senden der Anfrage:', error)
+      alert('Es gab einen Fehler beim Senden Ihrer Anfrage. Bitte versuchen Sie es später erneut.')
+    } finally {
+      setIsSubmitting(false)
     }
-  
-    const getPopularQuestions = () => {
-      return helpCategories
-        .flatMap(category => 
-          category.faqs.map(faq => ({
-            ...faq,
-            category: category.title
-          }))
-        )
-        .sort((a, b) => b.helpful - a.helpful)
-        .slice(0, 5)
-    }
-  
-    const popularQuestions = getPopularQuestions()
-  
-    return (
-      <div className="flex h-screen overflow-hidden bg-background">
-        <Sidebar className="hidden md:block" />
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="flex-1 overflow-auto">
-                      {/* Hero Section mit verbessertem Design */}
+  }
+
+  const handleHelpful = (categoryIndex: number, faqIndex: number) => {
+    // Simuliere API-Aufruf für Feedback
+    console.log("Feedback registriert für:", {
+      category: helpCategories[categoryIndex].title,
+      question: helpCategories[categoryIndex].faqs[faqIndex].question
+    })
+
+    // Optimistisches Update
+    const updatedCategories = [...helpCategories]
+    updatedCategories[categoryIndex].faqs[faqIndex].helpful += 1
+
+    // Feedback-Bestätigung
+    alert('Danke für Ihr Feedback!')
+  }
+
+  const getPopularQuestions = () => {
+    return helpCategories
+      .flatMap(category =>
+        category.faqs.map(faq => ({
+          ...faq,
+          category: category.title
+        }))
+      )
+      .sort((a, b) => b.helpful - a.helpful)
+      .slice(0, 5)
+  }
+
+  const popularQuestions = getPopularQuestions()
+
+  return (
+    <div className="flex h-screen overflow-hidden bg-background">
+      <Sidebar className="hidden md:block" />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 overflow-auto">
+          {/* Hero Section mit verbessertem Design */}
           <div className="relative bg-gradient-to-r from-primary/10 via-primary/5 to-background px-6 lg:px-8 py-24 space-y-8">
             <div className="absolute inset-0 bg-grid-white/10 bg-[size:40px_40px] pointer-events-none" />
             <div className="mx-auto max-w-2xl text-center relative">
@@ -443,9 +444,9 @@ export default function HelpPage() {
                       <p className="text-xs text-muted-foreground mb-1">Letzte Suchen:</p>
                       <div className="flex flex-wrap gap-2">
                         {searchHistory.map((term, index) => (
-                          <Badge 
-                            key={index} 
-                            variant="secondary" 
+                          <Badge
+                            key={index}
+                            variant="secondary"
                             className="cursor-pointer"
                             onClick={() => setSearchQuery(term)}
                           >
@@ -498,7 +499,7 @@ export default function HelpPage() {
                 <h3 className="text-lg font-semibold mb-4">Top 5 Fragen</h3>
                 <div className="space-y-4">
                   {popularQuestions.map((question, index) => (
-                    <div 
+                    <div
                       key={index}
                       className="p-4 rounded-lg border hover:border-primary/50 transition-colors cursor-pointer"
                       onClick={() => trackViewedArticle(question.question)}
@@ -522,7 +523,7 @@ export default function HelpPage() {
                 <h3 className="text-lg font-semibold mb-4">Kürzlich angesehen</h3>
                 <div className="space-y-4">
                   {recentlyViewed.map((question, index) => (
-                    <div 
+                    <div
                       key={index}
                       className="p-4 rounded-lg border hover:border-primary/50 transition-colors"
                     >
@@ -536,8 +537,8 @@ export default function HelpPage() {
               </div>
             </div>
           </div>
-                    {/* Kategorien Tabs und Grid */}
-                    <div className="mx-auto max-w-7xl px-6 lg:px-8 py-12 border-t">
+          {/* Kategorien Tabs und Grid */}
+          <div className="mx-auto max-w-7xl px-6 lg:px-8 py-12 border-t">
             <Tabs defaultValue="all" className="space-y-6" value={activeTab} onValueChange={setActiveTab}>
               <div className="flex items-center justify-between mb-6">
                 <TabsList className="inline-flex">
@@ -548,7 +549,7 @@ export default function HelpPage() {
                 </TabsList>
                 <div className="flex items-center space-x-2">
                   <Label>Sortieren nach:</Label>
-                  <select 
+                  <select
                     className="border rounded-md p-2"
                     onChange={(e) => console.log("Sortierung:", e.target.value)}
                   >
@@ -558,7 +559,7 @@ export default function HelpPage() {
                   </select>
                 </div>
               </div>
-              
+
               <TabsContent value="all" className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {filteredCategories.map((category, index) => (

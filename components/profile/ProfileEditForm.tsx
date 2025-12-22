@@ -29,9 +29,9 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { 
-  Edit2, 
-  Loader2, 
+import {
+  Edit2,
+  Loader2,
   Save,
   User,
   Mail,
@@ -310,7 +310,7 @@ export function ProfileEditForm({ userId, initialData, onUpdate }: ProfileEditFo
                         type="button"
                         variant="outline"
                         size="sm"
-                        onClick={() => setImagePreview(initialData.image)}
+                        onClick={() => setImagePreview(initialData.image || null)}
                         className="gap-2"
                       >
                         <X className="h-4 w-4" />

@@ -3,8 +3,9 @@ import prisma from '@/lib/prisma';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { certificateId: string } }
+  props: { params: Promise<{ certificateId: string }> }
 ) {
+  const params = await props.params;
   try {
     const certificateId = params.certificateId;
 

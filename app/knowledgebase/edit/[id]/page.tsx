@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import dynamic from 'next/dynamic';
+import Image from 'next/image';
 import { Sidebar } from "@/components/Sidebar";
 import { UserNav } from "@/components/user-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -18,7 +19,8 @@ import { TagSelect } from "@/components/TagSelect";
 import { toast } from 'sonner';
 import { Editor } from "@/components/Editor";
 
-export default function EditArticle({ params }: { params: { id: string } }) {
+export default function EditArticle({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const { data: session, status } = useSession();
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -44,10 +46,10 @@ export default function EditArticle({ params }: { params: { id: string } }) {
     const fetchArticle = async () => {
       setIsLoading(true);
       try {
-        console.log('Fetching article with ID:', params.id); // Debug log
+        console.log('Fetching article with ID:', id); // Debug log
 
         const [articleResponse, categoriesResponse] = await Promise.all([
-          fetch(`/api/articles/${params.id}`),
+          fetch(`/api/articles/${id}`),
           fetch('/api/articles/categories-and-tags')
         ]);
 
@@ -88,7 +90,7 @@ export default function EditArticle({ params }: { params: { id: string } }) {
     };
 
     fetchArticle();
-  }, [params.id, session, router]);
+  }, [id, session, router]);
 
   const handleSubmit = async (asDraft: boolean) => {
     setIsSubmitting(true);
@@ -110,7 +112,7 @@ export default function EditArticle({ params }: { params: { id: string } }) {
     }
 
     try {
-      const response = await fetch(`/api/articles/${params.id}`, {
+      const response = await fetch(`/api/articles/${id}`, {
         method: 'PUT',
         body: formData,
       });
@@ -247,10 +249,11 @@ export default function EditArticle({ params }: { params: { id: string } }) {
                     {featuredImagePreview && (
                       <div className="relative group">
                         <div className="w-20 h-20 border rounded-md overflow-hidden">
-                          <img
+                          <Image
                             src={featuredImagePreview}
                             alt="Vorschau"
-                            className="w-full h-full object-cover"
+                            fill
+                            className="object-cover"
                           />
                         </div>
                         <Button

@@ -8,8 +8,7 @@ export async function GET() {
       by: ['category'],
       where: {
         category: {
-          not: null,
-          not: '',
+          notIn: ['', null as any],
         },
       },
       _count: {

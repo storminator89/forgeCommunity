@@ -51,10 +51,10 @@ export default function CourseClient() {
         if (!response.ok) {
           throw new Error('Failed to fetch courses');
         }
-        const data = await response.json();
+        const data = (await response.json()) as Course[];
         setCourses(data);
         // Extract unique categories
-        const uniqueCategories = Array.from(new Set(data.map((course: Course) => course.category)));
+        const uniqueCategories = Array.from(new Set(data.map((course) => course.category)));
         setCategories(['Alle', ...uniqueCategories]);
       } catch (error) {
         console.error('Error fetching courses:', error);
@@ -68,7 +68,7 @@ export default function CourseClient() {
 
   const filteredCourses = courses.filter(course =>
     (course.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    course.instructor.toLowerCase().includes(searchTerm.toLowerCase())) &&
+      course.instructor.toLowerCase().includes(searchTerm.toLowerCase())) &&
     (categoryFilter === '' || categoryFilter === 'Alle' || course.category === categoryFilter)
   );
 
@@ -150,7 +150,7 @@ export default function CourseClient() {
               </div>
             </div>
             <AnimatePresence>
-              <motion.div 
+              <motion.div
                 className="grid md:grid-cols-2 lg:grid-cols-3 gap-8"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -162,7 +162,7 @@ export default function CourseClient() {
               </motion.div>
             </AnimatePresence>
             {filteredCourses.length === 0 && (
-              <motion.div 
+              <motion.div
                 className="text-center py-10"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -192,7 +192,7 @@ function CourseCard({ course, onDelete }: CourseCardProps) {
   };
 
   return (
-    <motion.div 
+    <motion.div
       className="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden transition-all duration-300 hover:shadow-xl flex flex-col h-full"
       whileHover={{ scale: 1.03 }}
       whileTap={{ scale: 0.98 }}
@@ -255,7 +255,7 @@ function CourseCard({ course, onDelete }: CourseCardProps) {
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button 
+                <Button
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white transition-colors duration-300"
                   onClick={handleCourseAction}
                 >

@@ -39,7 +39,7 @@ export function SubContentForm({
       case 'VIDEO':
         return (
           <Input
-            value={content.content}
+            value={content.content as string}
             onChange={(e) => onContentChange({ ...content, content: e.target.value })}
             placeholder="YouTube URL eingeben"
           />
@@ -47,7 +47,7 @@ export function SubContentForm({
       case 'AUDIO':
         return (
           <Input
-            value={content.content}
+            value={content.content as string}
             onChange={(e) => onContentChange({ ...content, content: e.target.value })}
             placeholder="Audio URL eingeben"
           />
@@ -65,7 +65,7 @@ export function SubContentForm({
             {content.content && (
               <div className="p-4 bg-gray-100 dark:bg-gray-700 rounded-lg">
                 <p className="font-medium">Ausgewählter H5P Inhaltstyp:</p>
-                <p className="text-sm text-gray-600 dark:text-gray-300">{content.content}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-300">{content.content as string}</p>
               </div>
             )}
           </div>
@@ -73,7 +73,7 @@ export function SubContentForm({
       case 'QUIZ':
         return (
           <QuizEditor
-            initialContent={content.content ? JSON.parse(content.content) : { questions: [], shuffleQuestions: false, passingScore: 70 }}
+            initialContent={typeof content.content === 'string' ? JSON.parse(content.content) : (content.content || { questions: [], shuffleQuestions: false, passingScore: 70 })}
             onSave={(quizContent) => onContentChange({ ...content, content: JSON.stringify(quizContent) })}
           />
         );

@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, useParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Sidebar } from "@/components/Sidebar";
 import { UserNav } from "@/components/user-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -41,7 +41,7 @@ export default function ArticlePage() {
   const { data: session } = useSession();
   const router = useRouter();
 
-  const fetchArticle = async () => {
+  const fetchArticle = useCallback(async () => {
     setIsLoading(true);
     try {
       const response = await fetch(`/api/articles/${id}`);
@@ -57,13 +57,13 @@ export default function ArticlePage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [id]);
 
   useEffect(() => {
     if (id) {
       fetchArticle();
     }
-  }, [id]);
+  }, [id, fetchArticle]);
 
   const handleDelete = async () => {
     if (!confirm('Bist du sicher, dass du diesen Artikel löschen möchtest?')) return;

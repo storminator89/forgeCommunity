@@ -7,8 +7,9 @@ import QRCode from 'qrcode';
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { certificateId: string } }
+  props: { params: Promise<{ certificateId: string }> }
 ) {
+  const params = await props.params;
   try {
     // Get the authenticated user
     const session = await getServerSession(authOptions);
@@ -18,7 +19,7 @@ export async function GET(
 
     // Get the certificate from the database
     const certificate = await prisma.certificate.findUnique({
-      where: { 
+      where: {
         id: params.certificateId,
         userId: session.user.id // Ensure the certificate belongs to the user
       },
@@ -75,7 +76,7 @@ export async function GET(
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
     const verificationUrl = `${baseUrl}/verify-certificate/${certificate.id}`;
     const qrCodeDataUrl = await QRCode.toDataURL(verificationUrl);
-    
+
     // Add QR code to the PDF
     doc.addImage(qrCodeDataUrl, 'PNG', 128.5, 150, 40, 40);
 

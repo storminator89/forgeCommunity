@@ -3,15 +3,13 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { useSession } from 'next-auth/react';
-import { NotificationType } from '@prisma/client';
-
-export type NotificationType = 'CHAT_MESSAGE' | 'CHANNEL_CREATED' | 'CHANNEL_DELETED' | 'SYSTEM';
+import { NotificationType } from '@/types/notifications';
 
 interface CreateNotificationInput {
-    type: NotificationType;
-    content: string;
-    isRead: boolean;
-  }
+  type: NotificationType;
+  content: string;
+  isRead: boolean;
+}
 
 interface Notification {
   id: string;
@@ -118,7 +116,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       });
 
       if (!response.ok) throw new Error('Failed to add notification');
-      
+
       const newNotification = await response.json();
       setNotifications(prev => [newNotification, ...prev]);
     } catch (error) {

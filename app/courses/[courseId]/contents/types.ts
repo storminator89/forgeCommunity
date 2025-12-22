@@ -43,6 +43,7 @@ export interface QuizContent {
 
 export interface CourseContent {
   id: string;
+  courseId: string;
   title: string;
   type: 'TEXT' | 'VIDEO' | 'AUDIO' | 'H5P' | 'QUIZ';
   content: string | QuizContent;

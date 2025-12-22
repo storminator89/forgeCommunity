@@ -1,7 +1,7 @@
 'use client';
 
 // Erweitere die Imports
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserNav } from "@/components/user-nav";
@@ -43,11 +43,7 @@ export default function ResourcePage() {
   const [loading, setLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  useEffect(() => {
-    fetchResource();
-  }, []);
-
-  const fetchResource = async () => {
+  const fetchResource = useCallback(async () => {
     try {
       const response = await axios.get(`/api/resources/${params.id}`);
       setResource(response.data);
@@ -57,11 +53,15 @@ export default function ResourcePage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [params.id]);
+
+  useEffect(() => {
+    fetchResource();
+  }, [fetchResource]);
 
   const getIcon = (type: ResourceType) => {
     const iconClass = "h-6 w-6 text-white";
-    switch(type) {
+    switch (type) {
       case 'ARTICLE': return <File className={iconClass} />;
       case 'VIDEO': return <Video className={iconClass} />;
       case 'EBOOK': return <Book className={iconClass} />;
@@ -76,16 +76,16 @@ export default function ResourcePage() {
         <header className="bg-white dark:bg-gray-800 shadow-sm z-10">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
             <div className="flex items-center">
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="lg:hidden mr-2" 
+              <Button
+                variant="ghost"
+                size="icon"
+                className="lg:hidden mr-2"
                 onClick={() => setIsSidebarOpen(true)}
               >
                 <Menu className="h-6 w-6" />
               </Button>
-              <Button 
-                variant="ghost" 
+              <Button
+                variant="ghost"
                 onClick={() => router.push('/resources')}
                 className="flex items-center"
               >
@@ -154,7 +154,7 @@ export default function ResourcePage() {
                     </DropdownMenu>
                   </div>
                 </CardHeader>
-                
+
                 <CardContent className="p-8">
                   <div className="space-y-6">
                     <div className="grid grid-cols-2 gap-6">
@@ -197,7 +197,7 @@ export default function ResourcePage() {
                     </div>
 
                     <div className="pt-6">
-                      <Button 
+                      <Button
                         className="w-full h-12 text-lg"
                         onClick={() => window.open(resource.url, '_blank')}
                       >

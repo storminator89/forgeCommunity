@@ -15,8 +15,9 @@ function sanitizeFilename(name: string): string {
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  props: { params: Promise<{ id: string }> }
 ) {
+  const params = await props.params;
   try {
     console.log(`Generating ICS for event ID: ${params.id}`);
 

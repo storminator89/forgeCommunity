@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -54,7 +54,7 @@ export function ActivityFeed({ userId }: ActivityFeedProps) {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
 
-  const fetchActivities = async (pageNum: number) => {
+  const fetchActivities = useCallback(async (pageNum: number) => {
     try {
       const response = await fetch(
         `/api/users/${userId}/activity?page=${pageNum}&limit=10`,
@@ -66,24 +66,24 @@ export function ActivityFeed({ userId }: ActivityFeedProps) {
       if (!response.ok) throw new Error('Failed to fetch activities');
 
       const data = await response.json();
-      
+
       if (pageNum === 1) {
         setActivities(data.activities);
       } else {
         setActivities(prev => [...prev, ...data.activities]);
       }
-      
+
       setHasMore(data.pagination.hasMore);
     } catch (error) {
       console.error('Error fetching activities:', error);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [userId]);
 
   useEffect(() => {
     fetchActivities(1);
-  }, [userId]);
+  }, [fetchActivities]);
 
   const loadMore = () => {
     const nextPage = page + 1;
@@ -268,7 +268,7 @@ export function ActivityFeed({ userId }: ActivityFeedProps) {
                   {renderActivityContent(activity)}
                 </div>
               ))}
-              
+
               {hasMore && (
                 <div className="text-center pt-4">
                   <Button

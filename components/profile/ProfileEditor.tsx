@@ -31,17 +31,17 @@ import Image from 'next/image';
 
 interface ProfileData {
   id: string;
-  name: string;
+  name: string | null;
   title: string | null;
   bio: string | null;
   contact: string | null;
   image: string | null;
   coverImage: string | null;
   socialLinks?: {
-    github?: string;
-    linkedin?: string;
-    twitter?: string;
-    website?: string;
+    github?: string | null;
+    linkedin?: string | null;
+    twitter?: string | null;
+    website?: string | null;
   };
 }
 
@@ -176,8 +176,8 @@ export function ProfileEditor({ profile, onUpdate }: ProfileEditorProps) {
           <div>
             <h4 className="text-sm font-medium">{title}</h4>
             <p className="text-sm text-gray-500">
-              {currentImage 
-                ? `Aktuelles ${imageType} hochgeladen` 
+              {currentImage
+                ? `Aktuelles ${imageType} hochgeladen`
                 : `Kein ${imageType} vorhanden`}
             </p>
           </div>
@@ -267,8 +267,8 @@ export function ProfileEditor({ profile, onUpdate }: ProfileEditorProps) {
                 </CardDescription>
               </div>
               <Badge
-                variant={calculateCompletionScore() === 100 ? "success" : "secondary"}
-                className="flex items-center gap-1"
+                variant="secondary"
+                className={`flex items-center gap-1 ${calculateCompletionScore() === 100 ? "text-green-600 bg-green-100 dark:bg-green-900/30 dark:text-green-400" : ""}`}
               >
                 {calculateCompletionScore() === 100 ? (
                   <CheckCircle className="h-4 w-4" />
@@ -309,7 +309,7 @@ export function ProfileEditor({ profile, onUpdate }: ProfileEditorProps) {
                       <ProfileEditForm
                         userId={profile.id}
                         initialData={{
-                          name: profile.name,
+                          name: profile.name || '',
                           title: profile.title,
                           bio: profile.bio,
                           contact: profile.contact,
@@ -349,7 +349,7 @@ export function ProfileEditor({ profile, onUpdate }: ProfileEditorProps) {
                       <SocialLinksForm
                         userId={profile.id}
                         initialData={profile.socialLinks || {}}
-                        onUpdate={handleProfileUpdate}
+                        onUpdate={(data) => handleProfileUpdate({ socialLinks: data })}
                       />
                     </CardContent>
                   </Card>
@@ -366,8 +366,8 @@ export function ProfileEditor({ profile, onUpdate }: ProfileEditorProps) {
                   {calculateCompletionScore()}%
                 </span>
               </div>
-              <Progress 
-                value={calculateCompletionScore()} 
+              <Progress
+                value={calculateCompletionScore()}
                 className="h-2"
               />
               <p className="text-sm text-gray-500 mt-2">

@@ -7,8 +7,9 @@ import path from 'path';
 
 export async function GET(
   req: Request,
-  { params }: { params: { id: string } }
+  props: { params: Promise<{ id: string }> }
 ) {
+  const params = await props.params;
   try {
     console.log('GET request for article ID:', params.id); // Debug log
 
@@ -40,8 +41,9 @@ export async function GET(
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  props: { params: Promise<{ id: string }> }
 ) {
+  const params = await props.params;
   const { id } = params;
   const session = await getServerSession(authOptions);
   if (!session || !session.user) {
@@ -77,7 +79,7 @@ export async function PUT(
     // Wenn das Bild gelöscht werden soll, setze den Pfad auf null
     if (deleteImage) {
       featuredImagePath = null;
-    } 
+    }
     // Ansonsten, wenn ein neues Bild hochgeladen wurde, speichere es
     else if (featuredImage) {
       const bytes = await featuredImage.arrayBuffer();
@@ -124,8 +126,9 @@ export async function PUT(
 
 export async function DELETE(
   req: Request,
-  { params }: { params: { id: string } }
+  props: { params: Promise<{ id: string }> }
 ) {
+  const params = await props.params;
   const { id } = params;
   const session = await getServerSession(authOptions);
   if (!session || !session.user) {

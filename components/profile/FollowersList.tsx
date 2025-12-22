@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,7 +35,7 @@ export function FollowersList({ userId, count, type }: FollowersListProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [users, setUsers] = useState<Follower[]>([]);
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     setIsLoading(true);
     try {
       const response = await fetch(`/api/users/${userId}/${type}`, {
@@ -51,13 +51,13 @@ export function FollowersList({ userId, count, type }: FollowersListProps) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [userId, type]);
 
   useEffect(() => {
     if (isOpen) {
       fetchUsers();
     }
-  }, [isOpen]);
+  }, [isOpen, fetchUsers]);
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -79,8 +79,8 @@ export function FollowersList({ userId, count, type }: FollowersListProps) {
             {type === 'followers' ? 'Follower' : 'Folgt'}
           </DialogTitle>
           <DialogDescription>
-            {type === 'followers' 
-              ? 'Benutzer, die diesem Profil folgen' 
+            {type === 'followers'
+              ? 'Benutzer, die diesem Profil folgen'
               : 'Benutzer, denen dieses Profil folgt'}
           </DialogDescription>
         </DialogHeader>

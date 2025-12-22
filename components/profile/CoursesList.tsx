@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { 
-  BookOpen, 
-  Users, 
+import {
+  BookOpen,
+  Users,
   Calendar,
   Clock,
   DollarSign,
@@ -66,12 +66,12 @@ export function CoursesList({ userId, isInstructor, showEnrolled = false }: Cour
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
 
-  const fetchCourses = async (pageNum: number) => {
+  const fetchCourses = useCallback(async (pageNum: number) => {
     try {
-      const endpoint = showEnrolled 
+      const endpoint = showEnrolled
         ? `/api/users/${userId}/enrollments`
         : `/api/users/${userId}/courses`;
-        
+
       const response = await fetch(
         `${endpoint}?page=${pageNum}&limit=6`,
         {
@@ -82,13 +82,13 @@ export function CoursesList({ userId, isInstructor, showEnrolled = false }: Cour
       if (!response.ok) throw new Error('Failed to fetch courses');
 
       const data = await response.json();
-      
+
       if (pageNum === 1) {
         setCourses(data.courses);
       } else {
         setCourses(prev => [...prev, ...data.courses]);
       }
-      
+
       setHasMore(data.pagination.hasMore);
     } catch (error) {
       console.error('Error fetching courses:', error);
@@ -96,11 +96,11 @@ export function CoursesList({ userId, isInstructor, showEnrolled = false }: Cour
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [userId, showEnrolled]);
 
   useEffect(() => {
     fetchCourses(1);
-  }, [userId, showEnrolled]);
+  }, [fetchCourses]);
 
   const handleShare = async (course: Course) => {
     try {
@@ -123,11 +123,10 @@ export function CoursesList({ userId, isInstructor, showEnrolled = false }: Cour
           {[1, 2, 3, 4, 5].map((star) => (
             <Star
               key={star}
-              className={`h-4 w-4 ${
-                star <= rating
-                  ? 'text-yellow-400 fill-current'
-                  : 'text-gray-300'
-              }`}
+              className={`h-4 w-4 ${star <= rating
+                ? 'text-yellow-400 fill-current'
+                : 'text-gray-300'
+                }`}
             />
           ))}
         </div>
@@ -191,7 +190,7 @@ export function CoursesList({ userId, isInstructor, showEnrolled = false }: Cour
                               <span>Fortschritt</span>
                               <span>{Math.round((course.progress.completed / course.progress.total) * 100)}%</span>
                             </div>
-                            <Progress 
+                            <Progress
                               value={(course.progress.completed / course.progress.total) * 100}
                               className="h-1"
                             />

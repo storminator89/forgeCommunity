@@ -12,7 +12,8 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { BookOpen, ArrowLeft, Image, Upload, Loader2, BookmarkIcon, SendIcon, Trash2, Book, Tag } from 'lucide-react';
+import { BookOpen, ArrowLeft, Upload, Loader2, BookmarkIcon, SendIcon, Trash2, Book, Tag } from 'lucide-react';
+import Image from 'next/image';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CategorySelect } from "@/components/CategorySelect";
 import { TagSelect } from "@/components/TagSelect";
@@ -261,9 +262,9 @@ export default function NewArticle() {
                             </Button>
                             {featuredImagePreview && (
                               <div className="relative group">
-                                <div className="w-20 h-20 rounded-lg overflow-hidden border border-border">
-                                  <img src={featuredImagePreview} alt="Vorschau" className="w-full h-full object-cover" />
-                                  <div className="absolute inset-0 bg-background/80 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                <div className="w-20 h-20 rounded-lg overflow-hidden border border-border relative">
+                                  <Image src={featuredImagePreview} alt="Vorschau" fill className="object-cover" />
+                                  <div className="absolute inset-0 bg-background/80 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-10">
                                     <Button
                                       type="button"
                                       variant="ghost"

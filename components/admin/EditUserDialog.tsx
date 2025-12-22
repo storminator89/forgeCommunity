@@ -23,10 +23,14 @@ interface User {
   name: string
   email: string
   role: 'USER' | 'ADMIN' | 'MODERATOR' | 'INSTRUCTOR'
-  title?: string
-  bio?: string
-  contact?: string
+  createdAt: string
+  title?: string | null
+  bio?: string | null
+  contact?: string | null
   image?: string | null
+  endorsements: number
+  lastLogin?: string | null
+  emailVerified?: string | null
   settings?: {
     emailNotifications: boolean
     pushNotifications: boolean
@@ -253,7 +257,7 @@ export function EditUserDialog({ user, isOpen, onClose, onUpdateUser }: EditUser
                   <Label htmlFor="role">Rolle *</Label>
                   <Select
                     value={formData.role}
-                    onValueChange={(value: UserFormData['role']) => 
+                    onValueChange={(value: UserFormData['role']) =>
                       handleInputChange('role', value)
                     }
                   >
@@ -334,7 +338,7 @@ export function EditUserDialog({ user, isOpen, onClose, onUpdateUser }: EditUser
                   <Switch
                     id="emailNotifications"
                     checked={formData.emailNotifications}
-                    onCheckedChange={(checked) => 
+                    onCheckedChange={(checked) =>
                       handleInputChange('emailNotifications', checked)
                     }
                   />
@@ -352,7 +356,7 @@ export function EditUserDialog({ user, isOpen, onClose, onUpdateUser }: EditUser
                   <Switch
                     id="pushNotifications"
                     checked={formData.pushNotifications}
-                    onCheckedChange={(checked) => 
+                    onCheckedChange={(checked) =>
                       handleInputChange('pushNotifications', checked)
                     }
                   />
@@ -361,7 +365,7 @@ export function EditUserDialog({ user, isOpen, onClose, onUpdateUser }: EditUser
                   <Label htmlFor="theme">Theme</Label>
                   <Select
                     value={formData.theme}
-                    onValueChange={(value: 'LIGHT' | 'DARK') => 
+                    onValueChange={(value: 'LIGHT' | 'DARK') =>
                       handleInputChange('theme', value)
                     }
                   >
@@ -379,7 +383,7 @@ export function EditUserDialog({ user, isOpen, onClose, onUpdateUser }: EditUser
                   <Label htmlFor="language">Sprache</Label>
                   <Select
                     value={formData.language}
-                    onValueChange={(value) => 
+                    onValueChange={(value) =>
                       handleInputChange('language', value)
                     }
                   >

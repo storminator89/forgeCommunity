@@ -19,9 +19,10 @@ interface ImageUploadProps {
   type: 'avatar' | 'cover';
   currentImage?: string | null;
   onUpdate: (imageUrl: string) => void;
+  children?: React.ReactNode;
 }
 
-export function ImageUpload({ userId, type, currentImage, onUpdate }: ImageUploadProps) {
+export function ImageUpload({ userId, type, currentImage, onUpdate, children }: ImageUploadProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
@@ -83,14 +84,16 @@ export function ImageUpload({ userId, type, currentImage, onUpdate }: ImageUploa
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          className={type === 'cover' ? 'absolute top-4 right-4' : 'absolute bottom-0 right-0'}
-        >
-          <Camera className="h-4 w-4 mr-2" />
-          {type === 'avatar' ? 'Profilbild ändern' : 'Titelbild ändern'}
-        </Button>
+        {children || (
+          <Button
+            variant="ghost"
+            size="sm"
+            className={type === 'cover' ? 'absolute top-4 right-4' : 'absolute bottom-0 right-0'}
+          >
+            <Camera className="h-4 w-4 mr-2" />
+            {type === 'avatar' ? 'Profilbild ändern' : 'Titelbild ändern'}
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="sm:max-w-[525px]">
         <DialogHeader>

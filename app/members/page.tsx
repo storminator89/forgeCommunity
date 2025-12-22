@@ -62,6 +62,7 @@ export default function Members() {
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Extrahiere einzigartige Skills und Rollen
   const uniqueSkills = [...new Set(members.flatMap(m => m.skills))].sort();
@@ -85,7 +86,7 @@ export default function Members() {
         image: user.image || '',
         role: user.role,
         title: user.title,
-        location: user.contact?.location,
+        location: user.contact ? (typeof user.contact === 'string' ? user.contact : (user.contact as any).location) : undefined,
         joinedAt: user.createdAt,
         followers: user.stats?.followersCount || 0,
         following: user.stats?.followingCount || 0,

@@ -75,8 +75,8 @@ interface User {
   createdAt: string;
   image?: string | null;
   bio?: string | null;
-  title?: string;
-  contact?: string;
+  title?: string | null;
+  contact?: string | null;
   endorsements: number;
   lastLogin?: string | null;
   emailVerified?: string | null;
@@ -127,7 +127,8 @@ export default function UserManagement() {
       setUsers(data);
     } catch (error) {
       console.error("Error fetching users:", error);
-      toast.error("Beim Laden der Benutzer ist ein Fehler aufgetreten.");
+      // Fallback if toast is not imported correctly or if it's the wrong toast
+      alert("Beim Laden der Benutzer ist ein Fehler aufgetreten.");
     } finally {
       setIsLoading(false);
     }
@@ -174,9 +175,9 @@ export default function UserManagement() {
       case 'ADMIN':
         return 'destructive';
       case 'MODERATOR':
-        return 'warning';
+        return 'secondary';
       case 'INSTRUCTOR':
-        return 'purple';
+        return 'secondary';
       default:
         return 'default';
     }
@@ -591,7 +592,7 @@ export default function UserManagement() {
                                       Erhält E-Mail Benachrichtigungen
                                     </div>
                                   </div>
-                                  <Badge variant={selectedUser.settings.emailNotifications ? "success" : "secondary"}>
+                                  <Badge variant={selectedUser.settings.emailNotifications ? "default" : "secondary"}>
                                     {selectedUser.settings.emailNotifications ? "Aktiviert" : "Deaktiviert"}
                                   </Badge>
                                 </div>
@@ -603,7 +604,7 @@ export default function UserManagement() {
                                       Erhält Push Benachrichtigungen
                                     </div>
                                   </div>
-                                  <Badge variant={selectedUser.settings.pushNotifications ? "success" : "secondary"}>
+                                  <Badge variant={selectedUser.settings.pushNotifications ? "default" : "secondary"}>
                                     {selectedUser.settings.pushNotifications ? "Aktiviert" : "Deaktiviert"}
                                   </Badge>
                                 </div>

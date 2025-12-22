@@ -8,8 +8,9 @@ import { authOptions } from "../../../auth/[...nextauth]/options";
 // GET-Methode zum Abrufen der Kursinhalte
 export async function GET(
   request: NextRequest,
-  { params }: { params: { courseId: string } }
+  props: { params: Promise<{ courseId: string }> }
 ) {
+  const params = await props.params;
   const courseId = params.courseId;
 
   try {
@@ -39,8 +40,9 @@ export async function GET(
 // POST-Methode zum Hinzufügen eines neuen Inhalts
 export async function POST(
   request: NextRequest,
-  { params }: { params: { courseId: string } }
+  props: { params: Promise<{ courseId: string }> }
 ) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   const courseId = params.courseId;
 

@@ -7,11 +7,12 @@ const prisma = new PrismaClient()
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  props: { params: Promise<{ id: string }> }
 ) {
+  const params = await props.params;
   try {
     const session = await getServerSession(authOptions)
-    
+
     if (!session?.user || (session.user.id !== params.id && session.user.role !== 'ADMIN')) {
       return NextResponse.json(
         { error: 'Nicht autorisiert' },
@@ -20,7 +21,7 @@ export async function PUT(
     }
 
     const data = await request.json()
-    
+
     // Validiere die Eingaben
     const {
       name,

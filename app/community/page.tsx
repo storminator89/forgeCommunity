@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from 'react'
+import Image from 'next/image'
 import { useSession } from 'next-auth/react'
 import { Button } from "@/components/ui/button"
 import { UserNav } from "@/components/user-nav"
@@ -9,6 +10,7 @@ import { ThemeToggle } from "@/components/theme-toggle"
 import { PlusCircle } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { PointsAnimation } from "@/components/PointsAnimation"
+
 
 // Import our new components
 import { PostForm } from '@/components/community/PostForm'
@@ -337,10 +339,12 @@ function Community() {
                       className="bg-card rounded-xl p-4 shadow-sm border border-border flex items-center space-x-4 cursor-pointer hover:shadow-md transition-shadow"
                       onClick={() => setIsEditing(true)}
                     >
-                      <img
+                      <Image
                         src={session?.user?.image || 'https://via.placeholder.com/150'}
                         alt="User"
-                        className="w-10 h-10 rounded-full border border-border"
+                        width={40}
+                        height={40}
+                        className="rounded-full border border-border"
                       />
                       <div className="flex-1 bg-muted rounded-full px-4 py-2.5 text-muted-foreground text-sm hover:bg-accent transition-colors">
                         Was möchtest du teilen, {session?.user?.name?.split(' ')[0]}?

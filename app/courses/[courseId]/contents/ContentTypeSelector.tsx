@@ -21,7 +21,7 @@ export function ContentTypeSelector({ onSelectType }: ContentTypeSelectorProps) 
         </div>
         <p className="text-sm text-muted-foreground">Create rich text content with formatting, images, and more.</p>
       </Button>
-      
+
       <Button
         variant="outline"
         className="flex flex-col items-start h-40 p-6 hover:border-primary hover:bg-accent/50 transition-all group relative overflow-hidden"
@@ -33,7 +33,7 @@ export function ContentTypeSelector({ onSelectType }: ContentTypeSelectorProps) 
         </div>
         <p className="text-sm text-muted-foreground">Upload or embed videos from YouTube and other platforms.</p>
       </Button>
-      
+
       <Button
         variant="outline"
         className="flex flex-col items-start h-40 p-6 hover:border-primary hover:bg-accent/50 transition-all group relative overflow-hidden"
@@ -45,7 +45,7 @@ export function ContentTypeSelector({ onSelectType }: ContentTypeSelectorProps) 
         </div>
         <p className="text-sm text-muted-foreground">Add audio content, podcasts, or music to your course.</p>
       </Button>
-      
+
       <Button
         variant="outline"
         className="flex flex-col items-start h-40 p-6 hover:border-primary hover:bg-accent/50 transition-all group relative overflow-hidden"
@@ -55,7 +55,7 @@ export function ContentTypeSelector({ onSelectType }: ContentTypeSelectorProps) 
           <Box className="h-8 w-8 text-primary transition-transform group-hover:scale-110" />
           <span className="text-lg font-semibold">H5P</span>
         </div>
-        <p className="text-sm text-muted-foreground">Create interactive content with H5P's rich set of tools.</p>
+        <p className="text-sm text-muted-foreground">Create interactive content with H5P&apos;s rich set of tools.</p>
       </Button>
 
       <Button

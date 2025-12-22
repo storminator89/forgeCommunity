@@ -11,7 +11,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PlusCircle, Trash2, GripVertical, Eye, EyeOff, ArrowUpDown, ArrowUp, ArrowDown, CheckSquare, Square } from 'lucide-react';
-import { QuizContent, QuizQuestion, QuestionType } from './types';
+import {
+  QuizContent,
+  QuizQuestion,
+  QuestionType,
+  MatchingQuizQuestion,
+  TextInputQuizQuestion,
+  FillBlanksQuizQuestion,
+  ChoiceQuizQuestion
+} from './types';
 import { cn } from '@/lib/utils';
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -21,24 +29,7 @@ interface QuizEditorProps {
   onSave: (content: QuizContent) => void;
 }
 
-interface MatchingQuizQuestion extends QuizQuestion {
-  pairs: { left: string; right: string }[];
-}
-
-interface TextInputQuizQuestion extends QuizQuestion {
-  correctAnswer: string;
-  caseSensitive: boolean;
-}
-
-interface FillBlanksQuizQuestion extends QuizQuestion {
-  text: string;
-  answers: string[];
-}
-
-interface ChoiceQuizQuestion extends QuizQuestion {
-  options: string[];
-  correctAnswers: number[];
-}
+// Local interfaces removed as they are now imported from ./types
 
 const QUESTION_TYPES: { value: QuestionType; label: string }[] = [
   { value: 'SINGLE_CHOICE', label: 'Single Choice' },
@@ -108,7 +99,7 @@ const createEmptyQuestion = (type: QuestionType = 'SINGLE_CHOICE'): QuizQuestion
 const isMatchingQuestion = (q: QuizQuestion): q is MatchingQuizQuestion => q.type === 'MATCHING';
 const isTextInputQuestion = (q: QuizQuestion): q is TextInputQuizQuestion => q.type === 'TEXT_INPUT';
 const isFillBlanksQuestion = (q: QuizQuestion): q is FillBlanksQuizQuestion => q.type === 'FILL_BLANKS';
-const isChoiceQuestion = (q: QuizQuestion): q is ChoiceQuizQuestion => 
+const isChoiceQuestion = (q: QuizQuestion): q is ChoiceQuizQuestion =>
   q.type === 'SINGLE_CHOICE' || q.type === 'MULTIPLE_CHOICE' || q.type === 'TRUE_FALSE';
 
 export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
@@ -129,15 +120,25 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
     }
     const initialQuestions = initialContent?.questions || [];
     // Migrate existing questions to new format
-    return initialQuestions.map(q => ({
+    return initialQuestions.map((q: any) => ({
       ...q,
       type: q.type || 'SINGLE_CHOICE',
       correctAnswers: q.correctAnswers || (typeof q.correctAnswer === 'number' ? [q.correctAnswer] : [0])
     }));
   });
-  
-  const [shuffleQuestions, setShuffleQuestions] = useState(initialContent?.shuffleQuestions || false);
-  const [passingScore, setPassingScore] = useState(initialContent?.passingScore?.toString() || '70');
+
+  const [shuffleQuestions, setShuffleQuestions] = useState(() => {
+    if (typeof initialContent === 'object' && initialContent !== null && 'shuffleQuestions' in initialContent) {
+      return initialContent.shuffleQuestions || false;
+    }
+    return false;
+  });
+  const [passingScore, setPassingScore] = useState(() => {
+    if (typeof initialContent === 'object' && initialContent !== null && 'passingScore' in initialContent) {
+      return initialContent.passingScore?.toString() || '70';
+    }
+    return '70';
+  });
   const [currentTab, setCurrentTab] = useState('edit');
   const [draggedQuestionIndex, setDraggedQuestionIndex] = useState<number | null>(null);
   const dragOverQuestionIndex = useRef<number | null>(null);
@@ -205,12 +206,15 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
     const newQuestions = [...questions];
     const question = newQuestions[questionIndex];
     if (!question) return;
-    
+
+    // Ensure we are working with a choice question
+    if (!isChoiceQuestion(question)) return;
+
     // Ensure correctAnswers is an array
     if (!Array.isArray(question.correctAnswers)) {
       question.correctAnswers = [];
     }
-    
+
     if (question.type === 'SINGLE_CHOICE' || question.type === 'TRUE_FALSE') {
       question.correctAnswers = [optionIndex];
     } else {
@@ -222,37 +226,46 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
       }
       question.correctAnswers.sort();
     }
-    
+
     setQuestions(newQuestions);
   };
 
   const isCorrectAnswer = (questionIndex: number, optionIndex: number) => {
     const question = questions[questionIndex];
-    if (!question || !Array.isArray(question.correctAnswers)) return false;
+    if (!question || !isChoiceQuestion(question) || !Array.isArray(question.correctAnswers)) return false;
     return question.correctAnswers.includes(optionIndex);
   };
 
   const addOption = (questionIndex: number) => {
     const newQuestions = [...questions];
-    newQuestions[questionIndex].options.push('');
-    setQuestions(newQuestions);
+    const question = newQuestions[questionIndex];
+    if (isChoiceQuestion(question)) {
+      question.options.push('');
+      setQuestions(newQuestions);
+    }
   };
 
   const removeOption = (questionIndex: number, optionIndex: number) => {
     const newQuestions = [...questions];
-    newQuestions[questionIndex].options = newQuestions[questionIndex].options.filter(
-      (_, i) => i !== optionIndex
-    );
-    if (newQuestions[questionIndex].correctAnswers.includes(optionIndex)) {
-      newQuestions[questionIndex].correctAnswers = newQuestions[questionIndex].correctAnswers.filter(answer => answer !== optionIndex);
+    const question = newQuestions[questionIndex];
+    if (isChoiceQuestion(question)) {
+      question.options = question.options.filter(
+        (_, i) => i !== optionIndex
+      );
+      if (question.correctAnswers.includes(optionIndex)) {
+        question.correctAnswers = question.correctAnswers.filter(answer => answer !== optionIndex);
+      }
+      setQuestions(newQuestions);
     }
-    setQuestions(newQuestions);
   };
 
   const updateOption = (questionIndex: number, optionIndex: number, value: string) => {
     const newQuestions = [...questions];
-    newQuestions[questionIndex].options[optionIndex] = value;
-    setQuestions(newQuestions);
+    const question = newQuestions[questionIndex];
+    if (isChoiceQuestion(question)) {
+      question.options[optionIndex] = value;
+      setQuestions(newQuestions);
+    }
   };
 
   const moveQuestionUp = (index: number) => {
@@ -465,7 +478,6 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
                     <Select
                       value={question.type}
                       onValueChange={(value) => updateQuestion(questionIndex, 'type', value)}
-                      className="w-full"
                     >
                       <SelectTrigger className="w-full">
                         <SelectValue />
@@ -536,7 +548,7 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
                         <Checkbox
                           id={`case-sensitive-${questionIndex}`}
                           checked={question.caseSensitive}
-                          onCheckedChange={(checked) => 
+                          onCheckedChange={(checked) =>
                             updateQuestion(questionIndex, 'caseSensitive', checked)
                           }
                         />

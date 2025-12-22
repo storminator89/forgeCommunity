@@ -27,8 +27,9 @@ function sanitizeFilename(name: string): string {
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  props: { params: Promise<{ id: string }> }
 ) {
+  const params = await props.params;
   try {
     console.log(`Generating ICS for event ID: ${params.id}`);
 
@@ -100,8 +101,9 @@ END:VCALENDAR`;
 
 export async function PUT(
   request: Request,
-  { params }: { params: { id: string } }
+  props: { params: Promise<{ id: string }> }
 ) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
 
   if (!session || session.user.role !== 'ADMIN') {
@@ -181,8 +183,9 @@ export async function PUT(
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  props: { params: Promise<{ id: string }> }
 ) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
 
   if (!session || session.user.role !== 'ADMIN') {

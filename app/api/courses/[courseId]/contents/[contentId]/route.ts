@@ -9,14 +9,15 @@ const prisma = new PrismaClient();
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { courseId: string; contentId: string } }
+  props: { params: Promise<{ courseId: string; contentId: string }> }
 ) {
+  const params = await props.params;
   console.log('DELETE request received for content:', params.contentId);
-  
+
   try {
     const session = await getServerSession(authOptions);
     console.log('Session:', session);
-    
+
     if (!session?.user?.id) {
       console.log('Unauthorized - no valid session');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -44,14 +45,14 @@ export async function DELETE(
     });
     console.log('Deleted content:', deletedContent);
 
-    return NextResponse.json({ 
-      success: true, 
+    return NextResponse.json({
+      success: true,
       message: 'Content deleted successfully',
-      deletedContent 
+      deletedContent
     });
   } catch (error) {
     console.error('Error in DELETE operation:', error);
-    return NextResponse.json({ 
+    return NextResponse.json({
       error: 'Failed to delete content',
       details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
@@ -62,8 +63,9 @@ export async function DELETE(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { courseId: string; contentId: string } }
+  props: { params: Promise<{ courseId: string; contentId: string }> }
 ) {
+  const params = await props.params;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {

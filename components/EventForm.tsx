@@ -53,7 +53,7 @@ export default function EventForm({ initialData, onSuccess, onClose }: EventForm
   useEffect(() => {
     if (!initialData) {
       const now = DateTime.now().setZone('Europe/Berlin');
-      setDate(now.toISODate());
+      setDate(now.toISODate() || '');
       setTimezone('Europe/Berlin'); // Standardzeitzone setzen
     }
   }, [initialData]);
@@ -119,7 +119,7 @@ export default function EventForm({ initialData, onSuccess, onClose }: EventForm
         description: initialData
           ? 'Das Event wurde erfolgreich aktualisiert.'
           : 'Das Event wurde erfolgreich erstellt.',
-        variant: 'success',
+        variant: 'default',
       });
 
       onSuccess();

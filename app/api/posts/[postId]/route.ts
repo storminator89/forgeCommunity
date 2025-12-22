@@ -5,9 +5,9 @@ import prisma from '@/lib/prisma'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 
-export async function GET(req: NextRequest, { params }: { params: { postId: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ postId: string }> }) {
   try {
-    const { postId } = params
+    const { postId } = await params
 
     const post = await prisma.post.findUnique({
       where: { id: postId },
@@ -53,14 +53,14 @@ export async function GET(req: NextRequest, { params }: { params: { postId: stri
   }
 }
 
-export async function PUT(req: NextRequest, { params }: { params: { postId: string } }) {
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ postId: string }> }) {
   const session = await getServerSession(authOptions)
 
   if (!session || !session.user) {
     return NextResponse.json({ error: 'Nicht authentifiziert' }, { status: 401 })
   }
 
-  const { postId } = params
+  const { postId } = await params
   const userId = session.user.id
 
   try {
@@ -105,14 +105,14 @@ export async function PUT(req: NextRequest, { params }: { params: { postId: stri
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { postId: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ postId: string }> }) {
   const session = await getServerSession(authOptions)
 
   if (!session || !session.user) {
     return NextResponse.json({ error: 'Nicht authentifiziert' }, { status: 401 })
   }
 
-  const { postId } = params
+  const { postId } = await params
   const userId = session.user.id
 
   try {

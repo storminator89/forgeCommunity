@@ -27,6 +27,7 @@ interface ContentListProps {
   mainTopicIndex: number;
   courseId: string;
   isLoading?: boolean;
+  onVisitedToggle: (contentId: string) => void;
 }
 
 export function ContentList({
@@ -46,6 +47,7 @@ export function ContentList({
   mainTopicIndex,
   courseId,
   isLoading = false,
+  onVisitedToggle,
 }: ContentListProps) {
   const [isDeletingId, setIsDeletingId] = useState<string | null>(null);
 
@@ -72,7 +74,7 @@ export function ContentList({
                       selectedContentId === content.id && "text-primary border-primary bg-primary/5",
                       isPageVisited(courseId, content.id) && "border-green-500/50 bg-green-50 dark:bg-green-500/10"
                     )}
-                    onClick={() => onContentSelect(content.id)}
+                    onClick={() => onVisitedToggle(content.id)}
                   >
                     {isPageVisited(courseId, content.id) ? (
                       <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
@@ -120,7 +122,7 @@ export function ContentList({
                 />
               </form>
             ) : (
-              <span 
+              <span
                 className="text-sm cursor-pointer font-medium text-foreground hover:text-primary transition-colors duration-200 truncate"
                 onClick={() => onContentSelect(content.id)}
               >
@@ -128,7 +130,7 @@ export function ContentList({
               </span>
             )}
           </div>
-          
+
           <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-all duration-200 flex-shrink-0">
             {index > 0 && (
               <Button

@@ -60,7 +60,7 @@ interface Event {
 
 type ViewType = 'month' | 'week' | 'list';
 
-export default function Events() {
+export default function Events(props: { params: Promise<any>, searchParams: Promise<any> }) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
@@ -169,7 +169,7 @@ export default function Events() {
       toast({
         title: 'Event gelöscht',
         description: 'Das Event wurde erfolgreich gelöscht.',
-        variant: 'success',
+        variant: 'default',
       });
 
       fetchEvents();
@@ -201,7 +201,7 @@ export default function Events() {
       toast({
         title: 'ICS-Datei heruntergeladen',
         description: 'Die Kalenderdatei wurde erfolgreich heruntergeladen.',
-        variant: 'success',
+        variant: 'default',
       });
     } catch (error) {
       console.error('Fehler beim Herunterladen der ICS-Datei:', error);
@@ -441,7 +441,7 @@ export default function Events() {
         <main className="flex-1 overflow-y-auto p-4 lg:p-8">
           <div className="flex justify-start mb-4 space-x-2">
             <Button
-              variant={view === 'month' ? 'primary' : 'outline'}
+              variant={view === 'month' ? 'default' : 'outline'}
               size="sm"
               onClick={() => setView('month')}
               className="flex items-center"
@@ -450,7 +450,7 @@ export default function Events() {
               Monat
             </Button>
             <Button
-              variant={view === 'week' ? 'primary' : 'outline'}
+              variant={view === 'week' ? 'default' : 'outline'}
               size="sm"
               onClick={() => setView('week')}
               className="flex items-center"
@@ -459,7 +459,7 @@ export default function Events() {
               Woche
             </Button>
             <Button
-              variant={view === 'list' ? 'primary' : 'outline'}
+              variant={view === 'list' ? 'default' : 'outline'}
               size="sm"
               onClick={() => setView('list')}
               className="flex items-center"

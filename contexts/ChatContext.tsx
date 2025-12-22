@@ -5,7 +5,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { useSession } from 'next-auth/react';
 import { useNotifications } from './NotificationContext';
 import { ChatMessage, ChatChannel, CreateChannelInput, EditMessageInput } from '@/types/chat';
-import { NotificationType } from '@prisma/client';
+import { NotificationType } from '@/types/notifications';
 
 interface ChatContextType {
   channels: ChatChannel[];
@@ -94,7 +94,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let syncInterval: NodeJS.Timeout;
-    
+
     if (currentChannel) {
       syncInterval = setInterval(async () => {
         await syncMessages();
@@ -110,18 +110,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const lastMessage = messages[messages.length - 1];
-    if (lastMessage && 
-        lastMessage.author.id !== session?.user?.id && 
-        !processedMessageIds.has(lastMessage.id)) {
-      
+    if (lastMessage &&
+      lastMessage.author.id !== session?.user?.id &&
+      !processedMessageIds.has(lastMessage.id)) {
+
       processedMessageIds.add(lastMessage.id);
 
       if (!isWindowFocused || currentChannel?.id !== lastMessage.channelId) {
-        const notificationContent = `${lastMessage.author.name} hat in #${currentChannel?.name} geschrieben: ${
-          lastMessage.content.length > 50 
-            ? lastMessage.content.substring(0, 47) + '...' 
-            : lastMessage.content
-        }`;
+        const notificationContent = `${lastMessage.author.name} hat in #${currentChannel?.name} geschrieben: ${lastMessage.content.length > 50
+          ? lastMessage.content.substring(0, 47) + '...'
+          : lastMessage.content
+          }`;
 
         addNotification({
           type: 'CHAT_MESSAGE' as NotificationType,
@@ -171,15 +170,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       const response = await fetch(`/api/chat/messages?channelId=${channelId}`);
       if (!response.ok) throw new Error('Failed to fetch messages');
       const data = await response.json();
-      
+
       const sortedMessages = data.items.sort(
-        (a: ChatMessage, b: ChatMessage) => 
+        (a: ChatMessage, b: ChatMessage) =>
           new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
       );
-      
+
       // Füge alle initial geladenen Nachrichten zum Set hinzu
-      sortedMessages.forEach(msg => processedMessageIds.add(msg.id));
-      
+      sortedMessages.forEach((msg: ChatMessage) => processedMessageIds.add(msg.id));
+
       setMessages(sortedMessages);
       setLastSync(new Date());
     } catch (err) {
@@ -200,24 +199,23 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       );
       if (!response.ok) throw new Error('Failed to sync messages');
       const data = await response.json();
-      
+
       if (data.items.length > 0) {
         setMessages(prev => {
           const allMessages = [...prev];
           let hasNewMessages = false;
-          
+
           data.items.forEach((newMsg: ChatMessage) => {
             // Prüfe, ob die Nachricht wirklich neu ist
             if (!processedMessageIds.has(newMsg.id)) {
               processedMessageIds.add(newMsg.id);
               hasNewMessages = true;
-              
+
               if (newMsg.author.id !== session.user.id) {
-                const notificationContent = `${newMsg.author.name} hat in #${currentChannel.name} geschrieben: ${
-                  newMsg.content.length > 50 
-                    ? newMsg.content.substring(0, 47) + '...' 
-                    : newMsg.content
-                }`;
+                const notificationContent = `${newMsg.author.name} hat in #${currentChannel.name} geschrieben: ${newMsg.content.length > 50
+                  ? newMsg.content.substring(0, 47) + '...'
+                  : newMsg.content
+                  }`;
 
                 addNotification({
                   type: 'CHAT_MESSAGE' as NotificationType,
@@ -242,16 +240,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
               allMessages.push(newMsg);
             }
           });
-          
+
           if (hasNewMessages) {
             return allMessages.sort(
               (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
             );
           }
-          
+
           return prev;
         });
-        
+
         setLastSync(new Date());
       }
     } catch (err) {
@@ -286,8 +284,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         channelId: currentChannel.id,
         author: {
           id: session.user.id,
-          name: session.user.name,
-          image: session.user.image,
+          name: session.user.name || null,
+          image: session.user.image || null,
         },
         createdAt: new Date(),
         messageType: imageUrl ? 'image' : 'text',
@@ -308,7 +306,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       });
 
       if (!response.ok) throw new Error('Failed to send message');
-      
+
       const actualMessage = await response.json();
       processedMessageIds.add(actualMessage.id);
 
@@ -337,9 +335,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       });
 
       if (!response.ok) throw new Error('Failed to edit message');
-      
+
       const updatedMessage = await response.json();
-      setMessages(prev => 
+      setMessages(prev =>
         prev.map(msg => msg.id === messageId ? updatedMessage : msg)
       );
     } catch (err) {
@@ -358,7 +356,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       });
 
       if (!response.ok) throw new Error('Failed to create channel');
-      
+
       const newChannel = await response.json();
       setChannels(prev => [...prev, newChannel]);
       setCurrentChannel(newChannel);
@@ -378,15 +376,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const deleteChannel = async (channelId: string) => {
     try {
       const channelToDelete = channels.find(c => c.id === channelId);
-      
+
       const response = await fetch(`/api/chat/channels/${channelId}`, {
         method: 'DELETE',
       });
 
       if (!response.ok) throw new Error('Failed to delete channel');
-      
+
       setChannels(prev => prev.filter(channel => channel.id !== channelId));
-      
+
       if (currentChannel?.id === channelId) {
         const remainingChannels = channels.filter(channel => channel.id !== channelId);
         setCurrentChannel(remainingChannels.length > 0 ? remainingChannels[0] : null);

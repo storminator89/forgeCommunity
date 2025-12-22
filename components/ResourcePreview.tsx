@@ -3,11 +3,8 @@ import { Loader2, Video, Download, Eye, FileText } from 'lucide-react';
 import { Button } from './ui/button';
 import { toast } from 'react-toastify';
 import { clsx } from 'clsx';
-import dynamic from 'next/dynamic';
 import Script from 'next/script';
-
-// Dynamischer Import von pdfjs-dist
-const pdfjsLib = dynamic(() => import('pdfjs-dist'), { ssr: false });
+import Image from 'next/image';
 
 interface ResourcePreviewProps {
   url: string;
@@ -22,21 +19,21 @@ type VideoProvider = {
 const getVideoProvider = (url: string): VideoProvider => {
   try {
     const urlObj = new URL(url);
-    
+
     // YouTube
     if (urlObj.hostname.includes('youtube.com') || urlObj.hostname.includes('youtu.be')) {
-      const id = urlObj.hostname.includes('youtu.be') 
+      const id = urlObj.hostname.includes('youtu.be')
         ? urlObj.pathname.slice(1)
         : urlObj.searchParams.get('v');
       return { type: 'youtube', id };
     }
-    
+
     // Vimeo
     if (urlObj.hostname.includes('vimeo.com')) {
       const id = urlObj.pathname.split('/')[1];
       return { type: 'vimeo', id };
     }
-    
+
     // Dailymotion
     if (urlObj.hostname.includes('dailymotion.com')) {
       const id = urlObj.pathname.split('/')[2]?.split('_')[0];
@@ -45,7 +42,7 @@ const getVideoProvider = (url: string): VideoProvider => {
   } catch (e) {
     console.error('Error parsing video URL:', e);
   }
-  
+
   return { type: null, id: null };
 };
 
@@ -62,6 +59,19 @@ export function ResourcePreview({ url, type }: ResourcePreviewProps) {
   const [error, setError] = useState<string | null>(null);
   const [imageError, setImageError] = useState(false);
   const [videoProvider, setVideoProvider] = useState<VideoProvider>({ type: null, id: null });
+
+  const [isPdfLoading, setIsPdfLoading] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+  const iframeRef = React.useRef<HTMLIFrameElement>(null);
+
+  const handleDownload = () => {
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = url.split('/').pop() || 'download';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -103,13 +113,13 @@ export function ResourcePreview({ url, type }: ResourcePreviewProps) {
           body: JSON.stringify({ url }),
           signal: controller.signal
         });
-        
+
         if (!response.ok) {
           throw new Error('Vorschau konnte nicht geladen werden');
         }
-        
+
         const data = await response.json();
-        
+
         if (data.error) {
           throw new Error(data.error);
         }
@@ -121,8 +131,8 @@ export function ResourcePreview({ url, type }: ResourcePreviewProps) {
             image: data.image
           });
         }
-      } catch (err) {
-        if (isMounted && err instanceof Error) {
+      } catch (err: any) {
+        if (isMounted && err.name !== 'AbortError') {
           setError(err.message);
         }
       } finally {
@@ -138,6 +148,36 @@ export function ResourcePreview({ url, type }: ResourcePreviewProps) {
       isMounted = false;
       controller.abort();
     };
+  }, [url, type]);
+
+  useEffect(() => {
+    if (type !== 'PDF') return;
+
+    const loadPdf = async () => {
+      try {
+        setIsPdfLoading(true);
+        setPdfError(null);
+
+        // Prüfe ob die PDF-URL gültig ist
+        const response = await fetch(url, { method: 'HEAD' });
+        if (!response.ok) {
+          throw new Error('PDF konnte nicht geladen werden');
+        }
+
+        // Setze den Content-Type Header für die PDF-Anzeige
+        if (iframeRef.current) {
+          iframeRef.current.src = url + '#toolbar=0&navpanes=0';
+        }
+
+        setIsPdfLoading(false);
+      } catch (err: any) {
+        console.error('Error loading PDF:', err);
+        setPdfError(err.message || 'Fehler beim Laden des PDFs');
+        setIsPdfLoading(false);
+      }
+    };
+
+    loadPdf();
   }, [url, type]);
 
   if (loading) {
@@ -175,7 +215,7 @@ export function ResourcePreview({ url, type }: ResourcePreviewProps) {
           />
         </svg>
         <p className="text-center">{error}</p>
-        <button 
+        <button
           onClick={() => window.open(url, '_blank')}
           className="mt-4 text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 underline"
         >
@@ -209,37 +249,6 @@ export function ResourcePreview({ url, type }: ResourcePreviewProps) {
 
   // PDF Preview
   if (type === 'PDF') {
-    const [isPdfLoading, setIsPdfLoading] = useState(true);
-    const [pdfError, setPdfError] = useState<string | null>(null);
-    const iframeRef = React.useRef<HTMLIFrameElement>(null);
-
-    useEffect(() => {
-      const loadPdf = async () => {
-        try {
-          setIsPdfLoading(true);
-          setPdfError(null);
-
-          // Prüfe ob die PDF-URL gültig ist
-          const response = await fetch(url, { method: 'HEAD' });
-          if (!response.ok) {
-            throw new Error('PDF konnte nicht geladen werden');
-          }
-
-          // Setze den Content-Type Header für die PDF-Anzeige
-          if (iframeRef.current) {
-            iframeRef.current.src = url + '#toolbar=0&navpanes=0';
-          }
-
-          setIsPdfLoading(false);
-        } catch (err) {
-          console.error('Error loading PDF:', err);
-          setPdfError(err instanceof Error ? err.message : 'Fehler beim Laden des PDFs');
-        }
-      };
-
-      loadPdf();
-    }, [url]);
-
     return (
       <div className="h-80 relative bg-gray-50 dark:bg-gray-800/50 group">
         <div className="absolute inset-0">
@@ -249,7 +258,7 @@ export function ResourcePreview({ url, type }: ResourcePreviewProps) {
             className="w-full h-full"
             style={{ backgroundColor: 'white' }}
           />
-          
+
           {/* Loading State */}
           {isPdfLoading && (
             <div className="absolute inset-0 flex items-center justify-center bg-gray-50 dark:bg-gray-800/50">
@@ -278,7 +287,7 @@ export function ResourcePreview({ url, type }: ResourcePreviewProps) {
           )}
 
           {/* Info Overlay on Hover */}
-          <div 
+          <div
             className={clsx(
               "absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors duration-300",
               "opacity-0 group-hover:opacity-100 flex items-center justify-center",
@@ -326,11 +335,11 @@ export function ResourcePreview({ url, type }: ResourcePreviewProps) {
     <div className="h-80 overflow-hidden group relative">
       {previewData?.image && !imageError ? (
         <div className="relative h-full">
-          <img
+          <Image
             src={previewData.image}
             alt={previewData.title || 'Preview'}
             className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-300"
-            loading="lazy"
+            fill
             onError={() => setImageError(true)}
           />
           <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/95 via-black/70 to-transparent p-6">

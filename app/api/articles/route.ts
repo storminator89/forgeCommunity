@@ -52,8 +52,7 @@ export async function POST(req: NextRequest) {
     let featuredImagePath = '';
     if (featuredImage) {
       const bytes = await featuredImage.arrayBuffer();
-      const buffer = Buffer.from(bytes);
-
+      const buffer = new Uint8Array(bytes);
       const fileName = `${Date.now()}_${featuredImage.name}`;
       const filePath = path.join(process.cwd(), 'public', 'images', 'uploads', fileName);
       await writeFile(filePath, buffer);
@@ -72,7 +71,7 @@ export async function POST(req: NextRequest) {
         category,
         isPublished, // Neues Feld
         featuredImage: featuredImagePath,
-        author: { connect: { email: session.user.email } },
+        author: { connect: { email: session.user.email as string } },
         tags: {
           connectOrCreate: tagConnectOrCreate,
         },

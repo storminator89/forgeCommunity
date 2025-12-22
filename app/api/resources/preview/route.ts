@@ -3,7 +3,7 @@ import { getLinkPreview } from 'link-preview-js';
 
 const getPdfMetadata = async (url: string) => {
   try {
-    const response = await fetch(url, { 
+    const response = await fetch(url, {
       method: 'HEAD',
       redirect: 'manual',
       credentials: 'same-origin',
@@ -12,11 +12,13 @@ const getPdfMetadata = async (url: string) => {
       console.error('Fetch error:', e);
       return null;
     });
-    
+
+    if (!response) return null;
+
     if (response.status >= 300 && response.status < 400) {
       return null; // Weiterleitungen ignorieren
     }
-    
+
     if (!response.ok) return null;
 
     const contentType = response.headers.get('content-type');
@@ -26,7 +28,7 @@ const getPdfMetadata = async (url: string) => {
 
     if (contentType?.includes('application/pdf')) {
       const fileSizeInMB = contentLength ? Math.round(parseInt(contentLength) / (1024 * 1024) * 10) / 10 : null;
-      
+
       return {
         title: fileName,
         type: 'pdf',
@@ -45,13 +47,13 @@ const getPdfMetadata = async (url: string) => {
 const getVideoMetadata = async (url: string) => {
   try {
     const urlObj = new URL(url);
-    
+
     // YouTube
     if (urlObj.hostname.includes('youtube.com') || urlObj.hostname.includes('youtu.be')) {
-      const videoId = urlObj.hostname.includes('youtu.be') 
+      const videoId = urlObj.hostname.includes('youtu.be')
         ? urlObj.pathname.slice(1)
         : urlObj.searchParams.get('v');
-      
+
       const response = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`, {
         redirect: 'manual',
         credentials: 'same-origin',
@@ -60,11 +62,13 @@ const getVideoMetadata = async (url: string) => {
         console.error('YouTube fetch error:', e);
         return null;
       });
-      
+
+      if (!response) return null;
+
       if (response.status >= 300 && response.status < 400) {
         return null; // Weiterleitungen ignorieren
       }
-      
+
       if (response.ok) {
         const data = await response.json();
         return {
@@ -75,7 +79,7 @@ const getVideoMetadata = async (url: string) => {
         };
       }
     }
-    
+
     // Vimeo
     if (urlObj.hostname.includes('vimeo.com')) {
       const videoId = urlObj.pathname.split('/')[1];
@@ -87,11 +91,13 @@ const getVideoMetadata = async (url: string) => {
         console.error('Vimeo fetch error:', e);
         return null;
       });
-      
+
+      if (!response) return null;
+
       if (response.status >= 300 && response.status < 400) {
         return null; // Weiterleitungen ignorieren
       }
-      
+
       if (response.ok) {
         const data = await response.json();
         return {
@@ -113,7 +119,7 @@ const getVideoMetadata = async (url: string) => {
 export async function POST(request: Request) {
   try {
     const { url } = await request.json();
-    
+
     if (!url) {
       return NextResponse.json(
         { error: 'URL ist erforderlich' },
@@ -143,10 +149,12 @@ export async function POST(request: Request) {
       },
     });
 
+    const data = previewData as any;
+
     return NextResponse.json({
-      title: previewData.title,
-      description: previewData.description,
-      image: previewData.images?.[0] || null,
+      title: data.title,
+      description: data.description,
+      image: data.images?.[0] || null,
       type: 'link'
     });
   } catch (error) {

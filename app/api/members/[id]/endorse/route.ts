@@ -7,7 +7,8 @@ import { authOptions } from "@/lib/auth"; // Pfad zu deinen Auth-Optionen
 
 const prisma = new PrismaClient();
 
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { id: endorsedId } = params;
 
   // Hole die aktuelle Sitzung

@@ -6,8 +6,9 @@ import prisma from '@/lib/prisma';
 
 export async function DELETE(
   req: Request,
-  { params }: { params: { channelId: string } }
+  props: { params: Promise<{ channelId: string }> }
 ) {
+  const params = await props.params;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user || session.user.role !== 'ADMIN') {

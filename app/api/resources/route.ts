@@ -33,7 +33,7 @@ export async function GET(request: Request) {
     } : {};
 
     const resources = await prisma.resource.findMany({
-      where: whereClause,
+      where: whereClause as any,
       include: {
         author: {
           select: {
@@ -50,7 +50,7 @@ export async function GET(request: Request) {
       skip: skip,
     });
 
-    const total = await prisma.resource.count({ where: whereClause });
+    const total = await prisma.resource.count({ where: whereClause as any });
 
     return NextResponse.json({
       resources,
@@ -60,7 +60,7 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error('Error fetching resources:', error);
     return NextResponse.json(
-      { error: 'Fehler beim Abrufen der Ressourcen.' }, 
+      { error: 'Fehler beim Abrufen der Ressourcen.' },
       { status: 500 }
     );
   }

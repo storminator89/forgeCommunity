@@ -7,9 +7,22 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { QuizContent, QuizQuestion } from './types';
+import {
+  QuizContent,
+  QuizQuestion,
+  MatchingQuizQuestion,
+  TextInputQuizQuestion,
+  FillBlanksQuizQuestion,
+  ChoiceQuizQuestion
+} from './types';
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
+
+const isMatchingQuestion = (q: QuizQuestion): q is MatchingQuizQuestion => q.type === 'MATCHING';
+const isTextInputQuestion = (q: QuizQuestion): q is TextInputQuizQuestion => q.type === 'TEXT_INPUT';
+const isFillBlanksQuestion = (q: QuizQuestion): q is FillBlanksQuizQuestion => q.type === 'FILL_BLANKS';
+const isChoiceQuestion = (q: QuizQuestion): q is ChoiceQuizQuestion =>
+  q.type === 'SINGLE_CHOICE' || q.type === 'MULTIPLE_CHOICE' || q.type === 'TRUE_FALSE';
 
 interface QuizRendererProps {
   content: QuizContent;
@@ -18,8 +31,8 @@ interface QuizRendererProps {
 type Answer = string | number[] | { [key: string]: string } | string[];
 
 export function QuizRenderer({ content }: QuizRendererProps) {
-  const [questions] = useState(() => 
-    content.shuffleQuestions 
+  const [questions] = useState(() =>
+    content.shuffleQuestions
       ? [...content.questions].sort(() => Math.random() - 0.5)
       : content.questions
   );
@@ -60,11 +73,11 @@ export function QuizRenderer({ content }: QuizRendererProps) {
 
   const handleMultipleAnswerSelect = (optionIndex: number) => {
     setSelectedAnswers(prev => {
-      const currentAnswers = prev[currentQuestionIndex] || [];
+      const currentAnswers = (prev[currentQuestionIndex] as number[]) || [];
       const newAnswers = currentAnswers.includes(optionIndex)
         ? currentAnswers.filter(i => i !== optionIndex)
         : [...currentAnswers, optionIndex].sort();
-      
+
       return {
         ...prev,
         [currentQuestionIndex]: newAnswers
@@ -122,7 +135,7 @@ export function QuizRenderer({ content }: QuizRendererProps) {
           ? selectedArray?.length === correct.length && selectedArray.every(answer => correct.includes(answer))
           : selectedArray?.[0] === correct[0];
       }
-      
+
       case 'TEXT_INPUT': {
         const answer = selected as string;
         const correctAnswer = (question as any).correctAnswer;
@@ -133,7 +146,7 @@ export function QuizRenderer({ content }: QuizRendererProps) {
 
       case 'MATCHING': {
         const answers = selected as { [key: string]: string };
-        return question.pairs.every((pair, index) => 
+        return question.pairs.every((pair, index) =>
           answers?.[index] === pair.right
         );
       }
@@ -204,13 +217,18 @@ export function QuizRenderer({ content }: QuizRendererProps) {
                 <p className="font-medium">{q.question}</p>
                 <p className={isAnswerCorrect(index) ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>
                   {isAnswerCorrect(index) ? "✓ Richtig" : "✗ Falsch"}
-                  {!isAnswerCorrect(index) && (
+                  {!isAnswerCorrect(index) && isChoiceQuestion(q) && (
                     <span className="block text-sm">
                       Richtige Antwort: {
-                        (q.correctAnswers || [q.correctAnswer])
+                        q.correctAnswers
                           .map(i => q.options[i])
                           .join(', ')
                       }
+                    </span>
+                  )}
+                  {!isAnswerCorrect(index) && isTextInputQuestion(q) && (
+                    <span className="block text-sm">
+                      Richtige Antwort: {q.correctAnswer}
                     </span>
                   )}
                 </p>
@@ -243,7 +261,7 @@ export function QuizRenderer({ content }: QuizRendererProps) {
       <CardContent>
         <div className="space-y-4">
           <p className="text-lg font-medium">{currentQuestion.question}</p>
-          
+
           {currentQuestion.type === 'TEXT_INPUT' && (
             <div className="space-y-2">
               <Input
@@ -377,18 +395,18 @@ export function QuizRenderer({ content }: QuizRendererProps) {
         </div>
       </CardContent>
       <CardFooter>
-        <Button 
+        <Button
           onClick={handleNext}
           disabled={
             !selectedAnswers[currentQuestionIndex] ||
-            (currentQuestion.type === 'MATCHING' && 
-              !currentQuestion.pairs.every((_, index) => 
+            (currentQuestion.type === 'MATCHING' &&
+              !currentQuestion.pairs.every((_, index) =>
                 ((selectedAnswers[currentQuestionIndex] as { [key: string]: string })?.[index])
               ))
           }
         >
-          {!showFeedback ? 'Antwort prüfen' : 
-           currentQuestionIndex < questions.length - 1 ? 'Nächste Frage' : 'Quiz beenden'}
+          {!showFeedback ? 'Antwort prüfen' :
+            currentQuestionIndex < questions.length - 1 ? 'Nächste Frage' : 'Quiz beenden'}
         </Button>
       </CardFooter>
     </Card>

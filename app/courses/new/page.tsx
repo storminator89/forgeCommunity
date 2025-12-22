@@ -15,6 +15,7 @@ import { CalendarIcon, X, Upload } from "lucide-react"
 import { Sidebar } from "@/components/Sidebar"
 import { UserNav } from "@/components/user-nav"
 import { ThemeToggle } from "@/components/theme-toggle"
+import Image from 'next/image'
 
 export default function NewCoursePage() {
   const [title, setTitle] = useState('')
@@ -227,7 +228,7 @@ export default function NewCoursePage() {
                   </label>
                   {imagePreview && (
                     <div className="ml-4">
-                      <img src={imagePreview} alt="Vorschau" className="h-20 w-20 object-cover rounded-md" />
+                      <Image src={imagePreview} alt="Vorschau" width={80} height={80} className="object-cover rounded-md" />
                     </div>
                   )}
                 </div>

@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Heart, 
-  MessageSquare, 
-  ExternalLink, 
+import {
+  Heart,
+  MessageSquare,
+  ExternalLink,
   Github,
   Loader2,
   ThumbsUp,
@@ -48,7 +48,7 @@ export function ProjectsList({ userId, isOwner }: ProjectsListProps) {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
 
-  const fetchProjects = async (pageNum: number) => {
+  const fetchProjects = useCallback(async (pageNum: number) => {
     try {
       const response = await fetch(
         `/api/users/${userId}/projects?page=${pageNum}&limit=6`,
@@ -60,13 +60,13 @@ export function ProjectsList({ userId, isOwner }: ProjectsListProps) {
       if (!response.ok) throw new Error('Failed to fetch projects');
 
       const data = await response.json();
-      
+
       if (pageNum === 1) {
         setProjects(data.projects);
       } else {
         setProjects(prev => [...prev, ...data.projects]);
       }
-      
+
       setHasMore(data.pagination.hasMore);
     } catch (error) {
       console.error('Error fetching projects:', error);
@@ -74,11 +74,11 @@ export function ProjectsList({ userId, isOwner }: ProjectsListProps) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [userId]);
 
   useEffect(() => {
     fetchProjects(1);
-  }, [userId]);
+  }, [fetchProjects]);
 
   const handleLike = async (projectId: string) => {
     try {
@@ -93,13 +93,13 @@ export function ProjectsList({ userId, isOwner }: ProjectsListProps) {
         prev.map(project =>
           project.id === projectId
             ? {
-                ...project,
-                isLiked: !project.isLiked,
-                stats: {
-                  ...project.stats,
-                  likes: project.stats.likes + (project.isLiked ? -1 : 1),
-                },
-              }
+              ...project,
+              isLiked: !project.isLiked,
+              stats: {
+                ...project.stats,
+                likes: project.stats.likes + (project.isLiked ? -1 : 1),
+              },
+            }
             : project
         )
       );
@@ -138,7 +138,7 @@ export function ProjectsList({ userId, isOwner }: ProjectsListProps) {
                 Keine Projekte vorhanden
               </h3>
               <p className="text-gray-500 dark:text-gray-400">
-                {isOwner 
+                {isOwner
                   ? 'Erstellen Sie Ihr erstes Projekt'
                   : 'Dieser Benutzer hat noch keine Projekte erstellt'}
               </p>

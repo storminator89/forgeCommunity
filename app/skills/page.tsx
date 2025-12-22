@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, Suspense } from 'react';
+import { useState, useEffect, useMemo, Suspense, useCallback } from 'react';
 import { Sidebar } from "@/components/Sidebar";
 import { UserNav } from "@/components/user-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -78,14 +78,14 @@ export default function SkillDirectory() {
   const [expandedSkills, setExpandedSkills] = useState<{ [key: string]: boolean }>({});
   const [isRetrying, setIsRetrying] = useState(false);
 
-  const getSkillByName = (name: string): Skill | undefined => {
+  const getSkillByName = useCallback((name: string): Skill | undefined => {
     return skillsData.find(skill => skill.name === name);
-  };
+  }, [skillsData]);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
-    
+
     try {
       const [skillsResponse, membersResponse] = await Promise.all([
         fetch('/api/skills'),
@@ -108,37 +108,37 @@ export default function SkillDirectory() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   const categories = useMemo(() => ['All', ...Array.from(new Set(skillsData.map(skill => skill.category)))], [skillsData]);
 
   const filteredMembers = useMemo(() => {
     return membersData
       .filter(member => {
-        const matchesCategory = selectedCategory === 'All' || 
+        const matchesCategory = selectedCategory === 'All' ||
           member.skills.some(s => {
             const skill = getSkillByName(s.skillName);
             return skill?.category === selectedCategory;
           });
 
         const searchTermLower = searchTerm.toLowerCase();
-        const matchesSearch = 
+        const matchesSearch =
           member.name.toLowerCase().includes(searchTermLower) ||
           member.skills.some(s => s.skillName.toLowerCase().includes(searchTermLower));
 
         return matchesCategory && matchesSearch;
       })
       .sort((a, b) => {
-        const comparison = sortBy === 'endorsements' 
+        const comparison = sortBy === 'endorsements'
           ? b.endorsements - a.endorsements
           : a.name.localeCompare(b.name);
         return sortOrder === 'asc' ? comparison : -comparison;
       });
-  }, [membersData, selectedCategory, searchTerm, sortBy, sortOrder]);
+  }, [membersData, selectedCategory, searchTerm, sortBy, sortOrder, getSkillByName]);
 
   const toggleSortOrder = () => {
     setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
@@ -193,7 +193,7 @@ export default function SkillDirectory() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4">
         <p className="text-lg text-red-500 mb-4">{error}</p>
-        <Button 
+        <Button
           onClick={() => {
             setIsRetrying(true);
             fetchData().finally(() => setIsRetrying(false));
@@ -337,7 +337,7 @@ export default function SkillDirectory() {
                                 <TooltipTrigger asChild>
                                   <div className="space-y-1">
                                     <div className="flex justify-between">
-                                      <Badge 
+                                      <Badge
                                         variant="outline"
                                         className="cursor-help transition-colors hover:bg-secondary"
                                       >
@@ -388,7 +388,7 @@ export default function SkillDirectory() {
             <DialogTitle className="text-2xl">{selectedMember?.name}</DialogTitle>
           </DialogHeader>
           {selectedMember && (
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               className="grid gap-6 py-4"

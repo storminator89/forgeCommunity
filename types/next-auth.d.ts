@@ -64,5 +64,13 @@ declare module "next-auth" {
     endorsements?: number
     emailVerified?: Date | null
     lastLogin?: Date | null
+    settings?: {
+      id: string
+      userId: string
+      emailNotifications: boolean
+      pushNotifications: boolean
+      theme: 'LIGHT' | 'DARK'
+      language: string
+    } | null
   }
 }

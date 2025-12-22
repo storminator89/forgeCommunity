@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Sidebar } from "@/components/Sidebar";
 import { UserNav } from "@/components/user-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -79,23 +79,7 @@ export default function ResourceLibrary() {
     threshold: 0,
   });
 
-  useEffect(() => {
-    const initialFetch = async () => {
-      await fetchResources();
-      if (session?.user?.id) {
-        await checkAdminStatus();
-      }
-    };
-    initialFetch();
-  }, [session]);
-
-  useEffect(() => {
-    if (inView && hasMore && !loading) {
-      loadMore();
-    }
-  }, [inView, hasMore, loading]);
-
-  const fetchResources = async (pageNumber = 1) => {
+  const fetchResources = useCallback(async (pageNumber = 1) => {
     try {
       setLoading(true);
       const response = await axios.get('/api/resources', {
@@ -125,26 +109,9 @@ export default function ResourceLibrary() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const loadMore = () => {
-    if (loading || !hasMore) return;
-    const nextPage = Math.floor(displayedResources.length / ITEMS_PER_PAGE) + 1;
-    fetchResources(nextPage);
-  };
-
-  useEffect(() => {
-    const debouncedSearch = setTimeout(() => {
-      setPage(1);
-      setDisplayedResources([]);
-      setHasMore(true);
-      fetchResources(1);
-    }, 300);
-
-    return () => clearTimeout(debouncedSearch);
   }, [searchTerm]);
 
-  const checkAdminStatus = async () => {
+  const checkAdminStatus = useCallback(async () => {
     if (session?.user?.id) {
       try {
         const response = await axios.get(`/api/users/${session.user.id}/role`);
@@ -153,7 +120,29 @@ export default function ResourceLibrary() {
         console.error('Fehler beim Prüfen des Admin-Status:', error);
       }
     }
-  };
+  }, [session]);
+
+  useEffect(() => {
+    const initialFetch = async () => {
+      await fetchResources();
+      if (session?.user?.id) {
+        await checkAdminStatus();
+      }
+    };
+    initialFetch();
+  }, [session, fetchResources, checkAdminStatus]);
+
+  const loadMore = useCallback(() => {
+    if (loading || !hasMore) return;
+    const nextPage = Math.floor(displayedResources.length / ITEMS_PER_PAGE) + 1;
+    fetchResources(nextPage);
+  }, [loading, hasMore, displayedResources.length, fetchResources]);
+
+  useEffect(() => {
+    if (inView && hasMore && !loading) {
+      loadMore();
+    }
+  }, [inView, hasMore, loading, loadMore]);
 
   const handleAddResource = async () => {
     if (!newResource.title || !newResource.url) {

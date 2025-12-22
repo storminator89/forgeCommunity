@@ -5,6 +5,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation'; // Für Navigation
 import Link from 'next/link'; // Für Links
+import Image from 'next/image';
 import { Sidebar } from "@/components/Sidebar";
 import { UserNav } from "@/components/user-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -549,10 +550,12 @@ export default function ProjectShowcase() {
                         <CardHeader className="relative p-0 overflow-hidden rounded-t-xl">
                           {project.imageUrl ? (
                             <div className="relative h-48 overflow-hidden">
-                              <img
+                              <Image
                                 src={project.imageUrl}
                                 alt={`${project.title} Vorschaubild`}
                                 className="w-full h-full object-cover transform transition-transform duration-500 group-hover:scale-110"
+                                fill
+                                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                               />
                               <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                             </div>
@@ -669,10 +672,12 @@ export default function ProjectShowcase() {
                           <div className="flex items-start space-x-4">
                             <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0">
                               {project.imageUrl ? (
-                                <img
+                                <Image
                                   src={project.imageUrl}
                                   alt={project.title}
                                   className="w-full h-full object-cover"
+                                  fill
+                                  sizes="64px"
                                 />
                               ) : (
                                 <div
@@ -780,10 +785,12 @@ export default function ProjectShowcase() {
         <DialogContent className="sm:max-w-[800px] p-0 overflow-hidden">
           <div className="relative h-[300px]">
             {selectedProject?.imageUrl ? (
-              <img
+              <Image
                 src={selectedProject.imageUrl}
                 alt={selectedProject.title}
                 className="w-full h-full object-cover"
+                fill
+                sizes="(max-width: 768px) 100vw, 800px"
               />
             ) : (
               <div

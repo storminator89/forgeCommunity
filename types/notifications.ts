@@ -1,8 +1,8 @@
 // types/notifications.ts
-export type NotificationType = 
-  | 'CHAT_MESSAGE' 
-  | 'CHANNEL_CREATED' 
-  | 'CHANNEL_DELETED' 
+export type NotificationType =
+  | 'CHAT_MESSAGE'
+  | 'CHANNEL_CREATED'
+  | 'CHANNEL_DELETED'
   | 'CHANNEL_INVITATION'
   | 'MENTION'
   | 'SYSTEM';
@@ -23,6 +23,7 @@ export interface NotificationTemplate {
       messageId: string;
       channelName: string;
       messagePreview: string;
+      authorName?: string;
     };
   };
   CHANNEL_CREATED: {
@@ -38,6 +39,7 @@ export interface NotificationTemplate {
       channelId: string;
       channelName: string;
       inviterId: string;
+      inviterName?: string;
     };
   };
   MENTION: {
@@ -46,6 +48,20 @@ export interface NotificationTemplate {
       channelId: string;
       messageId: string;
       mentionedBy: string;
+      channelName?: string;
+    };
+  };
+  CHANNEL_DELETED: {
+    content: string;
+    metadata: {
+      channelId: string;
+      channelName: string;
+    };
+  };
+  SYSTEM: {
+    content: string;
+    metadata: {
+      [key: string]: any;
     };
   };
 }

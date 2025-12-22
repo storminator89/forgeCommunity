@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -101,20 +101,16 @@ export default function ProfilePage() {
     },
   };
 
-  useEffect(() => {
-    fetchProfile();
-  }, [params.id]);
-
-  const fetchProfile = async () => {
+  const fetchProfile = useCallback(async () => {
     try {
       const response = await fetch(`/api/users/${params.id}`, {
         credentials: 'include',
       });
-      
+
       if (!response.ok) {
         throw new Error('Failed to fetch profile');
       }
-      
+
       const data = await response.json();
       setProfile(data);
     } catch (error) {
@@ -123,7 +119,11 @@ export default function ProfilePage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [params.id]);
+
+  useEffect(() => {
+    fetchProfile();
+  }, [params.id, fetchProfile]);
 
   const handleProfileUpdate = async (data: Partial<UserType>) => {
     try {
@@ -234,7 +234,7 @@ export default function ProfilePage() {
 
         <main className="flex-1 overflow-y-auto">
           {/* Cover Image */}
-          <div 
+          <div
             className="h-48 bg-gradient-to-r from-blue-500 to-purple-600 bg-cover bg-center relative"
             style={profile.coverImage ? { backgroundImage: `url(${profile.coverImage})` } : undefined}
           />
@@ -298,8 +298,8 @@ export default function ProfilePage() {
                       {!profile.isCurrentUser && (
                         <FollowButton
                           userId={profile.id}
-                          initialIsFollowing={profile.isFollowing}
-                          userName={profile.name}
+                          initialIsFollowing={!!profile.isFollowing}
+                          userName={profile.name || ''}
                           onFollowChange={(isFollowing) => {
                             setProfile(prev => prev ? {
                               ...prev,
@@ -405,7 +405,7 @@ export default function ProfilePage() {
                           <p className="text-gray-600 dark:text-gray-300">{profile.bio}</p>
                         ) : (
                           <p className="text-gray-400 italic">
-                            {profile.isCurrentUser 
+                            {profile.isCurrentUser
                               ? 'Fügen Sie eine Biografie hinzu, um anderen von sich zu erzählen.'
                               : 'Keine Biografie vorhanden'}
                           </p>
@@ -446,7 +446,7 @@ export default function ProfilePage() {
                             ))
                           ) : (
                             <p className="text-gray-400 italic">
-                              {profile.isCurrentUser 
+                              {profile.isCurrentUser
                                 ? 'Fügen Sie Skills hinzu, um Ihre Fähigkeiten zu präsentieren.'
                                 : 'Keine Skills vorhanden'}
                             </p>
@@ -471,10 +471,10 @@ export default function ProfilePage() {
                                     {lang}
                                   </Badge>
                                 )) || (
-                                  <p className="text-gray-400 italic">
-                                    Keine Unterrichtssprachen angegeben
-                                  </p>
-                                )}
+                                    <p className="text-gray-400 italic">
+                                      Keine Unterrichtssprachen angegeben
+                                    </p>
+                                  )}
                               </div>
                             </div>
                             <div>
@@ -485,10 +485,10 @@ export default function ProfilePage() {
                                     {exp}
                                   </Badge>
                                 )) || (
-                                  <p className="text-gray-400 italic">
-                                    Keine Fachgebiete angegeben
-                                  </p>
-                                )}
+                                    <p className="text-gray-400 italic">
+                                      Keine Fachgebiete angegeben
+                                    </p>
+                                  )}
                               </div>
                             </div>
                           </div>
@@ -505,10 +505,10 @@ export default function ProfilePage() {
                 <TabsContent value="projects">
                   <ProjectsList
                     userId={profile.id}
-                    isOwner={profile.isCurrentUser}
+                    isOwner={!!profile.isCurrentUser}
                   />
                 </TabsContent>
-                </Tabs>
+              </Tabs>
             </div>
           </div>
 

@@ -127,7 +127,7 @@ export const authOptions: NextAuthOptions = {
           endorsements: token.endorsements as number,
           emailVerified: token.emailVerified as Date | null,
           lastLogin: token.lastLogin as Date | null,
-          settings: token.settings
+          settings: token.settings as any
         }
 
         // Aktuelle Daten aus der Datenbank holen
@@ -147,7 +147,7 @@ export const authOptions: NextAuthOptions = {
           })
 
           session.user.lastLogin = currentUser.lastLogin
-          session.user.settings = currentUser.userSettings
+          session.user.settings = currentUser.userSettings as any
           session.user.endorsements = currentUser.endorsements
         }
       }

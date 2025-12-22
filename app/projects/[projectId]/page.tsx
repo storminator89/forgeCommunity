@@ -63,7 +63,7 @@ interface Project {
   comments: ProjectComment[];
 }
 
-export default function ProjectDetail() {
+export default function ProjectDetail(props: { params: Promise<{ projectId: string }> }) {
   const router = useRouter();
   const params = useParams();
   const { data: session } = useSession();
@@ -158,7 +158,7 @@ export default function ProjectDetail() {
       const newLike: LikeProject = await res.json();
       setProject(prev => prev ? { ...prev, likes: [...prev.likes, newLike] } : prev);
       setIsLiked(true);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error liking project:', error);
       alert(error.message || 'Fehler beim Liken des Projekts.');
     }
@@ -199,7 +199,7 @@ export default function ProjectDetail() {
       } : prev);
 
       setNewComment('');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error adding comment:', error);
       alert(error.message || 'Fehler beim Hinzufügen des Kommentars.');
     }
@@ -257,7 +257,7 @@ export default function ProjectDetail() {
       const updatedProject: Project = await res.json();
       setProject(updatedProject);
       setIsEditDialogOpen(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating project:', error);
       alert(error.message || 'Fehler beim Aktualisieren des Projekts.');
     }
@@ -277,7 +277,7 @@ export default function ProjectDetail() {
       }
 
       router.push('/showcases');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting project:', error);
       alert(error.message || 'Fehler beim Löschen des Projekts.');
     }
@@ -386,10 +386,10 @@ export default function ProjectDetail() {
                 </div>
 
                 {/* Project Image */}
-                {project.image && (
+                {project.imageUrl && (
                   <div className="mb-8 rounded-lg overflow-hidden bg-muted">
                     <Image
-                      src={project.image}
+                      src={project.imageUrl}
                       alt={project.title}
                       width={1200}
                       height={600}

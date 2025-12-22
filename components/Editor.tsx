@@ -32,11 +32,8 @@ interface EditorProps {
 }
 
 const MenuBar = ({ editor }: { editor: any }) => {
-  if (!editor) {
-    return null
-  }
-
   const setLink = useCallback(() => {
+    if (!editor) return;
     const previousUrl = editor.getAttributes('link').href
     const url = window.prompt('URL', previousUrl)
 
@@ -53,12 +50,17 @@ const MenuBar = ({ editor }: { editor: any }) => {
   }, [editor])
 
   const addImage = useCallback(() => {
+    if (!editor) return;
     const url = window.prompt('Bild URL')
 
     if (url) {
       editor.chain().focus().setImage({ src: url }).run()
     }
   }, [editor])
+
+  if (!editor) {
+    return null
+  }
 
   return (
     <div className="border-b border-input bg-transparent p-1 flex flex-wrap gap-1">

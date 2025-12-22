@@ -27,7 +27,7 @@ export function ContentRenderer({ content, isEditing: externalIsEditing, onSave,
     if (content.type !== 'QUIZ') {
       setEditedContent(content.content as string || '');
     }
-  }, [content.id, content.type]);
+  }, [content.id, content.type, content.content]);
 
   const isEditing = externalIsEditing ?? internalIsEditing;
 
@@ -167,7 +167,7 @@ export function ContentRenderer({ content, isEditing: externalIsEditing, onSave,
       default:
         return (
           <div className="p-4 text-muted-foreground">
-            <p>{content.content}</p>
+            <p>{typeof content.content === 'string' ? content.content : 'Komplexer Inhalt'}</p>
           </div>
         );
     }

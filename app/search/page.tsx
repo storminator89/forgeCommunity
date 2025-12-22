@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Sidebar } from "@/components/Sidebar";
 import { UserNav } from "@/components/user-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -111,7 +111,7 @@ export default function SearchPage() {
   const [totalPages, setTotalPages] = useState(1);
   const router = useRouter();
 
-  const fetchResults = async () => {
+  const fetchResults = useCallback(async () => {
     if (!searchTerm.trim()) {
       setResults([]);
       return;
@@ -139,7 +139,7 @@ export default function SearchPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [searchTerm, activeTab, page]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -149,7 +149,7 @@ export default function SearchPage() {
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [searchTerm, activeTab, page]);
+  }, [searchTerm, fetchResults]);
 
   const handleItemClick = (result: SearchResult) => {
     switch (result.type) {

@@ -11,6 +11,7 @@ interface TagSelectProps {
   onTagSelect: (tag: string) => void;
   onTagRemove: (tag: string) => void;
   onAddTag: (tag: string) => void;
+  maxTags?: number;
 }
 
 export const TagSelect: React.FC<TagSelectProps> = ({
@@ -19,6 +20,7 @@ export const TagSelect: React.FC<TagSelectProps> = ({
   onTagSelect,
   onTagRemove,
   onAddTag,
+  maxTags = 5,
 }) => {
   const [isAdding, setIsAdding] = useState(false);
   const [newTag, setNewTag] = useState('');
@@ -34,17 +36,17 @@ export const TagSelect: React.FC<TagSelectProps> = ({
 
   return (
     <div className="space-y-3">
-      <Label htmlFor="tags" className="text-sm font-medium">Tags (max. 5)</Label>
+      <Label htmlFor="tags" className="text-sm font-medium">Tags (max. {maxTags})</Label>
       <div className="flex flex-wrap gap-2 mb-3">
         {selectedTags.map((tag) => (
-          <Badge 
-            key={tag} 
-            variant="secondary" 
+          <Badge
+            key={tag}
+            variant="secondary"
             className="text-base py-1.5 px-3 hover:bg-secondary/80"
           >
             {tag}
-            <button 
-              onClick={() => onTagRemove(tag)} 
+            <button
+              onClick={() => onTagRemove(tag)}
               className="ml-2 hover:text-destructive"
             >
               ×
@@ -58,13 +60,13 @@ export const TagSelect: React.FC<TagSelectProps> = ({
             id="tags"
             value=""
             onChange={(e) => {
-              if (e.target.value && selectedTags.length < 5) {
+              if (e.target.value && selectedTags.length < maxTags) {
                 onTagSelect(e.target.value);
                 e.target.value = '';
               }
             }}
             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={selectedTags.length >= 5}
+            disabled={selectedTags.length >= maxTags}
           >
             <option value="">Tag auswählen...</option>
             {availableTags
@@ -73,12 +75,12 @@ export const TagSelect: React.FC<TagSelectProps> = ({
                 <option key={tag} value={tag}>{tag}</option>
               ))}
           </select>
-          <Button 
-            type="button" 
+          <Button
+            type="button"
             onClick={() => setIsAdding(true)}
             variant="outline"
             size="sm"
-            disabled={selectedTags.length >= 5}
+            disabled={selectedTags.length >= maxTags}
           >
             Neu
           </Button>
@@ -93,16 +95,16 @@ export const TagSelect: React.FC<TagSelectProps> = ({
             className="w-full h-10 text-base"
           />
           <div className="flex items-center gap-2">
-            <Button 
-              type="button" 
+            <Button
+              type="button"
               onClick={handleAddTag}
               size="default"
               className="flex-1"
             >
               Hinzufügen
             </Button>
-            <Button 
-              type="button" 
+            <Button
+              type="button"
               onClick={() => {
                 setIsAdding(false);
                 setNewTag('');

@@ -292,7 +292,7 @@ export default function EditArticle() {
                           htmlFor="featuredImage"
                           className="text-base font-medium text-foreground flex items-center gap-2"
                         >
-                          <Image className="h-4 w-4" />
+                          <ImageIcon className="h-4 w-4" />
                           <span>Beitragsbild</span>
                           <Badge variant="secondary" className="ml-2 font-normal">
                             Optional

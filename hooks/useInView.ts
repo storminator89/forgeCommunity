@@ -10,10 +10,10 @@ export function useInView(options = {}) {
       requestAnimationFrame(() => {
         setIsInView(entry.isIntersecting);
       });
-    }, { 
-      threshold: 0.15, 
+    }, {
+      threshold: 0.15,
       rootMargin: '0px',
-      ...options 
+      ...options
     });
 
     const currentRef = ref.current;
@@ -28,5 +28,5 @@ export function useInView(options = {}) {
     };
   }, [options]);
 
-  return [ref, isInView];
+  return [ref, isInView] as const;
 }

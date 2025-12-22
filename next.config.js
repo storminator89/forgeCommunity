@@ -30,11 +30,11 @@ const securityHeaders = [
 
 const nextConfig = {
   // Entwicklungsmodus schneller machen
-  reactStrictMode: false,
+  reactStrictMode: true,
 
-  // TypeScript Checks lockern
+  // TypeScript Checks
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
 
   // Experimentelle Features

@@ -96,7 +96,7 @@ export function CourseMainContent({
               <div className="mt-4 mb-6 w-full">
                 <h4 className="text-lg font-semibold mb-4">Wählen Sie den Inhaltstyp aus:</h4>
                 <ContentTypeSelector onSelectType={(type) => {
-                  setNewContent(prev => ({ ...prev, type }));
+                  setNewContent({ ...newContent, type });
                   setIsSelectingContentType(true);
                 }} />
               </div>
@@ -108,14 +108,14 @@ export function CourseMainContent({
                 <SubContentForm
                   content={newContent}
                   onContentChange={setNewContent}
-                  onSubmit={(e) => {
+                  onSubmit={async (e) => {
                     e.preventDefault();
-                    handleSubContentSubmit(newContent.title);
+                    await handleSubContentSubmit(newContent.title);
                   }}
                   onCancel={() => {
                     setIsAddingSubContent(null);
                     setIsSelectingContentType(false);
-                    setNewContent({ id: '', title: '', type: 'TEXT', content: '', order: 0, parentId: null });
+                    setNewContent({ id: '', title: '', type: 'TEXT', content: '', order: 0, parentId: null, courseId: '' });
                   }}
                   onH5PDialogOpen={() => setIsH5PDialogOpen(true)}
                 />
@@ -148,13 +148,13 @@ export function CourseMainContent({
                       }
 
                       const savedContent = await response.json();
-                      
+
                       // Update the main contents with the updated content
                       const updatedMainContents = mainContents.map(mainContent => {
                         if (mainContent.id === selectedMainContent.parentId) {
                           return {
                             ...mainContent,
-                            subContents: (mainContent.subContents || []).map(sub => 
+                            subContents: (mainContent.subContents || []).map(sub =>
                               sub.id === selectedMainContent.id ? savedContent : sub
                             )
                           };
@@ -176,7 +176,7 @@ export function CourseMainContent({
                   }}
                   onCancel={() => {
                     setEditingContentId(null);
-                    setNewContent({ id: '', title: '', type: 'TEXT', content: '', order: 0, parentId: null });
+                    setNewContent({ id: '', title: '', type: 'TEXT', content: '', order: 0, parentId: null, courseId: '' });
                   }}
                 />
               </div>
@@ -205,7 +205,7 @@ export function CourseMainContent({
                   )}
                 </>
               )}
-              
+
               {/* Show subtopics list for main topics */}
               {!selectedMainContent.parentId && selectedMainContent.subContents && selectedMainContent.subContents.length > 0 && (
                 <ul className="space-y-2">

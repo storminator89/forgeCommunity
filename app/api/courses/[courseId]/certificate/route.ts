@@ -10,8 +10,9 @@ import QRCode from 'qrcode';
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { courseId: string } }
+  props: { params: Promise<{ courseId: string }> }
 ) {
+  const params = await props.params;
   try {
     const session = await getServerSession(authOptions);
 

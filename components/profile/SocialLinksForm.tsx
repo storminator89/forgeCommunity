@@ -15,10 +15,10 @@ import { Github, Globe, Linkedin, Loader2, Save, Twitter } from 'lucide-react';
 import { toast } from 'react-toastify';
 
 interface SocialLinks {
-  github?: string;
-  linkedin?: string;
-  twitter?: string;
-  website?: string;
+  github?: string | null;
+  linkedin?: string | null;
+  twitter?: string | null;
+  website?: string | null;
 }
 
 interface SocialLinksFormProps {

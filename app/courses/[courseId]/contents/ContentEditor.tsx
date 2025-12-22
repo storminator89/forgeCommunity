@@ -42,7 +42,7 @@ export function ContentEditor({ content, onSave, onCancel }: ContentEditorProps)
             <Input
               id="videoUrl"
               type="url"
-              value={editedContent.content}
+              value={editedContent.content as string}
               onChange={(e) => setEditedContent({ ...editedContent, content: e.target.value })}
               placeholder="https://www.youtube.com/watch?v=..."
             />
@@ -55,7 +55,7 @@ export function ContentEditor({ content, onSave, onCancel }: ContentEditorProps)
             <Input
               id="audioUrl"
               type="url"
-              value={editedContent.content}
+              value={editedContent.content as string}
               onChange={(e) => setEditedContent({ ...editedContent, content: e.target.value })}
               placeholder="https://example.com/audio.mp3"
             />
@@ -68,7 +68,7 @@ export function ContentEditor({ content, onSave, onCancel }: ContentEditorProps)
             <Input
               id="h5pContent"
               type="text"
-              value={editedContent.content}
+              value={editedContent.content as string}
               onChange={(e) => setEditedContent({ ...editedContent, content: e.target.value })}
               placeholder="Enter H5P Content ID"
             />

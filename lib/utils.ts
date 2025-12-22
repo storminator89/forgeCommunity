@@ -15,15 +15,15 @@ export function formatDate(date: string) {
   }).format(new Date(date));
 }
 
-export function getRandomGradient(): string {
+export function getRandomGradient() {
   const gradients = [
-    'bg-gradient-to-r from-pink-500 via-red-500 to-yellow-500',
-    'bg-gradient-to-r from-green-300 via-blue-500 to-purple-600',
-    'bg-gradient-to-r from-pink-300 via-purple-300 to-indigo-400',
-    'bg-gradient-to-r from-yellow-200 via-green-200 to-green-500',
-    'bg-gradient-to-r from-blue-300 to-blue-600',
-    'bg-gradient-to-r from-red-200 via-red-300 to-yellow-200',
+    { from: '#ec4899', to: '#eab308' }, // pink-500 to yellow-500
+    { from: '#86efac', to: '#9333ea' }, // green-300 to purple-600
+    { from: '#f9a8d4', to: '#818cf8' }, // pink-300 to indigo-400
+    { from: '#fef08a', to: '#22c55e' }, // yellow-200 to green-500
+    { from: '#93c5fd', to: '#2563eb' }, // blue-300 to blue-600
+    { from: '#fecaca', to: '#fef08a' }, // red-200 to yellow-200
   ];
-  
+
   return gradients[Math.floor(Math.random() * gradients.length)];
 }

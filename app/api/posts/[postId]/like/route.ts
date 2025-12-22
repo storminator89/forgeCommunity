@@ -5,7 +5,8 @@ import prisma from '@/lib/prisma' // Sicherstellen, dass dies korrekt ist
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth' // Import von lib/auth.ts
 
-export async function POST(req: NextRequest, { params }: { params: { postId: string } }) {
+export async function POST(req: NextRequest, props: { params: Promise<{ postId: string }> }) {
+  const params = await props.params;
   try {
     const session = await getServerSession(authOptions)
     if (!session || !session.user) {

@@ -3,11 +3,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getServerSession } from 'next-auth/next'
-import { authOptions } from '@/lib/auth' 
+import { authOptions } from '@/lib/auth'
 import fs from 'fs'
 import path from 'path'
 
-export async function GET(req: NextRequest, { params }: { params: { projectId: string } }) {
+export async function GET(req: NextRequest, props: { params: Promise<{ projectId: string }> }) {
+  const params = await props.params;
   const { projectId } = params
 
   try {
@@ -53,7 +54,8 @@ export async function GET(req: NextRequest, { params }: { params: { projectId: s
   }
 }
 
-export async function PUT(req: NextRequest, { params }: { params: { projectId: string } }) {
+export async function PUT(req: NextRequest, props: { params: Promise<{ projectId: string }> }) {
+  const params = await props.params;
   const { projectId } = params
   const session = await getServerSession(authOptions)
 
@@ -106,7 +108,7 @@ export async function PUT(req: NextRequest, { params }: { params: { projectId: s
 
         // Speichere die Datei
         const arrayBuffer = await image.arrayBuffer()
-        const buffer = Buffer.from(arrayBuffer)
+        const buffer = new Uint8Array(arrayBuffer)
         fs.writeFileSync(filePath, buffer)
 
         // Lösche das alte Bild, falls vorhanden
@@ -176,7 +178,8 @@ export async function PUT(req: NextRequest, { params }: { params: { projectId: s
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { projectId: string } }) {
+export async function DELETE(req: NextRequest, props: { params: Promise<{ projectId: string }> }) {
+  const params = await props.params;
   const { projectId } = params
   const session = await getServerSession(authOptions)
 

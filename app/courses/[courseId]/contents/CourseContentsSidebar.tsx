@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -40,6 +40,7 @@ interface CourseContentsSidebarProps {
   forceUpdate?: boolean;
   onSubContentSubmit: (title: string) => Promise<CourseContent | void>;
   onMainContentSelect?: (contentId: string | null) => void;
+  onVisitedToggle: (contentId: string) => void;
 }
 
 export function CourseContentsSidebar({
@@ -63,6 +64,7 @@ export function CourseContentsSidebar({
   forceUpdate,
   onSubContentSubmit,
   onMainContentSelect,
+  onVisitedToggle,
 }: CourseContentsSidebarProps) {
   const router = useRouter();
   const params = useParams();
@@ -82,7 +84,7 @@ export function CourseContentsSidebar({
     setMainContents(contents || []);
   }, [contents]);
 
-  const checkCompletion = () => {
+  const checkCompletion = useCallback(() => {
     // Check if there are any main topics with subtopics
     const hasTopicsWithSubtopics = contents.some(topic =>
       topic.subContents && topic.subContents.length > 0
@@ -107,7 +109,7 @@ export function CourseContentsSidebar({
         isPageVisited(courseId, mainTopic.id)
       );
     }
-  };
+  }, [contents, courseId]);
 
   useEffect(() => {
     // Update allTopicsCompleted state
@@ -115,7 +117,7 @@ export function CourseContentsSidebar({
     if (isCompleted !== allTopicsCompleted) {
       setAllTopicsCompleted(isCompleted);
     }
-  }, [contents, courseId, forceUpdate, allTopicsCompleted]);
+  }, [contents, courseId, forceUpdate, allTopicsCompleted, checkCompletion]);
 
   useEffect(() => {
     const handleVisitedPagesChange = (event: CustomEvent) => {
@@ -135,7 +137,7 @@ export function CourseContentsSidebar({
     return () => {
       window.removeEventListener('visitedPagesChanged', handleVisitedPagesChange as EventListener);
     };
-  }, [courseId, allTopicsCompleted, contents]);
+  }, [courseId, allTopicsCompleted, contents, checkCompletion]);
 
   // Hinzufügen eines Event Listeners für die Sidebar-Aktualisierung
   useEffect(() => {
@@ -534,6 +536,7 @@ export function CourseContentsSidebar({
                         mainTopicIndex={index}
                         courseId={courseId}
                         isLoading={isLoading}
+                        onVisitedToggle={onVisitedToggle}
                       />
                     </div>
                   )}

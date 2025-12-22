@@ -5,8 +5,9 @@ import { authOptions } from '../../../auth/[...nextauth]/options';
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  props: { params: Promise<{ id: string }> }
 ) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Nicht autorisiert.' }, { status: 401 });

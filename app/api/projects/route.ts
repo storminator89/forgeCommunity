@@ -87,7 +87,7 @@ export async function POST(req: Request) {
 
         // Speichere die Datei
         const arrayBuffer = await image.arrayBuffer()
-        const buffer = Buffer.from(arrayBuffer)
+        const buffer = new Uint8Array(arrayBuffer)
         fs.writeFileSync(filePath, buffer)
 
         // Setze die Bild-URL
@@ -127,7 +127,7 @@ export async function POST(req: Request) {
         gradientFrom: gradient.from,
         gradientTo: gradient.to,
         author: {
-          connect: { id: session.user.id as number }
+          connect: { id: session.user.id }
         },
         tags: {
           connect: tagObjects.map(tag => ({ id: tag.id }))

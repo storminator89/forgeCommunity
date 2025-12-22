@@ -222,7 +222,12 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
       if (selectedContentId) {
         const content = findContentById(selectedContentId, mainContents);
         if (content?.parentId) {
-          setExpandedTopics(prev => new Set([...prev, content.parentId]));
+          const parentId = content.parentId;
+          setExpandedTopics(prev => {
+            const next = new Set(prev);
+            next.add(parentId);
+            return next;
+          });
         }
       }
     };
@@ -327,7 +332,7 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
         message: error instanceof Error ? error.message : 'Failed to create content.',
       });
     }
-  }, [courseId, mainContents, newMainContentTitle, isAddingSubContent]);
+  }, [courseId, newMainContentTitle, isAddingSubContent]);
 
   const handleSubContentSubmit = useCallback(async (title: string) => {
     if (!currentMainContentId) return;
@@ -538,7 +543,7 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
       console.error('Error deleting content:', error);
       setAlertMessage({ type: 'error', message: 'Fehler beim Löschen des Inhalts.' });
     }
-  }, [courseId, mainContents, selectedContentId]);
+  }, [courseId, mainContents, selectedContentId, confirmDelete.content]);
 
   // Funktion zum Generieren des YouTube Embed Codes aus einer URL
   const getYouTubeEmbedUrl = useCallback((url: string) => {
@@ -702,9 +707,12 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
   }, [courseId, mainContents]);
 
   // Handler zum Bearbeiten eines Inhalts
-  const handleEditContent = useCallback((content: CourseContent) => {
-    setSelectedContentId(content.id);
-    setEditingContentId(content.id);
+  const handleEditContent = useCallback((contentId: string) => {
+    // Falls contentId ein Event ist (manchmal bei Fehlklicks), ignorieren oder behandeln
+    if (typeof contentId !== 'string') return;
+
+    setSelectedContentId(contentId);
+    setEditingContentId(contentId);
   }, []);
 
   // Handler for inline title editing
@@ -763,7 +771,7 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
     const content = findContentById(contentId, mainContents);
 
     // If content is empty, automatically enter edit mode
-    if (content && (!content.content || content.content.trim() === '')) {
+    if (content && (!content.content || (typeof content.content === 'string' && content.content.trim() === ''))) {
       setEditingContentId(contentId);
       setIsEditing(true);
     } else {
@@ -813,7 +821,7 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
     // Update local state
     setMainContents(prevContents => {
       const newContents = [...prevContents];
-      const content = findContentById(newContents, contentId);
+      const content = findContentById(contentId, newContents);
       if (content) {
         content.completed = !content.completed;
       }
@@ -906,14 +914,21 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
                   onInlineEditSubmit={handleInlineEditSubmit}
                   setIsInlineEditing={setIsInlineEditing}
                   setInlineEditTitle={setInlineEditTitle}
-                  onMoveUp={handleMoveSubContentUp}
-                  onMoveDown={handleMoveSubContentDown}
+                  onMoveUp={(subContentId) => {
+                    // Find parent
+                    const parent = mainContents.find(m => m.subContents?.some(s => s.id === subContentId));
+                    if (parent) handleMoveSubContentUp(parent.id, subContentId);
+                  }}
+                  onMoveDown={(subContentId) => {
+                    const parent = mainContents.find(m => m.subContents?.some(s => s.id === subContentId));
+                    if (parent) handleMoveSubContentDown(parent.id, subContentId);
+                  }}
                   mainContentId={currentMainContentId}
-                  mainTopicIndex={null}
+                  mainTopicIndex={0}
                   courseId={courseId}
                   courseName={course?.name || ''}
                   isLoading={isLoading}
-                  forceUpdate={forceUpdateValue}
+                  forceUpdate={!!forceUpdateValue}
                   onVisitedToggle={handleVisitedToggle}
                   onSubContentSubmit={handleSubContentSubmit}
                   onMainContentSelect={setCurrentMainContentId}
