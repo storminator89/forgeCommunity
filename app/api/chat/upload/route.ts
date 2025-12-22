@@ -48,17 +48,27 @@ export async function POST(request: NextRequest) {
         const bytes = await file.arrayBuffer();
         const buffer = Buffer.from(bytes);
 
-        // Generieren Sie einen eindeutigen Dateinamen
-        const fileExt = path.extname(file.name);
+        // Validiere und säubere die Dateierweiterung
+        const fileExt = path.extname(file.name).toLowerCase();
+        const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+
+        if (!allowedExtensions.includes(fileExt)) {
+            return NextResponse.json(
+                { error: 'Ungültige Dateiendung. Nur JPG, PNG, GIF und WebP sind erlaubt.' },
+                { status: 400 }
+            );
+        }
+
+        // Generieren Sie einen eindeutigen Dateinamen (UUID verhindert Path Traversal)
         const fileName = `chat-${uuidv4()}${fileExt}`;
         const filePath = path.join(process.cwd(), 'public', 'images', 'uploads', fileName);
 
         // Speichern Sie die Datei
-        await writeFile(filePath, buffer);
+        await writeFile(filePath, new Uint8Array(buffer));
 
-        return NextResponse.json({ 
-            success: true, 
-            filePath: `/images/uploads/${fileName}` 
+        return NextResponse.json({
+            success: true,
+            filePath: `/images/uploads/${fileName}`
         });
 
     } catch (error) {

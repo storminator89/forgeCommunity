@@ -11,7 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { User, Calendar, Edit, Trash, ArrowLeft, Tag, BookOpen } from 'lucide-react';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
-import DOMPurify from 'isomorphic-dompurify';
+import { SanitizedHtml } from '@/components/SanitizedHtml';
 import { Card } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -180,7 +180,7 @@ export default function ArticlePage() {
                 <UserNav />
               </div>
             </div>
-            
+
             {/* Article Title Section */}
             <div className="py-6 flex flex-col gap-4">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -213,9 +213,9 @@ export default function ArticlePage() {
                   </div>
                   <div className="flex gap-1.5">
                     {article.tags.map((tag) => (
-                      <Badge 
-                        key={tag.id} 
-                        variant="secondary" 
+                      <Badge
+                        key={tag.id}
+                        variant="secondary"
                         className="text-xs bg-muted/40 hover:bg-muted/60 transition-colors"
                       >
                         {tag.name}
@@ -248,7 +248,8 @@ export default function ArticlePage() {
                     </div>
                   )}
                   <div className="p-6 sm:p-8 sm:pt-10">
-                    <div 
+                    <SanitizedHtml
+                      html={article.content}
                       className="prose prose-neutral dark:prose-invert max-w-none 
                         prose-headings:font-semibold prose-headings:tracking-tight
                         prose-h1:text-3xl prose-h2:text-2xl prose-h3:text-xl
@@ -267,9 +268,6 @@ export default function ArticlePage() {
                         prose-li:before:bg-primary/40
                         [&_ul_li]:mt-2 first:[&_ul_li]:mt-0
                         prose-hr:border-border/40"
-                      dangerouslySetInnerHTML={{ 
-                        __html: DOMPurify.sanitize(article.content) 
-                      }} 
                     />
                   </div>
                 </div>

@@ -6,6 +6,7 @@ import { ThumbsUp, MessageSquare, Edit, Trash, ChevronDown, ChevronUp } from 'lu
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { motion, AnimatePresence } from 'framer-motion'
 import { CommentSection } from './CommentSection'
+import { SanitizedHtml } from '@/components/SanitizedHtml'
 
 const DEFAULT_AVATAR_URL = 'https://via.placeholder.com/150'
 
@@ -118,9 +119,9 @@ export function PostCard({
         </CardHeader>
 
         <CardContent className="pt-4 px-4">
-          <div
+          <SanitizedHtml
+            html={post.content}
             className="prose dark:prose-invert max-w-none mb-4"
-            dangerouslySetInnerHTML={{ __html: post.content }}
           />
         </CardContent>
 
@@ -158,9 +159,8 @@ export function PostCard({
                       variant="ghost"
                       size="sm"
                       onClick={() => onLike(post.id)}
-                      className={`hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center space-x-1 rounded-md p-2 transition-colors duration-200 ${
-                        post.isLiked ? 'text-primary' : 'text-gray-500'
-                      }`}
+                      className={`hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center space-x-1 rounded-md p-2 transition-colors duration-200 ${post.isLiked ? 'text-primary' : 'text-gray-500'
+                        }`}
                       disabled={isLoading}
                     >
                       <ThumbsUp className="h-4 w-4" />

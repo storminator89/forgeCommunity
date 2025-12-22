@@ -8,6 +8,9 @@ import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Pencil } from 'lucide-react';
 import { QuizRenderer } from './QuizRenderer';
+import { SanitizedHtml } from '@/components/SanitizedHtml';
+import { getSafeEmbedUrl, getYouTubeEmbedUrl as getSecureYouTubeEmbedUrl } from '@/lib/security';
+import { AlertTriangle } from 'lucide-react';
 
 interface ContentRendererProps {
   content: CourseContent;
@@ -19,7 +22,7 @@ interface ContentRendererProps {
 export function ContentRenderer({ content, isEditing: externalIsEditing, onSave, onEditToggle }: ContentRendererProps) {
   const [internalIsEditing, setInternalIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState('');
-  
+
   useEffect(() => {
     if (content.type !== 'QUIZ') {
       setEditedContent(content.content as string || '');
@@ -68,8 +71,8 @@ export function ContentRenderer({ content, isEditing: externalIsEditing, onSave,
             <div className="space-y-2">
               <label className="text-sm font-medium text-muted-foreground">
                 {content.type === 'VIDEO' ? 'YouTube URL' :
-                 content.type === 'AUDIO' ? 'Audio URL' :
-                 'H5P Content ID'}
+                  content.type === 'AUDIO' ? 'Audio URL' :
+                    'H5P Content ID'}
               </label>
               <Input
                 type="url"
@@ -77,22 +80,22 @@ export function ContentRenderer({ content, isEditing: externalIsEditing, onSave,
                 onChange={(e) => setEditedContent(e.target.value)}
                 placeholder={
                   content.type === 'VIDEO' ? 'YouTube URL eingeben' :
-                  content.type === 'AUDIO' ? 'Audio URL eingeben' :
-                  'H5P Content ID oder URL eingeben'
+                    content.type === 'AUDIO' ? 'Audio URL eingeben' :
+                      'H5P Content ID oder URL eingeben'
                 }
                 className="w-full"
               />
             </div>
           )}
           <div className="flex justify-end space-x-2 pt-4">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => handleEditToggle(false)}
               className="px-4"
             >
               Abbrechen
             </Button>
-            <Button 
+            <Button
               onClick={handleSave}
               className="px-4"
             >
@@ -109,32 +112,32 @@ export function ContentRenderer({ content, isEditing: externalIsEditing, onSave,
       case 'TEXT':
         return (
           <div className="prose dark:prose-invert max-w-none p-6 bg-card rounded-lg">
-            <div dangerouslySetInnerHTML={{ __html: content.content as string }} />
+            <SanitizedHtml html={content.content as string} />
           </div>
         );
 
       case 'VIDEO': {
-        const getYouTubeEmbedUrl = (url: string) => {
-          try {
-            let videoId = '';
-            if (url.includes('youtu.be/')) {
-              videoId = url.split('youtu.be/')[1].split('?')[0];
-            } else if (url.includes('youtube.com')) {
-              const urlParams = new URLSearchParams(url.split('?')[1]);
-              videoId = urlParams.get('v') || '';
-            }
-            return videoId ? `https://www.youtube.com/embed/${videoId}` : url;
-          } catch (error) {
-            console.error('Error parsing YouTube URL:', error);
-            return url;
-          }
-        };
+        const videoUrl = content.content as string;
+        const safeUrl = getSecureYouTubeEmbedUrl(videoUrl) || getSafeEmbedUrl(videoUrl, 'video');
+
+        if (!safeUrl) {
+          return (
+            <div className="bg-card rounded-lg p-6">
+              <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                <div className="flex items-center gap-3 text-yellow-700 dark:text-yellow-400">
+                  <AlertTriangle className="h-5 w-5" />
+                  <span>Diese Video-URL wird aus Sicherheitsgründen nicht unterstützt.</span>
+                </div>
+              </div>
+            </div>
+          );
+        }
 
         return (
           <div className="bg-card rounded-lg p-6">
             <div className="relative" style={{ paddingBottom: '56.25%', height: 0 }}>
               <iframe
-                src={getYouTubeEmbedUrl(content.content as string)}
+                src={safeUrl}
                 frameBorder="0"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
@@ -148,9 +151,9 @@ export function ContentRenderer({ content, isEditing: externalIsEditing, onSave,
       case 'AUDIO':
         return (
           <div className="bg-card rounded-lg p-6">
-            <audio 
-              src={content.content as string} 
-              controls 
+            <audio
+              src={content.content as string}
+              controls
               className="w-full"
             />
           </div>

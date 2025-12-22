@@ -12,11 +12,11 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent } from "@/components/ui/card";
-import { 
-  Menu, 
-  Search, 
-  Mail, 
-  MapPin, 
+import {
+  Menu,
+  Search,
+  Mail,
+  MapPin,
   Briefcase,
   Calendar,
   Users,
@@ -77,7 +77,7 @@ export default function Members() {
       const response = await fetch('/api/admin/users');
       if (!response.ok) throw new Error('Failed to fetch members');
       const data = await response.json();
-      
+
       const transformedMembers: Member[] = data.map((user: any) => ({
         id: user.id,
         name: user.name,
@@ -131,7 +131,7 @@ export default function Members() {
     result.sort((a, b) => {
       switch (sortBy) {
         case 'name':
-          return sortOrder === 'asc' 
+          return sortOrder === 'asc'
             ? a.name.localeCompare(b.name)
             : b.name.localeCompare(a.name);
         case 'joinedAt':
@@ -189,7 +189,7 @@ export default function Members() {
               <ThemeToggle />
               <UserNav />
             </div>
-        </div>
+          </div>
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 lg:p-8">
@@ -199,7 +199,7 @@ export default function Members() {
                 {[
                   { label: 'Alle Mitglieder', value: members.length },
                   { label: 'Aktive Mitglieder', value: members.filter(m => m.followers > 0).length },
-                  { label: 'Durchschn. Skills', value: Math.round(members.reduce((acc, m) => acc + m.skills.length, 0) / members.length) },
+                  { label: 'Durchschn. Skills', value: members.length > 0 ? Math.round(members.reduce((acc, m) => acc + m.skills.length, 0) / members.length) : 0 },
                   { label: 'Neue diesen Monat', value: members.filter(m => new Date(m.joinedAt) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)).length }
                 ].map((stat, i) => (
                   <Card key={i} className="bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm">
@@ -280,13 +280,12 @@ export default function Members() {
                             <div
                               key={skill}
                               className="flex items-center hover:bg-accent rounded px-2 py-1 cursor-pointer transition-colors"
-                              onClick={() => setSelectedSkills(prev => 
+                              onClick={() => setSelectedSkills(prev =>
                                 prev.includes(skill) ? prev.filter(s => s !== skill) : [...prev, skill]
                               )}
                             >
-                              <div className={`w-3 h-3 border rounded-sm mr-2 transition-colors ${
-                                selectedSkills.includes(skill) ? 'bg-primary border-primary' : 'border-input'
-                              }`} />
+                              <div className={`w-3 h-3 border rounded-sm mr-2 transition-colors ${selectedSkills.includes(skill) ? 'bg-primary border-primary' : 'border-input'
+                                }`} />
                               <span className="text-sm">{skill}</span>
                             </div>
                           ))}
@@ -299,13 +298,12 @@ export default function Members() {
                             <div
                               key={role}
                               className="flex items-center hover:bg-accent rounded px-2 py-1 cursor-pointer transition-colors"
-                              onClick={() => setSelectedRoles(prev => 
+                              onClick={() => setSelectedRoles(prev =>
                                 prev.includes(role) ? prev.filter(r => r !== role) : [...prev, role]
                               )}
                             >
-                              <div className={`w-3 h-3 border rounded-sm mr-2 transition-colors ${
-                                selectedRoles.includes(role) ? 'bg-primary border-primary' : 'border-input'
-                              }`} />
+                              <div className={`w-3 h-3 border rounded-sm mr-2 transition-colors ${selectedRoles.includes(role) ? 'bg-primary border-primary' : 'border-input'
+                                }`} />
                               <span className="text-sm">{role}</span>
                             </div>
                           ))}
@@ -318,24 +316,24 @@ export default function Members() {
                     <DropdownMenuTrigger asChild>
                       <Button variant="outline" className="min-w-[130px]">
                         <SlidersHorizontal className="w-4 h-4 mr-2" />
-                        {sortBy === 'joinedAt' ? 'Datum' : 
-                         sortBy === 'followers' ? 'Follower' : 'Name'} {sortOrder === 'asc' ? '↑' : '↓'}
+                        {sortBy === 'joinedAt' ? 'Datum' :
+                          sortBy === 'followers' ? 'Follower' : 'Name'} {sortOrder === 'asc' ? '↑' : '↓'}
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-[180px]">
-                      <DropdownMenuItem 
+                      <DropdownMenuItem
                         onClick={() => handleSort('name')}
                         className="flex items-center justify-between"
                       >
                         Name {sortBy === 'name' && <span className="text-primary">{sortOrder === 'asc' ? '↑' : '↓'}</span>}
                       </DropdownMenuItem>
-                      <DropdownMenuItem 
+                      <DropdownMenuItem
                         onClick={() => handleSort('joinedAt')}
                         className="flex items-center justify-between"
                       >
                         Datum {sortBy === 'joinedAt' && <span className="text-primary">{sortOrder === 'asc' ? '↑' : '↓'}</span>}
                       </DropdownMenuItem>
-                      <DropdownMenuItem 
+                      <DropdownMenuItem
                         onClick={() => handleSort('followers')}
                         className="flex items-center justify-between"
                       >
@@ -395,7 +393,7 @@ export default function Members() {
                   </div>
                 ) : (
                   <div className={
-                    viewMode === 'grid' 
+                    viewMode === 'grid'
                       ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
                       : "flex flex-col gap-4"
                   }>

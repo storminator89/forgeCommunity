@@ -108,8 +108,6 @@ export async function PUT(
   try {
     const session = await getServerSession(authOptions)
 
-    console.log("Update User Session:", session) // Debugging
-
     if (!session?.user) {
       return NextResponse.json(
         { error: 'Nicht authentifiziert' },
@@ -220,8 +218,6 @@ export async function DELETE(
 ) {
   try {
     const session = await getServerSession(authOptions)
-
-    console.log("Delete User Session:", session) // Debugging
 
     if (!session?.user) {
       return NextResponse.json(

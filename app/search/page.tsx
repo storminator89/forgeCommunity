@@ -7,13 +7,13 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  Search, 
-  Book, 
-  Calendar, 
-  Users, 
-  MessageSquare, 
-  X, 
+import {
+  Search,
+  Book,
+  Calendar,
+  Users,
+  MessageSquare,
+  X,
   Loader2,
   ThumbsUp,
   MessageCircle,
@@ -33,7 +33,7 @@ import { toast } from 'react-toastify';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { Progress } from "@/components/ui/progress";
-import DOMPurify from 'isomorphic-dompurify';
+import { SanitizedHtml } from '@/components/SanitizedHtml';
 
 interface SearchResult {
   id: string;
@@ -95,8 +95,7 @@ interface SearchResponse {
 }
 
 const SafeHTML = ({ html }: { html: string }) => {
-  const sanitizedHtml = DOMPurify.sanitize(html);
-  return <div dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />;
+  return <SanitizedHtml html={html} className="inline" />;
 };
 
 export default function SearchPage() {
@@ -166,7 +165,7 @@ export default function SearchPage() {
   };
 
   const renderIcon = (type: string) => {
-    switch(type) {
+    switch (type) {
       case 'course': return <Book className="h-5 w-5 text-blue-500" />;
       case 'event': return <Calendar className="h-5 w-5 text-green-500" />;
       case 'member': return <Users className="h-5 w-5 text-purple-500" />;
@@ -382,7 +381,7 @@ export default function SearchPage() {
                             {searchTerm ? 'Keine Ergebnisse gefunden' : 'Geben Sie einen Suchbegriff ein'}
                           </h3>
                           <p className="text-gray-500 dark:text-gray-400">
-                            {searchTerm 
+                            {searchTerm
                               ? "Versuchen Sie es mit anderen Suchbegriffen oder wählen Sie eine andere Kategorie."
                               : "Suchen Sie nach Kursen, Events, Mitgliedern oder Beiträgen."}
                           </p>
@@ -391,151 +390,151 @@ export default function SearchPage() {
                         <>
                           {results.map((result) => (
                             <motion.div
-                            key={`${result.type}-${result.id}`}
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -20 }}
-                            transition={{ duration: 0.2 }}
-                            className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md mb-4 hover:shadow-lg transition-shadow duration-200 cursor-pointer"
-                            onClick={() => handleItemClick(result)}
-                          >
-                            <div className="flex items-start space-x-4">
-                              {renderAvatar(result)}
-                              <div className="flex-grow min-w-0">
-                                <div className="flex items-center justify-between">
-                                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white truncate">
-                                    {result.title}
-                                  </h3>
-                                  {renderIcon(result.type)}
-                                </div>
-                                
-                                {result.type === 'member' && result.role && (
-                                  <div className="mt-1">
-                                    <Badge variant="outline" className="text-xs">
-                                      {result.role}
+                              key={`${result.type}-${result.id}`}
+                              initial={{ opacity: 0, y: 20 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -20 }}
+                              transition={{ duration: 0.2 }}
+                              className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md mb-4 hover:shadow-lg transition-shadow duration-200 cursor-pointer"
+                              onClick={() => handleItemClick(result)}
+                            >
+                              <div className="flex items-start space-x-4">
+                                {renderAvatar(result)}
+                                <div className="flex-grow min-w-0">
+                                  <div className="flex items-center justify-between">
+                                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white truncate">
+                                      {result.title}
+                                    </h3>
+                                    {renderIcon(result.type)}
+                                  </div>
+
+                                  {result.type === 'member' && result.role && (
+                                    <div className="mt-1">
+                                      <Badge variant="outline" className="text-xs">
+                                        {result.role}
+                                      </Badge>
+                                    </div>
+                                  )}
+
+                                  <div className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                                    <SafeHTML html={result.description} />
+                                  </div>
+
+                                  {result.category && (
+                                    <Badge variant="secondary" className="mt-2">
+                                      {result.category}
                                     </Badge>
-                                  </div>
-                                )}
+                                  )}
 
-                                <div className="text-sm text-gray-600 dark:text-gray-300 mt-1">
-                                  <SafeHTML html={result.description} />
-                                </div>
+                                  {renderStats(result)}
+                                  {renderTags(result)}
 
-                                {result.category && (
-                                  <Badge variant="secondary" className="mt-2">
-                                    {result.category}
-                                  </Badge>
-                                )}
+                                  {result.type === 'member' && result.badges && result.badges.length > 0 && (
+                                    <div className="flex flex-wrap gap-2 mt-2">
+                                      {result.badges.slice(0, 3).map((badge, index) => (
+                                        <Badge
+                                          key={index}
+                                          variant="outline"
+                                          className="flex items-center bg-yellow-50 dark:bg-yellow-900/20"
+                                        >
+                                          <Award className="h-3 w-3 mr-1 text-yellow-500" />
+                                          {badge.name}
+                                        </Badge>
+                                      ))}
+                                      {result.badges.length > 3 && (
+                                        <Badge variant="outline">
+                                          +{result.badges.length - 3} weitere
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  )}
 
-                                {renderStats(result)}
-                                {renderTags(result)}
-
-                                {result.type === 'member' && result.badges && result.badges.length > 0 && (
-                                  <div className="flex flex-wrap gap-2 mt-2">
-                                    {result.badges.slice(0, 3).map((badge, index) => (
-                                      <Badge 
-                                        key={index}
-                                        variant="outline"
-                                        className="flex items-center bg-yellow-50 dark:bg-yellow-900/20"
-                                      >
-                                        <Award className="h-3 w-3 mr-1 text-yellow-500" />
-                                        {badge.name}
-                                      </Badge>
-                                    ))}
-                                    {result.badges.length > 3 && (
-                                      <Badge variant="outline">
-                                        +{result.badges.length - 3} weitere
-                                      </Badge>
-                                    )}
-                                  </div>
-                                )}
-
-                                <div className="flex items-center justify-between mt-2 text-xs text-gray-500 dark:text-gray-400">
-                                  <div className="flex items-center space-x-2">
-                                    {result.author && (
+                                  <div className="flex items-center justify-between mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                    <div className="flex items-center space-x-2">
+                                      {result.author && (
+                                        <span className="flex items-center">
+                                          <User className="h-3 w-3 mr-1" />
+                                          {result.author}
+                                        </span>
+                                      )}
+                                      {result.instructor && (
+                                        <span className="flex items-center">
+                                          <Briefcase className="h-3 w-3 mr-1" />
+                                          {result.instructor}
+                                        </span>
+                                      )}
+                                    </div>
+                                    {result.createdAt && (
                                       <span className="flex items-center">
-                                        <User className="h-3 w-3 mr-1" />
-                                        {result.author}
-                                      </span>
-                                    )}
-                                    {result.instructor && (
-                                      <span className="flex items-center">
-                                        <Briefcase className="h-3 w-3 mr-1" />
-                                        {result.instructor}
+                                        <Clock className="h-3 w-3 mr-1" />
+                                        {getTimeAgo(result.createdAt)}
                                       </span>
                                     )}
                                   </div>
-                                  {result.createdAt && (
-                                    <span className="flex items-center">
-                                      <Clock className="h-3 w-3 mr-1" />
-                                      {getTimeAgo(result.createdAt)}
-                                    </span>
+
+                                  {result.time && (
+                                    <div className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                                      <div className="flex items-center">
+                                        <Clock className="h-4 w-4 mr-1" />
+                                        {result.time.start} - {result.time.end} ({result.time.timezone})
+                                      </div>
+                                    </div>
                                   )}
                                 </div>
-
-                                {result.time && (
-                                  <div className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                                    <div className="flex items-center">
-                                      <Clock className="h-4 w-4 mr-1" />
-                                      {result.time.start} - {result.time.end} ({result.time.timezone})
-                                    </div>
-                                  </div>
-                                )}
                               </div>
+                            </motion.div>
+                          ))}
+
+                          {totalPages > 1 && (
+                            <div className="flex justify-center space-x-2 mt-6">
+                              <Button
+                                variant="outline"
+                                onClick={() => setPage(p => Math.max(1, p - 1))}
+                                disabled={page === 1}
+                                className="flex items-center"
+                              >
+                                <span className="mr-2">←</span>
+                                Vorherige
+                              </Button>
+                              <div className="flex items-center space-x-2">
+                                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                                  .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
+                                  .map((p, i, arr) => (
+                                    <React.Fragment key={p}>
+                                      {i > 0 && arr[i - 1] !== p - 1 && (
+                                        <span className="text-gray-500">...</span>
+                                      )}
+                                      <Button
+                                        variant={p === page ? "default" : "outline"}
+                                        onClick={() => setPage(p)}
+                                        className="w-10 h-10"
+                                      >
+                                        {p}
+                                      </Button>
+                                    </React.Fragment>
+                                  ))}
+                              </div>
+                              <Button
+                                variant="outline"
+                                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                disabled={page === totalPages}
+                                className="flex items-center"
+                              >
+                                Nächste
+                                <span className="ml-2">→</span>
+                              </Button>
                             </div>
-                          </motion.div>
-                        ))}
-                        
-                        {totalPages > 1 && (
-                          <div className="flex justify-center space-x-2 mt-6">
-                            <Button
-                              variant="outline"
-                              onClick={() => setPage(p => Math.max(1, p - 1))}
-                              disabled={page === 1}
-                              className="flex items-center"
-                            >
-                              <span className="mr-2">←</span>
-                              Vorherige
-                            </Button>
-                            <div className="flex items-center space-x-2">
-                              {Array.from({ length: totalPages }, (_, i) => i + 1)
-                                .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
-                                .map((p, i, arr) => (
-                                  <React.Fragment key={p}>
-                                    {i > 0 && arr[i - 1] !== p - 1 && (
-                                      <span className="text-gray-500">...</span>
-                                    )}
-                                    <Button
-                                      variant={p === page ? "default" : "outline"}
-                                      onClick={() => setPage(p)}
-                                      className="w-10 h-10"
-                                    >
-                                      {p}
-                                    </Button>
-                                  </React.Fragment>
-                                ))}
-                            </div>
-                            <Button
-                              variant="outline"
-                              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                              disabled={page === totalPages}
-                              className="flex items-center"
-                            >
-                              Nächste
-                              <span className="ml-2">→</span>
-                            </Button>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </TabsContent>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </Tabs>
-        </div>
-      </main>
+                          )}
+                        </>
+                      )}
+                    </TabsContent>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </Tabs>
+          </div>
+        </main>
+      </div>
     </div>
-  </div>
-);
+  );
 }

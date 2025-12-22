@@ -169,14 +169,15 @@ const MenuBar = ({ editor }: { editor: any }) => {
   )
 }
 
-export function Editor({ 
-  content, 
-  onChange, 
-  placeholder = 'Beginnen Sie hier mit der Eingabe...', 
+export function Editor({
+  content,
+  onChange,
+  placeholder = 'Beginnen Sie hier mit der Eingabe...',
   className = '',
-  readOnly = false 
+  readOnly = false
 }: EditorProps) {
   const editor = useEditor({
+    immediatelyRender: false,
     extensions: [
       StarterKit.configure({
         heading: {

@@ -13,7 +13,7 @@ import Link from 'next/link';
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { motion, AnimatePresence } from 'framer-motion';
-import DOMPurify from 'isomorphic-dompurify';
+import { SanitizedHtml } from '@/components/SanitizedHtml';
 import Image from 'next/image';
 
 interface Article {
@@ -67,17 +67,17 @@ export default function KnowledgeBase() {
     fetchArticles();
   }, []);
 
-  const categories = useMemo(() => 
+  const categories = useMemo(() =>
     ['All', ...new Set(articles.map(article => article.category))],
     [articles]
   );
 
-  const tags = useMemo(() => 
+  const tags = useMemo(() =>
     ['All', ...new Set(articles.flatMap(article => article.tags.map(tag => tag.name)))],
     [articles]
   );
 
-  const filteredArticles = useMemo(() => 
+  const filteredArticles = useMemo(() =>
     articles.filter(article =>
       (selectedCategory === 'All' || article.category === selectedCategory) &&
       (selectedTag === 'All' || article.tags.some(tag => tag.name === selectedTag)) &&
@@ -161,7 +161,7 @@ export default function KnowledgeBase() {
                         Filter
                       </h2>
                     </div>
-                    
+
                     {/* Kategorien */}
                     <div className="p-4 border-b border-border/40">
                       <h3 className="text-sm font-medium text-muted-foreground mb-3 flex items-center">
@@ -173,20 +173,19 @@ export default function KnowledgeBase() {
                           <button
                             key={category}
                             onClick={() => setSelectedCategory(category)}
-                            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
-                              selectedCategory === category 
-                                ? 'bg-primary text-primary-foreground' 
+                            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all duration-200 ${selectedCategory === category
+                                ? 'bg-primary text-primary-foreground'
                                 : 'hover:bg-muted/50 text-foreground'
-                            }`}
+                              }`}
                           >
                             <span className="flex items-center">
                               {category === 'All' ? 'Alle Kategorien' : category}
                             </span>
-                            <Badge 
+                            <Badge
                               variant={selectedCategory === category ? "outline" : "secondary"}
                               className={`ml-auto ${selectedCategory === category ? 'border-primary-foreground/30 text-primary-foreground' : ''}`}
                             >
-                              {category === 'All' 
+                              {category === 'All'
                                 ? articles.length
                                 : articles.filter(a => a.category === category).length
                               }
@@ -204,9 +203,9 @@ export default function KnowledgeBase() {
                           Tags
                         </h3>
                         {selectedTag !== 'All' && (
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => setSelectedTag('All')}
                             className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
                           >
@@ -216,19 +215,18 @@ export default function KnowledgeBase() {
                       </div>
                       <div className="flex flex-wrap gap-1.5">
                         {Array.from(new Set(articles.flatMap(article => article.tags.map(tag => tag.name)))).map((tag) => (
-                          <Badge 
+                          <Badge
                             key={tag}
                             variant={selectedTag === tag ? "default" : "secondary"}
-                            className={`cursor-pointer transition-all duration-200 text-xs ${
-                              selectedTag === tag 
-                                ? 'bg-primary hover:bg-primary/90 text-primary-foreground' 
+                            className={`cursor-pointer transition-all duration-200 text-xs ${selectedTag === tag
+                                ? 'bg-primary hover:bg-primary/90 text-primary-foreground'
                                 : 'hover:bg-secondary/80'
-                            }`}
+                              }`}
                             onClick={() => setSelectedTag(tag === selectedTag ? 'All' : tag)}
                           >
                             {tag}
                             <span className="ml-1.5 px-1 py-0.5 rounded-sm bg-background/10 text-[10px]">
-                              {articles.filter(article => 
+                              {articles.filter(article =>
                                 article.tags.some(t => t.name === tag)
                               ).length}
                             </span>
@@ -279,7 +277,7 @@ export default function KnowledgeBase() {
                                 </p>
                               </div>
                               {(selectedCategory !== 'All' || selectedTag !== 'All') && (
-                                <Button 
+                                <Button
                                   variant="outline"
                                   onClick={() => {
                                     setSelectedCategory('All');
@@ -326,11 +324,11 @@ export default function KnowledgeBase() {
                                         {new Date(article.createdAt).toLocaleDateString()}
                                       </span>
                                     </div>
-                                    
+
                                     <h3 className="text-xl font-semibold text-foreground mb-2 group-hover:text-primary transition-colors">
                                       {article.title}
                                     </h3>
-                                    
+
                                     <div className="flex items-center gap-2 mb-4">
                                       <div className="flex items-center">
                                         <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center">
@@ -342,18 +340,16 @@ export default function KnowledgeBase() {
                                       </div>
                                     </div>
 
-                                    <div 
+                                    <SanitizedHtml
+                                      html={article.content.substring(0, 150) + '...'}
                                       className="text-muted-foreground mb-4 line-clamp-2"
-                                      dangerouslySetInnerHTML={{
-                                        __html: DOMPurify.sanitize(article.content.substring(0, 150) + '...')
-                                      }}
                                     />
 
                                     <div className="flex flex-wrap gap-2 mb-4">
                                       {article.tags.map((tag) => (
-                                        <Badge 
-                                          key={tag.id} 
-                                          variant="secondary" 
+                                        <Badge
+                                          key={tag.id}
+                                          variant="secondary"
                                           className="text-xs px-2 py-0.5 hover:bg-secondary/80 transition-colors"
                                           onClick={(e) => {
                                             e.preventDefault();
@@ -366,8 +362,8 @@ export default function KnowledgeBase() {
                                       ))}
                                     </div>
 
-                                    <Button 
-                                      variant="ghost" 
+                                    <Button
+                                      variant="ghost"
                                       className="group/btn hover:bg-primary hover:text-primary-foreground p-0"
                                     >
                                       Weiterlesen

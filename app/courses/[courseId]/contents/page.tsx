@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useState, useMemo, useRef, use } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import dynamic from 'next/dynamic'
@@ -17,7 +17,8 @@ import { ChevronLeft, ChevronRight, Edit, FileText, Video, Music, Box } from 'lu
 import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-export default function CourseContentsPage({ params }: { params: { courseId: string } }) {
+export default function CourseContentsPage({ params }: { params: Promise<{ courseId: string }> }) {
+  const { courseId } = use(params);
   const router = useRouter();
   const { data: session, status } = useSession();
   const [mainContents, setMainContents] = useState<CourseContent[]>([]);
@@ -45,7 +46,7 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
   const fetchCourse = useCallback(async () => {
     try {
       setIsLoading(true);
-      const response = await fetch(`/api/courses/${params.courseId}`);
+      const response = await fetch(`/api/courses/${courseId}`);
       if (!response.ok) {
         throw new Error('Failed to fetch course');
       }
@@ -60,7 +61,7 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
     } finally {
       setIsLoading(false);
     }
-  }, [params.courseId]);
+  }, [courseId]);
 
   useEffect(() => {
     fetchCourse();
@@ -188,7 +189,7 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
   const fetchContents = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/courses/${params.courseId}/contents`);
+      const response = await fetch(`/api/courses/${courseId}/contents`);
       if (!response.ok) {
         throw new Error('Failed to fetch contents');
       }
@@ -203,7 +204,7 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
     } finally {
       setIsLoading(false);
     }
-  }, [params.courseId]);
+  }, [courseId]);
 
   useEffect(() => {
     if (status === 'authenticated') {
@@ -232,9 +233,9 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
   // Handler zum Hinzufügen eines neuen Hauptthemas
   const handleMainContentSubmit = useCallback(async (title: string) => {
     if (!title.trim()) return;
-    
+
     try {
-      const response = await fetch(`/api/courses/${params.courseId}/contents`, {
+      const response = await fetch(`/api/courses/${courseId}/contents`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -252,11 +253,11 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
       }
 
       const newContent = await response.json();
-      
+
       // Update local state
       setMainContents(prev => [...prev, newContent]);
       setNewMainContentTitle('');
-      
+
       setAlertMessage({
         type: 'success',
         message: 'Hauptthema erfolgreich erstellt.',
@@ -268,7 +269,7 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
         message: error instanceof Error ? error.message : 'Failed to create main content.',
       });
     }
-  }, [params.courseId]);
+  }, [courseId]);
 
   // Handler zum Hinzufügen eines neuen Unterthemas
   const handleContentSubmit = useCallback(async (title: string) => {
@@ -280,7 +281,7 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
   // Handler for content type selection
   const handleTypeSelection = useCallback(async (selectedType: 'TEXT' | 'VIDEO' | 'AUDIO') => {
     try {
-      const response = await fetch(`/api/courses/${params.courseId}/contents`, {
+      const response = await fetch(`/api/courses/${courseId}/contents`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -303,9 +304,9 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
           return prev.map(content =>
             content.id === isAddingSubContent
               ? {
-                  ...content,
-                  subContents: [...(content.subContents || []), newContent],
-                }
+                ...content,
+                subContents: [...(content.subContents || []), newContent],
+              }
               : content
           );
         } else {
@@ -326,13 +327,13 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
         message: error instanceof Error ? error.message : 'Failed to create content.',
       });
     }
-  }, [params.courseId, mainContents, newMainContentTitle, isAddingSubContent]);
+  }, [courseId, mainContents, newMainContentTitle, isAddingSubContent]);
 
   const handleSubContentSubmit = useCallback(async (title: string) => {
     if (!currentMainContentId) return;
-    
+
     try {
-      const response = await fetch(`/api/courses/${params.courseId}/contents`, {
+      const response = await fetch(`/api/courses/${courseId}/contents`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -350,7 +351,7 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
       }
 
       const newContent = await response.json();
-      
+
       // Update the local state directly
       setMainContents(prev => prev.map(content => {
         if (content.id === currentMainContentId) {
@@ -363,7 +364,7 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
       }));
 
       setForceUpdateValue(prev => prev + 1);
-      
+
       setAlertMessage({
         type: 'success',
         message: 'Unterthema erfolgreich erstellt',
@@ -378,12 +379,12 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
       });
       throw error;
     }
-  }, [params.courseId, currentMainContentId]);
+  }, [courseId, currentMainContentId]);
 
   // Handler zum Aktualisieren eines Inhalts (Hauptthema oder Unterthema)
   const handleContentUpdate = useCallback(async (updatedContent: CourseContent) => {
     try {
-      const response = await fetch(`/api/courses/${params.courseId}/contents/${updatedContent.id}`, {
+      const response = await fetch(`/api/courses/${courseId}/contents/${updatedContent.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -396,7 +397,7 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
       }
 
       const updatedData = await response.json();
-      
+
       // Aktualisiere den State mit dem aktualisierten Inhalt
       setMainContents(prev =>
         prev.map(content => {
@@ -428,7 +429,7 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
         message: error instanceof Error ? error.message : 'Failed to update content.',
       });
     }
-  }, [params.courseId]);
+  }, [courseId]);
 
   // Handler zum Initiieren des Löschvorgangs
   const handleDeleteContent = useCallback(async (content: CourseContent) => {
@@ -437,12 +438,12 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
       setMainContents(prev => {
         // Kopie des States erstellen
         const newContents = [...prev];
-        
+
         // Hauptthema finden, das das zu löschende Unterthema enthält
-        const parentIndex = newContents.findIndex(main => 
+        const parentIndex = newContents.findIndex(main =>
           main.subContents?.some(sub => sub.id === content.id)
         );
-        
+
         if (parentIndex !== -1) {
           // Unterthema aus dem subContents Array filtern
           newContents[parentIndex] = {
@@ -452,12 +453,12 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
             ) || []
           };
         }
-        
+
         return newContents;
       });
 
       // API-Aufruf zum Löschen
-      const response = await fetch(`/api/courses/${params.courseId}/contents/${content.id}`, {
+      const response = await fetch(`/api/courses/${courseId}/contents/${content.id}`, {
         method: 'DELETE',
       });
 
@@ -484,11 +485,11 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
         type: 'error',
         message: 'Fehler beim Löschen des Unterthemas'
       });
-      
+
       // Optional: State wiederherstellen bei Fehler
       await fetchContents();
     }
-  }, [params.courseId, selectedContentId, fetchContents]);
+  }, [courseId, selectedContentId, fetchContents]);
 
   // Handler zum Bestätigen des Löschvorgangs
   const confirmDeleteContent = useCallback(async () => {
@@ -496,7 +497,7 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
     if (!content) return;
 
     try {
-      const response = await fetch(`/api/courses/${params.courseId}/contents/${content.id}`, {
+      const response = await fetch(`/api/courses/${courseId}/contents/${content.id}`, {
         method: 'DELETE',
       });
 
@@ -512,7 +513,7 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
         if (!content.parentId) {
           return prev.filter(c => c.id !== content.id);
         }
-        
+
         // If deleting a subtheme
         return prev.map(main => {
           if (main.subContents) {
@@ -537,7 +538,7 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
       console.error('Error deleting content:', error);
       setAlertMessage({ type: 'error', message: 'Fehler beim Löschen des Inhalts.' });
     }
-  }, [params.courseId, mainContents, selectedContentId]);
+  }, [courseId, mainContents, selectedContentId]);
 
   // Funktion zum Generieren des YouTube Embed Codes aus einer URL
   const getYouTubeEmbedUrl = useCallback((url: string) => {
@@ -546,7 +547,7 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
     try {
       // Extract video ID from URL
       let videoId = '';
-      
+
       if (url.includes('youtu.be/')) {
         videoId = url.split('youtu.be/')[1].split('?')[0];
       } else if (url.includes('youtube.com')) {
@@ -598,7 +599,7 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
     try {
       // Update the order on the server
       const updatePromises = [
-        fetch(`/api/courses/${params.courseId}/contents/${newSubContents[currentIndex].id}`, {
+        fetch(`/api/courses/${courseId}/contents/${newSubContents[currentIndex].id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -609,7 +610,7 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
             parentId: mainContentId
           }),
         }),
-        fetch(`/api/courses/${params.courseId}/contents/${newSubContents[currentIndex - 1].id}`, {
+        fetch(`/api/courses/${courseId}/contents/${newSubContents[currentIndex - 1].id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -623,7 +624,7 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
       ];
 
       await Promise.all(updatePromises);
-      
+
       // Update local state
       setMainContents(prev => prev.map(content => {
         if (content.id === mainContentId) {
@@ -637,7 +638,7 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
       console.error('Error updating sub contents order:', error);
       setAlertMessage({ type: 'error', message: 'Fehler beim Aktualisieren der Reihenfolge.' });
     }
-  }, [params.courseId, mainContents]);
+  }, [courseId, mainContents]);
 
   // Handler zum Verschieben eines Unterthemas nach unten
   const handleMoveSubContentDown = useCallback(async (mainContentId: string, subContentId: string) => {
@@ -659,7 +660,7 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
     try {
       // Update the order on the server
       const updatePromises = [
-        fetch(`/api/courses/${params.courseId}/contents/${newSubContents[currentIndex].id}`, {
+        fetch(`/api/courses/${courseId}/contents/${newSubContents[currentIndex].id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -670,7 +671,7 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
             parentId: mainContentId
           }),
         }),
-        fetch(`/api/courses/${params.courseId}/contents/${newSubContents[currentIndex + 1].id}`, {
+        fetch(`/api/courses/${courseId}/contents/${newSubContents[currentIndex + 1].id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -684,7 +685,7 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
       ];
 
       await Promise.all(updatePromises);
-      
+
       // Update local state
       setMainContents(prev => prev.map(content => {
         if (content.id === mainContentId) {
@@ -698,7 +699,7 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
       console.error('Error updating sub contents order:', error);
       setAlertMessage({ type: 'error', message: 'Fehler beim Aktualisieren der Reihenfolge.' });
     }
-  }, [params.courseId, mainContents]);
+  }, [courseId, mainContents]);
 
   // Handler zum Bearbeiten eines Inhalts
   const handleEditContent = useCallback((content: CourseContent) => {
@@ -709,7 +710,7 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
   // Handler for inline title editing
   const handleInlineEditSubmit = useCallback(async (contentId: string, newTitle: string) => {
     try {
-      const response = await fetch(`/api/courses/${params.courseId}/contents/${contentId}`, {
+      const response = await fetch(`/api/courses/${courseId}/contents/${contentId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -748,19 +749,19 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
       setIsInlineEditing(null);
       setInlineEditTitle('');
     }
-  }, [params.courseId, mainContents]);
+  }, [courseId, mainContents]);
 
   const handleContentSelect = useCallback((contentId: string) => {
     setSelectedContentId(contentId);
-    
+
     // Mark as visited if it's not null
     if (contentId) {
-      markPageAsVisited(params.courseId, contentId);
+      markPageAsVisited(courseId, contentId);
     }
-    
+
     // Find the selected content
     const content = findContentById(contentId, mainContents);
-    
+
     // If content is empty, automatically enter edit mode
     if (content && (!content.content || content.content.trim() === '')) {
       setEditingContentId(contentId);
@@ -769,7 +770,7 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
       setEditingContentId(null);
       setIsEditing(false);
     }
-    
+
     // Ensure parent topic is expanded when selecting content
     if (content?.parentId) {
       const parentContent = findContentById(content.parentId, mainContents);
@@ -777,11 +778,11 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
         setExpandedTopics(prev => new Set([...prev, parentContent.id]));
       }
     }
-  }, [params.courseId, mainContents, findContentById]);
+  }, [courseId, mainContents, findContentById]);
 
   const handleContentDrop = async (draggedId: string, targetId: string, position: "before" | "after" | "inside") => {
     try {
-      const response = await fetch(`/api/courses/${params.courseId}/contents/${draggedId}/move`, {
+      const response = await fetch(`/api/courses/${courseId}/contents/${draggedId}/move`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -854,7 +855,7 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
   return (
     <div className="flex flex-col lg:flex-row h-screen overflow-hidden bg-gradient-to-br from-background via-background/95 to-accent/10 dark:from-gray-900 dark:via-gray-900/95 dark:to-gray-800/10 transition-all duration-300">
       <Sidebar />
-      
+
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
         <header className="bg-background/80 dark:bg-gray-800/80 backdrop-blur-lg border-b border-border/40 shadow-sm sticky top-0 z-40 transition-colors duration-300">
@@ -876,7 +877,7 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto">
           <div className="flex h-full">
-            <div 
+            <div
               className="relative transition-all duration-300 ease-in-out"
               style={{ width: isTopicsSidebarOpen ? `${sidebarWidth}px` : '0px' }}
             >
@@ -909,7 +910,7 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
                   onMoveDown={handleMoveSubContentDown}
                   mainContentId={currentMainContentId}
                   mainTopicIndex={null}
-                  courseId={params.courseId}
+                  courseId={courseId}
                   courseName={course?.name || ''}
                   isLoading={isLoading}
                   forceUpdate={forceUpdateValue}
@@ -923,7 +924,7 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
                 onMouseDown={startResizing}
               />
             </div>
-            
+
             <div className={cn(
               "flex-1 overflow-y-auto transition-all duration-300 ease-in-out",
               !isTopicsSidebarOpen && "px-4 md:px-8 lg:px-12"
@@ -1003,7 +1004,7 @@ export default function CourseContentsPage({ params }: { params: { courseId: str
                                 ...selectedMainContent,
                                 ...updatedContent
                               };
-                              
+
                               setMainContents(prev =>
                                 prev.map(content => {
                                   if (content.id === selectedMainContent.id) {

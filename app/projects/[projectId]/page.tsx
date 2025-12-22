@@ -7,16 +7,17 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ThumbsUp, MessageSquare, ExternalLink, Edit, Trash, Upload, Share2, Bookmark, Calendar, User, Tag } from 'lucide-react';
+import { ThumbsUp, MessageSquare, ExternalLink, Edit, Trash, Upload, Share2, Calendar, User, Tag } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Sidebar } from "@/components/Sidebar";
-import { UserNav } from "@/components/user-nav"; 
+import { UserNav } from "@/components/user-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
 import Image from 'next/image';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { SanitizedHtml } from '@/components/SanitizedHtml';
 
 interface Tag {
   id: string;
@@ -51,7 +52,7 @@ interface Project {
   category: string;
   link: string;
   imageUrl?: string;
-  coverImage?: string;  
+  coverImage?: string;
   gradientFrom: string;
   gradientTo: string;
   createdAt: string;
@@ -70,7 +71,7 @@ export default function ProjectDetail() {
   const [comments, setComments] = useState<ProjectComment[]>([]);
   const [newComment, setNewComment] = useState('');
   const [isLiked, setIsLiked] = useState(false);
-  const [isBookmarked, setIsBookmarked] = useState(false);
+
   const [activeTab, setActiveTab] = useState('overview');
   const [isLoading, setIsLoading] = useState(true);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -121,7 +122,7 @@ export default function ProjectDetail() {
   useEffect(() => {
     const fetchComments = async () => {
       if (!params?.projectId) return;
-      
+
       try {
         const res = await fetch(`/api/projects/${params.projectId}/comments`);
         if (!res.ok) {
@@ -189,14 +190,14 @@ export default function ProjectDetail() {
       }
 
       const addedComment: ProjectComment = await res.json();
-      
+
       // Update both comments and project state
       setComments(prev => [...prev, addedComment]);
       setProject(prev => prev ? {
         ...prev,
         comments: [...prev.comments, addedComment]
       } : prev);
-      
+
       setNewComment('');
     } catch (error) {
       console.error('Error adding comment:', error);
@@ -307,58 +308,7 @@ export default function ProjectDetail() {
     }
   };
 
-  const handleBookmark = async () => {
-    if (!session || !project) {
-      alert('Bitte melde dich an, um das Projekt zu speichern.');
-      return;
-    }
 
-    try {
-      const res = await fetch(`/api/projects/${project.id}/bookmark`, {
-        method: isBookmarked ? 'DELETE' : 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || `Fehler beim ${isBookmarked ? 'Entfernen' : 'Hinzufügen'} des Lesezeichens.`);
-      }
-
-      setIsBookmarked(!isBookmarked);
-      
-      // Show feedback to user
-      const message = isBookmarked 
-        ? 'Projekt wurde aus deinen Lesezeichen entfernt' 
-        : 'Projekt wurde zu deinen Lesezeichen hinzugefügt';
-      alert(message);
-
-    } catch (error) {
-      console.error('Error bookmarking project:', error);
-      alert(error.message || 'Fehler beim Speichern des Projekts.');
-    }
-  };
-
-  // Check if project is bookmarked on load
-  useEffect(() => {
-    const checkBookmarkStatus = async () => {
-      if (!session?.user?.id || !project?.id) return;
-
-      try {
-        const res = await fetch(`/api/projects/${project.id}/bookmark/status`);
-        if (!res.ok) {
-          throw new Error('Fehler beim Laden des Lesezeichen-Status.');
-        }
-        const { isBookmarked: bookmarkStatus } = await res.json();
-        setIsBookmarked(bookmarkStatus);
-      } catch (error) {
-        console.error('Error checking bookmark status:', error);
-      }
-    };
-
-    checkBookmarkStatus();
-  }, [project?.id, session?.user?.id]);
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -426,7 +376,7 @@ export default function ProjectDetail() {
                         variant="outline"
                         size="sm"
                         className="flex items-center"
-                        onClick={() => handleShare(project.id)}
+                        onClick={() => handleShare()}
                       >
                         <Share2 className="w-4 h-4 mr-2" />
                         Teilen
@@ -453,8 +403,8 @@ export default function ProjectDetail() {
                 <div className="space-y-8">
                   {/* Description */}
                   <div className="prose dark:prose-invert prose-slate max-w-none">
-                    <div
-                      dangerouslySetInnerHTML={{ __html: project.description }}
+                    <SanitizedHtml
+                      html={project.description}
                       className="[&>h2]:text-2xl [&>h2]:font-bold [&>h2]:text-foreground [&>h2]:mt-8 [&>h2]:mb-4
                                  [&>p]:text-muted-foreground [&>p]:leading-relaxed [&>p]:mb-4
                                  [&>ul]:list-disc [&>ul]:pl-6 [&>ul]:mb-4 [&>ul]:text-muted-foreground

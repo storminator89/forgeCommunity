@@ -3,15 +3,15 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { 
-  format, 
-  startOfMonth, 
-  endOfMonth, 
-  eachDayOfInterval, 
-  isSameMonth, 
-  isSameDay, 
-  addMonths, 
-  subMonths, 
+import {
+  format,
+  startOfMonth,
+  endOfMonth,
+  eachDayOfInterval,
+  isSameMonth,
+  isSameDay,
+  addMonths,
+  subMonths,
   getISODay, // Verwenden Sie getISODay statt getDay
   startOfWeek,
   addDays,
@@ -24,15 +24,15 @@ import { Sidebar } from "@/components/Sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { 
-  ChevronLeft, 
-  ChevronRight, 
-  MapPin, 
-  Clock, 
-  Calendar as CalendarIcon, 
-  Search, 
-  Plus, 
-  Edit, 
+import {
+  ChevronLeft,
+  ChevronRight,
+  MapPin,
+  Clock,
+  Calendar as CalendarIcon,
+  Search,
+  Plus,
+  Edit,
   Trash2,
   Download,
   CalendarDays,
@@ -43,7 +43,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import EventForm from '@/components/EventForm';
 import { useToast } from '@/hooks/use-toast';
-import DOMPurify from 'isomorphic-dompurify';
+import { SanitizedHtml } from '@/components/SanitizedHtml';
 
 interface Event {
   id: string;
@@ -57,11 +57,6 @@ interface Event {
   timezone: string;
 }
 
-const sanitizeHTML = (html: string) => {
-  return {
-    __html: DOMPurify.sanitize(html)
-  };
-};
 
 type ViewType = 'month' | 'week' | 'list';
 
@@ -387,7 +382,7 @@ export default function Events() {
                         <MapPin className="mr-2 h-4 w-4 flex-shrink-0" />
                         <span>{event.location}</span>
                       </div>
-                      <div dangerouslySetInnerHTML={sanitizeHTML(event.description)} />
+                      <SanitizedHtml html={event.description} />
                       {event.category && <Badge variant="secondary">{event.category}</Badge>}
                     </div>
                   </div>
@@ -445,27 +440,27 @@ export default function Events() {
         </header>
         <main className="flex-1 overflow-y-auto p-4 lg:p-8">
           <div className="flex justify-start mb-4 space-x-2">
-            <Button 
-              variant={view === 'month' ? 'primary' : 'outline'} 
-              size="sm" 
+            <Button
+              variant={view === 'month' ? 'primary' : 'outline'}
+              size="sm"
               onClick={() => setView('month')}
               className="flex items-center"
             >
               <CalendarDays className="h-4 w-4 mr-1" />
               Monat
             </Button>
-            <Button 
-              variant={view === 'week' ? 'primary' : 'outline'} 
-              size="sm" 
+            <Button
+              variant={view === 'week' ? 'primary' : 'outline'}
+              size="sm"
               onClick={() => setView('week')}
               className="flex items-center"
             >
               <CalendarIcon className="h-4 w-4 mr-1" />
               Woche
             </Button>
-            <Button 
-              variant={view === 'list' ? 'primary' : 'outline'} 
-              size="sm" 
+            <Button
+              variant={view === 'list' ? 'primary' : 'outline'}
+              size="sm"
               onClick={() => setView('list')}
               className="flex items-center"
             >
@@ -544,7 +539,7 @@ export default function Events() {
                         <MapPin className="mr-2 h-4 w-4 flex-shrink-0" />
                         <span>{event.location}</span>
                       </div>
-                      <div dangerouslySetInnerHTML={sanitizeHTML(event.description)} />
+                      <SanitizedHtml html={event.description} />
                       {event.category && <Badge variant="secondary">{event.category}</Badge>}
                     </div>
                   </div>
