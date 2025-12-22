@@ -10,10 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { DateTime } from 'luxon';
 import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
-import dynamic from 'next/dynamic';
-
-const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
-import 'react-quill/dist/quill.snow.css';
+import { Editor } from "@/components/Editor";
 
 interface EventFormProps {
   initialData?: {
@@ -67,11 +64,11 @@ export default function EventForm({ initialData, onSuccess, onClose }: EventForm
 
     try {
       // Kombinieren von Datum und Uhrzeit und Konvertierung in UTC
-      const eventStartDateTime = startTime 
+      const eventStartDateTime = startTime
         ? DateTime.fromISO(`${date}T${startTime}`, { zone: timezone })
         : DateTime.fromISO(`${date}T00:00`, { zone: timezone });
-      
-      const eventEndDateTime = endTime 
+
+      const eventEndDateTime = endTime
         ? DateTime.fromISO(`${date}T${endTime}`, { zone: timezone })
         : eventStartDateTime.plus({ hours: 1 }); // Standardendzeit 1 Stunde nach Start
 
@@ -119,8 +116,8 @@ export default function EventForm({ initialData, onSuccess, onClose }: EventForm
 
       toast({
         title: initialData ? 'Event aktualisiert' : 'Event erstellt',
-        description: initialData 
-          ? 'Das Event wurde erfolgreich aktualisiert.' 
+        description: initialData
+          ? 'Das Event wurde erfolgreich aktualisiert.'
           : 'Das Event wurde erfolgreich erstellt.',
         variant: 'success',
       });
@@ -244,10 +241,9 @@ export default function EventForm({ initialData, onSuccess, onClose }: EventForm
       {/* Beschreibung */}
       <div className="space-y-2">
         <Label htmlFor="description">Beschreibung</Label>
-        <ReactQuill
-          value={description}
+        <Editor
+          content={description}
           onChange={setDescription}
-          placeholder="Beschreiben Sie das Event und was die Teilnehmer erwarten können..."
         />
       </div>
 

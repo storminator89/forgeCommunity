@@ -6,10 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { CourseContent } from './types'
-import dynamic from 'next/dynamic'
-
-const ReactQuill = dynamic(() => import('react-quill'), { ssr: false })
-import 'react-quill/dist/quill.snow.css'
+import { Editor } from "@/components/Editor"
 
 interface ContentEditorProps {
   content: CourseContent
@@ -31,10 +28,10 @@ export function ContentEditor({ content, onSave, onCancel }: ContentEditorProps)
         {editedContent.type === 'TEXT' && (
           <div className="space-y-2">
             <Label htmlFor="textContent">Text Content</Label>
-            <ReactQuill
-              value={editedContent.content}
+            <Editor
+              content={editedContent.content as string}
               onChange={(value) => setEditedContent({ ...editedContent, content: value })}
-              className="bg-white dark:bg-gray-800 min-h-[200px]"
+              className="min-h-[200px]"
             />
           </div>
         )}

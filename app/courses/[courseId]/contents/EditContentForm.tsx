@@ -11,12 +11,7 @@ import { CourseContent, QuizContent } from './types';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectGroup, SelectLabel, SelectItem } from "@/components/ui/select";
 import { FileText, Video, Music2, Layers, Info, HelpCircle } from "lucide-react";
 import { QuizEditor } from './QuizEditor';
-import 'react-quill/dist/quill.snow.css';
-
-const ReactQuill = dynamic(() => import('react-quill'), { 
-  ssr: false,
-  loading: () => <div className="h-64 w-full bg-gray-100 dark:bg-gray-800 rounded-md animate-pulse" />
-});
+import { Editor } from "@/components/Editor";
 
 interface EditContentFormProps {
   content: CourseContent;
@@ -61,16 +56,16 @@ export function EditContentForm({
   const [formData, setFormData] = useState<ContentFormData>(() => {
     let content = initialContent.content;
     // If it's a TEXT type but contains quiz content, parse it
-    if (initialContent.type === 'TEXT' && 
-        typeof content === 'string' && 
-        content.includes('"questions":[')) {
+    if (initialContent.type === 'TEXT' &&
+      typeof content === 'string' &&
+      content.includes('"questions":[')) {
       try {
         content = JSON.parse(content);
       } catch (e) {
         console.error('Failed to parse quiz content:', e);
       }
     }
-    
+
     return {
       title: initialContent.title,
       type: initialContent.type === 'TEXT' && typeof content === 'object' ? 'QUIZ' : initialContent.type,
@@ -115,13 +110,13 @@ export function EditContentForm({
         <Select
           value={formData.type}
           onValueChange={(value: 'TEXT' | 'VIDEO' | 'AUDIO' | 'H5P' | 'QUIZ') => {
-            setFormData(prev => ({ 
-              ...prev, 
+            setFormData(prev => ({
+              ...prev,
               type: value,
               content: value === 'QUIZ' ? JSON.stringify({ questions: [], shuffleQuestions: false, passingScore: 70 }) : ''
             }));
-            onContentChange({ 
-              ...initialContent, 
+            onContentChange({
+              ...initialContent,
               type: value,
               content: value === 'QUIZ' ? JSON.stringify({ questions: [], shuffleQuestions: false, passingScore: 70 }) : ''
             });
@@ -216,15 +211,13 @@ export function EditContentForm({
                 />
               ) : (
                 <div className="[&_.ql-toolbar]:border-border/50 [&_.ql-container]:border-border/50">
-                  <ReactQuill
-                    value={formData.content}
-                    onChange={(content) => {
+                  <Editor
+                    content={formData.content}
+                    onChange={(content: string) => {
                       setFormData(prev => ({ ...prev, content }));
                       onContentChange({ ...initialContent, content });
                     }}
-                    modules={quillModules}
-                    formats={quillFormats}
-                    className="bg-transparent [&_.ql-toolbar]:bg-background/80 [&_.ql-container]:bg-background/50 [&_.ql-editor]:min-h-[250px]"
+                    className="min-h-[250px]"
                   />
                 </div>
               )}
@@ -245,8 +238,8 @@ export function EditContentForm({
                 formData.type === 'VIDEO'
                   ? 'YouTube Video URL'
                   : formData.type === 'AUDIO'
-                  ? 'Audio URL'
-                  : 'H5P Embed Code'
+                    ? 'Audio URL'
+                    : 'H5P Embed Code'
               }
               className="w-full bg-background/50 border-border/50 focus:border-primary/50 transition-all duration-200"
             />

@@ -3,23 +3,18 @@ const nextConfig = {
   // Entwicklungsmodus schneller machen
   reactStrictMode: false,
 
-  // Build-Optimierungen
-  swcMinify: true,
-
-  // TypeScript & ESLint Checks lockern
+  // TypeScript Checks lockern
   typescript: {
     ignoreBuildErrors: true,
-  },
-  eslint: {
-    ignoreDuringBuilds: true,
   },
 
   // Experimentelle Features
   experimental: {
-    optimizeCss: {
-      enabled: true
-    }
+    optimizeCss: true
   },
+
+  // Turbopack config (leere Config um Warnung zu unterdrücken)
+  turbopack: {},
 
   // Production Build Konfiguration
   output: 'standalone',
@@ -28,10 +23,7 @@ const nextConfig = {
   },
 
   // Webpack-Optimierungen
-  webpack: (config, { dev }) => {
-    if (dev) {
-      config.devtool = 'eval-source-map';
-    }
+  webpack: (config) => {
     return config;
   },
 };

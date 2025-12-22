@@ -9,13 +9,7 @@ import { useSession } from 'next-auth/react';
 import { toast } from 'react-toastify';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Image from 'next/image';
-import dynamic from 'next/dynamic';
-import 'react-quill/dist/quill.snow.css';
-
-const ReactQuill = dynamic(() => import('react-quill'), {
-  ssr: false,
-  loading: () => <p>Loading editor...</p>,
-});
+import { Editor } from "@/components/Editor";
 
 const CATEGORIES = [
   "Web Development",
@@ -25,23 +19,6 @@ const CATEGORIES = [
   "Data Science",
   "Game Development",
   "Other"
-];
-
-const modules = {
-  toolbar: [
-    [{ 'header': [1, 2, false] }],
-    ['bold', 'italic', 'underline', 'strike', 'blockquote'],
-    [{'list': 'ordered'}, {'list': 'bullet'}],
-    ['link', 'code-block'],
-    ['clean']
-  ],
-};
-
-const formats = [
-  'header',
-  'bold', 'italic', 'underline', 'strike', 'blockquote',
-  'list', 'bullet',
-  'link', 'code-block'
 ];
 
 export default function NewProjectPage() {
@@ -73,7 +50,7 @@ export default function NewProjectPage() {
     if (description.length < 50) newErrors.description = 'Beschreibung muss mindestens 50 Zeichen lang sein';
     if (!category) newErrors.category = 'Kategorie ist erforderlich';
     if (!link.trim()) newErrors.link = 'Projekt-Link ist erforderlich';
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -129,7 +106,7 @@ export default function NewProjectPage() {
     <div className="flex justify-center items-center min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 py-8">
       <form onSubmit={handleSubmit} className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-md w-full max-w-2xl space-y-6">
         <h2 className="text-3xl font-bold mb-8 text-gray-800 dark:text-white">Neues Projekt einreichen</h2>
-        
+
         <div className="space-y-2">
           <Label htmlFor="title">Titel *</Label>
           <Input
@@ -145,18 +122,10 @@ export default function NewProjectPage() {
         <div className="space-y-2">
           <Label htmlFor="description">Beschreibung *</Label>
           <div className="min-h-[300px] relative mb-12">
-            <ReactQuill
-              theme="snow"
-              value={description}
+            <Editor
+              content={description}
               onChange={setDescription}
-              modules={modules}
-              formats={formats}
-              className="h-[250px] bg-white dark:bg-gray-900"
-              placeholder="Beschreibe dein Projekt..."
-              style={{ 
-                height: '250px',
-                backgroundColor: 'white',
-              }}
+              className="min-h-[250px]"
             />
           </div>
           {errors.description && (
@@ -245,8 +214,8 @@ export default function NewProjectPage() {
           )}
         </div>
 
-        <Button 
-          type="submit" 
+        <Button
+          type="submit"
           className="w-full"
           disabled={isSubmitting}
         >

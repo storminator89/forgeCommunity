@@ -1,8 +1,5 @@
 "use client"
 
-import 'react-quill/dist/quill.snow.css'
-import '@/styles/quill-dark.css'
-
 import { useState, useEffect, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import { Button } from "@/components/ui/button"
@@ -64,7 +61,7 @@ function Community() {
   const [leaderboardUsers, setLeaderboardUsers] = useState<LeaderboardUser[]>([])
   const [isLeaderboardLoading, setIsLeaderboardLoading] = useState(true)
   const [notification, setNotification] = useState<{ type: 'success' | 'error', message: string } | null>(null)
-  
+
   const [pointsAnimation, setPointsAnimation] = useState({
     isVisible: false,
     points: 0
@@ -150,14 +147,14 @@ function Community() {
 
       setIsEditing(false)
       setEditingPost(null)
-      setNotification({ 
-        type: 'success', 
-        message: editingPost ? 'Beitrag aktualisiert!' : 'Beitrag erstellt!' 
+      setNotification({
+        type: 'success',
+        message: editingPost ? 'Beitrag aktualisiert!' : 'Beitrag erstellt!'
       })
     } catch (error) {
-      setNotification({ 
-        type: 'error', 
-        message: 'Fehler beim Erstellen/Aktualisieren des Beitrags.' 
+      setNotification({
+        type: 'error',
+        message: 'Fehler beim Erstellen/Aktualisieren des Beitrags.'
       })
     } finally {
       setIsLoading(false)
@@ -171,10 +168,10 @@ function Community() {
     }
 
     try {
-      const response = await fetchWithErrorHandling(`/api/posts/${postId}/like`, { 
-        method: 'POST' 
+      const response = await fetchWithErrorHandling(`/api/posts/${postId}/like`, {
+        method: 'POST'
       })
-      
+
       const isLikeAdded = response.message !== 'Like entfernt'
       setLocalPosts(prev => prev.map(post => {
         if (post.id === postId) {
@@ -302,9 +299,8 @@ function Community() {
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className={`fixed top-4 right-4 p-4 rounded-md shadow-lg z-50 ${
-                notification.type === 'success' ? 'bg-green-500' : 'bg-red-500'
-              } text-white`}
+              className={`fixed top-4 right-4 p-4 rounded-md shadow-lg z-50 ${notification.type === 'success' ? 'bg-green-500' : 'bg-red-500'
+                } text-white`}
             >
               {notification.message}
             </motion.div>
@@ -388,7 +384,7 @@ function Community() {
           </div>
         </main>
       </div>
-      
+
       <PointsAnimation
         points={pointsAnimation.points}
         isVisible={pointsAnimation.isVisible}

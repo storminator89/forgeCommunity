@@ -7,9 +7,7 @@ import dynamic from 'next/dynamic';
 import { CourseContent } from './types';
 import { QuizEditor } from './QuizEditor';
 import { ContentTypeSelector } from './ContentTypeSelector';
-
-const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
-import 'react-quill/dist/quill.snow.css';
+import { Editor } from "@/components/Editor";
 
 interface SubContentFormProps {
   content: CourseContent;
@@ -32,19 +30,10 @@ export function SubContentForm({
     switch (type) {
       case 'TEXT':
         return (
-          <ReactQuill
-            value={content.content}
-            onChange={(value) => onContentChange({ ...content, content: value })}
-            modules={{
-              toolbar: [
-                [{ 'header': [1, 2, false] }],
-                ['bold', 'italic', 'underline', 'strike', 'blockquote'],
-                [{ 'list': 'ordered' }, { 'list': 'bullet' }, { 'indent': '-1' }, { 'indent': '+1' }],
-                ['link', 'image'],
-                ['clean']
-              ],
-            }}
-            className="bg-white dark:bg-gray-700 rounded-md"
+          <Editor
+            content={content.content as string}
+            onChange={(value: string) => onContentChange({ ...content, content: value })}
+            className="min-h-[200px]"
           />
         );
       case 'VIDEO':
@@ -66,7 +55,7 @@ export function SubContentForm({
       case 'H5P':
         return (
           <div className="space-y-4">
-            <Button 
+            <Button
               type="button"
               onClick={onH5PDialogOpen}
               className="w-full"
@@ -107,12 +96,12 @@ export function SubContentForm({
       </div>
       <div className="space-y-2">
         <Label>Inhaltstyp</Label>
-        <ContentTypeSelector 
-          onSelectType={(type) => onContentChange({ 
-            ...content, 
-            type: type as 'TEXT' | 'VIDEO' | 'AUDIO' | 'H5P' | 'QUIZ', 
-            content: type === 'QUIZ' ? JSON.stringify({ questions: [], shuffleQuestions: false, passingScore: 70 }) : '' 
-          })} 
+        <ContentTypeSelector
+          onSelectType={(type) => onContentChange({
+            ...content,
+            type: type as 'TEXT' | 'VIDEO' | 'AUDIO' | 'H5P' | 'QUIZ',
+            content: type === 'QUIZ' ? JSON.stringify({ questions: [], shuffleQuestions: false, passingScore: 70 }) : ''
+          })}
         />
       </div>
       <div>

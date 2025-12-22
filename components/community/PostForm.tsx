@@ -3,14 +3,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Loader2 } from 'lucide-react'
-import dynamic from 'next/dynamic'
 import { Skeleton } from "@/components/ui/skeleton"
 import { motion } from 'framer-motion'
-
-const ReactQuill = dynamic(() => import('react-quill'), {
-  ssr: false,
-  loading: () => <Skeleton className="h-[200px]" />
-})
+import { Editor } from "@/components/Editor"
 
 interface PostFormProps {
   onSubmit: (title: string, content: string) => Promise<void>
@@ -21,27 +16,10 @@ interface PostFormProps {
   onCancel?: () => void
 }
 
-const EDITOR_MODULES = {
-  toolbar: [
-    [{ 'header': [1, 2, false] }],
-    ['bold', 'italic', 'underline', 'strike', 'blockquote'],
-    [{ 'list': 'ordered' }, { 'list': 'bullet' }, { 'indent': '-1' }, { 'indent': '+1' }],
-    ['link', 'image'],
-    ['clean']
-  ],
-}
-
-const EDITOR_FORMATS = [
-  'header',
-  'bold', 'italic', 'underline', 'strike', 'blockquote',
-  'list', 'bullet', 'indent',
-  'link', 'image'
-]
-
-export function PostForm({ 
-  onSubmit, 
-  initialTitle = '', 
-  initialContent = '', 
+export function PostForm({
+  onSubmit,
+  initialTitle = '',
+  initialContent = '',
   isEditing = false,
   isLoading = false,
   onCancel
@@ -71,9 +49,8 @@ export function PostForm({
             placeholder="Gib deinem Beitrag einen Titel"
             required
             disabled={isLoading}
-            className={`mt-1 block w-full p-3 border ${
-              !title ? 'border-red-500' : 'border-border'
-            } rounded-md shadow-sm focus:ring-primary focus:border-primary dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 transition-colors duration-200`}
+            className={`mt-1 block w-full p-3 border ${!title ? 'border-red-500' : 'border-border'
+              } rounded-md shadow-sm focus:ring-primary focus:border-primary dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 transition-colors duration-200`}
           />
           {!title && (
             <span className="text-red-500 text-xs">
@@ -84,15 +61,10 @@ export function PostForm({
 
         <div>
           <Label htmlFor="content" className="block text-sm font-medium text-foreground">Inhalt</Label>
-          <ReactQuill
-            theme="snow"
-            value={content}
+          <Editor
+            content={content}
             onChange={setContent}
-            placeholder="Was möchtest du mitteilen?"
-            modules={EDITOR_MODULES}
-            formats={EDITOR_FORMATS}
             readOnly={isLoading}
-            className="mt-1"
           />
         </div>
 

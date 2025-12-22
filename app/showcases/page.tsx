@@ -21,31 +21,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { useSession } from 'next-auth/react';
-import dynamic from 'next/dynamic';
-import 'react-quill/dist/quill.snow.css';
-import '@/styles/quill-dark.css';
-
-const ReactQuill = dynamic(() => import('react-quill'), {
-  ssr: false,
-  loading: () => <p>Loading editor...</p>,
-});
-
-const modules = {
-  toolbar: [
-    [{ 'header': [1, 2, false] }],
-    ['bold', 'italic', 'underline', 'strike', 'blockquote'],
-    [{'list': 'ordered'}, {'list': 'bullet'}],
-    ['link', 'code-block'],
-    ['clean']
-  ],
-};
-
-const formats = [
-  'header',
-  'bold', 'italic', 'underline', 'strike', 'blockquote',
-  'list', 'bullet',
-  'link', 'code-block'
-];
+import { Editor } from "@/components/Editor";
 
 interface Tag {
   id: string;
@@ -543,8 +519,8 @@ export default function ProjectShowcase() {
           </div>
 
           {session && (
-            <Button 
-              onClick={() => setIsSubmitDialogOpen(true)} 
+            <Button
+              onClick={() => setIsSubmitDialogOpen(true)}
               className="mb-6 flex items-center"
             >
               <Plus className="mr-2 h-4 w-4" /> Neues Projekt einreichen
@@ -605,7 +581,7 @@ export default function ProjectShowcase() {
                             <CardTitle className="text-xl font-bold mb-2 line-clamp-1">
                               {project.title}
                             </CardTitle>
-                            <div 
+                            <div
                               className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2 prose dark:prose-invert"
                               dangerouslySetInnerHTML={{ __html: project.description }}
                             />
@@ -631,11 +607,10 @@ export default function ProjectShowcase() {
 
                             <div className="flex items-center space-x-4">
                               <button
-                                className={`flex items-center space-x-1 transition-colors ${
-                                  project.likes.some(like => like.userId === session?.user.id)
-                                    ? 'text-blue-500'
-                                    : 'text-gray-500 hover:text-blue-500'
-                                }`}
+                                className={`flex items-center space-x-1 transition-colors ${project.likes.some(like => like.userId === session?.user.id)
+                                  ? 'text-blue-500'
+                                  : 'text-gray-500 hover:text-blue-500'
+                                  }`}
                                 onClick={(e) => {
                                   e.stopPropagation(); // Verhindert das Navigieren zur Detailseite
                                   const userLike = project.likes.find(like => like.userId === session?.user.id);
@@ -649,7 +624,7 @@ export default function ProjectShowcase() {
                                 <ThumbsUp className="h-4 w-4" />
                                 <span>{project.likes.length}</span>
                               </button>
-                              
+
                               <div className="flex items-center space-x-1 text-gray-500">
                                 <MessageSquare className="h-4 w-4" />
                                 <span>{project.comments.length}</span>
@@ -735,7 +710,7 @@ export default function ProjectShowcase() {
                                   )}
                                 </div>
                               </div>
-                              <div 
+                              <div
                                 className="mt-1 text-sm text-gray-600 dark:text-gray-300 line-clamp-2 prose dark:prose-invert"
                                 dangerouslySetInnerHTML={{ __html: project.description }}
                               />
@@ -907,7 +882,7 @@ export default function ProjectShowcase() {
             <DialogHeader className="space-y-3 pb-4 border-b">
               <DialogTitle className="text-2xl font-bold">Neues Projekt einreichen</DialogTitle>
               <p className="text-muted-foreground text-sm">
-                Teile dein Projekt mit der Community. Fülle alle erforderlichen Felder aus und stelle sicher, 
+                Teile dein Projekt mit der Community. Fülle alle erforderlichen Felder aus und stelle sicher,
                 dass deine Projektbeschreibung aussagekräftig ist.
               </p>
             </DialogHeader>
@@ -935,18 +910,10 @@ export default function ProjectShowcase() {
                     Beschreibung <span className="text-red-500">*</span>
                   </Label>
                   <div className="min-h-[250px] relative border rounded-md">
-                    <ReactQuill
-                      theme="snow"
-                      value={newProject.description}
-                      onChange={(content) => setNewProject({ ...newProject, description: content })}
-                      modules={modules}
-                      formats={formats}
-                      className="h-[200px] bg-white dark:bg-gray-900 rounded-md"
-                      placeholder="Beschreibe dein Projekt ausführlich..."
-                      style={{ 
-                        height: '200px',
-                        backgroundColor: 'white',
-                      }}
+                    <Editor
+                      content={newProject.description}
+                      onChange={(content: string) => setNewProject({ ...newProject, description: content })}
+                      className="min-h-[200px]"
                     />
                   </div>
                 </div>
@@ -958,8 +925,8 @@ export default function ProjectShowcase() {
                     <Label htmlFor="category" className="text-base font-semibold">
                       Kategorie <span className="text-red-500">*</span>
                     </Label>
-                    <Select 
-                      value={newProject.category} 
+                    <Select
+                      value={newProject.category}
                       onValueChange={(value) => setNewProject({ ...newProject, category: value })}
                     >
                       <SelectTrigger className="h-11">
@@ -990,9 +957,9 @@ export default function ProjectShowcase() {
                           className="h-11"
                           onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddTag())}
                         />
-                        <Button 
-                          type="button" 
-                          onClick={handleAddTag} 
+                        <Button
+                          type="button"
+                          onClick={handleAddTag}
                           variant="outline"
                           className="h-11 px-6"
                         >
@@ -1050,9 +1017,9 @@ export default function ProjectShowcase() {
                       <Input
                         id="image"
                         type="file"
-                        onChange={(e) => setNewProject({ 
-                          ...newProject, 
-                          image: e.target.files ? e.target.files[0] : null 
+                        onChange={(e) => setNewProject({
+                          ...newProject,
+                          image: e.target.files ? e.target.files[0] : null
                         })}
                         accept="image/*"
                         className="h-11 cursor-pointer file:cursor-pointer file:mr-4"
@@ -1069,16 +1036,16 @@ export default function ProjectShowcase() {
 
               {/* Form Actions */}
               <div className="flex justify-end gap-3 pt-4 border-t">
-                <Button 
-                  type="button" 
-                  variant="outline" 
+                <Button
+                  type="button"
+                  variant="outline"
                   onClick={() => setIsSubmitDialogOpen(false)}
                   className="h-11 px-6"
                 >
                   Abbrechen
                 </Button>
-                <Button 
-                  type="submit" 
+                <Button
+                  type="submit"
                   disabled={isSubmitting}
                   className="h-11 px-8"
                 >

@@ -21,9 +21,7 @@ import { TagSelect } from "@/components/TagSelect";
 import Image from 'next/image';
 import { Type, ImageIcon, FileText, FolderOpen, Tags, Trash2, Save, Loader2 } from 'lucide-react';
 import { Badge } from "@/components/ui/badge";
-
-const QuillEditor = dynamic(() => import('react-quill'), { ssr: false });
-import 'react-quill/dist/quill.snow.css';
+import { Editor } from "@/components/Editor";
 
 interface Tag {
   id: string;
@@ -164,10 +162,10 @@ export default function EditArticle() {
     formData.append('content', content);
     formData.append('category', category);
     tags.forEach(tag => formData.append('tags', tag));
-    
+
     // Explizit markieren, wenn das Bild gelöscht werden soll
     formData.append('deleteImage', isImageDeleted.toString());
-    
+
     if (featuredImage) {
       formData.append('featuredImage', featuredImage);
     }
@@ -220,7 +218,7 @@ export default function EditArticle() {
               </h1>
             </div>
             <div className="flex items-center space-x-3">
-              <Button 
+              <Button
                 type="submit"
                 form="editForm"
                 disabled={isLoading}
@@ -253,15 +251,15 @@ export default function EditArticle() {
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
               )}
-              
+
               <div className="space-y-6">
                 <form id="editForm" onSubmit={handleSubmit} className="space-y-6">
                   {/* Titel */}
                   <Card className="p-6 shadow-sm transition-all border-muted">
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
-                        <Label 
-                          htmlFor="title" 
+                        <Label
+                          htmlFor="title"
                           className="text-base font-medium text-foreground flex items-center gap-2"
                         >
                           <Type className="h-4 w-4" />
@@ -290,8 +288,8 @@ export default function EditArticle() {
                   <Card className="p-6 shadow-sm transition-all border-muted">
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
-                        <Label 
-                          htmlFor="featuredImage" 
+                        <Label
+                          htmlFor="featuredImage"
                           className="text-base font-medium text-foreground flex items-center gap-2"
                         >
                           <Image className="h-4 w-4" />
@@ -363,8 +361,8 @@ export default function EditArticle() {
                   <Card className="p-6 shadow-sm transition-all border-muted">
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
-                        <Label 
-                          htmlFor="content" 
+                        <Label
+                          htmlFor="content"
                           className="text-base font-medium text-foreground flex items-center gap-2"
                         >
                           <FileText className="h-4 w-4" />
@@ -375,20 +373,10 @@ export default function EditArticle() {
                         </Label>
                       </div>
                       <div className="border rounded-lg overflow-hidden bg-background/50 focus-within:ring-1 focus-within:ring-primary transition-all">
-                        <QuillEditor
-                          value={content}
+                        <Editor
+                          content={content}
                           onChange={setContent}
-                          modules={{
-                            toolbar: [
-                              [{ 'header': [1, 2, 3, false] }],
-                              ['bold', 'italic', 'underline', 'strike'],
-                              [{'list': 'ordered'}, {'list': 'bullet'}],
-                              ['link', 'image', 'code-block'],
-                              ['clean']
-                            ],
-                          }}
                           className="min-h-[400px]"
-                          placeholder="Schreibe hier deinen Artikel..."
                         />
                       </div>
                     </div>
@@ -420,8 +408,8 @@ export default function EditArticle() {
                           <Label className="text-base font-medium text-foreground flex items-center gap-2">
                             <Tags className="h-4 w-4" />
                             <span>Tags</span>
-                            <Badge 
-                              variant={tags.length >= 5 ? "destructive" : "secondary"} 
+                            <Badge
+                              variant={tags.length >= 5 ? "destructive" : "secondary"}
                               className="ml-2 font-normal"
                             >
                               {tags.length}/5 Tags

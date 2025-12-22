@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { signIn } from 'next-auth/react'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -18,7 +18,7 @@ const loginSchema = z.object({
   password: z.string().min(8, 'Das Passwort muss mindestens 8 Zeichen lang sein'),
 });
 
-export default function LoginPage() {
+function LoginContent() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -28,6 +28,8 @@ export default function LoginPage() {
   const [isBlocked, setIsBlocked] = useState(false)
   const [blockTimer, setBlockTimer] = useState(0)
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const callbackUrl = searchParams.get('callbackUrl') || '/community'
 
   useEffect(() => {
     let timer: NodeJS.Timeout;
@@ -59,7 +61,7 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (isBlocked) {
       setError(`Login temporär gesperrt. Bitte warten Sie ${blockTimer} Sekunden vor dem nächsten Versuch.`);
       return;
@@ -89,10 +91,11 @@ export default function LoginPage() {
           }
           return newAttempts;
         });
-        
+
         setError('Anmeldung fehlgeschlagen. Bitte überprüfen Sie Ihre Eingaben.')
       } else if (result?.ok) {
-        router.push('/community')
+        // Verwende window.location für zuverlässigere Weiterleitung
+        window.location.href = callbackUrl
       }
     } catch (err) {
       setError('Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es später erneut.')
@@ -104,7 +107,7 @@ export default function LoginPage() {
   const handleGoogleSignIn = async () => {
     setIsLoading(true)
     try {
-      await signIn('google', { callbackUrl: '/community' })
+      await signIn('google', { callbackUrl })
     } catch (err) {
       setError('Ein Fehler ist bei der Anmeldung mit Google aufgetreten.')
       setIsLoading(false)
@@ -116,7 +119,7 @@ export default function LoginPage() {
       {/* Decorative background elements */}
       <div className="absolute inset-0 bg-grid-black/[0.02] dark:bg-grid-white/[0.02] bg-[size:60px_60px]" />
       <div className="absolute h-full w-full bg-gradient-to-br from-blue-50/50 via-transparent to-purple-50/50 dark:from-blue-900/20 dark:to-purple-900/20" />
-      
+
       <div className="absolute top-6 right-6 z-50">
         <ThemeToggle />
       </div>
@@ -233,9 +236,9 @@ export default function LoginPage() {
                 </motion.div>
               )}
 
-              <Button 
-                type="submit" 
-                className="w-full h-12 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 dark:from-blue-500 dark:to-blue-400 dark:hover:from-blue-400 dark:hover:to-blue-300 text-white font-medium rounded-lg transition-all duration-200" 
+              <Button
+                type="submit"
+                className="w-full h-12 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 dark:from-blue-500 dark:to-blue-400 dark:hover:from-blue-400 dark:hover:to-blue-300 text-white font-medium rounded-lg transition-all duration-200"
                 disabled={isLoading}
               >
                 {isLoading ? (
@@ -249,14 +252,14 @@ export default function LoginPage() {
 
             <div className="space-y-6">
               <div className="flex items-center justify-between w-full text-sm">
-                <Link 
-                  href="/forgot-password" 
+                <Link
+                  href="/forgot-password"
                   className="text-gray-600 hover:text-blue-500 dark:text-gray-400 dark:hover:text-blue-400 transition-colors duration-200"
                 >
                   Passwort vergessen?
                 </Link>
-                <Link 
-                  href="/register" 
+                <Link
+                  href="/register"
                   className="text-gray-600 hover:text-blue-500 dark:text-gray-400 dark:hover:text-blue-400 transition-colors duration-200"
                 >
                   Konto erstellen
@@ -274,10 +277,10 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              <Button 
-                variant="outline" 
-                className="w-full h-12 bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-all duration-200" 
-                onClick={handleGoogleSignIn} 
+              <Button
+                variant="outline"
+                className="w-full h-12 bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-all duration-200"
+                onClick={handleGoogleSignIn}
                 disabled={isLoading}
               >
                 <svg className="mr-2 h-5 w-5" aria-hidden="true" focusable="false" data-prefix="fab" data-icon="google" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 488 512">
@@ -287,7 +290,7 @@ export default function LoginPage() {
               </Button>
 
               <div className="flex justify-center mt-6">
-                <Link 
+                <Link
                   href="/"
                   className="group flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-all duration-300"
                 >
@@ -302,5 +305,18 @@ export default function LoginPage() {
         </Card>
       </div>
     </div>
+  )
+}
+
+// Wrapper-Komponente mit Suspense für useSearchParams
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-white via-gray-50 to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-blue-900 flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+      </div>
+    }>
+      <LoginContent />
+    </Suspense>
   )
 }

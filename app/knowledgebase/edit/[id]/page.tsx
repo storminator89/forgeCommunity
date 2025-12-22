@@ -16,9 +16,7 @@ import { BookOpen, ArrowLeft, Upload, Loader2, BookmarkIcon, SendIcon } from 'lu
 import { CategorySelect } from "@/components/CategorySelect";
 import { TagSelect } from "@/components/TagSelect";
 import { toast } from 'sonner';
-
-const QuillEditor = dynamic(() => import('react-quill'), { ssr: false });
-import 'react-quill/dist/quill.snow.css';
+import { Editor } from "@/components/Editor";
 
 export default function EditArticle({ params }: { params: { id: string } }) {
   const { data: session, status } = useSession();
@@ -120,8 +118,8 @@ export default function EditArticle({ params }: { params: { id: string } }) {
       if (response.ok) {
         const article = await response.json();
         toast.success(
-          asDraft 
-            ? 'Entwurf wurde aktualisiert!' 
+          asDraft
+            ? 'Entwurf wurde aktualisiert!'
             : 'Artikel wurde erfolgreich aktualisiert!'
         );
         router.push(asDraft ? '/knowledgebase/drafts' : `/knowledgebase/${article.id}`);
@@ -249,10 +247,10 @@ export default function EditArticle({ params }: { params: { id: string } }) {
                     {featuredImagePreview && (
                       <div className="relative group">
                         <div className="w-20 h-20 border rounded-md overflow-hidden">
-                          <img 
-                            src={featuredImagePreview} 
-                            alt="Vorschau" 
-                            className="w-full h-full object-cover" 
+                          <img
+                            src={featuredImagePreview}
+                            alt="Vorschau"
+                            className="w-full h-full object-cover"
                           />
                         </div>
                         <Button
@@ -294,11 +292,9 @@ export default function EditArticle({ params }: { params: { id: string } }) {
                     Inhalt <span className="text-red-500">*</span>
                   </Label>
                   <div className="min-h-[400px] border rounded-md">
-                    <QuillEditor
-                      value={content}
+                    <Editor
+                      content={content}
                       onChange={setContent}
-                      className="h-full"
-                      theme="snow"
                     />
                   </div>
                 </div>

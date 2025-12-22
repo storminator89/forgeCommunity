@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import dynamic from 'next/dynamic';
 import { Sidebar } from "@/components/Sidebar";
 import { UserNav } from "@/components/user-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -18,9 +17,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { CategorySelect } from "@/components/CategorySelect";
 import { TagSelect } from "@/components/TagSelect";
 import { toast } from 'sonner';
-
-const QuillEditor = dynamic(() => import('react-quill'), { ssr: false });
-import 'react-quill/dist/quill.snow.css';
+import { Editor } from "@/components/Editor";
 
 export default function NewArticle() {
   const { data: session, status } = useSession();
@@ -37,7 +34,7 @@ export default function NewArticle() {
   const [alert, setAlert] = useState<{ message: string; type: 'error' | 'success' } | null>(null);
   const [isDraft, setIsDraft] = useState(false);
   const maxTitleLength = 100;
-  
+
   const [existingCategories, setExistingCategories] = useState<string[]>([]);
   const [existingTags, setExistingTags] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -115,13 +112,13 @@ export default function NewArticle() {
 
   const submitArticle = async (asDraft: boolean) => {
     setIsSubmitting(true);
-  
+
     if (!title || !content || !category) {
       toast.error('Bitte füllen Sie alle erforderlichen Felder aus.');
       setIsSubmitting(false);
       return;
     }
-  
+
     const formData = new FormData();
     formData.append('title', title);
     formData.append('content', content);
@@ -131,23 +128,23 @@ export default function NewArticle() {
     if (featuredImage) {
       formData.append('featuredImage', featuredImage);
     }
-  
+
     try {
       const response = await fetch('/api/articles', {
         method: 'POST',
         body: formData,
       });
-  
+
       if (response.ok) {
         const article = await response.json();
         toast.success(
-          asDraft 
-            ? 'Artikel wurde als Entwurf gespeichert!' 
+          asDraft
+            ? 'Artikel wurde als Entwurf gespeichert!'
             : 'Artikel wurde erfolgreich veröffentlicht!'
         );
         // Kurze Verzögerung für bessere UX
         setTimeout(() => router.push(
-          asDraft 
+          asDraft
             ? '/knowledgebase/drafts' // Neue Route für Entwürfe
             : `/knowledgebase/${article.id}`
         ), 1000);
@@ -175,7 +172,7 @@ export default function NewArticle() {
     toolbar: [
       [{ 'header': [1, 2, 3, false] }],
       ['bold', 'italic', 'underline', 'strike'],
-      [{'list': 'ordered'}, {'list': 'bullet'}],
+      [{ 'list': 'ordered' }, { 'list': 'bullet' }],
       ['link', 'image'],
       ['clean']
     ],
@@ -298,12 +295,10 @@ export default function NewArticle() {
                         <div>
                           <Label className="text-sm font-medium text-foreground mb-2 block">Inhalt</Label>
                           <div className="border rounded-lg overflow-hidden">
-                            <QuillEditor
-                              value={content}
+                            <Editor
+                              content={content}
                               onChange={setContent}
-                              modules={quillModules}
                               className="min-h-[400px]"
-                              theme="snow"
                             />
                           </div>
                         </div>
