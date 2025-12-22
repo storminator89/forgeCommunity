@@ -1,7 +1,7 @@
 // components/ui/image-modal.tsx
 "use client"
 
-import { Dialog, DialogContent } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import Image from "next/image"
 
 interface ImageModalProps {
@@ -14,6 +14,7 @@ export function ImageModal({ isOpen, onClose, imageUrl }: ImageModalProps) {
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-fit">
+        <DialogTitle className="sr-only">Bild Vorschau</DialogTitle>
         <div className="relative max-h-[80vh] max-w-[80vw]">
           <Image
             src={imageUrl}

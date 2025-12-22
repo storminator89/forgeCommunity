@@ -23,7 +23,9 @@ import {
   Briefcase,
   Clock,
   DollarSign,
-  Tag
+  Tag,
+  FileText,
+  Link as LinkIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Badge } from "@/components/ui/badge";
@@ -39,7 +41,7 @@ interface SearchResult {
   id: string;
   title: string;
   description: string;
-  type: 'course' | 'event' | 'member' | 'post';
+  type: 'course' | 'event' | 'member' | 'post' | 'resource';
   author?: string;
   authorImage?: string;
   instructor?: string;
@@ -50,6 +52,8 @@ interface SearchResult {
   image?: string;
   price?: number;
   currency?: string;
+  url?: string;
+  resourceType?: string;
   stats?: {
     attendees?: number;
     maxAttendees?: number;
@@ -161,6 +165,13 @@ export default function SearchPage() {
       case 'post':
         router.push(`/posts/${result.id}`);
         break;
+      case 'resource':
+        if (result.url) {
+          window.open(result.url, '_blank');
+        } else {
+          router.push(`/resources`);
+        }
+        break;
     }
   };
 
@@ -170,6 +181,7 @@ export default function SearchPage() {
       case 'event': return <Calendar className="h-5 w-5 text-green-500" />;
       case 'member': return <Users className="h-5 w-5 text-purple-500" />;
       case 'post': return <MessageSquare className="h-5 w-5 text-yellow-500" />;
+      case 'resource': return <FileText className="h-5 w-5 text-orange-500" />;
       default: return null;
     }
   };
@@ -192,7 +204,7 @@ export default function SearchPage() {
   };
 
   const renderStats = (result: SearchResult) => {
-    if (!result.stats) return null;
+    if (!result.stats && result.type !== 'resource') return null;
 
     switch (result.type) {
       case 'course':
@@ -200,7 +212,7 @@ export default function SearchPage() {
           <div className="flex space-x-4 text-sm text-gray-500 dark:text-gray-400">
             <span className="flex items-center">
               <Users className="h-4 w-4 mr-1" />
-              {result.stats.enrollments} / {result.stats.maxStudents || '∞'} Teilnehmer
+              {result.stats!.enrollments} / {result.stats!.maxStudents || '∞'} Teilnehmer
             </span>
             {result.price !== undefined && (
               <span className="flex items-center">
@@ -216,7 +228,7 @@ export default function SearchPage() {
           <div className="flex space-x-4 text-sm text-gray-500 dark:text-gray-400">
             <span className="flex items-center">
               <Users className="h-4 w-4 mr-1" />
-              {result.stats.attendees} / {result.stats.maxAttendees || '∞'} Teilnehmer
+              {result.stats!.attendees} / {result.stats!.maxAttendees || '∞'} Teilnehmer
             </span>
             {result.location && (
               <span className="flex items-center">
@@ -227,21 +239,39 @@ export default function SearchPage() {
           </div>
         );
 
+      case 'resource':
+        return (
+          <div className="flex space-x-4 text-sm text-gray-500 dark:text-gray-400">
+            {result.resourceType && (
+              <span className="flex items-center capitalize">
+                <Tag className="h-4 w-4 mr-1" />
+                {result.resourceType.toLowerCase()}
+              </span>
+            )}
+            {result.url && (
+              <span className="flex items-center text-primary truncate max-w-[200px]">
+                <LinkIcon className="h-4 w-4 mr-1 flex-shrink-0" />
+                <span className="truncate">{result.url}</span>
+              </span>
+            )}
+          </div>
+        )
+
       case 'member':
         return (
           <div className="space-y-2">
             <div className="flex space-x-4 text-sm text-gray-500 dark:text-gray-400">
               <span className="flex items-center">
                 <Users className="h-4 w-4 mr-1" />
-                {result.stats.followers} Follower
+                {result.stats!.followers} Follower
               </span>
               <span className="flex items-center">
                 <MessageSquare className="h-4 w-4 mr-1" />
-                {result.stats.posts} Beiträge
+                {result.stats!.posts} Beiträge
               </span>
               <span className="flex items-center">
                 <Book className="h-4 w-4 mr-1" />
-                {result.stats.courses} Kurse
+                {result.stats!.courses} Kurse
               </span>
             </div>
             {result.skills && result.skills.length > 0 && (
@@ -265,11 +295,11 @@ export default function SearchPage() {
           <div className="flex space-x-4 text-sm text-gray-500 dark:text-gray-400">
             <span className="flex items-center">
               <ThumbsUp className="h-4 w-4 mr-1" />
-              {result.stats.likes}
+              {result.stats!.likes}
             </span>
             <span className="flex items-center">
               <MessageCircle className="h-4 w-4 mr-1" />
-              {result.stats.comments}
+              {result.stats!.comments}
             </span>
             {result.createdAt && (
               <span className="flex items-center">
@@ -334,7 +364,7 @@ export default function SearchPage() {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
               <Input
                 type="text"
-                placeholder="Suche nach Kursen, Events, Mitgliedern oder Beiträgen"
+                placeholder="Suche nach Kursen, Events, Mitgliedern, Beiträgen oder Ressourcen"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10 pr-10 py-2 w-full rounded-full shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -352,12 +382,13 @@ export default function SearchPage() {
             </div>
 
             <Tabs defaultValue="all" onValueChange={setActiveTab} className="w-full">
-              <TabsList className="w-full justify-start mb-4 bg-white dark:bg-gray-800 p-1 rounded-lg shadow-sm">
-                <TabsTrigger value="all" className="flex-1">Alle</TabsTrigger>
-                <TabsTrigger value="course" className="flex-1">Kurse</TabsTrigger>
-                <TabsTrigger value="event" className="flex-1">Events</TabsTrigger>
-                <TabsTrigger value="member" className="flex-1">Mitglieder</TabsTrigger>
-                <TabsTrigger value="post" className="flex-1">Beiträge</TabsTrigger>
+              <TabsList className="w-full justify-start mb-4 bg-white dark:bg-gray-800 p-1 rounded-lg shadow-sm overflow-x-auto">
+                <TabsTrigger value="all">Alle</TabsTrigger>
+                <TabsTrigger value="course">Kurse</TabsTrigger>
+                <TabsTrigger value="event">Events</TabsTrigger>
+                <TabsTrigger value="member">Mitglieder</TabsTrigger>
+                <TabsTrigger value="post">Beiträge</TabsTrigger>
+                <TabsTrigger value="resource">Ressourcen</TabsTrigger>
               </TabsList>
 
               <AnimatePresence mode="wait">
