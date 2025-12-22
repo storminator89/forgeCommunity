@@ -1,12 +1,10 @@
-import { writeFile } from 'fs/promises';
+import { writeFile, mkdir } from 'fs/promises';
 import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '../auth/[...nextauth]/options';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "../auth/[...nextauth]/options";
+import prisma from '@/lib/prisma';
 
 export async function POST(request: NextRequest) {
     try {
@@ -56,7 +54,7 @@ export async function POST(request: NextRequest) {
         const filePath = path.join(process.cwd(), 'public', 'images', 'uploads', fileName);
 
         // Speichern Sie die Datei
-        await writeFile(filePath, buffer);
+        await writeFile(filePath, new Uint8Array(buffer));
 
         // Aktualisieren Sie das Benutzerprofil mit dem neuen Bildpfad
         await prisma.user.update({
@@ -68,9 +66,9 @@ export async function POST(request: NextRequest) {
             },
         });
 
-        return NextResponse.json({ 
-            success: true, 
-            filePath: `/images/uploads/${fileName}` 
+        return NextResponse.json({
+            success: true,
+            filePath: `/images/uploads/${fileName}`
         });
 
     } catch (error) {

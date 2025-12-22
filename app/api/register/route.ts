@@ -1,12 +1,27 @@
 import { NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
+import prisma from '@/lib/prisma'
 import bcrypt from 'bcrypt'
+import { z } from 'zod'
 
-const prisma = new PrismaClient()
+const registerSchema = z.object({
+  name: z.string().min(1, "Name ist erforderlich"),
+  email: z.string().email("Ungültige E-Mail-Adresse"),
+  password: z.string().min(8, "Passwort muss mindestens 8 Zeichen lang sein"),
+})
 
 export async function POST(req: Request) {
   try {
-    const { name, email, password } = await req.json()
+    const json = await req.json()
+    const result = registerSchema.safeParse(json)
+
+    if (!result.success) {
+      return NextResponse.json(
+        { message: result.error.errors[0].message },
+        { status: 400 }
+      )
+    }
+
+    const { name, email, password } = result.data
 
     // Überprüfen, ob der Benutzer bereits existiert
     const existingUser = await prisma.user.findUnique({

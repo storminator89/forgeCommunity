@@ -1,10 +1,8 @@
 import { NextAuthOptions } from "next-auth"
 import CredentialsProvider from "next-auth/providers/credentials"
 import { PrismaAdapter } from "@next-auth/prisma-adapter"
-import { PrismaClient } from "@prisma/client"
+import prisma from "@/lib/prisma"
 import bcrypt from "bcrypt"
-
-const prisma = new PrismaClient()
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
@@ -33,7 +31,7 @@ export const authOptions: NextAuthOptions = {
 
           // 2. Passwort überprüfen
           const isPasswordValid = await bcrypt.compare(
-            credentials.password, 
+            credentials.password,
             user.password
           )
 
@@ -56,7 +54,9 @@ export const authOptions: NextAuthOptions = {
               contact: true,
               endorsements: true,
               emailVerified: true,
-              lastLogin: true
+              lastLogin: true,
+              createdAt: true,
+              updatedAt: true
             }
           })
 

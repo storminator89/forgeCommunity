@@ -8,7 +8,8 @@ const publicPaths = [
   '/resources',
   '/login',
   '/register',
-  '/api',  // API-Routen haben eigene Auth-Prüfungen
+  '/api/auth',     // Auth endpoints (handled by NextAuth)
+  '/api/register', // Registration endpoint
 ];
 
 function isPublicPath(pathname: string): boolean {

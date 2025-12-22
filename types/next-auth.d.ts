@@ -21,8 +21,6 @@ declare module "next-auth" {
         pushNotifications: boolean
         theme: 'LIGHT' | 'DARK'
         language: string
-        createdAt: Date
-        updatedAt: Date
       } | null
     }
   }
@@ -51,8 +49,6 @@ declare module "next-auth" {
       pushNotifications: boolean
       theme: 'LIGHT' | 'DARK'
       language: string
-      createdAt: Date
-      updatedAt: Date
     } | null
   }
 

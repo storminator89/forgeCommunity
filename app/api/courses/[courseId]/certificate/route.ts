@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
-import { PrismaClient } from '@prisma/client';
+import prisma from '@/lib/prisma';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../../auth/[...nextauth]/options";
 import { v4 as uuidv4 } from 'uuid';
 import QRCode from 'qrcode';
 
-const prisma = new PrismaClient();
 
 export async function POST(
   request: NextRequest,
@@ -15,7 +14,7 @@ export async function POST(
 ) {
   try {
     const session = await getServerSession(authOptions);
-    
+
     if (!session?.user?.email) {
       return new NextResponse('Unauthorized', { status: 401 });
     }
@@ -59,7 +58,7 @@ export async function POST(
 
     // Generate QR code with verification URL
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000';
-    const verificationUrl = `${baseUrl}/verify-certificate/${certificateId}`;
+    const verificationUrl = `${baseUrl} /verify-certificate/${certificateId} `;
     const qrCodeDataUrl = await QRCode.toDataURL(verificationUrl);
 
     // Create PDF document
@@ -134,17 +133,17 @@ export async function POST(
       day: 'numeric'
     });
     doc.setFontSize(12);
-    doc.text(`Ausgestellt am ${date}`, pageWidth / 2, 175, { align: 'center' });
+    doc.text(`Ausgestellt am ${date} `, pageWidth / 2, 175, { align: 'center' });
 
     // Add QR code with white background
     const qrSize = 35;
     const qrX = 35;
     const qrY = pageHeight - 90;
-    
+
     // Add white background for QR code
     doc.setFillColor(255, 255, 255);
     doc.rect(qrX - 2, qrY - 2, qrSize + 4, qrSize + 4, 'F');
-    
+
     // Add QR code
     doc.addImage(qrCodeDataUrl, 'PNG', qrX, qrY, qrSize, qrSize);
 
@@ -152,23 +151,23 @@ export async function POST(
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
     doc.setTextColor(80, 80, 80);
-    doc.text('Verifizieren Sie dieses Zertifikat:', qrX + qrSize/2, qrY + qrSize + 8, { align: 'center' });
+    doc.text('Verifizieren Sie dieses Zertifikat:', qrX + qrSize / 2, qrY + qrSize + 8, { align: 'center' });
 
     // Add clickable URL with custom text
     const linkText = 'Zertifikat verifizieren';
     doc.setTextColor(44, 82, 130);
     const urlY = qrY + qrSize + 15;
     const urlWidth = doc.getStringUnitWidth(linkText) * 10 / doc.internal.scaleFactor;
-    const urlX = qrX + qrSize/2 - urlWidth/2;
-    
+    const urlX = qrX + qrSize / 2 - urlWidth / 2;
+
     // Add white background for URL
     doc.setFillColor(255, 255, 255);
     doc.rect(urlX - 1, urlY - 4, urlWidth + 2, 6, 'F');
-    
+
     doc.textWithLink(linkText, urlX, urlY, {
       url: verificationUrl
     });
-    
+
     // Draw underline
     doc.setDrawColor(44, 82, 130);
     doc.setLineWidth(0.1);
@@ -178,17 +177,17 @@ export async function POST(
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
     doc.setTextColor(255, 255, 255);
-    const certificateIdText = `Zertifikat ID: ${certificateId}`;
+    const certificateIdText = `Zertifikat ID: ${certificateId} `;
     doc.text(certificateIdText, pageWidth - 35, pageHeight - 15, { align: 'right' });
 
     // Convert to buffer
     const pdfBuffer = Buffer.from(doc.output('arraybuffer'));
 
     // Return the PDF
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(new Uint8Array(pdfBuffer), {
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="${course.title.replace(/\s+/g, '_')}_Zertifikat.pdf"`,
+        'Content-Disposition': `attachment; filename = "${course.title.replace(/\s+/g, '_')}_Zertifikat.pdf"`,
       },
     });
   } catch (error) {

@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '../../../auth/[...nextauth]/options';
-
-const prisma = new PrismaClient();
+import prisma from '@/lib/prisma';
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "../../../auth/[...nextauth]/options";
 
 interface SocialLinks {
   github?: string | null;
@@ -28,7 +26,7 @@ export async function PUT(
 ) {
   try {
     const session = await getServerSession(authOptions);
-    
+
     if (!session?.user || (session.user.id !== params.id && session.user.role !== 'ADMIN')) {
       return NextResponse.json(
         { error: 'Nicht autorisiert' },
@@ -37,7 +35,7 @@ export async function PUT(
     }
 
     const data = await request.json() as SocialLinks;
-    
+
     // Validiere URLs
     const invalidUrls = Object.entries(data)
       .filter(([_, url]) => url && !isValidUrl(url))
@@ -45,8 +43,8 @@ export async function PUT(
 
     if (invalidUrls.length > 0) {
       return NextResponse.json(
-        { 
-          error: 'Ungültige URLs für: ' + invalidUrls.join(', ') 
+        {
+          error: 'Ungültige URLs für: ' + invalidUrls.join(', ')
         },
         { status: 400 }
       );
@@ -93,7 +91,7 @@ export async function GET(
 ) {
   try {
     const session = await getServerSession(authOptions);
-    
+
     if (!session?.user) {
       return NextResponse.json(
         { error: 'Nicht authentifiziert' },

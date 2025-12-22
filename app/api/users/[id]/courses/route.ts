@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import prisma from '@/lib/prisma';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../../auth/[...nextauth]/options";
-
-const prisma = new PrismaClient();
 
 export async function GET(
   request: NextRequest,
@@ -11,7 +9,7 @@ export async function GET(
 ) {
   try {
     const session = await getServerSession(authOptions);
-    
+
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -45,9 +43,6 @@ export async function GET(
               completedAt: {
                 not: null
               }
-            },
-            select: {
-              rating: true,
             }
           }
         },
@@ -65,13 +60,9 @@ export async function GET(
     ]);
 
     const formattedCourses = courses.map(course => {
-      const ratings = course.enrollments
-        .map(e => e.rating)
-        .filter((r): r is number => r !== null);
-      
-      const averageRating = ratings.length > 0
-        ? ratings.reduce((a, b) => a + b, 0) / ratings.length
-        : 0;
+      // Rating logic removed as 'rating' field does not exist on Enrollment
+      const averageRating = 0;
+      const ratingCount = 0;
 
       return {
         id: course.id,
@@ -91,7 +82,7 @@ export async function GET(
             ? (course.enrollments.length / course._count.enrollments) * 100
             : 0,
           rating: averageRating,
-          ratingCount: ratings.length,
+          ratingCount: ratingCount,
           lessonsCount: course._count.lessons,
         },
         createdAt: course.createdAt,

@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
+import prisma from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '../../auth/[...nextauth]/options'
-import { PrismaClient } from '@prisma/client'
-
-const prisma = new PrismaClient()
 
 // GET-Handler für das Abrufen des Benutzerprofils
 export async function GET() {

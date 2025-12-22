@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "../auth/[...nextauth]/options";
+import prisma from '@/lib/prisma';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '../auth/[...nextauth]/options';
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
-
-const prisma = new PrismaClient();
 
 // Funktion zum Erstellen des Upload-Verzeichnisses, falls es nicht existiert
 async function ensureUploadDirectory() {
@@ -83,12 +81,12 @@ export async function POST(request: NextRequest) {
       const uint8Array = new Uint8Array(buffer);
 
       const uploadDir = path.join(process.cwd(), 'public', 'images', 'uploads');
-      const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1E9)}`;
-      const filename = `${uniqueSuffix}-${image.name}`;
+      const uniqueSuffix = `${Date.now()} -${Math.round(Math.random() * 1E9)} `;
+      const filename = `${uniqueSuffix} -${image.name} `;
       const filepath = path.join(uploadDir, filename);
 
       await writeFile(filepath, uint8Array);
-      imageUrl = `/images/uploads/${filename}`;
+      imageUrl = `/ images / uploads / ${filename} `;
     }
 
     const newCourse = await prisma.course.create({

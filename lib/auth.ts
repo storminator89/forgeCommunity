@@ -35,7 +35,7 @@ export const authOptions: NextAuthOptions = {
           }
         });
 
-        if (!user) {
+        if (!user || !user.password) {
           return null;
         }
 
@@ -56,7 +56,6 @@ export const authOptions: NextAuthOptions = {
   ],
   callbacks: {
     session: ({ session, token }) => {
-      console.log('Session callback - token:', token);
       return {
         ...session,
         user: {
@@ -67,7 +66,6 @@ export const authOptions: NextAuthOptions = {
       };
     },
     jwt: ({ token, user }) => {
-      console.log('JWT callback - user:', user);
       if (user) {
         return {
           ...token,

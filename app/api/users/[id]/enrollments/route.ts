@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import prisma from '@/lib/prisma';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../../auth/[...nextauth]/options";
-
-const prisma = new PrismaClient();
 
 export async function GET(
   request: NextRequest,
@@ -11,7 +9,7 @@ export async function GET(
 ) {
   try {
     const session = await getServerSession(authOptions);
-    
+
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -72,7 +70,7 @@ export async function GET(
       const course = enrollment.course;
       const completedCount = course.enrollments.length;
       const totalEnrollments = course._count.enrollments;
-      
+
       return {
         id: course.id,
         title: course.title,
@@ -96,7 +94,7 @@ export async function GET(
         progress: {
           completed: 0, // TODO: Implementieren Sie die Logik für abgeschlossene Lektionen
           total: course._count.lessons,
-          lastAccessed: enrollment.updatedAt,
+          lastAccessed: enrollment.enrolledAt,
         },
         enrolledAt: enrollment.enrolledAt,
         completedAt: enrollment.completedAt,

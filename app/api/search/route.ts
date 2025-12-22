@@ -1,16 +1,15 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
+import prisma from '@/lib/prisma'
+import { startOfDay, endOfDay, subDays } from 'date-fns'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '../auth/[...nextauth]/options'
-
-const prisma = new PrismaClient()
 
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
-    
+
     if (!session?.user) {
       return NextResponse.json(
         { error: 'Nicht authentifiziert' },

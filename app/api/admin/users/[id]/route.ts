@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
+import prisma from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '../../../auth/[...nextauth]/options'
 import bcrypt from 'bcrypt'
-
-const prisma = new PrismaClient()
 
 // GET: Einzelnen Benutzer abrufen
 export async function GET(
@@ -222,7 +220,7 @@ export async function DELETE(
 ) {
   try {
     const session = await getServerSession(authOptions)
-    
+
     console.log("Delete User Session:", session) // Debugging
 
     if (!session?.user) {
@@ -352,7 +350,7 @@ export async function DELETE(
 
       // Lösche verknüpfte Kurse des Users
       await prisma.course.deleteMany({
-        where: { instructorId: params.id } 
+        where: { instructorId: params.id }
       })
 
       // Lösche verknüpfte Projekte des Users
@@ -391,7 +389,7 @@ export async function DELETE(
       })
     })
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       success: true,
       message: 'Benutzer erfolgreich gelöscht'
     })

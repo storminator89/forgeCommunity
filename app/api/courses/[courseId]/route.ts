@@ -1,15 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import prisma from '@/lib/prisma';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../auth/[...nextauth]/options";
-
-// PrismaClient is attached to the `global` object in development to prevent
-// exhausting your database connection limit.
-const globalForPrisma = global as unknown as { prisma: PrismaClient };
-
-export const prisma = globalForPrisma.prisma || new PrismaClient();
-
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 
 export async function GET(
   request: NextRequest,
@@ -35,7 +27,8 @@ export async function GET(
     // Since user is an admin, skip the userCourse check
     if (session.user.role !== 'ADMIN') {
       // Check if user has access to this course
-      const userCourse = await prisma.userCourse.findFirst({
+      // Check if user has access to this course
+      const userCourse = await prisma.enrollment.findFirst({
         where: {
           courseId: courseId,
           userId: session.user.id,
@@ -79,14 +72,14 @@ export async function GET(
   } catch (error) {
     console.error('Detailed error in course fetch:', error);
     console.error('Full error object:', {
-      name: error?.name,
-      message: error?.message,
-      stack: error?.stack,
+      name: (error as any)?.name,
+      message: (error as any)?.message,
+      stack: (error as any)?.stack,
     });
-    
+
     return NextResponse.json(
-      { 
-        error: 'Failed to fetch course', 
+      {
+        error: 'Failed to fetch course',
         details: error instanceof Error ? error.message : 'Unknown error',
       },
       { status: 500 }
@@ -102,7 +95,7 @@ export async function DELETE(
 ) {
   try {
     const session = await getServerSession(authOptions);
-    
+
     if (!session || !session.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -145,7 +138,7 @@ export async function DELETE(
         where: { courseId },
         select: { id: true },
       });
-      
+
       // Delete child contents first
       await tx.courseContent.deleteMany({
         where: {
@@ -153,7 +146,7 @@ export async function DELETE(
           parentId: { not: null },
         },
       });
-      
+
       // Then delete parent contents
       await tx.courseContent.deleteMany({
         where: {
@@ -177,9 +170,9 @@ export async function DELETE(
   } catch (error) {
     console.error('Error deleting course:', error);
     return NextResponse.json(
-      { 
-        error: 'Failed to delete course', 
-        details: error instanceof Error ? error.message : 'Unknown error' 
+      {
+        error: 'Failed to delete course',
+        details: error instanceof Error ? error.message : 'Unknown error'
       },
       { status: 500 }
     );
