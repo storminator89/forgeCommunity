@@ -111,7 +111,7 @@ export function ContentRenderer({ content, isEditing: externalIsEditing, onSave,
     switch (content.type) {
       case 'TEXT':
         return (
-          <div className="prose dark:prose-invert max-w-none p-6 bg-card rounded-lg">
+          <div className="prose prose-sm md:prose-base dark:prose-invert max-w-none">
             <SanitizedHtml html={content.content as string} />
           </div>
         );
@@ -122,35 +122,29 @@ export function ContentRenderer({ content, isEditing: externalIsEditing, onSave,
 
         if (!safeUrl) {
           return (
-            <div className="bg-card rounded-lg p-6">
-              <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
-                <div className="flex items-center gap-3 text-yellow-700 dark:text-yellow-400">
-                  <AlertTriangle className="h-5 w-5" />
-                  <span>Diese Video-URL wird aus Sicherheitsgründen nicht unterstützt.</span>
-                </div>
-              </div>
+            <div className="bg-destructive/10 text-destructive rounded-md p-4 flex items-center gap-3">
+              <AlertTriangle className="h-5 w-5" />
+              <span>Diese Video-URL wird aus Sicherheitsgründen nicht unterstützt.</span>
             </div>
           );
         }
 
         return (
-          <div className="bg-card rounded-lg p-6">
-            <div className="relative" style={{ paddingBottom: '56.25%', height: 0 }}>
-              <iframe
-                src={safeUrl}
-                frameBorder="0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-                className="absolute top-0 left-0 w-full h-full rounded-lg shadow-md"
-              />
-            </div>
+          <div className="aspect-video w-full rounded-md overflow-hidden bg-muted border border-border/50">
+            <iframe
+              src={safeUrl}
+              frameBorder="0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+              className="w-full h-full"
+            />
           </div>
         );
       }
 
       case 'AUDIO':
         return (
-          <div className="bg-card rounded-lg p-6">
+          <div className="bg-muted/30 rounded-lg p-6 border border-border/50">
             <audio
               src={content.content as string}
               controls
@@ -161,20 +155,18 @@ export function ContentRenderer({ content, isEditing: externalIsEditing, onSave,
 
       case 'H5P':
         return (
-          <div className="bg-card rounded-lg p-6">
-            <div className="relative" style={{ paddingBottom: '56.25%', height: 0 }}>
-              <iframe
-                src={`/h5p/embed/${content.content}`}
-                className="absolute top-0 left-0 w-full h-full rounded-lg shadow-md"
-                allowFullScreen
-              />
-            </div>
+          <div className="aspect-video w-full rounded-md overflow-hidden bg-muted border border-border/50">
+            <iframe
+              src={`/h5p/embed/${content.content}`}
+              className="w-full h-full"
+              allowFullScreen
+            />
           </div>
         );
 
       default:
         return (
-          <div className="bg-card rounded-lg p-6">
+          <div className="p-4 text-muted-foreground">
             <p>{content.content}</p>
           </div>
         );
@@ -183,19 +175,8 @@ export function ContentRenderer({ content, isEditing: externalIsEditing, onSave,
 
   return (
     <div className="space-y-4">
-      {onSave && (
-        <div className="flex justify-end">
-          <Button
-            variant="outline"
-            onClick={() => handleEditToggle(true)}
-            className="flex items-center space-x-2"
-          >
-            <Pencil className="h-4 w-4" />
-            <span>Bearbeiten</span>
-          </Button>
-        </div>
-      )}
-      <div className="shadow-md">
+      {/* Edit Button is already in parent, but if needed here we can add it */}
+      <div className="p-0">
         {renderContent()}
       </div>
     </div>

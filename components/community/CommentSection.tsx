@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ThumbsUp, Send, Loader2 } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { cn } from "@/lib/utils"
 
 const DEFAULT_AVATAR_URL = 'https://via.placeholder.com/150'
 
@@ -66,47 +67,47 @@ export function CommentSection({
       transition={{ duration: 0.3 }}
       className="mt-4 space-y-4"
     >
-      <div className="bg-background dark:bg-gray-700 p-4 rounded-lg shadow-inner">
+      <div className="bg-card p-4 rounded-lg shadow-sm border border-border">
         <div className="relative flex items-center">
           <Input
             value={newCommentContent}
             onChange={(e) => setNewCommentContent(e.target.value)}
             onKeyPress={handleKeyPress}
             placeholder="Schreibe einen Kommentar..."
-            className="pr-10"
+            className="pr-10 bg-muted/50 border-input"
             disabled={isLoading}
           />
           <Button
             onClick={handleSubmit}
             disabled={isLoading || !newCommentContent.trim()}
-            className="absolute right-2 p-1 hover:bg-gray-100 dark:hover:bg-gray-600 text-foreground rounded-full flex items-center justify-center transition-colors duration-200"
+            className="absolute right-2 p-1 hover:bg-accent text-foreground rounded-full flex items-center justify-center transition-colors duration-200"
             size="icon"
             variant="ghost"
           >
             {isLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
             ) : (
-              <Send className="h-4 w-4" />
+              <Send className="h-4 w-4 text-primary" />
             )}
           </Button>
         </div>
       </div>
 
-      {comments.map((comment) => (
-        <Card key={comment.id} className="bg-background dark:bg-gray-700 p-3 rounded-lg shadow-sm">
-          <CardContent>
+      {(comments || []).map((comment) => (
+        <Card key={comment.id} className="bg-card p-3 rounded-lg shadow-sm border border-border">
+          <CardContent className="p-0">
             <div className="flex items-center space-x-3 mb-2">
               <Avatar className="h-6 w-6">
                 <AvatarImage
                   src={comment.author?.image || DEFAULT_AVATAR_URL}
                   alt={comment.author?.name || 'Anonym'}
                 />
-                <AvatarFallback>{comment.author?.name?.[0] || 'A'}</AvatarFallback>
+                <AvatarFallback className="text-xs bg-primary/10 text-primary">{comment.author?.name?.[0] || 'A'}</AvatarFallback>
               </Avatar>
-              <span className="text-sm font-medium text-foreground dark:text-white">
+              <span className="text-sm font-medium text-foreground">
                 {comment.author?.name || 'Anonym'}
               </span>
-              <span className="text-xs text-gray-500 dark:text-gray-400">
+              <span className="text-xs text-muted-foreground">
                 {new Date(comment.createdAt).toLocaleDateString('de-DE', {
                   year: 'numeric',
                   month: 'long',
@@ -116,10 +117,10 @@ export function CommentSection({
                 })}
               </span>
             </div>
-            <p className="text-sm text-foreground dark:text-gray-200 leading-relaxed">
+            <p className="text-sm text-foreground/90 leading-relaxed pl-9">
               {comment.content}
             </p>
-            <div className="flex items-center mt-2">
+            <div className="flex items-center mt-2 pl-9">
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -127,13 +128,12 @@ export function CommentSection({
                       variant="ghost"
                       size="sm"
                       onClick={() => onLikeComment?.(comment.id, postId)}
-                      className={`hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center space-x-1 rounded-md p-2 transition-colors duration-200 ${
-                        comment.isLiked ? 'text-primary' : 'text-gray-500'
-                      }`}
+                      className={`hover:bg-accent flex items-center space-x-1 rounded-md p-2 h-auto py-1 transition-colors duration-200 ${comment.isLiked ? 'text-destructive bg-destructive/10 hover:bg-destructive/20' : 'text-muted-foreground'
+                        }`}
                       disabled={isLoading}
                     >
-                      <ThumbsUp className="h-4 w-4" />
-                      <span>{comment.votes}</span>
+                      <ThumbsUp className={cn("h-3 w-3 mr-1.5", comment.isLiked && "fill-current")} />
+                      <span className="text-xs font-medium">{comment.votes}</span>
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>

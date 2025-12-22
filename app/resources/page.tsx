@@ -6,25 +6,21 @@ import { UserNav } from "@/components/user-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Book, File, Video, Link, Search, Plus, Menu, Edit, Share2, Copy, Check, X, Trash2 } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { Badge } from "@/components/ui/badge";
+import { Book, File, Video, Link as LinkIcon, Search, Plus, MoreVertical, Edit, Trash2, Share2, Copy, Check, ExternalLink, Filter, Menu } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import { useSession } from 'next-auth/react';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { useInView } from 'react-intersection-observer';
 import { ResourcePreview } from "@/components/ResourcePreview";
-import clsx from 'clsx';
+import { cn } from "@/lib/utils";
 
 enum ResourceType {
   ARTICLE = 'ARTICLE',
@@ -47,28 +43,13 @@ interface Resource {
   category: string;
   author: User;
   url: string;
-  color: string;
   createdAt: string;
   updatedAt: string;
 }
 
 const categories = ["Web Development", "Data Science", "Design", "Mobile Development", "DevOps"];
 const types = ["ARTICLE", "VIDEO", "EBOOK", "PODCAST", "COURSE"];
-
-const ITEMS_PER_PAGE = 9; // Anzahl der Ressourcen pro Seite
-
-const shareResource = async (resource: Resource, platform: string) => {
-  const shareUrl = encodeURIComponent(`${window.location.origin}/resources/${resource.id}`);
-  const shareTitle = encodeURIComponent(resource.title);
-  
-  const shareUrls = {
-    twitter: `https://twitter.com/intent/tweet?text=${shareTitle}&url=${shareUrl}`,
-    linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${shareUrl}`,
-    facebook: `https://www.facebook.com/sharer/sharer.php?u=${shareUrl}`,
-  };
-
-  window.open(shareUrls[platform as keyof typeof shareUrls], '_blank');
-};
+const ITEMS_PER_PAGE = 9;
 
 export default function ResourceLibrary() {
   const { data: session } = useSession();
@@ -80,7 +61,6 @@ export default function ResourceLibrary() {
     type: 'ARTICLE',
     category: 'Web Development',
     url: '',
-    color: 'bg-blue-500',
   });
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -94,7 +74,7 @@ export default function ResourceLibrary() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedType, setSelectedType] = useState<string>('all');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'title'>('newest');
-  
+
   const { ref, inView } = useInView({
     threshold: 0,
   });
@@ -107,7 +87,7 @@ export default function ResourceLibrary() {
       }
     };
     initialFetch();
-  }, [session]);  // Abhängigkeit von session hinzugefügt
+  }, [session]);
 
   useEffect(() => {
     if (inView && hasMore && !loading) {
@@ -125,11 +105,10 @@ export default function ResourceLibrary() {
           search: searchTerm
         }
       });
-      
+
       if (pageNumber === 1) {
         setDisplayedResources(response.data.resources);
       } else {
-        // Füge nur neue, eindeutige Ressourcen hinzu
         setDisplayedResources(prev => {
           const existingIds = new Set(prev.map(r => r.id));
           const newResources = response.data.resources.filter(
@@ -138,7 +117,7 @@ export default function ResourceLibrary() {
           return [...prev, ...newResources];
         });
       }
-      
+
       setHasMore(response.data.hasMore);
     } catch (error) {
       console.error('Fehler beim Abrufen der Ressourcen:', error);
@@ -150,13 +129,8 @@ export default function ResourceLibrary() {
 
   const loadMore = () => {
     if (loading || !hasMore) return;
-    
     const nextPage = Math.floor(displayedResources.length / ITEMS_PER_PAGE) + 1;
     fetchResources(nextPage);
-  };
-
-  const handleSearchInput = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchTerm(event.target.value);
   };
 
   useEffect(() => {
@@ -193,18 +167,16 @@ export default function ResourceLibrary() {
         type: newResource.type,
         category: newResource.category,
         url: newResource.url,
-        color: newResource.color,
+        color: 'bg-blue-500', // Default value maintained for backend compatibility
       };
 
       const response = await axios.post('/api/resources', resourceToAdd);
-      // Füge neue Ressource am Anfang der displayedResources hinzu
       setDisplayedResources(prev => [response.data, ...prev]);
       setNewResource({
         title: '',
         type: 'ARTICLE',
         category: 'Web Development',
         url: '',
-        color: 'bg-blue-500',
       });
       setIsDialogOpen(false);
       toast.success('Ressource erfolgreich hinzugefügt!');
@@ -215,27 +187,15 @@ export default function ResourceLibrary() {
   };
 
   const handleDeleteResource = async (id: string) => {
-    if (window.confirm('Möchtest du diese Ressource wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.')) {
-      try {
-        const response = await axios.delete(`/api/resources/${id}`);
-        if (response.status === 200) {
-          setDisplayedResources(prev => prev.filter(resource => resource.id !== id));
-          toast.success('Ressource wurde erfolgreich gelöscht', {
-            position: "top-right",
-            autoClose: 3000,
-            hideProgressBar: false,
-            closeOnClick: true,
-            pauseOnHover: true,
-            draggable: true,
-          });
-        }
-      } catch (error: any) {
-        console.error('Fehler beim Löschen der Ressource:', error);
-        toast.error(error.response?.data?.message || 'Fehler beim Löschen der Ressource', {
-          position: "top-right",
-          autoClose: 5000,
-        });
+    try {
+      const response = await axios.delete(`/api/resources/${id}`);
+      if (response.status === 200) {
+        setDisplayedResources(prev => prev.filter(resource => resource.id !== id));
+        toast.success('Ressource wurde erfolgreich gelöscht');
       }
+    } catch (error: any) {
+      console.error('Fehler beim Löschen der Ressource:', error);
+      toast.error(error.response?.data?.message || 'Fehler beim Löschen der Ressource');
     }
   };
 
@@ -256,9 +216,8 @@ export default function ResourceLibrary() {
         url: editResource.url,
       });
 
-      // Aktualisiere die Ressource in displayedResources
-      setDisplayedResources(prev => 
-        prev.map(resource => 
+      setDisplayedResources(prev =>
+        prev.map(resource =>
           resource.id === editResource.id ? response.data : resource
         )
       );
@@ -272,18 +231,15 @@ export default function ResourceLibrary() {
 
   const filteredAndSortedResources = useMemo(() => {
     let filtered = [...displayedResources];
-    
-    // Kategorie-Filter
+
     if (selectedCategory !== 'all') {
       filtered = filtered.filter(resource => resource.category === selectedCategory);
     }
-    
-    // Typ-Filter
+
     if (selectedType !== 'all') {
       filtered = filtered.filter(resource => resource.type === selectedType);
     }
-    
-    // Sortierung
+
     return filtered.sort((a, b) => {
       switch (sortBy) {
         case 'newest':
@@ -298,275 +254,246 @@ export default function ResourceLibrary() {
     });
   }, [displayedResources, selectedCategory, selectedType, sortBy]);
 
-  const totalPages = Math.ceil(filteredAndSortedResources.length / ITEMS_PER_PAGE);
-  const paginatedResources = filteredAndSortedResources.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
-
-  const handlePageChange = (page: number) => {
-    setCurrentPage(page);
-  };
-
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-100 dark:bg-gray-900">
+    <div className="flex h-screen overflow-hidden bg-background">
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="bg-white dark:bg-gray-800 shadow-sm z-10">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <header className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border z-10 sticky top-0">
+          <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-3">
+            <div className="flex items-center justify-between gap-4">
               <div className="flex items-center">
                 <Button variant="ghost" size="icon" className="lg:hidden mr-2" onClick={() => setIsSidebarOpen(true)}>
-                  <Menu className="h-6 w-6" />
+                  <Menu className="h-5 w-5" />
                 </Button>
-                <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Ressourcen-Bibliothek</h2>
+                <h2 className="text-xl font-semibold text-foreground tracking-tight">Ressourcen</h2>
               </div>
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
                 <ThemeToggle />
                 <UserNav />
               </div>
             </div>
           </div>
         </header>
-        <main className="flex-1 overflow-y-auto p-4 lg:p-8">
-          <ToastContainer />
-          <div className="max-w-[1600px] mx-auto space-y-6">
-            <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm">
-              <div className="flex-1 w-full md:w-auto max-w-2xl">
-                <div className="relative group">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 group-hover:text-blue-500 transition-colors duration-200" />
-                  <Input
-                    type="text"
-                    placeholder="Suche nach Ressourcen..."
-                    value={searchTerm}
-                    onChange={handleSearchInput}
-                    className="pl-10 pr-4 py-2 w-full border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-white transition-all duration-200 hover:border-blue-500/50"
-                  />
-                </div>
+
+        <main className="flex-1 overflow-y-auto">
+          <ToastContainer position="top-right" theme="colored" />
+          <div className="max-w-[1600px] mx-auto p-4 sm:px-6 lg:px-8 py-8 space-y-6">
+
+            {/* Toolbar */}
+            <div className="flex flex-col xl:flex-row gap-4 justify-between items-start xl:items-center bg-card p-4 rounded-lg border border-border shadow-sm">
+              <div className="flex-1 w-full xl:max-w-md relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Input
+                  type="text"
+                  placeholder="Ressourcen durchsuchen..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-9 w-full bg-background"
+                />
               </div>
-              {session && (
-                <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button className="flex items-center bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg shadow-lg hover:shadow-blue-500/25 transition-all duration-200 min-w-[200px]">
-                      <Plus className="mr-2 h-5 w-5" />
-                      Ressource hinzufügen
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-[425px] p-0 overflow-hidden">
-                    <DialogHeader className="p-6 pb-2">
-                      <DialogTitle className="text-xl font-semibold">Neue Ressource hinzufügen</DialogTitle>
-                    </DialogHeader>
-                    <div className="px-6 py-4 space-y-4">
+
+              <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
+                <div className="flex items-center gap-2 flex-1 sm:flex-none">
+                  <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                    <SelectTrigger className="w-full sm:w-[160px] bg-background">
+                      <SelectValue placeholder="Kategorie" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Alle Kategorien</SelectItem>
+                      {categories.map((c) => (
+                        <SelectItem key={c} value={c}>{c}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex items-center gap-2 flex-1 sm:flex-none">
+                  <Select value={selectedType} onValueChange={setSelectedType}>
+                    <SelectTrigger className="w-full sm:w-[160px] bg-background">
+                      <SelectValue placeholder="Typ" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Alle Typen</SelectItem>
+                      {types.map((t) => (
+                        <SelectItem key={t} value={t}>{t}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex items-center gap-2 flex-1 sm:flex-none">
+                  <Select value={sortBy} onValueChange={(v: any) => setSortBy(v)}>
+                    <SelectTrigger className="w-full sm:w-[160px] bg-background">
+                      <SelectValue placeholder="Sortierung" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="newest">Neueste</SelectItem>
+                      <SelectItem value="oldest">Älteste</SelectItem>
+                      <SelectItem value="title">Titel (A-Z)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {session && (
+                  <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button className="ml-auto flex-shrink-0">
+                        <Plus className="mr-2 h-4 w-4" />
+                        Neu
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-[500px]">
+                      <DialogHeader>
+                        <DialogTitle>Neue Ressource hinzufügen</DialogTitle>
+                        <DialogDescription>
+                          Fügen Sie eine neue Ressource zur Bibliothek hinzu.
+                        </DialogDescription>
+                      </DialogHeader>
                       <div className="grid gap-4 py-4">
                         <div className="grid gap-2">
-                          <Label htmlFor="title" className="text-gray-700 dark:text-gray-300">Titel</Label>
+                          <Label htmlFor="title">Titel</Label>
                           <Input
                             id="title"
                             value={newResource.title}
                             onChange={(e) => setNewResource({ ...newResource, title: e.target.value })}
-                            className="dark:bg-gray-700 dark:text-white"
+                            placeholder="z.B. Advanced React Patterns"
                           />
                         </div>
-                        <div className="grid gap-2">
-                          <Label htmlFor="type" className="text-gray-700 dark:text-gray-300">Typ</Label>
-                          <Select
-                            value={newResource.type}
-                            onValueChange={(value) => setNewResource({ ...newResource, type: value })}
-                          >
-                            <SelectTrigger id="type" className="dark:bg-gray-700">
-                              <SelectValue placeholder="Wähle einen Typ" />
-                            </SelectTrigger>
-                            <SelectContent className="dark:bg-gray-700">
-                              {types.map((type) => (
-                                <SelectItem key={type} value={type} className="dark:text-gray-200">
-                                  {type}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="grid gap-2">
+                            <Label htmlFor="type">Typ</Label>
+                            <Select
+                              value={newResource.type}
+                              onValueChange={(value) => setNewResource({ ...newResource, type: value })}
+                            >
+                              <SelectTrigger id="type">
+                                <SelectValue placeholder="Wählen" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {types.map((type) => (
+                                  <SelectItem key={type} value={type}>{type}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="grid gap-2">
+                            <Label htmlFor="category">Kategorie</Label>
+                            <Select
+                              value={newResource.category}
+                              onValueChange={(value) => setNewResource({ ...newResource, category: value })}
+                            >
+                              <SelectTrigger id="category">
+                                <SelectValue placeholder="Wählen" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {categories.map((category) => (
+                                  <SelectItem key={category} value={category}>{category}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
                         </div>
                         <div className="grid gap-2">
-                          <Label htmlFor="category" className="text-gray-700 dark:text-gray-300">Kategorie</Label>
-                          <Select
-                            value={newResource.category}
-                            onValueChange={(value) => setNewResource({ ...newResource, category: value })}
-                          >
-                            <SelectTrigger id="category" className="dark:bg-gray-700">
-                              <SelectValue placeholder="Wähle eine Kategorie" />
-                            </SelectTrigger>
-                            <SelectContent className="dark:bg-gray-700">
-                              {categories.map((category) => (
-                                <SelectItem key={category} value={category} className="dark:text-gray-200">
-                                  {category}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="grid gap-2">
-                          <Label htmlFor="url" className="text-gray-700 dark:text-gray-300">URL</Label>
+                          <Label htmlFor="url">URL</Label>
                           <Input
                             id="url"
                             value={newResource.url}
                             onChange={(e) => setNewResource({ ...newResource, url: e.target.value })}
-                            className="dark:bg-gray-700 dark:text-white"
+                            placeholder="https://..."
                           />
                         </div>
-                        <div className="grid gap-2">
-                          <Label htmlFor="color" className="text-gray-700 dark:text-gray-300">Farbe</Label>
-                          <Select
-                            value={newResource.color}
-                            onValueChange={(value) => setNewResource({ ...newResource, color: value })}
-                          >
-                            <SelectTrigger id="color" className="dark:bg-gray-700">
-                              <SelectValue placeholder="Wähle eine Farbe" />
-                            </SelectTrigger>
-                            <SelectContent className="dark:bg-gray-700">
-                              <SelectItem value="bg-blue-500" className="dark:text-gray-200">Blau</SelectItem>
-                              <SelectItem value="bg-green-500" className="dark:text-gray-200">Grün</SelectItem>
-                              <SelectItem value="bg-purple-500" className="dark:text-gray-200">Lila</SelectItem>
-                              <SelectItem value="bg-red-500" className="dark:text-gray-200">Rot</SelectItem>
-                              <SelectItem value="bg-yellow-500" className="dark:text-gray-200">Gelb</SelectItem>
-                              <SelectItem value="bg-gray-500" className="dark:text-gray-200">Grau</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
                       </div>
-                    </div>
-                    <div className="border-t border-gray-100 dark:border-gray-700 p-6 bg-gray-50 dark:bg-gray-800/50">
-                      <Button 
-                        onClick={handleAddResource} 
-                        className="w-full bg-blue-600 hover:bg-blue-700 text-white h-11 rounded-lg shadow-lg hover:shadow-blue-500/25 transition-all duration-200"
-                      >
-                        Ressource hinzufügen
-                      </Button>
-                    </div>
-                  </DialogContent>
-                </Dialog>
-              )}
-            </div>
-
-            {/* Filter-Leiste */}
-            <div className="flex flex-wrap gap-4 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-sm">
-              <div className="flex items-center space-x-3">
-                <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Kategorie:</Label>
-                <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                  <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="Alle Kategorien" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Alle Kategorien</SelectItem>
-                    {categories.map(category => (
-                      <SelectItem key={category} value={category}>{category}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex items-center space-x-3">
-                <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Typ:</Label>
-                <Select value={selectedType} onValueChange={setSelectedType}>
-                  <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="Alle Typen" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Alle Typen</SelectItem>
-                    {types.map(type => (
-                      <SelectItem key={type} value={type}>{type}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex items-center space-x-3 ml-auto">
-                <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Sortierung:</Label>
-                <Select value={sortBy} onValueChange={(value: 'newest' | 'oldest' | 'title') => setSortBy(value)}>
-                  <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="Sortieren nach" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="newest">Neueste zuerst</SelectItem>
-                    <SelectItem value="oldest">Älteste zuerst</SelectItem>
-                    <SelectItem value="title">Nach Titel</SelectItem>
-                  </SelectContent>
-                </Select>
+                      <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Abbrechen</Button>
+                        <Button onClick={handleAddResource}>Hinzufügen</Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                )}
               </div>
             </div>
 
-            {/* Aktive Filter anzeigen */}
-            {(selectedCategory !== 'all' || selectedType !== 'all') && (
-              <div className="flex flex-wrap gap-2">
-                {selectedCategory !== 'all' && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setSelectedCategory('all')}
-                    className="flex items-center space-x-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800"
-                  >
-                    <span>{selectedCategory}</span>
-                    <X className="h-4 w-4" />
-                  </Button>
-                )}
-                {selectedType !== 'all' && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setSelectedType('all')}
-                    className="flex items-center space-x-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800"
-                  >
-                    <span>{selectedType}</span>
-                    <X className="h-4 w-4" />
-                  </Button>
-                )}
+            {/* Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <AnimatePresence mode="popLayout">
+                {filteredAndSortedResources.map((resource) => (
+                  <ResourceItem
+                    key={resource.id}
+                    resource={resource}
+                    isAdmin={isAdmin}
+                    currentUserId={session?.user?.id}
+                    onDelete={handleDeleteResource}
+                    onEdit={handleEditResource}
+                  />
+                ))}
+              </AnimatePresence>
+            </div>
+
+            {/* States */}
+            {!loading && filteredAndSortedResources.length === 0 && (
+              <div className="flex flex-col items-center justify-center p-12 text-center border rounded-lg border-dashed border-border bg-muted/10">
+                <Search className="h-10 w-10 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-medium text-foreground">Keine Ressourcen gefunden</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Versuchen Sie, Ihre Suchbegriffe oder Filter anzupassen.
+                </p>
+                <Button
+                  variant="link"
+                  onClick={() => {
+                    setSearchTerm('');
+                    setSelectedCategory('all');
+                    setSelectedType('all');
+                  }}
+                  className="mt-2"
+                >
+                  Filter zurücksetzen
+                </Button>
               </div>
             )}
 
-            <div className="mt-6">
-              <ResourceGrid 
-                resources={filteredAndSortedResources}
-                onDelete={handleDeleteResource} 
-                onEdit={handleEditResource}
-                isAdmin={isAdmin}
-                currentUserId={session?.user?.id}
-              />
-              {hasMore && !loading && (
-                <div ref={ref} className="h-10" /> // Unsichtbarer Trigger für Intersection Observer
-              )}
-              {loading && (
-                <div className="flex justify-center p-4">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-                </div>
-              )}
-            </div>
+            {hasMore && !loading && (
+              <div ref={ref} className="h-10" />
+            )}
+
+            {loading && (
+              <div className="flex justify-center p-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              </div>
+            )}
           </div>
         </main>
       </div>
+
+      {/* Edit Dialog */}
       {editResource && (
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent className="sm:max-w-[425px]">
+          <DialogContent className="sm:max-w-[500px]">
             <DialogHeader>
-              <DialogTitle className="text-xl font-semibold">Ressource bearbeiten</DialogTitle>
+              <DialogTitle>Ressource bearbeiten</DialogTitle>
+              <DialogDescription>Aktualisieren Sie die Details der Ressource.</DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
-                <Label htmlFor="edit-title" className="text-gray-700 dark:text-gray-300">Titel</Label>
+                <Label htmlFor="edit-title">Titel</Label>
                 <Input
                   id="edit-title"
                   value={editResource.title}
                   onChange={(e) => setEditResource({ ...editResource, title: e.target.value })}
-                  className="dark:bg-gray-700 dark:text-white"
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="edit-url" className="text-gray-700 dark:text-gray-300">URL</Label>
+                <Label htmlFor="edit-url">URL</Label>
                 <Input
                   id="edit-url"
                   value={editResource.url}
                   onChange={(e) => setEditResource({ ...editResource, url: e.target.value })}
-                  className="dark:bg-gray-700 dark:text-white"
                 />
               </div>
             </div>
-            <Button onClick={handleUpdateResource} className="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white">
-              Aktualisieren
-            </Button>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>Abbrechen</Button>
+              <Button onClick={handleUpdateResource}>Aktualisieren</Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       )}
@@ -574,158 +501,129 @@ export default function ResourceLibrary() {
   );
 }
 
-function ResourceGrid({ resources, onDelete, onEdit, isAdmin, currentUserId }) {
-  const [copiedId, setCopiedId] = useState<string | null>(null);
+function ResourceItem({ resource, isAdmin, currentUserId, onDelete, onEdit }: {
+  resource: Resource,
+  isAdmin: boolean,
+  currentUserId?: string,
+  onDelete: (id: string) => void,
+  onEdit: (r: Resource) => void
+}) {
+  const [copied, setCopied] = useState(false);
 
-  const handleCopyLink = async (resource: Resource) => {
+  const canModify = Boolean(isAdmin) || resource.author.id === currentUserId;
+
+  const handleCopyLink = async () => {
     const shareUrl = `${window.location.origin}/resources/${resource.id}`;
     await navigator.clipboard.writeText(shareUrl);
-    setCopiedId(resource.id);
-    setTimeout(() => setCopiedId(null), 2000);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+    toast.success("Link kopiert", { autoClose: 2000 });
   };
 
-  const canModifyResource = (resource: Resource) => {
-    return Boolean(isAdmin) || resource.author.id === currentUserId;
+  const shareResource = (platform: string) => {
+    const shareUrl = encodeURIComponent(`${window.location.origin}/resources/${resource.id}`);
+    const shareTitle = encodeURIComponent(resource.title);
+
+    const urls: Record<string, string> = {
+      twitter: `https://twitter.com/intent/tweet?text=${shareTitle}&url=${shareUrl}`,
+      linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${shareUrl}`,
+      facebook: `https://www.facebook.com/sharer/sharer.php?u=${shareUrl}`,
+    };
+
+    window.open(urls[platform], '_blank');
   };
+
+  const Icon = getIcon(resource.type);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-6">
-      <AnimatePresence>
-        {resources.map(resource => (
-          <motion.div
-            key={resource.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.2 }}
-          >
-            <Card className="group overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 rounded-xl bg-white dark:bg-gray-800/90 border border-gray-100 dark:border-gray-700/50">
-              <div className={`${resource.color} rounded-t-xl flex items-center justify-between p-6 transition-transform duration-300 group-hover:scale-[1.01]`}>
-                <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-white/10 rounded-lg backdrop-blur-sm">
-                    {getIcon(resource.type)}
-                  </div>
-                  <h3 className="text-2xl font-semibold text-white dark:text-gray-200 truncate">{resource.title}</h3>
-                </div>
-                {canModifyResource(resource) && (
-                  <div className="flex space-x-2">
-                    <Button
-                      variant="ghost"
-                      onClick={() => onEdit(resource)}
-                      className="text-white/90 hover:text-white dark:text-gray-200 hover:bg-white/10 transition-colors duration-200"
-                      aria-label="Ressource bearbeiten"
-                    >
-                      <Edit className="h-5 w-5" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      onClick={() => onDelete(resource.id)}
-                      className="text-white/90 hover:text-white dark:text-gray-200 hover:bg-red-500/20 transition-colors duration-200"
-                      aria-label="Ressource löschen"
-                    >
-                      <Trash2 className="h-5 w-5" />
-                    </Button>
-                  </div>
-                )}
-              </div>
-              
-              <ResourcePreview url={resource.url} type={resource.type} />
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.95 }}
+      layout
+    >
+      <Card className="h-full flex flex-col group overflow-hidden border-border hover:border-primary/50 transition-all duration-300">
+        <CardHeader className="p-4 pb-2 flex flex-row items-start justify-between gap-2 space-y-0">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-2">
+              <Badge variant="secondary" className="text-xs font-normal">
+                {resource.category}
+              </Badge>
+              <Badge variant="outline" className="text-xs font-normal text-muted-foreground border-border">
+                {resource.type}
+              </Badge>
+            </div>
+            <CardTitle className="text-lg font-semibold leading-tight line-clamp-2group-hover:text-primary transition-colors">
+              <a href={resource.url} target="_blank" rel="noopener noreferrer" className="hover:underline decoration-primary/30 underline-offset-4">
+                {resource.title}
+              </a>
+            </CardTitle>
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8 -mr-2 text-muted-foreground">
+                <MoreVertical className="h-4 w-4" />
+                <span className="sr-only">Menü öffnen</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem onClick={handleCopyLink}>
+                {copied ? <Check className="mr-2 h-4 w-4 text-green-500" /> : <Copy className="mr-2 h-4 w-4" />}
+                Link kopieren
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => shareResource('twitter')}>Twitter</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => shareResource('linkedin')}>LinkedIn</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {canModify && (
+                <>
+                  <DropdownMenuItem onClick={() => onEdit(resource)}>
+                    <Edit className="mr-2 h-4 w-4" />
+                    Bearbeiten
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onDelete(resource.id)} className="text-destructive focus:text-destructive">
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Löschen
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </CardHeader>
 
-              <CardContent className="p-6 border-t border-gray-100 dark:border-gray-700/50">
-                <div className="flex items-center justify-between mb-4">
-                  <span className="inline-flex items-center px-3 py-1 text-xs font-medium text-white bg-gray-700 rounded-full">
-                    {resource.category}
-                  </span>
-                  <span className="text-sm text-gray-500 dark:text-gray-400">
-                    von {resource.author.name || resource.author.email}
-                  </span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <a 
-                    href={resource.url} 
-                    target="_blank" 
-                    rel="noopener noreferrer" 
-                    className="flex-1 inline-flex items-center justify-center px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors duration-200 font-medium"
-                  >
-                    <Link className="mr-2 h-5 w-5" />
-                    Ressource öffnen
-                  </a>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button 
-                        variant="outline" 
-                        size="icon"
-                        className="hover:bg-gray-100 dark:hover:bg-gray-700"
-                      >
-                        <Share2 className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48">
-                      <DropdownMenuItem 
-                        onClick={() => shareResource(resource, 'twitter')}
-                        className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
-                      >
-                        <svg className="h-4 w-4 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.827 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.935 9.935 0 0024 4.59z"/>
-                        </svg>
-                        Auf Twitter teilen
-                      </DropdownMenuItem>
-                      <DropdownMenuItem 
-                        onClick={() => shareResource(resource, 'linkedin')}
-                        className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
-                      >
-                        <svg className="h-4 w-4 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
-                        </svg>
-                        Auf LinkedIn teilen
-                      </DropdownMenuItem>
-                      <DropdownMenuItem 
-                        onClick={() => shareResource(resource, 'facebook')}
-                        className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
-                      >
-                        <svg className="h-4 w-4 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-                        </svg>
-                        Auf Facebook teilen
-                      </DropdownMenuItem>
-                      <DropdownMenuItem 
-                        onClick={() => handleCopyLink(resource)}
-                        className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
-                      >
-                        <div className="flex items-center w-full">
-                          {copiedId === resource.id ? (
-                            <>
-                              <Check className="h-4 w-4 mr-2 text-green-500" />
-                              <span className="text-green-500">Link kopiert!</span>
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="h-4 w-4 mr-2" />
-                              <span>Link kopieren</span>
-                            </>
-                          )}
-                        </div>
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        ))}
-      </AnimatePresence>
-    </div>
+        <CardContent className="p-0 flex-1 relative bg-muted/20">
+          <div className="aspect-video w-full overflow-hidden relative">
+            <ResourcePreview url={resource.url} type={resource.type} />
+          </div>
+        </CardContent>
+
+        <CardFooter className="p-4 pt-3 flex items-center justify-between border-t border-border bg-card">
+          <div className="flex items-center text-sm text-muted-foreground">
+            <span className="truncate max-w-[150px]">
+              {resource.author.name || "Unbekannt"}
+            </span>
+          </div>
+          <Button size="sm" variant="outline" className="gap-2 h-8" asChild>
+            <a href={resource.url} target="_blank" rel="noopener noreferrer">
+              <ExternalLink className="h-3 w-3" />
+              Öffnen
+            </a>
+          </Button>
+        </CardFooter>
+      </Card>
+    </motion.div>
   );
 }
 
 function getIcon(type: ResourceType) {
-  const iconClass = "h-6 w-6 text-white dark:text-gray-200";
-  switch(type) {
-    case ResourceType.ARTICLE: return <File className={iconClass} />;
-    case ResourceType.VIDEO: return <Video className={iconClass} />;
-    case ResourceType.EBOOK: return <Book className={iconClass} />;
-    case ResourceType.PODCAST: return <Link className={iconClass} />;
-    case ResourceType.COURSE: return <Book className={iconClass} />;
-    default: return <Link className={iconClass} />;
+  const props = { className: "h-4 w-4" };
+  switch (type) {
+    case ResourceType.ARTICLE: return <File {...props} />;
+    case ResourceType.VIDEO: return <Video {...props} />;
+    case ResourceType.EBOOK: return <Book {...props} />;
+    case ResourceType.PODCAST: return <LinkIcon {...props} />;
+    case ResourceType.COURSE: return <Book {...props} />;
+    default: return <LinkIcon {...props} />;
   }
 }
+

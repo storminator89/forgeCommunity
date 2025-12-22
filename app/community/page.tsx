@@ -289,27 +289,32 @@ function Community() {
   }
 
   return (
-    <div className="flex flex-col lg:flex-row h-screen overflow-hidden bg-background dark:bg-gray-900 transition-colors duration-300">
+    <div className="flex flex-col lg:flex-row h-screen overflow-hidden bg-background transition-colors duration-300">
       <Sidebar />
 
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden relative">
         <AnimatePresence>
           {notification && (
             <motion.div
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className={`fixed top-4 right-4 p-4 rounded-md shadow-lg z-50 ${notification.type === 'success' ? 'bg-green-500' : 'bg-red-500'
-                } text-white`}
+              initial={{ opacity: 0, y: -20, x: '-50%' }}
+              animate={{ opacity: 1, y: 0, x: '-50%' }}
+              exit={{ opacity: 0, y: -20, x: '-50%' }}
+              className={`fixed top-6 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-full shadow-2xl z-[100] flex items-center space-x-2 ${notification.type === 'success'
+                ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white'
+                : 'bg-gradient-to-r from-red-500 to-rose-600 text-white'
+                }`}
             >
-              {notification.message}
+              <span className="font-medium">{notification.message}</span>
             </motion.div>
           )}
         </AnimatePresence>
 
-        <header className="bg-background dark:bg-gray-800 shadow-md sticky top-0 z-40 transition-colors duration-300">
+        <header className="bg-background/80 backdrop-blur-md shadow-sm sticky top-0 z-40 transition-colors duration-300 border-b border-border">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-            <h2 className="text-3xl font-bold text-foreground dark:text-white">Community</h2>
+            <div>
+              <h2 className="text-2xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">Community Hub</h2>
+              <p className="text-sm text-muted-foreground hidden sm:block">Tausche dich aus und sammle Punkte</p>
+            </div>
             <div className="flex items-center space-x-4">
               <ThemeToggle />
               <UserNav />
@@ -317,25 +322,31 @@ function Community() {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto scroll-smooth">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              <div className="lg:col-span-2 space-y-8">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+              {/* Main Content Feed - 8 cols */}
+              <div className="lg:col-span-8 space-y-6">
                 <AnimatePresence mode="wait">
                   {!isEditing ? (
                     <motion.div
                       key="new-post-button"
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -20 }}
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      className="bg-card rounded-xl p-4 shadow-sm border border-border flex items-center space-x-4 cursor-pointer hover:shadow-md transition-shadow"
+                      onClick={() => setIsEditing(true)}
                     >
-                      <Button
-                        className="w-full bg-primary hover:bg-primary-dark text-white flex items-center justify-center p-4 rounded-lg shadow-lg transition-transform transform hover:scale-105 duration-200 active:scale-95"
-                        onClick={() => setIsEditing(true)}
-                        disabled={isLoading}
-                      >
-                        <PlusCircle className="mr-2 h-5 w-5" />
-                        Neuer Beitrag
+                      <img
+                        src={session?.user?.image || 'https://via.placeholder.com/150'}
+                        alt="User"
+                        className="w-10 h-10 rounded-full border border-border"
+                      />
+                      <div className="flex-1 bg-muted rounded-full px-4 py-2.5 text-muted-foreground text-sm hover:bg-accent transition-colors">
+                        Was möchtest du teilen, {session?.user?.name?.split(' ')[0]}?
+                      </div>
+                      <Button variant="ghost" size="icon" className="text-primary">
+                        <PlusCircle className="h-6 w-6" />
                       </Button>
                     </motion.div>
                   ) : (
@@ -353,32 +364,47 @@ function Community() {
                   )}
                 </AnimatePresence>
 
-                <AnimatePresence>
-                  {localPosts.map((post) => (
-                    <PostCard
-                      key={post.id}
-                      post={post}
-                      currentUserId={session?.user.id}
-                      onLike={handleToggleLike}
-                      onDelete={handleDeletePost}
-                      onEdit={(post) => {
-                        setEditingPost(post)
-                        setIsEditing(true)
-                      }}
-                      onAddComment={handleAddComment}
-                      onLikeComment={handleLikeComment}
-                      isLoading={isLoading}
-                    />
-                  ))}
-                </AnimatePresence>
+                <div className="space-y-6">
+                  <AnimatePresence>
+                    {localPosts.map((post) => (
+                      <PostCard
+                        key={post.id}
+                        post={post}
+                        currentUserId={session?.user.id}
+                        onLike={handleToggleLike}
+                        onDelete={handleDeletePost}
+                        onEdit={(post) => {
+                          setEditingPost(post)
+                          setIsEditing(true)
+                          // Scroll to top to see form
+                          window.scrollTo({ top: 0, behavior: 'smooth' })
+                        }}
+                        onAddComment={handleAddComment}
+                        onLikeComment={handleLikeComment}
+                        isLoading={isLoading}
+                      />
+                    ))}
+                  </AnimatePresence>
+
+                  {localPosts.length === 0 && !isLoading && (
+                    <div className="text-center py-12">
+                      <div className="bg-gray-100 dark:bg-gray-800 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <PlusCircle className="h-8 w-8 text-gray-400" />
+                      </div>
+                      <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">Keine Beiträge gefunden</h3>
+                      <p className="text-gray-500 dark:text-gray-400 mt-2">Sei der Erste, der etwas teilt!</p>
+                    </div>
+                  )}
+                </div>
               </div>
 
-              <div className="space-y-8">
+              {/* Sidebar - 4 cols - Sticky */}
+              <div className="lg:col-span-4 space-y-6 lg:sticky lg:top-8">
+                <StatsCard stats={userStats} />
                 <LeaderboardCard
                   users={leaderboardUsers}
                   isLoading={isLeaderboardLoading}
                 />
-                <StatsCard stats={userStats} />
               </div>
             </div>
           </div>
@@ -393,5 +419,6 @@ function Community() {
     </div>
   )
 }
+
 
 export default Community

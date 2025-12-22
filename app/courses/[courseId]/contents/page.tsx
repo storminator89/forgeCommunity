@@ -853,21 +853,21 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
   }
 
   return (
-    <div className="flex flex-col lg:flex-row h-screen overflow-hidden bg-gradient-to-br from-background via-background/95 to-accent/10 dark:from-gray-900 dark:via-gray-900/95 dark:to-gray-800/10 transition-all duration-300">
+    <div className="flex flex-col lg:flex-row h-screen overflow-hidden bg-background transition-all duration-300">
       <Sidebar />
 
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="bg-background/80 dark:bg-gray-800/80 backdrop-blur-lg border-b border-border/40 shadow-sm sticky top-0 z-40 transition-colors duration-300">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
+        <header className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border sticky top-0 z-40">
+          <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <h2 className="text-3xl font-bold bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent transition-colors duration-300">{course?.name}</h2>
-              <div className="hidden sm:flex items-center">
-                <span className="text-xs text-primary/90">•</span>
-                <span className="ml-2 text-sm font-semibold text-primary">Kursinhalt</span>
+              <h2 className="text-xl font-semibold text-foreground tracking-tight">{course?.name}</h2>
+              <div className="hidden sm:flex items-center text-muted-foreground">
+                <span className="text-xs mx-2">/</span>
+                <span className="text-sm font-medium">Kursinhalt</span>
               </div>
             </div>
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2">
               <ThemeToggle />
               <UserNav />
             </div>
@@ -878,17 +878,17 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
         <main className="flex-1 overflow-y-auto">
           <div className="flex h-full">
             <div
-              className="relative transition-all duration-300 ease-in-out"
+              className="relative transition-all duration-300 ease-in-out border-r border-border bg-card/30"
               style={{ width: isTopicsSidebarOpen ? `${sidebarWidth}px` : '0px' }}
             >
-              <div className="absolute -right-4 top-4 z-50">
+              <div className="absolute -right-3 top-3 z-50">
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="icon"
                   onClick={() => setIsTopicsSidebarOpen(!isTopicsSidebarOpen)}
-                  className="bg-background dark:bg-gray-800 border border-primary/20 hover:border-primary/50 rounded-full shadow-sm hover:shadow-md transition-all duration-200 text-primary/80 hover:text-primary"
+                  className="h-6 w-6 rounded-full shadow-sm bg-background border-border hover:bg-accent"
                 >
-                  {isTopicsSidebarOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                  {isTopicsSidebarOpen ? <ChevronLeft className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                 </Button>
               </div>
               <div className={cn(
@@ -920,82 +920,52 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
                 />
               </div>
               <div
-                className="absolute top-0 right-0 h-full w-2 cursor-col-resize bg-transparent"
+                className="absolute top-0 right-0 h-full w-1 cursor-col-resize hover:bg-primary/20 transition-colors"
                 onMouseDown={startResizing}
               />
             </div>
 
             <div className={cn(
-              "flex-1 overflow-y-auto transition-all duration-300 ease-in-out",
-              !isTopicsSidebarOpen && "px-4 md:px-8 lg:px-12"
+              "flex-1 overflow-y-auto bg-background/50",
+              !isTopicsSidebarOpen && "px-0"
             )}>
-              <div className={cn(
-                "h-full transition-all duration-300 ease-in-out",
-                !isTopicsSidebarOpen ? "max-w-4xl mx-auto" : "max-w-full"
-              )}>
+              <div className="h-full max-w-5xl mx-auto w-full">
                 {selectedMainContent ? (
-                  <div className={cn(
-                    "w-full transition-all duration-300 ease-in-out",
-                    isTopicsSidebarOpen ? "px-6 py-6" : "px-0 py-6"
-                  )}>
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-card to-card/80 rounded-xl border border-border/50 shadow-sm p-6 mb-6 relative overflow-hidden group">
-                      <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-primary/3 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                      <div className="relative space-y-1.5">
-                        <div className="flex items-center gap-2">
-                          <h1 className="text-2xl font-semibold tracking-tight">
+                  <div className="w-full px-6 py-8 md:px-10 lg:px-12">
+                    <div className="mb-8 pb-6 border-b border-border/60">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-secondary text-secondary-foreground">
+                              {selectedMainContent.type === 'TEXT' && <FileText className="h-3 w-3" />}
+                              {selectedMainContent.type === 'VIDEO' && <Video className="h-3 w-3" />}
+                              {selectedMainContent.type === 'AUDIO' && <Music className="h-3 w-3" />}
+                              {selectedMainContent.type === 'H5P' && <Box className="h-3 w-3" />}
+                              <span className="capitalize">{selectedMainContent.type.toLowerCase()}</span>
+                            </span>
+                          </div>
+                          <h1 className="text-3xl font-bold tracking-tight text-foreground">
                             {selectedMainContent.title}
                           </h1>
                         </div>
-                        <p className="text-sm text-muted-foreground flex items-center gap-2">
-                          <span className="inline-flex items-center gap-1.5 bg-gradient-to-r from-primary/10 to-primary/5 text-primary px-3 py-1 rounded-full text-xs font-medium">
-                            {selectedMainContent.type === 'TEXT' && (
-                              <>
-                                <FileText className="h-3.5 w-3.5" />
-                                Textinhalt
-                              </>
-                            )}
-                            {selectedMainContent.type === 'VIDEO' && (
-                              <>
-                                <Video className="h-3.5 w-3.5" />
-                                Videoinhalt
-                              </>
-                            )}
-                            {selectedMainContent.type === 'AUDIO' && (
-                              <>
-                                <Music className="h-3.5 w-3.5" />
-                                Audioinhalt
-                              </>
-                            )}
-                            {selectedMainContent.type === 'H5P' && (
-                              <>
-                                <Box className="h-3.5 w-3.5" />
-                                Interaktiver Inhalt
-                              </>
-                            )}
-                          </span>
-                          <span className="text-xs">•</span>
-                          <span>Lerninhalt</span>
-                        </p>
-                      </div>
-                      <div className="relative flex items-center gap-3">
                         <Button
-                          variant="outline"
+                          variant="ghost"
                           size="sm"
                           onClick={() => {
                             setEditingContentId(selectedMainContent.id);
                             setIsEditing(true);
                           }}
-                          className="group/btn bg-background/50 hover:bg-primary/5 hover:text-primary border-border/50 transition-all duration-200"
+                          className="h-8 text-muted-foreground hover:text-primary"
                         >
-                          <Edit className="h-4 w-4 mr-2 transition-transform duration-200 group-hover/btn:scale-110" />
+                          <Edit className="h-4 w-4 mr-2" />
                           <span>Bearbeiten</span>
                         </Button>
                       </div>
                     </div>
 
-                    <div className="relative">
+                    <div className="relative min-h-[500px]">
                       {isEditing && editingContentId === selectedMainContent.id ? (
-                        <div className="bg-card rounded-xl border border-border/50 shadow-sm overflow-hidden backdrop-blur-sm">
+                        <div className="bg-card rounded-lg border border-border shadow-sm p-4 animate-in fade-in zoom-in-95 duration-200">
                           <EditContentForm
                             content={selectedMainContent}
                             onSubmit={handleContentUpdate}
@@ -1029,23 +999,23 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
                           />
                         </div>
                       ) : (
-                        <div className="bg-card rounded-xl border border-border/50 shadow-sm overflow-hidden backdrop-blur-sm">
+                        <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
                           <ContentRenderer content={selectedMainContent} />
                         </div>
                       )}
                     </div>
                   </div>
                 ) : (
-                  <div className="flex items-center justify-center h-full">
-                    <div className="text-center space-y-4 max-w-md mx-auto p-8">
-                      <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-muted/80 to-muted/50 flex items-center justify-center mx-auto mb-6 shadow-sm">
-                        <FileText className="h-10 w-10 text-muted-foreground" />
+                  <div className="flex items-center justify-center h-full text-center p-8">
+                    <div className="max-w-md space-y-4">
+                      <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
+                        <FileText className="h-8 w-8 text-muted-foreground/50" />
                       </div>
-                      <h2 className="text-2xl font-semibold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
-                        Wählen Sie einen Inhalt aus
-                      </h2>
-                      <p className="text-muted-foreground text-sm leading-relaxed max-w-sm mx-auto">
-                        Wählen Sie einen Inhalt aus der Seitenleiste aus, um ihn anzuzeigen. Sie können die Inhalte bearbeiten und neu anordnen.
+                      <h3 className="text-lg font-semibold text-foreground">
+                        Kein Inhalt ausgewählt
+                      </h3>
+                      <p className="text-muted-foreground text-sm">
+                        Wählen Sie ein Thema aus der Seitenleiste, um den Inhalt anzuzeigen.
                       </p>
                     </div>
                   </div>

@@ -12,60 +12,67 @@ interface StatsCardProps {
 }
 
 export function StatsCard({ stats }: StatsCardProps) {
+  const container = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1
+      }
+    }
+  }
+
+  const item = {
+    hidden: { opacity: 0, y: 20 },
+    show: { opacity: 1, y: 0 }
+  }
+
   return (
-    <Card className="hover:shadow-xl transition-shadow duration-300 bg-background dark:bg-gray-800 rounded-lg border border-border dark:border-gray-700">
-      <CardHeader className="p-4 border-b border-border dark:border-gray-600">
-        <CardTitle className="flex items-center text-lg font-semibold text-foreground dark:text-white">
-          <Award className="h-6 w-6 text-purple-500 mr-2" />
-          Deine Statistiken
+    <Card className="border-none shadow-xl bg-gradient-to-br from-white to-gray-50 dark:from-card dark:to-card dark:bg-card overflow-hidden">
+      <CardHeader className="bg-primary/5 dark:bg-accent/10 border-b border-border">
+        <CardTitle className="flex items-center text-lg font-bold text-foreground">
+          <Award className="h-5 w-5 text-primary mr-2" />
+          Deine Erfolge
         </CardTitle>
       </CardHeader>
-      <CardContent className="p-4">
+      <CardContent className="p-6">
         <motion.div
-          className="space-y-4"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.2 }}
+          variants={container}
+          initial="hidden"
+          animate="show"
+          className="grid grid-cols-2 gap-4"
         >
-          <div className="flex justify-between items-center p-3 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200">
-            <div className="flex items-center space-x-2">
-              <PlusCircle className="h-5 w-5 text-blue-500" />
-              <span className="text-sm font-medium text-foreground dark:text-white">Beiträge</span>
+          <motion.div variants={item} className="flex flex-col items-center justify-center p-4 bg-card rounded-xl space-y-2 hover:bg-accent/50 transition-colors duration-200 border border-border">
+            <div className="p-3 bg-blue-100 dark:bg-blue-900/20 rounded-full">
+              <PlusCircle className="h-6 w-6 text-blue-600 dark:text-blue-400" />
             </div>
-            <span className="font-semibold text-primary bg-gray-200 dark:bg-gray-600 px-3 py-1 rounded-full">
-              {stats.posts}
-            </span>
-          </div>
+            <span className="text-2xl font-bold text-foreground">{stats.posts}</span>
+            <span className="text-xs font-medium text-muted-foreground">Beiträge</span>
+          </motion.div>
 
-          <div className="flex justify-between items-center p-3 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200">
-            <div className="flex items-center space-x-2">
-              <ThumbsUp className="h-5 w-5 text-green-500" />
-              <span className="text-sm font-medium text-foreground dark:text-white">Likes erhalten</span>
+          <motion.div variants={item} className="flex flex-col items-center justify-center p-4 bg-card rounded-xl space-y-2 hover:bg-accent/50 transition-colors duration-200 border border-border">
+            <div className="p-3 bg-green-100 dark:bg-green-900/20 rounded-full">
+              <ThumbsUp className="h-6 w-6 text-green-600 dark:text-green-400" />
             </div>
-            <span className="font-semibold text-green-600 bg-gray-200 dark:bg-gray-600 px-3 py-1 rounded-full">
-              {stats.receivedLikes}
-            </span>
-          </div>
+            <span className="text-2xl font-bold text-foreground">{stats.receivedLikes}</span>
+            <span className="text-xs font-medium text-muted-foreground">Likes</span>
+          </motion.div>
 
-          <div className="flex justify-between items-center p-3 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200">
-            <div className="flex items-center space-x-2">
-              <MessageSquare className="h-5 w-5 text-orange-500" />
-              <span className="text-sm font-medium text-foreground dark:text-white">Kommentare</span>
+          <motion.div variants={item} className="flex flex-col items-center justify-center p-4 bg-card rounded-xl space-y-2 hover:bg-accent/50 transition-colors duration-200 border border-border">
+            <div className="p-3 bg-orange-100 dark:bg-orange-900/20 rounded-full">
+              <MessageSquare className="h-6 w-6 text-orange-600 dark:text-orange-400" />
             </div>
-            <span className="font-semibold text-orange-600 bg-gray-200 dark:bg-gray-600 px-3 py-1 rounded-full">
-              {stats.comments}
-            </span>
-          </div>
+            <span className="text-2xl font-bold text-foreground">{stats.comments}</span>
+            <span className="text-xs font-medium text-muted-foreground">Kommentare</span>
+          </motion.div>
 
-          <div className="flex justify-between items-center p-3 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200">
-            <div className="flex items-center space-x-2">
-              <Award className="h-5 w-5 text-purple-500" />
-              <span className="text-sm font-medium text-foreground dark:text-white">Gesamtpunkte</span>
+          <motion.div variants={item} className="flex flex-col items-center justify-center p-4 bg-card rounded-xl space-y-2 hover:bg-accent/50 transition-colors duration-200 border border-border">
+            <div className="p-3 bg-purple-100 dark:bg-purple-900/20 rounded-full">
+              <Award className="h-6 w-6 text-purple-600 dark:text-purple-400" />
             </div>
-            <span className="font-semibold text-purple-600 bg-gray-200 dark:bg-gray-600 px-3 py-1 rounded-full">
-              {stats.totalPoints}
-            </span>
-          </div>
+            <span className="text-2xl font-bold text-foreground">{stats.totalPoints}</span>
+            <span className="text-xs font-medium text-muted-foreground">Punkte</span>
+          </motion.div>
         </motion.div>
       </CardContent>
     </Card>
