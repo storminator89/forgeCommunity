@@ -55,7 +55,7 @@ export async function GET() {
 
     // Normalize activities
     const activities = [
-      ...recentUsers.map(u => ({
+      ...recentUsers.map((u: { name: string | null; email: string | null; image: string | null; createdAt: Date }) => ({
         type: 'USER_REGISTERED',
         user: { name: u.name || 'Unbekannt', email: u.email, image: u.image },
         action: 'hat sich registriert',

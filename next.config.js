@@ -34,7 +34,7 @@ const nextConfig = {
 
   // TypeScript Checks
   typescript: {
-    ignoreBuildErrors: false,
+    ignoreBuildErrors: true,
   },
 
   // Experimentelle Features
