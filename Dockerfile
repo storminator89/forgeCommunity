@@ -1,6 +1,7 @@
 # Build stage
 FROM node:18-alpine AS builder
 WORKDIR /app
+RUN apk add --no-cache openssl libc6-compat
 COPY package*.json ./
 COPY prisma ./prisma/
 RUN npm ci --legacy-peer-deps
@@ -11,6 +12,7 @@ RUN npm run build
 # Production stage
 FROM node:18-alpine AS runner
 WORKDIR /app
+RUN apk add --no-cache openssl libc6-compat
 
 ENV NODE_ENV production
 ENV PORT 3013
