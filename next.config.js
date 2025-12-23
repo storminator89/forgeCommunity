@@ -47,6 +47,10 @@ const nextConfig = {
 
   // Production Build Konfiguration
   output: 'standalone',
+
+  // External packages that should not be bundled for server
+  serverExternalPackages: ['framer-motion'],
+
   images: {
     unoptimized: true
   },
