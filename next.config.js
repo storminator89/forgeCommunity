@@ -66,7 +66,12 @@ const nextConfig = {
   },
 
   // Webpack-Optimierungen
-  webpack: (config) => {
+  webpack: (config, { isServer }) => {
+    // Redirect framer-motion imports to our safe fallback
+    // This fixes "Element type is invalid: undefined" errors in Docker
+    const path = require('path');
+    config.resolve.alias['framer-motion'] = path.resolve(__dirname, 'lib/motion.tsx');
+
     return config;
   },
 };
