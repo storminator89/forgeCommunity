@@ -10,6 +10,10 @@ export const metadata: Metadata = {
   description: 'Eine Plattform für Wachstum, Austausch und Zusammenarbeit',
 }
 
+// Force all pages to be dynamically rendered (no static prerendering)
+// This fixes "Element type is invalid: undefined" errors in Docker builds
+export const dynamic = 'force-dynamic'
+
 export default function RootLayout({
   children,
 }: {
