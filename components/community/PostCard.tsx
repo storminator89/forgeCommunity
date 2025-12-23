@@ -7,7 +7,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { motion, AnimatePresence } from 'framer-motion'
 import { CommentSection } from './CommentSection'
-import { SanitizedHtml } from '@/components/SanitizedHtml'
+
 import { cn } from "@/lib/utils"
 import { formatDistanceToNow } from 'date-fns'
 import { de } from 'date-fns/locale'
@@ -122,9 +122,9 @@ export function PostCard({
           <div className="space-y-3">
             <h2 className="text-xl font-bold text-foreground">{post.title}</h2>
             <div className="relative">
-              <SanitizedHtml
-                html={post.content}
+              <div
                 className="prose prose-sm dark:prose-invert max-w-none text-muted-foreground"
+                dangerouslySetInnerHTML={{ __html: post.content }}
               />
             </div>
           </div>

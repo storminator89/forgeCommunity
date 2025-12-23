@@ -17,7 +17,7 @@ import { UserNav } from "@/components/user-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
 import Image from 'next/image';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { SanitizedHtml } from '@/components/SanitizedHtml';
+
 
 interface Tag {
   id: string;
@@ -403,8 +403,7 @@ export default function ProjectDetail(props: { params: Promise<{ projectId: stri
                 <div className="space-y-8">
                   {/* Description */}
                   <div className="prose dark:prose-invert prose-slate max-w-none">
-                    <SanitizedHtml
-                      html={project.description}
+                    <div
                       className="[&>h2]:text-2xl [&>h2]:font-bold [&>h2]:text-foreground [&>h2]:mt-8 [&>h2]:mb-4
                                  [&>p]:text-muted-foreground [&>p]:leading-relaxed [&>p]:mb-4
                                  [&>ul]:list-disc [&>ul]:pl-6 [&>ul]:mb-4 [&>ul]:text-muted-foreground
@@ -413,6 +412,7 @@ export default function ProjectDetail(props: { params: Promise<{ projectId: stri
                                  [&_em]:text-muted-foreground [&_em]:italic
                                  [&>h2]:flex [&>h2]:items-center [&>h2]:gap-2
                                  [&>*:first-child]:mt-0"
+                      dangerouslySetInnerHTML={{ __html: project.description }}
                     />
                   </div>
 

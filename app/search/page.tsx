@@ -35,7 +35,7 @@ import { toast } from 'react-toastify';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { Progress } from "@/components/ui/progress";
-import { SanitizedHtml } from '@/components/SanitizedHtml';
+
 
 interface SearchResult {
   id: string;
@@ -99,7 +99,7 @@ interface SearchResponse {
 }
 
 const SafeHTML = ({ html }: { html: string }) => {
-  return <SanitizedHtml html={html} className="inline" />;
+  return <div className="inline" dangerouslySetInnerHTML={{ __html: html }} />;
 };
 
 export default function SearchPage() {

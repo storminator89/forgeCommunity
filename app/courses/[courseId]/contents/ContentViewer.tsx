@@ -2,7 +2,7 @@
 
 import { FileText, Video, Music, AlertTriangle } from 'lucide-react';
 import { CourseContent } from './types';
-import { SanitizedHtml } from '@/components/SanitizedHtml';
+
 import { getSafeEmbedUrl, getYouTubeEmbedUrl } from '@/lib/security';
 
 interface ContentViewerProps {
@@ -46,14 +46,14 @@ export function ContentViewer({ content }: ContentViewerProps) {
         <div className="divide-y divide-border">
           {content.type === 'TEXT' && (
             <div className="p-6">
-              <SanitizedHtml
-                html={content.content as string}
+              <div
                 className="prose dark:prose-invert max-w-none prose-img:rounded-lg prose-headings:scroll-m-20 
                   prose-headings:font-semibold prose-h1:text-3xl prose-h2:text-2xl prose-h3:text-xl 
                   prose-h4:text-lg prose-h1:mb-6 prose-h2:mb-4 prose-h3:mb-3
                   prose-p:leading-7 prose-p:mb-4 prose-a:text-primary hover:prose-a:text-primary/80
                   prose-strong:font-semibold prose-code:text-primary prose-code:bg-muted/50 prose-code:p-1 
                   prose-code:rounded prose-code:before:content-none prose-code:after:content-none"
+                dangerouslySetInnerHTML={{ __html: content.content as string }}
               />
             </div>
           )}

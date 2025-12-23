@@ -13,7 +13,7 @@ import Link from 'next/link';
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { motion, AnimatePresence } from 'framer-motion';
-import { SanitizedHtml } from '@/components/SanitizedHtml';
+
 import Image from 'next/image';
 
 interface Article {
@@ -174,8 +174,8 @@ export default function KnowledgeBase() {
                             key={category}
                             onClick={() => setSelectedCategory(category)}
                             className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all duration-200 ${selectedCategory === category
-                                ? 'bg-primary text-primary-foreground'
-                                : 'hover:bg-muted/50 text-foreground'
+                              ? 'bg-primary text-primary-foreground'
+                              : 'hover:bg-muted/50 text-foreground'
                               }`}
                           >
                             <span className="flex items-center">
@@ -219,8 +219,8 @@ export default function KnowledgeBase() {
                             key={tag}
                             variant={selectedTag === tag ? "default" : "secondary"}
                             className={`cursor-pointer transition-all duration-200 text-xs ${selectedTag === tag
-                                ? 'bg-primary hover:bg-primary/90 text-primary-foreground'
-                                : 'hover:bg-secondary/80'
+                              ? 'bg-primary hover:bg-primary/90 text-primary-foreground'
+                              : 'hover:bg-secondary/80'
                               }`}
                             onClick={() => setSelectedTag(tag === selectedTag ? 'All' : tag)}
                           >
@@ -340,9 +340,9 @@ export default function KnowledgeBase() {
                                       </div>
                                     </div>
 
-                                    <SanitizedHtml
-                                      html={article.content.substring(0, 150) + '...'}
+                                    <div
                                       className="text-muted-foreground mb-4 line-clamp-2"
+                                      dangerouslySetInnerHTML={{ __html: article.content.substring(0, 150) + '...' }}
                                     />
 
                                     <div className="flex flex-wrap gap-2 mb-4">

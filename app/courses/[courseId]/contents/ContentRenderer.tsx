@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Pencil } from 'lucide-react';
 import { QuizRenderer } from './QuizRenderer';
-import { SanitizedHtml } from '@/components/SanitizedHtml';
+
 import { getSafeEmbedUrl, getYouTubeEmbedUrl as getSecureYouTubeEmbedUrl } from '@/lib/security';
 import { AlertTriangle } from 'lucide-react';
 
@@ -112,7 +112,7 @@ export function ContentRenderer({ content, isEditing: externalIsEditing, onSave,
       case 'TEXT':
         return (
           <div className="prose prose-sm md:prose-base dark:prose-invert max-w-none">
-            <SanitizedHtml html={content.content as string} />
+            <div dangerouslySetInnerHTML={{ __html: content.content as string }} />
           </div>
         );
 

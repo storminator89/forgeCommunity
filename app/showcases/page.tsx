@@ -23,7 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { useSession } from 'next-auth/react';
 import { Editor } from "@/components/Editor";
-import { SanitizedHtml } from '@/components/SanitizedHtml';
+
 
 interface Tag {
   id: string;
@@ -585,9 +585,9 @@ export default function ProjectShowcase() {
                             <CardTitle className="text-xl font-bold mb-2 line-clamp-1">
                               {project.title}
                             </CardTitle>
-                            <SanitizedHtml
-                              html={project.description}
+                            <div
                               className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2 prose dark:prose-invert"
+                              dangerouslySetInnerHTML={{ __html: project.description }}
                             />
                           </div>
 
@@ -716,9 +716,9 @@ export default function ProjectShowcase() {
                                   )}
                                 </div>
                               </div>
-                              <SanitizedHtml
-                                html={project.description}
+                              <div
                                 className="mt-1 text-sm text-gray-600 dark:text-gray-300 line-clamp-2 prose dark:prose-invert"
+                                dangerouslySetInnerHTML={{ __html: project.description }}
                               />
                               <div className="mt-2 flex items-center justify-between">
                                 <div className="flex items-center space-x-2">
