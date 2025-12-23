@@ -1,6 +1,6 @@
-import dynamicImport from "next/dynamic";
+"use client";
 
-export const dynamic = 'force-dynamic';
+import dynamicImport from "next/dynamic";
 
 const SearchPageClient = dynamicImport(() => import("./SearchPageClient"), {
   ssr: false,
