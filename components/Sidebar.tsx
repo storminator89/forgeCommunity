@@ -62,7 +62,7 @@ const navItems = {
   ],
   settings: [
     { name: 'Einstellungen', icon: Settings, href: '/settings' },
-    { name: 'Hilfe', icon: HelpCircle, href: '/help' },
+
     { name: 'Über uns', icon: Info, href: '/about' },
   ],
   admin: [
