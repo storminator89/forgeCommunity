@@ -1,7 +1,10 @@
 # Build stage
-FROM node:18-alpine AS builder
+FROM node:18-slim AS builder
 WORKDIR /app
-RUN apk add --no-cache openssl libc6-compat
+
+# Install OpenSSL for Prisma
+RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+
 COPY package*.json ./
 COPY prisma ./prisma/
 RUN npm ci --legacy-peer-deps
@@ -10,13 +13,15 @@ RUN npx prisma generate
 RUN npm run build
 
 # Production stage
-FROM node:18-alpine AS runner
+FROM node:18-slim AS runner
 WORKDIR /app
-RUN apk add --no-cache openssl libc6-compat
 
-ENV NODE_ENV production
-ENV PORT 3013
-ENV HOSTNAME "0.0.0.0"
+# Install OpenSSL for Prisma
+RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+
+ENV NODE_ENV=production
+ENV PORT=3013
+ENV HOSTNAME="0.0.0.0"
 
 # Copy necessary files from builder
 COPY --from=builder --chown=node:node /app/public ./public
