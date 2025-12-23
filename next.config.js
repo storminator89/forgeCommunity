@@ -48,9 +48,6 @@ const nextConfig = {
   // Production Build Konfiguration
   output: 'standalone',
 
-  // Transpile framer-motion for proper Node.js/Docker compatibility
-  transpilePackages: ['framer-motion'],
-
   images: {
     unoptimized: true
   },

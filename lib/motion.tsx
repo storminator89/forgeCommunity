@@ -9,7 +9,7 @@
 import React, { ComponentProps, ReactNode, forwardRef } from 'react';
 
 // Safe proxy to handle any motion.xyz component access
-const motionProxy = new Proxy({}, {
+const motionProxy = new Proxy({} as any, {
     get: (target, prop) => {
         // Return a forwardRef component for any property access (div, span, li, etc.)
         const Component = forwardRef((props: any, ref) => {
@@ -39,7 +39,7 @@ const motionProxy = new Proxy({}, {
     }
 });
 
-export const motion = motionProxy;
+export const motion: any = motionProxy;
 
 // Fallback AnimatePresence that just renders children
 export const AnimatePresence = ({ children }: { children: ReactNode }) => {
