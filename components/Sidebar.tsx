@@ -27,7 +27,7 @@ import {
   Award,
   Library,
   LayoutDashboard,
-  BookmarkIcon,
+  Bookmark,
   ChevronRight,
   ChevronLeft
 } from 'lucide-react';
@@ -51,7 +51,7 @@ const navItems = {
     { name: 'Ressourcen', icon: BookOpen, href: '/resources' },
   ],
   personal: [
-    { name: 'Meine Entwürfe', icon: BookmarkIcon, href: '/knowledgebase/drafts' },
+    { name: 'Meine Entwürfe', icon: Bookmark, href: '/knowledgebase/drafts' },
     { name: 'Projekte', icon: Briefcase, href: '/showcases' },
     { name: 'Skills', icon: Award, href: '/skills' },
   ],

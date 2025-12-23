@@ -147,7 +147,7 @@ export default function SearchPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [searchTerm, activeTab, page]);
+  }, [searchTerm, activeTab, page, toast]);
 
   useEffect(() => {
     const timer = setTimeout(() => {

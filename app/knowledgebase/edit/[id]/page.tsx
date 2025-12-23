@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Card } from "@/components/ui/card";
-import { BookOpen, ArrowLeft, Upload, Loader2, BookmarkIcon, SendIcon } from 'lucide-react';
+import { BookOpen, ArrowLeft, Upload, Loader2, Bookmark, Send } from 'lucide-react';
 import { CategorySelect } from "@/components/CategorySelect";
 import { TagSelect } from "@/components/TagSelect";
 import { toast } from 'sonner';
@@ -189,7 +189,7 @@ export default function EditArticle({ params }: { params: Promise<{ id: string }
                       </>
                     ) : (
                       <>
-                        <BookmarkIcon className="mr-2 h-4 w-4" />
+                        <Bookmark className="mr-2 h-4 w-4" />
                         Als Entwurf speichern
                       </>
                     )}
@@ -205,7 +205,7 @@ export default function EditArticle({ params }: { params: Promise<{ id: string }
                       </>
                     ) : (
                       <>
-                        <SendIcon className="mr-2 h-4 w-4" />
+                        <Send className="mr-2 h-4 w-4" />
                         Veröffentlichen
                       </>
                     )}

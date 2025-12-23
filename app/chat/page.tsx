@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { useChat } from '@/contexts/ChatContext'
 import { useSession } from 'next-auth/react'
-import { Hash, Send, Plus, Pencil, Check, X, Trash2, ImageIcon, Maximize2 } from 'lucide-react'
+import { Hash, Send, Plus, Pencil, Check, X, Trash2, Image as ImageIcon, Maximize2 } from 'lucide-react'
 import { format } from 'date-fns'
 import { de } from 'date-fns/locale'
 import { ChatMessage } from '@/types/chat'

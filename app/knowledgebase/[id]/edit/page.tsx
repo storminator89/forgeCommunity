@@ -19,7 +19,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { CategorySelect } from "@/components/CategorySelect";
 import { TagSelect } from "@/components/TagSelect";
 import Image from 'next/image';
-import { Type, ImageIcon, FileText, FolderOpen, Tags, Trash2, Save, Loader2 } from 'lucide-react';
+import { Type, Image as ImageIcon, FileText, FolderOpen, Tags, Trash2, Save, Loader2 } from 'lucide-react';
 import { Badge } from "@/components/ui/badge";
 import { Editor } from "@/components/Editor";
 

@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { BookOpen, ArrowLeft, Upload, Loader2, BookmarkIcon, SendIcon, Trash2, Book, Tag } from 'lucide-react';
+import { BookOpen, ArrowLeft, Upload, Loader2, Bookmark, Send, Trash2, Book, Tag } from 'lucide-react';
 import Image from 'next/image';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CategorySelect } from "@/components/CategorySelect";
@@ -332,7 +332,7 @@ export default function NewArticle() {
                             </>
                           ) : (
                             <>
-                              <BookmarkIcon className="mr-2 h-4 w-4" />
+                              <Bookmark className="mr-2 h-4 w-4" />
                               Als Entwurf speichern
                             </>
                           )}
@@ -350,7 +350,7 @@ export default function NewArticle() {
                             </>
                           ) : (
                             <>
-                              <SendIcon className="mr-2 h-4 w-4" />
+                              <Send className="mr-2 h-4 w-4" />
                               Veröffentlichen
                             </>
                           )}

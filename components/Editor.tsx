@@ -20,7 +20,7 @@ import {
   Redo,
   Code,
   Link as LinkIcon,
-  ImageIcon,
+  Image as ImageIcon,
 } from 'lucide-react'
 
 interface EditorProps {
