@@ -3,76 +3,67 @@
 /**
  * Safe wrapper for framer-motion that handles SSR/Docker environments
  * This provides fallback components when framer-motion fails to load
+ * or for environments where we want to disable animations globally
  */
 
-import React, { useEffect, useState, forwardRef, ComponentProps, ReactNode } from 'react';
+import React, { ComponentProps, ReactNode, forwardRef } from 'react';
 
-// Type definitions
-type MotionDivProps = ComponentProps<'div'> & {
-    initial?: any;
-    animate?: any;
-    exit?: any;
-    transition?: any;
-    whileHover?: any;
-    whileTap?: any;
-    layout?: boolean | string;
-};
+// Safe proxy to handle any motion.xyz component access
+const motionProxy = new Proxy({}, {
+    get: (target, prop) => {
+        // Return a forwardRef component for any property access (div, span, li, etc.)
+        const Component = forwardRef((props: any, ref) => {
+            const {
+                initial, animate, exit, transition, variants,
+                whileHover, whileTap, whileDrag, whileFocus, whileInView,
+                viewport, onAnimationStart, onAnimationComplete, onLayoutAnimationComplete,
+                layout, layoutId, layoutDependency, layoutScroll,
+                drag, dragControls, dragListener, dragConstraints, dragElastic, dragMomentum,
+                ...rest
+            } = props;
 
-type AnimatePresenceProps = {
-    children: ReactNode;
-    mode?: 'sync' | 'wait' | 'popLayout';
-    initial?: boolean;
-    onExitComplete?: () => void;
-};
+            // If prop is a valid HTML tag, render it
+            if (typeof prop === 'string') {
+                // Handle special cases or generic fallbacks
+                if (prop === 'custom') return <div ref={ref} {...rest} />;
 
-// Fallback div component that ignores motion props
-const FallbackDiv = forwardRef<HTMLDivElement, MotionDivProps>(
-    ({ initial, animate, exit, transition, whileHover, whileTap, layout, ...props }, ref) => {
-        return <div ref={ref} {...props} />;
+                return React.createElement(prop, { ref, ...rest });
+            }
+
+            // Fallback for non-string props (symbols etc)
+            return <div ref={ref} {...rest} />;
+        });
+
+        Component.displayName = `MotionFallback.${String(prop)}`;
+        return Component;
     }
-);
-FallbackDiv.displayName = 'FallbackDiv';
+});
+
+export const motion = motionProxy;
 
 // Fallback AnimatePresence that just renders children
-const FallbackAnimatePresence = ({ children }: AnimatePresenceProps) => {
+export const AnimatePresence = ({ children }: { children: ReactNode }) => {
     return <>{children}</>;
 };
 
-// Create a motion object with dynamic loading
-export const motion = {
-    div: FallbackDiv,
-    span: forwardRef<HTMLSpanElement, MotionDivProps>(
-        ({ initial, animate, exit, transition, whileHover, whileTap, layout, ...props }, ref) => {
-            return <span ref={ref} {...props} />;
-        }
-    ),
-    button: forwardRef<HTMLButtonElement, MotionDivProps & ComponentProps<'button'>>(
-        ({ initial, animate, exit, transition, whileHover, whileTap, layout, ...props }, ref) => {
-            return <button ref={ref} {...props} />;
-        }
-    ),
+// Mock other common exports that might be used
+export const useAnimation = () => ({
+    start: () => Promise.resolve(),
+    stop: () => { },
+    set: () => { },
+});
+
+export const useScroll = () => ({
+    scrollY: { on: () => { }, get: () => 0 },
+    scrollYProgress: { on: () => { }, get: () => 0 },
+});
+
+export const useTransform = () => 0;
+
+export const Reorder = {
+    Group: ({ children, ...props }: any) => <ul {...props}>{children}</ul>,
+    Item: ({ children, ...props }: any) => <li {...props}>{children}</li>,
 };
 
-motion.span.displayName = 'FallbackSpan';
-motion.button.displayName = 'FallbackButton';
-
-// Export AnimatePresence as fallback
-export const AnimatePresence = FallbackAnimatePresence;
-
-// Dynamic loading hook - can be used to enable animations after hydration
-export function useMotion() {
-    const [motionLib, setMotionLib] = useState<typeof import('framer-motion') | null>(null);
-
-    useEffect(() => {
-        // Only load framer-motion on client side
-        import('framer-motion')
-            .then((mod) => {
-                setMotionLib(mod);
-            })
-            .catch(() => {
-                console.warn('framer-motion failed to load, using fallback components');
-            });
-    }, []);
-
-    return motionLib;
-}
+// Export dummy versions of other hooks/components if needed
+export default motion;
