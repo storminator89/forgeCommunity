@@ -31,10 +31,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useRouter } from 'next/navigation';
-import { toast } from 'react-toastify';
+
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { Progress } from "@/components/ui/progress";
+import { useToast } from "@/hooks/use-toast";
 
 
 interface SearchResult {
@@ -102,7 +103,10 @@ const SafeHTML = ({ html }: { html: string }) => {
   return <div className="inline" dangerouslySetInnerHTML={{ __html: html }} />;
 };
 
+export const dynamic = 'force-dynamic';
+
 export default function SearchPage() {
+  const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('all');
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -135,7 +139,11 @@ export default function SearchPage() {
       setTotalPages(data.pagination.pages);
     } catch (error) {
       console.error('Search error:', error);
-      toast.error('Fehler bei der Suche');
+      toast({
+        title: "Fehler",
+        description: "Fehler bei der Suche",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
