@@ -1,10 +1,8 @@
-import { writeFile, mkdir } from 'fs/promises';
 import { NextRequest, NextResponse } from 'next/server';
-import path from 'path';
-import { v4 as uuidv4 } from 'uuid';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]/options";
 import prisma from '@/lib/prisma';
+import { ImageUploadValidationError, saveImageUpload } from '@/lib/server/image-upload';
 
 export async function POST(request: NextRequest) {
     try {
@@ -27,44 +25,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Überprüfen Sie den Dateityp
-        const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
-        if (!allowedTypes.includes(file.type)) {
-            return NextResponse.json(
-                { error: 'Ungültiger Dateityp. Nur JPEG, PNG und GIF sind erlaubt.' },
-                { status: 400 }
-            );
-        }
-
-        // Maximale Dateigröße (5MB)
-        const maxSize = 5 * 1024 * 1024; // 5MB in Bytes
-        if (file.size > maxSize) {
-            return NextResponse.json(
-                { error: 'Datei ist zu groß. Maximale Größe ist 5MB.' },
-                { status: 400 }
-            );
-        }
-
-        const bytes = await file.arrayBuffer();
-        const buffer = Buffer.from(bytes);
-
-        // Validiere und säubere die Dateierweiterung
-        const fileExt = path.extname(file.name).toLowerCase();
-        const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
-
-        if (!allowedExtensions.includes(fileExt)) {
-            return NextResponse.json(
-                { error: 'Ungültige Dateiendung. Nur JPG, PNG, GIF und WebP sind erlaubt.' },
-                { status: 400 }
-            );
-        }
-
-        // Generieren Sie einen eindeutigen Dateinamen (UUID verhindert Path Traversal)
-        const fileName = `${uuidv4()}${fileExt}`;
-        const filePath = path.join(process.cwd(), 'public', 'images', 'uploads', fileName);
-
-        // Speichern Sie die Datei
-        await writeFile(filePath, new Uint8Array(buffer));
+        const publicPath = await saveImageUpload(file, 'profile');
 
         // Aktualisieren Sie das Benutzerprofil mit dem neuen Bildpfad
         await prisma.user.update({
@@ -72,20 +33,20 @@ export async function POST(request: NextRequest) {
                 id: session.user.id,
             },
             data: {
-                image: `/images/uploads/${fileName}`,
+                image: publicPath,
             },
         });
 
         return NextResponse.json({
             success: true,
-            filePath: `/images/uploads/${fileName}`
+            filePath: publicPath
         });
 
     } catch (error) {
         console.error('Fehler beim Hochladen:', error);
         return NextResponse.json(
-            { error: 'Fehler beim Hochladen der Datei' },
-            { status: 500 }
+            { error: error instanceof Error ? error.message : 'Fehler beim Hochladen der Datei' },
+            { status: error instanceof ImageUploadValidationError ? 400 : 500 }
         );
     }
 }

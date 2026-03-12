@@ -4,8 +4,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
-import { writeFile } from 'fs/promises';
-import path from 'path';
+import { ImageUploadValidationError, saveImageUpload } from '@/lib/server/image-upload';
+import { sanitizeRichHtmlServer, sanitizeTextServer } from '@/lib/server/sanitize-html';
 
 export async function GET() {
   try {
@@ -38,10 +38,12 @@ export async function POST(req: NextRequest) {
 
   try {
     const formData = await req.formData();
-    const title = formData.get('title') as string;
-    const content = formData.get('content') as string;
-    const category = formData.get('category') as string;
-    const tags = formData.getAll('tags') as string[];
+    const title = sanitizeTextServer(formData.get('title') as string);
+    const content = sanitizeRichHtmlServer(formData.get('content') as string);
+    const category = sanitizeTextServer(formData.get('category') as string);
+    const tags = (formData.getAll('tags') as string[])
+      .map((tag) => sanitizeTextServer(tag))
+      .filter(Boolean);
     const featuredImage = formData.get('featuredImage') as File | null;
     const isPublished = formData.get('isPublished') === 'true'; // Neues Feld
 
@@ -51,12 +53,7 @@ export async function POST(req: NextRequest) {
 
     let featuredImagePath = '';
     if (featuredImage) {
-      const bytes = await featuredImage.arrayBuffer();
-      const buffer = new Uint8Array(bytes);
-      const fileName = `${Date.now()}_${featuredImage.name}`;
-      const filePath = path.join(process.cwd(), 'public', 'images', 'uploads', fileName);
-      await writeFile(filePath, buffer);
-      featuredImagePath = `/images/uploads/${fileName}`;
+      featuredImagePath = await saveImageUpload(featuredImage, 'article');
     }
 
     const tagConnectOrCreate = tags.map((tagName: string) => ({
@@ -88,6 +85,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(newArticle, { status: 201 });
   } catch (error) {
     console.error('POST /api/articles Error:', error);
-    return NextResponse.json({ error: 'Fehler beim Erstellen des Artikels.' }, { status: 500 });
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Fehler beim Erstellen des Artikels.' },
+      { status: error instanceof ImageUploadValidationError ? 400 : 500 }
+    );
   }
 }

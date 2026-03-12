@@ -16,6 +16,7 @@ import { Card } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import Image from 'next/image';
+import { sanitizeRichHtml } from '@/lib/sanitize-html';
 
 interface Article {
   id: string;
@@ -260,14 +261,14 @@ export default function ArticlePage() {
                         prose-img:rounded-lg prose-img:ring-1 prose-img:ring-border/40
                         prose-blockquote:border-l-primary/30 prose-blockquote:bg-muted/30 prose-blockquote:not-italic
                         prose-blockquote:pl-6 prose-blockquote:py-1 prose-blockquote:text-muted-foreground
-                        prose-ul:list-none prose-ul:pl-0
-                        prose-li:relative prose-li:pl-6
-                        prose-li:before:absolute prose-li:before:left-1 prose-li:before:top-3
+                      prose-ul:list-none prose-ul:pl-0
+                      prose-li:relative prose-li:pl-6
+                      prose-li:before:absolute prose-li:before:left-1 prose-li:before:top-3
                         prose-li:before:h-1.5 prose-li:before:w-1.5 prose-li:before:rounded-full
                         prose-li:before:bg-primary/40
                         [&_ul_li]:mt-2 first:[&_ul_li]:mt-0
                         prose-hr:border-border/40"
-                      dangerouslySetInnerHTML={{ __html: article.content }}
+                      dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(article.content) }}
                     />
                   </div>
                 </div>

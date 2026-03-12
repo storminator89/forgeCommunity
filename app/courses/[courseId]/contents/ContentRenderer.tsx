@@ -11,6 +11,7 @@ import { QuizRenderer } from './QuizRenderer';
 
 import { getSafeEmbedUrl, getYouTubeEmbedUrl as getSecureYouTubeEmbedUrl } from '@/lib/security';
 import { AlertTriangle } from 'lucide-react';
+import { sanitizeRichHtml } from '@/lib/sanitize-html';
 
 interface ContentRendererProps {
   content: CourseContent;
@@ -112,7 +113,7 @@ export function ContentRenderer({ content, isEditing: externalIsEditing, onSave,
       case 'TEXT':
         return (
           <div className="prose prose-sm md:prose-base dark:prose-invert max-w-none">
-            <div dangerouslySetInnerHTML={{ __html: content.content as string }} />
+            <div dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(content.content as string) }} />
           </div>
         );
 

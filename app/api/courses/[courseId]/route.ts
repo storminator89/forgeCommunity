@@ -8,40 +8,16 @@ export async function GET(
   props: { params: Promise<{ courseId: string }> }
 ) {
   const params = await props.params;
+  const courseId = params.courseId;
   try {
     const session = await getServerSession(authOptions);
-    console.log('Session in GET /api/courses/[courseId]:', session);
 
     if (!session || !session.user?.id) {
-      console.log('No valid session found');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const courseId = params.courseId;
-    console.log('Attempting to fetch course with ID:', courseId);
-
     if (!courseId) {
-      console.log('No courseId provided');
       return NextResponse.json({ error: 'Course ID is required' }, { status: 400 });
-    }
-
-    // Since user is an admin, skip the userCourse check
-    if (session.user.role !== 'ADMIN') {
-      // Check if user has access to this course
-      // Check if user has access to this course
-      const userCourse = await prisma.enrollment.findFirst({
-        where: {
-          courseId: courseId,
-          userId: session.user.id,
-        },
-      });
-
-      console.log('User course access:', userCourse);
-
-      if (!userCourse) {
-        console.log('User does not have access to this course');
-        return NextResponse.json({ error: 'Access denied to this course' }, { status: 403 });
-      }
     }
 
     const course = await prisma.course.findUnique({
@@ -52,32 +28,38 @@ export async function GET(
         description: true,
         createdAt: true,
         updatedAt: true,
+        instructorId: true,
       },
     });
 
-    console.log('Found course:', course);
-
     if (!course) {
-      console.log('Course not found');
       return NextResponse.json({ error: 'Course not found' }, { status: 404 });
     }
 
-    // Transform the response to match the expected format
+    if (session.user.role !== 'ADMIN' && course.instructorId !== session.user.id) {
+      const enrollment = await prisma.enrollment.findUnique({
+        where: {
+          userId_courseId: {
+            userId: session.user.id,
+            courseId,
+          },
+        },
+        select: { id: true },
+      });
+
+      if (!enrollment) {
+        return NextResponse.json({ error: 'Access denied to this course' }, { status: 403 });
+      }
+    }
+
     return NextResponse.json({
       id: course.id,
-      name: course.title,  // Map 'title' to 'name' in the response
+      name: course.title,
       description: course.description,
       createdAt: course.createdAt,
       updatedAt: course.updatedAt,
     });
   } catch (error) {
-    console.error('Detailed error in course fetch:', error);
-    console.error('Full error object:', {
-      name: (error as any)?.name,
-      message: (error as any)?.message,
-      stack: (error as any)?.stack,
-    });
-
     return NextResponse.json(
       {
         error: 'Failed to fetch course',
@@ -85,8 +67,6 @@ export async function GET(
       },
       { status: 500 }
     );
-  } finally {
-    await prisma.$disconnect();
   }
 }
 
@@ -111,7 +91,7 @@ export async function DELETE(
     // Fetch the course with instructor info
     const course = await prisma.course.findUnique({
       where: { id: courseId },
-      include: { instructor: true },
+      select: { instructorId: true },
     });
 
     if (!course) {
@@ -119,7 +99,7 @@ export async function DELETE(
     }
 
     // Check authorization
-    if (session.user.role !== 'ADMIN' && course.instructor.id !== session.user.id) {
+    if (session.user.role !== 'ADMIN' && course.instructorId !== session.user.id) {
       return NextResponse.json({ error: 'Unauthorized to delete this course' }, { status: 403 });
     }
 
@@ -178,7 +158,5 @@ export async function DELETE(
       },
       { status: 500 }
     );
-  } finally {
-    await prisma.$disconnect();
   }
 }

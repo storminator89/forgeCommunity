@@ -4,6 +4,7 @@ import { FileText, Video, Music, AlertTriangle } from 'lucide-react';
 import { CourseContent } from './types';
 
 import { getSafeEmbedUrl, getYouTubeEmbedUrl } from '@/lib/security';
+import { sanitizeRichHtml } from '@/lib/sanitize-html';
 
 interface ContentViewerProps {
   content: CourseContent;
@@ -53,7 +54,7 @@ export function ContentViewer({ content }: ContentViewerProps) {
                   prose-p:leading-7 prose-p:mb-4 prose-a:text-primary hover:prose-a:text-primary/80
                   prose-strong:font-semibold prose-code:text-primary prose-code:bg-muted/50 prose-code:p-1 
                   prose-code:rounded prose-code:before:content-none prose-code:after:content-none"
-                dangerouslySetInnerHTML={{ __html: content.content as string }}
+                dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(content.content as string) }}
               />
             </div>
           )}

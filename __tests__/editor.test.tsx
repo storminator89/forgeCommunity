@@ -6,38 +6,53 @@ import '@testing-library/jest-dom'
 jest.mock('lucide-react', () => ({
   Bold: () => <span data-testid="bold-icon">Bold</span>,
   Italic: () => <span data-testid="italic-icon">Italic</span>,
+  Underline: () => <span data-testid="underline-icon">Underline</span>,
+  Strikethrough: () => <span data-testid="strikethrough-icon">Strikethrough</span>,
   Heading2: () => <span data-testid="heading-icon">Heading</span>,
   List: () => <span data-testid="bullet-list-icon">BulletList</span>,
   ListOrdered: () => <span data-testid="ordered-list-icon">OrderedList</span>,
   Quote: () => <span data-testid="quote-icon">Quote</span>,
   Code: () => <span data-testid="code-icon">Code</span>,
+  Link: () => <span data-testid="link-icon">Link</span>,
+  Image: () => <span data-testid="image-icon">Image</span>,
   Undo: () => <span data-testid="undo-icon">Undo</span>,
   Redo: () => <span data-testid="redo-icon">Redo</span>,
 }))
 
 // Mock tiptap
+const mockChain = {
+  focus: jest.fn().mockReturnThis(),
+  toggleBold: jest.fn().mockReturnThis(),
+  toggleItalic: jest.fn().mockReturnThis(),
+  toggleUnderline: jest.fn().mockReturnThis(),
+  toggleStrike: jest.fn().mockReturnThis(),
+  toggleHeading: jest.fn().mockReturnThis(),
+  toggleBulletList: jest.fn().mockReturnThis(),
+  toggleOrderedList: jest.fn().mockReturnThis(),
+  toggleBlockquote: jest.fn().mockReturnThis(),
+  toggleCode: jest.fn().mockReturnThis(),
+  extendMarkRange: jest.fn().mockReturnThis(),
+  unsetLink: jest.fn().mockReturnThis(),
+  setLink: jest.fn().mockReturnThis(),
+  setImage: jest.fn().mockReturnThis(),
+  undo: jest.fn().mockReturnThis(),
+  redo: jest.fn().mockReturnThis(),
+  run: jest.fn(),
+}
+
 const mockEditor = {
-  chain: () => ({
-    focus: jest.fn().mockReturnThis(),
-    toggleBold: () => ({ run: jest.fn() }),
-    toggleItalic: () => ({ run: jest.fn() }),
-    toggleHeading: () => ({ run: jest.fn() }),
-    toggleBulletList: () => ({ run: jest.fn() }),
-    toggleOrderedList: () => ({ run: jest.fn() }),
-    toggleBlockquote: () => ({ run: jest.fn() }),
-    toggleCode: () => ({ run: jest.fn() }),
-    undo: () => ({ run: jest.fn() }),
-    redo: () => ({ run: jest.fn() }),
-  }),
+  chain: () => mockChain,
   isActive: () => false,
   can: () => ({
     undo: () => true,
     redo: () => true,
   }),
+  getAttributes: () => ({ href: '' }),
   getHTML: () => '<p>Test Content</p>',
   commands: {
     setContent: jest.fn(),
   },
+  setEditable: jest.fn(),
 }
 
 jest.mock('@tiptap/react', () => ({
@@ -76,6 +91,7 @@ describe('Editor', () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
+    window.prompt = jest.fn().mockReturnValue(null)
   })
 
   it('renders with initial content', () => {

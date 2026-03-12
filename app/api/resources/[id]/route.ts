@@ -3,17 +3,17 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../../auth/[...nextauth]/options';
-import { PrismaClient, ResourceType } from '@prisma/client';
+import { ResourceType } from '@prisma/client';
 import { z } from 'zod';
-
-const prisma = new PrismaClient();
+import prisma from '@/lib/prisma';
+import { HttpUrlValidationError, normalizeHttpUrl } from '@/lib/server/url-security';
 
 // Schema für Ressourcenvalidierung bei Updates
 const resourceUpdateSchema = z.object({
   title: z.string().min(1).optional(),
   type: z.nativeEnum(ResourceType).optional(),
   category: z.string().min(1).optional(),
-  url: z.string().url().optional(),
+  url: z.string().url().transform((value) => normalizeHttpUrl(value).toString()).optional(),
   color: z.string().min(1).optional(),
 });
 
@@ -63,7 +63,7 @@ export async function PUT(request: Request, props: { params: Promise<{ id: strin
 
   try {
     const body = await request.json();
-    const { title, url } = body;
+    const { title, url } = resourceUpdateSchema.parse(body);
     const { id } = params;
 
     if (!title || !url) {
@@ -114,8 +114,8 @@ export async function PUT(request: Request, props: { params: Promise<{ id: strin
   } catch (error) {
     console.error('Error updating resource:', error);
     return NextResponse.json(
-      { error: 'Fehler beim Aktualisieren der Ressource.' },
-      { status: 500 }
+      { error: error instanceof Error ? error.message : 'Fehler beim Aktualisieren der Ressource.' },
+      { status: error instanceof HttpUrlValidationError ? 400 : 500 }
     );
   }
 }

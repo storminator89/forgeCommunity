@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { CommentSection } from './CommentSection'
 
 import { cn } from "@/lib/utils"
+import { sanitizeRichHtml } from '@/lib/sanitize-html'
 import { formatDistanceToNow } from 'date-fns'
 import { de } from 'date-fns/locale'
 
@@ -124,7 +125,7 @@ export function PostCard({
             <div className="relative">
               <div
                 className="prose prose-sm dark:prose-invert max-w-none text-muted-foreground"
-                dangerouslySetInnerHTML={{ __html: post.content }}
+                dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(post.content) }}
               />
             </div>
           </div>

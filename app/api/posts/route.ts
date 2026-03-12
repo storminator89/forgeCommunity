@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma' 
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth' 
+import { sanitizeRichHtmlServer, sanitizeTextServer } from '@/lib/server/sanitize-html'
 
 export async function POST(req: NextRequest) {
   try {
@@ -20,8 +21,8 @@ export async function POST(req: NextRequest) {
 
     const newPost = await prisma.post.create({
       data: {
-        title,
-        content,
+        title: sanitizeTextServer(title),
+        content: sanitizeRichHtmlServer(content),
         authorId: session.user.id,
       },
       include: {

@@ -1,14 +1,19 @@
 import { NextResponse } from 'next/server';
-import { getLinkPreview } from 'link-preview-js';
+import { JSDOM } from 'jsdom';
 
-const getPdfMetadata = async (url: string) => {
+import { sanitizeTextServer } from '@/lib/server/sanitize-html';
+import { assertSafePublicUrl } from '@/lib/server/url-security';
+
+const PREVIEW_TIMEOUT_MS = 5000;
+
+const getPdfMetadata = async (url: URL) => {
   try {
-    const response = await fetch(url, {
+    const response = await fetch(url.toString(), {
       method: 'HEAD',
-      redirect: 'follow',
-      signal: AbortSignal.timeout(5000)
+      redirect: 'manual',
+      signal: AbortSignal.timeout(PREVIEW_TIMEOUT_MS)
     }).catch(e => {
-      console.error(`Fetch error for ${url}:`, e);
+      console.error(`Fetch error for ${url.toString()}:`, e);
       return null;
     });
 
@@ -23,7 +28,7 @@ const getPdfMetadata = async (url: string) => {
     const contentType = response.headers.get('content-type');
     const contentLength = response.headers.get('content-length');
     const lastModified = response.headers.get('last-modified');
-    const fileName = decodeURIComponent(url.split('/').pop() || 'document.pdf');
+    const fileName = decodeURIComponent(url.pathname.split('/').pop() || 'document.pdf');
 
     if (contentType?.includes('application/pdf')) {
       const fileSizeInMB = contentLength ? Math.round(parseInt(contentLength) / (1024 * 1024) * 10) / 10 : null;
@@ -55,7 +60,7 @@ const getVideoMetadata = async (url: string) => {
 
       const response = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`, {
         redirect: 'follow',
-        signal: AbortSignal.timeout(5000)
+        signal: AbortSignal.timeout(PREVIEW_TIMEOUT_MS)
       }).catch(e => {
         console.error(`YouTube fetch error for ${videoId}:`, e);
         return null;
@@ -83,7 +88,7 @@ const getVideoMetadata = async (url: string) => {
       const videoId = urlObj.pathname.split('/')[1];
       const response = await fetch(`https://vimeo.com/api/oembed.json?url=https://vimeo.com/${videoId}`, {
         redirect: 'follow',
-        signal: AbortSignal.timeout(5000)
+        signal: AbortSignal.timeout(PREVIEW_TIMEOUT_MS)
       }).catch(e => {
         console.error(`Vimeo fetch error for ${videoId}:`, e);
         return null;
@@ -113,6 +118,84 @@ const getVideoMetadata = async (url: string) => {
   }
 };
 
+const getHtmlMetadata = async (url: URL) => {
+  try {
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      redirect: 'manual',
+      headers: {
+        'user-agent': 'forge-community-preview/1.0',
+        accept: 'text/html,application/xhtml+xml',
+      },
+      signal: AbortSignal.timeout(PREVIEW_TIMEOUT_MS),
+    }).catch((error) => {
+      console.error(`HTML fetch error for ${url.toString()}:`, error);
+      return null;
+    });
+
+    if (!response || !response.ok) {
+      return null;
+    }
+
+    if (response.status >= 300 && response.status < 400) {
+      return null;
+    }
+
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('text/html')) {
+      return null;
+    }
+
+    const html = (await response.text()).slice(0, 250000);
+    const dom = new JSDOM(html);
+    const document = dom.window.document;
+
+    const getMetaContent = (...selectors: string[]) => {
+      for (const selector of selectors) {
+        const value = document.querySelector(selector)?.getAttribute('content');
+        if (value) {
+          return sanitizeTextServer(value);
+        }
+      }
+
+      return '';
+    };
+
+    const resolvePreviewUrl = (value: string) => {
+      if (!value) {
+        return null;
+      }
+
+      try {
+        return new URL(value, url).toString();
+      } catch {
+        return null;
+      }
+    };
+
+    const title =
+      getMetaContent('meta[property="og:title"]', 'meta[name="twitter:title"]') ||
+      sanitizeTextServer(document.title) ||
+      url.hostname;
+    const description =
+      getMetaContent('meta[property="og:description"]', 'meta[name="description"]', 'meta[name="twitter:description"]') ||
+      '';
+    const image = resolvePreviewUrl(
+      getMetaContent('meta[property="og:image"]', 'meta[name="twitter:image"]')
+    );
+
+    return {
+      title,
+      description,
+      image,
+      type: 'link',
+    };
+  } catch (error) {
+    console.error('Error fetching HTML metadata:', error);
+    return null;
+  }
+};
+
 export async function POST(request: Request) {
   try {
     const { url } = await request.json();
@@ -124,9 +207,10 @@ export async function POST(request: Request) {
       );
     }
 
-    // Prüfe zuerst auf PDF
-    if (url.toLowerCase().endsWith('.pdf')) {
-      const pdfMetadata = await getPdfMetadata(url);
+    const safeUrl = await assertSafePublicUrl(url);
+
+    if (safeUrl.toString().toLowerCase().endsWith('.pdf')) {
+      const pdfMetadata = await getPdfMetadata(safeUrl);
       if (pdfMetadata) {
         return NextResponse.json(pdfMetadata);
       }
@@ -139,20 +223,20 @@ export async function POST(request: Request) {
     }
 
     // Fallback auf allgemeine Link-Vorschau
-    const previewData = await getLinkPreview(url, {
-      timeout: 5000,
-      headers: {
-        'user-agent': 'Googlebot/2.1 (+http://www.google.com/bot.html)',
-      },
-    });
+    const previewData = await getHtmlMetadata(safeUrl);
 
-    const data = previewData as any;
+    if (!previewData) {
+      return NextResponse.json(
+        { error: 'Für diese URL konnte keine Vorschau geladen werden' },
+        { status: 400 }
+      );
+    }
 
     return NextResponse.json({
-      title: data.title,
-      description: data.description,
-      image: data.images?.[0] || null,
-      type: 'link'
+      title: previewData.title,
+      description: previewData.description,
+      image: previewData.image,
+      type: previewData.type
     });
   } catch (error) {
     console.error('Preview error:', error);

@@ -1,17 +1,17 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../auth/[...nextauth]/options';
-import { PrismaClient, ResourceType } from '@prisma/client';
+import { ResourceType } from '@prisma/client';
 import { z } from 'zod';
-
-const prisma = new PrismaClient();
+import prisma from '@/lib/prisma';
+import { HttpUrlValidationError, normalizeHttpUrl } from '@/lib/server/url-security';
 
 // Schema für Ressourcenvalidierung
 const resourceSchema = z.object({
   title: z.string().min(1),
   type: z.nativeEnum(ResourceType),
   category: z.string().min(1),
-  url: z.string().url(),
+  url: z.string().url().transform((value) => normalizeHttpUrl(value).toString()),
   color: z.string().min(1),
 });
 
@@ -104,7 +104,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.errors }, { status: 400 });
     }
     console.error('Error creating resource:', error);
-    return NextResponse.json({ error: 'Fehler beim Erstellen der Ressource.' }, { status: 500 });
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Fehler beim Erstellen der Ressource.' },
+      { status: error instanceof HttpUrlValidationError ? 400 : 500 }
+    );
   }
 }
 
@@ -138,13 +141,16 @@ export async function PUT(request: Request) {
       where: { id },
       data: {
         title,
-        url,
+        url: normalizeHttpUrl(url).toString(),
       },
     });
 
     return NextResponse.json(updatedResource, { status: 200 });
   } catch (error: any) {
     console.error('Error updating resource:', error);
-    return NextResponse.json({ error: 'Fehler beim Aktualisieren der Ressource.' }, { status: 500 });
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Fehler beim Aktualisieren der Ressource.' },
+      { status: error instanceof HttpUrlValidationError ? 400 : 500 }
+    );
   }
 }

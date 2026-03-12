@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
-import { writeFile } from 'fs/promises';
-import path from 'path';
+import { deleteUploadedImage, ImageUploadValidationError, saveImageUpload } from '@/lib/server/image-upload';
+import { sanitizeRichHtmlServer, sanitizeTextServer } from '@/lib/server/sanitize-html';
 
 export async function GET(
   req: Request,
@@ -52,10 +52,12 @@ export async function PUT(
 
   try {
     const formData = await req.formData();
-    const title = formData.get('title') as string;
-    const content = formData.get('content') as string;
-    const category = formData.get('category') as string;
-    const tags = formData.getAll('tags') as string[];
+    const title = sanitizeTextServer(formData.get('title') as string);
+    const content = sanitizeRichHtmlServer(formData.get('content') as string);
+    const category = sanitizeTextServer(formData.get('category') as string);
+    const tags = (formData.getAll('tags') as string[])
+      .map((tag) => sanitizeTextServer(tag))
+      .filter(Boolean);
     const featuredImage = formData.get('featuredImage') as File | null;
     const deleteImage = formData.get('deleteImage') === 'true';
 
@@ -78,17 +80,17 @@ export async function PUT(
 
     // Wenn das Bild gelöscht werden soll, setze den Pfad auf null
     if (deleteImage) {
+      if (featuredImagePath) {
+        await deleteUploadedImage(featuredImagePath);
+      }
       featuredImagePath = null;
     }
     // Ansonsten, wenn ein neues Bild hochgeladen wurde, speichere es
     else if (featuredImage) {
-      const bytes = await featuredImage.arrayBuffer();
-      const buffer = new Uint8Array(bytes);
-
-      const fileName = `${Date.now()}_${featuredImage.name}`;
-      const filePath = path.join(process.cwd(), 'public', 'images', 'uploads', fileName);
-      await writeFile(filePath, buffer);
-      featuredImagePath = `/images/uploads/${fileName}`;
+      if (featuredImagePath) {
+        await deleteUploadedImage(featuredImagePath);
+      }
+      featuredImagePath = await saveImageUpload(featuredImage, 'article');
     }
 
     // Verknüpfe Tags oder erstelle neue Tags, falls sie nicht existieren
@@ -120,7 +122,10 @@ export async function PUT(
     return NextResponse.json(updatedArticle, { status: 200 });
   } catch (error) {
     console.error(`PUT /api/articles/${id} Error:`, error);
-    return NextResponse.json({ error: 'Fehler beim Aktualisieren des Artikels.' }, { status: 500 });
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Fehler beim Aktualisieren des Artikels.' },
+      { status: error instanceof ImageUploadValidationError ? 400 : 500 }
+    );
   }
 }
 
@@ -148,6 +153,7 @@ export async function DELETE(
     }
 
     // Lösche den Artikel
+    await deleteUploadedImage(existingArticle.featuredImage);
     await prisma.article.delete({ where: { id } });
 
     return NextResponse.json({ message: 'Artikel erfolgreich gelöscht.' }, { status: 200 });

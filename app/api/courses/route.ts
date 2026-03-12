@@ -2,18 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../auth/[...nextauth]/options';
-import { writeFile, mkdir } from 'fs/promises';
-import path from 'path';
-
-// Funktion zum Erstellen des Upload-Verzeichnisses, falls es nicht existiert
-async function ensureUploadDirectory() {
-  const uploadDir = path.join(process.cwd(), 'public', 'images', 'uploads');
-  try {
-    await mkdir(uploadDir, { recursive: true });
-  } catch (error) {
-    console.error('Failed to create upload directory:', error);
-  }
-}
+import { ImageUploadValidationError, saveImageUpload } from '@/lib/server/image-upload';
 
 export async function GET() {
   try {
@@ -61,9 +50,6 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // Ensure the upload directory exists
-    await ensureUploadDirectory();
-
     const formData = await request.formData();
     const title = formData.get('title') as string;
     const description = formData.get('description') as string;
@@ -76,17 +62,7 @@ export async function POST(request: NextRequest) {
 
     let imageUrl = null;
     if (image) {
-      const bytes = await image.arrayBuffer();
-      const buffer = Buffer.from(bytes);
-      const uint8Array = new Uint8Array(buffer);
-
-      const uploadDir = path.join(process.cwd(), 'public', 'images', 'uploads');
-      const uniqueSuffix = `${Date.now()} -${Math.round(Math.random() * 1E9)} `;
-      const filename = `${uniqueSuffix} -${image.name} `;
-      const filepath = path.join(uploadDir, filename);
-
-      await writeFile(filepath, uint8Array);
-      imageUrl = `/ images / uploads / ${filename} `;
+      imageUrl = await saveImageUpload(image, 'course');
     }
 
     const newCourse = await prisma.course.create({
@@ -113,6 +89,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(newCourse, { status: 201 });
   } catch (error) {
     console.error('Failed to create course:', error);
-    return NextResponse.json({ error: 'Failed to create course' }, { status: 500 });
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Failed to create course' },
+      { status: error instanceof ImageUploadValidationError ? 400 : 500 }
+    );
   }
 }

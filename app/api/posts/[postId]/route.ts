@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
+import { sanitizeRichHtmlServer, sanitizeTextServer } from '@/lib/server/sanitize-html'
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ postId: string }> }) {
   try {
@@ -88,8 +89,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ post
     const updatedPost = await prisma.post.update({
       where: { id: postId },
       data: {
-        title,
-        content,
+        title: sanitizeTextServer(title),
+        content: sanitizeRichHtmlServer(content),
       },
       include: {
         author: {

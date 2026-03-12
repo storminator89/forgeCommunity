@@ -1,49 +1,58 @@
 // app/api/courses/[courseId]/contents/[contentId]/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../../../auth/[...nextauth]/options";
-
-const prisma = new PrismaClient();
+import prisma from '@/lib/prisma';
+import { sanitizeCourseTextContentServer, sanitizeTextServer } from '@/lib/server/sanitize-html';
 
 export async function DELETE(
   request: NextRequest,
   props: { params: Promise<{ courseId: string; contentId: string }> }
 ) {
   const params = await props.params;
-  console.log('DELETE request received for content:', params.contentId);
 
   try {
     const session = await getServerSession(authOptions);
-    console.log('Session:', session);
 
     if (!session?.user?.id) {
-      console.log('Unauthorized - no valid session');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Log before deleting subcontent
-    console.log('Checking for subcontents to delete');
-    const subcontents = await prisma.courseContent.findMany({
-      where: { parentId: params.contentId }
+    const existingContent = await prisma.courseContent.findUnique({
+      where: { id: params.contentId },
+      select: {
+        id: true,
+        courseId: true,
+        type: true,
+        course: {
+          select: {
+            instructorId: true,
+          },
+        },
+      },
     });
-    console.log('Found subcontents:', subcontents);
 
-    // Erst Unterinhalte löschen, falls vorhanden
-    if (subcontents.length > 0) {
-      console.log('Deleting subcontents');
-      await prisma.courseContent.deleteMany({
-        where: { parentId: params.contentId }
-      });
+    if (!existingContent || existingContent.courseId !== params.courseId) {
+      return NextResponse.json({ error: 'Content not found' }, { status: 404 });
     }
 
-    // Dann den Hauptinhalt löschen
-    console.log('Deleting main content');
-    const deletedContent = await prisma.courseContent.delete({
-      where: { id: params.contentId },
+    if (
+      existingContent.course.instructorId !== session.user.id &&
+      session.user.role !== 'ADMIN'
+    ) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
+
+    const deletedContent = await prisma.$transaction(async (tx) => {
+      await tx.courseContent.deleteMany({
+        where: { parentId: params.contentId },
+      });
+
+      return tx.courseContent.delete({
+        where: { id: params.contentId },
+      });
     });
-    console.log('Deleted content:', deletedContent);
 
     return NextResponse.json({
       success: true,
@@ -56,8 +65,6 @@ export async function DELETE(
       error: 'Failed to delete content',
       details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
-  } finally {
-    await prisma.$disconnect();
   }
 }
 
@@ -72,17 +79,50 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const existingContent = await prisma.courseContent.findUnique({
+      where: { id: params.contentId },
+      select: {
+        id: true,
+        courseId: true,
+        type: true,
+        course: {
+          select: {
+            instructorId: true,
+          },
+        },
+      },
+    });
+
+    if (!existingContent || existingContent.courseId !== params.courseId) {
+      return NextResponse.json({ error: 'Content not found' }, { status: 404 });
+    }
+
+    if (
+      existingContent.course.instructorId !== session.user.id &&
+      session.user.role !== 'ADMIN'
+    ) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
+
     const body = await request.json();
     const { title, type, content, order, parentId } = body;
+    const sanitizedTitle = title !== undefined ? sanitizeTextServer(title) : undefined;
+    const effectiveType = type ?? existingContent.type;
+    const sanitizedContent =
+      content !== undefined
+        ? (effectiveType === 'TEXT' || effectiveType === null
+            ? sanitizeCourseTextContentServer(content)
+            : sanitizeTextServer(content))
+        : undefined;
 
     const updatedContent = await prisma.courseContent.update({
       where: {
         id: params.contentId,
       },
       data: {
-        ...(title !== undefined && { title }),
+        ...(sanitizedTitle !== undefined && { title: sanitizedTitle }),
         ...(type !== undefined && { type }),
-        ...(content !== undefined && { content }),
+        ...(sanitizedContent !== undefined && { content: sanitizedContent }),
         ...(order !== undefined && { order }),
         ...(parentId !== undefined && { parentId })
       },

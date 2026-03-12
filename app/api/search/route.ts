@@ -1,64 +1,138 @@
-export const dynamic = 'force-dynamic'
+export const dynamic = 'force-dynamic';
 
-import { NextRequest, NextResponse } from 'next/server'
-import prisma from '@/lib/prisma'
-import { startOfDay, endOfDay, subDays } from 'date-fns'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '../auth/[...nextauth]/options'
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+
+import prisma from '@/lib/prisma';
+import { sanitizeHtmlPreviewServer, sanitizeTextServer } from '@/lib/server/sanitize-html';
+
+import { authOptions } from '../auth/[...nextauth]/options';
+
+const VALID_TYPES = new Set(['all', 'course', 'event', 'member', 'post', 'resource']);
+const ALL_RESULTS_LIMIT = 5;
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await getServerSession(authOptions);
 
     if (!session?.user) {
       return NextResponse.json(
         { error: 'Nicht authentifiziert' },
         { status: 401 }
-      )
+      );
     }
 
-    // URL-Parameter abrufen
-    const searchParams = request.nextUrl.searchParams
-    const query = searchParams.get('query') || ''
-    const type = searchParams.get('type') || 'all'
-    const page = parseInt(searchParams.get('page') || '1')
-    const limit = parseInt(searchParams.get('limit') || '10')
-    const skip = (page - 1) * limit
+    const searchParams = request.nextUrl.searchParams;
+    const rawQuery = searchParams.get('query') ?? '';
+    const rawType = searchParams.get('type') ?? 'all';
+    const type = VALID_TYPES.has(rawType) ? rawType : 'all';
+    const page = clamp(Number.parseInt(searchParams.get('page') ?? '1', 10) || 1, 1, 1000);
+    const limit = clamp(Number.parseInt(searchParams.get('limit') ?? '10', 10) || 10, 1, 20);
+    const query = sanitizeTextServer(rawQuery).slice(0, 120);
 
-    // Basis-Suchbedingungen
-    const searchString = query.toLowerCase()
-
-    // Suchergebnisse basierend auf dem Typ
-    let results: any[] = []
-
-    // Define search functions for each type to allow parallel execution
-    const searchCourses = async () => {
-      if (type !== 'all' && type !== 'course') return [];
-      const courses = await prisma.course.findMany({
-        where: {
-          OR: [
-            { title: { contains: searchString, mode: 'insensitive' } },
-            { description: { contains: searchString, mode: 'insensitive' } },
-          ],
+    if (query.length < 2) {
+      return NextResponse.json({
+        results: [],
+        pagination: {
+          total: 0,
+          page,
+          limit,
+          pages: 0,
         },
-        include: {
-          instructor: { select: { name: true, image: true } },
-          _count: { select: { enrollments: true } },
+      });
+    }
+
+    const skip = (page - 1) * limit;
+
+    const courseWhere = {
+      OR: [
+        { title: { contains: query, mode: 'insensitive' as const } },
+        { description: { contains: query, mode: 'insensitive' as const } },
+      ],
+    };
+
+    const memberWhere = {
+      OR: [
+        { name: { contains: query, mode: 'insensitive' as const } },
+        { email: { contains: query, mode: 'insensitive' as const } },
+        { bio: { contains: query, mode: 'insensitive' as const } },
+        { title: { contains: query, mode: 'insensitive' as const } },
+      ],
+    };
+
+    const postWhere = {
+      OR: [
+        { title: { contains: query, mode: 'insensitive' as const } },
+        { content: { contains: query, mode: 'insensitive' as const } },
+      ],
+    };
+
+    const eventWhere = {
+      OR: [
+        { title: { contains: query, mode: 'insensitive' as const } },
+        { description: { contains: query, mode: 'insensitive' as const } },
+      ],
+    };
+
+    const resourceWhere = {
+      OR: [
+        { title: { contains: query, mode: 'insensitive' as const } },
+        { category: { contains: query, mode: 'insensitive' as const } },
+      ],
+    };
+
+    const searchCourses = async () => {
+      if (type !== 'all' && type !== 'course') {
+        return [];
+      }
+
+      const courses = await prisma.course.findMany({
+        where: courseWhere,
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          price: true,
+          currency: true,
+          maxStudents: true,
+          imageUrl: true,
+          startDate: true,
+          endDate: true,
+          createdAt: true,
+          instructor: {
+            select: {
+              name: true,
+              image: true,
+            },
+          },
+          _count: {
+            select: {
+              enrollments: true,
+            },
+          },
         },
         skip: type === 'course' ? skip : 0,
-        take: type === 'course' ? limit : 5,
+        take: type === 'course' ? limit : ALL_RESULTS_LIMIT,
         orderBy: { createdAt: 'desc' },
       });
-      return courses.map(course => ({
+
+      return courses.map((course) => ({
         id: course.id,
         title: course.title,
-        description: course.description,
+        description: sanitizeHtmlPreviewServer(course.description, 220),
         type: 'course' as const,
         instructor: course.instructor.name,
         instructorImage: course.instructor.image,
         price: course.price,
         currency: course.currency,
-        stats: { enrollments: course._count.enrollments, maxStudents: course.maxStudents },
+        stats: {
+          enrollments: course._count.enrollments,
+          maxStudents: course.maxStudents,
+        },
         image: course.imageUrl,
         dates: { start: course.startDate, end: course.endDate },
         createdAt: course.createdAt,
@@ -66,29 +140,64 @@ export async function GET(request: NextRequest) {
     };
 
     const searchMembers = async () => {
-      if (type !== 'all' && type !== 'member') return [];
+      if (type !== 'all' && type !== 'member') {
+        return [];
+      }
+
       const members = await prisma.user.findMany({
-        where: {
-          OR: [
-            { name: { contains: searchString, mode: 'insensitive' } },
-            { email: { contains: searchString, mode: 'insensitive' } },
-            { bio: { contains: searchString, mode: 'insensitive' } },
-            { title: { contains: searchString, mode: 'insensitive' } },
-          ],
-        },
-        include: {
-          _count: { select: { followers: true, following: true, posts: true, courses: true, projects: true } },
-          skills: { include: { skill: true } },
-          badges: { include: { badge: true } },
+        where: memberWhere,
+        select: {
+          id: true,
+          name: true,
+          bio: true,
+          title: true,
+          image: true,
+          role: true,
+          endorsements: true,
+          lastLogin: true,
+          createdAt: true,
+          _count: {
+            select: {
+              followers: true,
+              following: true,
+              posts: true,
+              courses: true,
+              projects: true,
+            },
+          },
+          skills: {
+            take: 3,
+            select: {
+              level: true,
+              endorsements: true,
+              skill: {
+                select: {
+                  name: true,
+                },
+              },
+            },
+          },
+          badges: {
+            take: 3,
+            select: {
+              awardedAt: true,
+              badge: {
+                select: {
+                  name: true,
+                },
+              },
+            },
+          },
         },
         skip: type === 'member' ? skip : 0,
-        take: type === 'member' ? limit : 5,
+        take: type === 'member' ? limit : ALL_RESULTS_LIMIT,
         orderBy: { createdAt: 'desc' },
       });
-      return members.map(member => ({
+
+      return members.map((member) => ({
         id: member.id,
         title: member.name || 'Unbekannt',
-        description: member.bio || member.title || '',
+        description: sanitizeHtmlPreviewServer(member.bio || member.title || '', 220),
         type: 'member' as const,
         image: member.image,
         role: member.role,
@@ -100,64 +209,102 @@ export async function GET(request: NextRequest) {
           projects: member._count.projects,
           endorsements: member.endorsements,
         },
-        skills: member.skills.map(s => ({ name: s.skill.name, level: s.level, endorsements: s.endorsements })),
-        badges: member.badges.map(b => ({ name: b.badge.name, awardedAt: b.awardedAt })),
+        skills: member.skills.map((skill) => ({
+          name: skill.skill.name,
+          level: skill.level,
+          endorsements: skill.endorsements,
+        })),
+        badges: member.badges.map((badge) => ({
+          name: badge.badge.name,
+          awardedAt: badge.awardedAt,
+        })),
         lastActive: member.lastLogin,
         createdAt: member.createdAt,
       }));
     };
 
     const searchPosts = async () => {
-      if (type !== 'all' && type !== 'post') return [];
+      if (type !== 'all' && type !== 'post') {
+        return [];
+      }
+
       const posts = await prisma.post.findMany({
-        where: {
-          OR: [
-            { title: { contains: searchString, mode: 'insensitive' } },
-            { content: { contains: searchString, mode: 'insensitive' } },
-          ],
-        },
-        include: {
-          author: { select: { name: true, image: true } },
-          tags: true,
-          _count: { select: { comments: true, likePosts: true } },
+        where: postWhere,
+        select: {
+          id: true,
+          title: true,
+          content: true,
+          createdAt: true,
+          author: {
+            select: {
+              name: true,
+              image: true,
+            },
+          },
+          tags: {
+            select: {
+              name: true,
+            },
+          },
+          _count: {
+            select: {
+              comments: true,
+              likePosts: true,
+            },
+          },
         },
         skip: type === 'post' ? skip : 0,
-        take: type === 'post' ? limit : 5,
+        take: type === 'post' ? limit : ALL_RESULTS_LIMIT,
         orderBy: { createdAt: 'desc' },
       });
-      return posts.map(post => ({
+
+      return posts.map((post) => ({
         id: post.id,
         title: post.title,
-        description: post.content,
+        description: sanitizeHtmlPreviewServer(post.content, 220),
         type: 'post' as const,
         author: post.author.name,
         authorImage: post.author.image,
         stats: { comments: post._count.comments, likes: post._count.likePosts },
-        tags: post.tags.map(tag => tag.name),
+        tags: post.tags.map((tag) => tag.name),
         createdAt: post.createdAt,
       }));
     };
 
     const searchEvents = async () => {
-      if (type !== 'all' && type !== 'event') return [];
+      if (type !== 'all' && type !== 'event') {
+        return [];
+      }
+
       const events = await prisma.event.findMany({
-        where: {
-          OR: [
-            { title: { contains: searchString, mode: 'insensitive' } },
-            { description: { contains: searchString, mode: 'insensitive' } },
-          ],
-        },
-        include: {
-          _count: { select: { attendees: true } },
+        where: eventWhere,
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          category: true,
+          location: true,
+          date: true,
+          maxAttendees: true,
+          startTime: true,
+          endTime: true,
+          timezone: true,
+          createdAt: true,
+          _count: {
+            select: {
+              attendees: true,
+            },
+          },
         },
         skip: type === 'event' ? skip : 0,
-        take: type === 'event' ? limit : 5,
+        take: type === 'event' ? limit : ALL_RESULTS_LIMIT,
         orderBy: { createdAt: 'desc' },
       });
-      return events.map(event => ({
+
+      return events.map((event) => ({
         id: event.id,
         title: event.title,
-        description: event.description,
+        description: sanitizeHtmlPreviewServer(event.description, 220),
         type: 'event' as const,
         category: event.category,
         location: event.location,
@@ -169,22 +316,32 @@ export async function GET(request: NextRequest) {
     };
 
     const searchResources = async () => {
-      if (type !== 'all' && type !== 'resource') return [];
+      if (type !== 'all' && type !== 'resource') {
+        return [];
+      }
+
       const resources = await prisma.resource.findMany({
-        where: {
-          OR: [
-            { title: { contains: searchString, mode: 'insensitive' } },
-            { category: { contains: searchString, mode: 'insensitive' } },
-          ],
-        },
-        include: {
-          author: { select: { name: true, image: true } },
+        where: resourceWhere,
+        select: {
+          id: true,
+          title: true,
+          category: true,
+          url: true,
+          type: true,
+          createdAt: true,
+          author: {
+            select: {
+              name: true,
+              image: true,
+            },
+          },
         },
         skip: type === 'resource' ? skip : 0,
-        take: type === 'resource' ? limit : 5,
+        take: type === 'resource' ? limit : ALL_RESULTS_LIMIT,
         orderBy: { createdAt: 'desc' },
       });
-      return resources.map(resource => ({
+
+      return resources.map((resource) => ({
         id: resource.id,
         title: resource.title,
         description: resource.url,
@@ -198,7 +355,6 @@ export async function GET(request: NextRequest) {
       }));
     };
 
-    // Execute queries in parallel
     const [courses, members, posts, events, resources] = await Promise.all([
       searchCourses(),
       searchMembers(),
@@ -207,9 +363,8 @@ export async function GET(request: NextRequest) {
       searchResources(),
     ]);
 
-    results = [...courses, ...members, ...posts, ...events, ...resources];
+    const results = [...courses, ...members, ...posts, ...events, ...resources];
 
-    // Optional: Sort combined results by date descending if in 'all' mode
     if (type === 'all') {
       results.sort((a, b) => {
         const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
@@ -218,62 +373,25 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Gesamtzahl der Ergebnisse für Pagination
-    let total = 0
+    let total = 0;
+
     if (type !== 'all') {
       switch (type) {
         case 'course':
-          total = await prisma.course.count({
-            where: {
-              OR: [
-                { title: { contains: searchString, mode: 'insensitive' } },
-                { description: { contains: searchString, mode: 'insensitive' } },
-              ],
-            },
-          })
-          break
+          total = await prisma.course.count({ where: courseWhere });
+          break;
         case 'member':
-          total = await prisma.user.count({
-            where: {
-              OR: [
-                { name: { contains: searchString, mode: 'insensitive' } },
-                { email: { contains: searchString, mode: 'insensitive' } },
-                { bio: { contains: searchString, mode: 'insensitive' } },
-                { title: { contains: searchString, mode: 'insensitive' } },
-              ],
-            },
-          })
-          break
+          total = await prisma.user.count({ where: memberWhere });
+          break;
         case 'post':
-          total = await prisma.post.count({
-            where: {
-              OR: [
-                { title: { contains: searchString, mode: 'insensitive' } },
-                { content: { contains: searchString, mode: 'insensitive' } },
-              ],
-            },
-          })
-          break
+          total = await prisma.post.count({ where: postWhere });
+          break;
         case 'event':
-          total = await prisma.event.count({
-            where: {
-              OR: [
-                { title: { contains: searchString, mode: 'insensitive' } },
-                { description: { contains: searchString, mode: 'insensitive' } },
-              ],
-            },
-          })
-          break
+          total = await prisma.event.count({ where: eventWhere });
+          break;
         case 'resource':
-          total = await prisma.resource.count({
-            where: {
-              OR: [
-                { title: { contains: searchString, mode: 'insensitive' } },
-                { category: { contains: searchString, mode: 'insensitive' } },
-              ],
-            },
-          })
-          break
+          total = await prisma.resource.count({ where: resourceWhere });
+          break;
       }
     }
 
@@ -283,14 +401,14 @@ export async function GET(request: NextRequest) {
         total,
         page,
         limit,
-        pages: Math.ceil(total / limit),
-      }
-    })
+        pages: total === 0 ? 0 : Math.ceil(total / limit),
+      },
+    });
   } catch (error) {
-    console.error('Search error:', error)
+    console.error('Search error:', error);
     return NextResponse.json(
       { error: 'Fehler bei der Suche' },
       { status: 500 }
-    )
+    );
   }
 }

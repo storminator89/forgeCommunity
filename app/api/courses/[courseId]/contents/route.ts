@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../../auth/[...nextauth]/options";
+import { sanitizeCourseTextContentServer, sanitizeTextServer } from '@/lib/server/sanitize-html';
 
 // GET-Methode zum Abrufen der Kursinhalte
 export async function GET(
@@ -14,21 +15,60 @@ export async function GET(
   const courseId = params.courseId;
 
   try {
+    const session = await getServerSession(authOptions);
+
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const course = await prisma.course.findUnique({
+      where: { id: courseId },
+      select: { instructorId: true },
+    });
+
+    if (!course) {
+      return NextResponse.json({ error: 'Course not found' }, { status: 404 });
+    }
+
+    if (session.user.role !== 'ADMIN' && course.instructorId !== session.user.id) {
+      const enrollment = await prisma.enrollment.findUnique({
+        where: {
+          userId_courseId: {
+            userId: session.user.id,
+            courseId,
+          },
+        },
+        select: { id: true },
+      });
+
+      if (!enrollment) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+      }
+    }
+
     const contents = await prisma.courseContent.findMany({
       where: { courseId: courseId },
       orderBy: { order: 'asc' },
     });
 
-    // Gruppieren Sie die Inhalte in Haupt- und Unterinhalte
-    const groupedContents = contents.reduce((acc, content) => {
+    const subContentsByParent = new Map<string, typeof contents>();
+
+    for (const content of contents) {
       if (!content.parentId) {
-        acc.push({
-          ...content,
-          subContents: contents.filter(c => c.parentId === content.id)
-        });
+        continue;
       }
-      return acc;
-    }, [] as any[]); // Typisierung anpassen, falls nötig
+
+      const siblings = subContentsByParent.get(content.parentId) ?? [];
+      siblings.push(content);
+      subContentsByParent.set(content.parentId, siblings);
+    }
+
+    const groupedContents = contents
+      .filter((content) => !content.parentId)
+      .map((content) => ({
+        ...content,
+        subContents: subContentsByParent.get(content.id) ?? [],
+      }));
 
     return NextResponse.json(groupedContents);
   } catch (error) {
@@ -56,11 +96,20 @@ export async function POST(
       select: { instructorId: true },
     });
 
-    if (!course || course.instructorId !== session.user.id) {
+    if (!course) {
+      return NextResponse.json({ error: 'Course not found' }, { status: 404 });
+    }
+
+    if (course.instructorId !== session.user.id && session.user.role !== 'ADMIN') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
     const { title, type, content, order, parentId } = await request.json();
+    const sanitizedTitle = sanitizeTextServer(title);
+    const sanitizedContent =
+      type === 'TEXT' || !type
+        ? sanitizeCourseTextContentServer(content)
+        : sanitizeTextServer(content);
 
     // If order is not provided, find the next available order number
     let nextOrder = order;
@@ -80,9 +129,9 @@ export async function POST(
 
     const newContent = await prisma.courseContent.create({
       data: {
-        title,
+        title: sanitizedTitle,
         type: type || 'TEXT',
-        content: content || '',
+        content: sanitizedContent,
         order: nextOrder,
         parentId,
         courseId,

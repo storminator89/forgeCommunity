@@ -23,6 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { useSession } from 'next-auth/react';
 import { Editor } from "@/components/Editor";
+import { sanitizeTextPreview } from '@/lib/sanitize-html';
 
 
 interface Tag {
@@ -585,10 +586,9 @@ export default function ProjectShowcase() {
                             <CardTitle className="text-xl font-bold mb-2 line-clamp-1">
                               {project.title}
                             </CardTitle>
-                            <div
-                              className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2 prose dark:prose-invert"
-                              dangerouslySetInnerHTML={{ __html: project.description }}
-                            />
+                              <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2">
+                                {sanitizeTextPreview(project.description, 180)}
+                              </p>
                           </div>
 
                           <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
@@ -716,10 +716,9 @@ export default function ProjectShowcase() {
                                   )}
                                 </div>
                               </div>
-                              <div
-                                className="mt-1 text-sm text-gray-600 dark:text-gray-300 line-clamp-2 prose dark:prose-invert"
-                                dangerouslySetInnerHTML={{ __html: project.description }}
-                              />
+                                <p className="mt-1 text-sm text-gray-600 dark:text-gray-300 line-clamp-2">
+                                  {sanitizeTextPreview(project.description, 180)}
+                                </p>
                               <div className="mt-2 flex items-center justify-between">
                                 <div className="flex items-center space-x-2">
                                   <Avatar className="h-6 w-6">

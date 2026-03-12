@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '../../../auth/[...nextauth]/options'
-
-const prisma = new PrismaClient()
+import prisma from '@/lib/prisma'
 
 export async function PUT(
   request: NextRequest,
@@ -33,35 +31,35 @@ export async function PUT(
       ...otherData
     } = data
 
-    // Update Hauptprofil
-    const updatedUser = await prisma.user.update({
-      where: { id: params.id },
-      data: {
-        name,
-        bio,
-        title,
-        contact,
-      },
-    })
-
-    // Update Skills
-    if (skills && Array.isArray(skills)) {
-      // Lösche alte Skills
-      await prisma.userSkill.deleteMany({
-        where: { userId: params.id },
+    const updatedUser = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.update({
+        where: { id: params.id },
+        data: {
+          name,
+          bio,
+          title,
+          contact,
+        },
       })
 
-      // Füge neue Skills hinzu
-      for (const skill of skills) {
-        await prisma.userSkill.create({
-          data: {
-            userId: params.id,
-            skillId: skill.id,
-            level: skill.level,
-          },
+      if (skills && Array.isArray(skills)) {
+        await tx.userSkill.deleteMany({
+          where: { userId: params.id },
         })
+
+        if (skills.length > 0) {
+          await tx.userSkill.createMany({
+            data: skills.map((skill) => ({
+              userId: params.id,
+              skillId: skill.id,
+              level: skill.level,
+            })),
+          })
+        }
       }
-    }
+
+      return user
+    })
 
     // Update Social Links (falls Sie eine separate Tabelle dafür haben)
     if (socialLinks) {

@@ -20,6 +20,7 @@ const customJestConfig = {
     '^@/types/(.*)$': '<rootDir>/types/$1',
   },
   testPathIgnorePatterns: ['<rootDir>/node_modules/', '<rootDir>/.next/'],
+  modulePathIgnorePatterns: ['<rootDir>/.next/'],
   transform: {
     '^.+\\.(js|jsx|ts|tsx)$': ['babel-jest', { presets: ['next/babel'] }],
   },

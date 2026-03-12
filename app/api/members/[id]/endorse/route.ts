@@ -1,11 +1,9 @@
 // app/api/members/[id]/endorse/route.ts
 
 import { NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
 import { getServerSession } from "next-auth/next"; // Annahme: NextAuth.js wird verwendet
 import { authOptions } from "@/lib/auth"; // Pfad zu deinen Auth-Optionen
-
-const prisma = new PrismaClient();
+import prisma from '@/lib/prisma';
 
 export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -39,19 +37,18 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       return NextResponse.json({ error: "Du hast dieses Mitglied bereits empfohlen." }, { status: 400 });
     }
 
-    // Erstelle die Empfehlung
-    await prisma.endorsement.create({
-      data: {
-        endorser: { connect: { id: endorserId } },
-        endorsed: { connect: { id: endorsedId } },
-      },
-    });
-
-    // Erhöhe die endorsements-Zahl des Endorsed Benutzers
-    await prisma.user.update({
-      where: { id: endorsedId },
-      data: { endorsements: { increment: 1 } },
-    });
+    await prisma.$transaction([
+      prisma.endorsement.create({
+        data: {
+          endorser: { connect: { id: endorserId } },
+          endorsed: { connect: { id: endorsedId } },
+        },
+      }),
+      prisma.user.update({
+        where: { id: endorsedId },
+        data: { endorsements: { increment: 1 } },
+      }),
+    ]);
 
     return NextResponse.json({ message: "Mitglied erfolgreich empfohlen." }, { status: 200 });
   } catch (error) {

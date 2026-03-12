@@ -43,6 +43,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import EventForm from '@/components/EventForm';
 import { useToast } from '@/hooks/use-toast';
+import { sanitizeRichHtml } from '@/lib/sanitize-html';
 
 
 interface Event {
@@ -382,7 +383,7 @@ export default function Events(props: { params: Promise<any>, searchParams: Prom
                         <MapPin className="mr-2 h-4 w-4 flex-shrink-0" />
                         <span>{event.location}</span>
                       </div>
-                      <div dangerouslySetInnerHTML={{ __html: event.description }} />
+                      <div dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(event.description) }} />
                       {event.category && <Badge variant="secondary">{event.category}</Badge>}
                     </div>
                   </div>
@@ -539,7 +540,7 @@ export default function Events(props: { params: Promise<any>, searchParams: Prom
                         <MapPin className="mr-2 h-4 w-4 flex-shrink-0" />
                         <span>{event.location}</span>
                       </div>
-                      <div dangerouslySetInnerHTML={{ __html: event.description }} />
+                      <div dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(event.description) }} />
                       {event.category && <Badge variant="secondary">{event.category}</Badge>}
                     </div>
                   </div>

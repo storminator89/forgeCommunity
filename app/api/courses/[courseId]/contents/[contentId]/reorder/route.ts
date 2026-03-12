@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../../../../auth/[...nextauth]/options";
-
-const prisma = new PrismaClient();
+import prisma from '@/lib/prisma';
 
 export async function PUT(
   request: NextRequest,
@@ -17,10 +15,39 @@ export async function PUT(
     }
 
     const { direction, mainContentId } = await request.json();
+    if (direction !== 'up' && direction !== 'down') {
+      return NextResponse.json({ error: 'Invalid direction' }, { status: 400 });
+    }
 
-    // Hole alle Unterthemen des Hauptthemas, sortiert nach order
+    const parentContent = await prisma.courseContent.findUnique({
+      where: { id: mainContentId },
+      select: {
+        id: true,
+        courseId: true,
+        course: {
+          select: {
+            instructorId: true,
+          },
+        },
+      },
+    });
+
+    if (!parentContent || parentContent.courseId !== params.courseId) {
+      return NextResponse.json({ error: 'Main content not found' }, { status: 404 });
+    }
+
+    if (
+      parentContent.course.instructorId !== session.user.id &&
+      session.user.role !== 'ADMIN'
+    ) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
+
     const subContents = await prisma.courseContent.findMany({
-      where: { parentId: mainContentId },
+      where: {
+        parentId: mainContentId,
+        courseId: params.courseId,
+      },
       orderBy: { order: 'asc' },
     });
 
@@ -51,7 +78,5 @@ export async function PUT(
   } catch (error) {
     console.error('Error reordering content:', error);
     return NextResponse.json({ error: 'Failed to reorder content' }, { status: 500 });
-  } finally {
-    await prisma.$disconnect();
   }
 }

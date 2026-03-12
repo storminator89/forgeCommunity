@@ -2,43 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../../auth/[...nextauth]/options";
-import { writeFile, mkdir, unlink } from 'fs/promises';
-import path from 'path';
-import { existsSync } from 'fs';
+import { deleteUploadedImage, ImageUploadValidationError, saveImageUpload } from '@/lib/server/image-upload';
 
 // New route segment config format
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 
-
-// Funktion zum Erstellen des Upload-Verzeichnisses, falls es nicht existiert
-async function ensureUploadDirectory() {
-  const uploadDir = path.join(process.cwd(), 'public', 'images', 'uploads');
-  if (!existsSync(uploadDir)) {
-    try {
-      await mkdir(uploadDir, { recursive: true });
-    } catch (error) {
-      console.error('Failed to create upload directory:', error);
-      throw error;
-    }
-  }
-  return uploadDir;
-}
-
-// Funktion zum Generieren eines eindeutigen Dateinamens
-function generateUniqueFileName(originalName: string, type: string): string {
-  const timestamp = Date.now();
-  const random = Math.floor(Math.random() * 1000);
-  const extension = path.extname(originalName);
-  return `${type} -${timestamp} -${random}${extension} `;
-}
-
-// Funktion zum Validieren des Dateityps
-function isValidImageType(mimeType: string): boolean {
-  const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-  return validTypes.includes(mimeType);
-}
 
 export async function POST(
   request: NextRequest,
@@ -66,38 +36,8 @@ export async function POST(
       );
     }
 
-    // Validiere Dateityp
-    if (!isValidImageType(file.type)) {
-      return NextResponse.json(
-        { error: 'Ungültiger Dateityp. Erlaubt sind: JPG, PNG, GIF, WebP' },
-        { status: 400 }
-      );
-    }
-
-    // Validiere Dateigröße (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      return NextResponse.json(
-        { error: 'Datei ist zu groß (max 5MB)' },
-        { status: 400 }
-      );
-    }
-
-    // Erstelle Upload-Verzeichnis
-    const uploadDir = await ensureUploadDirectory();
-
-    // Generiere eindeutigen Dateinamen
-    const fileName = generateUniqueFileName(file.name, type);
-    const filePath = path.join(uploadDir, fileName);
-
-    // Konvertiere File zu Buffer und speichere
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-
-    // Speichere Datei
-    await writeFile(filePath, new Uint8Array(buffer));
-
-    // Erstelle öffentliche URL
-    const publicUrl = `/ images / uploads / ${fileName} `;
+    const uploadType = type === 'cover' ? 'cover' : 'avatar';
+    const publicUrl = await saveImageUpload(file, uploadType);
 
     // Hole aktuellen Benutzer mit relevanten Bildern
     const currentUser = await prisma.user.findUnique({
@@ -114,10 +54,7 @@ export async function POST(
     // Lösche altes Bild wenn vorhanden
     if (oldImagePath) {
       try {
-        const oldFilePath = path.join(process.cwd(), 'public', oldImagePath);
-        if (existsSync(oldFilePath) && oldImagePath.includes('/uploads/')) {
-          await unlink(oldFilePath);
-        }
+        await deleteUploadedImage(oldImagePath);
       } catch (error) {
         console.error('Error deleting old image:', error);
       }
@@ -141,8 +78,8 @@ export async function POST(
   } catch (error) {
     console.error('Error uploading image:', error);
     return NextResponse.json(
-      { error: 'Fehler beim Hochladen des Bildes' },
-      { status: 500 }
+      { error: error instanceof Error ? error.message : 'Fehler beim Hochladen des Bildes' },
+      { status: error instanceof ImageUploadValidationError ? 400 : 500 }
     );
   }
 }

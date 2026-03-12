@@ -36,6 +36,7 @@ import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
+import { sanitizeTextPreview } from '@/lib/sanitize-html';
 
 
 interface SearchResult {
@@ -100,7 +101,7 @@ interface SearchResponse {
 }
 
 const SafeHTML = ({ html }: { html: string }) => {
-  return <div className="inline" dangerouslySetInnerHTML={{ __html: html }} />;
+  return <span className="inline">{sanitizeTextPreview(html, 240)}</span>;
 };
 
 export default function SearchPageClient() {

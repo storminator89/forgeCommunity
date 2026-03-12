@@ -17,6 +17,7 @@ import { UserNav } from "@/components/user-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
 import Image from 'next/image';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { sanitizeRichHtml } from '@/lib/sanitize-html';
 
 
 interface Tag {
@@ -412,7 +413,7 @@ export default function ProjectDetail(props: { params: Promise<{ projectId: stri
                                  [&_em]:text-muted-foreground [&_em]:italic
                                  [&>h2]:flex [&>h2]:items-center [&>h2]:gap-2
                                  [&>*:first-child]:mt-0"
-                      dangerouslySetInnerHTML={{ __html: project.description }}
+                      dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(project.description) }}
                     />
                   </div>
 

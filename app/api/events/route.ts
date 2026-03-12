@@ -5,6 +5,7 @@ import prisma from '@/lib/prisma';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { DateTime } from 'luxon';
+import { sanitizeRichHtmlServer, sanitizeTextServer } from '@/lib/server/sanitize-html';
 
 // Unterstützte Zeitzonen
 const TIMEZONES = [
@@ -58,8 +59,11 @@ export async function POST(request: Request) {
 
   try {
     const data = await request.json();
-    console.log('Received event data:', data); // Protokollierung der empfangenen Daten
-    const { title, date, description, location, startTime, endTime, category, timezone } = data;
+    const title = sanitizeTextServer(data.title);
+    const description = sanitizeRichHtmlServer(data.description);
+    const location = sanitizeTextServer(data.location);
+    const category = sanitizeTextServer(data.category) || 'Allgemein';
+    const { date, startTime, endTime, timezone } = data;
 
     // Überprüfen der erforderlichen Felder
     if (!title || !date || !description || !location || !timezone || !startTime || !endTime) {
@@ -95,7 +99,7 @@ export async function POST(request: Request) {
         location,
         startTime: eventStartDateTime.toFormat('HH:mm'),
         endTime: eventEndDateTime.toFormat('HH:mm'),
-        category: category || null,
+        category,
         timezone,
       },
     });

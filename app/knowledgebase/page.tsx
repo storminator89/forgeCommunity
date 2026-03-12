@@ -15,6 +15,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { motion, AnimatePresence } from 'framer-motion';
 
 import Image from 'next/image';
+import { sanitizeTextPreview } from '@/lib/sanitize-html';
 
 interface Article {
   id: string;
@@ -340,10 +341,9 @@ export default function KnowledgeBase() {
                                       </div>
                                     </div>
 
-                                    <div
-                                      className="text-muted-foreground mb-4 line-clamp-2"
-                                      dangerouslySetInnerHTML={{ __html: article.content.substring(0, 150) + '...' }}
-                                    />
+                                    <p className="text-muted-foreground mb-4 line-clamp-2">
+                                      {sanitizeTextPreview(article.content, 150)}
+                                    </p>
 
                                     <div className="flex flex-wrap gap-2 mb-4">
                                       {article.tags.map((tag) => (

@@ -5,8 +5,9 @@ import prisma from '@/lib/prisma'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import { getRandomGradient } from '@/lib/utils'
-import fs from 'fs'
-import path from 'path'
+import { ImageUploadValidationError, saveImageUpload } from '@/lib/server/image-upload'
+import { sanitizeRichHtmlServer, sanitizeTextServer } from '@/lib/server/sanitize-html'
+import { HttpUrlValidationError, normalizeHttpUrl } from '@/lib/server/url-security'
 
 export async function GET() {
   try {
@@ -59,42 +60,33 @@ export async function POST(req: Request) {
 
     // Parse form data
     const formData = await req.formData()
-    const title = formData.get('title') as string
-    const description = formData.get('description') as string
-    const category = formData.get('category') as string
-    const tags = (formData.get('tags') as string).split(',').map(tag => tag.trim()).filter(tag => tag !== '')
-    const link = formData.get('link') as string
-    const image = formData.get('image') as File | null
-
-    // Validate required fields
-    if (!title || !description || !category || !link) {
+    const rawTitle = formData.get('title') as string
+    const rawDescription = formData.get('description') as string
+    const rawCategory = formData.get('category') as string
+    const rawLink = (formData.get('link') as string)?.trim()
+    const title = sanitizeTextServer(rawTitle)
+    const description = sanitizeRichHtmlServer(rawDescription)
+    const category = sanitizeTextServer(rawCategory)
+    const tags = (formData.get('tags') as string)
+      .split(',')
+      .map(tag => sanitizeTextServer(tag))
+      .filter(tag => tag !== '')
+    if (!rawTitle || !rawDescription || !rawCategory || !rawLink) {
       return NextResponse.json({ error: 'Titel, Beschreibung, Kategorie und Link sind erforderlich.' }, { status: 400 })
     }
+    const link = normalizeHttpUrl(rawLink)
+    const image = formData.get('image') as File | null
 
     let imageUrl = ''
     if (image) {
       try {
-        // Sicherstellen, dass der Upload-Ordner existiert
-        const uploadDir = path.join(process.cwd(), 'public', 'images', 'uploads')
-        if (!fs.existsSync(uploadDir)) {
-          fs.mkdirSync(uploadDir, { recursive: true })
-        }
-
-        // Generiere einen einzigartigen Dateinamen
-        const fileExtension = path.extname(image.name)
-        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}${fileExtension}`
-        const filePath = path.join(uploadDir, fileName)
-
-        // Speichere die Datei
-        const arrayBuffer = await image.arrayBuffer()
-        const buffer = new Uint8Array(arrayBuffer)
-        fs.writeFileSync(filePath, buffer)
-
-        // Setze die Bild-URL
-        imageUrl = `/images/uploads/${fileName}`
+        imageUrl = await saveImageUpload(image, 'project')
       } catch (error) {
         console.error('Error saving image:', error)
-        return NextResponse.json({ error: 'Fehler beim Speichern des Bildes.' }, { status: 500 })
+        return NextResponse.json(
+          { error: error instanceof Error ? error.message : 'Fehler beim Speichern des Bildes.' },
+          { status: error instanceof ImageUploadValidationError ? 400 : 500 }
+        )
       }
     }
 
@@ -155,6 +147,9 @@ export async function POST(req: Request) {
     return NextResponse.json(newProject, { status: 201 })
   } catch (error) {
     console.error('Error creating project:', error)
+    if (error instanceof HttpUrlValidationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
     return NextResponse.json({ error: 'Fehler beim Erstellen des Projekts.' }, { status: 500 })
   }
 }
