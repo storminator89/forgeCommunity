@@ -1,27 +1,14 @@
-"use client";
+import type { ReactNode } from 'react';
+import { getServerSession } from 'next-auth';
+import { redirect } from 'next/navigation';
+import { authOptions } from '@/lib/auth';
+import AdminShell from '@/components/admin/AdminShell';
 
-import { useState } from 'react';
-import { Sidebar } from '@/components/Sidebar';
-import { AdminHeader } from '@/components/admin/AdminHeader';
-
-export default function AdminLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-
-  return (
-    <div className="flex h-screen overflow-hidden bg-background">
-      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <AdminHeader onMenuClick={() => setIsSidebarOpen(true)} />
-        <main className="flex-1 overflow-y-auto p-4 lg:p-8">
-          <div className="max-w-[1600px] mx-auto space-y-6">
-            {children}
-          </div>
-        </main>
-      </div>
-    </div>
-  );
+export default async function AdminLayout({ children }: { children: ReactNode }) {
+  // getServerSession refreshes identity and role from the database. A stale
+  // middleware JWT is not sufficient to authorize this page boundary.
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) redirect('/login');
+  if (session.user.role !== 'ADMIN') redirect('/');
+  return <AdminShell>{children}</AdminShell>;
 }

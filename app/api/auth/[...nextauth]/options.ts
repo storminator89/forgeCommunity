@@ -6,6 +6,10 @@ import GoogleProvider from 'next-auth/providers/google';
 import bcrypt from 'bcrypt';
 
 import prisma from '@/lib/prisma';
+import {
+  normalizeEmail,
+  utf8ByteLength,
+} from '@/lib/server/auth-security';
 
 const userSelect = {
   id: true,
@@ -51,17 +55,25 @@ const providers: NextAuthOptions['providers'] = [
       password: { label: 'Password', type: 'password' },
     },
     async authorize(credentials) {
-      const email = credentials?.email?.trim().toLowerCase();
+      const rawEmail = credentials?.email;
       const password = credentials?.password;
+      const email = typeof rawEmail === 'string' ? normalizeEmail(rawEmail) : '';
 
-      if (!email || !password) {
+      if (!email || typeof password !== 'string' || !password) {
         return null;
       }
 
-      const user = await prisma.user.findUnique({
-        where: { email },
+      // bcrypt only uses the first 72 UTF-8 bytes. Rejecting longer input
+      // avoids silently authenticating a password whose suffix was ignored.
+      if (utf8ByteLength(password) > 72) {
+        return null;
+      }
+
+      const user = await prisma.user.findFirst({
+        where: { email: { equals: email, mode: 'insensitive' } },
         select: {
           id: true,
+          email: true,
           password: true,
         },
       });
@@ -76,7 +88,7 @@ const providers: NextAuthOptions['providers'] = [
         return null;
       }
 
-      return { id: user.id, email };
+      return { id: user.id, email: user.email };
     },
   }),
 ];
@@ -94,48 +106,64 @@ export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   providers,
   callbacks: {
-    async jwt({ token, user, trigger, session }) {
-      if (trigger === 'update' && session?.user) {
-        return {
-          ...token,
-          ...session.user,
-        };
-      }
+    async jwt({ token, user }) {
+      // `session` data on an update is client supplied. Never merge it into
+      // the token: identity and authorization claims must come from Prisma.
+      const userId =
+        (typeof user?.id === 'string' && user.id) ||
+        (typeof token.id === 'string' && token.id) ||
+        (typeof token.sub === 'string' && token.sub);
 
-      if (user?.id) {
-        const currentUser = await prisma.user.update({
-          where: { id: user.id },
-          data: { lastLogin: new Date() },
-          select: userSelect,
-        });
+      if (!userId) return token;
 
-        return {
-          ...token,
-          ...mapUserToToken(currentUser),
-        };
-      }
+      const currentUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: userSelect,
+      });
 
-      return token;
+      // A signed JWT can outlive its database row. Returning an empty token
+      // makes session/middleware checks reject it on the next request.
+      if (!currentUser) return {} as typeof token;
+
+      const userForToken = user
+        ? await prisma.user.update({
+            where: { id: currentUser.id },
+            data: { lastLogin: new Date() },
+            select: userSelect,
+          })
+        : currentUser;
+
+      return {
+        ...token,
+        ...mapUserToToken(userForToken),
+        sub: userForToken.id,
+      };
     },
 
     async session({ session, token }) {
-      if (session.user) {
-        session.user = {
-          ...session.user,
-          id: token.id as string,
-          role: token.role as string | null,
-          email: token.email as string | null,
-          name: token.name as string | null,
-          image: token.image as string | null,
-          title: token.title as string | null,
-          bio: token.bio as string | null,
-          contact: token.contact as string | null,
-          endorsements: token.endorsements as number | undefined,
-          emailVerified: token.emailVerified as Date | null | undefined,
-          lastLogin: token.lastLogin as Date | null | undefined,
-          settings: (token.settings as typeof session.user.settings) ?? null,
-        };
+      if (typeof token.id !== 'string' || token.id.length === 0) {
+        return null as unknown as typeof session;
       }
+
+      if (!session.user) return session;
+
+      // Copy only claims written by the server-side jwt callback. In
+      // particular, no properties from a client supplied session update are
+      // trusted here.
+      session.user = {
+        id: token.id,
+        role: token.role as string | null,
+        email: token.email as string | null,
+        name: token.name as string | null,
+        image: token.image as string | null,
+        title: token.title as string | null,
+        bio: token.bio as string | null,
+        contact: token.contact as string | null,
+        endorsements: token.endorsements as number | undefined,
+        emailVerified: token.emailVerified as Date | null | undefined,
+        lastLogin: token.lastLogin as Date | null | undefined,
+        settings: (token.settings as typeof session.user.settings) ?? null,
+      };
 
       return session;
     },
