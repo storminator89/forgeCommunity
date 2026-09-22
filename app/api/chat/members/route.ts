@@ -11,18 +11,21 @@ export async function POST(req: Request) {
       return new NextResponse('Unauthorized', { status: 401 })
     }
 
+    // Channels do not have a separate owner field; they are created by
+    // administrators.  Requiring an administrator here prevents any member
+    // from adding arbitrary users to private channels.
+    if (session.user.role !== 'ADMIN') {
+      return new NextResponse('Unauthorized', { status: 403 })
+    }
+
     const { userId, channelId } = await req.json()
 
     if (!userId || !channelId) {
       return new NextResponse('UserId and channelId are required', { status: 400 })
     }
 
-    // Überprüfen, ob der anfragende Benutzer Admin ist oder der Channel-Ersteller
     const channel = await prisma.chatChannel.findUnique({
       where: { id: channelId },
-      include: {
-        members: true,
-      },
     })
 
     if (!channel) {
@@ -79,12 +82,8 @@ export async function DELETE(req: Request) {
       return new NextResponse('UserId and channelId are required', { status: 400 })
     }
 
-    // Überprüfen, ob der anfragende Benutzer Admin ist oder der Channel-Ersteller
     const channel = await prisma.chatChannel.findUnique({
       where: { id: channelId },
-      include: {
-        members: true,
-      },
     })
 
     if (!channel) {
@@ -121,6 +120,26 @@ export async function GET(req: Request) {
 
     if (!channelId) {
       return new NextResponse('ChannelId is required', { status: 400 })
+    }
+
+    // Membership lists for private channels are private as well. Public
+    // channels remain discoverable to authenticated users, matching the
+    // channel list endpoint.
+    const channel = await prisma.chatChannel.findFirst({
+      where: session.user.role === 'ADMIN'
+        ? { id: channelId }
+        : {
+            id: channelId,
+            OR: [
+              { isPrivate: false },
+              { members: { some: { userId: session.user.id } } },
+            ],
+          },
+      select: { id: true },
+    })
+
+    if (!channel) {
+      return new NextResponse('Channel not found or access denied', { status: 403 })
     }
 
     const members = await prisma.chatMember.findMany({

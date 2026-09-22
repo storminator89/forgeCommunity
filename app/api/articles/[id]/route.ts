@@ -4,6 +4,9 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { deleteUploadedImage, ImageUploadValidationError, saveImageUpload } from '@/lib/server/image-upload';
 import { sanitizeRichHtmlServer, sanitizeTextServer } from '@/lib/server/sanitize-html';
+import { requestWithBodyLimit, RequestBodyLimitError } from '@/lib/server/request-body';
+
+const MAX_MULTIPART_REQUEST_BYTES = 5 * 1024 * 1024 + 256 * 1024;
 
 export async function GET(
   req: Request,
@@ -11,8 +14,6 @@ export async function GET(
 ) {
   const params = await props.params;
   try {
-    console.log('GET request for article ID:', params.id); // Debug log
-
     const article = await prisma.article.findUnique({
       where: { id: params.id },
       include: {
@@ -24,11 +25,19 @@ export async function GET(
     });
 
     if (!article) {
-      console.log('Article not found'); // Debug log
       return NextResponse.json({ error: 'Artikel nicht gefunden' }, { status: 404 });
     }
 
-    console.log('Found article:', article); // Debug log
+    // Drafts are private to their author (and administrators). Returning a
+    // draft here would bypass the owner-only drafts endpoint because this
+    // route is also used by the public article pages.
+    if (!article.isPublished) {
+      const session = await getServerSession(authOptions);
+      if (!session?.user || (article.authorId !== session.user.id && session.user.role !== 'ADMIN')) {
+        return NextResponse.json({ error: 'Artikel nicht gefunden' }, { status: 404 });
+      }
+    }
+
     return NextResponse.json(article);
   } catch (error) {
     console.error('Error fetching article:', error);
@@ -51,7 +60,12 @@ export async function PUT(
   }
 
   try {
-    const formData = await req.formData();
+    const contentLength = Number(req.headers.get('content-length'));
+    if (Number.isFinite(contentLength) && contentLength > MAX_MULTIPART_REQUEST_BYTES) {
+      return NextResponse.json({ error: 'Datei ist zu gross.' }, { status: 413 });
+    }
+    const limitedRequest = await requestWithBodyLimit(req, MAX_MULTIPART_REQUEST_BYTES);
+    const formData = await limitedRequest.formData();
     const title = sanitizeTextServer(formData.get('title') as string);
     const content = sanitizeRichHtmlServer(formData.get('content') as string);
     const category = sanitizeTextServer(formData.get('category') as string);
@@ -124,7 +138,7 @@ export async function PUT(
     console.error(`PUT /api/articles/${id} Error:`, error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Fehler beim Aktualisieren des Artikels.' },
-      { status: error instanceof ImageUploadValidationError ? 400 : 500 }
+      { status: error instanceof ImageUploadValidationError ? 400 : error instanceof RequestBodyLimitError ? 413 : 500 }
     );
   }
 }

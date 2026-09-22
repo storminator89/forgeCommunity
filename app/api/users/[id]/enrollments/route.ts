@@ -15,9 +15,13 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    if (session.user.id !== params.id && session.user.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '6');
+    const page = Math.max(1, Math.min(1000, Number.parseInt(searchParams.get('page') || '1', 10) || 1));
+    const limit = Math.max(1, Math.min(50, Number.parseInt(searchParams.get('limit') || '6', 10) || 6));
     const skip = (page - 1) * limit;
 
     const [enrollments, total] = await Promise.all([
@@ -92,11 +96,10 @@ export async function GET(
           lessonsCount: course._count.lessons,
         },
         enrolled: true,
-        progress: {
-          completed: 0, // TODO: Implementieren Sie die Logik für abgeschlossene Lektionen
-          total: course._count.lessons,
-          lastAccessed: enrollment.enrolledAt,
-        },
+        // The schema tracks course completion, but has no per-lesson progress
+        // records. Do not present enrollment time or a fabricated zero as
+        // lesson progress.
+        progress: null,
         enrolledAt: enrollment.enrolledAt,
         completedAt: enrollment.completedAt,
       };

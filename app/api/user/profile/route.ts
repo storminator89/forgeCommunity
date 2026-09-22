@@ -65,6 +65,42 @@ export async function PUT(request: NextRequest) {
         }
 
         const data = await request.json()
+        const name = data.name === undefined
+            ? undefined
+            : typeof data.name === 'string' ? data.name.trim() : ''
+        const email = data.email === undefined
+            ? undefined
+            : typeof data.email === 'string' ? data.email.trim().toLowerCase() : ''
+
+        if (name === '' || email === '') {
+            return NextResponse.json(
+                { error: 'Name und E-Mail sind erforderlich' },
+                { status: 400 }
+            )
+        }
+
+        const existingUser = email
+            ? await prisma.user.findFirst({
+                where: {
+                    email: { equals: email, mode: 'insensitive' },
+                    NOT: { id: session.user.id },
+                },
+                select: { id: true },
+            })
+            : null
+
+        const currentSessionEmail = typeof session.user.email === 'string'
+            ? session.user.email.trim().toLowerCase()
+            : null
+        const emailChanged = email !== undefined &&
+            (currentSessionEmail === null || email !== currentSessionEmail)
+
+        if (existingUser) {
+            return NextResponse.json(
+                { error: 'Diese E-Mail-Adresse wird bereits verwendet' },
+                { status: 409 }
+            )
+        }
 
         // Aktualisieren des Benutzers
         const updatedUser = await prisma.user.update({
@@ -72,9 +108,16 @@ export async function PUT(request: NextRequest) {
                 id: session.user.id
             },
             data: {
-                name: data.name,
-                email: data.email,
+                name,
+                email,
                 image: data.image,
+                ...(emailChanged && {
+                    // A new address must complete verification again. Do not
+                    // carry the old address' verified/recovery claims over.
+                    emailVerified: null,
+                    verificationToken: null,
+                    resetPasswordToken: null,
+                }),
                 userSettings: {
                     upsert: {
                         create: {
@@ -90,12 +133,32 @@ export async function PUT(request: NextRequest) {
                     }
                 }
             },
-            include: {
-                userSettings: true
+            // Never return the full User row here: it contains the password
+            // hash and account recovery tokens.
+            select: {
+                id: true,
+                name: true,
+                email: true,
+                image: true,
+                userSettings: {
+                    select: {
+                        language: true,
+                        emailNotifications: true,
+                        pushNotifications: true,
+                    }
+                }
             }
         })
 
-        return NextResponse.json(updatedUser)
+        const safeUser = {
+            id: updatedUser.id,
+            name: updatedUser.name,
+            email: updatedUser.email,
+            image: updatedUser.image,
+            userSettings: updatedUser.userSettings,
+        }
+
+        return NextResponse.json(safeUser)
 
     } catch (error) {
         console.error('Fehler beim Aktualisieren des Benutzerprofils:', error)

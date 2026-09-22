@@ -16,7 +16,7 @@ export async function PUT(request: Request, props: { params: Promise<{ id: strin
   const skillId = params.id;
   const { level } = await request.json();
 
-  if (typeof level !== "number") {
+  if (typeof level !== "number" || !Number.isFinite(level) || level < 0 || level > 100) {
     return NextResponse.json({ error: "Ungültige Daten." }, { status: 400 });
   }
 

@@ -19,9 +19,18 @@ export async function POST(req: NextRequest, props: { params: Promise<{ commentI
     // Überprüfen, ob der Kommentar existiert
     const comment = await prisma.comment.findUnique({
       where: { id: commentId },
+      include: {
+        post: {
+          select: { published: true, authorId: true },
+        },
+      },
     })
 
     if (!comment) {
+      return NextResponse.json({ error: 'Kommentar nicht gefunden' }, { status: 404 })
+    }
+
+    if (!comment.post.published && comment.post.authorId !== userId && session.user.role !== 'ADMIN') {
       return NextResponse.json({ error: 'Kommentar nicht gefunden' }, { status: 404 })
     }
 

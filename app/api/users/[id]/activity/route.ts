@@ -18,6 +18,8 @@ export async function GET(
       )
     }
 
+    const canViewDrafts = session.user.role === 'ADMIN' || session.user.id === params.id
+
     const searchParams = new URL(request.url).searchParams
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '10')
@@ -27,7 +29,10 @@ export async function GET(
     const [posts, comments, projects, courses] = await Promise.all([
       // Letzte Posts
       prisma.post.findMany({
-        where: { authorId: params.id },
+        where: {
+          authorId: params.id,
+          ...(canViewDrafts ? {} : { published: true }),
+        },
         include: {
           author: {
             select: {
@@ -49,7 +54,10 @@ export async function GET(
 
       // Letzte Kommentare
       prisma.comment.findMany({
-        where: { authorId: params.id },
+        where: {
+          authorId: params.id,
+          ...(canViewDrafts ? {} : { post: { published: true } }),
+        },
         include: {
           post: true,
           author: {

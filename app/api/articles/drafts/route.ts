@@ -6,16 +6,14 @@ import { authOptions } from '@/lib/auth';
 export async function GET() {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id) {
     return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
   }
 
   try {
     const drafts = await prisma.article.findMany({
       where: {
-        author: {
-          email: session.user.email
-        },
+        authorId: session.user.id,
         isPublished: false
       },
       orderBy: {

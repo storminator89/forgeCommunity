@@ -34,7 +34,7 @@ export async function POST(request: Request) {
   const userId = session.user.id;
   const { skillId, level } = await request.json();
 
-  if (!skillId || typeof level !== "number") {
+  if (!skillId || typeof level !== "number" || !Number.isFinite(level) || level < 0 || level > 100) {
     return NextResponse.json({ error: "Ungültige Daten." }, { status: 400 });
   }
 

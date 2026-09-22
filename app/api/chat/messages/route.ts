@@ -77,10 +77,23 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const channelId = searchParams.get('channelId');
     const after = searchParams.get('after');
+    const afterId = searchParams.get('afterId');
     const limit = 50;
 
     if (!channelId) {
       return new NextResponse('ChannelId is required', { status: 400 });
+    }
+
+    let afterDate: Date | undefined;
+    if (after) {
+      afterDate = new Date(after);
+      if (Number.isNaN(afterDate.getTime())) {
+        return new NextResponse('Invalid after cursor', { status: 400 });
+      }
+    }
+
+    if (afterId && !afterDate) {
+      return new NextResponse('afterId requires after', { status: 400 });
     }
 
     // Überprüfen, ob der Benutzer Zugang zum Channel hat
@@ -107,16 +120,19 @@ export async function GET(req: Request) {
     const messages = await prisma.chatMessage.findMany({
       where: {
         channelId,
-        ...(after && {
-          createdAt: {
-            gt: new Date(after),
-          },
-        }),
+        ...(afterDate && afterId
+          ? {
+              OR: [
+                { createdAt: { gt: afterDate } },
+                { createdAt: afterDate, id: { gt: afterId } },
+              ],
+            }
+          : afterDate
+            ? { createdAt: { gt: afterDate } }
+            : {}),
       },
       take: limit,
-      orderBy: {
-        createdAt: 'asc',
-      },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       include: {
         author: {
           select: {
@@ -130,6 +146,12 @@ export async function GET(req: Request) {
 
     return NextResponse.json({
       items: messages,
+      nextCursor: messages.length > 0
+        ? {
+            after: messages[messages.length - 1].createdAt.toISOString(),
+            afterId: messages[messages.length - 1].id,
+          }
+        : null,
     });
   } catch (error) {
     console.error('[MESSAGES_GET]', error);

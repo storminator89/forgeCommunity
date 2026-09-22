@@ -101,7 +101,7 @@ export async function POST(request: Request) {
     return NextResponse.json(newResource, { status: 201 });
   } catch (error: any) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: error.errors }, { status: 400 });
+      return NextResponse.json({ error: error.issues }, { status: 400 });
     }
     console.error('Error creating resource:', error);
     return NextResponse.json(

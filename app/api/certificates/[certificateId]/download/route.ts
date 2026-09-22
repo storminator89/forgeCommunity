@@ -5,6 +5,15 @@ import prisma from '@/lib/prisma';
 import { jsPDF } from 'jspdf';
 import QRCode from 'qrcode';
 
+function safeDownloadName(value: string) {
+  return value
+    .normalize('NFKD')
+    .replace(/[^\x20-\x7E]/g, '')
+    .replace(/[\r\n"\\/<>:*?|]+/g, '')
+    .replace(/\s+/g, '_')
+    .slice(0, 120) || 'course';
+}
+
 export async function GET(
   req: NextRequest,
   props: { params: Promise<{ certificateId: string }> }
@@ -91,7 +100,7 @@ export async function GET(
     return new NextResponse(pdfBuffer, {
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="${certificate.course.title}-certificate.pdf"`
+        'Content-Disposition': `attachment; filename="${safeDownloadName(certificate.course.title)}-certificate.pdf"`
       }
     });
   } catch (error) {

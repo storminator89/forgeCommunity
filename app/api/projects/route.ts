@@ -8,6 +8,9 @@ import { getRandomGradient } from '@/lib/utils'
 import { ImageUploadValidationError, saveImageUpload } from '@/lib/server/image-upload'
 import { sanitizeRichHtmlServer, sanitizeTextServer } from '@/lib/server/sanitize-html'
 import { HttpUrlValidationError, normalizeHttpUrl } from '@/lib/server/url-security'
+import { requestWithBodyLimit, RequestBodyLimitError } from '@/lib/server/request-body';
+
+const MAX_MULTIPART_REQUEST_BYTES = 5 * 1024 * 1024 + 256 * 1024;
 
 export async function GET() {
   try {
@@ -59,7 +62,12 @@ export async function POST(req: Request) {
     }
 
     // Parse form data
-    const formData = await req.formData()
+    const contentLength = Number(req.headers.get('content-length'));
+    if (Number.isFinite(contentLength) && contentLength > MAX_MULTIPART_REQUEST_BYTES) {
+      return NextResponse.json({ error: 'Datei ist zu gross.' }, { status: 413 });
+    }
+    const limitedRequest = await requestWithBodyLimit(req, MAX_MULTIPART_REQUEST_BYTES)
+    const formData = await limitedRequest.formData()
     const rawTitle = formData.get('title') as string
     const rawDescription = formData.get('description') as string
     const rawCategory = formData.get('category') as string
@@ -147,6 +155,9 @@ export async function POST(req: Request) {
     return NextResponse.json(newProject, { status: 201 })
   } catch (error) {
     console.error('Error creating project:', error)
+    if (error instanceof RequestBodyLimitError) {
+      return NextResponse.json({ error: 'Datei ist zu gross.' }, { status: 413 })
+    }
     if (error instanceof HttpUrlValidationError) {
       return NextResponse.json({ error: error.message }, { status: 400 })
     }

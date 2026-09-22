@@ -106,6 +106,45 @@ export async function PUT(
 
     const body = await request.json();
     const { title, type, content, order, parentId } = body;
+
+    if (parentId !== undefined && parentId !== null && typeof parentId !== 'string') {
+      return NextResponse.json({ error: 'Invalid parent content' }, { status: 400 });
+    }
+
+    if (parentId !== undefined && parentId !== null) {
+      if (parentId === params.contentId) {
+        return NextResponse.json({ error: 'Content cannot be its own parent' }, { status: 400 });
+      }
+
+      const parentContent = await prisma.courseContent.findUnique({
+        where: { id: parentId },
+        select: { id: true, courseId: true, parentId: true },
+      });
+
+      if (!parentContent || parentContent.courseId !== params.courseId) {
+        return NextResponse.json({ error: 'Invalid parent content' }, { status: 400 });
+      }
+
+      // Walk the proposed parent's ancestry to prevent creating a cycle (for
+      // example, moving a main item below one of its own descendants).
+      const visited = new Set<string>();
+      let ancestor: { id: string; parentId: string | null } | null = {
+        id: parentContent.id,
+        parentId: parentContent.parentId,
+      };
+      while (ancestor && !visited.has(ancestor.id)) {
+        if (ancestor.id === params.contentId) {
+          return NextResponse.json({ error: 'Content cannot be its own ancestor' }, { status: 400 });
+        }
+        visited.add(ancestor.id);
+        if (!ancestor.parentId) break;
+        ancestor = await prisma.courseContent.findUnique({
+          where: { id: ancestor.parentId },
+          select: { id: true, parentId: true },
+        });
+      }
+    }
+
     const sanitizedTitle = title !== undefined ? sanitizeTextServer(title) : undefined;
     const effectiveType = type ?? existingContent.type;
     const sanitizedContent =

@@ -7,6 +7,14 @@ import { authOptions } from "../../../auth/[...nextauth]/options";
 import { v4 as uuidv4 } from 'uuid';
 import QRCode from 'qrcode';
 
+function safeDownloadName(value: string) {
+  return value
+    .normalize('NFKD')
+    .replace(/[^\x20-\x7E]/g, '')
+    .replace(/[\r\n"\\/<>:*?|]+/g, '')
+    .replace(/\s+/g, '_')
+    .slice(0, 120) || 'course';
+}
 
 export async function POST(
   request: NextRequest,
@@ -16,7 +24,7 @@ export async function POST(
   try {
     const session = await getServerSession(authOptions);
 
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       return new NextResponse('Unauthorized', { status: 401 });
     }
 
@@ -35,20 +43,42 @@ export async function POST(
     }
 
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
+      where: { id: session.user.id },
     });
 
     if (!user) {
       return new NextResponse('User not found', { status: 404 });
     }
 
-    // Generate unique certificate ID
-    const certificateId = uuidv4();
+    const enrollment = await prisma.enrollment.findUnique({
+      where: {
+        userId_courseId: {
+          userId: user.id,
+          courseId: course.id,
+        },
+      },
+      select: { completedAt: true },
+    });
 
-    // Store certificate in database
-    const certificate = await prisma.certificate.create({
+    // Certificates are completion credentials. Merely being logged in (or
+    // knowing a course ID) must not be enough to mint one.
+    if (!enrollment || !enrollment.completedAt) {
+      return new NextResponse('Course has not been completed', { status: 403 });
+    }
+
+    // Issuance is idempotent for a completed enrollment. Reusing the existing
+    // record prevents repeated clicks from minting unlimited certificates for
+    // the same user and course.
+    const existingCertificate = await prisma.certificate.findFirst({
+      where: {
+        userId: user.id,
+        courseId: course.id,
+      },
+      orderBy: { issuedAt: 'desc' },
+    });
+    const certificate = existingCertificate ?? await prisma.certificate.create({
       data: {
-        id: certificateId,
+        id: uuidv4(),
         userId: user.id,
         courseId: course.id,
         issuedAt: new Date(),
@@ -56,10 +86,11 @@ export async function POST(
         userName: user.name || user.email,
       }
     });
+    const certificateId = certificate.id;
 
     // Generate QR code with verification URL
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000';
-    const verificationUrl = `${baseUrl} /verify-certificate/${certificateId} `;
+    const verificationUrl = `${baseUrl.replace(/\/$/, '')}/verify-certificate/${certificateId}`;
     const qrCodeDataUrl = await QRCode.toDataURL(verificationUrl);
 
     // Create PDF document
@@ -107,7 +138,7 @@ export async function POST(
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(28);
     doc.setTextColor(44, 82, 130);
-    doc.text(user.name || session.user.email, pageWidth / 2, 110, { align: 'center' });
+    doc.text(user.name || user.email, pageWidth / 2, 110, { align: 'center' });
 
     // Add course text
     doc.setFont('helvetica', 'normal');
@@ -188,7 +219,7 @@ export async function POST(
     return new NextResponse(new Uint8Array(pdfBuffer), {
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename = "${course.title.replace(/\s+/g, '_')}_Zertifikat.pdf"`,
+        'Content-Disposition': `attachment; filename="${safeDownloadName(course.title)}_Zertifikat.pdf"`,
       },
     });
   } catch (error) {

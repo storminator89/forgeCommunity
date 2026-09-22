@@ -6,6 +6,9 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { ImageUploadValidationError, saveImageUpload } from '@/lib/server/image-upload';
 import { sanitizeRichHtmlServer, sanitizeTextServer } from '@/lib/server/sanitize-html';
+import { requestWithBodyLimit, RequestBodyLimitError } from '@/lib/server/request-body';
+
+const MAX_MULTIPART_REQUEST_BYTES = 5 * 1024 * 1024 + 256 * 1024;
 
 export async function GET() {
   try {
@@ -37,7 +40,12 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const formData = await req.formData();
+    const contentLength = Number(req.headers.get('content-length'));
+    if (Number.isFinite(contentLength) && contentLength > MAX_MULTIPART_REQUEST_BYTES) {
+      return NextResponse.json({ error: 'Datei ist zu gross.' }, { status: 413 });
+    }
+    const limitedRequest = await requestWithBodyLimit(req, MAX_MULTIPART_REQUEST_BYTES);
+    const formData = await limitedRequest.formData();
     const title = sanitizeTextServer(formData.get('title') as string);
     const content = sanitizeRichHtmlServer(formData.get('content') as string);
     const category = sanitizeTextServer(formData.get('category') as string);
@@ -68,7 +76,7 @@ export async function POST(req: NextRequest) {
         category,
         isPublished, // Neues Feld
         featuredImage: featuredImagePath,
-        author: { connect: { email: session.user.email as string } },
+        author: { connect: { id: session.user.id } },
         tags: {
           connectOrCreate: tagConnectOrCreate,
         },
@@ -87,7 +95,7 @@ export async function POST(req: NextRequest) {
     console.error('POST /api/articles Error:', error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Fehler beim Erstellen des Artikels.' },
-      { status: error instanceof ImageUploadValidationError ? 400 : 500 }
+      { status: error instanceof ImageUploadValidationError ? 400 : error instanceof RequestBodyLimitError ? 413 : 500 }
     );
   }
 }

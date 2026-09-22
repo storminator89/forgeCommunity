@@ -9,6 +9,8 @@ import { sanitizeRichHtmlServer, sanitizeTextServer } from '@/lib/server/sanitiz
 export async function GET(req: NextRequest, { params }: { params: Promise<{ postId: string }> }) {
   try {
     const { postId } = await params
+    const session = await getServerSession(authOptions)
+    const userId = session?.user?.id
 
     const post = await prisma.post.findUnique({
       where: { id: postId },
@@ -32,9 +34,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ post
       return NextResponse.json({ error: 'Beitrag nicht gefunden' }, { status: 404 })
     }
 
-    // Optional: Like-Informationen hinzufügen, ähnlich wie in der `app/api/posts/route.ts`
-    const session = await getServerSession(authOptions)
-    const userId = session?.user?.id
+    if (!post.published && post.authorId !== userId && session?.user?.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Beitrag nicht gefunden' }, { status: 404 })
+    }
 
     const mappedPost = {
       ...post,
@@ -75,7 +77,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ post
     }
 
     // Überprüfen, ob der aktuelle Benutzer der Autor des Beitrags ist
-    if (post.authorId !== userId) {
+    if (post.authorId !== userId && session.user.role !== 'ADMIN') {
       return NextResponse.json({ error: 'Nicht autorisiert, diesen Beitrag zu bearbeiten' }, { status: 403 })
     }
 
@@ -128,7 +130,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ p
 
     // Überprüfen, ob der aktuelle Benutzer der Autor des Beitrags ist oder ein Admin (optional)
     // Angenommen, du hast ein `role` Feld im User-Model
-    if (post.authorId !== userId /* && session.user.role !== 'ADMIN' */) {
+    if (post.authorId !== userId && session.user.role !== 'ADMIN') {
       return NextResponse.json({ error: 'Nicht autorisiert, diesen Beitrag zu löschen' }, { status: 403 })
     }
 
