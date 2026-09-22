@@ -18,6 +18,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import Image from 'next/image';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { sanitizeRichHtml } from '@/lib/sanitize-html';
+import { getSafeHttpUrl } from '@/lib/security';
 
 
 interface Tag {
@@ -92,6 +93,7 @@ export default function ProjectDetail(props: { params: Promise<{ projectId: stri
     link: '',
     image: null,
   });
+  const safeProjectLink = project ? getSafeHttpUrl(project.link) : null;
 
   useEffect(() => {
     const fetchProject = async () => {
@@ -436,15 +438,17 @@ export default function ProjectDetail(props: { params: Promise<{ projectId: stri
                   {/* Project Link */}
                   <div className="space-y-3 pt-4 border-t">
                     <h3 className="text-lg font-semibold text-foreground">Projekt Link</h3>
-                    <a
-                      href={project.link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center text-primary hover:text-primary/80 transition-colors"
-                    >
-                      <ExternalLink className="w-4 h-4 mr-2" />
-                      {project.link}
-                    </a>
+                    {safeProjectLink && (
+                      <a
+                        href={safeProjectLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center text-primary hover:text-primary/80 transition-colors"
+                      >
+                        <ExternalLink className="w-4 h-4 mr-2" />
+                        {safeProjectLink}
+                      </a>
+                    )}
                   </div>
 
                   {/* Interactions Section */}

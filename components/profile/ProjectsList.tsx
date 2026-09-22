@@ -17,6 +17,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { toast } from 'react-toastify';
+import { getSafeHttpUrl } from '@/lib/security';
 
 interface Project {
   id: string;
@@ -146,7 +147,9 @@ export function ProjectsList({ userId, isOwner }: ProjectsListProps) {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               <AnimatePresence mode="popLayout">
-                {projects.map((project) => (
+                {projects.map((project) => {
+                  const safeProjectLink = getSafeHttpUrl(project.link);
+                  return (
                   <motion.div
                     key={project.id}
                     initial={{ opacity: 0, y: 20 }}
@@ -166,11 +169,11 @@ export function ProjectsList({ userId, isOwner }: ProjectsListProps) {
                         }}
                       >
                         <div className="absolute inset-0 bg-black bg-opacity-40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center space-x-4">
-                          {project.link && (
+                          {safeProjectLink && (
                             <Button
                               size="sm"
                               variant="secondary"
-                              onClick={() => window.open(project.link, '_blank')}
+                              onClick={() => window.open(safeProjectLink, '_blank', 'noopener,noreferrer')}
                             >
                               <ExternalLink className="h-4 w-4 mr-2" />
                               Demo
@@ -243,7 +246,8 @@ export function ProjectsList({ userId, isOwner }: ProjectsListProps) {
                       </CardContent>
                     </Card>
                   </motion.div>
-                ))}
+                  );
+                })}
               </AnimatePresence>
             </div>
           )}

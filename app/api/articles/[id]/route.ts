@@ -18,7 +18,7 @@ export async function GET(
       where: { id: params.id },
       include: {
         author: {
-          select: { id: true, name: true, email: true },
+          select: { id: true, name: true },
         },
         tags: true,
       },
@@ -127,7 +127,7 @@ export async function PUT(
       },
       include: {
         author: {
-          select: { id: true, name: true, email: true },
+          select: { id: true, name: true },
         },
         tags: true,
       },

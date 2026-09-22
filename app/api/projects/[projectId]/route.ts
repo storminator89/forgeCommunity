@@ -7,6 +7,7 @@ import { authOptions } from '@/lib/auth'
 import { deleteUploadedImage, ImageUploadValidationError, saveImageUpload } from '@/lib/server/image-upload'
 import { sanitizeRichHtmlServer, sanitizeTextServer } from '@/lib/server/sanitize-html'
 import { HttpUrlValidationError, normalizeHttpUrl } from '@/lib/server/url-security'
+import { getSafeHttpUrl } from '@/lib/security'
 import { requestWithBodyLimit, RequestBodyLimitError } from '@/lib/server/request-body';
 
 const MAX_MULTIPART_REQUEST_BYTES = 5 * 1024 * 1024 + 256 * 1024;
@@ -51,7 +52,10 @@ export async function GET(req: NextRequest, props: { params: Promise<{ projectId
       return NextResponse.json({ error: 'Projekt nicht gefunden.' }, { status: 404 })
     }
 
-    return NextResponse.json(project)
+    return NextResponse.json({
+      ...project,
+      link: typeof project.link === 'string' ? (getSafeHttpUrl(project.link) ?? '') : project.link,
+    })
   } catch (error) {
     console.error('Error fetching project:', error)
     return NextResponse.json({ error: 'Fehler beim Abrufen des Projekts.' }, { status: 500 })

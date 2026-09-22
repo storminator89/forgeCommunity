@@ -37,7 +37,6 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
           select: {
             id: true,
             name: true,
-            email: true,
           },
         },
       },
@@ -77,7 +76,6 @@ export async function PUT(request: Request, props: { params: Promise<{ id: strin
           select: {
             id: true,
             name: true,
-            email: true,
           },
         },
       },
@@ -104,7 +102,6 @@ export async function PUT(request: Request, props: { params: Promise<{ id: strin
           select: {
             id: true,
             name: true,
-            email: true,
           },
         },
       },

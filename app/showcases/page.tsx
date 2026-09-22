@@ -24,6 +24,7 @@ import { Label } from "@/components/ui/label";
 import { useSession } from 'next-auth/react';
 import { Editor } from "@/components/Editor";
 import { sanitizeTextPreview } from '@/lib/sanitize-html';
+import { getSafeHttpUrl } from '@/lib/security';
 
 
 interface Tag {
@@ -106,6 +107,7 @@ export default function ProjectShowcase() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [projectToEdit, setProjectToEdit] = useState<Project | null>(null);
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
+  const safeSelectedProjectLink = selectedProject ? getSafeHttpUrl(selectedProject.link) : null;
   const [newProject, setNewProject] = useState<{
     title: string,
     description: string,
@@ -873,11 +875,13 @@ export default function ProjectShowcase() {
             )}
           </div>
           <div className="flex justify-end mt-6">
-            <Button asChild>
-              <a href={selectedProject?.link} target="_blank" rel="noopener noreferrer" className="flex items-center">
-                Projekt ansehen <ExternalLink className="ml-2 h-5 w-5" />
-              </a>
-            </Button>
+            {safeSelectedProjectLink && (
+              <Button asChild>
+                <a href={safeSelectedProjectLink} target="_blank" rel="noopener noreferrer" className="flex items-center">
+                  Projekt ansehen <ExternalLink className="ml-2 h-5 w-5" />
+                </a>
+              </Button>
+            )}
           </div>
         </DialogContent>
       </Dialog>

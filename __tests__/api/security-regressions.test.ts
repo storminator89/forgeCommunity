@@ -1,4 +1,6 @@
 import { GET as getArticle } from '@/app/api/articles/[id]/route'
+import { GET as getArticles } from '@/app/api/articles/route'
+import { GET as getResources } from '@/app/api/resources/route'
 import { GET as getPost } from '@/app/api/posts/[postId]/route'
 import { POST as likeNestedComment } from '@/app/api/posts/[postId]/comments/[commentId]/like/route'
 import { GET as getChatMembers, POST as addChatMember } from '@/app/api/chat/members/route'
@@ -27,7 +29,8 @@ jest.mock('next/server', () => {
 jest.mock('@/lib/prisma', () => ({
   __esModule: true,
   default: {
-    article: { findUnique: jest.fn() },
+    article: { findUnique: jest.fn(), findMany: jest.fn() },
+    resource: { findMany: jest.fn(), count: jest.fn() },
     post: { findUnique: jest.fn(), findMany: jest.fn() },
     comment: { findUnique: jest.fn() },
     likeComment: { findUnique: jest.fn(), create: jest.fn(), delete: jest.fn() },
@@ -53,7 +56,8 @@ jest.mock('qrcode', () => ({ __esModule: true, default: { toDataURL: jest.fn() }
 jest.mock('uuid', () => ({ v4: jest.fn(() => 'certificate-id') }))
 
 const mockedPrisma = prisma as unknown as {
-  article: { findUnique: jest.Mock }
+  article: { findUnique: jest.Mock; findMany: jest.Mock }
+  resource: { findMany: jest.Mock; count: jest.Mock }
   post: { findUnique: jest.Mock; findMany: jest.Mock }
   comment: { findUnique: jest.Mock }
   likeComment: { findUnique: jest.Mock; create: jest.Mock; delete: jest.Mock }
@@ -94,6 +98,33 @@ describe('API authorization regressions', () => {
     })
 
     expect(response.status).toBe(404)
+  })
+
+  it('does not select author email addresses in public article listings', async () => {
+    mockedPrisma.article.findMany.mockResolvedValue([])
+
+    const response = await getArticles()
+
+    expect(response.status).toBe(200)
+    expect(mockedPrisma.article.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      include: expect.objectContaining({
+        author: { select: { id: true, name: true } },
+      }),
+    }))
+  })
+
+  it('does not select author email addresses in public resource listings', async () => {
+    mockedPrisma.resource.findMany.mockResolvedValue([])
+    mockedPrisma.resource.count.mockResolvedValue(0)
+
+    const response = await getResources(new Request('http://localhost/api/resources'))
+
+    expect(response.status).toBe(200)
+    expect(mockedPrisma.resource.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      include: expect.objectContaining({
+        author: { select: { id: true, name: true } },
+      }),
+    }))
   })
 
   it('does not expose an unpublished post to anonymous readers', async () => {

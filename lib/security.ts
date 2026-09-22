@@ -29,6 +29,29 @@ function isUnsafeRelativeUrl(url: string) {
 }
 
 /**
+ * Returns an absolute web URL safe to place in an ordinary link or
+ * window.open call. This is intentionally stricter than the embed helpers:
+ * persisted legacy project links may contain arbitrary schemes.
+ */
+export function getSafeHttpUrl(value: unknown): string | null {
+    if (typeof value !== 'string' || value.length === 0 || value.length > 2048) {
+        return null;
+    }
+    if (/[\u0000-\u001f\u007f]/.test(value)) {
+        return null;
+    }
+
+    try {
+        const parsed = new URL(value);
+        if (!['http:', 'https:'].includes(parsed.protocol)) return null;
+        if (parsed.username || parsed.password) return null;
+        return parsed.toString();
+    } catch {
+        return null;
+    }
+}
+
+/**
  * Validates if a URL belongs to an allowed domain for video embedding
  */
 export function isAllowedVideoUrl(url: string): boolean {

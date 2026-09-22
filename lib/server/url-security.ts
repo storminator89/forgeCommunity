@@ -242,7 +242,14 @@ export async function fetchSafePublicUrl(rawUrl: string | URL, init: RequestInit
 }
 
 export function normalizeHttpUrl(rawUrl: string) {
+  if (typeof rawUrl !== 'string') {
+    throw new HttpUrlValidationError('Eine gültige URL ist erforderlich.');
+  }
+
   const candidate = rawUrl.trim();
+  if (!candidate || candidate.length > 2048) {
+    throw new HttpUrlValidationError('Eine gültige URL ist erforderlich.');
+  }
   let url: URL;
 
   try {
@@ -253,6 +260,10 @@ export function normalizeHttpUrl(rawUrl: string) {
 
   if (!['http:', 'https:'].includes(url.protocol)) {
     throw new HttpUrlValidationError('Nur HTTP- und HTTPS-URLs sind erlaubt.');
+  }
+
+  if (url.username || url.password) {
+    throw new HttpUrlValidationError('URLs mit eingebetteten Zugangsdaten sind nicht erlaubt.');
   }
 
   return candidate;
