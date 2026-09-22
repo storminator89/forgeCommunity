@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/options';
 import prisma from '@/lib/prisma';
+import { getChatUploadOwnerId } from '@/lib/server/image-upload';
 
 export async function POST(req: Request) {
   try {
@@ -18,6 +19,16 @@ export async function POST(req: Request) {
     }
     if (!channelId) {
       return new NextResponse('ChannelId is required', { status: 400 });
+    }
+
+    if (imageUrl !== undefined && imageUrl !== null && imageUrl !== '') {
+      if (typeof imageUrl !== 'string' || !imageUrl.startsWith('/api/chat/uploads/')) {
+        return new NextResponse('Use an uploaded chat image', { status: 400 });
+      }
+      const uploadOwner = getChatUploadOwnerId(imageUrl.slice('/api/chat/uploads/'.length));
+      if (!uploadOwner || uploadOwner !== session.user.id) {
+        return new NextResponse('Image upload does not belong to the current user', { status: 403 });
+      }
     }
 
     // Überprüfen, ob der Benutzer Zugang zum Channel hat
@@ -132,7 +143,9 @@ export async function GET(req: Request) {
             : {}),
       },
       take: limit,
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      orderBy: afterDate
+        ? [{ createdAt: 'asc' }, { id: 'asc' }]
+        : [{ createdAt: 'desc' }, { id: 'desc' }],
       include: {
         author: {
           select: {
@@ -143,6 +156,10 @@ export async function GET(req: Request) {
         },
       },
     });
+
+    // Initial visits show the newest page in display order. Incremental
+    // requests walk forward from the last delivered composite cursor.
+    if (!afterDate) messages.reverse();
 
     return NextResponse.json({
       items: messages,

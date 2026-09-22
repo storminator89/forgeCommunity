@@ -20,17 +20,25 @@ const ALLOWED_AUDIO_DOMAINS = [
     'open.spotify.com',
 ];
 
+function isSafeRelativeUrl(url: string) {
+    return /^\/(?![\\/])[^\u0000-\u001f\u007f]*$/.test(url);
+}
+
+function isUnsafeRelativeUrl(url: string) {
+    return url.startsWith('/') || url.startsWith('\\') || /[\u0000-\u001f\u007f\\]/.test(url);
+}
+
 /**
  * Validates if a URL belongs to an allowed domain for video embedding
  */
 export function isAllowedVideoUrl(url: string): boolean {
     if (!url) return false;
+    if (isUnsafeRelativeUrl(url)) return false;
 
     try {
         const parsed = new URL(url);
-        return ALLOWED_VIDEO_DOMAINS.some(domain =>
-            parsed.hostname === domain || parsed.hostname.endsWith('.' + domain)
-        );
+        if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) return false;
+        return ALLOWED_VIDEO_DOMAINS.includes(parsed.hostname.toLowerCase());
     } catch {
         return false;
     }
@@ -41,18 +49,15 @@ export function isAllowedVideoUrl(url: string): boolean {
  */
 export function isAllowedAudioUrl(url: string): boolean {
     if (!url) return false;
+    if (isSafeRelativeUrl(url)) return true;
+    if (isUnsafeRelativeUrl(url)) return false;
 
     try {
         const parsed = new URL(url);
-        // Allow relative URLs (local audio files)
-        if (url.startsWith('/')) return true;
-
-        return ALLOWED_AUDIO_DOMAINS.some(domain =>
-            parsed.hostname === domain || parsed.hostname.endsWith('.' + domain)
-        );
+        if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) return false;
+        return ALLOWED_AUDIO_DOMAINS.includes(parsed.hostname.toLowerCase());
     } catch {
-        // Allow relative URLs
-        return url.startsWith('/');
+        return false;
     }
 }
 
@@ -62,10 +67,11 @@ export function isAllowedAudioUrl(url: string): boolean {
 export function getSafeEmbedUrl(url: string, type: 'video' | 'audio'): string | null {
     if (!url) return null;
 
-    // Allow relative URLs (local files)
-    if (url.startsWith('/')) {
+    // Reject protocol-relative URLs and browser-normalized backslash variants.
+    if (isSafeRelativeUrl(url)) {
         return url;
     }
+    if (isUnsafeRelativeUrl(url)) return null;
 
     if (type === 'video') {
         if (!isAllowedVideoUrl(url)) {
@@ -95,14 +101,15 @@ export function getYouTubeEmbedUrl(url: string): string | null {
     try {
         let videoId = '';
 
-        if (url.includes('youtu.be/')) {
-            videoId = url.split('youtu.be/')[1].split('?')[0];
-        } else if (url.includes('youtube.com')) {
-            const urlParams = new URLSearchParams(url.split('?')[1]);
-            videoId = urlParams.get('v') || '';
+        const parsed = new URL(url);
+        if (parsed.hostname.toLowerCase() === 'youtu.be') {
+            videoId = parsed.pathname.slice(1);
+        } else if (parsed.hostname.toLowerCase() === 'youtube.com' || parsed.hostname.toLowerCase() === 'www.youtube.com') {
+            videoId = parsed.searchParams.get('v') || '';
         }
 
-        return videoId ? `https://www.youtube.com/embed/${videoId}` : null;
+        if (!/^[A-Za-z0-9_-]{1,128}$/.test(videoId)) return null;
+        return `https://www.youtube.com/embed/${encodeURIComponent(videoId)}`;
     } catch {
         return null;
     }

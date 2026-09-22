@@ -1,6 +1,7 @@
 import DOMPurify from 'dompurify';
 
 import {
+  isSafeRichHtmlUrl,
   RICH_HTML_ALLOWED_ATTR,
   RICH_HTML_ALLOWED_TAGS,
 } from '@/lib/html-sanitize-config';
@@ -15,6 +16,12 @@ function ensureHooks() {
   DOMPurify.addHook('afterSanitizeAttributes', (node) => {
     if (node instanceof Element && node.getAttribute('target') === '_blank') {
       node.setAttribute('rel', 'noopener noreferrer');
+    }
+  });
+
+  DOMPurify.addHook('uponSanitizeAttribute', (_node, data) => {
+    if ((data.attrName === 'href' || data.attrName === 'src') && !isSafeRichHtmlUrl(data.attrValue, data.attrName)) {
+      data.keepAttr = false;
     }
   });
 

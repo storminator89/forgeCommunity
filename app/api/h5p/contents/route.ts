@@ -12,6 +12,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const h5pContents = await prisma.h5PContent.findMany({
+      where: session.user.role === 'ADMIN' ? undefined : { userId: session.user.id },
       orderBy: {
         createdAt: 'desc'
       },

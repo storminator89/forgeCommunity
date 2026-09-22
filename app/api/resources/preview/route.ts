@@ -1,16 +1,69 @@
 import { NextResponse } from 'next/server';
 import { JSDOM } from 'jsdom';
+import { getServerSession } from 'next-auth/next';
 
+import { authOptions } from '@/lib/auth';
 import { sanitizeTextServer } from '@/lib/server/sanitize-html';
-import { assertSafePublicUrl } from '@/lib/server/url-security';
+import { consumeRateLimit, rateLimitHeaders } from '@/lib/server/rate-limit';
+import { requestWithBodyLimit, RequestBodyLimitError } from '@/lib/server/request-body';
+import {
+  assertSafePublicUrl,
+  fetchSafePublicUrl,
+  HttpUrlValidationError,
+} from '@/lib/server/url-security';
 
 const PREVIEW_TIMEOUT_MS = 5000;
+const MAX_PREVIEW_BODY_BYTES = 250_000;
+const MAX_PREVIEW_REQUEST_BYTES = 8 * 1024;
+const MAX_PREVIEW_URL_LENGTH = 2048;
+const PREVIEW_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 } as const;
+
+async function readResponseTextLimited(response: Response, maxBytes: number) {
+  const contentLength = Number(response.headers.get('content-length'));
+  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+    return null;
+  }
+
+  if (!response.body) {
+    return null;
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunk = value as Uint8Array;
+      if (total + chunk.byteLength > maxBytes) {
+        await reader.cancel();
+        return null;
+      }
+
+      chunks.push(chunk);
+      total += chunk.byteLength;
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  return new TextDecoder().decode(bytes);
+}
 
 const getPdfMetadata = async (url: URL) => {
   try {
-    const response = await fetch(url.toString(), {
+    const response = await fetchSafePublicUrl(url, {
       method: 'HEAD',
-      redirect: 'manual',
       signal: AbortSignal.timeout(PREVIEW_TIMEOUT_MS)
     }).catch(e => {
       console.error(`Fetch error for ${url.toString()}:`, e);
@@ -53,13 +106,12 @@ const getVideoMetadata = async (url: string) => {
     const urlObj = new URL(url);
 
     // YouTube
-    if (urlObj.hostname.includes('youtube.com') || urlObj.hostname.includes('youtu.be')) {
-      const videoId = urlObj.hostname.includes('youtu.be')
+    if (['youtube.com', 'www.youtube.com', 'youtu.be'].includes(urlObj.hostname.toLowerCase())) {
+      const videoId = urlObj.hostname.toLowerCase() === 'youtu.be'
         ? urlObj.pathname.slice(1)
         : urlObj.searchParams.get('v');
 
-      const response = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`, {
-        redirect: 'follow',
+      const response = await fetchSafePublicUrl(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${encodeURIComponent(videoId || '')}&format=json`, {
         signal: AbortSignal.timeout(PREVIEW_TIMEOUT_MS)
       }).catch(e => {
         console.error(`YouTube fetch error for ${videoId}:`, e);
@@ -73,7 +125,9 @@ const getVideoMetadata = async (url: string) => {
       }
 
       if (response.ok) {
-        const data = await response.json();
+        const payload = await readResponseTextLimited(response, 64 * 1024);
+        if (!payload) return null;
+        const data = JSON.parse(payload);
         return {
           title: data.title,
           description: data.author_name,
@@ -84,10 +138,9 @@ const getVideoMetadata = async (url: string) => {
     }
 
     // Vimeo
-    if (urlObj.hostname.includes('vimeo.com')) {
+    if (['vimeo.com', 'player.vimeo.com'].includes(urlObj.hostname.toLowerCase())) {
       const videoId = urlObj.pathname.split('/')[1];
-      const response = await fetch(`https://vimeo.com/api/oembed.json?url=https://vimeo.com/${videoId}`, {
-        redirect: 'follow',
+      const response = await fetchSafePublicUrl(`https://vimeo.com/api/oembed.json?url=https://vimeo.com/${encodeURIComponent(videoId || '')}`, {
         signal: AbortSignal.timeout(PREVIEW_TIMEOUT_MS)
       }).catch(e => {
         console.error(`Vimeo fetch error for ${videoId}:`, e);
@@ -101,7 +154,9 @@ const getVideoMetadata = async (url: string) => {
       }
 
       if (response.ok) {
-        const data = await response.json();
+        const payload = await readResponseTextLimited(response, 64 * 1024);
+        if (!payload) return null;
+        const data = JSON.parse(payload);
         return {
           title: data.title,
           description: data.author_name,
@@ -120,9 +175,8 @@ const getVideoMetadata = async (url: string) => {
 
 const getHtmlMetadata = async (url: URL) => {
   try {
-    const response = await fetch(url.toString(), {
+    const response = await fetchSafePublicUrl(url, {
       method: 'GET',
-      redirect: 'manual',
       headers: {
         'user-agent': 'forge-community-preview/1.0',
         accept: 'text/html,application/xhtml+xml',
@@ -146,7 +200,10 @@ const getHtmlMetadata = async (url: URL) => {
       return null;
     }
 
-    const html = (await response.text()).slice(0, 250000);
+    const html = await readResponseTextLimited(response, MAX_PREVIEW_BODY_BYTES);
+    if (html === null) {
+      return null;
+    }
     const dom = new JSDOM(html);
     const document = dom.window.document;
 
@@ -161,13 +218,13 @@ const getHtmlMetadata = async (url: URL) => {
       return '';
     };
 
-    const resolvePreviewUrl = (value: string) => {
+    const resolvePreviewUrl = async (value: string) => {
       if (!value) {
         return null;
       }
 
       try {
-        return new URL(value, url).toString();
+        return (await assertSafePublicUrl(new URL(value, url).toString())).toString();
       } catch {
         return null;
       }
@@ -180,7 +237,7 @@ const getHtmlMetadata = async (url: URL) => {
     const description =
       getMetaContent('meta[property="og:description"]', 'meta[name="description"]', 'meta[name="twitter:description"]') ||
       '';
-    const image = resolvePreviewUrl(
+    const image = await resolvePreviewUrl(
       getMetaContent('meta[property="og:image"]', 'meta[name="twitter:image"]')
     );
 
@@ -198,9 +255,23 @@ const getHtmlMetadata = async (url: URL) => {
 
 export async function POST(request: Request) {
   try {
-    const { url } = await request.json();
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
+    }
 
-    if (!url) {
+    const rateLimit = consumeRateLimit(`preview:user:${session.user.id}`, PREVIEW_RATE_LIMIT);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: 'Zu viele Vorschauanfragen' },
+        { status: 429, headers: rateLimitHeaders(rateLimit) },
+      );
+    }
+
+    const limitedRequest = await requestWithBodyLimit(request, MAX_PREVIEW_REQUEST_BYTES);
+    const { url } = await limitedRequest.json();
+
+    if (typeof url !== 'string' || !url.trim() || url.length > MAX_PREVIEW_URL_LENGTH) {
       return NextResponse.json(
         { error: 'URL ist erforderlich' },
         { status: 400 }
@@ -242,7 +313,7 @@ export async function POST(request: Request) {
     console.error('Preview error:', error);
     return NextResponse.json(
       { error: 'Fehler beim Laden der Vorschau' },
-      { status: 500 }
+      { status: error instanceof HttpUrlValidationError ? 400 : error instanceof RequestBodyLimitError ? 413 : 500 }
     );
   }
 }
