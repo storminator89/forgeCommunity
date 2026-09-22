@@ -119,6 +119,20 @@ describe('POST /api/register', () => {
     expect(mockBcrypt.hash).not.toHaveBeenCalled();
   });
 
+  it('does not apply the strict per address quota to unknown proxy addresses', async () => {
+    const responses = [] as Response[];
+    for (let index = 0; index < 6; index += 1) {
+      responses.push(
+        await POST(
+          registrationRequest(`person-${index}@example.com`, 'StrongPassword1!'),
+        ),
+      );
+    }
+
+    expect(responses.every(response => response.status === 201)).toBe(true);
+    expect(mockPrisma.user.create).toHaveBeenCalledTimes(6);
+  });
+
   it('rejects a cross origin mutation', async () => {
     const request = {
       url: 'https://community.example.test/api/register',

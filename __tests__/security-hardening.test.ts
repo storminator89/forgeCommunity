@@ -9,7 +9,7 @@ import { isSafeRichHtmlUrl } from '@/lib/html-sanitize-config';
 import { sanitizeRichHtmlServer } from '@/lib/server/sanitize-html';
 import { assertSafePublicUrl } from '@/lib/server/url-security';
 import { requestWithBodyLimit, RequestBodyLimitError } from '@/lib/server/request-body';
-import { deleteUploadedImage, saveImageUpload } from '@/lib/server/image-upload';
+import { deleteUploadedImage, getPublicImageUploadPath, saveImageUpload } from '@/lib/server/image-upload';
 import { access, mkdir, rm, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -118,5 +118,9 @@ describe('server URL and request boundaries', () => {
     } finally {
       await rm(sibling, { recursive: true, force: true });
     }
+  });
+
+  it('does not expose legacy public chat attachment names', () => {
+    expect(getPublicImageUploadPath('chat-legacy-123.png')).toBeNull();
   });
 });

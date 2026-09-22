@@ -9,6 +9,7 @@ import {
 } from '@/lib/server/auth-security';
 import {
   consumeRateLimit,
+  LOGIN_AGGREGATE_RATE_LIMIT,
   LOGIN_RATE_LIMIT,
   rateLimitHeaders,
 } from '@/lib/server/rate-limit';
@@ -33,9 +34,10 @@ function rateLimitCredentials(
 ): Response | null {
   if (!isCredentialsCallback) return null;
 
+  const address = getClientAddress(request.headers);
   const addressLimit = consumeRateLimit(
-    `login:ip:${getClientAddress(request.headers)}`,
-    LOGIN_RATE_LIMIT,
+    address === 'unknown' ? 'login:aggregate' : `login:ip:${address}`,
+    address === 'unknown' ? LOGIN_AGGREGATE_RATE_LIMIT : LOGIN_RATE_LIMIT,
   );
   if (!addressLimit.allowed) return tooManyRequests(addressLimit);
 

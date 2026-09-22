@@ -152,7 +152,7 @@ export function getPrivateChatUploadPath(filename: string) {
 }
 
 export function getPublicImageUploadPath(filename: string) {
-  if (!/^[A-Za-z0-9_-]+-[0-9a-f-]+\.(?:gif|jpg|png|webp)$/.test(filename)) {
+  if (/^chat-/i.test(filename) || !/^[A-Za-z0-9_-]+-[0-9a-f-]+\.(?:gif|jpg|png|webp)$/.test(filename)) {
     return null;
   }
   return path.join(IMAGE_UPLOAD_DIR, filename);

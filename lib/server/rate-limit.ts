@@ -17,6 +17,19 @@ export const REGISTER_RATE_LIMIT = {
   windowMs: 60 * 60 * 1000,
 } as const;
 
+// When no trusted proxy address is available, all callers share `unknown`.
+// Keep a higher aggregate ceiling for that case instead of applying the
+// strict per-client quota to every user behind the same proxy.
+export const LOGIN_AGGREGATE_RATE_LIMIT = {
+  limit: 100,
+  windowMs: 15 * 60 * 1000,
+} as const;
+
+export const REGISTER_AGGREGATE_RATE_LIMIT = {
+  limit: 100,
+  windowMs: 60 * 60 * 1000,
+} as const;
+
 export const UPLOAD_RATE_LIMIT = {
   limit: 30,
   windowMs: 60 * 60 * 1000,

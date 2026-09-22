@@ -13,6 +13,7 @@ import {
 import {
   rateLimitHeaders,
   consumeRateLimit,
+  REGISTER_AGGREGATE_RATE_LIMIT,
   REGISTER_RATE_LIMIT,
 } from '@/lib/server/rate-limit';
 
@@ -67,8 +68,8 @@ export async function POST(req: Request) {
 
   const address = getClientAddress(req.headers);
   const addressLimit = consumeRateLimit(
-    `register:ip:${address}`,
-    REGISTER_RATE_LIMIT,
+    address === 'unknown' ? 'register:aggregate' : `register:ip:${address}`,
+    address === 'unknown' ? REGISTER_AGGREGATE_RATE_LIMIT : REGISTER_RATE_LIMIT,
   );
 
   if (!addressLimit.allowed) return tooManyRequests(addressLimit);
