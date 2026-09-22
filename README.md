@@ -3,12 +3,12 @@
 <div align="center">
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Next.js](https://img.shields.io/badge/Next.js-14-black)](https://nextjs.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-16-black)](https://nextjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-blue)](https://www.typescriptlang.org/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3-38B2AC)](https://tailwindcss.com/)
-[![Prisma](https://img.shields.io/badge/Prisma-5-2D3748)](https://www.prisma.io/)
+[![Prisma](https://img.shields.io/badge/Prisma-7-2D3748)](https://www.prisma.io/)
 [![Contributions Welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg)](CONTRIBUTING.md)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/yourusername/forgeCommunity/pulls)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/storminator89/forgeCommunity/pulls)
 [![Code Style](https://img.shields.io/badge/code_style-prettier-ff69b4.svg)](https://prettier.io/)
 
 <h3 align="center">🚀 Building the Future of Community Learning</h3>
@@ -56,7 +56,7 @@ ForgeCommunity is a comprehensive platform designed to foster learning, collabor
 Our tech stack combines modern technologies for optimal performance and developer experience:
 
 #### Frontend
-- 🔷 Next.js 14 (App Router)
+- 🔷 Next.js 16 (App Router)
 - 📘 TypeScript
 - 🎨 Tailwind CSS
 - 🧩 Shadcn UI Components
@@ -109,8 +109,8 @@ Our tech stack combines modern technologies for optimal performance and develope
 ### Prerequisites
 
 Ensure you have installed:
-- Node.js (v18.0.0 or higher)
-- npm (v9.0.0 or higher) or yarn (v1.22.0 or higher)
+- Node.js 24 LTS (use the version declared in `.nvmrc`)
+- npm 11 or later; use the committed `package-lock.json`
 - Git (v2.0.0 or higher)
 - PostgreSQL (v14 or higher)
 
@@ -124,9 +124,7 @@ cd forgeCommunity
 
 2. **Install dependencies**
    ```bash
-   npm install
-   # or
-   yarn install
+   npm ci
    ```
 
 3. **Environment Setup**
@@ -136,15 +134,15 @@ cd forgeCommunity
    Configure your `.env` file:
    ```env
    DATABASE_URL="postgresql://user:password@localhost:5432/forge"
-   NEXTAUTH_SECRET="your-secret-key"
-   NEXTAUTH_URL="http://localhost:3000"
+   NEXTAUTH_SECRET="<generate with: openssl rand -base64 32>"
+   NEXTAUTH_URL="http://localhost:3013"
    ```
 
 4. **Database Setup**
    ```bash
    npx prisma generate
    npx prisma db push
-   npm run db:seed  # Optional: Seed initial data
+   ALLOW_DEMO_SEED=true npm run db:seed  # Optional; disposable development DB only
    ```
 
 ## 💻 Development
@@ -192,11 +190,15 @@ We welcome contributions! See our [Contributing Guide](CONTRIBUTING.md) for deta
 # Run unit tests
 npm run test
 
-# Run integration tests
-npm run test:integration
+# Check application types
+npm run typecheck
 
-# Run e2e tests
-npm run test:e2e
+# Check lint and production build
+npm run lint
+npm run build
+
+# Check known package vulnerabilities
+npm audit
 ```
 
 ## 📁 Project Structure
@@ -228,3 +230,24 @@ This project is licensed under the Apache License, Version 2.0.
 - [Prisma](https://www.prisma.io)
 - [Shadcn UI](https://ui.shadcn.com)
 - [TypeScript](https://www.typescriptlang.org)
+
+## Security modernization and upgrade notes
+
+See [the audit and validation report](docs/SECURITY-MODERNIZATION.md) for the
+baseline findings, migration details, test results, and remaining limitations.
+
+For an existing installation:
+
+1. Back up PostgreSQL and uploaded files; rehearse the upgrade against a staging copy.
+2. Rotate `NEXTAUTH_SECRET` on deployment. This invalidates all old sessions,
+   including any claims forged before the session update fix. Users must log in again.
+3. Configure the canonical HTTPS `NEXTAUTH_URL` and `NEXT_PUBLIC_APP_URL`.
+4. Use a strong database password. Never use the example connection string unchanged.
+5. Only run `prisma db push` on a disposable development database. Plan and review
+   production schema migrations separately; no production migration is run by this branch.
+
+Demo seeding requires `ALLOW_DEMO_SEED=true`, is refused in production, and creates
+independent random passwords that are not printed. Demo accounts cannot be used
+as a production login mechanism. Uploaded files require persistent storage in a
+container deployment and a backup policy. Legacy public chat image paths are blocked
+until their files and database references have been migrated to private storage.

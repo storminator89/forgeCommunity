@@ -1,3 +1,4 @@
+import type { NextRequest } from 'next/server';
 import { POST } from '@/app/api/users/[id]/projects/route';
 import prisma from '@/lib/prisma';
 import { getServerSession } from 'next-auth/next';
@@ -54,7 +55,7 @@ describe('legacy profile project creation', () => {
           link,
           tags: [],
         }),
-      } as unknown as Request;
+      } as unknown as NextRequest;
 
       const response = await POST(request, {
         params: Promise.resolve({ id: 'user-1' }),
@@ -78,7 +79,7 @@ describe('legacy profile project creation', () => {
         link: '  https://example.com/demo  ',
         tags: [],
       }),
-    } as unknown as Request;
+    } as unknown as NextRequest;
 
     const response = await POST(request, {
       params: Promise.resolve({ id: 'user-1' }),
