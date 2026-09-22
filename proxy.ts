@@ -43,16 +43,28 @@ function isPublicApiRequest(pathname: string, method: string): boolean {
 }
 
 export async function proxy(req: NextRequest) {
-  const { pathname } = req.nextUrl;
+  let pathname: string;
+  try {
+    pathname = decodeURIComponent(req.nextUrl.pathname);
+  } catch {
+    return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
+  }
 
   // Legacy chat attachments were written below public/ before private
   // attachment serving existed. Fail closed until those records are migrated
   // through the authenticated chat upload route.
-  if (req.method.toUpperCase() === 'GET' && /^\/images\/uploads\/chat-[^/]+$/i.test(pathname)) {
+  if (/^\/images\/uploads\/chat-[^/]+$/i.test(pathname)) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
   const isApiRequest = pathname.startsWith('/api/');
+
+  // Include image paths in the proxy matcher so encoded legacy filenames
+  // cannot skip the check above. Other public images retain public access.
+  if (!isApiRequest && ['GET', 'HEAD'].includes(req.method.toUpperCase()) &&
+      /\.(?:svg|png|jpg|jpeg|gif|webp|ico)$/i.test(pathname)) {
+    return NextResponse.next();
+  }
 
   // NextAuth protects its own CSRF endpoints. This covers custom mutation
   // endpoints, including registration, and rejects browser cross-origin
@@ -98,8 +110,8 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
-     * - public files (images, etc.)
+     * Public images are permitted after the legacy chat check above.
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
 };

@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # Build and typecheck do not connect to a database. Runtime deployments
+      # must provide their own DATABASE_URL and secrets.
+      DATABASE_URL: postgresql://placeholder.invalid:5432/forge?schema=public
+      NEXTAUTH_SECRET: ci-only-secret-not-for-runtime
+      NEXTAUTH_URL: http://localhost:3013
+      NEXT_PUBLIC_APP_URL: http://localhost:3013
+
+    steps:
+      - name: Check out repository
+        # v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Set up Node.js
+        # v7.0.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Check security floor
+        run: npm audit --audit-level=high
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test -- --runInBand
+
+      - name: Build
+        run: npm run build
+
+      - name: Smoke test standalone server
+        run: node scripts/smoke-standalone.mjs

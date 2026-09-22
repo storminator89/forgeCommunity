@@ -56,5 +56,16 @@ describe('auth middleware public and API boundaries', () => {
 
     expect(response).toEqual(expect.objectContaining({ kind: 'json', status: 404 }));
     expect(config.matcher).toContain('/images/uploads/:path*');
+    await expect(proxy(request('/images/uploads/%63hat-legacy-123.png')))
+      .resolves.toEqual(expect.objectContaining({ status: 404 }));
+    await expect(proxy(request('/images/uploads/chat-legacy-123.png', 'HEAD')))
+      .resolves.toEqual(expect.objectContaining({ status: 404 }));
+  });
+
+  it('keeps public images reachable while protecting API image paths', async () => {
+    await expect(proxy(request('/images/uploads/image-123.png')))
+      .resolves.toEqual({ kind: 'next' });
+    await expect(proxy(request('/api/private.png')))
+      .resolves.toEqual(expect.objectContaining({ status: 401 }));
   });
 });

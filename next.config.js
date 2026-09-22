@@ -32,11 +32,6 @@ const nextConfig = {
   // Entwicklungsmodus schneller machen
   reactStrictMode: true,
 
-  // TypeScript Checks
-  typescript: {
-    ignoreBuildErrors: true,
-  },
-
   // Experimentelle Features
   experimental: {
     optimizeCss: true

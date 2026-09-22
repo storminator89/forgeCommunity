@@ -21,6 +21,7 @@ export function ImageModal({ isOpen, onClose, imageUrl }: ImageModalProps) {
             alt="Vergrößertes Bild"
             width={1920}
             height={1080}
+            unoptimized
             className="object-contain"
             onClick={(e) => e.stopPropagation()}
           />
