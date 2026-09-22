@@ -10,10 +10,20 @@ interface SocialLinks {
   website?: string | null;
 }
 
-function isValidUrl(url: string | null): boolean {
-  if (!url) return true;
+const SOCIAL_LINK_KEYS = new Set(['github', 'linkedin', 'twitter', 'website']);
+const MAX_SOCIAL_URL_LENGTH = 2048;
+
+function isValidUrl(value: unknown): value is string | null {
+  if (value === null || value === '') return true;
+  if (typeof value !== 'string') return false;
+
+  const url = value.trim();
+  if (!url || url.length > MAX_SOCIAL_URL_LENGTH) return false;
+
   try {
-    new URL(url);
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+    if (parsed.username || parsed.password) return false;
     return true;
   } catch {
     return false;
@@ -35,11 +45,14 @@ export async function PUT(
       );
     }
 
-    const data = await request.json() as SocialLinks;
+    const data = await request.json();
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      return NextResponse.json({ error: 'Ungültige sozialen Links' }, { status: 400 });
+    }
 
     // Validiere URLs
     const invalidUrls = Object.entries(data)
-      .filter(([_, url]) => url && !isValidUrl(url))
+      .filter(([key, url]) => !SOCIAL_LINK_KEYS.has(key) || !isValidUrl(url))
       .map(([key]) => key);
 
     if (invalidUrls.length > 0) {
@@ -53,9 +66,9 @@ export async function PUT(
 
     // Entferne leere Strings und ersetze sie durch null
     const cleanedData = Object.fromEntries(
-      Object.entries(data).map(([key, value]) => [
+      Object.entries(data as SocialLinks).map(([key, value]) => [
         key,
-        value?.trim() || null
+        typeof value === 'string' ? value.trim() || null : null
       ])
     );
 

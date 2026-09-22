@@ -231,7 +231,7 @@ export default function Events(props: { params: Promise<any>, searchParams: Prom
   }
 
   // Komponenten für verschiedene Ansichten
-  const MonthView = () => (
+  const renderMonthView = () => (
     <div className="max-w-6xl mx-auto bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
       <div className="flex items-center justify-between p-4 lg:p-6 border-b border-gray-200 dark:border-gray-700">
         <Button variant="outline" size="sm" onClick={handlePreviousMonth} className="flex items-center">
@@ -290,7 +290,7 @@ export default function Events(props: { params: Promise<any>, searchParams: Prom
     </div>
   );
 
-  const WeekView = () => {
+  const renderWeekView = () => {
     const weekStart = startOfWeek(currentMonth, { locale: de, weekStartsOn: 1 }); // Woche beginnt am Montag
     const weekDays = Array.from({ length: 7 }).map((_, i) => addDays(weekStart, i));
     const weekEvents = getEventsForWeek(weekStart);
@@ -298,14 +298,14 @@ export default function Events(props: { params: Promise<any>, searchParams: Prom
     return (
       <div className="max-w-6xl mx-auto bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
         <div className="flex items-center justify-between p-4 lg:p-6 border-b border-gray-200 dark:border-gray-700">
-          <Button variant="outline" size="sm" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="flex items-center">
+          <Button variant="outline" size="sm" onClick={() => setCurrentMonth(addDays(currentMonth, -7))} className="flex items-center">
             <ChevronLeft className="h-4 w-4 mr-2" />
             Vorherige Woche
           </Button>
           <h2 className="text-lg lg:text-2xl font-semibold text-gray-800 dark:text-white">
             Woche: {format(weekStart, 'dd. MMM yyyy', { locale: de })} - {format(addDays(weekStart, 6), 'dd. MMM yyyy', { locale: de })}
           </h2>
-          <Button variant="outline" size="sm" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="flex items-center">
+          <Button variant="outline" size="sm" onClick={() => setCurrentMonth(addDays(currentMonth, 7))} className="flex items-center">
             Nächste Woche
             <ChevronRight className="h-4 w-4 ml-2" />
           </Button>
@@ -351,7 +351,7 @@ export default function Events(props: { params: Promise<any>, searchParams: Prom
     );
   };
 
-  const ListView = () => {
+  const renderListView = () => {
     const today = startOfToday();
     const futureEvents = filteredEvents.filter(event => isAfter(new Date(event.date), today));
     const sortedEvents = [...futureEvents].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -470,9 +470,9 @@ export default function Events(props: { params: Promise<any>, searchParams: Prom
             </Button>
           </div>
 
-          {view === 'month' && <MonthView />}
-          {view === 'week' && <WeekView />}
-          {view === 'list' && <ListView />}
+          {view === 'month' && renderMonthView()}
+          {view === 'week' && renderWeekView()}
+          {view === 'list' && renderListView()}
         </main>
       </div>
 

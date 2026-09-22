@@ -102,6 +102,13 @@ export default function SettingsPage() {
         setUserImage(userResponse.data.image)
         setName(userResponse.data.name || '')
         setEmail(userResponse.data.email || '')
+        // The profile endpoint returns preferences under `userSettings`.
+        // Hydrate these controls so saving one tab does not overwrite values
+        // that were already persisted for the account.
+        const userSettings = userResponse.data.userSettings
+        setLanguage(userSettings?.language || 'de')
+        setEmailNotifications(userSettings?.emailNotifications ?? true)
+        setPushNotifications(userSettings?.pushNotifications ?? true)
         setCertificates(certificatesResponse.data)
       } catch (error) {
         console.error("Fehler beim Abrufen der Daten:", error)

@@ -329,6 +329,7 @@ export default function ChatPage() {
                                     alt="Nachrichtenbild"
                                     width={512}
                                     height={512}
+                                    unoptimized
                                     className="rounded-lg object-contain cursor-pointer"
                                     onClick={() => setSelectedImageForModal(message.imageUrl ?? null)}
                                   />

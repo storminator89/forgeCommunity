@@ -17,28 +17,55 @@ interface VerificationResponse {
 }
 
 export default function VerifyCertificate() {
-  const params = useParams();
+  const { certificateId } = useParams<{ certificateId: string }>();
   const [verificationResult, setVerificationResult] = useState<VerificationResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const controller = new AbortController();
+
     const verifyCertificate = async () => {
+      if (!certificateId) {
+        setVerificationResult({
+          valid: false,
+          message: 'Certificate ID is missing',
+        });
+        setLoading(false);
+        return;
+      }
+
       try {
-        const response = await fetch(`/api/verify-certificate/${params.certificateId}`);
+        const response = await fetch(`/api/verify-certificate/${encodeURIComponent(certificateId)}`, {
+          signal: controller.signal,
+        });
         const data = await response.json();
-        setVerificationResult(data);
+        if (!response.ok) {
+          setVerificationResult({
+            valid: false,
+            message: data.message || 'Error verifying certificate',
+          });
+        } else {
+          setVerificationResult(data);
+        }
       } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          return;
+        }
         setVerificationResult({
           valid: false,
           message: 'Error verifying certificate',
         });
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
       }
     };
 
     verifyCertificate();
-  }, [params.certificateId]);
+
+    return () => controller.abort();
+  }, [certificateId]);
 
   if (loading) {
     return (
@@ -59,18 +86,18 @@ export default function VerifyCertificate() {
     );
   }
 
-  if (!verificationResult.valid) {
+  if (!verificationResult.valid || !verificationResult.certificate) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-red-600">Invalid Certificate</h1>
-          <p className="mt-2">{verificationResult.message}</p>
+          <p className="mt-2">{verificationResult.message || 'Unable to verify certificate'}</p>
         </div>
       </div>
     );
   }
 
-  const certificate = verificationResult.certificate!;
+  const certificate = verificationResult.certificate;
   const issueDate = new Date(certificate.issuedAt).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',

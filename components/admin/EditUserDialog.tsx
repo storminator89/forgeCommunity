@@ -18,6 +18,8 @@ import { toast } from 'react-toastify'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
+const MIN_PASSWORD_LENGTH = 12
+
 interface User {
   id: string
   name: string
@@ -110,8 +112,8 @@ export function EditUserDialog({ user, isOpen, onClose, onUpdateUser }: EditUser
         return
       }
 
-      if (formData.password && formData.password.length < 8) {
-        toast.error('Das Passwort muss mindestens 8 Zeichen lang sein')
+      if (formData.password && formData.password.length < MIN_PASSWORD_LENGTH) {
+        toast.error(`Das Passwort muss mindestens ${MIN_PASSWORD_LENGTH} Zeichen lang sein`)
         return
       }
 
@@ -129,6 +131,7 @@ export function EditUserDialog({ user, isOpen, onClose, onUpdateUser }: EditUser
         title: formData.title,
         bio: formData.bio,
         contact: formData.contact,
+        image: formData.image,
         settings: {
           emailNotifications: formData.emailNotifications,
           pushNotifications: formData.pushNotifications,
@@ -152,7 +155,7 @@ export function EditUserDialog({ user, isOpen, onClose, onUpdateUser }: EditUser
 
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.message || 'Fehler beim Aktualisieren des Benutzers')
+        throw new Error(error.message || error.error || 'Fehler beim Aktualisieren des Benutzers')
       }
 
       const updatedUser = await response.json()
@@ -247,9 +250,10 @@ export function EditUserDialog({ user, isOpen, onClose, onUpdateUser }: EditUser
                     value={formData.password}
                     onChange={(e) => handleInputChange('password', e.target.value)}
                     placeholder="Leer lassen für keine Änderung"
+                    minLength={MIN_PASSWORD_LENGTH}
                   />
                   <p className="text-xs text-gray-500">
-                    Mindestens 8 Zeichen
+                    Mindestens {MIN_PASSWORD_LENGTH} Zeichen
                   </p>
                 </div>
 

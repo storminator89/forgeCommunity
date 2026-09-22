@@ -40,6 +40,20 @@ export async function PUT(
           title,
           contact,
         },
+        // Keep credentials and account recovery claims out of the response.
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          image: true,
+          bio: true,
+          title: true,
+          contact: true,
+          socialLinks: true,
+          role: true,
+          createdAt: true,
+          updatedAt: true,
+        },
       })
 
       if (skills && Array.isArray(skills)) {
@@ -66,9 +80,23 @@ export async function PUT(
       // Implementieren Sie hier die Logik für Social Links
     }
 
+    const safeUser = {
+      id: updatedUser.id,
+      name: updatedUser.name,
+      email: updatedUser.email,
+      image: updatedUser.image,
+      bio: updatedUser.bio,
+      title: updatedUser.title,
+      contact: updatedUser.contact,
+      socialLinks: updatedUser.socialLinks,
+      role: updatedUser.role,
+      createdAt: updatedUser.createdAt,
+      updatedAt: updatedUser.updatedAt,
+    }
+
     return NextResponse.json({
       success: true,
-      user: updatedUser,
+      user: safeUser,
     })
   } catch (error) {
     console.error('Error updating profile:', error)
