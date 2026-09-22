@@ -42,7 +42,6 @@ next-env.d.ts
 
 # Prisma
 /prisma/*.db
-/prisma/migrations
 
 # IDEs and editors
 /.idea

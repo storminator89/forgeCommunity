@@ -1,11 +1,19 @@
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcrypt'
+import { randomBytes } from 'node:crypto'
 
 const prisma = new PrismaClient()
 
 async function main() {
-  // Erstellen von Beispiel-Benutzern
-  const hashedPassword = await bcrypt.hash('password123', 10)
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Demo seed is disabled in production.');
+  }
+  if (process.env.ALLOW_DEMO_SEED !== 'true') {
+    throw new Error('Set ALLOW_DEMO_SEED=true explicitly for a disposable development database.');
+  }
+  // Demo accounts have independent, undisclosed random credentials.
+  const alicePassword = await bcrypt.hash(randomBytes(32).toString('base64url'), 12)
+  const bobPassword = await bcrypt.hash(randomBytes(32).toString('base64url'), 12)
 
   const user1 = await prisma.user.upsert({
     where: { email: 'alice@example.com' },
@@ -13,7 +21,7 @@ async function main() {
     create: {
       email: 'alice@example.com',
       name: 'Alice',
-      password: hashedPassword,
+      password: alicePassword,
       role: 'USER',
     },
   })
@@ -24,7 +32,7 @@ async function main() {
     create: {
       email: 'bob@example.com',
       name: 'Bob',
-      password: hashedPassword,
+      password: bobPassword,
       role: 'USER',
     },
   })
