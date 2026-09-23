@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useEffectEvent, useRef } from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -53,19 +53,29 @@ export function ActivityFeed({ userId }: ActivityFeedProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+  const [loadedForUserId, setLoadedForUserId] = useState<string | null>(null);
+  const requestIdRef = useRef(0);
+  const activeControllerRef = useRef<AbortController | null>(null);
 
-  const fetchActivities = useCallback(async (pageNum: number) => {
+  const fetchActivities = useCallback(async (
+    pageNum: number,
+    signal: AbortSignal,
+    requestId: number,
+  ) => {
     try {
       const response = await fetch(
         `/api/users/${userId}/activity?page=${pageNum}&limit=10`,
         {
           credentials: 'include',
+          signal,
         }
       );
 
       if (!response.ok) throw new Error('Failed to fetch activities');
 
       const data = await response.json();
+
+      if (signal.aborted || requestIdRef.current !== requestId) return;
 
       if (pageNum === 1) {
         setActivities(data.activities);
@@ -74,21 +84,44 @@ export function ActivityFeed({ userId }: ActivityFeedProps) {
       }
 
       setHasMore(data.pagination.hasMore);
+      setPage(pageNum);
+      setLoadedForUserId(userId);
     } catch (error) {
+      if (signal.aborted || requestIdRef.current !== requestId) return;
       console.error('Error fetching activities:', error);
+      setLoadedForUserId(userId);
     } finally {
-      setIsLoading(false);
+      if (!signal.aborted && requestIdRef.current === requestId) {
+        setIsLoading(false);
+      }
     }
   }, [userId]);
 
+  const startInitialFetch = useEffectEvent(() => {
+    activeControllerRef.current?.abort();
+    const controller = new AbortController();
+    activeControllerRef.current = controller;
+    const requestId = ++requestIdRef.current;
+    void fetchActivities(1, controller.signal, requestId);
+  });
+
   useEffect(() => {
-    fetchActivities(1);
-  }, [fetchActivities]);
+    startInitialFetch();
+
+    return () => {
+      activeControllerRef.current?.abort();
+      requestIdRef.current += 1;
+    };
+  }, [userId]);
 
   const loadMore = () => {
     const nextPage = page + 1;
-    setPage(nextPage);
-    fetchActivities(nextPage);
+    activeControllerRef.current?.abort();
+    const controller = new AbortController();
+    activeControllerRef.current = controller;
+    const requestId = ++requestIdRef.current;
+    setIsLoading(true);
+    void fetchActivities(nextPage, controller.signal, requestId);
   };
 
   const getTimeAgo = (date: Date) => {
@@ -231,7 +264,9 @@ export function ActivityFeed({ userId }: ActivityFeedProps) {
     );
   };
 
-  if (isLoading) {
+  const isCurrentUserLoaded = loadedForUserId === userId;
+
+  if (isLoading || !isCurrentUserLoaded) {
     return (
       <div className="flex justify-center items-center py-8">
         <Loader2 className="h-8 w-8 animate-spin text-blue-500" />

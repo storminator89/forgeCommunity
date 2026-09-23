@@ -17,6 +17,21 @@ import { ChevronLeft, ChevronRight, Edit, FileText, Video, Music, Box } from 'lu
 import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
+function findContentById(contentId: string, contentsToSearch: CourseContent[]): CourseContent | null {
+  for (const content of contentsToSearch) {
+    if (content.id === contentId) {
+      return content;
+    }
+    if (content.subContents) {
+      const found = findContentById(contentId, content.subContents);
+      if (found) {
+        return found;
+      }
+    }
+  }
+  return null;
+}
+
 export default function CourseContentsPage({ params }: { params: Promise<{ courseId: string }> }) {
   const { courseId } = use(params);
   const router = useRouter();
@@ -30,7 +45,7 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
   const [isInlineEditing, setIsInlineEditing] = useState<string | null>(null);
   const [inlineEditTitle, setInlineEditTitle] = useState('');
   const [editingContentId, setEditingContentId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [loadedContentsCourseId, setLoadedContentsCourseId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [course, setCourse] = useState<{ id: string; name: string } | null>(null);
   const [forceUpdateValue, setForceUpdateValue] = useState(0);
@@ -38,50 +53,44 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
   const [currentMainContentId, setCurrentMainContentId] = useState<string | null>(null);
   const [expandedTopics, setExpandedTopics] = useState<Set<string>>(new Set());
   const [sidebarWidth, setSidebarWidth] = useState(300);
+  const [isResizingSidebar, setIsResizingSidebar] = useState(false);
+  const [loadedCourseId, setLoadedCourseId] = useState<string | null>(null);
   const isResizing = useRef(false);
   const startX = useRef(0);
   const startWidth = useRef(0);
 
-  // Fetch course data
-  const fetchCourse = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      const response = await fetch(`/api/courses/${courseId}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch course');
-      }
-      const data = await response.json();
-      setCourse(data);
-    } catch (error) {
-      console.error('Error fetching course:', error);
-      setAlertMessage({
-        type: 'error',
-        message: 'Failed to load course information',
-      });
-    } finally {
-      setIsLoading(false);
+  const loadCourse = useCallback(async (signal: AbortSignal) => {
+    const response = await fetch(`/api/courses/${courseId}`, { signal });
+    if (!response.ok) {
+      throw new Error('Failed to fetch course');
     }
+    return response.json() as Promise<{ id: string; name: string }>;
   }, [courseId]);
 
   useEffect(() => {
-    fetchCourse();
-  }, [fetchCourse]);
+    if (status !== 'authenticated') return;
 
-  // Utility function to find content by ID
-  const findContentById = useCallback((contentId: string, contentsToSearch: CourseContent[]): CourseContent | null => {
-    for (const content of contentsToSearch) {
-      if (content.id === contentId) {
-        return content;
-      }
-      if (content.subContents) {
-        const found = findContentById(contentId, content.subContents);
-        if (found) {
-          return found;
+    const controller = new AbortController();
+    void loadCourse(controller.signal)
+      .then(data => {
+        if (!controller.signal.aborted) {
+          setCourse(data);
+          setLoadedCourseId(courseId);
         }
-      }
-    }
-    return null;
-  }, []);
+      })
+      .catch(error => {
+        if (controller.signal.aborted) return;
+        console.error('Error fetching course:', error);
+        setCourse(null);
+        setLoadedCourseId(courseId);
+        setAlertMessage({
+          type: 'error',
+          message: 'Failed to load course information',
+        });
+      });
+
+    return () => controller.abort();
+  }, [courseId, loadCourse, status]);
 
   // Utility function to update content order
   const updateContentOrder = useCallback((
@@ -145,82 +154,117 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
 
     addToTarget();
     return newContents;
-  }, [findContentById]);
+  }, []);
 
   // Finden des ausgewählten Inhalts basierend auf selectedContentId
   const selectedMainContent = useMemo(() => {
+    const currentContents = loadedContentsCourseId === courseId ? mainContents : [];
     // First check if the content is a subcontent
-    for (const main of mainContents) {
+    for (const main of currentContents) {
       if (main.subContents) {
         const sub = main.subContents.find(sub => sub.id === selectedContentId);
         if (sub) return sub;
       }
     }
     // If not found in subcontents, check main contents
-    return mainContents.find(content => content.id === selectedContentId) || null;
-  }, [mainContents, selectedContentId]);
+    return currentContents.find(content => content.id === selectedContentId) || null;
+  }, [courseId, loadedContentsCourseId, mainContents, selectedContentId]);
+
+  const currentContents = useMemo(
+    () => loadedContentsCourseId === courseId ? mainContents : [],
+    [courseId, loadedContentsCourseId, mainContents]
+  );
 
   const startResizing = (e: React.MouseEvent) => {
     isResizing.current = true;
     startX.current = e.pageX;
     startWidth.current = sidebarWidth;
+    setIsResizingSidebar(true);
+  };
+
+  useEffect(() => {
+    if (!isResizingSidebar) return;
+
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing.current) return;
+      const delta = e.pageX - startX.current;
+      const newWidth = Math.max(200, Math.min(500, startWidth.current + delta));
+      setSidebarWidth(newWidth);
+    };
+
+    const stopResizing = () => {
+      isResizing.current = false;
+      setIsResizingSidebar(false);
+    };
+
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', stopResizing);
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
-  };
 
-  const handleMouseMove = (e: MouseEvent) => {
-    if (!isResizing.current) return;
-    const delta = e.pageX - startX.current;
-    const newWidth = Math.max(200, Math.min(500, startWidth.current + delta));
-    setSidebarWidth(newWidth);
-  };
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', stopResizing);
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+    };
+  }, [isResizingSidebar]);
 
-  const stopResizing = () => {
-    isResizing.current = false;
-    document.removeEventListener('mousemove', handleMouseMove);
-    document.removeEventListener('mouseup', stopResizing);
-    document.body.style.cursor = '';
-    document.body.style.userSelect = '';
-  };
+  const loadContents = useCallback(async (signal: AbortSignal) => {
+    const response = await fetch(`/api/courses/${courseId}/contents`, { signal });
+    if (!response.ok) {
+      throw new Error('Failed to fetch contents');
+    }
+    return response.json() as Promise<CourseContent[]>;
+  }, [courseId]);
 
-  // Funktion zum Abrufen der Kursinhalte
   const fetchContents = useCallback(async () => {
-    setIsLoading(true);
     try {
-      const response = await fetch(`/api/courses/${courseId}/contents`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch contents');
-      }
-      const data = await response.json();
+      const data = await loadContents(new AbortController().signal);
       setMainContents(data);
+      setLoadedContentsCourseId(courseId);
     } catch (error) {
       console.error('Error fetching contents:', error);
       setAlertMessage({
         type: 'error',
         message: 'Failed to load course contents. Please try again.',
       });
-    } finally {
-      setIsLoading(false);
+      setLoadedContentsCourseId(courseId);
     }
-  }, [courseId]);
+  }, [courseId, loadContents]);
 
   useEffect(() => {
-    if (status === 'authenticated') {
-      fetchContents();
-    }
-  }, [status, fetchContents]);
+    if (status !== 'authenticated') return;
 
-  useEffect(() => {
-    fetchContents();
-  }, [fetchContents]);
+    const controller = new AbortController();
+    void loadContents(controller.signal)
+      .then(data => {
+        if (controller.signal.aborted) return;
+        setMainContents(data);
+        setLoadedContentsCourseId(courseId);
+      })
+      .catch(error => {
+        if (controller.signal.aborted) return;
+        console.error('Error fetching contents:', error);
+        setAlertMessage({
+          type: 'error',
+          message: 'Failed to load course contents. Please try again.',
+        });
+        setMainContents([]);
+        setLoadedContentsCourseId(courseId);
+      });
+
+    return () => controller.abort();
+  }, [courseId, loadContents, status]);
 
   // Add this to your existing useEffect block or create a new one
   useEffect(() => {
     const expandTopicForSelectedContent = () => {
       if (selectedContentId) {
-        const content = findContentById(selectedContentId, mainContents);
+        const content = findContentById(selectedContentId, currentContents);
         if (content?.parentId) {
           const parentId = content.parentId;
           setExpandedTopics(prev => {
@@ -233,7 +277,7 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
     };
 
     expandTopicForSelectedContent();
-  }, [selectedContentId, mainContents, findContentById]);
+  }, [selectedContentId, currentContents]);
 
   // Handler zum Hinzufügen eines neuen Hauptthemas
   const handleMainContentSubmit = useCallback(async (title: string) => {
@@ -443,6 +487,10 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
       setMainContents(prev => {
         // Kopie des States erstellen
         const newContents = [...prev];
+
+        if (!content.parentId) {
+          return newContents.filter(main => main.id !== content.id);
+        }
 
         // Hauptthema finden, das das zu löschende Unterthema enthält
         const parentIndex = newContents.findIndex(main =>
@@ -786,7 +834,7 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
         setExpandedTopics(prev => new Set([...prev, parentContent.id]));
       }
     }
-  }, [courseId, mainContents, findContentById]);
+  }, [courseId, mainContents]);
 
   const handleContentDrop = async (draggedId: string, targetId: string, position: "before" | "after" | "inside") => {
     try {
@@ -846,7 +894,13 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
   }, []);
 
   // Loading indicator while fetching contents
-  if (status === 'loading' || isLoading) {
+  const isLoading = status === 'loading'
+    || (status === 'authenticated' && (
+      loadedCourseId !== courseId
+      || loadedContentsCourseId !== courseId
+    ));
+
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="animate-spin h-8 w-8 text-gray-500" />
@@ -904,7 +958,7 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
                 isTopicsSidebarOpen ? "opacity-100 w-full" : "opacity-0 w-0"
               )}>
                 <CourseContentsSidebar
-                  contents={mainContents || []}
+                  contents={currentContents}
                   selectedContentId={selectedContentId}
                   onContentSelect={handleContentSelect}
                   onEditClick={handleEditContent}
@@ -928,6 +982,7 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
                   courseId={courseId}
                   courseName={course?.name || ''}
                   isLoading={isLoading}
+                  onMainContentSubmit={handleMainContentSubmit}
                   forceUpdate={!!forceUpdateValue}
                   onVisitedToggle={handleVisitedToggle}
                   onSubContentSubmit={handleSubContentSubmit}

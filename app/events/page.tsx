@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   format,
   startOfMonth,
@@ -73,6 +73,7 @@ export default function Events(props: { params: Promise<any>, searchParams: Prom
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const { toast } = useToast();
   const [view, setView] = useState<ViewType>('month');
+  const eventsRequestRef = useRef<AbortController | null>(null);
 
   const handlePreviousMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
   const handleNextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
@@ -112,26 +113,64 @@ export default function Events(props: { params: Promise<any>, searchParams: Prom
     setSelectedEvent(null);
   };
 
-  const fetchEvents = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/events');
-      if (!res.ok) {
-        throw new Error('Netzwerkantwort war nicht ok');
-      }
-      const data: Event[] = await res.json();
-      setEventsData(data);
-    } catch (err) {
-      console.error('Fehler beim Abrufen der Events:', err);
-      setError('Fehler beim Abrufen der Events');
-    } finally {
-      setLoading(false);
+  const loadEvents = useCallback(async (controller: AbortController) => {
+    const res = await fetch('/api/events', { signal: controller.signal });
+    if (!res.ok) {
+      throw new Error('Netzwerkantwort war nicht ok');
     }
-  };
+    return (await res.json()) as Event[];
+  }, []);
+
+  const fetchEvents = useCallback(() => {
+    eventsRequestRef.current?.abort();
+    const controller = new AbortController();
+    eventsRequestRef.current = controller;
+    setLoading(true);
+    setError(null);
+    void loadEvents(controller)
+      .then((data) => {
+        if (eventsRequestRef.current !== controller) return;
+        setEventsData(data);
+      })
+      .catch((err: unknown) => {
+        if (controller.signal.aborted || eventsRequestRef.current !== controller) return;
+        console.error('Fehler beim Abrufen der Events:', err);
+        setError('Fehler beim Abrufen der Events');
+      })
+      .finally(() => {
+        if (eventsRequestRef.current === controller) {
+          eventsRequestRef.current = null;
+          setLoading(false);
+        }
+      });
+  }, [loadEvents]);
 
   useEffect(() => {
-    fetchEvents();
-  }, []);
+    const controller = new AbortController();
+    eventsRequestRef.current = controller;
+    void loadEvents(controller)
+      .then((data) => {
+        if (eventsRequestRef.current !== controller) return;
+        setEventsData(data);
+        setError(null);
+      })
+      .catch((err: unknown) => {
+        if (controller.signal.aborted || eventsRequestRef.current !== controller) return;
+        console.error('Fehler beim Abrufen der Events:', err);
+        setError('Fehler beim Abrufen der Events');
+      })
+      .finally(() => {
+        if (eventsRequestRef.current === controller) {
+          eventsRequestRef.current = null;
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      controller.abort();
+      if (eventsRequestRef.current === controller) eventsRequestRef.current = null;
+    };
+  }, [loadEvents]);
 
   const filteredEvents = eventsData.filter(event =>
     event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||

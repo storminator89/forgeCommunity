@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectGroup, SelectLabel, SelectItem } from "@/components/ui/select";
@@ -39,24 +39,22 @@ const TIMEZONES = [
 ];
 
 export default function EventForm({ initialData, onSuccess, onClose }: EventFormProps) {
-  const [title, setTitle] = useState(initialData?.title || '');
-  const [date, setDate] = useState(initialData ? initialData.date.slice(0, 10) : '');
-  const [description, setDescription] = useState(initialData?.description || '');
-  const [location, setLocation] = useState(initialData?.location || '');
-  const [startTime, setStartTime] = useState(initialData?.startTime || '');
-  const [endTime, setEndTime] = useState(initialData?.endTime || '');
-  const [category, setCategory] = useState(initialData?.category || '');
-  const [timezone, setTimezone] = useState(initialData?.timezone || 'Europe/Berlin'); // Neue State für Zeitzone
+  // The form is keyed by event id so switching between edit targets remounts it
+  // with the new values instead of synchronizing controlled state in an effect.
+  return <EventFormFields key={initialData?.id ?? 'new'} initialData={initialData} onSuccess={onSuccess} onClose={onClose} />;
+}
+
+function EventFormFields({ initialData, onSuccess, onClose }: EventFormProps) {
+  const [title, setTitle] = useState(() => initialData?.title || '');
+  const [date, setDate] = useState(() => initialData ? initialData.date.slice(0, 10) : DateTime.now().setZone('Europe/Berlin').toISODate() || '');
+  const [description, setDescription] = useState(() => initialData?.description || '');
+  const [location, setLocation] = useState(() => initialData?.location || '');
+  const [startTime, setStartTime] = useState(() => initialData?.startTime || '');
+  const [endTime, setEndTime] = useState(() => initialData?.endTime || '');
+  const [category, setCategory] = useState(() => initialData?.category || '');
+  const [timezone, setTimezone] = useState(() => initialData?.timezone || 'Europe/Berlin');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
-
-  useEffect(() => {
-    if (!initialData) {
-      const now = DateTime.now().setZone('Europe/Berlin');
-      setDate(now.toISODate() || '');
-      setTimezone('Europe/Berlin'); // Standardzeitzone setzen
-    }
-  }, [initialData]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

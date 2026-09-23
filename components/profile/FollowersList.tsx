@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useEffectEvent, useRef } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -34,30 +34,53 @@ export function FollowersList({ userId, count, type }: FollowersListProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [users, setUsers] = useState<Follower[]>([]);
+  const [loadedForKey, setLoadedForKey] = useState<string | null>(null);
+  const requestIdRef = useRef(0);
+  const activeControllerRef = useRef<AbortController | null>(null);
+  const requestKey = `${userId}:${type}`;
 
-  const fetchUsers = useCallback(async () => {
-    setIsLoading(true);
+  const fetchUsers = useCallback(async (signal: AbortSignal, requestId: number) => {
     try {
       const response = await fetch(`/api/users/${userId}/${type}`, {
         credentials: 'include',
+        signal,
       });
 
       if (!response.ok) throw new Error('Failed to fetch users');
 
       const data = await response.json();
+      if (signal.aborted || requestIdRef.current !== requestId) return;
       setUsers(data.users);
+      setLoadedForKey(requestKey);
     } catch (error) {
+      if (signal.aborted || requestIdRef.current !== requestId) return;
       console.error(`Error fetching ${type}:`, error);
+      setLoadedForKey(requestKey);
     } finally {
-      setIsLoading(false);
+      if (!signal.aborted && requestIdRef.current === requestId) {
+        setIsLoading(false);
+      }
     }
-  }, [userId, type]);
+  }, [requestKey, type, userId]);
+
+  const startFetch = useEffectEvent(() => {
+    activeControllerRef.current?.abort();
+    const controller = new AbortController();
+    activeControllerRef.current = controller;
+    const requestId = ++requestIdRef.current;
+    void fetchUsers(controller.signal, requestId);
+  });
 
   useEffect(() => {
-    if (isOpen) {
-      fetchUsers();
-    }
-  }, [isOpen, fetchUsers]);
+    if (!isOpen) return;
+
+    startFetch();
+
+    return () => {
+      activeControllerRef.current?.abort();
+      requestIdRef.current += 1;
+    };
+  }, [isOpen, requestKey]);
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -85,7 +108,7 @@ export function FollowersList({ userId, count, type }: FollowersListProps) {
           </DialogDescription>
         </DialogHeader>
         <ScrollArea className="max-h-[60vh] pr-4">
-          {isLoading ? (
+          {isLoading || loadedForKey !== requestKey ? (
             <div className="flex justify-center py-8">
               <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
             </div>

@@ -6,6 +6,7 @@ import { POST as likeNestedComment } from '@/app/api/posts/[postId]/comments/[co
 import { GET as getChatMembers, POST as addChatMember } from '@/app/api/chat/members/route'
 import { GET as getChatMessages } from '@/app/api/chat/messages/route'
 import { GET as getAdminUsers } from '@/app/api/admin/users/route'
+import { GET as getMembers } from '@/app/api/members/route'
 import { PUT as updateProfile } from '@/app/api/user/profile/route'
 import { POST as issueCertificate } from '@/app/api/courses/[courseId]/certificate/route'
 import { POST as addCourseContent } from '@/app/api/courses/[courseId]/contents/route'
@@ -204,6 +205,41 @@ describe('API authorization regressions', () => {
 
     expect(response.status).toBe(403)
     expect(mockedPrisma.user.findMany).not.toHaveBeenCalled()
+  })
+
+  it('returns only the public member profile fields', async () => {
+    mockedPrisma.user.findMany.mockResolvedValue([{
+      id: 'member-1',
+      name: 'Member',
+      image: null,
+      title: 'Developer',
+      role: 'USER',
+      createdAt: new Date('2025-01-01T00:00:00.000Z'),
+      _count: { followers: 3 },
+      skills: [{ skill: { name: 'TypeScript' } }],
+      email: 'private@example.com',
+      password: 'password-hash',
+      contact: { phone: 'private' },
+      bio: 'private bio',
+    }])
+
+    const response = await getMembers()
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body).toEqual([{
+      id: 'member-1',
+      name: 'Member',
+      image: null,
+      title: 'Developer',
+      role: 'USER',
+      createdAt: '2025-01-01T00:00:00.000Z',
+      followers: 3,
+      skills: ['TypeScript'],
+    }])
+    expect(mockedPrisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      select: expect.not.objectContaining({ email: true, password: true, contact: true, bio: true }),
+    }))
   })
 
   it('returns only the safe profile projection after an update', async () => {

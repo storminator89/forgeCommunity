@@ -32,6 +32,16 @@ interface Article {
   tags: { id: string; name: string }[];
 }
 
+async function loadArticles(signal: AbortSignal): Promise<Article[]> {
+  const response = await fetch('/api/articles', { signal });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return (await response.json()) as Article[];
+}
+
 export default function KnowledgeBase() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -41,31 +51,30 @@ export default function KnowledgeBase() {
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
-  const fetchArticles = async () => {
-    setIsLoading(true);
-    try {
-      const response = await fetch('/api/articles');
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      console.log('Fetched articles data:', data);
-
-      setArticles(data);
-      setError(null);
-    } catch (error: any) {
-      console.error('Error fetching articles:', error);
-      setError(error.message || 'Fehler beim Laden der Artikel.');
-      setArticles([]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchArticles();
+    const controller = new AbortController();
+    let active = true;
+
+    void loadArticles(controller.signal)
+      .then((data) => {
+        if (!active) return;
+        setArticles(data);
+        setError(null);
+      })
+      .catch((error: unknown) => {
+        if (!active || controller.signal.aborted) return;
+        console.error('Error fetching articles:', error);
+        setError(error instanceof Error ? error.message : 'Fehler beim Laden der Artikel.');
+        setArticles([]);
+      })
+      .finally(() => {
+        if (active) setIsLoading(false);
+      });
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, []);
 
   const categories = useMemo(() =>

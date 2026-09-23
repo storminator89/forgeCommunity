@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/button";
@@ -103,12 +103,7 @@ export default function UserManagement() {
     }
   }, [status, router]);
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
-
-  const fetchUsers = async () => {
-    setIsLoading(true);
+  const fetchUsers = useCallback(async (): Promise<User[]> => {
     try {
       const response = await fetch('/api/admin/users', {
         method: 'GET',
@@ -124,15 +119,43 @@ export default function UserManagement() {
       }
 
       const data = await response.json();
-      setUsers(data);
+      return data as User[];
     } catch (error) {
       console.error("Error fetching users:", error);
-      // Fallback if toast is not imported correctly or if it's the wrong toast
+      throw error;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (status === 'authenticated') {
+      let ignore = false;
+      void fetchUsers()
+        .then((nextUsers) => {
+          if (!ignore) setUsers(nextUsers);
+        })
+        .catch(() => {
+          if (!ignore) alert("Beim Laden der Benutzer ist ein Fehler aufgetreten.");
+        })
+        .finally(() => {
+          if (!ignore) setIsLoading(false);
+        });
+      return () => {
+        ignore = true;
+      };
+    }
+    return undefined;
+  }, [fetchUsers, status]);
+
+  const refreshUsers = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      setUsers(await fetchUsers());
+    } catch {
       alert("Beim Laden der Benutzer ist ein Fehler aufgetreten.");
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [fetchUsers]);
 
 
   const handleAddUser = (newUser: User) => {
@@ -279,7 +302,7 @@ export default function UserManagement() {
                     </div>
                     <Button
                       variant="outline"
-                      onClick={fetchUsers}
+                      onClick={refreshUsers}
                       className="dark:text-gray-100 dark:hover:bg-gray-700"
                     >
                       <RefreshCw className="mr-2 h-4 w-4" />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useEffectEvent, useRef } from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +18,7 @@ import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { toast } from 'react-toastify';
 import { getSafeHttpUrl } from '@/lib/security';
+import { useRouter } from 'next/navigation';
 
 interface Project {
   id: string;
@@ -44,23 +45,34 @@ interface ProjectsListProps {
 }
 
 export function ProjectsList({ userId, isOwner }: ProjectsListProps) {
+  const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+  const [loadedForUserId, setLoadedForUserId] = useState<string | null>(null);
+  const requestIdRef = useRef(0);
+  const activeControllerRef = useRef<AbortController | null>(null);
 
-  const fetchProjects = useCallback(async (pageNum: number) => {
+  const fetchProjects = useCallback(async (
+    pageNum: number,
+    signal: AbortSignal,
+    requestId: number,
+  ) => {
     try {
       const response = await fetch(
         `/api/users/${userId}/projects?page=${pageNum}&limit=6`,
         {
           credentials: 'include',
+          signal,
         }
       );
 
       if (!response.ok) throw new Error('Failed to fetch projects');
 
       const data = await response.json();
+
+      if (signal.aborted || requestIdRef.current !== requestId) return;
 
       if (pageNum === 1) {
         setProjects(data.projects);
@@ -69,17 +81,36 @@ export function ProjectsList({ userId, isOwner }: ProjectsListProps) {
       }
 
       setHasMore(data.pagination.hasMore);
+      setPage(pageNum);
+      setLoadedForUserId(userId);
     } catch (error) {
+      if (signal.aborted || requestIdRef.current !== requestId) return;
       console.error('Error fetching projects:', error);
       toast.error('Fehler beim Laden der Projekte');
+      setLoadedForUserId(userId);
     } finally {
-      setIsLoading(false);
+      if (!signal.aborted && requestIdRef.current === requestId) {
+        setIsLoading(false);
+      }
     }
   }, [userId]);
 
+  const startInitialFetch = useEffectEvent(() => {
+    activeControllerRef.current?.abort();
+    const controller = new AbortController();
+    activeControllerRef.current = controller;
+    const requestId = ++requestIdRef.current;
+    void fetchProjects(1, controller.signal, requestId);
+  });
+
   useEffect(() => {
-    fetchProjects(1);
-  }, [fetchProjects]);
+    startInitialFetch();
+
+    return () => {
+      activeControllerRef.current?.abort();
+      requestIdRef.current += 1;
+    };
+  }, [userId]);
 
   const handleLike = async (projectId: string) => {
     try {
@@ -127,7 +158,7 @@ export function ProjectsList({ userId, isOwner }: ProjectsListProps) {
 
   return (
     <div className="space-y-6">
-      {isLoading ? (
+      {isLoading || loadedForUserId !== userId ? (
         <div className="flex justify-center items-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
         </div>
@@ -226,7 +257,7 @@ export function ProjectsList({ userId, isOwner }: ProjectsListProps) {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => window.location.href = `/projects/${project.id}#comments`}
+                              onClick={() => router.push(`/projects/${project.id}#comments`)}
                             >
                               <MessageSquare className="h-4 w-4 mr-1" />
                               {project.stats.comments}
@@ -257,8 +288,12 @@ export function ProjectsList({ userId, isOwner }: ProjectsListProps) {
               <Button
                 variant="outline"
                 onClick={() => {
-                  setPage(p => p + 1);
-                  fetchProjects(page + 1);
+                  activeControllerRef.current?.abort();
+                  const controller = new AbortController();
+                  activeControllerRef.current = controller;
+                  const requestId = ++requestIdRef.current;
+                  setIsLoading(true);
+                  void fetchProjects(page + 1, controller.signal, requestId);
                 }}
               >
                 Mehr laden

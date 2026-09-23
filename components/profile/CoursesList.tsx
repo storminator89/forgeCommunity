@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useEffectEvent, useRef } from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +22,7 @@ import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { toast } from 'react-toastify';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 
 interface Course {
   id: string;
@@ -61,12 +62,21 @@ interface CoursesListProps {
 }
 
 export function CoursesList({ userId, isInstructor, showEnrolled = false }: CoursesListProps) {
+  const router = useRouter();
   const [courses, setCourses] = useState<Course[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+  const [loadedForKey, setLoadedForKey] = useState<string | null>(null);
+  const requestIdRef = useRef(0);
+  const activeControllerRef = useRef<AbortController | null>(null);
+  const requestKey = `${userId}:${showEnrolled ? 'enrolled' : 'created'}`;
 
-  const fetchCourses = useCallback(async (pageNum: number) => {
+  const fetchCourses = useCallback(async (
+    pageNum: number,
+    signal: AbortSignal,
+    requestId: number,
+  ) => {
     try {
       const endpoint = showEnrolled
         ? `/api/users/${userId}/enrollments`
@@ -76,12 +86,15 @@ export function CoursesList({ userId, isInstructor, showEnrolled = false }: Cour
         `${endpoint}?page=${pageNum}&limit=6`,
         {
           credentials: 'include',
+          signal,
         }
       );
 
       if (!response.ok) throw new Error('Failed to fetch courses');
 
       const data = await response.json();
+
+      if (signal.aborted || requestIdRef.current !== requestId) return;
 
       if (pageNum === 1) {
         setCourses(data.courses);
@@ -90,17 +103,36 @@ export function CoursesList({ userId, isInstructor, showEnrolled = false }: Cour
       }
 
       setHasMore(data.pagination.hasMore);
+      setPage(pageNum);
+      setLoadedForKey(requestKey);
     } catch (error) {
+      if (signal.aborted || requestIdRef.current !== requestId) return;
       console.error('Error fetching courses:', error);
       toast.error('Fehler beim Laden der Kurse');
+      setLoadedForKey(requestKey);
     } finally {
-      setIsLoading(false);
+      if (!signal.aborted && requestIdRef.current === requestId) {
+        setIsLoading(false);
+      }
     }
-  }, [userId, showEnrolled]);
+  }, [requestKey, showEnrolled, userId]);
+
+  const startInitialFetch = useEffectEvent(() => {
+    activeControllerRef.current?.abort();
+    const controller = new AbortController();
+    activeControllerRef.current = controller;
+    const requestId = ++requestIdRef.current;
+    void fetchCourses(1, controller.signal, requestId);
+  });
 
   useEffect(() => {
-    fetchCourses(1);
-  }, [fetchCourses]);
+    startInitialFetch();
+
+    return () => {
+      activeControllerRef.current?.abort();
+      requestIdRef.current += 1;
+    };
+  }, [requestKey]);
 
   const handleShare = async (course: Course) => {
     try {
@@ -137,7 +169,7 @@ export function CoursesList({ userId, isInstructor, showEnrolled = false }: Cour
 
   return (
     <div className="space-y-6">
-      {isLoading ? (
+      {isLoading || loadedForKey !== requestKey ? (
         <div className="flex justify-center items-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
         </div>
@@ -248,7 +280,7 @@ export function CoursesList({ userId, isInstructor, showEnrolled = false }: Cour
                         <div className="mt-4 flex justify-between items-center">
                           <Button
                             variant="default"
-                            onClick={() => window.location.href = `/courses/${course.id}`}
+                            onClick={() => router.push(`/courses/${course.id}`)}
                           >
                             {course.enrolled ? (
                               <>
@@ -290,8 +322,12 @@ export function CoursesList({ userId, isInstructor, showEnrolled = false }: Cour
               <Button
                 variant="outline"
                 onClick={() => {
-                  setPage(p => p + 1);
-                  fetchCourses(page + 1);
+                  activeControllerRef.current?.abort();
+                  const controller = new AbortController();
+                  activeControllerRef.current = controller;
+                  const requestId = ++requestIdRef.current;
+                  setIsLoading(true);
+                  void fetchCourses(page + 1, controller.signal, requestId);
                 }}
               >
                 Mehr laden

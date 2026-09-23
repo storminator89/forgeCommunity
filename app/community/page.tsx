@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Image from 'next/image'
 import { useSession } from 'next-auth/react'
 import { Button } from "@/components/ui/button"
@@ -54,9 +54,22 @@ interface LeaderboardUser {
   points: number
 }
 
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError'
+}
+
+async function fetchWithErrorHandling(url: string, options?: RequestInit) {
+  const response = await fetch(url, options)
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.message || 'Ein Fehler ist aufgetreten')
+  }
+  return response.json()
+}
+
 function Community() {
   const { data: session } = useSession()
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   const [localPosts, setLocalPosts] = useState<Post[]>([])
   const [isEditing, setIsEditing] = useState(false)
   const [editingPost, setEditingPost] = useState<Post | null>(null)
@@ -69,49 +82,81 @@ function Community() {
     points: 0
   })
 
-  // Fetch functions
-  const fetchWithErrorHandling = async (url: string, options?: RequestInit) => {
-    try {
-      const response = await fetch(url, options)
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.message || 'Ein Fehler ist aufgetreten')
-      }
-      return await response.json()
-    } catch (error: any) {
-      console.error("Fehler:", error.message)
-      throw error
-    }
-  }
-
-  const fetchPosts = useCallback(async () => {
-    setIsLoading(true)
-    try {
-      const data = await fetchWithErrorHandling('/api/posts')
-      setLocalPosts(data)
-    } catch (error) {
-      setNotification({ type: 'error', message: 'Fehler beim Laden der Beiträge.' })
-    } finally {
-      setIsLoading(false)
-    }
-  }, [])
+  const postsRequestRef = useRef<AbortController | null>(null)
+  const leaderboardRequestRef = useRef<AbortController | null>(null)
 
   const fetchLeaderboard = useCallback(async () => {
+    leaderboardRequestRef.current?.abort()
+    const controller = new AbortController()
+    leaderboardRequestRef.current = controller
+    setIsLeaderboardLoading(true)
+
     try {
-      const data = await fetchWithErrorHandling('/api/leaderboard')
+      const data = await fetchWithErrorHandling('/api/leaderboard', { signal: controller.signal })
+      if (leaderboardRequestRef.current !== controller) return
       setLeaderboardUsers(data)
     } catch (error) {
+      if (controller.signal.aborted || leaderboardRequestRef.current !== controller || isAbortError(error)) return
       setNotification({ type: 'error', message: 'Fehler beim Laden des Leaderboards.' })
     } finally {
-      setIsLeaderboardLoading(false)
+      if (leaderboardRequestRef.current === controller) {
+        leaderboardRequestRef.current = null
+        setIsLeaderboardLoading(false)
+      }
     }
   }, [])
 
   // Effects
   useEffect(() => {
-    fetchPosts()
-    fetchLeaderboard()
-  }, [fetchPosts, fetchLeaderboard])
+    let active = true
+    const postsController = new AbortController()
+    const leaderboardController = new AbortController()
+    postsRequestRef.current = postsController
+    leaderboardRequestRef.current = leaderboardController
+
+    const loadPosts = async () => {
+      try {
+        const data = await fetchWithErrorHandling('/api/posts', { signal: postsController.signal })
+        if (!active || postsRequestRef.current !== postsController) return
+        setLocalPosts(data)
+      } catch (error) {
+        if (!active || postsController.signal.aborted || postsRequestRef.current !== postsController || isAbortError(error)) return
+        setNotification({ type: 'error', message: 'Fehler beim Laden der Beiträge.' })
+      } finally {
+        if (active && postsRequestRef.current === postsController) {
+          postsRequestRef.current = null
+          setIsLoading(false)
+        }
+      }
+    }
+
+    const loadLeaderboard = async () => {
+      try {
+        const data = await fetchWithErrorHandling('/api/leaderboard', { signal: leaderboardController.signal })
+        if (!active || leaderboardRequestRef.current !== leaderboardController) return
+        setLeaderboardUsers(data)
+      } catch (error) {
+        if (!active || leaderboardController.signal.aborted || leaderboardRequestRef.current !== leaderboardController || isAbortError(error)) return
+        setNotification({ type: 'error', message: 'Fehler beim Laden des Leaderboards.' })
+      } finally {
+        if (active && leaderboardRequestRef.current === leaderboardController) {
+          leaderboardRequestRef.current = null
+          setIsLeaderboardLoading(false)
+        }
+      }
+    }
+
+    void loadPosts()
+    void loadLeaderboard()
+
+    return () => {
+      active = false
+      postsController.abort()
+      leaderboardController.abort()
+      if (postsRequestRef.current === postsController) postsRequestRef.current = null
+      if (leaderboardRequestRef.current === leaderboardController) leaderboardRequestRef.current = null
+    }
+  }, [])
 
   useEffect(() => {
     if (notification) {

@@ -40,14 +40,23 @@ import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 interface Member {
   id: string;
   name: string;
-  email: string;
   image: string;
   role: string;
   title?: string;
   location?: string;
   joinedAt: string;
   followers: number;
-  following: number;
+  skills: string[];
+}
+
+interface MembersApiRecord {
+  id: string;
+  name: string | null;
+  image: string | null;
+  role: string;
+  title: string | null;
+  createdAt: string;
+  followers: number;
   skills: string[];
 }
 
@@ -63,43 +72,46 @@ export default function Members() {
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [currentTime] = useState(() => Date.now());
 
   // Extrahiere einzigartige Skills und Rollen
   const uniqueSkills = [...new Set(members.flatMap(m => m.skills))].sort();
   const uniqueRoles = [...new Set(members.map(m => m.role))].sort();
 
+  const fetchMembers = useCallback(async (signal: AbortSignal) => {
+    const response = await fetch('/api/members', { signal });
+    if (!response.ok) throw new Error('Failed to fetch members');
+    const data: unknown = await response.json();
+    if (!Array.isArray(data)) throw new Error('Invalid members response');
+
+    const transformedMembers: Member[] = (data as MembersApiRecord[]).map((member) => ({
+      id: member.id,
+      name: member.name || 'Unbekannt',
+      image: member.image || '',
+      role: member.role,
+      title: member.title || undefined,
+      joinedAt: member.createdAt,
+      followers: member.followers,
+      skills: member.skills,
+    }));
+
+    return transformedMembers;
+  }, []);
+
   useEffect(() => {
-    fetchMembers();
-  }, []); // Only fetch once on mount
-
-  const fetchMembers = async () => {
-    try {
-      setIsLoading(true);
-      const response = await fetch('/api/admin/users');
-      if (!response.ok) throw new Error('Failed to fetch members');
-      const data = await response.json();
-
-      const transformedMembers: Member[] = data.map((user: any) => ({
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        image: user.image || '',
-        role: user.role,
-        title: user.title,
-        location: user.contact ? (typeof user.contact === 'string' ? user.contact : (user.contact as any).location) : undefined,
-        joinedAt: user.createdAt,
-        followers: user.stats?.followersCount || 0,
-        following: user.stats?.followingCount || 0,
-        skills: user.skills?.map((s: any) => s.name) || []
-      }));
-
-      setMembers(transformedMembers);
-    } catch (error) {
-      console.error('Error fetching members:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    const controller = new AbortController();
+    void fetchMembers(controller.signal)
+      .then((nextMembers) => {
+        if (!controller.signal.aborted) setMembers(nextMembers);
+      })
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) console.error('Error fetching members:', error);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setIsLoading(false);
+      });
+    return () => controller.abort();
+  }, [fetchMembers]);
 
   const getSortedAndFilteredMembers = useCallback(() => {
     let result = [...members];
@@ -201,7 +213,7 @@ export default function Members() {
                   { label: 'Alle Mitglieder', value: members.length },
                   { label: 'Aktive Mitglieder', value: members.filter(m => m.followers > 0).length },
                   { label: 'Durchschn. Skills', value: members.length > 0 ? Math.round(members.reduce((acc, m) => acc + m.skills.length, 0) / members.length) : 0 },
-                  { label: 'Neue diesen Monat', value: members.filter(m => new Date(m.joinedAt) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)).length }
+                  { label: 'Neue diesen Monat', value: members.filter(m => new Date(m.joinedAt).getTime() > currentTime - 30 * 24 * 60 * 60 * 1000).length }
                 ].map((stat, i) => (
                   <Card key={i} className="bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm">
                     <CardContent className="p-4">

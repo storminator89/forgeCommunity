@@ -14,6 +14,7 @@ jest.mock('react-toastify', () => ({
 jest.mock('next/image', () => ({
   __esModule: true,
   default: ({ src, alt, className }: { src: string; alt: string; className: string }) => (
+    // eslint-disable-next-line @next/next/no-img-element -- Unit-test double for next/image; no production image is rendered.
     <img src={src} alt={alt} className={className} />
   ),
 }))

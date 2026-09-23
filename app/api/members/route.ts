@@ -6,45 +6,36 @@ import prisma from '@/lib/prisma';
 export async function GET() {
   try {
     const members = await prisma.user.findMany({
-      where: {
-        // Optional: Füge hier Filter hinzu, falls du nur bestimmte Benutzer als Mitglieder behandeln möchtest
-        // Beispiel: role: 'USER'
-      },
+      orderBy: { createdAt: 'desc' },
       select: {
         id: true,
         name: true,
-        image: true, // Verwende 'image' statt 'avatar'
-        title: true, // Erforderlich
-        bio: true,
-        contact: true, // Erforderlich
-        endorsements: true, // Erforderlich
+        image: true,
+        title: true,
+        role: true,
+        createdAt: true,
+        _count: {
+          select: { followers: true },
+        },
         skills: {
           select: {
             skill: {
-              select: {
-                name: true,
-                category: true,
-              },
+              select: { name: true },
             },
-            level: true,
           },
         },
       },
     });
 
-    // Formatiere die Daten, um 'image' als 'avatar' zurückzugeben
     const formattedMembers = members.map(member => ({
       id: member.id,
       name: member.name,
-      avatar: member.image, // Mappe 'image' zu 'avatar'
+      image: member.image,
       title: member.title,
-      bio: member.bio,
-      contact: member.contact,
-      endorsements: member.endorsements,
-      skills: member.skills.map(ms => ({
-        skillName: ms.skill.name,
-        level: ms.level,
-      })),
+      role: member.role,
+      createdAt: member.createdAt,
+      followers: member._count.followers,
+      skills: member.skills.map(({ skill }) => skill.name),
     }));
 
     return NextResponse.json(formattedMembers);

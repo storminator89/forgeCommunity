@@ -70,6 +70,14 @@ interface Project {
   comments: ProjectComment[];
 }
 
+async function loadProjects(signal: AbortSignal): Promise<Project[]> {
+  const res = await fetch('/api/projects', { signal });
+  if (!res.ok) {
+    throw new Error('Fehler beim Abrufen der Projekte.');
+  }
+  return (await res.json()) as Project[];
+}
+
 const defaultDescription = `<h2>🎯 Projektziel</h2>
 <p>Beschreibe kurz das Hauptziel deines Projekts...</p>
 
@@ -143,22 +151,23 @@ export default function ProjectShowcase() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
-  // Fetch all projects
-  const fetchProjects = async () => {
-    try {
-      const res = await fetch('/api/projects');
-      if (!res.ok) {
-        throw new Error('Fehler beim Abrufen der Projekte.');
-      }
-      const data: Project[] = await res.json();
-      setProjects(data);
-    } catch (error) {
-      console.error('Error fetching projects:', error);
-    }
-  }
-
   useEffect(() => {
-    fetchProjects();
+    const controller = new AbortController();
+    let active = true;
+
+    void loadProjects(controller.signal)
+      .then((data) => {
+        if (active) setProjects(data);
+      })
+      .catch((error: unknown) => {
+        if (!active || controller.signal.aborted) return;
+        console.error('Error fetching projects:', error);
+      });
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, []);
 
   // Filter and sort projects

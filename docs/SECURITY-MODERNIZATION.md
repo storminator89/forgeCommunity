@@ -85,6 +85,11 @@ Maschinenlesbare Details: `docs/audit-baseline.json`.
 - Chat und Benachrichtigungen verwerfen verspätete Antworten nach Konto- oder
   Kanalwechsel. Profil, Einstellungen, Kalenderexport und Kursverschiebung
   wurden korrigiert. Zertifikate verlangen einen bestätigten Abschluss.
+- Öffentliche Mitgliederlisten liefern nur notwendige Profildaten; E-Mail,
+  Kontaktangaben, Biografie und interne Endorsement-Daten werden nicht
+  ausgewählt oder ausgegeben. Seiten und Listen verwerfen verspätete Antworten
+  nach Navigation und Filterwechseln; Formulare, Kursinhalte und Karussells
+  verwenden stabile Zustands- und Event-Subscriptions.
 - Node 24, Next.js 16.3.5, React 19.3.0, Prisma 7.10.0, Zod 4 und Tiptap 3;
   Prisma verwendet den PostgreSQL-Treiberadapter und eine externe Konfiguration.
   NextAuth bleibt auf der aktuellen stabilen 4.x-Linie. Tailwind 3, Recharts 2
@@ -112,9 +117,7 @@ Maschinenlesbare Details: `docs/audit-baseline.json`.
 - Datenbankintegration mit realem PostgreSQL, OAuth mit echten Zugangsdaten,
   vollständige Browser-E2E-Abläufe und Docker-Build wurden in dieser Umgebung
   nicht ausgeführt. Diese Prüfungen sind vor Freigabe in Staging erforderlich.
-- ESLint meldet noch React-Compiler- und Hook-Warnungen im bestehenden UI.
-  Compiler-Diagnosen werden als Warnungen geführt; die Kernregeln zur
-  Hook-Reihenfolge und TypeScript-Buildfehler bleiben wirksam.
+- Keine bekannten ESLint-Warnungen; CI bricht bei jeder Warnung ab.
 
 ## Abschlussprüfung
 
@@ -124,9 +127,9 @@ Geprüfter Stand: 22.09.2026, Node 24.19.0.
 | --- | --- |
 | Saubere Installation mit `npm ci` | Erfolgreich |
 | `prisma generate` und `prisma validate` | Erfolgreich |
-| Jest, `npm test -- --runInBand` | 24 Testsuiten, 139 Tests bestanden |
+| Jest, `npm test -- --runInBand` | 24 Testsuiten, 140 Tests bestanden |
 | TypeScript-Prüfung einschließlich Next-Routentypen | Erfolgreich im Produktionsbuild |
-| `npm run lint` | 0 Fehler, 32 Warnungen |
+| `npm run lint -- --max-warnings 0` | 0 Fehler, 0 Warnungen |
 | `npm run build` | Erfolgreich, Standalone-Artefakt erzeugt |
 | `node scripts/smoke-standalone.mjs` | 11 HTTP-Prüfungen bestanden |
 | `npm audit` | 0 bekannte Schwachstellen, alle Schweregrade |
