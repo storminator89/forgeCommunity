@@ -24,6 +24,7 @@ import { Label } from "@/components/ui/label";
 import { useSession } from 'next-auth/react';
 import { Editor } from "@/components/Editor";
 import { sanitizeTextPreview } from '@/lib/sanitize-html';
+import { getSafeHttpUrl } from '@/lib/security';
 
 
 interface Tag {
@@ -69,6 +70,14 @@ interface Project {
   comments: ProjectComment[];
 }
 
+async function loadProjects(signal: AbortSignal): Promise<Project[]> {
+  const res = await fetch('/api/projects', { signal });
+  if (!res.ok) {
+    throw new Error('Fehler beim Abrufen der Projekte.');
+  }
+  return (await res.json()) as Project[];
+}
+
 const defaultDescription = `<h2>🎯 Projektziel</h2>
 <p>Beschreibe kurz das Hauptziel deines Projekts...</p>
 
@@ -106,6 +115,7 @@ export default function ProjectShowcase() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [projectToEdit, setProjectToEdit] = useState<Project | null>(null);
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
+  const safeSelectedProjectLink = selectedProject ? getSafeHttpUrl(selectedProject.link) : null;
   const [newProject, setNewProject] = useState<{
     title: string,
     description: string,
@@ -141,22 +151,23 @@ export default function ProjectShowcase() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
-  // Fetch all projects
-  const fetchProjects = async () => {
-    try {
-      const res = await fetch('/api/projects');
-      if (!res.ok) {
-        throw new Error('Fehler beim Abrufen der Projekte.');
-      }
-      const data: Project[] = await res.json();
-      setProjects(data);
-    } catch (error) {
-      console.error('Error fetching projects:', error);
-    }
-  }
-
   useEffect(() => {
-    fetchProjects();
+    const controller = new AbortController();
+    let active = true;
+
+    void loadProjects(controller.signal)
+      .then((data) => {
+        if (active) setProjects(data);
+      })
+      .catch((error: unknown) => {
+        if (!active || controller.signal.aborted) return;
+        console.error('Error fetching projects:', error);
+      });
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, []);
 
   // Filter and sort projects
@@ -873,11 +884,13 @@ export default function ProjectShowcase() {
             )}
           </div>
           <div className="flex justify-end mt-6">
-            <Button asChild>
-              <a href={selectedProject?.link} target="_blank" rel="noopener noreferrer" className="flex items-center">
-                Projekt ansehen <ExternalLink className="ml-2 h-5 w-5" />
-              </a>
-            </Button>
+            {safeSelectedProjectLink && (
+              <Button asChild>
+                <a href={safeSelectedProjectLink} target="_blank" rel="noopener noreferrer" className="flex items-center">
+                  Projekt ansehen <ExternalLink className="ml-2 h-5 w-5" />
+                </a>
+              </Button>
+            )}
           </div>
         </DialogContent>
       </Dialog>

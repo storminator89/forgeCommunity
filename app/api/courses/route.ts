@@ -3,6 +3,9 @@ import prisma from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../auth/[...nextauth]/options';
 import { ImageUploadValidationError, saveImageUpload } from '@/lib/server/image-upload';
+import { requestWithBodyLimit, RequestBodyLimitError } from '@/lib/server/request-body';
+
+const MAX_MULTIPART_REQUEST_BYTES = 5 * 1024 * 1024 + 256 * 1024;
 
 export async function GET() {
   try {
@@ -50,7 +53,12 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const formData = await request.formData();
+    const contentLength = Number(request.headers.get('content-length'));
+    if (Number.isFinite(contentLength) && contentLength > MAX_MULTIPART_REQUEST_BYTES) {
+      return NextResponse.json({ error: 'File is too large' }, { status: 413 });
+    }
+    const limitedRequest = await requestWithBodyLimit(request, MAX_MULTIPART_REQUEST_BYTES);
+    const formData = await limitedRequest.formData();
     const title = formData.get('title') as string;
     const description = formData.get('description') as string;
     const startDate = formData.get('startDate') as string;
@@ -91,7 +99,7 @@ export async function POST(request: NextRequest) {
     console.error('Failed to create course:', error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to create course' },
-      { status: error instanceof ImageUploadValidationError ? 400 : 500 }
+      { status: error instanceof ImageUploadValidationError ? 400 : error instanceof RequestBodyLimitError ? 413 : 500 }
     );
   }
 }

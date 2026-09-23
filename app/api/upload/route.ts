@@ -3,6 +3,10 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]/options";
 import prisma from '@/lib/prisma';
 import { ImageUploadValidationError, saveImageUpload } from '@/lib/server/image-upload';
+import { requestWithBodyLimit, RequestBodyLimitError } from '@/lib/server/request-body';
+import { consumeRateLimit, rateLimitHeaders, UPLOAD_RATE_LIMIT } from '@/lib/server/rate-limit';
+
+const MAX_MULTIPART_REQUEST_BYTES = 5 * 1024 * 1024 + 256 * 1024;
 
 export async function POST(request: NextRequest) {
     try {
@@ -15,7 +19,18 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const formData = await request.formData();
+        const uploadRate = consumeRateLimit(`upload:user:${session.user.id}`, UPLOAD_RATE_LIMIT);
+        if (!uploadRate.allowed) {
+            return NextResponse.json({ error: 'Zu viele Uploads.' }, { status: 429, headers: rateLimitHeaders(uploadRate) });
+        }
+
+        const contentLength = Number(request.headers.get('content-length'));
+        if (Number.isFinite(contentLength) && contentLength > MAX_MULTIPART_REQUEST_BYTES) {
+            return NextResponse.json({ error: 'Datei ist zu gross.' }, { status: 413 });
+        }
+
+        const limitedRequest = await requestWithBodyLimit(request, MAX_MULTIPART_REQUEST_BYTES);
+        const formData = await limitedRequest.formData();
         const file = formData.get('file') as File;
 
         if (!file) {
@@ -46,7 +61,7 @@ export async function POST(request: NextRequest) {
         console.error('Fehler beim Hochladen:', error);
         return NextResponse.json(
             { error: error instanceof Error ? error.message : 'Fehler beim Hochladen der Datei' },
-            { status: error instanceof ImageUploadValidationError ? 400 : 500 }
+            { status: error instanceof ImageUploadValidationError ? 400 : error instanceof RequestBodyLimitError ? 413 : 500 }
         );
     }
 }

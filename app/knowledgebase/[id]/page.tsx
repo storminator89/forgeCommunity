@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, useParams } from 'next/navigation';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { Sidebar } from "@/components/Sidebar";
 import { UserNav } from "@/components/user-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -39,32 +39,45 @@ export default function ArticlePage() {
   const [article, setArticle] = useState<Article | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [errorArticleId, setErrorArticleId] = useState<string | null>(null);
   const { data: session } = useSession();
   const router = useRouter();
 
-  const fetchArticle = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const response = await fetch(`/api/articles/${id}`);
-      if (response.ok) {
-        const data = await response.json();
-        setArticle(data);
-      } else {
-        throw new Error('Artikel nicht gefunden oder Fehler beim Abrufen.');
-      }
-    } catch (error) {
-      console.error('Error fetching article:', error);
-      setError(error instanceof Error ? error.message : 'Ein unbekannter Fehler ist aufgetreten.');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [id]);
-
   useEffect(() => {
-    if (id) {
-      fetchArticle();
-    }
-  }, [id, fetchArticle]);
+    if (!id) return;
+
+    const controller = new AbortController();
+    let active = true;
+
+    void fetch(`/api/articles/${encodeURIComponent(id)}`, { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error('Artikel nicht gefunden oder Fehler beim Abrufen.');
+        }
+        return response.json() as Promise<Article>;
+      })
+      .then((data) => {
+        if (!active) return;
+        setArticle(data);
+        setError(null);
+        setErrorArticleId(id);
+      })
+      .catch((fetchError: unknown) => {
+        if (!active || controller.signal.aborted) return;
+        console.error('Error fetching article:', fetchError);
+        setArticle(null);
+        setError(fetchError instanceof Error ? fetchError.message : 'Ein unbekannter Fehler ist aufgetreten.');
+        setErrorArticleId(id);
+      })
+      .finally(() => {
+        if (active) setIsLoading(false);
+      });
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [id]);
 
   const handleDelete = async () => {
     if (!confirm('Bist du sicher, dass du diesen Artikel löschen möchtest?')) return;
@@ -86,7 +99,9 @@ export default function ArticlePage() {
     }
   };
 
-  if (isLoading) {
+  const isCurrentArticleSettled = article?.id === id || errorArticleId === id;
+
+  if (isLoading || !isCurrentArticleSettled) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <p className="text-lg">Lade Artikel...</p>
@@ -94,7 +109,7 @@ export default function ArticlePage() {
     );
   }
 
-  if (error || !article) {
+  if (error || !article || article.id !== id) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen">
         <p className="text-lg text-red-500 mb-4">{error || 'Artikel nicht gefunden.'}</p>

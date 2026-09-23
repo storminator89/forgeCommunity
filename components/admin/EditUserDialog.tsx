@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -17,6 +17,8 @@ import { Switch } from "@/components/ui/switch"
 import { toast } from 'react-toastify'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+
+const MIN_PASSWORD_LENGTH = 12
 
 interface User {
   id: string
@@ -62,40 +64,38 @@ interface UserFormData {
 }
 
 export function EditUserDialog({ user, isOpen, onClose, onUpdateUser }: EditUserDialogProps) {
+  if (!user) return null
+
+  // Remount the controlled form for each user. This keeps edits local to the
+  // selected account and avoids copying props into state from an effect.
+  return (
+    <EditUserDialogForm
+      key={user.id}
+      user={user}
+      isOpen={isOpen}
+      onClose={onClose}
+      onUpdateUser={onUpdateUser}
+    />
+  )
+}
+
+function EditUserDialogForm({ user, isOpen, onClose, onUpdateUser }: EditUserDialogProps & { user: User }) {
   const [formData, setFormData] = useState<UserFormData>({
-    name: '',
-    email: '',
+    name: user.name || '',
+    email: user.email || '',
     password: '',
-    role: 'USER',
-    title: '',
-    bio: '',
-    contact: '',
-    emailNotifications: true,
-    pushNotifications: true,
-    theme: 'LIGHT',
-    language: 'de',
-    image: null
+    role: user.role,
+    title: user.title || '',
+    bio: user.bio || '',
+    contact: user.contact || '',
+    emailNotifications: user.settings?.emailNotifications ?? true,
+    pushNotifications: user.settings?.pushNotifications ?? true,
+    theme: user.settings?.theme || 'LIGHT',
+    language: user.settings?.language || 'de',
+    image: user.image,
   })
   const [isLoading, setIsLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('basic')
-  useEffect(() => {
-    if (user) {
-      setFormData({
-        name: user.name || '',
-        email: user.email || '',
-        password: '', // Leer lassen, nur bei Änderung setzen
-        role: user.role,
-        title: user.title || '',
-        bio: user.bio || '',
-        contact: user.contact || '',
-        emailNotifications: user.settings?.emailNotifications ?? true,
-        pushNotifications: user.settings?.pushNotifications ?? true,
-        theme: user.settings?.theme || 'LIGHT',
-        language: user.settings?.language || 'de',
-        image: user.image
-      })
-    }
-  }, [user])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -110,8 +110,8 @@ export function EditUserDialog({ user, isOpen, onClose, onUpdateUser }: EditUser
         return
       }
 
-      if (formData.password && formData.password.length < 8) {
-        toast.error('Das Passwort muss mindestens 8 Zeichen lang sein')
+      if (formData.password && formData.password.length < MIN_PASSWORD_LENGTH) {
+        toast.error(`Das Passwort muss mindestens ${MIN_PASSWORD_LENGTH} Zeichen lang sein`)
         return
       }
 
@@ -129,6 +129,7 @@ export function EditUserDialog({ user, isOpen, onClose, onUpdateUser }: EditUser
         title: formData.title,
         bio: formData.bio,
         contact: formData.contact,
+        image: formData.image,
         settings: {
           emailNotifications: formData.emailNotifications,
           pushNotifications: formData.pushNotifications,
@@ -152,7 +153,7 @@ export function EditUserDialog({ user, isOpen, onClose, onUpdateUser }: EditUser
 
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.message || 'Fehler beim Aktualisieren des Benutzers')
+        throw new Error(error.message || error.error || 'Fehler beim Aktualisieren des Benutzers')
       }
 
       const updatedUser = await response.json()
@@ -182,7 +183,6 @@ export function EditUserDialog({ user, isOpen, onClose, onUpdateUser }: EditUser
     }))
   }
 
-  if (!user) return null
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[600px]">
@@ -247,9 +247,10 @@ export function EditUserDialog({ user, isOpen, onClose, onUpdateUser }: EditUser
                     value={formData.password}
                     onChange={(e) => handleInputChange('password', e.target.value)}
                     placeholder="Leer lassen für keine Änderung"
+                    minLength={MIN_PASSWORD_LENGTH}
                   />
                   <p className="text-xs text-gray-500">
-                    Mindestens 8 Zeichen
+                    Mindestens {MIN_PASSWORD_LENGTH} Zeichen
                   </p>
                 </div>
 

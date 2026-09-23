@@ -231,6 +231,13 @@ export async function PATCH(
     const data = await request.json()
     const { skillId } = data
 
+    if (session.user.id === params.id) {
+      return NextResponse.json(
+        { error: 'Sie können Ihre eigenen Skills nicht empfehlen' },
+        { status: 400 }
+      )
+    }
+
     if (!skillId) {
       return NextResponse.json(
         { error: 'Skill ID ist erforderlich' },

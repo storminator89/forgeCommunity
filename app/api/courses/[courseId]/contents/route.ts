@@ -105,6 +105,23 @@ export async function POST(
     }
 
     const { title, type, content, order, parentId } = await request.json();
+    if (parentId !== undefined && parentId !== null && typeof parentId !== 'string') {
+      return NextResponse.json({ error: 'Invalid parent content' }, { status: 400 });
+    }
+
+    if (parentId) {
+      const parentContent = await prisma.courseContent.findUnique({
+        where: { id: parentId },
+        select: { id: true, courseId: true },
+      });
+
+      // A parent from another course would create a cross-course relation and
+      // expose/mutate content outside the authorized course.
+      if (!parentContent || parentContent.courseId !== courseId) {
+        return NextResponse.json({ error: 'Invalid parent content' }, { status: 400 });
+      }
+    }
+
     const sanitizedTitle = sanitizeTextServer(title);
     const sanitizedContent =
       type === 'TEXT' || !type

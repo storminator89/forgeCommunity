@@ -141,7 +141,8 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
   });
   const [currentTab, setCurrentTab] = useState('edit');
   const [draggedQuestionIndex, setDraggedQuestionIndex] = useState<number | null>(null);
-  const dragOverQuestionIndex = useRef<number | null>(null);
+  const [dragOverQuestionIndex, setDragOverQuestionIndex] = useState<number | null>(null);
+  const dragOverQuestionIndexRef = useRef<number | null>(null);
 
   const moveQuestion = (fromIndex: number, toIndex: number) => {
     const newQuestions = [...questions];
@@ -157,15 +158,18 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
 
   const handleDragOver = (e: React.DragEvent, index: number) => {
     e.preventDefault();
-    dragOverQuestionIndex.current = index;
+    dragOverQuestionIndexRef.current = index;
+    setDragOverQuestionIndex(index);
   };
 
   const handleDragEnd = () => {
-    if (draggedQuestionIndex !== null && dragOverQuestionIndex.current !== null) {
-      moveQuestion(draggedQuestionIndex, dragOverQuestionIndex.current);
+    const targetIndex = dragOverQuestionIndexRef.current;
+    if (draggedQuestionIndex !== null && targetIndex !== null) {
+      moveQuestion(draggedQuestionIndex, targetIndex);
     }
     setDraggedQuestionIndex(null);
-    dragOverQuestionIndex.current = null;
+    dragOverQuestionIndexRef.current = null;
+    setDragOverQuestionIndex(null);
   };
 
   const addQuestion = () => {
@@ -417,7 +421,7 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
                   "transition-all duration-200 hover:shadow-md",
                   draggedQuestionIndex === questionIndex && "opacity-50 scale-95",
                   "relative border-2",
-                  draggedQuestionIndex !== null && dragOverQuestionIndex.current === questionIndex && "border-primary border-dashed"
+                  draggedQuestionIndex !== null && dragOverQuestionIndex === questionIndex && "border-primary border-dashed"
                 )}
                 draggable
                 onDragStart={(e) => handleDragStart(e, questionIndex)}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Sidebar } from "@/components/Sidebar";
 import { UserNav } from "@/components/user-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -70,79 +70,125 @@ export default function ResourceLibrary() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [displayedResources, setDisplayedResources] = useState<Resource[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedType, setSelectedType] = useState<string>('all');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'title'>('newest');
+  const generationRef = useRef(0);
+  const activeRequestRef = useRef<AbortController | null>(null);
+  const loadingRef = useRef(true);
+  const pendingLoadRef = useRef(false);
+  const loadMoreRef = useRef<() => void>(() => {});
 
-  const { ref, inView } = useInView({
-    threshold: 0,
-  });
-
-  const fetchResources = useCallback(async (pageNumber = 1) => {
-    try {
-      setLoading(true);
-      const response = await axios.get('/api/resources', {
-        params: {
-          page: pageNumber,
-          limit: ITEMS_PER_PAGE,
-          search: searchTerm
-        }
-      });
-
-      if (pageNumber === 1) {
-        setDisplayedResources(response.data.resources);
-      } else {
-        setDisplayedResources(prev => {
-          const existingIds = new Set(prev.map(r => r.id));
-          const newResources = response.data.resources.filter(
-            (resource: Resource) => !existingIds.has(resource.id)
-          );
-          return [...prev, ...newResources];
-        });
-      }
-
-      setHasMore(response.data.hasMore);
-    } catch (error) {
-      console.error('Fehler beim Abrufen der Ressourcen:', error);
-      toast.error('Fehler beim Abrufen der Ressourcen.');
-    } finally {
-      setLoading(false);
-    }
+  const fetchResources = useCallback(async (pageNumber = 1, signal?: AbortSignal) => {
+    const response = await axios.get('/api/resources', {
+      params: { page: pageNumber, limit: ITEMS_PER_PAGE, search: searchTerm },
+      signal,
+    });
+    return response.data as { resources: Resource[]; hasMore: boolean };
   }, [searchTerm]);
 
-  const checkAdminStatus = useCallback(async () => {
-    if (session?.user?.id) {
-      try {
-        const response = await axios.get(`/api/users/${session.user.id}/role`);
-        setIsAdmin(response.data.role === 'ADMIN');
-      } catch (error) {
-        console.error('Fehler beim Prüfen des Admin-Status:', error);
-      }
+  const applyResourcePage = useCallback((pageNumber: number, data: { resources: Resource[]; hasMore: boolean }) => {
+    if (pageNumber === 1) {
+      setDisplayedResources(data.resources);
+    } else {
+      setDisplayedResources(prev => {
+        const existingIds = new Set(prev.map(resource => resource.id));
+        return [...prev, ...data.resources.filter(resource => !existingIds.has(resource.id))];
+      });
+    }
+    setHasMore(data.hasMore);
+  }, []);
+
+  const checkAdminStatus = useCallback(async (signal: AbortSignal) => {
+    if (!session?.user?.id) return false;
+    try {
+      const response = await axios.get(`/api/users/${session.user.id}/role`, { signal });
+      return response.data.role === 'ADMIN';
+    } catch (error) {
+      if (!signal.aborted) console.error('Fehler beim Prüfen des Admin-Status:', error);
+      return false;
     }
   }, [session]);
 
   useEffect(() => {
-    const initialFetch = async () => {
-      await fetchResources();
-      if (session?.user?.id) {
-        await checkAdminStatus();
-      }
+    const controller = new AbortController();
+    activeRequestRef.current?.abort();
+    activeRequestRef.current = controller;
+    const generation = ++generationRef.current;
+
+    void Promise.all([fetchResources(1, controller.signal), checkAdminStatus(controller.signal)])
+      .then(([result, admin]) => {
+        if (controller.signal.aborted || generation !== generationRef.current) return;
+        applyResourcePage(1, result);
+        setIsAdmin(admin);
+      })
+      .catch(error => {
+        if (controller.signal.aborted || generation !== generationRef.current) return;
+        console.error('Fehler beim Abrufen der Ressourcen:', error);
+        toast.error('Fehler beim Abrufen der Ressourcen.');
+      })
+      .finally(() => {
+        if (generation === generationRef.current) {
+          activeRequestRef.current = null;
+          loadingRef.current = false;
+          setLoading(false);
+          if (pendingLoadRef.current) {
+            pendingLoadRef.current = false;
+            loadMoreRef.current();
+          }
+        }
+      });
+
+    return () => {
+      controller.abort();
+      activeRequestRef.current?.abort();
+      activeRequestRef.current = null;
+      generationRef.current += 1;
     };
-    initialFetch();
-  }, [session, fetchResources, checkAdminStatus]);
+  }, [applyResourcePage, checkAdminStatus, fetchResources]);
 
   const loadMore = useCallback(() => {
-    if (loading || !hasMore) return;
+    if (loadingRef.current || !hasMore || activeRequestRef.current) return;
     const nextPage = Math.floor(displayedResources.length / ITEMS_PER_PAGE) + 1;
-    fetchResources(nextPage);
-  }, [loading, hasMore, displayedResources.length, fetchResources]);
+    const controller = new AbortController();
+    activeRequestRef.current = controller;
+    const generation = ++generationRef.current;
+    loadingRef.current = true;
+    setLoading(true);
+
+    void fetchResources(nextPage, controller.signal)
+      .then(result => {
+        if (!controller.signal.aborted && generation === generationRef.current) {
+          applyResourcePage(nextPage, result);
+        }
+      })
+      .catch(error => {
+        if (controller.signal.aborted || generation !== generationRef.current) return;
+        console.error('Fehler beim Abrufen der Ressourcen:', error);
+        toast.error('Fehler beim Abrufen der Ressourcen.');
+      })
+      .finally(() => {
+        if (generation === generationRef.current) {
+          activeRequestRef.current = null;
+          loadingRef.current = false;
+          setLoading(false);
+        }
+      });
+  }, [applyResourcePage, displayedResources.length, fetchResources, hasMore]);
 
   useEffect(() => {
-    if (inView && hasMore && !loading) {
-      loadMore();
-    }
-  }, [inView, hasMore, loading, loadMore]);
+    loadMoreRef.current = loadMore;
+  }, [loadMore]);
+
+  const { ref } = useInView({
+    threshold: 0,
+    onChange: visible => {
+      if (!visible) return;
+      if (loadingRef.current) pendingLoadRef.current = true;
+      else loadMore();
+    },
+  });
 
   const handleAddResource = async () => {
     if (!newResource.title || !newResource.url) {
@@ -615,4 +661,3 @@ function getIcon(type: ResourceType) {
     default: return <LinkIcon {...props} />;
   }
 }
-

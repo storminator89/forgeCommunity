@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -24,10 +24,10 @@ interface CourseContentsSidebarProps {
   selectedContentId: string | null;
   onContentSelect: (contentId: string) => void;
   onEditClick: (contentId: string) => void;
-  onDeleteClick: (content: CourseContent) => void;
+  onDeleteClick: (content: CourseContent) => Promise<void> | void;
   isInlineEditing: string | null;
   inlineEditTitle: string;
-  onInlineEditSubmit: (contentId: string, newTitle: string) => void;
+  onInlineEditSubmit: (contentId: string, newTitle: string) => Promise<void> | void;
   setIsInlineEditing: (contentId: string | null) => void;
   setInlineEditTitle: (title: string) => void;
   onMoveUp: (contentId: string) => void;
@@ -38,6 +38,7 @@ interface CourseContentsSidebarProps {
   courseName: string;
   isLoading: boolean;
   forceUpdate?: boolean;
+  onMainContentSubmit?: (title: string) => Promise<CourseContent | void>;
   onSubContentSubmit: (title: string) => Promise<CourseContent | void>;
   onMainContentSelect?: (contentId: string | null) => void;
   onVisitedToggle: (contentId: string) => void;
@@ -62,6 +63,7 @@ export function CourseContentsSidebar({
   courseName,
   isLoading,
   forceUpdate,
+  onMainContentSubmit,
   onSubContentSubmit,
   onMainContentSelect,
   onVisitedToggle,
@@ -76,13 +78,8 @@ export function CourseContentsSidebar({
   const [editingTitle, setEditingTitle] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
   const [newMainContentTitle, setNewMainContentTitle] = useState("");
-  const [mainContents, setMainContents] = useState<CourseContent[]>(contents || []);
   const [isGeneratingCertificate, setIsGeneratingCertificate] = useState(false);
-  const [allTopicsCompleted, setAllTopicsCompleted] = useState(false);
-
-  useEffect(() => {
-    setMainContents(contents || []);
-  }, [contents]);
+  const [visitedPagesVersion, setVisitedPagesVersion] = useState(0);
 
   const checkCompletion = useCallback(() => {
     // Check if there are any main topics with subtopics
@@ -111,22 +108,22 @@ export function CourseContentsSidebar({
     }
   }, [contents, courseId]);
 
-  useEffect(() => {
-    // Update allTopicsCompleted state
-    const isCompleted = checkCompletion();
-    if (isCompleted !== allTopicsCompleted) {
-      setAllTopicsCompleted(isCompleted);
-    }
-  }, [contents, courseId, forceUpdate, allTopicsCompleted, checkCompletion]);
+  const allTopicsCompleted = useMemo(
+    () => {
+      // These values invalidate the derived completion state after a visit event
+      // or a parent refresh, while the content tree remains the source of truth.
+      void forceUpdate;
+      void visitedPagesVersion;
+      return checkCompletion();
+    },
+    [checkCompletion, forceUpdate, visitedPagesVersion]
+  );
 
   useEffect(() => {
     const handleVisitedPagesChange = (event: CustomEvent) => {
       const { courseId: changedCourseId } = event.detail;
       if (changedCourseId === courseId) {
-        const isCompleted = checkCompletion();
-        if (isCompleted !== allTopicsCompleted) {
-          setAllTopicsCompleted(isCompleted);
-        }
+        setVisitedPagesVersion(version => version + 1);
       }
     };
 
@@ -137,31 +134,7 @@ export function CourseContentsSidebar({
     return () => {
       window.removeEventListener('visitedPagesChanged', handleVisitedPagesChange as EventListener);
     };
-  }, [courseId, allTopicsCompleted, contents, checkCompletion]);
-
-  // Hinzufügen eines Event Listeners für die Sidebar-Aktualisierung
-  useEffect(() => {
-    const handleRefresh = (event: CustomEvent) => {
-      const { mainContentId } = event.detail;
-      // Neu laden der Inhalte für das Hauptthema
-      const parent = mainContents.find(c => c.id === mainContentId);
-      if (parent) {
-        setMainContents(prev =>
-          prev.map(c => c.id === mainContentId ? {
-            ...c,
-            subContents: (c.subContents || []).filter(sub =>
-              sub.id !== selectedContentId
-            )
-          } : c)
-        );
-      }
-    };
-
-    window.addEventListener('refreshSidebar', handleRefresh as EventListener);
-    return () => {
-      window.removeEventListener('refreshSidebar', handleRefresh as EventListener);
-    };
-  }, [mainContents, selectedContentId]);
+  }, [courseId]);
 
   const toggleTopic = (topicId: string) => {
     const newExpanded = new Set(expandedTopics);
@@ -176,29 +149,7 @@ export function CourseContentsSidebar({
   const handleDelete = async (content: CourseContent) => {
     try {
       setIsDeleting(true);
-
-      // API-Aufruf zum Löschen
-      const response = await fetch(`/api/courses/${courseId}/contents/${content.id}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete content');
-      }
-
-      // Update local state
-      setMainContents(prev => prev.map(main => {
-        if (main.id === content.parentId) {
-          return {
-            ...main,
-            subContents: (main.subContents || []).filter(sub => sub.id !== content.id)
-          };
-        }
-        return main;
-      }));
-
-      // Call the parent's delete handler
-      onDeleteClick(content);
+      await onDeleteClick(content);
 
     } catch (error) {
       console.error('Error deleting content:', error);
@@ -207,67 +158,9 @@ export function CourseContentsSidebar({
     }
   };
 
-  const handleEdit = async (contentId: string, newTitle: string) => {
-    try {
-      const response = await fetch(`/api/courses/${courseId}/contents/${contentId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ title: newTitle }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update content');
-      }
-
-      // Update local state for both main topics and subtopics
-      setMainContents(prev =>
-        prev.map(main => {
-          if (main.id === contentId) {
-            return { ...main, title: newTitle };
-          }
-          if (main.subContents) {
-            return {
-              ...main,
-              subContents: main.subContents.map(sub =>
-                sub.id === contentId ? { ...sub, title: newTitle } : sub
-              )
-            };
-          }
-          return main;
-        })
-      );
-    } catch (error) {
-      console.error('Error updating content:', error);
-    }
-  };
-
   const handleInlineEdit = async (contentId: string, newTitle: string) => {
     try {
-      const response = await fetch(`/api/courses/${courseId}/contents/${contentId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ title: newTitle }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update title');
-      }
-
-      // Update local state
-      setMainContents(prev =>
-        prev.map(c =>
-          c.id === contentId
-            ? { ...c, title: newTitle }
-            : c
-        )
-      );
-
-      // Update parent state
-      onEditClick(contentId);
+      await onInlineEditSubmit(contentId, newTitle);
 
     } catch (error) {
       console.error('Error updating title:', error);
@@ -280,23 +173,10 @@ export function CourseContentsSidebar({
 
     try {
       setIsSubmitting(true);
-      const response = await fetch(`/api/courses/${courseId}/contents`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          title: newMainContentTitle,
-          type: 'TEXT',
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to create main content');
+      if (!onMainContentSubmit) {
+        throw new Error('Main content creation is unavailable');
       }
-
-      const newContent = await response.json();
-      setMainContents(prev => [...prev, newContent]);
+      await onMainContentSubmit(newMainContentTitle.trim());
       setNewMainContentTitle("");
       setIsDialogOpen(false); // Close the dialog after successful submission
     } catch (error) {
@@ -308,21 +188,6 @@ export function CourseContentsSidebar({
 
   const handleDeleteContent = async (content: CourseContent) => {
     try {
-      // Update local state immediately
-      setMainContents(prev => {
-        const updated = prev.map(main => {
-          if (main.id === content.parentId) {
-            // Wenn es ein Unterthema ist
-            return {
-              ...main,
-              subContents: main.subContents?.filter(sub => sub.id !== content.id) || []
-            };
-          }
-          return main;
-        });
-        return updated;
-      });
-
       // Rufe den übergebenen onDeleteClick Handler auf
       await onDeleteClick(content);
 
@@ -337,22 +202,7 @@ export function CourseContentsSidebar({
 
     try {
       setIsSubmitting(true);
-      const newContent = await onSubContentSubmit(newSubtopicTitle);
-
-      // Update local state immediately
-      if (newContent) {
-        const parentContent = mainContents.find(c => c.id === mainContentId);
-        if (parentContent) {
-          setMainContents(prev => prev.map(c =>
-            c.id === mainContentId
-              ? {
-                ...c,
-                subContents: [...(c.subContents || []), newContent]
-              }
-              : c
-          ));
-        }
-      }
+      await onSubContentSubmit(newSubtopicTitle);
 
       setNewSubtopicTitle("");
       onMainContentSelect?.(null);
@@ -395,7 +245,7 @@ export function CourseContentsSidebar({
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         <div className="space-y-3">
-          {mainContents.map((content, index) => (
+          {contents.map((content, index) => (
             <div key={content.id} className="group relative rounded-md overflow-hidden transition-all duration-200">
               <div className={cn(
                 "flex items-center justify-between p-2 rounded-md hover:bg-accent group/topic transition-colors",

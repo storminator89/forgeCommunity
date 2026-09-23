@@ -67,18 +67,20 @@ export async function GET() {
 
     // Channels abrufen, zu denen der Benutzer Zugang hat
     const channels = await prisma.chatChannel.findMany({
-      where: {
-        OR: [
-          { isPrivate: false },
-          {
-            members: {
-              some: {
-                userId: session.user.id,
+      where: session.user.role === 'ADMIN'
+        ? {}
+        : {
+            OR: [
+              { isPrivate: false },
+              {
+                members: {
+                  some: {
+                    userId: session.user.id,
+                  },
+                },
               },
-            },
+            ],
           },
-        ],
-      },
       include: {
         members: {
           include: {

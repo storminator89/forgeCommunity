@@ -5,12 +5,6 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { useSession } from 'next-auth/react';
 import { NotificationType } from '@/types/notifications';
 
-interface CreateNotificationInput {
-  type: NotificationType;
-  content: string;
-  isRead: boolean;
-}
-
 interface Notification {
   id: string;
   type: NotificationType;
@@ -33,26 +27,34 @@ const NotificationContext = createContext<NotificationContextType | null>(null);
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const { data: session } = useSession();
+  const userId = session?.user?.id ?? null;
+  // A user change remounts the state owner: previous private data and pending
+  // responses cannot become visible in another session.
+  return <SessionNotifications key={userId ?? 'anonymous'} userId={userId}>{children}</SessionNotifications>;
+}
+
+function SessionNotifications({ children, userId }: { children: ReactNode; userId: string | null }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
   useEffect(() => {
-    if (session?.user) {
-      fetchNotifications();
+    if (!userId) return;
+    const controller = new AbortController();
+    async function load() {
+      try {
+        const response = await fetch('/api/notifications', { signal: controller.signal });
+        if (!response.ok) throw new Error('Failed to fetch notifications');
+        const data = await response.json();
+        if (!controller.signal.aborted) setNotifications(data);
+      } catch (error) {
+        if (!controller.signal.aborted) console.error('Error fetching notifications:', error);
+      }
     }
-  }, [session]);
-
-  const fetchNotifications = async () => {
-    try {
-      const response = await fetch('/api/notifications');
-      if (!response.ok) throw new Error('Failed to fetch notifications');
-      const data = await response.json();
-      setNotifications(data);
-    } catch (error) {
-      console.error('Error fetching notifications:', error);
-    }
-  };
+    void load();
+    return () => controller.abort();
+  }, [userId]);
 
   const markAsRead = async (id: string) => {
+    if (!userId) return;
     try {
       const response = await fetch('/api/notifications', {
         method: 'PATCH',
@@ -73,6 +75,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   };
 
   const markAllAsRead = async () => {
+    if (!userId) return;
     try {
       const response = await fetch('/api/notifications/mark-all-read', {
         method: 'POST',
@@ -89,8 +92,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   };
 
   const deleteNotification = async (id: string) => {
+    if (!userId) return;
     try {
-      const response = await fetch(`/api/notifications?id=${id}`, {
+      const response = await fetch(`/api/notifications?id=${encodeURIComponent(id)}`, {
         method: 'DELETE',
       });
 
@@ -103,7 +107,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   };
 
   const addNotification = async (notification: Omit<Notification, 'id' | 'createdAt' | 'userId'>) => {
-    if (!session?.user) return;
+    if (!userId) return;
 
     try {
       const response = await fetch('/api/notifications', {
@@ -111,7 +115,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...notification,
-          userId: session.user.id
+          userId
         }),
       });
 

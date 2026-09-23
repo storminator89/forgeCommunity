@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { CourseContent, QuizContent } from './types';
 import { Editor } from '@/components/Editor';
 import { Button } from '@/components/ui/button';
@@ -20,15 +20,17 @@ interface ContentRendererProps {
   onEditToggle?: (isEditing: boolean) => void;
 }
 
-export function ContentRenderer({ content, isEditing: externalIsEditing, onSave, onEditToggle }: ContentRendererProps) {
-  const [internalIsEditing, setInternalIsEditing] = useState(false);
-  const [editedContent, setEditedContent] = useState('');
+export function ContentRenderer(props: ContentRendererProps) {
+  return <ContentRendererState key={props.content.id} {...props} />;
+}
 
-  useEffect(() => {
-    if (content.type !== 'QUIZ') {
-      setEditedContent(content.content as string || '');
-    }
-  }, [content.id, content.type, content.content]);
+function ContentRendererState({ content, isEditing: externalIsEditing, onSave, onEditToggle }: ContentRendererProps) {
+  const [internalIsEditing, setInternalIsEditing] = useState(false);
+  const [draft, setDraft] = useState<{ source: CourseContent['content']; value: string } | null>(null);
+  const editedContent = draft && draft.source === content.content
+    ? draft.value
+    : typeof content.content === 'string' ? content.content : '';
+  const setEditedContent = (value: string) => setDraft({ source: content.content, value });
 
   const isEditing = externalIsEditing ?? internalIsEditing;
 
@@ -47,16 +49,16 @@ export function ContentRenderer({ content, isEditing: externalIsEditing, onSave,
     }
   };
 
-  if (content.type === 'TEXT' && typeof content.content === 'string' && content.content.includes('"questions":[')) {
+  let embeddedQuiz: QuizContent | null = null;
+  if (content.type === 'TEXT' && typeof content.content === 'string') {
     try {
-      const quizContent = JSON.parse(content.content) as QuizContent;
-      if (quizContent.questions) {
-        return <QuizRenderer content={quizContent} />;
-      }
-    } catch (e) {
-      console.error('Failed to parse quiz content:', e);
+      const parsed = JSON.parse(content.content);
+      if (parsed && Array.isArray(parsed.questions)) embeddedQuiz = parsed as QuizContent;
+    } catch {
+      // Ordinary rich text is not a JSON quiz.
     }
   }
+  if (embeddedQuiz) return <QuizRenderer content={embeddedQuiz} />;
 
   if (content.type === 'QUIZ') {
     return <QuizRenderer content={content.content as QuizContent} />;
@@ -147,7 +149,7 @@ export function ContentRenderer({ content, isEditing: externalIsEditing, onSave,
         return (
           <div className="bg-muted/30 rounded-lg p-6 border border-border/50">
             <audio
-              src={content.content as string}
+              src={getSafeEmbedUrl(content.content as string, 'audio') ?? undefined}
               controls
               className="w-full"
             />

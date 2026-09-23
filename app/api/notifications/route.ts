@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/options';
 import prisma from '@/lib/prisma';
+import { NotificationType } from '@prisma/client';
 
 export async function GET(req: Request) {
   try {
@@ -35,13 +36,24 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { type, content, userId } = body;
+    const { type, content } = body;
+
+    if (
+      typeof content !== 'string' ||
+      !content.trim() ||
+      typeof type !== 'string' ||
+      !Object.values(NotificationType).includes(type as NotificationType)
+    ) {
+      return new NextResponse('Invalid notification', { status: 400 });
+    }
 
     const notification = await prisma.notification.create({
       data: {
-        type,
-        content,
-        userId,
+        type: type as NotificationType,
+        content: content.trim(),
+        // Clients may create local notifications, but they must not choose
+        // another recipient. Server-side domain events use Prisma directly.
+        userId: session.user.id,
       },
     });
 

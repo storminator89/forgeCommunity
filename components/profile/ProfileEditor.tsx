@@ -166,7 +166,7 @@ export function ProfileEditor({ profile, onUpdate }: ProfileEditorProps) {
     );
   };
 
-  const MediaSection = ({ type, title }: { type: 'avatar' | 'cover'; title: string }) => {
+  const renderMediaSection = ({ type, title }: { type: 'avatar' | 'cover'; title: string }) => {
     const currentImage = type === 'avatar' ? profile.image : profile.coverImage;
     const imageType = type === 'avatar' ? 'Profilbild' : 'Titelbild';
 
@@ -329,9 +329,9 @@ export function ProfileEditor({ profile, onUpdate }: ProfileEditorProps) {
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-8">
-                      <MediaSection type="avatar" title="Profilbild" />
+                      {renderMediaSection({ type: 'avatar', title: 'Profilbild' })}
                       <Separator />
-                      <MediaSection type="cover" title="Titelbild" />
+                      {renderMediaSection({ type: 'cover', title: 'Titelbild' })}
                     </CardContent>
                   </Card>
                 </TabsContent>

@@ -9,23 +9,29 @@ export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
 
-    console.log("Backend Session:", session); // Debugging
-
-    if (!session?.user) {
+    if (!session?.user || session.user.role !== 'ADMIN') {
       return NextResponse.json(
-        { error: 'Nicht authentifiziert' },
-        { status: 401 }
+        { error: session?.user ? 'Keine Administratorrechte' : 'Nicht authentifiziert' },
+        { status: session?.user ? 403 : 401 }
       )
     }
 
     const users = await prisma.user.findMany({
-      include: {
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        image: true,
+        role: true,
+        title: true,
+        contact: true,
+        createdAt: true,
+        lastLogin: true,
         skills: {
-          include: {
+          select: {
             skill: true,
           }
         },
-        userSettings: true,
         _count: {
           select: {
             followers: true,
@@ -44,7 +50,7 @@ export async function GET(request: NextRequest) {
       title: user.title,
       contact: user.contact,
       createdAt: user.createdAt,
-      lastLogin: user.lastLogin, // Stelle sicher, dass lastLogin inkludiert ist
+      lastLogin: user.lastLogin,
       skills: user.skills.map(s => ({
         name: s.skill.name,
       })),
@@ -69,8 +75,6 @@ export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
 
-    console.log("Create User Session:", session)
-
     if (!session?.user) {
       return NextResponse.json(
         { error: 'Nicht authentifiziert' },
@@ -94,16 +98,26 @@ export async function POST(request: NextRequest) {
     const data = await request.json()
 
     // Validierung
-    if (!data.email || !data.password || !data.name) {
+    const email = typeof data.email === 'string' ? data.email.trim().toLowerCase() : ''
+    const name = typeof data.name === 'string' ? data.name.trim() : ''
+    if (!email || !data.password || !name) {
       return NextResponse.json(
         { error: 'Fehlende Pflichtfelder' },
         { status: 400 }
       )
     }
 
+    const allowedRoles = ['USER', 'ADMIN', 'MODERATOR', 'INSTRUCTOR'] as const
+    if (data.role !== undefined && !allowedRoles.includes(data.role)) {
+      return NextResponse.json(
+        { error: 'Ungültige Benutzerrolle' },
+        { status: 400 }
+      )
+    }
+
     // Überprüfe, ob die E-Mail bereits existiert
-    const existingUser = await prisma.user.findUnique({
-      where: { email: data.email }
+    const existingUser = await prisma.user.findFirst({
+      where: { email: { equals: email, mode: 'insensitive' } }
     })
 
     if (existingUser) {
@@ -119,8 +133,8 @@ export async function POST(request: NextRequest) {
     // Erstelle den neuen Benutzer mit allen Daten
     const newUser = await prisma.user.create({
       data: {
-        email: data.email,
-        name: data.name,
+        email,
+        name,
         password: hashedPassword,
         role: data.role || 'USER',
         title: data.title || null,
@@ -142,7 +156,7 @@ export async function POST(request: NextRequest) {
     })
 
     // Entferne das Passwort aus der Antwort
-    const { password, ...userWithoutPassword } = newUser
+    const { password: _password, verificationToken: _verificationToken, resetPasswordToken: _resetPasswordToken, ...userWithoutPassword } = newUser
 
     // Optional: Sende Willkommens-E-Mail
     try {

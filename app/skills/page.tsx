@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, Suspense, useCallback } from 'react';
+import { useState, useEffect, useMemo, Suspense, useCallback, useRef } from 'react';
 import { Sidebar } from "@/components/Sidebar";
 import { UserNav } from "@/components/user-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -77,42 +77,80 @@ export default function SkillDirectory() {
   const [error, setError] = useState<string | null>(null);
   const [expandedSkills, setExpandedSkills] = useState<{ [key: string]: boolean }>({});
   const [isRetrying, setIsRetrying] = useState(false);
+  const dataRequestRef = useRef<AbortController | null>(null);
 
   const getSkillByName = useCallback((name: string): Skill | undefined => {
     return skillsData.find(skill => skill.name === name);
   }, [skillsData]);
 
+  const loadData = useCallback(async (signal: AbortSignal) => {
+    const [skillsResponse, membersResponse] = await Promise.all([
+      fetch('/api/skills', { signal }),
+      fetch('/api/members', { signal })
+    ]);
+
+    if (!skillsResponse.ok || !membersResponse.ok) {
+      throw new Error('Failed to fetch data');
+    }
+
+    const [skills, members] = await Promise.all([
+      skillsResponse.json() as Promise<Skill[]>,
+      membersResponse.json() as Promise<Member[]>
+    ]);
+
+    return { skills, members };
+  }, []);
+
   const fetchData = useCallback(async () => {
+    dataRequestRef.current?.abort();
+    const controller = new AbortController();
+    dataRequestRef.current = controller;
     setIsLoading(true);
     setError(null);
 
     try {
-      const [skillsResponse, membersResponse] = await Promise.all([
-        fetch('/api/skills'),
-        fetch('/api/members')
-      ]);
-
-      if (!skillsResponse.ok || !membersResponse.ok) {
-        throw new Error('Failed to fetch data');
-      }
-
-      const [skillsData, membersData] = await Promise.all([
-        skillsResponse.json() as Promise<Skill[]>,
-        membersResponse.json() as Promise<Member[]>
-      ]);
-
-      setSkillsData(skillsData);
-      setMembersData(membersData);
+      const data = await loadData(controller.signal);
+      if (dataRequestRef.current !== controller) return;
+      setSkillsData(data.skills);
+      setMembersData(data.members);
     } catch (err) {
+      if (controller.signal.aborted || dataRequestRef.current !== controller) return;
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');
     } finally {
-      setIsLoading(false);
+      if (dataRequestRef.current === controller) {
+        dataRequestRef.current = null;
+        setIsLoading(false);
+      }
     }
-  }, []);
+  }, [loadData]);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    const controller = new AbortController();
+    dataRequestRef.current = controller;
+
+    void loadData(controller.signal)
+      .then((data) => {
+        if (dataRequestRef.current !== controller) return;
+        setSkillsData(data.skills);
+        setMembersData(data.members);
+        setError(null);
+      })
+      .catch((err: unknown) => {
+        if (controller.signal.aborted || dataRequestRef.current !== controller) return;
+        setError(err instanceof Error ? err.message : 'An unexpected error occurred');
+      })
+      .finally(() => {
+        if (dataRequestRef.current === controller) {
+          dataRequestRef.current = null;
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      controller.abort();
+      if (dataRequestRef.current === controller) dataRequestRef.current = null;
+    };
+  }, [loadData]);
 
   const categories = useMemo(() => ['All', ...Array.from(new Set(skillsData.map(skill => skill.category)))], [skillsData]);
 

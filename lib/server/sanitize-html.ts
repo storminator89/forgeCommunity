@@ -3,6 +3,7 @@ import 'server-only';
 import createDOMPurify from 'dompurify';
 
 import {
+  isSafeRichHtmlUrl,
   RICH_HTML_ALLOWED_ATTR,
   RICH_HTML_ALLOWED_TAGS,
 } from '@/lib/html-sanitize-config';
@@ -22,6 +23,11 @@ function getDOMPurify() {
   if (!DOMPurifyInstance) {
     const windowLike = getServerWindow();
     DOMPurifyInstance = createDOMPurify(windowLike as unknown as any);
+    DOMPurifyInstance.addHook('uponSanitizeAttribute', (_node, data) => {
+      if ((data.attrName === 'href' || data.attrName === 'src') && !isSafeRichHtmlUrl(data.attrValue, data.attrName)) {
+        data.keepAttr = false;
+      }
+    });
     DOMPurifyInstance.addHook('afterSanitizeAttributes', (node) => {
       if ((node as Element).getAttribute?.('target') === '_blank') {
         node.setAttribute('rel', 'noopener noreferrer');

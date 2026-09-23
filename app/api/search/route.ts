@@ -65,6 +65,7 @@ export async function GET(request: NextRequest) {
     };
 
     const postWhere = {
+      published: true,
       OR: [
         { title: { contains: query, mode: 'insensitive' as const } },
         { content: { contains: query, mode: 'insensitive' as const } },

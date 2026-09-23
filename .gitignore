@@ -42,7 +42,6 @@ next-env.d.ts
 
 # Prisma
 /prisma/*.db
-/prisma/migrations
 
 # IDEs and editors
 /.idea
@@ -126,3 +125,6 @@ public/images/uploads/*
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+# Private runtime attachments
+/private/
+

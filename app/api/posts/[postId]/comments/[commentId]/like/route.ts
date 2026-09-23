@@ -3,7 +3,10 @@ import prisma from '@/lib/prisma'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 
-export async function POST(req: NextRequest, props: { params: Promise<{ commentId: string }> }) {
+export async function POST(
+  req: NextRequest,
+  props: { params: Promise<{ postId: string; commentId: string }> }
+) {
   const params = await props.params;
   try {
     const session = await getServerSession(authOptions)
@@ -11,15 +14,30 @@ export async function POST(req: NextRequest, props: { params: Promise<{ commentI
       return NextResponse.json({ error: 'Nicht authentifiziert' }, { status: 401 })
     }
 
-    const { commentId } = params
+    const { postId, commentId } = params
     const userId = session.user.id
 
     // Überprüfen, ob der Kommentar existiert
     const comment = await prisma.comment.findUnique({
       where: { id: commentId },
+      include: {
+        post: {
+          select: { published: true, authorId: true },
+        },
+      },
     })
 
     if (!comment) {
+      return NextResponse.json({ error: 'Kommentar nicht gefunden' }, { status: 404 })
+    }
+
+    // The nested URL identifies the parent post. Verify that relationship so
+    // a caller cannot operate on an unrelated comment by swapping IDs.
+    if (comment.postId !== postId) {
+      return NextResponse.json({ error: 'Kommentar nicht gefunden' }, { status: 404 })
+    }
+
+    if (!comment.post.published && comment.post.authorId !== userId && session.user.role !== 'ADMIN') {
       return NextResponse.json({ error: 'Kommentar nicht gefunden' }, { status: 404 })
     }
 

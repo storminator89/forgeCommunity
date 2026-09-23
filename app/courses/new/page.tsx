@@ -140,7 +140,7 @@ export default function NewCoursePage() {
                         selected={startDate}
                         onSelect={(date) => setStartDate(date)}
                         locale={de}
-                        initialFocus
+                        autoFocus
                       />
                     </PopoverContent>
                   </Popover>
@@ -169,7 +169,7 @@ export default function NewCoursePage() {
                         selected={endDate}
                         onSelect={(date) => setEndDate(date)}
                         locale={de}
-                        initialFocus
+                        autoFocus
                       />
                     </PopoverContent>
                   </Popover>

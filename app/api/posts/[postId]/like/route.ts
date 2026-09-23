@@ -25,6 +25,10 @@ export async function POST(req: NextRequest, props: { params: Promise<{ postId: 
       return NextResponse.json({ error: 'Beitrag nicht gefunden' }, { status: 404 })
     }
 
+    if (!post.published && post.authorId !== userId && session.user.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Beitrag nicht gefunden' }, { status: 404 })
+    }
+
     // Überprüfen, ob der Benutzer den Beitrag bereits geliked hat
     const existingLike = await prisma.likePost.findUnique({
       where: {

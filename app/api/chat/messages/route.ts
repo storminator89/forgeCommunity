@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/options';
 import prisma from '@/lib/prisma';
+import { getChatUploadOwnerId } from '@/lib/server/image-upload';
 
 export async function POST(req: Request) {
   try {
@@ -18,6 +19,16 @@ export async function POST(req: Request) {
     }
     if (!channelId) {
       return new NextResponse('ChannelId is required', { status: 400 });
+    }
+
+    if (imageUrl !== undefined && imageUrl !== null && imageUrl !== '') {
+      if (typeof imageUrl !== 'string' || !imageUrl.startsWith('/api/chat/uploads/')) {
+        return new NextResponse('Use an uploaded chat image', { status: 400 });
+      }
+      const uploadOwner = getChatUploadOwnerId(imageUrl.slice('/api/chat/uploads/'.length));
+      if (!uploadOwner || uploadOwner !== session.user.id) {
+        return new NextResponse('Image upload does not belong to the current user', { status: 403 });
+      }
     }
 
     // Überprüfen, ob der Benutzer Zugang zum Channel hat
@@ -77,10 +88,23 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const channelId = searchParams.get('channelId');
     const after = searchParams.get('after');
+    const afterId = searchParams.get('afterId');
     const limit = 50;
 
     if (!channelId) {
       return new NextResponse('ChannelId is required', { status: 400 });
+    }
+
+    let afterDate: Date | undefined;
+    if (after) {
+      afterDate = new Date(after);
+      if (Number.isNaN(afterDate.getTime())) {
+        return new NextResponse('Invalid after cursor', { status: 400 });
+      }
+    }
+
+    if (afterId && !afterDate) {
+      return new NextResponse('afterId requires after', { status: 400 });
     }
 
     // Überprüfen, ob der Benutzer Zugang zum Channel hat
@@ -107,16 +131,21 @@ export async function GET(req: Request) {
     const messages = await prisma.chatMessage.findMany({
       where: {
         channelId,
-        ...(after && {
-          createdAt: {
-            gt: new Date(after),
-          },
-        }),
+        ...(afterDate && afterId
+          ? {
+              OR: [
+                { createdAt: { gt: afterDate } },
+                { createdAt: afterDate, id: { gt: afterId } },
+              ],
+            }
+          : afterDate
+            ? { createdAt: { gt: afterDate } }
+            : {}),
       },
       take: limit,
-      orderBy: {
-        createdAt: 'asc',
-      },
+      orderBy: afterDate
+        ? [{ createdAt: 'asc' }, { id: 'asc' }]
+        : [{ createdAt: 'desc' }, { id: 'desc' }],
       include: {
         author: {
           select: {
@@ -128,8 +157,18 @@ export async function GET(req: Request) {
       },
     });
 
+    // Initial visits show the newest page in display order. Incremental
+    // requests walk forward from the last delivered composite cursor.
+    if (!afterDate) messages.reverse();
+
     return NextResponse.json({
       items: messages,
+      nextCursor: messages.length > 0
+        ? {
+            after: messages[messages.length - 1].createdAt.toISOString(),
+            afterId: messages[messages.length - 1].id,
+          }
+        : null,
     });
   } catch (error) {
     console.error('[MESSAGES_GET]', error);

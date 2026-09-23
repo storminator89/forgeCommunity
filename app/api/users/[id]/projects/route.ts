@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../../auth/[...nextauth]/options";
+import { HttpUrlValidationError, normalizeHttpUrl } from '@/lib/server/url-security';
+import { getSafeHttpUrl } from '@/lib/security';
 
 export async function GET(
   request: NextRequest,
@@ -65,13 +67,15 @@ export async function GET(
     ]);
 
     // Formatiere die Projekte für die Response
-    const formattedProjects = projects.map(project => ({
+    const formattedProjects = projects.map(project => {
+      const safeLink = getSafeHttpUrl(project.link);
+      return ({
       id: project.id,
       title: project.title,
       description: project.description,
       imageUrl: project.imageUrl,
-      link: project.link,
-      githubUrl: project.link.includes('github.com') ? project.link : null,
+      link: safeLink ?? '',
+      githubUrl: safeLink && new URL(safeLink).hostname.toLowerCase() === 'github.com' ? safeLink : null,
       category: project.category,
       gradientFrom: project.gradientFrom,
       gradientTo: project.gradientTo,
@@ -87,7 +91,8 @@ export async function GET(
       },
       isLiked: project.likes.length > 0,
       createdAt: project.createdAt,
-    }));
+      });
+    });
 
     return NextResponse.json({
       projects: formattedProjects,
@@ -134,12 +139,25 @@ export async function POST(
       );
     }
 
+    let link: string;
+    try {
+      // This legacy JSON endpoint feeds the public profile/showcase links.
+      // Keep its URL policy identical to the multipart project endpoint so a
+      // caller cannot persist javascript:, data:, or file: URLs.
+      link = normalizeHttpUrl(data.link);
+    } catch (error) {
+      if (error instanceof HttpUrlValidationError) {
+        return NextResponse.json({ error: error.message }, { status: 400 });
+      }
+      throw error;
+    }
+
     // Erstelle das Projekt
     const project = await prisma.project.create({
       data: {
         title: data.title,
         description: data.description,
-        link: data.link,
+        link,
         imageUrl: data.imageUrl,
         category: data.category,
         gradientFrom: data.gradientFrom || '#4F46E5',

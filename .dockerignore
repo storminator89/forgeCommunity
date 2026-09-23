@@ -8,3 +8,10 @@ node_modules
 build
 dist
 coverage
+
+# User data must never be baked into a reusable image.
+public/images/uploads/*
+!public/images/uploads/.gitkeep
+
+# Private runtime attachments
+private/

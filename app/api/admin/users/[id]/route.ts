@@ -22,7 +22,19 @@ export async function GET(
 
     const user = await prisma.user.findUnique({
       where: { id: params.id },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        image: true,
+        coverImage: true,
+        bio: true,
+        title: true,
+        contact: true,
+        role: true,
+        createdAt: true,
+        updatedAt: true,
+        lastLogin: true,
         userSettings: true,
         badges: {
           include: {
@@ -65,7 +77,6 @@ export async function GET(
     // Transformiere die Daten für die Frontend-Anzeige
     const transformedUser = {
       ...user,
-      password: undefined, // Entferne das Passwort aus der Antwort
       stats: {
         postsCount: user.posts.length,
         commentsCount: user.comments.length,
@@ -133,9 +144,19 @@ export async function PUT(
     const data = await request.json()
 
     // Validierung
-    if (!data.email || !data.name) {
+    const email = typeof data.email === 'string' ? data.email.trim().toLowerCase() : ''
+    const name = typeof data.name === 'string' ? data.name.trim() : ''
+    if (!email || !name) {
       return NextResponse.json(
         { error: 'Fehlende Pflichtfelder' },
+        { status: 400 }
+      )
+    }
+
+    const allowedRoles = ['USER', 'ADMIN', 'MODERATOR', 'INSTRUCTOR'] as const
+    if (data.role !== undefined && !allowedRoles.includes(data.role)) {
+      return NextResponse.json(
+        { error: 'Ungültige Benutzerrolle' },
         { status: 400 }
       )
     }
@@ -143,7 +164,7 @@ export async function PUT(
     // Überprüfe, ob die E-Mail bereits von einem anderen Benutzer verwendet wird
     const existingUser = await prisma.user.findFirst({
       where: {
-        email: data.email,
+        email: { equals: email, mode: 'insensitive' },
         NOT: {
           id: params.id
         }
@@ -157,15 +178,35 @@ export async function PUT(
       )
     }
 
+    const targetUser = await prisma.user.findUnique({
+      where: { id: params.id },
+      select: { email: true },
+    })
+
+    if (!targetUser) {
+      return NextResponse.json(
+        { error: 'Benutzer nicht gefunden' },
+        { status: 404 }
+      )
+    }
+
+    const emailChanged = targetUser.email.trim().toLowerCase() !== email
+
     // Erstelle das Update-Objekt
     const updateData: any = {
-      email: data.email,
-      name: data.name,
+      email,
+      name,
       role: data.role,
       title: data.title,
       bio: data.bio,
       contact: data.contact,
       image: data.image,
+    }
+
+    if (emailChanged) {
+      updateData.emailVerified = null
+      updateData.verificationToken = null
+      updateData.resetPasswordToken = null
     }
 
     // Wenn ein neues Passwort gesetzt werden soll
@@ -201,7 +242,12 @@ export async function PUT(
     })
 
     // Entferne sensitive Daten
-    const { password, ...userWithoutPassword } = updatedUser
+    const {
+      password: _password,
+      verificationToken: _verificationToken,
+      resetPasswordToken: _resetPasswordToken,
+      ...userWithoutPassword
+    } = updatedUser
 
     return NextResponse.json(userWithoutPassword)
   } catch (error) {

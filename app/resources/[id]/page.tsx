@@ -1,7 +1,7 @@
 'use client';
 
 // Erweitere die Imports
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useEffectEvent, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserNav } from "@/components/user-nav";
@@ -39,25 +39,56 @@ interface Resource {
 export default function ResourcePage() {
   const params = useParams();
   const router = useRouter();
+  const resourceId = typeof params.id === 'string' ? params.id : params.id?.[0];
   const [resource, setResource] = useState<Resource | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [loadedForId, setLoadedForId] = useState<string | null>(null);
+  const requestIdRef = useRef(0);
+  const activeControllerRef = useRef<AbortController | null>(null);
 
-  const fetchResource = useCallback(async () => {
+  const fetchResource = useCallback(async (
+    id: string,
+    signal: AbortSignal,
+    requestId: number,
+  ) => {
     try {
-      const response = await axios.get(`/api/resources/${params.id}`);
+      const response = await axios.get(`/api/resources/${id}`, { signal });
+
+      if (signal.aborted || requestIdRef.current !== requestId) return;
       setResource(response.data);
+      setLoadedForId(id);
     } catch (error) {
+      if (signal.aborted || requestIdRef.current !== requestId) return;
       console.error('Fehler beim Laden der Ressource:', error);
       toast.error('Ressource konnte nicht geladen werden.');
+      setResource(null);
+      setLoadedForId(id);
     } finally {
-      setLoading(false);
+      if (!signal.aborted && requestIdRef.current === requestId) {
+        setLoading(false);
+      }
     }
-  }, [params.id]);
+  }, []);
+
+  const startResourceFetch = useEffectEvent(() => {
+    if (!resourceId) return;
+
+    activeControllerRef.current?.abort();
+    const controller = new AbortController();
+    activeControllerRef.current = controller;
+    const requestId = ++requestIdRef.current;
+    void fetchResource(resourceId, controller.signal, requestId);
+  });
 
   useEffect(() => {
-    fetchResource();
-  }, [fetchResource]);
+    startResourceFetch();
+
+    return () => {
+      activeControllerRef.current?.abort();
+      requestIdRef.current += 1;
+    };
+  }, [resourceId]);
 
   const getIcon = (type: ResourceType) => {
     const iconClass = "h-6 w-6 text-white";
@@ -102,14 +133,14 @@ export default function ResourcePage() {
 
         <div className="flex-1 overflow-y-auto">
           {/* Loading State */}
-          {loading && (
+          {(loading || loadedForId !== resourceId) && (
             <div className="flex justify-center items-center h-[calc(100vh-4rem)]">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
             </div>
           )}
 
           {/* Error State */}
-          {!loading && !resource && (
+          {loadedForId === resourceId && !loading && !resource && (
             <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)]">
               <div className="text-center space-y-4">
                 <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
@@ -127,7 +158,7 @@ export default function ResourcePage() {
           )}
 
           {/* Resource Content */}
-          {!loading && resource && (
+          {loadedForId === resourceId && !loading && resource && (
             <main className="max-w-4xl mx-auto px-4 py-8">
               <ToastContainer />
               <Card className="overflow-hidden shadow-xl">

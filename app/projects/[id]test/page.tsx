@@ -14,6 +14,7 @@ import { motion } from 'framer-motion';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { getSafeHttpUrl } from '@/lib/security';
 
 interface Tag {
   id: string;
@@ -62,6 +63,7 @@ const ProjectDetail = ({ params }: { params: Promise<{ id: string }> }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const safeProjectLink = project?.link ? getSafeHttpUrl(project.link) : null;
 
   const handleLike = async (projectId?: string) => {
     if (!projectId) return;
@@ -440,15 +442,17 @@ const ProjectDetail = ({ params }: { params: Promise<{ id: string }> }) => {
                       asChild
                       className="w-full bg-blue-500 hover:bg-blue-600 transition-colors"
                     >
-                      <a
-                        href={project?.link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center justify-center"
-                      >
-                        Projekt ansehen
-                        <ExternalLink className="ml-2 h-4 w-4" />
-                      </a>
+                      {safeProjectLink && (
+                        <a
+                          href={safeProjectLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-center"
+                        >
+                          Projekt ansehen
+                          <ExternalLink className="ml-2 h-4 w-4" />
+                        </a>
+                      )}
                     </Button>
 
                     {session?.user?.id === project?.author.id && (
@@ -501,4 +505,3 @@ const ProjectDetail = ({ params }: { params: Promise<{ id: string }> }) => {
 };
 
 export default ProjectDetail;
-

@@ -125,7 +125,7 @@ export default function DraftsPage() {
       }
     });
 
-  const LoadingSkeleton = () => (
+  const renderLoadingSkeleton = () => (
     <div className="space-y-6">
       {[1, 2, 3].map((n) => (
         <Card key={n}>
@@ -141,7 +141,7 @@ export default function DraftsPage() {
     </div>
   );
 
-  const EmptyState = () => (
+  const renderEmptyState = () => (
     <Card className="text-center p-12">
       <div className="flex flex-col items-center gap-4">
         <FileText className="h-12 w-12 text-gray-400" />
@@ -245,7 +245,7 @@ export default function DraftsPage() {
             variants={pageVariants}
           >
             {isLoading ? (
-              <LoadingSkeleton />
+              renderLoadingSkeleton()
             ) : filteredAndSortedDrafts.length === 0 ? (
               searchQuery ? (
                 <Card className="text-center p-12">
@@ -258,7 +258,7 @@ export default function DraftsPage() {
                   </div>
                 </Card>
               ) : (
-                <EmptyState />
+                renderEmptyState()
               )
             ) : (
               <div className="grid gap-6">

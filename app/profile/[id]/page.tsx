@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -35,7 +35,6 @@ import {
   MessageSquare,
   Plus,
   Settings,
-  Heart,
   Star,
   CheckCircle,
   AlertCircle
@@ -75,13 +74,17 @@ const socialColors = {
 };
 
 export default function ProfilePage() {
-  const params = useParams();
+  const { id: profileId } = useParams<{ id: string }>();
   const router = useRouter();
   const { data: session } = useSession();
   const [profile, setProfile] = useState<UserType | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
   const [isEditing, setIsEditing] = useState(false);
+  const [isEndorsing, setIsEndorsing] = useState(false);
+  const [hasEndorsed, setHasEndorsed] = useState(false);
+  const [showBackToTop, setShowBackToTop] = useState(false);
+  const mainRef = useRef<HTMLElement>(null);
 
   const tabStats: TabStats = {
     overview: {
@@ -102,16 +105,34 @@ export default function ProfilePage() {
   };
 
   const fetchProfile = useCallback(async () => {
+    if (!profileId) {
+      setIsLoading(false);
+      return;
+    }
+
     try {
-      const response = await fetch(`/api/users/${params.id}`, {
-        credentials: 'include',
-      });
+      setHasEndorsed(false);
+      const encodedProfileId = encodeURIComponent(profileId);
+      const [response, socialResponse] = await Promise.all([
+        fetch(`/api/users/${encodedProfileId}`, {
+          credentials: 'include',
+        }),
+        fetch(`/api/users/${encodedProfileId}/social`, {
+          credentials: 'include',
+        }),
+      ]);
 
       if (!response.ok) {
         throw new Error('Failed to fetch profile');
       }
 
       const data = await response.json();
+      // The profile endpoint may return placeholder links while the dedicated
+      // endpoint owns the persisted social link values.
+      if (socialResponse.ok) {
+        const socialData = await socialResponse.json();
+        data.socialLinks = socialData.socialLinks ?? data.socialLinks;
+      }
       setProfile(data);
     } catch (error) {
       console.error('Error fetching profile:', error);
@@ -119,11 +140,28 @@ export default function ProfilePage() {
     } finally {
       setIsLoading(false);
     }
-  }, [params.id]);
+  }, [profileId]);
 
   useEffect(() => {
-    fetchProfile();
-  }, [params.id, fetchProfile]);
+    const fetchTimer = setTimeout(() => {
+      void fetchProfile();
+    }, 0);
+
+    return () => clearTimeout(fetchTimer);
+  }, [fetchProfile]);
+
+  useEffect(() => {
+    const main = mainRef.current;
+    if (!main) return;
+
+    const updateBackToTopVisibility = () => {
+      setShowBackToTop(main.scrollTop > 500);
+    };
+
+    updateBackToTopVisibility();
+    main.addEventListener('scroll', updateBackToTopVisibility, { passive: true });
+    return () => main.removeEventListener('scroll', updateBackToTopVisibility);
+  }, [isLoading]);
 
   const handleProfileUpdate = async (data: Partial<UserType>) => {
     try {
@@ -136,35 +174,36 @@ export default function ProfilePage() {
     }
   };
 
-  const handleEndorse = async (skillId: string) => {
-    if (!profile) return;
+  const handleEndorseProfile = async () => {
+    if (!profile || profile.isCurrentUser || hasEndorsed || isEndorsing) return;
 
+    setIsEndorsing(true);
     try {
-      const response = await fetch(`/api/users/${profile.id}/skills/${skillId}/endorse`, {
+      const response = await fetch(`/api/members/${encodeURIComponent(profile.id)}/endorse`, {
         method: 'POST',
         credentials: 'include',
       });
 
+      const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error('Failed to endorse skill');
+        throw new Error(data.error || 'Failed to endorse profile');
       }
 
       setProfile(prev => {
         if (!prev) return null;
         return {
           ...prev,
-          skills: prev.skills.map(skill =>
-            skill.id === skillId
-              ? { ...skill, endorsements: skill.endorsements + 1 }
-              : skill
-          ),
+          endorsements: prev.endorsements + 1,
         };
       });
+      setHasEndorsed(true);
 
-      toast.success('Skill erfolgreich endorsed');
+      toast.success('Profil erfolgreich empfohlen');
     } catch (error) {
-      console.error('Error endorsing skill:', error);
-      toast.error('Fehler beim Endorsen des Skills');
+      console.error('Error endorsing profile:', error);
+      toast.error(error instanceof Error ? error.message : 'Fehler beim Empfehlen des Profils');
+    } finally {
+      setIsEndorsing(false);
     }
   };
 
@@ -232,7 +271,7 @@ export default function ProfilePage() {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto">
+        <main ref={mainRef} className="flex-1 overflow-y-auto">
           {/* Cover Image */}
           <div
             className="h-48 bg-gradient-to-r from-blue-500 to-purple-600 bg-cover bg-center relative"
@@ -353,6 +392,18 @@ export default function ProfilePage() {
                     <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg text-center">
                       <div className="text-2xl font-bold">{profile.endorsements}</div>
                       <p className="text-xs text-gray-500 dark:text-gray-400">Empfehlungen</p>
+                      {!profile.isCurrentUser && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="mt-2"
+                          onClick={handleEndorseProfile}
+                          disabled={isEndorsing || hasEndorsed}
+                        >
+                          <Star className="mr-1 h-4 w-4" />
+                          {hasEndorsed ? 'Bereits empfohlen' : isEndorsing ? 'Wird empfohlen…' : 'Profil empfehlen'}
+                        </Button>
+                      )}
                     </div>
                     <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg text-center">
                       <div className="text-2xl font-bold">{profile.stats.projects}</div>
@@ -429,16 +480,6 @@ export default function ProfilePage() {
                                     <span className="text-sm text-gray-500">
                                       {skill.endorsements} Empfehlungen
                                     </span>
-                                    {!profile.isCurrentUser && (
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => handleEndorse(skill.id)}
-                                        className="hover:text-red-500"
-                                      >
-                                        <Heart className="h-4 w-4" />
-                                      </Button>
-                                    )}
                                   </div>
                                 </div>
                                 <Progress value={skill.level} className="h-2" />
@@ -562,7 +603,7 @@ export default function ProfilePage() {
 
           {/* Back to Top Button */}
           <AnimatePresence>
-            {typeof window !== 'undefined' && window.scrollY > 500 && (
+            {showBackToTop && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -573,7 +614,7 @@ export default function ProfilePage() {
                   variant="outline"
                   size="icon"
                   className="rounded-full shadow-lg"
-                  onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                  onClick={() => mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
                 >
                   <motion.div
                     animate={{ y: [0, -4, 0] }}

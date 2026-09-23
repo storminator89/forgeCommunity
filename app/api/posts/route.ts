@@ -23,6 +23,9 @@ export async function POST(req: NextRequest) {
       data: {
         title: sanitizeTextServer(title),
         content: sanitizeRichHtmlServer(content),
+        // Community posts are immediately published. The schema also serves
+        // draft-capable clients, so read routes still enforce draft privacy.
+        published: true,
         authorId: session.user.id,
       },
       include: {
@@ -41,7 +44,16 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   try {
+    const session = await getServerSession(authOptions)
+    const userId = session?.user?.id
+    const where = session?.user?.role === 'ADMIN'
+      ? undefined
+      : userId
+        ? { OR: [{ published: true }, { published: false, authorId: userId }] }
+        : { published: true }
+
     const posts = await prisma.post.findMany({
+      where,
       include: {
         author: {
           select: { id: true, name: true, image: true },
@@ -60,9 +72,6 @@ export async function GET(req: NextRequest) {
     })
 
     // Füge die Like-Informationen hinzu
-    const session = await getServerSession(authOptions)
-    const userId = session?.user?.id
-
     const mappedPosts = posts.map(post => ({
       ...post,
       votes: post.likePosts.length,
