@@ -2,7 +2,7 @@ FROM node:24-bookworm-slim AS builder
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
-ARG DATABASE_PROVIDER=postgresql
+ARG DATABASE_PROVIDER=sqlite
 ENV DATABASE_PROVIDER=${DATABASE_PROVIDER}
 # Only a provider selector is supplied at build time; no deployment credentials.
 RUN case "$DATABASE_PROVIDER" in postgresql|sqlite) printf '%s' "$DATABASE_PROVIDER" > .image-db-provider ;; *) echo 'DATABASE_PROVIDER must be postgresql or sqlite' >&2; exit 1 ;; esac
@@ -21,7 +21,7 @@ RUN if [ "$DATABASE_PROVIDER" = sqlite ]; then \
 
 FROM node:24-bookworm-slim AS runner
 WORKDIR /app
-ARG DATABASE_PROVIDER=postgresql
+ARG DATABASE_PROVIDER=sqlite
 ENV NODE_ENV=production PORT=3013 HOSTNAME=0.0.0.0 NEXT_TELEMETRY_DISABLED=1 DATABASE_PROVIDER=${DATABASE_PROVIDER}
 COPY --from=builder --chown=node:node /app/.image-db-provider ./.image-db-provider
 # npm run build prepares public/ and .next/static inside standalone already.

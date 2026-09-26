@@ -11,7 +11,7 @@ const account = {
 };
 const compose = (...args) => new Promise((resolve, reject) => {
   const child = spawn('docker', [
-    'compose', '-f', 'docker-compose.sqlite.yml', ...args,
+    'compose', '-f', process.env.COMPOSE_FILE ?? 'docker-compose.yml', ...args,
   ], { stdio: 'inherit' });
   child.once('error', reject);
   child.once('close', (code, signal) => {

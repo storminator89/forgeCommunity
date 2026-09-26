@@ -1,4 +1,4 @@
-# Optional single-container deployment. PostgreSQL remains the default compose file.
+# Compatibility alias for the default SQLite Compose deployment.
 services:
   app:
     build:

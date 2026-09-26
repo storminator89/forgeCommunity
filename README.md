@@ -112,7 +112,7 @@ Ensure you have installed:
 - Node.js 24 LTS (use the version declared in `.nvmrc`)
 - npm 11 or later; use the committed `package-lock.json`
 - Git (v2.0.0 or higher)
-- PostgreSQL (v14 or higher) for the default setup; SQLite is optional
+- Docker uses SQLite by default; PostgreSQL (v14 or higher) is available as an explicit deployment option
 
 ### Installation
 
@@ -133,16 +133,16 @@ cd forgeCommunity
    ```
    Configure your `.env` file:
    ```env
-   DATABASE_PROVIDER="postgresql"
-   DATABASE_URL="postgresql://user:password@localhost:5432/forge"
+   DATABASE_PROVIDER="sqlite"
+   DATABASE_URL="file:$PWD/data/forge.db"
    NEXTAUTH_SECRET="<generate with: openssl rand -base64 32>"
    NEXTAUTH_URL="http://localhost:3013"
    ```
 
 4. **Database Setup**
    ```bash
-   npx prisma generate
-   npx prisma db push
+   npm run db:generate
+   npm run db:deploy
    ALLOW_DEMO_SEED=true npm run db:seed  # Optional; disposable development DB only
    ```
 
@@ -156,64 +156,60 @@ npm run dev
 
 ## 🚀 Deployment
 
-For the existing PostgreSQL deployment, configure `DATABASE_PROVIDER=postgresql`
-(the default), a strong `NEXTAUTH_SECRET`, canonical public URLs, and a
-PostgreSQL `DATABASE_URL`. Build with `npm run build` and start with
-`npm run start`. The default `docker-compose.yml` also starts PostgreSQL:
+SQLite ist der Standard für Docker: ein einzelner App-Container, eine persistente
+SQLite-Datei und benannte Upload-Volumes. PostgreSQL bleibt als explizite Option
+für bestehende oder skalierte Installationen verfügbar.
 
 ```bash
 cp .env.example .env
-# Edit .env: set a strong NEXTAUTH_SECRET and POSTGRES_PASSWORD, and set
-# DATABASE_URL=postgresql://forge:<same password>@db:5432/forge?schema=public
-docker compose up --build -d
+# In .env mindestens einen starken NEXTAUTH_SECRET setzen.
+docker compose up --build -d --wait
+docker compose ps
 ```
 
-The PostgreSQL container does not alter the schema on startup. Provision an
-existing installation's schema using your reviewed deployment procedure before
-serving traffic. For a *disposable development database* only, `npx prisma db
-push` creates the schema; do not run it against production without reviewing
-its proposed changes. After creating a fresh development schema with `db push`,
-record the verified baseline once using
-`npm run db:deploy -- --baseline-current-schema`. This explicit option checks the
-new endorsement table, columns, keys and indexes before recording history; it
-refuses unknown layouts and must not be used to bypass a failed upgrade.
+Die Standarddatei `docker-compose.yml` baut das SQLite-Image und verwendet
+`file:/app/data/forge.db`. Die Datenbank liegt im Volume `sqlite_data` und bleibt
+bei einer normalen Neuerstellung des Containers erhalten. `docker compose down
+--volumes` **löscht** die Volumes und damit die Daten. Für Backups Schreibzugriffe
+stoppen und die SQLite-Datei inklusive Journal sichern oder die SQLite-Online-
+Backup-API verwenden.
 
-For an existing installation at the previous application schema, back up the
-database, rehearse against a staging copy, and run `npm run db:deploy` with
-`DATABASE_PROVIDER=postgresql` before serving the upgraded application. This
-applies the reviewed additive SQL in `prisma/postgresql-upgrades/`, records
-checksums transactionally, and respects the `?schema=` URL parameter. It does
-not create the full application schema or modify an unknown baseline. In the
-built container the same explicit command is
-`docker compose run --rm app node scripts/db-deploy.mjs` (with the database
-already running). Back up PostgreSQL and both uploads volumes separately.
+Der SQLite-Container wendet die versionierten Migrationen vor dem Serverstart
+transaktional und idempotent an. Er legt keine Demo-Konten an. Die Compose-Datei
+`docker-compose.sqlite.yml` bleibt als kompatibler Alias erhalten.
 
-For an optional small, single-host SQLite deployment, use the separate Compose
-file. It builds an SQLite-specific Prisma client and keeps the database in a
-named volume. `.env` still supplies the secret and public URLs; the SQLite
-Compose file supplies `DATABASE_PROVIDER=sqlite` and
-`DATABASE_URL=file:/app/data/forge.db` inside the container:
+Für PostgreSQL die separate Datei verwenden:
 
 ```bash
 cp .env.example .env
-# Edit .env: set a strong NEXTAUTH_SECRET and deployment URLs.
-docker compose -f docker-compose.sqlite.yml up --build -d --wait
-docker compose -f docker-compose.sqlite.yml ps
+# In .env POSTGRES_PASSWORD sowie NEXTAUTH_SECRET setzen.
+docker compose -f docker-compose.postgresql.yml up --build -d
 ```
 
-The SQLite image applies tracked, idempotent SQL migrations before starting
-the server. It does not seed demo accounts. The named `sqlite_data`, `uploads`,
-and `private_uploads` volumes survive normal container recreation; include all
-three in a backup. Stop writes before copying SQLite's database and journal
-files or use SQLite's online backup API. `docker compose -f
-docker-compose.sqlite.yml down --volumes` **deletes** those volumes and their
-data. A PostgreSQL image cannot be switched to SQLite using only runtime
-environment variables: rebuild with `DATABASE_PROVIDER=sqlite` as the SQLite
-Compose file does. Database engines are not interchangeable without a planned
-data migration.
+Das PostgreSQL-Compose-Setup verändert das Schema beim Start nicht. Für eine
+bestehende Installation zuerst die geprüfte Migration ausführen:
 
-For local SQLite development without Docker, choose the provider **before**
-installing dependencies so Prisma generates the correct client:
+```bash
+DATABASE_PROVIDER=postgresql \
+DATABASE_URL="postgresql://forge:<passwort>@localhost:5432/forge?schema=public" \
+npm run db:deploy
+```
+
+Für eine frische Entwicklungsdatenbank nach `prisma db push` muss einmalig die
+verifizierte Baseline gesetzt werden:
+
+```bash
+npm run db:deploy -- --baseline-current-schema
+```
+
+Der PostgreSQL-Runner prüft Tabellen, Schlüssel, Prüfsummen und das URL-Schema;
+unbekannte oder manipulierte Strukturen werden abgelehnt. Im Container kann der
+Runner mit `docker compose -f docker-compose.postgresql.yml run --rm app node
+scripts/db-deploy.mjs` ausgeführt werden. PostgreSQL und Upload-Volumes vor
+Upgrades sichern und das Upgrade zunächst in einer Staging-Kopie testen.
+
+Für lokale SQLite-Entwicklung ohne Docker den Provider **vor der Installation**
+setzen, damit Prisma den passenden Client erzeugt:
 
 ```bash
 export DATABASE_PROVIDER=sqlite
@@ -225,22 +221,21 @@ npm run db:deploy
 npm run dev
 ```
 
-Run `npm run db:generate` after changes to the canonical
-`prisma/schema.prisma`; it regenerates `prisma/schema.sqlite.prisma` and the
-selected Prisma Client. SQLite schema changes must also have a new, reviewed,
-numbered SQL file in `prisma/sqlite-migrations/`. The SQLite startup runner
-applies these files transactionally and refuses a changed migration checksum or
-an existing database without migration history. Do not edit an applied SQL
-migration. PostgreSQL uses the separate tracked `prisma/postgresql-upgrades/`
-files and the explicit deployment command described above; SQLite SQL files
-are not PostgreSQL migrations.
+Nach Änderungen an `prisma/schema.prisma` `npm run db:generate` ausführen. Der
+Befehl regeneriert `prisma/schema.sqlite.prisma` und den ausgewählten Prisma
+Client. SQLite-Schemaänderungen benötigen zusätzlich eine geprüfte, nummerierte
+SQL-Datei in `prisma/sqlite-migrations/`. Der SQLite-Runner wendet diese Dateien
+transaktional an und verweigert veränderte Prüfsummen oder eine bestehende
+Datenbank ohne Migrationshistorie. Bereits angewendete Migrationen nicht ändern.
+PostgreSQL verwendet die separat versionierten `prisma/postgresql-upgrades/`-
+Dateien und den beschriebenen Deployment-Befehl.
 
-SQLite suits a single application instance on a local persistent filesystem.
-Avoid network-mounted database files and multiple containers sharing the same
-file. Case-insensitive matching in SQLite is limited to ASCII case folding;
-check Unicode search requirements before choosing it. For a local production
-build, set `DATABASE_PROVIDER=sqlite` for `npm run build` as well as at runtime,
-run `npm run db:deploy` against the target database, then `npm run start`.
+SQLite eignet sich für eine einzelne Anwendung auf einem lokalen persistenten Dateisystem.
+Keine Netzwerkfreigaben als Datenbankpfad und keine mehreren Container mit derselben
+Datei verwenden. Case-insensitive Matching in SQLite ist bei Nicht-ASCII weiterhin
+begrenzt. Für einen lokalen Produktionsbuild `DATABASE_PROVIDER=sqlite` sowohl
+für `npm run build` als auch zur Laufzeit setzen, anschließend `npm run db:deploy`
+und `npm run start` ausführen.
 
 ## 🤝 Contributing
 
