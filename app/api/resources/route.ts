@@ -4,6 +4,7 @@ import { authOptions } from '../auth/[...nextauth]/options';
 import { ResourceType } from '@prisma/client';
 import { z } from 'zod';
 import prisma from '@/lib/prisma';
+import { containsInsensitive } from '@/lib/server/database-query';
 import { HttpUrlValidationError, normalizeHttpUrl } from '@/lib/server/url-security';
 
 // Schema für Ressourcenvalidierung
@@ -26,9 +27,9 @@ export async function GET(request: Request) {
 
     const whereClause = search ? {
       OR: [
-        { title: { contains: search, mode: 'insensitive' } },
-        { category: { contains: search, mode: 'insensitive' } },
-        { author: { name: { contains: search, mode: 'insensitive' } } }
+        { title: containsInsensitive(search) },
+        { category: containsInsensitive(search) },
+        { author: { name: containsInsensitive(search) } }
       ]
     } : {};
 

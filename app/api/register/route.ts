@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt';
 import { z } from 'zod';
 
 import prisma from '@/lib/prisma';
+import { emailEqualsInsensitive } from '@/lib/server/database-query';
 import {
   getClientAddress,
   isSameOriginRequest,
@@ -112,7 +113,7 @@ export async function POST(req: Request) {
     // Case insensitive lookup prevents duplicate accounts when an existing
     // database was created before registration normalized email addresses.
     const existingUser = await prisma.user.findFirst({
-      where: { email: { equals: email, mode: 'insensitive' } },
+      where: await emailEqualsInsensitive(email),
       select: { id: true },
     });
 

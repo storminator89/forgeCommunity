@@ -20,19 +20,21 @@ export async function GET() {
       return new NextResponse('User not found', { status: 404 });
     }
 
-    // Get all certificates for the user, grouped by courseId and taking only the latest one
-    const certificates = await prisma.$queryRaw`
-      SELECT DISTINCT ON (c."courseId") 
-        c.id,
-        c."courseId",
-        c."courseName",
-        c."issuedAt",
-        c."userId",
-        c."userName"
-      FROM "Certificate" c
-      WHERE c."userId" = ${user.id}
-      ORDER BY c."courseId", c."issuedAt" DESC
-    `;
+    // Prisma's distinct keeps the first row for each course after ordering,
+    // avoiding PostgreSQL-only DISTINCT ON and preserving the latest issue.
+    const certificates = await prisma.certificate.findMany({
+      where: { userId: user.id },
+      orderBy: [{ courseId: 'asc' }, { issuedAt: 'desc' }, { id: 'desc' }],
+      distinct: ['courseId'],
+      select: {
+        id: true,
+        courseId: true,
+        courseName: true,
+        issuedAt: true,
+        userId: true,
+        userName: true,
+      },
+    });
 
     return NextResponse.json(certificates);
   } catch (error) {

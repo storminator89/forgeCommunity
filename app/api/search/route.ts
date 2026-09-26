@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 
 import prisma from '@/lib/prisma';
+import { containsInsensitive } from '@/lib/server/database-query';
 import { sanitizeHtmlPreviewServer, sanitizeTextServer } from '@/lib/server/sanitize-html';
 
 import { authOptions } from '../auth/[...nextauth]/options';
@@ -50,39 +51,39 @@ export async function GET(request: NextRequest) {
 
     const courseWhere = {
       OR: [
-        { title: { contains: query, mode: 'insensitive' as const } },
-        { description: { contains: query, mode: 'insensitive' as const } },
+        { title: containsInsensitive(query) },
+        { description: containsInsensitive(query) },
       ],
     };
 
     const memberWhere = {
       OR: [
-        { name: { contains: query, mode: 'insensitive' as const } },
-        { email: { contains: query, mode: 'insensitive' as const } },
-        { bio: { contains: query, mode: 'insensitive' as const } },
-        { title: { contains: query, mode: 'insensitive' as const } },
+        { name: containsInsensitive(query) },
+        { email: containsInsensitive(query) },
+        { bio: containsInsensitive(query) },
+        { title: containsInsensitive(query) },
       ],
     };
 
     const postWhere = {
       published: true,
       OR: [
-        { title: { contains: query, mode: 'insensitive' as const } },
-        { content: { contains: query, mode: 'insensitive' as const } },
+        { title: containsInsensitive(query) },
+        { content: containsInsensitive(query) },
       ],
     };
 
     const eventWhere = {
       OR: [
-        { title: { contains: query, mode: 'insensitive' as const } },
-        { description: { contains: query, mode: 'insensitive' as const } },
+        { title: containsInsensitive(query) },
+        { description: containsInsensitive(query) },
       ],
     };
 
     const resourceWhere = {
       OR: [
-        { title: { contains: query, mode: 'insensitive' as const } },
-        { category: { contains: query, mode: 'insensitive' as const } },
+        { title: containsInsensitive(query) },
+        { category: containsInsensitive(query) },
       ],
     };
 

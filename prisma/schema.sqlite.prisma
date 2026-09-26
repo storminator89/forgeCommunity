@@ -1,0 +1,490 @@
+// Generated from schema.prisma by scripts/generate-sqlite-schema.mjs; edit the PostgreSQL schema instead.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite" // oder dein bevorzugter Datenbankanbieter
+}
+
+enum Role {
+  USER
+  ADMIN
+  MODERATOR
+  INSTRUCTOR
+}
+
+enum Theme {
+  LIGHT
+  DARK
+}
+
+enum AttendeeStatus {
+  REGISTERED
+  CONFIRMED
+  CANCELLED
+  ATTENDED
+}
+
+enum NotificationType {
+  SYSTEM
+  MENTION
+  COMMENT
+  LIKE
+  FOLLOW
+  EVENT
+  COURSE
+  CHAT_MESSAGE
+  CHANNEL_CREATED
+  CHANNEL_DELETED
+}
+
+enum ContentType {
+  TEXT
+  VIDEO
+  AUDIO
+  H5P
+}
+
+enum ResourceType {
+  ARTICLE
+  VIDEO
+  EBOOK
+  PODCAST
+  COURSE
+}
+
+model Endorsement {
+  id          String   @id @default(cuid())
+  endorser    User     @relation("EndorsementsGiven", fields: [endorserId], references: [id])
+  endorserId  String
+  endorsed    User     @relation("EndorsementsReceived", fields: [endorsedId], references: [id])
+  endorsedId  String
+  createdAt   DateTime @default(now())
+
+  @@unique([endorserId, endorsedId])
+}
+
+model User {
+  id                 String          @id @default(cuid())
+  name               String?
+  email              String          @unique
+  emailVerified      DateTime?
+  password           String?
+  image              String?
+  coverImage         String?
+  bio                String?
+  title              String?
+  contact            String?
+  endorsements       Int             @default(0)
+  role               Role            @default(USER)
+  verificationToken  String?
+  resetPasswordToken String?
+  lastLogin          DateTime?
+  socialLinks        Json?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  accounts           Account[]
+  sessions           Session[]
+  posts              Post[]
+  comments           Comment[]
+  likePosts          LikePost[]
+  likeComments       LikeComment[]
+  likeProjects       LikeProject[]
+  projectComments    ProjectComment[]
+  courses            Course[]
+  eventAttendees     EventAttendee[]
+  chatMessages       ChatMessage[]
+  notifications      Notification[]
+  badges             UserBadge[]
+  skills             UserSkill[]
+  followers          Follow[]        @relation("Following")
+  following          Follow[]        @relation("Follower")
+  userSettings       UserSettings?
+  enrollments        Enrollment[]
+  chatMemberships    ChatMember[]
+  articles           Article[]
+  projects           Project[]
+  resources          Resource[]      @relation("UserResources")
+  endorsementsGiven   Endorsement[] @relation("EndorsementsGiven")
+  endorsementsReceived Endorsement[] @relation("EndorsementsReceived")
+  h5pContents        H5PContent[]
+  certificates       Certificate[]
+}
+
+model UserSettings {
+  id                   String  @id @default(cuid())
+  user                 User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId               String  @unique
+  emailNotifications   Boolean @default(true)
+  pushNotifications    Boolean @default(true)
+  twoFactorAuthEnabled Boolean @default(false)
+  theme                Theme   @default(LIGHT)
+  language             String  @default("en")
+}
+
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String?
+  access_token       String?
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String?
+  session_state      String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Post {
+  id        String     @id @default(cuid())
+  title     String
+  content   String
+  published Boolean    @default(false)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  author    User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  authorId  String
+
+  comments  Comment[]
+  likePosts LikePost[]
+  tags      Tag[]      @relation("PostTags")
+}
+
+model Comment {
+  id           String        @id @default(cuid())
+  content      String
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  post         Post          @relation(fields: [postId], references: [id], onDelete: Cascade)
+  postId       String
+
+  author       User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  authorId     String
+
+  likeComments LikeComment[]
+}
+
+model LikePost {
+  id        String    @id @default(cuid())
+  createdAt DateTime  @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+
+  post      Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  postId    String
+
+  @@unique([userId, postId], name: "user_post_unique")
+}
+
+model LikeComment {
+  id        String    @id @default(cuid())
+  createdAt DateTime  @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+
+  comment   Comment   @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  commentId String
+
+  @@unique([userId, commentId], name: "user_comment_unique")
+}
+
+model Tag {
+  id        String      @id @default(cuid())
+  name      String      @unique
+  posts     Post[]      @relation("PostTags")
+  articles  Article[]   @relation("ArticleTags")
+  projects  Project[]   @relation("ProjectTags")
+}
+
+model Course {
+  id           String          @id @default(cuid())
+  title        String
+  description  String
+  instructor   User            @relation(fields: [instructorId], references: [id], onDelete: Cascade)
+  instructorId String
+  startDate    DateTime?
+  endDate      DateTime?
+  price        Float?
+  currency     String?
+  maxStudents  Int?
+  imageUrl     String?
+  enrollments  Enrollment[]
+  lessons      Lesson[]
+  contents     CourseContent[]
+  certificates Certificate[]
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+}
+
+model Lesson {
+  id            String   @id @default(cuid())
+  title         String
+  content       String
+  course        Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  courseId      String
+  orderInCourse Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model CourseContent {
+  id        String          @id @default(cuid())
+  title     String
+  type      ContentType?
+  content   String
+  order     Int
+  course    Course          @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  courseId  String
+  parent    CourseContent?  @relation("ParentChild", fields: [parentId], references: [id])
+  parentId  String?
+  children  CourseContent[] @relation("ParentChild")
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+}
+
+model Enrollment {
+  id          String    @id @default(cuid())
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  course      Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  courseId    String
+  enrolledAt  DateTime  @default(now())
+  completedAt DateTime?
+
+  @@unique([userId, courseId])
+}
+
+model Event {
+  id           String          @id @default(cuid())
+  title        String
+  description  String
+  date         DateTime
+  location     String
+  maxAttendees Int?
+  attendees    EventAttendee[]
+  category     String
+  timezone     String          @default("Europe/Berlin")
+  startTime    String
+  endTime      String
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+}
+
+model EventAttendee {
+  id      String         @id @default(cuid())
+  event   Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId String
+  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId  String
+  status  AttendeeStatus @default(REGISTERED)
+
+  @@unique([eventId, userId])
+}
+
+model ChatChannel {
+  id        String        @id @default(cuid())
+  name      String
+  isPrivate Boolean       @default(false)
+  messages  ChatMessage[]
+  members   ChatMember[]
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+}
+
+model ChatMember {
+  id        String      @id @default(cuid())
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  channel   ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  channelId String
+  joinedAt  DateTime    @default(now())
+
+  @@unique([userId, channelId])
+}
+
+model ChatMessage {
+  id          String      @id @default(cuid())
+  content     String
+  channelId   String
+  channel     ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  authorId    String
+  author      User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  imageUrl    String?
+  messageType String      @default("text")
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  type      NotificationType
+  content   String
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+}
+
+model Badge {
+  id          String      @id @default(cuid())
+  name        String      @unique
+  description String
+  image       String
+  users       UserBadge[]
+}
+
+model UserBadge {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  badge     Badge    @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+  badgeId   String
+  awardedAt DateTime @default(now())
+
+  @@unique([userId, badgeId])
+}
+
+model Skill {
+  id        String      @id @default(cuid())
+  name      String      @unique
+  category  String
+  users     UserSkill[]
+}
+
+model UserSkill {
+  id           String @id @default(cuid())
+  user         User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId       String
+  skill        Skill  @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  skillId      String
+  level        Int
+  endorsements Int    @default(0)
+
+  @@unique([userId, skillId])
+}
+
+model Follow {
+  id          String   @id @default(cuid())
+  follower    User     @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
+  followerId  String
+  following   User     @relation("Following", fields: [followingId], references: [id], onDelete: Cascade)
+  followingId String
+  createdAt   DateTime @default(now())
+
+  @@unique([followerId, followingId])
+}
+
+model Article {
+  id            String   @id @default(cuid())
+  title         String
+  content       String
+  category      String
+  featuredImage String?  // Optionales Feld für das Beitragsbild
+  isPublished   Boolean  @default(false) // Neues Feld
+  author        User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  authorId      String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  tags          Tag[]    @relation("ArticleTags")
+}
+
+model Project {
+  id           String          @id @default(cuid())
+  title        String
+  description  String
+  category     String?
+  link         String
+  imageUrl     String?
+  gradientFrom String
+  gradientTo   String
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  author       User            @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  authorId     String
+  tags         Tag[]           @relation("ProjectTags")
+  likes        LikeProject[]
+  comments     ProjectComment[]
+}
+
+model LikeProject {
+  id        String    @id @default(cuid())
+  createdAt DateTime  @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId String
+
+  @@unique([userId, projectId], name: "user_project_unique")
+}
+
+model ProjectComment {
+  id        String    @id @default(cuid())
+  content   String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId String
+
+  author    User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  authorId  String
+}
+
+model Resource {
+  id         String        @id @default(cuid())
+  title      String
+  type       ResourceType
+  category   String
+  author     User          @relation("UserResources", fields: [authorId], references: [id], onDelete: Cascade)
+  authorId   String
+  url        String
+  color      String
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+}
+
+model H5PContent {
+  id          String    @id @default(cuid())
+  title       String
+  contentType String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+}
+
+model Certificate {
+  id          String    @id
+  user        User      @relation(fields: [userId], references: [id])
+  userId      String
+  course      Course    @relation(fields: [courseId], references: [id])
+  courseId    String
+  issuedAt    DateTime  @default(now())
+  courseName  String
+  userName    String
+
+  @@index([userId])
+  @@index([courseId])
+}

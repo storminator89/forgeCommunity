@@ -47,8 +47,56 @@ jobs:
       - name: Test
         run: npm test -- --runInBand
 
+      - name: Verify SQLite migration safety
+        run: node --test scripts/check-sqlite-migrations.mjs
+
       - name: Build
         run: npm run build
 
       - name: Smoke test standalone server
         run: node scripts/smoke-standalone.mjs
+
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      NEXTAUTH_SECRET: ci-only-docker-smoke-secret-2026-09-26
+      NEXTAUTH_URL: http://127.0.0.1:3013
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3013
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+
+      - name: Prepare local environment
+        run: cp .env.example .env
+
+      - name: Build default PostgreSQL image
+        run: docker compose build app
+        env:
+          DATABASE_URL: postgresql://forge:ci-only-password@db:5432/forge?schema=public
+          POSTGRES_PASSWORD: ci-only-password
+
+      - name: Start SQLite image
+        run: docker compose -f docker-compose.sqlite.yml up --build --detach --wait
+
+      - name: Exercise SQLite application flows
+        run: node scripts/smoke-sqlite.mjs
+        env:
+          SMOKE_BASE_URL: http://127.0.0.1:3013
+
+      - name: Verify SQLite registration and restart persistence
+        run: node scripts/smoke-docker-sqlite.mjs
+
+      - name: Container logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.sqlite.yml logs --no-color
+
+      - name: Clean up containers and volumes
+        if: always()
+        run: docker compose -f docker-compose.sqlite.yml down --volumes

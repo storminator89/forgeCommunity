@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { emailEqualsInsensitive } from '@/lib/server/database-query'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '../../auth/[...nextauth]/options'
 import bcrypt from 'bcrypt'
@@ -117,7 +118,7 @@ export async function POST(request: NextRequest) {
 
     // Überprüfe, ob die E-Mail bereits existiert
     const existingUser = await prisma.user.findFirst({
-      where: { email: { equals: email, mode: 'insensitive' } }
+      where: await emailEqualsInsensitive(email)
     })
 
     if (existingUser) {

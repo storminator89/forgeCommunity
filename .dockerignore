@@ -1,8 +1,10 @@
 node_modules
 .next
 .git
+.image-db-provider
 .env
 .env.*
+.env.example
 .vscode
 .idea
 build
@@ -15,3 +17,11 @@ public/images/uploads/*
 
 # Private runtime attachments
 private/
+
+# Local SQLite data and journal files are never build inputs.
+data/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
