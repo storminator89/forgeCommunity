@@ -68,6 +68,7 @@ function registrationRequest(email: string, password: string): Request {
 
 describe('POST /api/register', () => {
   beforeEach(() => {
+    delete process.env.DATABASE_PROVIDER;
     resetRateLimitStore();
     process.env.NEXTAUTH_URL = 'https://community.example.test';
     mockPrisma.user.findFirst.mockResolvedValue(null);
@@ -96,6 +97,23 @@ describe('POST /api/register', () => {
       select: { id: true },
     });
     expect(mockBcrypt.hash).toHaveBeenCalledWith('StrongPassword1!', 12);
+  });
+
+  it('checks a SQLite email using the column NOCASE collation', async () => {
+    process.env.DATABASE_PROVIDER = 'sqlite';
+    mockPrisma.user.findFirst.mockResolvedValue({ id: 'legacy-mixed-case-user' });
+
+    const response = await POST(
+      registrationRequest('  Person@Example.COM ', 'StrongPassword1!'),
+    );
+
+    expect(response.status).toBe(400);
+    expect(mockPrisma.user.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { email: { equals: 'person@example.com' } },
+      }),
+    );
+    expect(mockPrisma.user.create).not.toHaveBeenCalled();
   });
 
   it('rejects passwords over bcrypt’s 72 UTF-8 byte input limit', async () => {

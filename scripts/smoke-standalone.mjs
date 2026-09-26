@@ -21,7 +21,8 @@ await writeFile(path.join(uploads, legacyName), png);
 const child = spawn(process.execPath, ['.next/standalone/server.js'], {
   env: {
     ...process.env, PORT: String(port), HOSTNAME: '127.0.0.1',
-    DATABASE_URL: 'postgresql://placeholder.invalid:5432/forge',
+    DATABASE_PROVIDER: process.env.DATABASE_PROVIDER ?? 'postgresql',
+    DATABASE_URL: process.env.DATABASE_URL ?? 'postgresql://placeholder.invalid:5432/forge',
     NEXTAUTH_SECRET: randomBytes(32).toString('hex'), NEXTAUTH_URL: origin,
     NEXT_PUBLIC_APP_URL: origin,
   },

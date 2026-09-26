@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { emailEqualsInsensitive } from '@/lib/server/database-query'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '../../auth/[...nextauth]/options'
 
@@ -82,7 +83,7 @@ export async function PUT(request: NextRequest) {
         const existingUser = email
             ? await prisma.user.findFirst({
                 where: {
-                    email: { equals: email, mode: 'insensitive' },
+                    ...(await emailEqualsInsensitive(email)),
                     NOT: { id: session.user.id },
                 },
                 select: { id: true },

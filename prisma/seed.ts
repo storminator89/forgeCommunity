@@ -1,15 +1,7 @@
 import 'dotenv/config'
-import { PrismaClient } from '@prisma/client'
-import { PrismaPg } from '@prisma/adapter-pg'
+import prisma from '../lib/prisma'
 import bcrypt from 'bcrypt'
 import { randomBytes } from 'node:crypto'
-
-const connectionString = process.env.DATABASE_URL
-if (!connectionString) {
-  throw new Error('DATABASE_URL must be configured before running the seed.')
-}
-const adapter = new PrismaPg({ connectionString })
-const prisma = new PrismaClient({ adapter })
 
 async function main() {
   if (process.env.NODE_ENV === 'production') {

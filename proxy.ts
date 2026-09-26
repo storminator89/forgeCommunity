@@ -33,6 +33,7 @@ function isPublicApiRequest(pathname: string, method: string): boolean {
   if (method.toUpperCase() !== 'GET') return false;
 
   return (
+    pathname === '/api/health' ||
     pathname === '/api/resources' ||
     pathname.startsWith('/api/resources/') ||
     pathname === '/api/verify' ||

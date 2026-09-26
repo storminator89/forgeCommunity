@@ -6,6 +6,7 @@ import GoogleProvider from 'next-auth/providers/google';
 import bcrypt from 'bcrypt';
 
 import prisma from '@/lib/prisma';
+import { emailEqualsInsensitive } from '@/lib/server/database-query';
 import {
   normalizeEmail,
   utf8ByteLength,
@@ -70,7 +71,7 @@ const providers: NextAuthOptions['providers'] = [
       }
 
       const user = await prisma.user.findFirst({
-        where: { email: { equals: email, mode: 'insensitive' } },
+        where: await emailEqualsInsensitive(email),
         select: {
           id: true,
           email: true,
