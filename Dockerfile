@@ -1,6 +1,7 @@
 FROM node:24-bookworm-slim AS builder
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
+RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
 ARG DATABASE_PROVIDER=postgresql
 ENV DATABASE_PROVIDER=${DATABASE_PROVIDER}
 # Only a provider selector is supplied at build time; no deployment credentials.
