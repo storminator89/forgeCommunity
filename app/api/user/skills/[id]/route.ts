@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
+import { readJsonObject, requestErrorResponse } from "@/lib/server/api-input";
 
 export async function PUT(request: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -13,18 +14,15 @@ export async function PUT(request: Request, props: { params: Promise<{ id: strin
   }
 
   const userId = session.user.id;
-  const skillId = params.id;
-  const { level } = await request.json();
-
-  if (typeof level !== "number" || !Number.isFinite(level) || level < 0 || level > 100) {
-    return NextResponse.json({ error: "Ungültige Daten." }, { status: 400 });
-  }
-
   try {
+    const { level } = await readJsonObject(request);
+    if (typeof level !== "number" || !Number.isInteger(level) || level < 0 || level > 100) {
+      return NextResponse.json({ error: "Ungültige Daten." }, { status: 400 });
+    }
     const updatedSkill = await prisma.userSkill.updateMany({
       where: {
         userId,
-        skillId,
+        OR: [{ id: params.id }, { skillId: params.id }],
       },
       data: { level },
     });
@@ -35,6 +33,8 @@ export async function PUT(request: Request, props: { params: Promise<{ id: strin
 
     return NextResponse.json({ message: "Fähigkeit erfolgreich aktualisiert." }, { status: 200 });
   } catch (error) {
+    const invalidRequest = requestErrorResponse(error);
+    if (invalidRequest) return invalidRequest;
     console.error("Fehler beim Aktualisieren der Fähigkeit:", error);
     return NextResponse.json({ error: "Fehler beim Aktualisieren der Fähigkeit." }, { status: 500 });
   }
@@ -48,13 +48,11 @@ export async function DELETE(request: Request, props: { params: Promise<{ id: st
   }
 
   const userId = session.user.id;
-  const skillId = params.id;
-
   try {
     const deletedSkill = await prisma.userSkill.deleteMany({
       where: {
         userId,
-        skillId,
+        OR: [{ id: params.id }, { skillId: params.id }],
       },
     });
 

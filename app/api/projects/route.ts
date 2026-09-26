@@ -10,12 +10,15 @@ import { sanitizeRichHtmlServer, sanitizeTextServer } from '@/lib/server/sanitiz
 import { HttpUrlValidationError, normalizeHttpUrl } from '@/lib/server/url-security'
 import { getSafeHttpUrl } from '@/lib/security'
 import { requestWithBodyLimit, RequestBodyLimitError } from '@/lib/server/request-body';
+import { readPage, requestErrorResponse } from '@/lib/server/api-input';
 
 const MAX_MULTIPART_REQUEST_BYTES = 5 * 1024 * 1024 + 256 * 1024;
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const page = readPage(request)
     const projects = await prisma.project.findMany({
+      ...page,
       include: {
         author: {
           select: {
@@ -53,6 +56,8 @@ export async function GET() {
     })))
   } catch (error) {
     console.error('Error fetching projects:', error)
+    const inputError = requestErrorResponse(error)
+    if (inputError) return inputError
     return NextResponse.json({ error: 'Fehler beim Abrufen der Projekte.' }, { status: 500 })
   }
 }
@@ -72,27 +77,37 @@ export async function POST(req: Request) {
     }
     const limitedRequest = await requestWithBodyLimit(req, MAX_MULTIPART_REQUEST_BYTES)
     const formData = await limitedRequest.formData()
-    const rawTitle = formData.get('title') as string
-    const rawDescription = formData.get('description') as string
-    const rawCategory = formData.get('category') as string
-    const rawLink = (formData.get('link') as string)?.trim()
+    const rawTitle = formData.get('title')
+    const rawDescription = formData.get('description')
+    const rawCategory = formData.get('category')
+    const rawLink = formData.get('link')
+    const rawTags = formData.get('tags')
+    const image = formData.get('image')
+    if (rawTitle == null || rawDescription == null || rawCategory == null || rawLink == null) {
+      return NextResponse.json({ error: 'Titel, Beschreibung, Kategorie und Link sind erforderlich.' }, { status: 400 })
+    }
+    if (typeof rawTitle !== 'string' || typeof rawDescription !== 'string' || typeof rawCategory !== 'string' || typeof rawLink !== 'string' || (rawTags != null && typeof rawTags !== 'string') || (image != null && typeof image === 'string')) {
+      return NextResponse.json({ error: 'Ungültige Projektdaten.' }, { status: 400 })
+    }
     const title = sanitizeTextServer(rawTitle)
     const description = sanitizeRichHtmlServer(rawDescription)
     const category = sanitizeTextServer(rawCategory)
-    const tags = (formData.get('tags') as string)
+    const tags = (rawTags ?? '')
       .split(',')
       .map(tag => sanitizeTextServer(tag))
       .filter(tag => tag !== '')
-    if (!rawTitle || !rawDescription || !rawCategory || !rawLink) {
+    if (!title || !sanitizeTextServer(description) || !category || !rawLink.trim()) {
       return NextResponse.json({ error: 'Titel, Beschreibung, Kategorie und Link sind erforderlich.' }, { status: 400 })
     }
-    const link = normalizeHttpUrl(rawLink)
-    const image = formData.get('image') as File | null
+    if (title.length > 300 || description.length > 100_000 || category.length > 100 || tags.length > 20 || tags.some(tag => tag.length > 60)) {
+      return NextResponse.json({ error: 'Projektdaten sind zu lang.' }, { status: 400 })
+    }
+    const link = normalizeHttpUrl(rawLink).toString()
 
     let imageUrl = ''
     if (image) {
       try {
-        imageUrl = await saveImageUpload(image, 'project')
+        imageUrl = await saveImageUpload(image as File, 'project')
       } catch (error) {
         console.error('Error saving image:', error)
         return NextResponse.json(

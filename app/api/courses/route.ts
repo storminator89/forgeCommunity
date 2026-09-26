@@ -7,6 +7,23 @@ import { requestWithBodyLimit, RequestBodyLimitError } from '@/lib/server/reques
 
 const MAX_MULTIPART_REQUEST_BYTES = 5 * 1024 * 1024 + 256 * 1024;
 
+function optionalDate(value: FormDataEntryValue | null): Date | null {
+  if (value === null || value === '') return null;
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}(?:T.*)?$/.test(value)) throw new Error('Invalid date');
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) throw new Error('Invalid date');
+  if (value.length === 10 && date.toISOString().slice(0, 10) !== value) throw new Error('Invalid date');
+  return date;
+}
+
+function optionalNumber(value: FormDataEntryValue | null, integer = false): number | null {
+  if (value === null || value === '') return null;
+  if (typeof value !== 'string' || !/^\d+(?:\.\d+)?$/.test(value)) throw new Error('Invalid number');
+  const number = Number(value);
+  if (!Number.isFinite(number) || (integer && (!Number.isSafeInteger(number) || number < 1))) throw new Error('Invalid number');
+  return number;
+}
+
 export async function GET() {
   try {
     const courses = await prisma.course.findMany({
@@ -59,14 +76,29 @@ export async function POST(request: NextRequest) {
     }
     const limitedRequest = await requestWithBodyLimit(request, MAX_MULTIPART_REQUEST_BYTES);
     const formData = await limitedRequest.formData();
-    const title = formData.get('title') as string;
-    const description = formData.get('description') as string;
-    const startDate = formData.get('startDate') as string;
-    const endDate = formData.get('endDate') as string;
-    const price = formData.get('price') as string;
-    const currency = formData.get('currency') as string;
-    const maxStudents = formData.get('maxStudents') as string;
-    const image = formData.get('image') as File | null;
+    const title = formData.get('title');
+    const description = formData.get('description');
+    const currency = formData.get('currency');
+    const image = formData.get('image');
+    if (typeof title !== 'string' || !title.trim() || typeof description !== 'string' || !description.trim() ||
+        (currency !== null && typeof currency !== 'string') || (image !== null && !(image instanceof File))) {
+      return NextResponse.json({ error: 'Invalid course fields' }, { status: 400 });
+    }
+    let startDate: Date | null;
+    let endDate: Date | null;
+    let price: number | null;
+    let maxStudents: number | null;
+    try {
+      startDate = optionalDate(formData.get('startDate'));
+      endDate = optionalDate(formData.get('endDate'));
+      price = optionalNumber(formData.get('price'));
+      maxStudents = optionalNumber(formData.get('maxStudents'), true);
+    } catch {
+      return NextResponse.json({ error: 'Invalid course dates or numbers' }, { status: 400 });
+    }
+    if (startDate && endDate && endDate < startDate) {
+      return NextResponse.json({ error: 'End date precedes start date' }, { status: 400 });
+    }
 
     let imageUrl = null;
     if (image) {
@@ -75,13 +107,13 @@ export async function POST(request: NextRequest) {
 
     const newCourse = await prisma.course.create({
       data: {
-        title,
-        description,
-        startDate: startDate ? new Date(startDate) : undefined,
-        endDate: endDate ? new Date(endDate) : undefined,
-        price: parseFloat(price),
-        currency,
-        maxStudents: parseInt(maxStudents),
+        title: title.trim(),
+        description: description.trim(),
+        startDate,
+        endDate,
+        price,
+        currency: currency || null,
+        maxStudents,
         imageUrl,
         instructor: {
           connect: { id: session.user.id }
@@ -98,7 +130,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Failed to create course:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to create course' },
+      { error: error instanceof ImageUploadValidationError ? error.message : 'Failed to create course' },
       { status: error instanceof ImageUploadValidationError ? 400 : error instanceof RequestBodyLimitError ? 413 : 500 }
     );
   }

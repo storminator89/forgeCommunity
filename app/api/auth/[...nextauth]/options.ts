@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import GoogleProvider from 'next-auth/providers/google';
 import bcrypt from 'bcrypt';
+import { passwordFingerprint, samePasswordFingerprint } from '@/lib/server/account-security';
 
 import prisma from '@/lib/prisma';
 import { emailEqualsInsensitive } from '@/lib/server/database-query';
@@ -19,12 +20,7 @@ const userSelect = {
   role: true,
   image: true,
   title: true,
-  bio: true,
-  contact: true,
-  endorsements: true,
-  emailVerified: true,
-  lastLogin: true,
-  userSettings: true,
+  password: true,
 } as const;
 
 type SelectedUser = Prisma.UserGetPayload<{
@@ -36,15 +32,9 @@ function mapUserToToken(user: NonNullable<SelectedUser>) {
     id: user.id,
     role: user.role,
     email: user.email,
-    name: user.name,
-    image: user.image,
-    title: user.title,
-    bio: user.bio,
-    contact: user.contact,
-    endorsements: user.endorsements,
-    emailVerified: user.emailVerified,
-    lastLogin: user.lastLogin,
-    settings: user.userSettings,
+    name: user.name?.slice(0, 120) ?? null,
+    image: user.image && user.image.length <= 2048 ? user.image : null,
+    title: user.title?.slice(0, 200) ?? null,
   };
 }
 
@@ -107,7 +97,7 @@ export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   providers,
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, account }) {
       // `session` data on an update is client supplied. Never merge it into
       // the token: identity and authorization claims must come from Prisma.
       const userId =
@@ -126,6 +116,21 @@ export const authOptions: NextAuthOptions = {
       // makes session/middleware checks reject it on the next request.
       if (!currentUser) return {} as typeof token;
 
+      // Older tokens have no provider marker and cannot be distinguished from
+      // credentials sessions created before this check. Require a fresh login.
+      const provider = user
+        ? (account?.provider === 'credentials' ? 'credentials' : 'oauth')
+        : token.authProvider;
+      if (provider !== 'credentials' && provider !== 'oauth') return {} as typeof token;
+
+      const fingerprint = provider === 'credentials' && currentUser.password
+        ? passwordFingerprint(currentUser.id, currentUser.password)
+        : null;
+      if (provider === 'credentials' &&
+          (!fingerprint || (!user && !samePasswordFingerprint(token.passwordFingerprint, fingerprint)))) {
+        return {} as typeof token;
+      }
+
       const userForToken = user
         ? await prisma.user.update({
             where: { id: currentUser.id },
@@ -135,9 +140,14 @@ export const authOptions: NextAuthOptions = {
         : currentUser;
 
       return {
-        ...token,
+        // Do not carry legacy or client-supplied profile claims into the JWT.
+        iat: token.iat,
+        exp: token.exp,
+        jti: token.jti,
         ...mapUserToToken(userForToken),
         sub: userForToken.id,
+        authProvider: provider,
+        passwordFingerprint: fingerprint,
       };
     },
 
@@ -171,9 +181,6 @@ export const authOptions: NextAuthOptions = {
   },
   pages: {
     signIn: '/login',
-    error: '/auth/error',
-    signOut: '/auth/signout',
-    verifyRequest: '/auth/verify-request',
   },
   session: {
     strategy: 'jwt',

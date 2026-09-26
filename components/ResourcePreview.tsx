@@ -5,6 +5,7 @@ import { toast } from 'react-toastify';
 import { clsx } from 'clsx';
 import Script from 'next/script';
 import Image from 'next/image';
+import { getSafeNavigationUrl } from '@/lib/security';
 
 interface ResourcePreviewProps {
   url: string;
@@ -19,25 +20,28 @@ type VideoProvider = {
 const getVideoProvider = (url: string): VideoProvider => {
   try {
     const urlObj = new URL(url);
+    if (!getSafeNavigationUrl(url) || !['http:', 'https:'].includes(urlObj.protocol)) return { type: null, id: null };
+    const hostname = urlObj.hostname.toLowerCase();
 
     // YouTube
-    if (urlObj.hostname.includes('youtube.com') || urlObj.hostname.includes('youtu.be')) {
-      const id = urlObj.hostname.includes('youtu.be')
+    if (['youtube.com', 'www.youtube.com', 'youtu.be'].includes(hostname)) {
+      const id = hostname === 'youtu.be'
         ? urlObj.pathname.slice(1)
         : urlObj.searchParams.get('v');
-      return { type: 'youtube', id };
+      return { type: 'youtube', id: id && /^[\w-]{1,128}$/.test(id) ? id : null };
     }
 
     // Vimeo
-    if (urlObj.hostname.includes('vimeo.com')) {
+    if (['vimeo.com', 'www.vimeo.com', 'player.vimeo.com'].includes(hostname)) {
       const id = urlObj.pathname.split('/')[1];
-      return { type: 'vimeo', id };
+      const videoId = hostname === 'player.vimeo.com' ? urlObj.pathname.split('/')[2] : id;
+      return { type: 'vimeo', id: videoId && /^\d{1,20}$/.test(videoId) ? videoId : null };
     }
 
     // Dailymotion
-    if (urlObj.hostname.includes('dailymotion.com')) {
+    if (['dailymotion.com', 'www.dailymotion.com'].includes(hostname)) {
       const id = urlObj.pathname.split('/')[2]?.split('_')[0];
-      return { type: 'dailymotion', id };
+      return { type: 'dailymotion', id: id && /^[\w-]{1,128}$/.test(id) ? id : null };
     }
   } catch (e) {
     console.error('Error parsing video URL:', e);
@@ -47,6 +51,7 @@ const getVideoProvider = (url: string): VideoProvider => {
 };
 
 export function ResourcePreview({ url, type }: ResourcePreviewProps) {
+  const safeUrl = getSafeNavigationUrl(url);
   const [previewData, setPreviewData] = useState<{
     title?: string;
     description?: string;
@@ -65,9 +70,10 @@ export function ResourcePreview({ url, type }: ResourcePreviewProps) {
   const iframeRef = React.useRef<HTMLIFrameElement>(null);
 
   const handleDownload = () => {
+    if (!safeUrl) return;
     const link = document.createElement('a');
-    link.href = url;
-    link.download = url.split('/').pop() || 'download';
+    link.href = safeUrl;
+    link.download = safeUrl.split('/').pop() || 'download';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -81,10 +87,11 @@ export function ResourcePreview({ url, type }: ResourcePreviewProps) {
       try {
         setLoading(true);
         setError(null);
+        if (!safeUrl) throw new Error('Ungültige URL');
 
         // Prüfe auf Video-URLs
         if (type === 'VIDEO') {
-          const provider = getVideoProvider(url);
+          const provider = getVideoProvider(safeUrl);
           if (provider.type && provider.id) {
             setVideoProvider(provider);
             setLoading(false);
@@ -98,19 +105,12 @@ export function ResourcePreview({ url, type }: ResourcePreviewProps) {
           return;
         }
 
-        // Validiere URL
-        try {
-          new URL(url);
-        } catch (e) {
-          throw new Error('Ungültige URL');
-        }
-
         const response = await fetch('/api/resources/preview', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ url }),
+          body: JSON.stringify({ url: safeUrl }),
           signal: controller.signal
         });
 
@@ -148,10 +148,10 @@ export function ResourcePreview({ url, type }: ResourcePreviewProps) {
       isMounted = false;
       controller.abort();
     };
-  }, [url, type]);
+  }, [url, type, safeUrl]);
 
   useEffect(() => {
-    if (type !== 'PDF') return;
+    if (type !== 'PDF' || !safeUrl) return;
 
     const loadPdf = async () => {
       try {
@@ -159,14 +159,14 @@ export function ResourcePreview({ url, type }: ResourcePreviewProps) {
         setPdfError(null);
 
         // Prüfe ob die PDF-URL gültig ist
-        const response = await fetch(url, { method: 'HEAD' });
+        const response = await fetch(safeUrl, { method: 'HEAD' });
         if (!response.ok) {
           throw new Error('PDF konnte nicht geladen werden');
         }
 
         // Setze den Content-Type Header für die PDF-Anzeige
         if (iframeRef.current) {
-          iframeRef.current.src = url + '#toolbar=0&navpanes=0';
+          iframeRef.current.src = safeUrl + '#toolbar=0&navpanes=0';
         }
 
         setIsPdfLoading(false);
@@ -178,7 +178,7 @@ export function ResourcePreview({ url, type }: ResourcePreviewProps) {
     };
 
     loadPdf();
-  }, [url, type]);
+  }, [type, safeUrl]);
 
   if (loading) {
     return (
@@ -215,12 +215,12 @@ export function ResourcePreview({ url, type }: ResourcePreviewProps) {
           />
         </svg>
         <p className="text-center">{error}</p>
-        <button
-          onClick={() => window.open(url, '_blank')}
+        {safeUrl && <button
+          onClick={() => window.open(safeUrl, '_blank', 'noopener,noreferrer')}
           className="mt-4 text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 underline"
         >
           Direkt zur Quelle
-        </button>
+        </button>}
       </div>
     );
   }
@@ -278,7 +278,7 @@ export function ResourcePreview({ url, type }: ResourcePreviewProps) {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => window.open(url, '_blank')}
+                  onClick={() => safeUrl && window.open(safeUrl, '_blank', 'noopener,noreferrer')}
                 >
                   Im Browser öffnen
                 </Button>
@@ -308,7 +308,7 @@ export function ResourcePreview({ url, type }: ResourcePreviewProps) {
                   variant="outline"
                   size="sm"
                   className="flex items-center space-x-2"
-                  onClick={() => window.open(url, '_blank')}
+                  onClick={() => safeUrl && window.open(safeUrl, '_blank', 'noopener,noreferrer')}
                 >
                   <Eye className="h-4 w-4" />
                   <span>Öffnen</span>

@@ -6,6 +6,8 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { DateTime } from 'luxon';
 import { sanitizeRichHtmlServer, sanitizeTextServer } from '@/lib/server/sanitize-html';
+import { generateICS } from '@/lib/icsGenerator';
+import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
 
 // Unterstützte Zeitzonen
 const TIMEZONES = [
@@ -17,81 +19,25 @@ const TIMEZONES = [
   // Weitere nach Bedarf hinzufügen
 ];
 
-// Hilfsfunktionen zur Bereinigung der Daten für ICS
-function escapeICS(text: string): string {
-  return text.replace(/,/g, '\\,').replace(/;/g, '\\;').replace(/\n/g, '\\n');
-}
-
-function sanitizeFilename(name: string): string {
-  return name.replace(/\s+/g, '_').replace(/[<>:"\/\\|?*]+/g, '');
-}
-
 export async function GET(
   request: Request,
   props: { params: Promise<{ id: string }> }
 ) {
   const params = await props.params;
   try {
-    console.log(`Generating ICS for event ID: ${params.id}`);
-
     const event = await prisma.event.findUnique({
       where: { id: params.id },
     });
 
     if (!event) {
-      console.error(`Event with ID ${params.id} not found.`);
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });
     }
-
-    console.log('Event data:', event);
-
-    // Annahme: event.date ist in UTC gespeichert
-    const zonedStartDate = DateTime.fromJSDate(event.date, { zone: 'utc' }).setZone(event.timezone);
-    let zonedEndDate = zonedStartDate.plus({ hours: 1 }); // Standarddauer 1 Stunde
-
-    if (event.endTime) {
-      const endDateTime = DateTime.fromISO(`${zonedStartDate.toISODate()}T${event.endTime}`, { zone: event.timezone });
-      if (endDateTime.isValid) {
-        zonedEndDate = endDateTime; // Jetzt gültig, da zonedEndDate mit `let` deklariert
-      } else {
-        console.error(`Invalid end time for event ID ${params.id}.`);
-        return NextResponse.json({ error: 'Invalid end time format' }, { status: 500 });
-      }
-    }
-
-    console.log('Start Date (Event Timezone):', zonedStartDate.toISO());
-    console.log('End Date (Event Timezone):', zonedEndDate.toISO());
-
-    if (!zonedStartDate.isValid || !zonedEndDate.isValid) {
-      console.error(`Invalid date conversion for event ID ${params.id}.`);
-      return NextResponse.json({ error: 'Invalid date format' }, { status: 500 });
-    }
-
-    // Formatierung der Datumsangaben für ICS
-    const formatDate = (date: DateTime) => {
-      return date.toUTC().toFormat("yyyyMMdd'T'HHmmss'Z'");
-    };
-
-    // Erstellen des ICS-Inhalts
-    const icsContent = `BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//YourOrganization//YourProduct//EN
-BEGIN:VEVENT
-UID:${event.id}
-DTSTAMP:${formatDate(DateTime.utc())}
-DTSTART:${formatDate(zonedStartDate)}
-DTEND:${formatDate(zonedEndDate)}
-SUMMARY:${escapeICS(event.title)}
-DESCRIPTION:${escapeICS(event.description)}
-LOCATION:${escapeICS(event.location)}
-END:VEVENT
-END:VCALENDAR`;
-
-    return new NextResponse(icsContent, {
+    return new NextResponse(generateICS(event), {
       status: 200,
       headers: {
-        'Content-Type': 'text/calendar',
-        'Content-Disposition': `attachment; filename="${sanitizeFilename(event.title)}.ics"`,
+        'Content-Type': 'text/calendar; charset=utf-8',
+        'Content-Disposition': 'attachment; filename="event.ics"',
+        'Cache-Control': 'no-store',
       },
     });
   } catch (error) {
@@ -120,15 +66,15 @@ export async function PUT(
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });
     }
 
-    const data = await request.json();
-    const title = sanitizeTextServer(data.title);
-    const description = sanitizeRichHtmlServer(data.description);
-    const location = sanitizeTextServer(data.location);
-    const category = sanitizeTextServer(data.category) || 'Allgemein';
+    const data = await readJsonObject(request);
+    const title = sanitizeTextServer(typeof data.title === 'string' ? data.title : '');
+    const description = sanitizeRichHtmlServer(typeof data.description === 'string' ? data.description : '');
+    const location = sanitizeTextServer(typeof data.location === 'string' ? data.location : '');
+    const category = sanitizeTextServer(typeof data.category === 'string' ? data.category : '') || 'Allgemein';
     const { date, startTime, endTime, timezone } = data;
 
     // Überprüfen der erforderlichen Felder
-    if (!title || !date || !description || !location || !timezone || !startTime || !endTime) {
+    if (!title || typeof date !== 'string' || !date || !description || !location || typeof timezone !== 'string' || !timezone || typeof startTime !== 'string' || !startTime || typeof endTime !== 'string' || !endTime) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
@@ -181,6 +127,8 @@ export async function PUT(
       timezone: updatedEvent.timezone,
     }, { status: 200 });
   } catch (error) {
+    const clientError = requestErrorResponse(error);
+    if (clientError) return clientError;
     console.error('Error updating event:', error);
     return NextResponse.json({ error: 'Error updating event' }, { status: 500 });
   }

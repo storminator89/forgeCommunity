@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
+import { readJsonObject, requestErrorResponse } from "@/lib/server/api-input";
 
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
@@ -32,13 +33,11 @@ export async function POST(request: Request) {
   }
 
   const userId = session.user.id;
-  const { skillId, level } = await request.json();
-
-  if (!skillId || typeof level !== "number" || !Number.isFinite(level) || level < 0 || level > 100) {
-    return NextResponse.json({ error: "Ungültige Daten." }, { status: 400 });
-  }
-
   try {
+    const { skillId, level } = await readJsonObject(request);
+    if (typeof skillId !== "string" || !skillId.trim() || typeof level !== "number" || !Number.isInteger(level) || level < 0 || level > 100) {
+      return NextResponse.json({ error: "Ungültige Daten." }, { status: 400 });
+    }
     // Überprüfen, ob die Fähigkeit existiert
     const skill = await prisma.skill.findUnique({
       where: { id: skillId },
@@ -73,6 +72,11 @@ export async function POST(request: Request) {
 
     return NextResponse.json(newUserSkill, { status: 201 });
   } catch (error) {
+    const invalidRequest = requestErrorResponse(error);
+    if (invalidRequest) return invalidRequest;
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "P2002") {
+      return NextResponse.json({ error: "Fähigkeit bereits hinzugefügt." }, { status: 409 });
+    }
     console.error("Fehler beim Hinzufügen der Fähigkeit:", error);
     return NextResponse.json({ error: "Fehler beim Hinzufügen der Fähigkeit." }, { status: 500 });
   }

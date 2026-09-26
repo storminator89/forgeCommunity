@@ -72,7 +72,7 @@ export default function NewProjectPage() {
 
     setIsSubmitting(true);
     try {
-      const res = await fetch('/api/projects', {
+      const res = await fetch(`/api/users/${session?.user?.id}/projects`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

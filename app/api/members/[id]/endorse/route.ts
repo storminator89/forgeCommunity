@@ -8,6 +8,9 @@ import prisma from '@/lib/prisma';
 export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   const { id: endorsedId } = params;
+  if (!endorsedId.trim()) {
+    return NextResponse.json({ error: "Ungültige Benutzer-ID." }, { status: 400 });
+  }
 
   // Hole die aktuelle Sitzung
   const session = await getServerSession(authOptions);
@@ -52,6 +55,14 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
 
     return NextResponse.json({ message: "Mitglied erfolgreich empfohlen." }, { status: 200 });
   } catch (error) {
+    if (typeof error === "object" && error !== null && "code" in error) {
+      if (error.code === "P2002") {
+        return NextResponse.json({ error: "Du hast dieses Mitglied bereits empfohlen." }, { status: 409 });
+      }
+      if (error.code === "P2025" || error.code === "P2003") {
+        return NextResponse.json({ error: "Mitglied nicht gefunden." }, { status: 404 });
+      }
+    }
     console.error("Fehler beim Empfehlen des Mitglieds:", error);
     return NextResponse.json({ error: "Fehler beim Empfehlen des Mitglieds." }, { status: 500 });
   }

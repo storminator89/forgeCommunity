@@ -47,19 +47,27 @@ const user = {
   emailVerified: null,
   lastLogin: null,
   userSettings: null,
+  password: '$2b$12$first',
 };
 
 describe('NextAuth identity claims', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    process.env.NEXTAUTH_SECRET = 'test-auth-secret';
+    mockPrisma.user.update.mockResolvedValue(user);
   });
 
   it('ignores session update claims and refreshes role from the database', async () => {
     mockPrisma.user.findUnique.mockResolvedValue(user);
 
     const jwt = authOptions.callbacks?.jwt;
+    const initial = await jwt?.({
+      token: { sub: user.id },
+      user: { id: user.id },
+      account: { provider: 'credentials' },
+    } as any);
     const token = await jwt?.({
-      token: { id: user.id, role: 'USER' },
+      token: { ...initial, role: 'USER' },
       user: undefined,
       trigger: 'update',
       session: {
@@ -97,5 +105,30 @@ describe('NextAuth identity claims', () => {
 
     expect(token).toEqual({});
     expect(session).toBeNull();
+  });
+
+  it('revokes existing credentials JWTs after a password update', async () => {
+    mockPrisma.user.findUnique.mockResolvedValue(user);
+    const jwt = authOptions.callbacks?.jwt;
+    const oldToken = await jwt?.({
+      token: { sub: user.id }, user: { id: user.id },
+      account: { provider: 'credentials' },
+    } as any);
+    expect((oldToken as any).passwordFingerprint).toMatch(/^[0-9a-f]{64}$/);
+    expect(JSON.stringify(oldToken)).not.toContain(user.password);
+
+    mockPrisma.user.findUnique.mockResolvedValue({ ...user, password: '$2b$12$changed' });
+    expect(await jwt?.({ token: oldToken, trigger: 'session' } as any)).toEqual({});
+  });
+
+  it('preserves OAuth JWTs across password updates and rejects old unmarked JWTs', async () => {
+    mockPrisma.user.findUnique.mockResolvedValue(user);
+    const jwt = authOptions.callbacks?.jwt;
+    const oauthToken = await jwt?.({
+      token: { sub: user.id }, user: { id: user.id }, account: { provider: 'google' },
+    } as any);
+    mockPrisma.user.findUnique.mockResolvedValue({ ...user, password: '$2b$12$changed' });
+    expect(await jwt?.({ token: oauthToken } as any)).toEqual(expect.objectContaining({ id: user.id }));
+    expect(await jwt?.({ token: { sub: user.id, role: 'ADMIN' } } as any)).toEqual({});
   });
 });

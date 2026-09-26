@@ -5,6 +5,9 @@ import prisma from '@/lib/prisma';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../../auth/[...nextauth]/options";
 import { sanitizeCourseTextContentServer, sanitizeTextServer } from '@/lib/server/sanitize-html';
+import { groupCourseContents } from '@/lib/server/group-course-contents';
+import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
+import { Prisma } from '@prisma/client';
 
 // GET-Methode zum Abrufen der Kursinhalte
 export async function GET(
@@ -51,26 +54,7 @@ export async function GET(
       orderBy: { order: 'asc' },
     });
 
-    const subContentsByParent = new Map<string, typeof contents>();
-
-    for (const content of contents) {
-      if (!content.parentId) {
-        continue;
-      }
-
-      const siblings = subContentsByParent.get(content.parentId) ?? [];
-      siblings.push(content);
-      subContentsByParent.set(content.parentId, siblings);
-    }
-
-    const groupedContents = contents
-      .filter((content) => !content.parentId)
-      .map((content) => ({
-        ...content,
-        subContents: subContentsByParent.get(content.id) ?? [],
-      }));
-
-    return NextResponse.json(groupedContents);
+    return NextResponse.json(groupCourseContents(contents));
   } catch (error) {
     console.error('Failed to fetch course contents:', error);
     return NextResponse.json({ error: 'Failed to fetch course contents' }, { status: 500 });
@@ -104,59 +88,47 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    const { title, type, content, order, parentId } = await request.json();
+    const { title, type, content, order, parentId } = await readJsonObject(request);
     if (parentId !== undefined && parentId !== null && typeof parentId !== 'string') {
       return NextResponse.json({ error: 'Invalid parent content' }, { status: 400 });
     }
 
-    if (parentId) {
-      const parentContent = await prisma.courseContent.findUnique({
-        where: { id: parentId },
-        select: { id: true, courseId: true },
-      });
-
-      // A parent from another course would create a cross-course relation and
-      // expose/mutate content outside the authorized course.
-      if (!parentContent || parentContent.courseId !== courseId) {
-        return NextResponse.json({ error: 'Invalid parent content' }, { status: 400 });
-      }
+    if (typeof title !== 'string' || !title.trim() || (content !== undefined && typeof content !== 'string') ||
+        (type !== undefined && type !== null && !['TEXT', 'VIDEO', 'AUDIO', 'H5P'].includes(String(type))) ||
+        (order !== undefined && (!Number.isSafeInteger(order) || Number(order) < 0))) {
+      return NextResponse.json({ error: 'Invalid content fields' }, { status: 400 });
     }
 
     const sanitizedTitle = sanitizeTextServer(title);
     const sanitizedContent =
       type === 'TEXT' || !type
-        ? sanitizeCourseTextContentServer(content)
-        : sanitizeTextServer(content);
+        ? sanitizeCourseTextContentServer(content as string | undefined)
+        : sanitizeTextServer(content as string | undefined);
 
     // If order is not provided, find the next available order number
-    let nextOrder = order;
-    if (typeof order !== 'number') {
-      const existingContents = await prisma.courseContent.findMany({
-        where: {
-          courseId,
-          parentId: parentId || null,
-        },
-        orderBy: {
-          order: 'desc',
-        },
-        take: 1,
+    const newContent = await prisma.$transaction(async (tx) => {
+      if (parentId) {
+        const parentContent = await tx.courseContent.findUnique({
+          where: { id: parentId }, select: { courseId: true },
+        });
+        if (!parentContent || parentContent.courseId !== courseId) throw new Error('INVALID_PARENT');
+      }
+      const last = typeof order === 'number' ? null : await tx.courseContent.findFirst({
+        where: { courseId, parentId: typeof parentId === 'string' && parentId ? parentId : null },
+        orderBy: { order: 'desc' }, select: { order: true },
       });
-      nextOrder = existingContents.length > 0 ? existingContents[0].order + 1 : 1;
-    }
-
-    const newContent = await prisma.courseContent.create({
-      data: {
-        title: sanitizedTitle,
-        type: type || 'TEXT',
-        content: sanitizedContent,
-        order: nextOrder,
-        parentId,
-        courseId,
-      },
-    });
+      return tx.courseContent.create({ data: {
+        title: sanitizedTitle, type: (type || 'TEXT') as Prisma.CourseContentCreateInput['type'],
+        content: sanitizedContent, order: typeof order === 'number' ? order : (last?.order ?? 0) + 1,
+        parentId: typeof parentId === 'string' && parentId ? parentId : null, courseId,
+      } });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
     return NextResponse.json(newContent, { status: 201 });
   } catch (error) {
+    if (error instanceof Error && error.message === 'INVALID_PARENT') return NextResponse.json({ error: 'Invalid parent content' }, { status: 400 });
+    const inputError = requestErrorResponse(error);
+    if (inputError) return inputError;
     console.error('Failed to create course content:', error);
     return NextResponse.json({ error: 'Failed to create course content' }, { status: 500 });
   }

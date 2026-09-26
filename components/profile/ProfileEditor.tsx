@@ -28,6 +28,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-toastify';
 import Image from 'next/image';
+import { getSafeHttpUrl } from '@/lib/security';
 
 interface ProfileData {
   id: string;
@@ -143,13 +144,14 @@ export function ProfileEditor({ profile, onUpdate }: ProfileEditorProps) {
   const renderSocialLinks = () => {
     if (!profile.socialLinks) return null;
 
-    const hasLinks = Object.entries(profile.socialLinks).some(([_, value]) => value);
+    const hasLinks = Object.values(profile.socialLinks).some(value => getSafeHttpUrl(value));
     if (!hasLinks) return null;
 
     return (
       <div className="flex flex-wrap gap-4 mb-6">
         {(Object.entries(profile.socialLinks) as [keyof typeof socialIcons, string][])
-          .filter(([_, value]) => value)
+          .map(([key, value]) => [key, getSafeHttpUrl(value)] as const)
+          .filter((entry): entry is readonly [keyof typeof socialIcons, string] => entry[1] !== null)
           .map(([key, value]) => (
             <a
               key={key}

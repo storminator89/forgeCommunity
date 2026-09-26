@@ -47,29 +47,28 @@ export async function POST(
       );
     }
 
-    // Erstelle den Follow
-    const follow = await prisma.follow.create({
-      data: {
-        follower: { connect: { id: followerId } },
-        following: { connect: { id: followingId } },
-      },
-      include: {
-        following: {
-          select: {
-            name: true,
-            email: true,
+    // The notification and relation commit together. The unique constraint
+    // also handles two requests that both passed the existence check.
+    const follow = await prisma.$transaction(async tx => {
+      const created = await tx.follow.create({
+        data: {
+          follower: { connect: { id: followerId } },
+          following: { connect: { id: followingId } },
+        },
+        include: {
+          following: {
+            select: { name: true, email: true },
           },
         },
-      },
-    });
-
-    // Optional: Erstelle eine Benachrichtigung für den gefolgten Benutzer
-    await prisma.notification.create({
-      data: {
-        userId: followingId,
-        type: 'FOLLOW',
-        content: `${session.user.name} folgt Ihnen jetzt`,
-      },
+      });
+      await tx.notification.create({
+        data: {
+          userId: followingId,
+          type: 'FOLLOW',
+          content: `${session.user.name} folgt Ihnen jetzt`,
+        },
+      });
+      return created;
     });
 
     return NextResponse.json({
@@ -78,6 +77,10 @@ export async function POST(
     });
 
   } catch (error) {
+    if (typeof error === 'object' && error !== null && 'code' in error) {
+      if (error.code === 'P2002') return NextResponse.json({ error: 'Sie folgen diesem Benutzer bereits' }, { status: 400 });
+      if (error.code === 'P2025') return NextResponse.json({ error: 'Benutzer nicht gefunden' }, { status: 404 });
+    }
     console.error('Error following user:', error);
     return NextResponse.json(
       { error: 'Fehler beim Folgen des Benutzers' },
@@ -106,12 +109,10 @@ export async function DELETE(
     const followingId = params.id;
 
     // Lösche den Follow
-    await prisma.follow.delete({
+    await prisma.follow.deleteMany({
       where: {
-        followerId_followingId: {
-          followerId,
-          followingId,
-        },
+        followerId,
+        followingId,
       },
     });
 

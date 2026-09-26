@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
+import { readJsonObject, requestErrorResponse } from "@/lib/server/api-input";
 
 // Handler für GET-Anfragen: Alle verfügbaren Skills abrufen
 export async function GET(request: Request) {
@@ -30,16 +31,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Nicht authentifiziert" }, { status: 401 });
   }
 
-  const { name, category } = await request.json();
-
-  if (!name) {
-    return NextResponse.json({ error: "Name der Fähigkeit ist erforderlich." }, { status: 400 });
-  }
-
   try {
+    const { name, category } = await readJsonObject(request);
+    if (typeof name !== "string" || !name.trim() || name.length > 120 ||
+        (category !== undefined && (typeof category !== "string" || category.length > 120))) {
+      return NextResponse.json({ error: "Ungültige Daten." }, { status: 400 });
+    }
+    const normalizedName = name.trim();
     // Überprüfen, ob die Fähigkeit bereits existiert
     const existingSkill = await prisma.skill.findUnique({
-      where: { name },
+      where: { name: normalizedName },
     });
 
     if (existingSkill) {
@@ -49,13 +50,18 @@ export async function POST(request: Request) {
     // Neue Fähigkeit erstellen
     const newSkill = await prisma.skill.create({
       data: {
-        name,
-        category: category || "Unkategorisiert",
+        name: normalizedName,
+        category: category?.trim() || "Unkategorisiert",
       },
     });
 
     return NextResponse.json(newSkill, { status: 201 });
   } catch (error) {
+    const invalidRequest = requestErrorResponse(error);
+    if (invalidRequest) return invalidRequest;
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "P2002") {
+      return NextResponse.json({ error: "Fähigkeit existiert bereits." }, { status: 409 });
+    }
     console.error("Fehler beim Erstellen der Fähigkeit:", error);
     return NextResponse.json({ error: "Fehler beim Erstellen der Fähigkeit." }, { status: 500 });
   }

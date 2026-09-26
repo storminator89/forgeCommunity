@@ -108,6 +108,7 @@ model User {
   resources          Resource[]      @relation("UserResources")
   endorsementsGiven   Endorsement[] @relation("EndorsementsGiven")
   endorsementsReceived Endorsement[] @relation("EndorsementsReceived")
+  skillEndorsementsGiven SkillEndorsement[]
   h5pContents        H5PContent[]
   certificates       Certificate[]
 }
@@ -378,8 +379,20 @@ model UserSkill {
   skillId      String
   level        Int
   endorsements Int    @default(0)
+  endorsementRecords SkillEndorsement[]
 
   @@unique([userId, skillId])
+}
+
+model SkillEndorsement {
+  id          String    @id @default(cuid())
+  endorser    User      @relation(fields: [endorserId], references: [id], onDelete: Cascade)
+  endorserId  String
+  userSkill   UserSkill @relation(fields: [userSkillId], references: [id], onDelete: Cascade)
+  userSkillId String
+  createdAt   DateTime  @default(now())
+
+  @@unique([endorserId, userSkillId])
 }
 
 model Follow {

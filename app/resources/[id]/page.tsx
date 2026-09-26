@@ -19,6 +19,7 @@ import { ResourceType } from '@prisma/client';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { Sidebar } from "@/components/Sidebar";
+import { getSafeNavigationUrl } from '@/lib/security';
 
 interface Resource {
   id: string;
@@ -41,6 +42,7 @@ export default function ResourcePage() {
   const router = useRouter();
   const resourceId = typeof params.id === 'string' ? params.id : params.id?.[0];
   const [resource, setResource] = useState<Resource | null>(null);
+  const safeResourceUrl = getSafeNavigationUrl(resource?.url);
   const [loading, setLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [loadedForId, setLoadedForId] = useState<string | null>(null);
@@ -227,15 +229,15 @@ export default function ResourcePage() {
                       </div>
                     </div>
 
-                    <div className="pt-6">
+                    {safeResourceUrl && <div className="pt-6">
                       <Button
                         className="w-full h-12 text-lg"
-                        onClick={() => window.open(resource.url, '_blank')}
+                        onClick={() => window.open(safeResourceUrl, '_blank', 'noopener,noreferrer')}
                       >
                         <ExternalLink className="mr-2 h-5 w-5" />
                         Ressource öffnen
                       </Button>
-                    </div>
+                    </div>}
                   </div>
                 </CardContent>
               </Card>

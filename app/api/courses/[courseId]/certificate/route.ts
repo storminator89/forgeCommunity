@@ -1,227 +1,55 @@
 import { NextRequest, NextResponse } from 'next/server';
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
 import prisma from '@/lib/prisma';
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "../../../auth/[...nextauth]/options";
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '../../../auth/[...nextauth]/options';
 import { v4 as uuidv4 } from 'uuid';
-import QRCode from 'qrcode';
-
-function safeDownloadName(value: string) {
-  return value
-    .normalize('NFKD')
-    .replace(/[^\x20-\x7E]/g, '')
-    .replace(/[\r\n"\\/<>:*?|]+/g, '')
-    .replace(/\s+/g, '_')
-    .slice(0, 120) || 'course';
-}
+import { Prisma } from '@prisma/client';
+import { certificatePdfResponse } from '@/lib/server/certificate-pdf';
 
 export async function POST(
   request: NextRequest,
-  props: { params: Promise<{ courseId: string }> }
+  props: { params: Promise<{ courseId: string }> },
 ) {
-  const params = await props.params;
+  const { courseId } = await props.params;
   try {
     const session = await getServerSession(authOptions);
+    if (!session?.user?.id) return new NextResponse('Unauthorized', { status: 401 });
 
-    if (!session?.user?.id) {
-      return new NextResponse('Unauthorized', { status: 401 });
-    }
-
-    const courseId = params.courseId;
-
-    // Fetch course and user data
-    const course = await prisma.course.findUnique({
-      where: { id: courseId },
-      include: {
-        contents: true,
-      },
-    });
-
-    if (!course) {
-      return new NextResponse('Course not found', { status: 404 });
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-    });
-
-    if (!user) {
-      return new NextResponse('User not found', { status: 404 });
-    }
-
-    const enrollment = await prisma.enrollment.findUnique({
-      where: {
-        userId_courseId: {
-          userId: user.id,
-          courseId: course.id,
-        },
-      },
-      select: { completedAt: true },
-    });
-
-    // Certificates are completion credentials. Merely being logged in (or
-    // knowing a course ID) must not be enough to mint one.
-    if (!enrollment || !enrollment.completedAt) {
-      return new NextResponse('Course has not been completed', { status: 403 });
-    }
-
-    // Issuance is idempotent for a completed enrollment. Reusing the existing
-    // record prevents repeated clicks from minting unlimited certificates for
-    // the same user and course.
-    const existingCertificate = await prisma.certificate.findFirst({
-      where: {
-        userId: user.id,
-        courseId: course.id,
-      },
-      orderBy: { issuedAt: 'desc' },
-    });
-    const certificate = existingCertificate ?? await prisma.certificate.create({
-      data: {
-        id: uuidv4(),
-        userId: user.id,
-        courseId: course.id,
-        issuedAt: new Date(),
-        courseName: course.title,
-        userName: user.name || user.email,
+    // Serializable isolation prevents concurrent read-then-create issuances
+    // without invalidating existing historical certificate IDs.
+    let certificate;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        certificate = await prisma.$transaction(async (tx) => {
+          const course = await tx.course.findUnique({ where: { id: courseId }, select: { title: true } });
+          if (!course) return null;
+          const user = await tx.user.findUnique({ where: { id: session.user.id }, select: { name: true, email: true } });
+          if (!user) return null;
+          const enrollment = await tx.enrollment.findUnique({
+            where: { userId_courseId: { userId: session.user.id, courseId } },
+            select: { completedAt: true },
+          });
+          if (!enrollment?.completedAt) return false;
+          const existing = await tx.certificate.findFirst({
+            where: { userId: session.user.id, courseId },
+            orderBy: [{ issuedAt: 'desc' }, { id: 'desc' }],
+          });
+          return existing ?? tx.certificate.create({
+            data: {
+              id: uuidv4(), userId: session.user.id, courseId,
+              issuedAt: new Date(), courseName: course.title, userName: user.name || user.email,
+            },
+          });
+        }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+        break;
+      } catch (error) {
+        if (attempt === 3 || !(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2034') throw error;
       }
-    });
-    const certificateId = certificate.id;
-
-    // Generate QR code with verification URL
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000';
-    const verificationUrl = `${baseUrl.replace(/\/$/, '')}/verify-certificate/${certificateId}`;
-    const qrCodeDataUrl = await QRCode.toDataURL(verificationUrl);
-
-    // Create PDF document
-    const doc = new jsPDF({
-      orientation: 'landscape',
-      unit: 'mm',
-      format: 'a4'
-    });
-
-    // Get page dimensions
-    const pageWidth = doc.internal.pageSize.width;
-    const pageHeight = doc.internal.pageSize.height;
-
-    // Set background color (soft white)
-    doc.setFillColor(252, 252, 252);
-    doc.rect(0, 0, pageWidth, pageHeight, 'F');
-
-    // Add accent color bar at the top
-    doc.setFillColor(44, 82, 130); // Primary blue
-    doc.rect(0, 0, pageWidth, 20, 'F');
-
-    // Add bottom accent bar in same color
-    doc.setFillColor(44, 82, 130); // Same solid blue as top
-    doc.rect(0, pageHeight - 25, pageWidth, 25, 'F');
-
-    // Add main title
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(46);
-    doc.setTextColor(44, 82, 130);
-    doc.text('ZERTIFIKAT', pageWidth / 2, 60, { align: 'center' });
-
-    // Add subtitle
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(16);
-    doc.setTextColor(128, 128, 128);
-    doc.text('für herausragende Leistungen', pageWidth / 2, 75, { align: 'center' });
-
-    // Add main text
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(14);
-    doc.setTextColor(80, 80, 80);
-    doc.text('Hiermit wird bestätigt, dass', pageWidth / 2, 95, { align: 'center' });
-
-    // Add name
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(28);
-    doc.setTextColor(44, 82, 130);
-    doc.text(user.name || user.email, pageWidth / 2, 110, { align: 'center' });
-
-    // Add course text
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(14);
-    doc.setTextColor(80, 80, 80);
-    doc.text('erfolgreich den Kurs', pageWidth / 2, 125, { align: 'center' });
-
-    // Add course name
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(24);
-    doc.setTextColor(44, 82, 130);
-    doc.text(course.title, pageWidth / 2, 140, { align: 'center' });
-
-    // Add completion text
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(14);
-    doc.setTextColor(80, 80, 80);
-    doc.text('abgeschlossen hat.', pageWidth / 2, 155, { align: 'center' });
-
-    // Add date
-    const date = new Date().toLocaleDateString('de-DE', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-    doc.setFontSize(12);
-    doc.text(`Ausgestellt am ${date} `, pageWidth / 2, 175, { align: 'center' });
-
-    // Add QR code with white background
-    const qrSize = 35;
-    const qrX = 35;
-    const qrY = pageHeight - 90;
-
-    // Add white background for QR code
-    doc.setFillColor(255, 255, 255);
-    doc.rect(qrX - 2, qrY - 2, qrSize + 4, qrSize + 4, 'F');
-
-    // Add QR code
-    doc.addImage(qrCodeDataUrl, 'PNG', qrX, qrY, qrSize, qrSize);
-
-    // Add verification text and URL
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-    doc.setTextColor(80, 80, 80);
-    doc.text('Verifizieren Sie dieses Zertifikat:', qrX + qrSize / 2, qrY + qrSize + 8, { align: 'center' });
-
-    // Add clickable URL with custom text
-    const linkText = 'Zertifikat verifizieren';
-    doc.setTextColor(44, 82, 130);
-    const urlY = qrY + qrSize + 15;
-    const urlWidth = doc.getStringUnitWidth(linkText) * 10 / doc.internal.scaleFactor;
-    const urlX = qrX + qrSize / 2 - urlWidth / 2;
-
-    // Add white background for URL
-    doc.setFillColor(255, 255, 255);
-    doc.rect(urlX - 1, urlY - 4, urlWidth + 2, 6, 'F');
-
-    doc.textWithLink(linkText, urlX, urlY, {
-      url: verificationUrl
-    });
-
-    // Draw underline
-    doc.setDrawColor(44, 82, 130);
-    doc.setLineWidth(0.1);
-    doc.line(urlX, urlY + 1, urlX + urlWidth, urlY + 1);
-
-    // Add certificate ID with modern styling - now in white color due to blue background
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.setTextColor(255, 255, 255);
-    const certificateIdText = `Zertifikat ID: ${certificateId} `;
-    doc.text(certificateIdText, pageWidth - 35, pageHeight - 15, { align: 'right' });
-
-    // Convert to buffer
-    const pdfBuffer = Buffer.from(doc.output('arraybuffer'));
-
-    // Return the PDF
-    return new NextResponse(new Uint8Array(pdfBuffer), {
-      headers: {
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="${safeDownloadName(course.title)}_Zertifikat.pdf"`,
-      },
-    });
+    }
+    if (certificate === null) return new NextResponse('Course or user not found', { status: 404 });
+    if (certificate === false) return new NextResponse('Course has not been completed', { status: 403 });
+    if (!certificate || typeof certificate !== 'object') throw new Error('Certificate issuance failed');
+    return certificatePdfResponse(certificate);
   } catch (error) {
     console.error('Error generating certificate:', error);
     return new NextResponse('Error generating certificate', { status: 500 });

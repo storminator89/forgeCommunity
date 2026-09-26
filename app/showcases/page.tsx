@@ -71,11 +71,14 @@ interface Project {
 }
 
 async function loadProjects(signal: AbortSignal): Promise<Project[]> {
-  const res = await fetch('/api/projects', { signal });
-  if (!res.ok) {
-    throw new Error('Fehler beim Abrufen der Projekte.');
+  const projects: Project[] = [];
+  for (let page = 1; ; page++) {
+    const res = await fetch(`/api/projects?page=${page}`, { signal });
+    if (!res.ok) throw new Error('Fehler beim Abrufen der Projekte.');
+    const batch = (await res.json()) as Project[];
+    projects.push(...batch);
+    if (batch.length < 50) return projects;
   }
-  return (await res.json()) as Project[];
 }
 
 const defaultDescription = `<h2>🎯 Projektziel</h2>

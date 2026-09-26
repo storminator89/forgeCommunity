@@ -84,7 +84,7 @@ describe('Projects API', () => {
 
       ;(prisma.project.findMany as jest.Mock).mockResolvedValueOnce(mockProjects)
 
-      const response = await GET()
+      const response = await GET(new Request('http://localhost/api/projects'))
       const data = await response.json()
 
       expect(response.status).toBe(200)
@@ -120,13 +120,15 @@ describe('Projects API', () => {
         orderBy: {
           createdAt: 'desc',
         },
+        skip: 0,
+        take: 50,
       })
     })
 
     it('should handle database errors', async () => {
       ;(prisma.project.findMany as jest.Mock).mockRejectedValueOnce(new Error('Database error'))
 
-      const response = await GET()
+      const response = await GET(new Request('http://localhost/api/projects'))
       const data = await response.json()
 
       expect(response.status).toBe(500)

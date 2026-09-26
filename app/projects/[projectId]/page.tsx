@@ -127,11 +127,14 @@ export default function ProjectDetail(props: { params: Promise<{ projectId: stri
       if (!params?.projectId) return;
 
       try {
-        const res = await fetch(`/api/projects/${params.projectId}/comments`);
-        if (!res.ok) {
-          throw new Error('Fehler beim Laden der Kommentare.');
+        const data: ProjectComment[] = [];
+        for (let page = 1; ; page++) {
+          const res = await fetch(`/api/projects/${params.projectId}/comments?page=${page}`);
+          if (!res.ok) throw new Error('Fehler beim Laden der Kommentare.');
+          const batch: ProjectComment[] = await res.json();
+          data.push(...batch);
+          if (batch.length < 50) break;
         }
-        const data: ProjectComment[] = await res.json();
         setComments(data);
       } catch (error) {
         console.error('Error fetching comments:', error);

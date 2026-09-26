@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync, copyFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -28,6 +28,44 @@ test('tracks migrations and preserves data across repeated initialization', () =
   assert.equal(reopened.prepare('SELECT value FROM Example').get().value, 'kept');
   assert.equal(reopened.prepare('SELECT count(*) AS count FROM _app_migrations').get().count, 1);
   reopened.close();
+});
+
+test('upgrades a populated 0001 database without losing historical skill totals', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'forge-skill-upgrade-'));
+  const migrations = join(dir, 'migrations');
+  mkdirSync(migrations);
+  copyFileSync(new URL('../prisma/sqlite-migrations/0001_initial.sql', import.meta.url), join(migrations, '0001_initial.sql'));
+  const url = `file:${join(dir, 'db.sqlite')}`;
+  initializeSqlite(url, migrations);
+  const db = new DatabaseSync(sqlitePath(url));
+  db.exec('PRAGMA foreign_keys = ON');
+  try {
+    const createUser = db.prepare('INSERT INTO "User" (id, email, updatedAt) VALUES (?, ?, CURRENT_TIMESTAMP)');
+    createUser.run('recipient', 'recipient@example.test');
+    createUser.run('endorser', 'endorser@example.test');
+    db.prepare('INSERT INTO "Skill" (id, name, category) VALUES (?, ?, ?)').run('skill', 'Skill', 'test');
+    db.prepare('INSERT INTO "UserSkill" (id, userId, skillId, level, endorsements) VALUES (?, ?, ?, ?, ?)')
+      .run('userSkill', 'recipient', 'skill', 50, 7);
+  } finally {
+    db.close();
+  }
+
+  copyFileSync(new URL('../prisma/sqlite-migrations/0002_skill_endorsements.sql', import.meta.url), join(migrations, '0002_skill_endorsements.sql'));
+  initializeSqlite(url, migrations);
+  initializeSqlite(url, migrations);
+  const upgraded = new DatabaseSync(sqlitePath(url));
+  upgraded.exec('PRAGMA foreign_keys = ON');
+  try {
+    assert.equal(upgraded.prepare('SELECT endorsements FROM "UserSkill"').get().endorsements, 7);
+    assert.equal(upgraded.prepare('SELECT count(*) AS count FROM _app_migrations').get().count, 2);
+    const addEndorsement = upgraded.prepare('INSERT INTO "SkillEndorsement" (id, endorserId, userSkillId) VALUES (?, ?, ?)');
+    addEndorsement.run('endorsement', 'endorser', 'userSkill');
+    assert.throws(() => addEndorsement.run('duplicate', 'endorser', 'userSkill'), /UNIQUE/);
+    upgraded.prepare('DELETE FROM "User" WHERE id = ?').run('endorser');
+    assert.equal(upgraded.prepare('SELECT count(*) AS count FROM "SkillEndorsement"').get().count, 0);
+  } finally {
+    upgraded.close();
+  }
 });
 
 test('rejects modified migration checksums', () => {

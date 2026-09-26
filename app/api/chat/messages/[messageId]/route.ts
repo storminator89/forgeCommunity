@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/options';
 import prisma from '@/lib/prisma';
+import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
 
 export async function PATCH(
   req: Request,
@@ -15,24 +16,39 @@ export async function PATCH(
       return new NextResponse('Unauthorized', { status: 401 });
     }
 
-    const { content } = await req.json();
+    const { content } = await readJsonObject(req);
     const messageId = params.messageId;
 
-    if (!content) {
+    if (typeof content !== 'string' || !content.trim() || content.length > 4000 ||
+      !messageId || messageId.length > 100) {
       return new NextResponse('Content is required', { status: 400 });
     }
 
     // Nachricht finden und prüfen, ob der Benutzer der Autor ist
     const message = await prisma.chatMessage.findUnique({
       where: { id: messageId },
-      include: { author: true },
+      select: { id: true, authorId: true, channelId: true },
     });
 
     if (!message) {
       return new NextResponse('Message not found', { status: 404 });
     }
 
-    if (message.author.id !== session.user.id && session.user.role !== 'ADMIN') {
+    const channel = await prisma.chatChannel.findFirst({
+      where: {
+        id: message.channelId,
+        OR: [
+          { isPrivate: false },
+          { members: { some: { userId: session.user.id } } },
+        ],
+      },
+      select: { id: true },
+    });
+    if (!channel) {
+      return new NextResponse('Channel not found or access denied', { status: 403 });
+    }
+
+    if (message.authorId !== session.user.id && session.user.role !== 'ADMIN') {
       return new NextResponse('Not authorized to edit this message', { status: 403 });
     }
 
@@ -55,6 +71,8 @@ export async function PATCH(
 
     return NextResponse.json(updatedMessage);
   } catch (error) {
+    const requestError = requestErrorResponse(error);
+    if (requestError) return requestError;
     console.error('[MESSAGE_PATCH]', error);
     return new NextResponse('Internal Error', { status: 500 });
   }

@@ -1,3 +1,5 @@
+/** @jest-environment node */
+
 jest.mock('next/server', () => ({
   NextResponse: class MockNextResponse extends Response {
     static json(body: unknown, init: ResponseInit = {}) {
@@ -42,13 +44,16 @@ describe('private chat image authorization', () => {
 
   it('does not let a user repost another user\'s private upload', async () => {
     ;(getServerSession as jest.Mock).mockResolvedValue({ user: { id: 'user-a' } });
-    const request = {
-      json: async () => ({
+    const request = new Request('http://localhost/api/chat/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
         content: '',
         channelId: 'channel-1',
         imageUrl: `/api/chat/uploads/${privateFilename('user-b')}`,
+        messageType: 'image',
       }),
-    } as unknown as Request;
+    });
 
     const response = await postMessage(request);
 

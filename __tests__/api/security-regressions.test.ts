@@ -76,6 +76,8 @@ function jsonRequest(url: string, init: RequestInit = {}): any {
   const body = typeof init.body === 'string' ? init.body : undefined
   return {
     url,
+    headers: { get: () => null },
+    body: null,
     json: async () => (body ? JSON.parse(body) : {}),
     formData: async () => new FormData(),
   }
@@ -84,6 +86,7 @@ function jsonRequest(url: string, init: RequestInit = {}): any {
 describe('API authorization regressions', () => {
   beforeEach(() => {
     jest.clearAllMocks()
+    mockedPrisma.$transaction.mockImplementation(async (callback: (tx: typeof mockedPrisma) => unknown) => callback(mockedPrisma))
   })
 
   it('does not expose an unpublished article to anonymous readers', async () => {
@@ -352,7 +355,7 @@ describe('API authorization regressions', () => {
 
     const tx = {
       courseContent: {
-        findUnique: jest.fn(),
+        findUnique: mockedPrisma.courseContent.findUnique,
         findMany: jest.fn()
           .mockResolvedValueOnce([
             { id: 'content-2', parentId: null, order: 1 },
@@ -380,5 +383,29 @@ describe('API authorization regressions', () => {
     expect(response.status).toBe(200)
     expect(body.map((content: { id: string }) => content.id)).toEqual(['content-1', 'content-2'])
     expect(tx.courseContent.update).toHaveBeenCalled()
+  })
+
+  it('rejects moving a parent beside its descendant inside the transaction', async () => {
+    ;(getServerSession as jest.Mock).mockResolvedValue({ user: { id: 'instructor-1', role: 'INSTRUCTOR' } })
+    const tx = {
+      courseContent: {
+        findUnique: jest.fn()
+          .mockResolvedValueOnce({ id: 'parent', courseId: 'course-1', parentId: null, order: 1, course: { instructorId: 'instructor-1' } })
+          .mockResolvedValueOnce({ id: 'child', courseId: 'course-1', parentId: 'parent', order: 1 }),
+        findMany: jest.fn(),
+        update: jest.fn(),
+      },
+    }
+    mockedPrisma.$transaction.mockImplementation(async (callback: (value: typeof tx) => unknown) => callback(tx))
+    const response = await moveCourseContent(
+      jsonRequest('http://localhost/api/courses/course-1/contents/parent/move', {
+        method: 'PUT',
+        body: JSON.stringify({ targetId: 'child', position: 'before' }),
+        headers: { 'Content-Type': 'application/json' },
+      }),
+      { params: Promise.resolve({ courseId: 'course-1', contentId: 'parent' }) },
+    )
+    expect(response.status).toBe(400)
+    expect(tx.courseContent.update).not.toHaveBeenCalled()
   })
 })

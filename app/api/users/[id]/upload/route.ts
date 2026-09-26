@@ -44,7 +44,7 @@ export async function POST(
     const file = formData.get('file') as File;
     const type = formData.get('type') as 'avatar' | 'cover';
 
-    if (!file) {
+    if (!(file instanceof File)) {
       return NextResponse.json(
         { error: 'Keine Datei gefunden' },
         { status: 400 }
@@ -97,7 +97,7 @@ export async function POST(
   } catch (error) {
     console.error('Error uploading image:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Fehler beim Hochladen des Bildes' },
+      { error: error instanceof ImageUploadValidationError ? error.message : 'Fehler beim Hochladen des Bildes' },
       { status: error instanceof ImageUploadValidationError ? 400 : error instanceof RequestBodyLimitError ? 413 : 500 }
     );
   }

@@ -5,6 +5,7 @@ import prisma from '@/lib/prisma'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import { sanitizeRichHtmlServer, sanitizeTextServer } from '@/lib/server/sanitize-html'
+import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input'
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ postId: string }> }) {
   try {
@@ -81,18 +82,23 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ post
       return NextResponse.json({ error: 'Nicht autorisiert, diesen Beitrag zu bearbeiten' }, { status: 403 })
     }
 
-    const data = await req.json()
+    const data = await readJsonObject(req)
     const { title, content } = data
 
-    if (!title || !content) {
+    if (typeof title !== 'string' || typeof content !== 'string') {
+      return NextResponse.json({ error: 'Titel und Inhalt sind erforderlich' }, { status: 400 })
+    }
+    const safeTitle = sanitizeTextServer(title)
+    const safeContent = sanitizeRichHtmlServer(content)
+    if (!safeTitle || !sanitizeTextServer(safeContent)) {
       return NextResponse.json({ error: 'Titel und Inhalt sind erforderlich' }, { status: 400 })
     }
 
     const updatedPost = await prisma.post.update({
       where: { id: postId },
       data: {
-        title: sanitizeTextServer(title),
-        content: sanitizeRichHtmlServer(content),
+        title: safeTitle,
+        content: safeContent,
       },
       include: {
         author: {
@@ -104,6 +110,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ post
     return NextResponse.json(updatedPost, { status: 200 })
   } catch (error: any) {
     console.error('Fehler beim Bearbeiten des Beitrags:', error)
+    const inputError = requestErrorResponse(error)
+    if (inputError) return inputError
     return NextResponse.json({ error: 'Fehler beim Bearbeiten des Beitrags' }, { status: 500 })
   }
 }

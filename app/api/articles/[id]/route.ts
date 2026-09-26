@@ -74,6 +74,10 @@ export async function PUT(
       .filter(Boolean);
     const featuredImage = formData.get('featuredImage') as File | null;
     const deleteImage = formData.get('deleteImage') === 'true';
+    const publishedField = formData.get('isPublished');
+    if (publishedField !== null && publishedField !== 'true' && publishedField !== 'false') {
+      return NextResponse.json({ error: 'Ungültiger Veröffentlichungsstatus.' }, { status: 400 });
+    }
 
     if (!title || !content || !category) {
       return NextResponse.json({ error: 'Titel, Inhalt und Kategorie sind erforderlich.' }, { status: 400 });
@@ -119,6 +123,7 @@ export async function PUT(
         title,
         content,
         category,
+        ...(publishedField !== null ? { isPublished: publishedField === 'true' } : {}),
         featuredImage: featuredImagePath,
         tags: {
           set: [], // Entfernt alle bestehenden Tags
@@ -137,7 +142,7 @@ export async function PUT(
   } catch (error) {
     console.error(`PUT /api/articles/${id} Error:`, error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Fehler beim Aktualisieren des Artikels.' },
+      { error: error instanceof ImageUploadValidationError ? error.message : error instanceof RequestBodyLimitError ? 'Datei ist zu gross.' : 'Fehler beim Aktualisieren des Artikels.' },
       { status: error instanceof ImageUploadValidationError ? 400 : error instanceof RequestBodyLimitError ? 413 : 500 }
     );
   }

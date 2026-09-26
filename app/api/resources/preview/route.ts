@@ -5,7 +5,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { sanitizeTextServer } from '@/lib/server/sanitize-html';
 import { consumeRateLimit, rateLimitHeaders } from '@/lib/server/rate-limit';
-import { requestWithBodyLimit, RequestBodyLimitError } from '@/lib/server/request-body';
+import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
 import {
   assertSafePublicUrl,
   fetchSafePublicUrl,
@@ -18,9 +18,14 @@ const MAX_PREVIEW_REQUEST_BYTES = 8 * 1024;
 const MAX_PREVIEW_URL_LENGTH = 2048;
 const PREVIEW_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 } as const;
 
+function discardResponse(response: Response) {
+  void response.body?.cancel().catch(() => {});
+}
+
 async function readResponseTextLimited(response: Response, maxBytes: number) {
   const contentLength = Number(response.headers.get('content-length'));
   if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+    discardResponse(response);
     return null;
   }
 
@@ -39,7 +44,7 @@ async function readResponseTextLimited(response: Response, maxBytes: number) {
 
       const chunk = value as Uint8Array;
       if (total + chunk.byteLength > maxBytes) {
-        await reader.cancel();
+        void reader.cancel().catch(() => {});
         return null;
       }
 
@@ -73,10 +78,11 @@ const getPdfMetadata = async (url: URL) => {
     if (!response) return null;
 
     if (response.status >= 300 && response.status < 400) {
+      discardResponse(response);
       return null; // Weiterleitungen ignorieren
     }
 
-    if (!response.ok) return null;
+    if (!response.ok) { discardResponse(response); return null; }
 
     const contentType = response.headers.get('content-type');
     const contentLength = response.headers.get('content-length');
@@ -86,6 +92,7 @@ const getPdfMetadata = async (url: URL) => {
     if (contentType?.includes('application/pdf')) {
       const fileSizeInMB = contentLength ? Math.round(parseInt(contentLength) / (1024 * 1024) * 10) / 10 : null;
 
+      discardResponse(response);
       return {
         title: fileName,
         type: 'pdf',
@@ -94,6 +101,7 @@ const getPdfMetadata = async (url: URL) => {
         fileSize: fileSizeInMB ? `${fileSizeInMB} MB` : null,
       };
     }
+    discardResponse(response);
     return null;
   } catch (e) {
     console.error('Error fetching PDF metadata:', e);
@@ -121,6 +129,7 @@ const getVideoMetadata = async (url: string) => {
       if (!response) return null;
 
       if (response.status >= 300 && response.status < 400) {
+        discardResponse(response);
         return null; // Weiterleitungen ignorieren
       }
 
@@ -135,6 +144,7 @@ const getVideoMetadata = async (url: string) => {
           type: 'video'
         };
       }
+      discardResponse(response);
     }
 
     // Vimeo
@@ -150,6 +160,7 @@ const getVideoMetadata = async (url: string) => {
       if (!response) return null;
 
       if (response.status >= 300 && response.status < 400) {
+        discardResponse(response);
         return null; // Weiterleitungen ignorieren
       }
 
@@ -164,6 +175,7 @@ const getVideoMetadata = async (url: string) => {
           type: 'video'
         };
       }
+      discardResponse(response);
     }
 
     return null;
@@ -188,15 +200,18 @@ const getHtmlMetadata = async (url: URL) => {
     });
 
     if (!response || !response.ok) {
+      if (response) discardResponse(response);
       return null;
     }
 
     if (response.status >= 300 && response.status < 400) {
+      discardResponse(response);
       return null;
     }
 
     const contentType = response.headers.get('content-type') || '';
     if (!contentType.includes('text/html')) {
+      discardResponse(response);
       return null;
     }
 
@@ -268,8 +283,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const limitedRequest = await requestWithBodyLimit(request, MAX_PREVIEW_REQUEST_BYTES);
-    const { url } = await limitedRequest.json();
+    const { url } = await readJsonObject(request, MAX_PREVIEW_REQUEST_BYTES);
 
     if (typeof url !== 'string' || !url.trim() || url.length > MAX_PREVIEW_URL_LENGTH) {
       return NextResponse.json(
@@ -311,9 +325,11 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error('Preview error:', error);
+    const inputError = requestErrorResponse(error);
+    if (inputError) return inputError;
     return NextResponse.json(
       { error: 'Fehler beim Laden der Vorschau' },
-      { status: error instanceof HttpUrlValidationError ? 400 : error instanceof RequestBodyLimitError ? 413 : 500 }
+      { status: error instanceof HttpUrlValidationError ? 400 : 500 }
     );
   }
 }

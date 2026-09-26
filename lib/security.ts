@@ -51,6 +51,13 @@ export function getSafeHttpUrl(value: unknown): string | null {
     }
 }
 
+/** Also permit ordinary same-origin paths used by older resource records. */
+export function getSafeNavigationUrl(value: unknown): string | null {
+    if (typeof value !== 'string' || value.length === 0 || value.length > 2048) return null;
+    if (isSafeRelativeUrl(value) && !value.includes('\\')) return value;
+    return getSafeHttpUrl(value);
+}
+
 /**
  * Validates if a URL belongs to an allowed domain for video embedding
  */

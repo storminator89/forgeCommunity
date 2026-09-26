@@ -1,3 +1,4 @@
+import { PaginationError, readPagination } from '@/lib/server/pagination';
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
@@ -21,9 +22,7 @@ export async function GET(
     const canViewDrafts = session.user.role === 'ADMIN' || session.user.id === params.id
 
     const searchParams = new URL(request.url).searchParams
-    const page = parseInt(searchParams.get('page') || '1')
-    const limit = parseInt(searchParams.get('limit') || '10')
-    const skip = (page - 1) * limit
+    const { page, limit, skip } = readPagination(searchParams, 10);
 
     // Hole verschiedene Aktivitätstypen
     const [posts, comments, projects, courses] = await Promise.all([
@@ -47,9 +46,8 @@ export async function GET(
             },
           },
         },
-        orderBy: { createdAt: 'desc' },
-        take: limit,
-        skip,
+        orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+        take: skip + limit + 1,
       }),
 
       // Letzte Kommentare
@@ -67,9 +65,8 @@ export async function GET(
             },
           },
         },
-        orderBy: { createdAt: 'desc' },
-        take: limit,
-        skip,
+        orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+        take: skip + limit + 1,
       }),
 
       // Letzte Projekte
@@ -89,9 +86,8 @@ export async function GET(
             },
           },
         },
-        orderBy: { createdAt: 'desc' },
-        take: limit,
-        skip,
+        orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+        take: skip + limit + 1,
       }),
 
       // Letzte Kurse
@@ -110,9 +106,8 @@ export async function GET(
             },
           },
         },
-        orderBy: { createdAt: 'desc' },
-        take: limit,
-        skip,
+        orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+        take: skip + limit + 1,
       }),
     ])
 
@@ -162,17 +157,18 @@ export async function GET(
         },
         createdAt: course.createdAt,
       })),
-    ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || a.type.localeCompare(b.type) || a.id.localeCompare(b.id))
 
     return NextResponse.json({
-      activities,
+      activities: activities.slice(skip, skip + limit),
       pagination: {
         page,
         limit,
-        hasMore: activities.length === limit,
+        hasMore: activities.length > skip + limit,
       },
     })
   } catch (error) {
+    if (error instanceof PaginationError) return NextResponse.json({ error: error.message }, { status: 400 });
     console.error('Error fetching activity:', error)
     return NextResponse.json(
       { error: 'Fehler beim Laden der Aktivitäten' },

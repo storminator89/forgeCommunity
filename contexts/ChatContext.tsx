@@ -111,6 +111,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         `/api/chat/messages?channelId=${encodeURIComponent(channelId)}&latest=true&limit=50`,
         { signal },
       );
+      if (response.status === 403 && activeChannelIdRef.current === channelId) {
+        setMessages([]);
+        setChannels(previous => previous.filter(channel => channel.id !== channelId));
+        setCurrentChannelState(null);
+      }
       if (!response.ok) throw new Error('Failed to fetch messages');
       const data = await response.json();
 
@@ -156,19 +161,25 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
   }, [processedMessageIds]);
 
-  const syncMessages = useCallback(async () => {
+  const syncMessages = useCallback(async (signal?: AbortSignal) => {
     if (!currentChannel || !session?.user) return;
 
     const channelId = currentChannel.id;
 
     try {
       const response = await fetch(
-        `/api/chat/messages?channelId=${encodeURIComponent(channelId)}&after=${encodeURIComponent(lastSync.toISOString())}${lastSyncId ? `&afterId=${encodeURIComponent(lastSyncId)}` : ''}`
+        `/api/chat/messages?channelId=${encodeURIComponent(channelId)}&after=${encodeURIComponent(lastSync.toISOString())}${lastSyncId ? `&afterId=${encodeURIComponent(lastSyncId)}` : ''}`,
+        { signal },
       );
+      if (response.status === 403 && activeChannelIdRef.current === channelId) {
+        setMessages([]);
+        setChannels(previous => previous.filter(channel => channel.id !== channelId));
+        setCurrentChannelState(null);
+      }
       if (!response.ok) throw new Error('Failed to sync messages');
       const data = await response.json();
 
-      if (activeChannelIdRef.current !== channelId) return;
+      if (signal?.aborted || activeChannelIdRef.current !== channelId || activeSessionIdRef.current !== session.user.id) return;
 
       const newMessages = data.items.filter((newMsg: ChatMessage) => !processedMessageIds.has(newMsg.id));
 
@@ -237,7 +248,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         );
       }
     } catch (err) {
-      console.error('Error syncing messages:', err);
+      if (!(err instanceof DOMException && err.name === 'AbortError')) console.error('Error syncing messages:', err);
     }
   }, [addNotification, currentChannel, isWindowFocused, lastSync, lastSyncId, processedMessageIds, session]);
 
@@ -307,14 +318,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let syncInterval: NodeJS.Timeout;
+    const controller = new AbortController();
 
     if (currentChannel && session?.user) {
       syncInterval = setInterval(async () => {
-        await syncMessages();
+        await syncMessages(controller.signal);
       }, 10000); // 10 Sekunden Intervall
     }
 
     return () => {
+      controller.abort();
       if (syncInterval) {
         clearInterval(syncInterval);
       }
