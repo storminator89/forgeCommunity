@@ -34,9 +34,9 @@ async function verifyCurrentSkillEndorsement(client) {
     SELECT c.conname, c.contype, c.confdeltype, c.confupdtype, c.condeferrable, c.convalidated,
            c.confrelid = to_regclass('"User"') AS references_user,
            c.confrelid = to_regclass('"UserSkill"') AS references_user_skill,
-           ARRAY(SELECT a.attname FROM unnest(c.conkey) WITH ORDINALITY AS k(attnum, n)
+           ARRAY(SELECT a.attname::text FROM unnest(c.conkey) WITH ORDINALITY AS k(attnum, n)
                  JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.attnum ORDER BY k.n) AS columns,
-           ARRAY(SELECT a.attname FROM unnest(c.confkey) WITH ORDINALITY AS k(attnum, n)
+           ARRAY(SELECT a.attname::text FROM unnest(c.confkey) WITH ORDINALITY AS k(attnum, n)
                  JOIN pg_attribute a ON a.attrelid = c.confrelid AND a.attnum = k.attnum ORDER BY k.n) AS referenced_columns
     FROM pg_constraint c WHERE c.conrelid = to_regclass('"SkillEndorsement"')`);
   const byName = new Map(constraints.map(constraint => [constraint.conname, constraint]));
@@ -64,7 +64,7 @@ async function verifyCurrentSkillEndorsement(client) {
     SELECT idx.relname AS name, i.indisunique, i.indisprimary, i.indisvalid, i.indisready,
            i.indpred IS NULL AS no_predicate, i.indexprs IS NULL AS no_expression,
            i.indnkeyatts,
-           ARRAY(SELECT a.attname FROM unnest(i.indkey) WITH ORDINALITY AS k(attnum, n)
+           ARRAY(SELECT a.attname::text FROM unnest(i.indkey) WITH ORDINALITY AS k(attnum, n)
                  JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = k.attnum ORDER BY k.n) AS columns
     FROM pg_index i JOIN pg_class idx ON idx.oid = i.indexrelid
     WHERE i.indrelid = to_regclass('"SkillEndorsement"')`);
