@@ -3,6 +3,10 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/app/api/auth/[...nextauth]/options'
 import prisma from '@/lib/prisma'
+import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input'
+
+const validId = (value: unknown): value is string =>
+  typeof value === 'string' && value.length > 0 && value.length <= 100 && value.trim() === value
 
 export async function POST(req: Request) {
   try {
@@ -18,9 +22,9 @@ export async function POST(req: Request) {
       return new NextResponse('Unauthorized', { status: 403 })
     }
 
-    const { userId, channelId } = await req.json()
+    const { userId, channelId } = await readJsonObject(req)
 
-    if (!userId || !channelId) {
+    if (!validId(userId) || !validId(channelId)) {
       return new NextResponse('UserId and channelId are required', { status: 400 })
     }
 
@@ -62,6 +66,8 @@ export async function POST(req: Request) {
 
     return NextResponse.json(member)
   } catch (error) {
+    const requestError = requestErrorResponse(error)
+    if (requestError) return requestError
     console.error('[MEMBERS_POST]', error)
     return new NextResponse('Internal Error', { status: 500 })
   }
@@ -78,7 +84,7 @@ export async function DELETE(req: Request) {
     const userId = searchParams.get('userId')
     const channelId = searchParams.get('channelId')
 
-    if (!userId || !channelId) {
+    if (!validId(userId) || !validId(channelId)) {
       return new NextResponse('UserId and channelId are required', { status: 400 })
     }
 
@@ -118,7 +124,7 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url)
     const channelId = searchParams.get('channelId')
 
-    if (!channelId) {
+    if (!validId(channelId)) {
       return new NextResponse('ChannelId is required', { status: 400 })
     }
 

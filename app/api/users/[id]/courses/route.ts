@@ -1,3 +1,4 @@
+import { PaginationError, readPagination } from '@/lib/server/pagination';
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getServerSession } from "next-auth/next";
@@ -16,9 +17,7 @@ export async function GET(
     }
 
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '6');
-    const skip = (page - 1) * limit;
+    const { page, limit, skip } = readPagination(searchParams, 6);
 
     const [courses, total] = await Promise.all([
       prisma.course.findMany({
@@ -40,6 +39,7 @@ export async function GET(
             },
           },
           enrollments: {
+            select: { id: true },
             where: {
               completedAt: {
                 not: null
@@ -100,6 +100,7 @@ export async function GET(
       }
     });
   } catch (error) {
+    if (error instanceof PaginationError) return NextResponse.json({ error: error.message }, { status: 400 });
     console.error('Failed to fetch user courses:', error);
     return NextResponse.json(
       { error: 'Failed to fetch courses' },

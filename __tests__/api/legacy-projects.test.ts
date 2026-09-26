@@ -49,6 +49,8 @@ describe('legacy profile project creation', () => {
   it.each(['javascript:alert(1)', 'data:text/html,<script>alert(1)</script>', 'file:///etc/passwd'])
     ('rejects unsafe project URL %s before persistence', async (link) => {
       const request = {
+        headers: { get: () => null },
+        body: null,
         json: async () => ({
           title: 'Project',
           description: 'Description',
@@ -73,6 +75,8 @@ describe('legacy profile project creation', () => {
     });
 
     const request = {
+      headers: { get: () => null },
+      body: null,
       json: async () => ({
         title: 'Project',
         description: 'Description',

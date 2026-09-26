@@ -5,6 +5,7 @@ import prisma from '@/lib/prisma'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth' 
 import { sanitizeRichHtmlServer, sanitizeTextServer } from '@/lib/server/sanitize-html'
+import { readJsonObject, readPage, requestErrorResponse } from '@/lib/server/api-input'
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,16 +14,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Nicht authentifiziert' }, { status: 401 })
     }
 
-    const { title, content } = await req.json()
+    const { title, content } = await readJsonObject(req)
 
-    if (!title || !content) {
+    if (typeof title !== 'string' || typeof content !== 'string') {
+      return NextResponse.json({ error: 'Titel und Inhalt sind erforderlich' }, { status: 400 })
+    }
+    const safeTitle = sanitizeTextServer(title)
+    const safeContent = sanitizeRichHtmlServer(content)
+    if (!safeTitle || !sanitizeTextServer(safeContent)) {
       return NextResponse.json({ error: 'Titel und Inhalt sind erforderlich' }, { status: 400 })
     }
 
     const newPost = await prisma.post.create({
       data: {
-        title: sanitizeTextServer(title),
-        content: sanitizeRichHtmlServer(content),
+        title: safeTitle,
+        content: safeContent,
         // Community posts are immediately published. The schema also serves
         // draft-capable clients, so read routes still enforce draft privacy.
         published: true,
@@ -38,12 +44,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(newPost, { status: 201 })
   } catch (error: any) {
     console.error(error)
+    const inputError = requestErrorResponse(error)
+    if (inputError) return inputError
     return NextResponse.json({ error: 'Fehler beim Erstellen des Beitrags' }, { status: 500 })
   }
 }
 
 export async function GET(req: NextRequest) {
   try {
+    const page = readPage(req)
     const session = await getServerSession(authOptions)
     const userId = session?.user?.id
     const where = session?.user?.role === 'ADMIN'
@@ -54,6 +63,7 @@ export async function GET(req: NextRequest) {
 
     const posts = await prisma.post.findMany({
       where,
+      ...page,
       include: {
         author: {
           select: { id: true, name: true, image: true },
@@ -86,6 +96,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(mappedPosts)
   } catch (error) {
     console.error(error)
+    const inputError = requestErrorResponse(error)
+    if (inputError) return inputError
     return NextResponse.json({ error: 'Fehler beim Abrufen der Beiträge' }, { status: 500 })
   }
 }

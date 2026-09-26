@@ -116,7 +116,12 @@ function Community() {
 
     const loadPosts = async () => {
       try {
-        const data = await fetchWithErrorHandling('/api/posts', { signal: postsController.signal })
+        const data = []
+        for (let page = 1; ; page++) {
+          const batch = await fetchWithErrorHandling(`/api/posts?page=${page}`, { signal: postsController.signal })
+          data.push(...batch)
+          if (batch.length < 50) break
+        }
         if (!active || postsRequestRef.current !== postsController) return
         setLocalPosts(data)
       } catch (error) {

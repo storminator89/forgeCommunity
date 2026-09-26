@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/options';
 import prisma from '@/lib/prisma';
+import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
 
 export async function POST(req: Request) {
   try {
@@ -11,17 +12,17 @@ export async function POST(req: Request) {
       return new NextResponse('Unauthorized', { status: 401 });
     }
 
-    const { name, isPrivate } = await req.json();
+    const { name, isPrivate = false } = await readJsonObject(req);
 
-    if (!name) {
+    if (typeof name !== 'string' || !name.trim() || name.length > 100 || typeof isPrivate !== 'boolean') {
       return new NextResponse('Name is required', { status: 400 });
     }
 
     // Channel erstellen
     const channel = await prisma.chatChannel.create({
       data: {
-        name,
-        isPrivate: isPrivate || false,
+        name: name.trim(),
+        isPrivate,
         // Ersteller automatisch als Mitglied hinzufügen
         members: {
           create: {
@@ -53,6 +54,8 @@ export async function POST(req: Request) {
 
     return NextResponse.json(channel);
   } catch (error) {
+    const requestError = requestErrorResponse(error);
+    if (requestError) return requestError;
     console.error('[CHANNELS_POST]', error);
     return new NextResponse('Internal Error', { status: 500 });
   }

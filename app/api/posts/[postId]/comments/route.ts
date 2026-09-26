@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import { sanitizeTextServer } from '@/lib/server/sanitize-html'
+import { readJsonObject, readPage, requestErrorResponse } from '@/lib/server/api-input'
 
 export async function POST(req: NextRequest, props: { params: Promise<{ postId: string }> }) {
   const params = await props.params;
@@ -12,7 +13,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ postId: 
       return NextResponse.json({ error: 'Nicht authentifiziert' }, { status: 401 })
     }
 
-    const { content } = await req.json()
+    const { content } = await readJsonObject(req)
     const { postId } = params
 
     const sanitizedContent = typeof content === 'string' ? sanitizeTextServer(content) : ''
@@ -57,6 +58,8 @@ export async function POST(req: NextRequest, props: { params: Promise<{ postId: 
     return NextResponse.json(formattedComment)
   } catch (error) {
     console.error('Fehler beim Erstellen des Kommentars:', error)
+    const inputError = requestErrorResponse(error)
+    if (inputError) return inputError
     return NextResponse.json({ error: 'Fehler beim Erstellen des Kommentars' }, { status: 500 })
   }
 }
@@ -64,6 +67,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ postId: 
 export async function GET(req: NextRequest, props: { params: Promise<{ postId: string }> }) {
   const params = await props.params;
   try {
+    const page = readPage(req)
     const { postId } = params
     const session = await getServerSession(authOptions)
     const userId = session?.user?.id
@@ -79,6 +83,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ postId: s
 
     const comments = await prisma.comment.findMany({
       where: { postId },
+      ...page,
       include: {
         author: {
           select: { id: true, name: true, image: true },
@@ -97,6 +102,8 @@ export async function GET(req: NextRequest, props: { params: Promise<{ postId: s
     return NextResponse.json(formattedComments)
   } catch (error) {
     console.error('Fehler beim Abrufen der Kommentare:', error)
+    const inputError = requestErrorResponse(error)
+    if (inputError) return inputError
     return NextResponse.json({ error: 'Fehler beim Abrufen der Kommentare' }, { status: 500 })
   }
 }

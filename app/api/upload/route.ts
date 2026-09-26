@@ -31,9 +31,9 @@ export async function POST(request: NextRequest) {
 
         const limitedRequest = await requestWithBodyLimit(request, MAX_MULTIPART_REQUEST_BYTES);
         const formData = await limitedRequest.formData();
-        const file = formData.get('file') as File;
+        const file = formData.get('file');
 
-        if (!file) {
+        if (!file || typeof file === 'string') {
             return NextResponse.json(
                 { error: 'Keine Datei hochgeladen' },
                 { status: 400 }
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
     } catch (error) {
         console.error('Fehler beim Hochladen:', error);
         return NextResponse.json(
-            { error: error instanceof Error ? error.message : 'Fehler beim Hochladen der Datei' },
+            { error: error instanceof ImageUploadValidationError ? error.message : error instanceof RequestBodyLimitError ? 'Datei ist zu gross.' : 'Fehler beim Hochladen der Datei' },
             { status: error instanceof ImageUploadValidationError ? 400 : error instanceof RequestBodyLimitError ? 413 : 500 }
         );
     }

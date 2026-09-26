@@ -2,33 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../../auth/[...nextauth]/options";
-
-interface SocialLinks {
-  github?: string | null;
-  linkedin?: string | null;
-  twitter?: string | null;
-  website?: string | null;
-}
-
-const SOCIAL_LINK_KEYS = new Set(['github', 'linkedin', 'twitter', 'website']);
-const MAX_SOCIAL_URL_LENGTH = 2048;
-
-function isValidUrl(value: unknown): value is string | null {
-  if (value === null || value === '') return true;
-  if (typeof value !== 'string') return false;
-
-  const url = value.trim();
-  if (!url || url.length > MAX_SOCIAL_URL_LENGTH) return false;
-
-  try {
-    const parsed = new URL(url);
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
-    if (parsed.username || parsed.password) return false;
-    return true;
-  } catch {
-    return false;
-  }
-}
+import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
+import { socialLinksInput } from '@/lib/server/profile-input';
 
 export async function PUT(
   request: NextRequest,
@@ -45,32 +20,11 @@ export async function PUT(
       );
     }
 
-    const data = await request.json();
-    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    const parsed = socialLinksInput.safeParse(await readJsonObject(request));
+    if (!parsed.success) {
       return NextResponse.json({ error: 'Ungültige sozialen Links' }, { status: 400 });
     }
-
-    // Validiere URLs
-    const invalidUrls = Object.entries(data)
-      .filter(([key, url]) => !SOCIAL_LINK_KEYS.has(key) || !isValidUrl(url))
-      .map(([key]) => key);
-
-    if (invalidUrls.length > 0) {
-      return NextResponse.json(
-        {
-          error: 'Ungültige URLs für: ' + invalidUrls.join(', ')
-        },
-        { status: 400 }
-      );
-    }
-
-    // Entferne leere Strings und ersetze sie durch null
-    const cleanedData = Object.fromEntries(
-      Object.entries(data as SocialLinks).map(([key, value]) => [
-        key,
-        typeof value === 'string' ? value.trim() || null : null
-      ])
-    );
+    const cleanedData = parsed.data;
 
     // Update des Benutzers
     const updatedUser = await prisma.user.update({
@@ -90,6 +44,8 @@ export async function PUT(
     });
 
   } catch (error) {
+    const invalidBody = requestErrorResponse(error);
+    if (invalidBody) return invalidBody;
     console.error('Error updating social links:', error);
     return NextResponse.json(
       { error: 'Fehler beim Aktualisieren der sozialen Links' },

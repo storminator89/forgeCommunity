@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '../../auth/[...nextauth]/options'
+import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input'
 
 export async function GET(
   request: NextRequest,
@@ -57,6 +58,11 @@ export async function GET(
       )
     }
 
+    const savedSocialLinks = user.socialLinks && typeof user.socialLinks === 'object' && !Array.isArray(user.socialLinks)
+      ? user.socialLinks as Record<string, unknown>
+      : {}
+    const socialLink = (key: string) => typeof savedSocialLinks[key] === 'string' ? savedSocialLinks[key] as string : null
+
     // Formatiere die Daten für die Frontend-Anzeige
     const formattedUser = {
       id: user.id,
@@ -74,6 +80,7 @@ export async function GET(
       isCurrentUser: user.id === session.user.id,
       skills: user.skills.map(userSkill => ({
         id: userSkill.id,
+        skillId: userSkill.skillId,
         name: userSkill.skill.name,
         level: userSkill.level,
         endorsements: userSkill.endorsements,
@@ -95,10 +102,10 @@ export async function GET(
       },
       // Optional: Fügen Sie Social Media Links hinzu, wenn Sie diese in Ihrem Schema haben
       socialLinks: {
-        github: null,    // TODO: Aus user-Daten oder separater Tabelle laden
-        linkedin: null,  // TODO: Aus user-Daten oder separater Tabelle laden
-        twitter: null,   // TODO: Aus user-Daten oder separater Tabelle laden
-        website: null,   // TODO: Aus user-Daten oder separater Tabelle laden
+        github: socialLink('github'),
+        linkedin: socialLink('linkedin'),
+        twitter: socialLink('twitter'),
+        website: socialLink('website'),
       },
     }
 
@@ -228,7 +235,7 @@ export async function PATCH(
       )
     }
 
-    const data = await request.json()
+    const data = await readJsonObject(request)
     const { skillId } = data
 
     if (session.user.id === params.id) {
@@ -238,7 +245,7 @@ export async function PATCH(
       )
     }
 
-    if (!skillId) {
+    if (typeof skillId !== 'string' || !skillId.trim()) {
       return NextResponse.json(
         { error: 'Skill ID ist erforderlich' },
         { status: 400 }
@@ -249,7 +256,7 @@ export async function PATCH(
     const userSkill = await prisma.userSkill.findFirst({
       where: {
         userId: params.id,
-        skillId,
+        OR: [{ id: skillId }, { skillId }],
       },
     })
 
@@ -260,20 +267,30 @@ export async function PATCH(
       )
     }
 
-    // Aktualisiere die Endorsements
-    await prisma.userSkill.update({
-      where: {
-        id: userSkill.id,
-      },
-      data: {
-        endorsements: {
-          increment: 1,
-        },
-      },
+    // The unique pair is the durable guard against retries and parallel requests.
+    await prisma.$transaction(async tx => {
+      await tx.skillEndorsement.create({
+        data: { endorserId: session.user.id, userSkillId: userSkill.id },
+      })
+      await tx.userSkill.update({
+        where: { id: userSkill.id },
+        data: { endorsements: { increment: 1 } },
+      })
     })
 
     return NextResponse.json({ success: true })
   } catch (error) {
+    const invalidRequest = requestErrorResponse(error)
+    if (invalidRequest) return invalidRequest
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002') {
+      return NextResponse.json({ error: 'Skill bereits empfohlen' }, { status: 409 })
+    }
+    if (typeof error === 'object' && error !== null && 'code' in error && (error.code === 'P2003' || error.code === 'P2025')) {
+      return NextResponse.json({ error: 'Skill nicht gefunden' }, { status: 404 })
+    }
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2034') {
+      return NextResponse.json({ error: 'Gleichzeitige Änderung. Bitte erneut versuchen.' }, { status: 409 })
+    }
     console.error('Error endorsing skill:', error)
     return NextResponse.json(
       { error: 'Interner Serverfehler' },

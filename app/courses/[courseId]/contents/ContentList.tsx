@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { CourseContent } from './types'
 import { FileText, ChevronUp, ChevronDown, Pen, Trash2, CheckCircle } from 'lucide-react'
 import { Button } from "@/components/ui/button"
@@ -54,8 +54,8 @@ export function ContentList({
   return (
     <div>
       {contents.map((content, index) => (
+        <Fragment key={content.id}>
         <div
-          key={content.id}
           className={cn(
             "relative group flex items-center justify-between py-2 px-3 rounded-md transition-all duration-200",
             selectedContentId === content.id && "bg-primary/10 text-primary font-medium shadow-sm",
@@ -200,6 +200,30 @@ export function ContentList({
             </div>
           </div>
         </div>
+        {content.subContents && content.subContents.length > 0 && (
+          <div className="pl-4 ml-3 border-l border-border/40">
+            <ContentList
+              contents={content.subContents}
+              selectedContentId={selectedContentId}
+              onContentSelect={onContentSelect}
+              onEditClick={onEditClick}
+              onDeleteClick={onDeleteClick}
+              isInlineEditing={isInlineEditing}
+              inlineEditTitle={inlineEditTitle}
+              onInlineEditSubmit={onInlineEditSubmit}
+              setIsInlineEditing={setIsInlineEditing}
+              setInlineEditTitle={setInlineEditTitle}
+              onMoveUp={onMoveUp}
+              onMoveDown={onMoveDown}
+              mainContentId={content.id}
+              mainTopicIndex={mainTopicIndex}
+              courseId={courseId}
+              isLoading={isLoading}
+              onVisitedToggle={onVisitedToggle}
+            />
+          </div>
+        )}
+        </Fragment>
       ))}
     </div>
   );

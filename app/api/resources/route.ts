@@ -6,21 +6,35 @@ import { z } from 'zod';
 import prisma from '@/lib/prisma';
 import { containsInsensitive } from '@/lib/server/database-query';
 import { HttpUrlValidationError, normalizeHttpUrl } from '@/lib/server/url-security';
+import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
 
 // Schema für Ressourcenvalidierung
 const resourceSchema = z.object({
-  title: z.string().min(1),
+  title: z.string().trim().min(1).max(300),
   type: z.nativeEnum(ResourceType),
-  category: z.string().min(1),
-  url: z.string().url().transform((value) => normalizeHttpUrl(value).toString()),
-  color: z.string().min(1),
+  category: z.string().trim().min(1).max(100),
+  url: z.string().trim().url().max(2048).transform((value) => normalizeHttpUrl(value).toString()),
+  color: z.string().trim().min(1).max(100),
+});
+const legacyUpdateSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().trim().min(1).max(300),
+  url: z.string().trim().url().max(2048).transform((value) => normalizeHttpUrl(value).toString()),
 });
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '9');
+    const pageValue = searchParams.get('page') || '1';
+    const limitValue = searchParams.get('limit') || '9';
+    if (!/^\d+$/.test(pageValue) || !/^\d+$/.test(limitValue)) {
+      return NextResponse.json({ error: 'Ungültige Seitennummer oder Limit.' }, { status: 400 });
+    }
+    const page = Number(pageValue);
+    const limit = Number(limitValue);
+    if (!Number.isSafeInteger(page) || page < 1 || !Number.isSafeInteger(limit) || limit < 1 || limit > 100 || (page - 1) * limit > Number.MAX_SAFE_INTEGER) {
+      return NextResponse.json({ error: 'Ungültige Seitennummer oder Limit.' }, { status: 400 });
+    }
     const search = searchParams.get('search') || '';
 
     const skip = (page - 1) * limit;
@@ -73,7 +87,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = await request.json();
+    const body = await readJsonObject(request);
     const parsed = resourceSchema.parse(body);
 
     const newResource = await prisma.resource.create({
@@ -99,12 +113,14 @@ export async function POST(request: Request) {
 
     return NextResponse.json(newResource, { status: 201 });
   } catch (error: any) {
+    const inputError = requestErrorResponse(error);
+    if (inputError) return inputError;
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.issues }, { status: 400 });
     }
     console.error('Error creating resource:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Fehler beim Erstellen der Ressource.' },
+      { error: error instanceof HttpUrlValidationError ? error.message : 'Fehler beim Erstellen der Ressource.' },
       { status: error instanceof HttpUrlValidationError ? 400 : 500 }
     );
   }
@@ -117,12 +133,7 @@ export async function PUT(request: Request) {
   }
 
   try {
-    const body = await request.json();
-    const { id, title, url } = body;
-
-    if (!id || !title || !url) {
-      return NextResponse.json({ error: 'ID, Titel und URL sind erforderlich.' }, { status: 400 });
-    }
+    const { id, title, url } = legacyUpdateSchema.parse(await readJsonObject(request));
 
     const resource = await prisma.resource.findUnique({
       where: { id },
@@ -140,15 +151,18 @@ export async function PUT(request: Request) {
       where: { id },
       data: {
         title,
-        url: normalizeHttpUrl(url).toString(),
+        url,
       },
     });
 
     return NextResponse.json(updatedResource, { status: 200 });
   } catch (error: any) {
+    const inputError = requestErrorResponse(error);
+    if (inputError) return inputError;
+    if (error instanceof z.ZodError) return NextResponse.json({ error: error.issues }, { status: 400 });
     console.error('Error updating resource:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Fehler beim Aktualisieren der Ressource.' },
+      { error: error instanceof HttpUrlValidationError ? error.message : 'Fehler beim Aktualisieren der Ressource.' },
       { status: error instanceof HttpUrlValidationError ? 400 : 500 }
     );
   }

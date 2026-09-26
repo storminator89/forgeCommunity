@@ -18,6 +18,16 @@ import { toast } from 'react-toastify'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 const MIN_PASSWORD_LENGTH = 12
+const PASSWORD_HELP = 'mindestens 12 Zeichen, höchstens 72 UTF-8-Bytes sowie Groß- und Kleinbuchstaben, Zahl und Sonderzeichen'
+
+function passwordError(password: string): string | null {
+  if (password.length < MIN_PASSWORD_LENGTH || new TextEncoder().encode(password).length > 72 ||
+      !/[A-Z]/.test(password) || !/[a-z]/.test(password) ||
+      !/[0-9]/.test(password) || !/[^A-Za-z0-9]/.test(password)) {
+    return `Das Passwort benötigt ${PASSWORD_HELP}.`
+  }
+  return null
+}
 
 interface AddUserDialogProps {
   isOpen: boolean
@@ -69,8 +79,9 @@ export default function AddUserDialog({ isOpen, onClose, onAddUser }: AddUserDia
         return
       }
 
-      if (formData.password.length < MIN_PASSWORD_LENGTH) {
-        toast.error(`Das Passwort muss mindestens ${MIN_PASSWORD_LENGTH} Zeichen lang sein`)
+      const invalidPassword = passwordError(formData.password)
+      if (invalidPassword) {
+        toast.error(invalidPassword)
         return
       }
 
@@ -182,7 +193,7 @@ export default function AddUserDialog({ isOpen, onClose, onAddUser }: AddUserDia
                     required
                   />
                   <p className="text-xs text-gray-500">
-                    Mindestens {MIN_PASSWORD_LENGTH} Zeichen
+                    {PASSWORD_HELP}
                   </p>
                 </div>
 

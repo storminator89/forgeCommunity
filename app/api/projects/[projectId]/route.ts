@@ -93,31 +93,37 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ projectId
     }
     const limitedRequest = await requestWithBodyLimit(req, MAX_MULTIPART_REQUEST_BYTES)
     const formData = await limitedRequest.formData()
-    const rawTitle = formData.get('title') as string
-    const rawDescription = formData.get('description') as string
-    const rawCategory = formData.get('category') as string
-    const rawLink = (formData.get('link') as string)?.trim()
+    const rawTitle = formData.get('title')
+    const rawDescription = formData.get('description')
+    const rawCategory = formData.get('category')
+    const rawLink = formData.get('link')
+    const rawTags = formData.get('tags')
+    const image = formData.get('image')
+    if (rawTitle == null || rawDescription == null || rawCategory == null || rawLink == null) {
+      return NextResponse.json({ error: 'Titel, Beschreibung, Kategorie und Link sind erforderlich.' }, { status: 400 })
+    }
+    if (typeof rawTitle !== 'string' || typeof rawDescription !== 'string' || typeof rawCategory !== 'string' || typeof rawLink !== 'string' || (rawTags != null && typeof rawTags !== 'string') || (image != null && typeof image === 'string')) {
+      return NextResponse.json({ error: 'Ungültige Projektdaten.' }, { status: 400 })
+    }
     const title = sanitizeTextServer(rawTitle)
     const description = sanitizeRichHtmlServer(rawDescription)
     const category = sanitizeTextServer(rawCategory)
-    const tags = (formData.get('tags') as string)
+    const tags = (rawTags ?? '')
       .split(',')
       .map(tag => sanitizeTextServer(tag))
       .filter(tag => tag !== '')
-    if (!rawTitle || !rawDescription || !rawCategory || !rawLink) {
+    if (!title || !sanitizeTextServer(description) || !category || !rawLink.trim()) {
       return NextResponse.json({ error: 'Titel, Beschreibung, Kategorie und Link sind erforderlich.' }, { status: 400 })
     }
-    const link = normalizeHttpUrl(rawLink)
-    const image = formData.get('image') as File | null
+    if (title.length > 300 || description.length > 100_000 || category.length > 100 || tags.length > 20 || tags.some(tag => tag.length > 60)) {
+      return NextResponse.json({ error: 'Projektdaten sind zu lang.' }, { status: 400 })
+    }
+    const link = normalizeHttpUrl(rawLink).toString()
 
     let imageUrl = project.imageUrl
     if (image) {
       try {
-        imageUrl = await saveImageUpload(image, 'project')
-
-        if (project.imageUrl) {
-          await deleteUploadedImage(project.imageUrl)
-        }
+        imageUrl = await saveImageUpload(image as File, 'project')
       } catch (error) {
         console.error('Error saving image:', error)
         return NextResponse.json(
@@ -171,6 +177,10 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ projectId
       },
     })
 
+    if (image && project.imageUrl) {
+      try { await deleteUploadedImage(project.imageUrl) } catch (cleanupError) { console.error('Old project image cleanup failed:', cleanupError) }
+    }
+
     return NextResponse.json(updatedProject, { status: 200 })
   } catch (error) {
     console.error('Error updating project:', error)
@@ -208,15 +218,14 @@ export async function DELETE(req: NextRequest, props: { params: Promise<{ projec
       return NextResponse.json({ error: 'Nicht autorisiert.' }, { status: 403 })
     }
 
-    // Lösche das Bild, falls vorhanden
-    if (project.imageUrl) {
-      await deleteUploadedImage(project.imageUrl)
-    }
-
     // Lösche das Projekt (cascading delete übernimmt Likes und Kommentare)
     await prisma.project.delete({
       where: { id: projectId },
     })
+
+    if (project.imageUrl) {
+      try { await deleteUploadedImage(project.imageUrl) } catch (cleanupError) { console.error('Project image cleanup failed:', cleanupError) }
+    }
 
     return NextResponse.json({ message: 'Projekt erfolgreich gelöscht.' }, { status: 200 })
   } catch (error) {

@@ -7,14 +7,15 @@ import { ResourceType } from '@prisma/client';
 import { z } from 'zod';
 import prisma from '@/lib/prisma';
 import { HttpUrlValidationError, normalizeHttpUrl } from '@/lib/server/url-security';
+import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
 
 // Schema für Ressourcenvalidierung bei Updates
 const resourceUpdateSchema = z.object({
-  title: z.string().min(1).optional(),
+  title: z.string().trim().min(1).max(300).optional(),
   type: z.nativeEnum(ResourceType).optional(),
-  category: z.string().min(1).optional(),
-  url: z.string().url().transform((value) => normalizeHttpUrl(value).toString()).optional(),
-  color: z.string().min(1).optional(),
+  category: z.string().trim().min(1).max(100).optional(),
+  url: z.string().trim().url().max(2048).transform((value) => normalizeHttpUrl(value).toString()).optional(),
+  color: z.string().trim().min(1).max(100).optional(),
 });
 
 async function isAdmin(userId: string) {
@@ -61,7 +62,7 @@ export async function PUT(request: Request, props: { params: Promise<{ id: strin
   }
 
   try {
-    const body = await request.json();
+    const body = await readJsonObject(request);
     const { title, url } = resourceUpdateSchema.parse(body);
     const { id } = params;
 
@@ -109,9 +110,12 @@ export async function PUT(request: Request, props: { params: Promise<{ id: strin
 
     return NextResponse.json(updatedResource, { status: 200 });
   } catch (error) {
+    const inputError = requestErrorResponse(error);
+    if (inputError) return inputError;
+    if (error instanceof z.ZodError) return NextResponse.json({ error: error.issues }, { status: 400 });
     console.error('Error updating resource:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Fehler beim Aktualisieren der Ressource.' },
+      { error: error instanceof HttpUrlValidationError ? error.message : 'Fehler beim Aktualisieren der Ressource.' },
       { status: error instanceof HttpUrlValidationError ? 400 : 500 }
     );
   }

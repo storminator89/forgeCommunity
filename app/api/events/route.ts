@@ -6,6 +6,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { DateTime } from 'luxon';
 import { sanitizeRichHtmlServer, sanitizeTextServer } from '@/lib/server/sanitize-html';
+import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
 
 // Unterstützte Zeitzonen
 const TIMEZONES = [
@@ -58,15 +59,15 @@ export async function POST(request: Request) {
   }
 
   try {
-    const data = await request.json();
-    const title = sanitizeTextServer(data.title);
-    const description = sanitizeRichHtmlServer(data.description);
-    const location = sanitizeTextServer(data.location);
-    const category = sanitizeTextServer(data.category) || 'Allgemein';
+    const data = await readJsonObject(request);
+    const title = sanitizeTextServer(typeof data.title === 'string' ? data.title : '');
+    const description = sanitizeRichHtmlServer(typeof data.description === 'string' ? data.description : '');
+    const location = sanitizeTextServer(typeof data.location === 'string' ? data.location : '');
+    const category = sanitizeTextServer(typeof data.category === 'string' ? data.category : '') || 'Allgemein';
     const { date, startTime, endTime, timezone } = data;
 
     // Überprüfen der erforderlichen Felder
-    if (!title || !date || !description || !location || !timezone || !startTime || !endTime) {
+    if (!title || typeof date !== 'string' || !date || !description || !location || typeof timezone !== 'string' || !timezone || typeof startTime !== 'string' || !startTime || typeof endTime !== 'string' || !endTime) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
@@ -118,6 +119,8 @@ export async function POST(request: Request) {
       timezone: newEvent.timezone,
     }, { status: 201 });
   } catch (error) {
+    const clientError = requestErrorResponse(error);
+    if (clientError) return clientError;
     console.error('Error creating event:', error);
     return NextResponse.json({ error: 'Error creating event' }, { status: 500 });
   }

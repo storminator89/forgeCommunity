@@ -4,6 +4,11 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/options';
 import prisma from '@/lib/prisma';
 import { getChatUploadOwnerId } from '@/lib/server/image-upload';
+import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
+
+const MAX_MESSAGE_LENGTH = 4000;
+const validId = (value: unknown): value is string =>
+  typeof value === 'string' && value.length > 0 && value.length <= 100 && value.trim() === value;
 
 export async function POST(req: Request) {
   try {
@@ -12,13 +17,26 @@ export async function POST(req: Request) {
       return new NextResponse('Unauthorized', { status: 401 });
     }
 
-    const { content, channelId, imageUrl, messageType = 'text' } = await req.json();
+    const { content, channelId, imageUrl, messageType = 'text' } = await readJsonObject(req);
 
-    if (!content && !imageUrl) {
+    if ((content !== undefined && typeof content !== 'string') ||
+      (typeof content === 'string' && content.length > MAX_MESSAGE_LENGTH) ||
+      (!content && !imageUrl) ||
+      (typeof content === 'string' && !content.trim() && !imageUrl)) {
       return new NextResponse('Content or image is required', { status: 400 });
     }
-    if (!channelId) {
+    if (!validId(channelId)) {
       return new NextResponse('ChannelId is required', { status: 400 });
+    }
+    if (messageType !== 'text' && messageType !== 'image') {
+      return new NextResponse('Invalid message type', { status: 400 });
+    }
+    if (imageUrl !== undefined && imageUrl !== null && imageUrl !== '' &&
+      (messageType !== 'image' || typeof imageUrl !== 'string' || imageUrl.length > 500)) {
+      return new NextResponse('Invalid image message', { status: 400 });
+    }
+    if (messageType === 'image' && !imageUrl) {
+      return new NextResponse('Image is required', { status: 400 });
     }
 
     if (imageUrl !== undefined && imageUrl !== null && imageUrl !== '') {
@@ -54,7 +72,7 @@ export async function POST(req: Request) {
 
     const message = await prisma.chatMessage.create({
       data: {
-        content,
+        content: content ?? '',
         channelId,
         authorId: session.user.id,
         imageUrl,
@@ -73,6 +91,8 @@ export async function POST(req: Request) {
 
     return NextResponse.json(message);
   } catch (error) {
+    const requestError = requestErrorResponse(error);
+    if (requestError) return requestError;
     console.error('[MESSAGES_POST]', error);
     return new NextResponse('Internal Error', { status: 500 });
   }
@@ -91,7 +111,7 @@ export async function GET(req: Request) {
     const afterId = searchParams.get('afterId');
     const limit = 50;
 
-    if (!channelId) {
+    if (!validId(channelId)) {
       return new NextResponse('ChannelId is required', { status: 400 });
     }
 
@@ -103,7 +123,7 @@ export async function GET(req: Request) {
       }
     }
 
-    if (afterId && !afterDate) {
+    if (afterId && (!afterDate || !validId(afterId))) {
       return new NextResponse('afterId requires after', { status: 400 });
     }
 

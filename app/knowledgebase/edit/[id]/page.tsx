@@ -46,7 +46,6 @@ export default function EditArticle({ params }: { params: Promise<{ id: string }
     const fetchArticle = async () => {
       setIsLoading(true);
       try {
-        console.log('Fetching article with ID:', id); // Debug log
 
         const [articleResponse, categoriesResponse] = await Promise.all([
           fetch(`/api/articles/${id}`),
@@ -58,7 +57,6 @@ export default function EditArticle({ params }: { params: Promise<{ id: string }
         }
 
         const article = await articleResponse.json();
-        console.log('Fetched article:', article); // Debug log
 
         if (!article) {
           toast.error('Artikel nicht gefunden');

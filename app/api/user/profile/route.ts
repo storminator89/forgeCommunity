@@ -3,6 +3,8 @@ import prisma from '@/lib/prisma'
 import { emailEqualsInsensitive } from '@/lib/server/database-query'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '../../auth/[...nextauth]/options'
+import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input'
+import { ownProfileInput } from '@/lib/server/profile-input'
 
 // GET-Handler für das Abrufen des Benutzerprofils
 export async function GET() {
@@ -65,20 +67,15 @@ export async function PUT(request: NextRequest) {
             )
         }
 
-        const data = await request.json()
-        const name = data.name === undefined
-            ? undefined
-            : typeof data.name === 'string' ? data.name.trim() : ''
-        const email = data.email === undefined
-            ? undefined
-            : typeof data.email === 'string' ? data.email.trim().toLowerCase() : ''
-
-        if (name === '' || email === '') {
+        const parsed = ownProfileInput.safeParse(await readJsonObject(request))
+        if (!parsed.success) {
             return NextResponse.json(
-                { error: 'Name und E-Mail sind erforderlich' },
+                { error: 'Ungültige Profildaten' },
                 { status: 400 }
             )
         }
+        const data = parsed.data
+        const { name, email } = data
 
         const existingUser = email
             ? await prisma.user.findFirst({
@@ -90,9 +87,10 @@ export async function PUT(request: NextRequest) {
             })
             : null
 
-        const currentSessionEmail = typeof session.user.email === 'string'
-            ? session.user.email.trim().toLowerCase()
-            : null
+        const currentUser = email === undefined ? null : await prisma.user.findUnique({
+            where: { id: session.user.id }, select: { email: true },
+        })
+        const currentSessionEmail = currentUser?.email.trim().toLowerCase() ?? null
         const emailChanged = email !== undefined &&
             (currentSessionEmail === null || email !== currentSessionEmail)
 
@@ -119,7 +117,7 @@ export async function PUT(request: NextRequest) {
                     verificationToken: null,
                     resetPasswordToken: null,
                 }),
-                userSettings: {
+                ...((data.language !== undefined || data.emailNotifications !== undefined || data.pushNotifications !== undefined) && { userSettings: {
                     upsert: {
                         create: {
                             language: data.language,
@@ -132,7 +130,7 @@ export async function PUT(request: NextRequest) {
                             pushNotifications: data.pushNotifications,
                         }
                     }
-                }
+                } })
             },
             // Never return the full User row here: it contains the password
             // hash and account recovery tokens.
@@ -162,6 +160,8 @@ export async function PUT(request: NextRequest) {
         return NextResponse.json(safeUser)
 
     } catch (error) {
+        const invalidBody = requestErrorResponse(error)
+        if (invalidBody) return invalidBody
         console.error('Fehler beim Aktualisieren des Benutzerprofils:', error)
         return NextResponse.json(
             { error: 'Interner Serverfehler' },

@@ -43,6 +43,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 import type { User as UserType, SocialLinks } from '@/types';
+import { getSafeHttpUrl } from '@/lib/security';
 
 interface TabStats {
   [key: string]: {
@@ -210,13 +211,14 @@ export default function ProfilePage() {
   const renderSocialLinks = () => {
     if (!profile?.socialLinks) return null;
 
-    const hasLinks = Object.entries(profile.socialLinks).some(([_, value]) => value);
+    const hasLinks = Object.values(profile.socialLinks).some(value => getSafeHttpUrl(value));
     if (!hasLinks) return null;
 
     return (
       <div className="flex flex-wrap gap-4 mt-6">
         {(Object.entries(profile.socialLinks) as [keyof typeof socialIcons, string][])
-          .filter(([_, value]) => value)
+          .map(([key, value]) => [key, getSafeHttpUrl(value)] as const)
+          .filter((entry): entry is readonly [keyof typeof socialIcons, string] => entry[1] !== null)
           .map(([key, value]) => (
             <a
               key={key}

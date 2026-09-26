@@ -89,12 +89,11 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    console.log('New article created:', newArticle);
     return NextResponse.json(newArticle, { status: 201 });
   } catch (error) {
     console.error('POST /api/articles Error:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Fehler beim Erstellen des Artikels.' },
+      { error: error instanceof ImageUploadValidationError ? error.message : error instanceof RequestBodyLimitError ? 'Datei ist zu gross.' : 'Fehler beim Erstellen des Artikels.' },
       { status: error instanceof ImageUploadValidationError ? 400 : error instanceof RequestBodyLimitError ? 413 : 500 }
     );
   }

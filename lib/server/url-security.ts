@@ -138,10 +138,18 @@ async function resolvePublicAddresses(hostname: string): Promise<ResolvedAddress
   }
 
   let addresses: ResolvedAddress[];
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    addresses = await lookup(normalizedHostname, { all: true, verbatim: true });
+    addresses = await Promise.race([
+      lookup(normalizedHostname, { all: true, verbatim: true }),
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error('DNS lookup timed out')), 5000);
+      }),
+    ]);
   } catch {
     throw new HttpUrlValidationError('Das Ziel konnte nicht aufgelöst werden.');
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 
   if (addresses.length === 0 || addresses.some((entry) => isPrivateAddress(entry.address))) {

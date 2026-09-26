@@ -35,16 +35,43 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
 function SessionNotifications({ children, userId }: { children: ReactNode; userId: string | null }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [serverUnreadCount, setServerUnreadCount] = useState<number | null>(null);
+  const [unreadDelta, setUnreadDelta] = useState(0);
+  const [fullyLoaded, setFullyLoaded] = useState(false);
 
   useEffect(() => {
     if (!userId) return;
     const controller = new AbortController();
     async function load() {
       try {
-        const response = await fetch('/api/notifications', { signal: controller.signal });
-        if (!response.ok) throw new Error('Failed to fetch notifications');
-        const data = await response.json();
-        if (!controller.signal.aborted) setNotifications(data);
+        let cursor: string | null = null;
+        let capturedUnreadCount = false;
+        const seenCursors = new Set<string>();
+        do {
+          const url: string = cursor
+            ? `/api/notifications?cursor=${encodeURIComponent(cursor)}`
+            : '/api/notifications';
+          const response = await fetch(url, { signal: controller.signal });
+          if (!response.ok) throw new Error('Failed to fetch notifications');
+          const data = await response.json();
+          // Accept an older array response during clients' rolling upgrades.
+          const items: Notification[] = Array.isArray(data) ? data : data.items;
+          if (!capturedUnreadCount && !Array.isArray(data) && typeof data.unreadCount === 'number') {
+            setServerUnreadCount(data.unreadCount);
+            capturedUnreadCount = true;
+          }
+          cursor = Array.isArray(data) ? null : data.nextCursor;
+          if (!controller.signal.aborted) setNotifications(previous => {
+            // Preserve mutations made while older pages were still loading.
+            const merged = new Map(items.map(item => [item.id, item]));
+            previous.forEach(item => merged.set(item.id, item));
+            return [...merged.values()].sort((a, b) =>
+              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime() || b.id.localeCompare(a.id));
+          });
+          if (cursor && seenCursors.has(cursor)) throw new Error('Repeated notification cursor');
+          if (cursor) seenCursors.add(cursor);
+        } while (cursor && !controller.signal.aborted);
+        if (!controller.signal.aborted) setFullyLoaded(true);
       } catch (error) {
         if (!controller.signal.aborted) console.error('Error fetching notifications:', error);
       }
@@ -69,6 +96,9 @@ function SessionNotifications({ children, userId }: { children: ReactNode; userI
           notif.id === id ? { ...notif, isRead: true } : notif
         )
       );
+      if (!fullyLoaded && notifications.some(notif => notif.id === id && !notif.isRead)) {
+        setUnreadDelta(previous => previous - 1);
+      }
     } catch (error) {
       console.error('Error marking notification as read:', error);
     }
@@ -86,6 +116,8 @@ function SessionNotifications({ children, userId }: { children: ReactNode; userI
       setNotifications(prev =>
         prev.map(notif => ({ ...notif, isRead: true }))
       );
+      setServerUnreadCount(0);
+      setUnreadDelta(0);
     } catch (error) {
       console.error('Error marking all notifications as read:', error);
     }
@@ -101,6 +133,9 @@ function SessionNotifications({ children, userId }: { children: ReactNode; userI
       if (!response.ok) throw new Error('Failed to delete notification');
 
       setNotifications(prev => prev.filter(notif => notif.id !== id));
+      if (!fullyLoaded && notifications.some(notif => notif.id === id && !notif.isRead)) {
+        setUnreadDelta(previous => previous - 1);
+      }
     } catch (error) {
       console.error('Error deleting notification:', error);
     }
@@ -123,12 +158,15 @@ function SessionNotifications({ children, userId }: { children: ReactNode; userI
 
       const newNotification = await response.json();
       setNotifications(prev => [newNotification, ...prev]);
+      if (!fullyLoaded && !newNotification.isRead) setUnreadDelta(previous => previous + 1);
     } catch (error) {
       console.error('Error adding notification:', error);
     }
   };
 
-  const unreadCount = notifications.filter(n => !n.isRead).length;
+  const unreadCount = !fullyLoaded && serverUnreadCount !== null
+    ? Math.max(0, serverUnreadCount + unreadDelta)
+    : notifications.filter(n => !n.isRead).length;
 
   const value = {
     notifications,

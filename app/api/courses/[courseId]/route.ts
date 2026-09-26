@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../auth/[...nextauth]/options";
+import { deleteCourseDependencies } from '@/lib/server/course-deletion';
 
 export async function GET(
   request: NextRequest,
@@ -63,7 +64,6 @@ export async function GET(
     return NextResponse.json(
       {
         error: 'Failed to fetch course',
-        details: error instanceof Error ? error.message : 'Unknown error',
       },
       { status: 500 }
     );
@@ -105,42 +105,7 @@ export async function DELETE(
 
     // Delete all related records in the correct order
     await prisma.$transaction(async (tx) => {
-      // Delete certificates first
-      await tx.certificate.deleteMany({
-        where: { courseId },
-      });
-
-      // Delete enrollments
-      await tx.enrollment.deleteMany({
-        where: { courseId },
-      });
-
-      // Delete course contents (handle nested contents first)
-      const contents = await tx.courseContent.findMany({
-        where: { courseId },
-        select: { id: true },
-      });
-
-      // Delete child contents first
-      await tx.courseContent.deleteMany({
-        where: {
-          courseId,
-          parentId: { not: null },
-        },
-      });
-
-      // Then delete parent contents
-      await tx.courseContent.deleteMany({
-        where: {
-          courseId,
-          parentId: null,
-        },
-      });
-
-      // Delete lessons
-      await tx.lesson.deleteMany({
-        where: { courseId },
-      });
+      await deleteCourseDependencies(tx, [courseId]);
 
       // Finally delete the course
       await tx.course.delete({
@@ -154,7 +119,6 @@ export async function DELETE(
     return NextResponse.json(
       {
         error: 'Failed to delete course',
-        details: error instanceof Error ? error.message : 'Unknown error'
       },
       { status: 500 }
     );

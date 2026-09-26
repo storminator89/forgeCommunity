@@ -19,6 +19,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
 const MIN_PASSWORD_LENGTH = 12
+const PASSWORD_HELP = 'mindestens 12 Zeichen, höchstens 72 UTF-8-Bytes sowie Groß- und Kleinbuchstaben, Zahl und Sonderzeichen'
+
+function passwordError(password: string): string | null {
+  if (password.length < MIN_PASSWORD_LENGTH || new TextEncoder().encode(password).length > 72 ||
+      !/[A-Z]/.test(password) || !/[a-z]/.test(password) ||
+      !/[0-9]/.test(password) || !/[^A-Za-z0-9]/.test(password)) {
+    return `Das Passwort benötigt ${PASSWORD_HELP}.`
+  }
+  return null
+}
 
 interface User {
   id: string
@@ -110,9 +120,12 @@ function EditUserDialogForm({ user, isOpen, onClose, onUpdateUser }: EditUserDia
         return
       }
 
-      if (formData.password && formData.password.length < MIN_PASSWORD_LENGTH) {
-        toast.error(`Das Passwort muss mindestens ${MIN_PASSWORD_LENGTH} Zeichen lang sein`)
-        return
+      if (formData.password) {
+        const invalidPassword = passwordError(formData.password)
+        if (invalidPassword) {
+          toast.error(invalidPassword)
+          return
+        }
       }
 
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -250,7 +263,7 @@ function EditUserDialogForm({ user, isOpen, onClose, onUpdateUser }: EditUserDia
                     minLength={MIN_PASSWORD_LENGTH}
                   />
                   <p className="text-xs text-gray-500">
-                    Mindestens {MIN_PASSWORD_LENGTH} Zeichen
+                    {PASSWORD_HELP}
                   </p>
                 </div>
 

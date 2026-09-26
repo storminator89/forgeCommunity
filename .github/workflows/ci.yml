@@ -12,6 +12,16 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: ci-only-upgrade-password
+          POSTGRES_DB: forge_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d forge_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       # Build and typecheck do not connect to a database. Runtime deployments
       # must provide their own DATABASE_URL and secrets.
@@ -50,6 +60,11 @@ jobs:
       - name: Verify SQLite migration safety
         run: node --test scripts/check-sqlite-migrations.mjs
 
+      - name: Verify PostgreSQL upgrade safety
+        run: node --test scripts/check-postgresql-upgrades.mjs
+        env:
+          DATABASE_URL: postgresql://postgres:ci-only-upgrade-password@127.0.0.1:5432/forge_test
+
       - name: Build
         run: npm run build
 
@@ -84,6 +99,11 @@ jobs:
 
       - name: Start SQLite image
         run: docker compose -f docker-compose.sqlite.yml up --build --detach --wait
+
+      - name: Exercise security regressions against SQLite container
+        run: |
+          docker compose -f docker-compose.sqlite.yml cp scripts/smoke-audit.mjs app:/tmp/smoke-audit.mjs
+          docker compose -f docker-compose.sqlite.yml exec -T -e SMOKE_SQLITE_FILE=/app/data/forge.db -e SMOKE_BASE_URL=http://127.0.0.1:3013 app node /tmp/smoke-audit.mjs
 
       - name: Exercise SQLite application flows
         run: node scripts/smoke-sqlite.mjs

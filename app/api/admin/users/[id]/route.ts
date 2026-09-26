@@ -4,6 +4,29 @@ import { emailEqualsInsensitive } from '@/lib/server/database-query'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '../../../auth/[...nextauth]/options'
 import bcrypt from 'bcrypt'
+import { adminUserInput } from '@/lib/server/account-security'
+import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input'
+import { deleteCourseDependencies } from '@/lib/server/course-deletion'
+import { decrementSkillEndorsementsForDeletedUser } from '@/lib/server/skill-endorsements'
+
+class LastAdminError extends Error {}
+class MissingUserError extends Error {}
+
+function mutationError(error: unknown): NextResponse | null {
+  if (error instanceof LastAdminError) {
+    return NextResponse.json({ error: 'Der letzte Administrator muss erhalten bleiben' }, { status: 400 })
+  }
+  if (error instanceof MissingUserError) {
+    return NextResponse.json({ error: 'Benutzer nicht gefunden' }, { status: 404 })
+  }
+  if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2034') {
+    return NextResponse.json({ error: 'Gleichzeitige Änderung. Bitte erneut versuchen.' }, { status: 409 })
+  }
+  if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002') {
+    return NextResponse.json({ error: 'Diese E-Mail-Adresse wird bereits verwendet' }, { status: 409 })
+  }
+  return requestErrorResponse(error)
+}
 
 // GET: Einzelnen Benutzer abrufen
 export async function GET(
@@ -142,25 +165,15 @@ export async function PUT(
       )
     }
 
-    const data = await request.json()
-
-    // Validierung
-    const email = typeof data.email === 'string' ? data.email.trim().toLowerCase() : ''
-    const name = typeof data.name === 'string' ? data.name.trim() : ''
-    if (!email || !name) {
+    const parsed = adminUserInput.safeParse(await readJsonObject(request))
+    if (!parsed.success || (parsed.data.password !== undefined && !parsed.data.password)) {
       return NextResponse.json(
-        { error: 'Fehlende Pflichtfelder' },
+        { error: 'Ungültige Benutzerdaten oder Passwort' },
         { status: 400 }
       )
     }
-
-    const allowedRoles = ['USER', 'ADMIN', 'MODERATOR', 'INSTRUCTOR'] as const
-    if (data.role !== undefined && !allowedRoles.includes(data.role)) {
-      return NextResponse.json(
-        { error: 'Ungültige Benutzerrolle' },
-        { status: 400 }
-      )
-    }
+    const data = parsed.data
+    const { email, name } = data
 
     // Überprüfe, ob die E-Mail bereits von einem anderen Benutzer verwendet wird
     const existingUser = await prisma.user.findFirst({
@@ -212,35 +225,37 @@ export async function PUT(
 
     // Wenn ein neues Passwort gesetzt werden soll
     if (data.password) {
-      updateData.password = await bcrypt.hash(data.password, 10)
+      updateData.password = await bcrypt.hash(data.password, 12)
     }
 
     // Aktualisiere den Benutzer und seine Einstellungen
-    const updatedUser = await prisma.user.update({
-      where: { id: params.id },
-      data: {
-        ...updateData,
-        userSettings: {
-          upsert: {
-            create: {
-              emailNotifications: data.settings?.emailNotifications ?? true,
-              pushNotifications: data.settings?.pushNotifications ?? true,
-              theme: data.settings?.theme || 'LIGHT',
-              language: data.settings?.language || 'de',
-            },
-            update: {
-              emailNotifications: data.settings?.emailNotifications,
-              pushNotifications: data.settings?.pushNotifications,
-              theme: data.settings?.theme,
-              language: data.settings?.language,
-            }
-          }
-        }
-      },
-      include: {
-        userSettings: true
+    const updatedUser = await prisma.$transaction(async tx => {
+      const actingAdmin = await tx.user.findUnique({ where: { id: session.user.id }, select: { role: true } })
+      if (actingAdmin?.role !== 'ADMIN') throw new LastAdminError()
+      const target = await tx.user.findUnique({ where: { id: params.id }, select: { role: true } })
+      if (target?.role === 'ADMIN' && data.role && data.role !== 'ADMIN') {
+        const adminCount = await tx.user.count({ where: { role: 'ADMIN' } })
+        if (adminCount <= 1) throw new LastAdminError()
       }
-    })
+      return tx.user.update({
+        where: { id: params.id },
+        data: {
+          ...updateData,
+          ...(data.settings && { userSettings: {
+            upsert: {
+              create: {
+                emailNotifications: data.settings.emailNotifications ?? true,
+                pushNotifications: data.settings.pushNotifications ?? true,
+                theme: data.settings.theme ?? 'LIGHT',
+                language: data.settings.language ?? 'de',
+              },
+              update: data.settings,
+            }
+          } }),
+        },
+        include: { userSettings: true },
+      })
+    }, { isolationLevel: 'Serializable' })
 
     // Entferne sensitive Daten
     const {
@@ -252,6 +267,8 @@ export async function PUT(
 
     return NextResponse.json(userWithoutPassword)
   } catch (error) {
+    const handled = mutationError(error)
+    if (handled) return handled
     console.error('Error updating user:', error)
     return NextResponse.json(
       { error: 'Fehler beim Aktualisieren des Benutzers' },
@@ -297,31 +314,22 @@ export async function DELETE(
       )
     }
 
-    // Überprüfe, ob der zu löschende Benutzer der letzte Admin ist
-    const userToDelete = await prisma.user.findUnique({
-      where: { id: params.id },
-      select: { role: true }
-    })
-
-    if (userToDelete?.role === 'ADMIN') {
-      const adminCount = await prisma.user.count({
-        where: { role: 'ADMIN' }
-      })
-
-      if (adminCount <= 1) {
-        return NextResponse.json(
-          { error: 'Der letzte Administrator kann nicht gelöscht werden' },
-          { status: 400 }
-        )
-      }
-    }
-
     // Bereinige zuerst alle abhängigen Daten
     await prisma.$transaction(async (prisma) => {
+      const actingAdmin = await prisma.user.findUnique({ where: { id: session.user.id }, select: { role: true } })
+      if (actingAdmin?.role !== 'ADMIN') throw new LastAdminError()
+      const target = await prisma.user.findUnique({ where: { id: params.id }, select: { role: true } })
+      if (!target) throw new MissingUserError()
+      if (target.role === 'ADMIN') {
+        const adminCount = await prisma.user.count({ where: { role: 'ADMIN' } })
+        if (adminCount <= 1) throw new LastAdminError()
+      }
       // Lösche Benutzereinstellungen
       await prisma.userSettings.deleteMany({
         where: { userId: params.id }
       })
+
+      await decrementSkillEndorsementsForDeletedUser(prisma, params.id)
 
       // Lösche Skill-Verknüpfungen
       await prisma.userSkill.deleteMany({
@@ -365,6 +373,17 @@ export async function DELETE(
       })
 
       // Lösche Endorsements
+      const givenEndorsements = await prisma.endorsement.findMany({
+        where: { endorserId: params.id, endorsedId: { not: params.id } },
+        select: { endorsedId: true },
+      })
+      for (const endorsement of givenEndorsements) {
+        const updated = await prisma.user.updateMany({
+          where: { id: endorsement.endorsedId, endorsements: { gte: 1 } },
+          data: { endorsements: { decrement: 1 } },
+        })
+        if (updated.count !== 1) throw new Error('Endorsement count is inconsistent')
+      }
       await prisma.endorsement.deleteMany({
         where: {
           OR: [
@@ -393,6 +412,14 @@ export async function DELETE(
       await prisma.account.deleteMany({
         where: { userId: params.id }
       })
+
+      // Certificates can point both at this user and at courses owned by
+      // this instructor, including certificates issued to other users.
+      await prisma.certificate.deleteMany({ where: { userId: params.id } })
+      const ownedCourses = await prisma.course.findMany({
+        where: { instructorId: params.id }, select: { id: true },
+      })
+      await deleteCourseDependencies(prisma, ownedCourses.map(course => course.id))
 
       // Lösche verknüpfte Kurse des Users
       await prisma.course.deleteMany({
@@ -424,16 +451,11 @@ export async function DELETE(
         where: { userId: params.id }
       })
 
-      // Lösche die Zertifikate des Users
-      await prisma.certificate.deleteMany({
-        where: { userId: params.id }
-      })
-
       // Lösche den Benutzer selbst
       await prisma.user.delete({
         where: { id: params.id }
       })
-    })
+    }, { isolationLevel: 'Serializable' })
 
     return NextResponse.json({
       success: true,
@@ -441,6 +463,8 @@ export async function DELETE(
     })
 
   } catch (error) {
+    const handled = mutationError(error)
+    if (handled) return handled
     console.error('Error deleting user:', error)
     return NextResponse.json(
       { error: 'Fehler beim Löschen des Benutzers' },

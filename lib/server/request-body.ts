@@ -32,7 +32,8 @@ export async function requestWithBodyLimit(request: Request, maxBytes: number) {
       const chunk = value as Uint8Array;
       total += chunk.byteLength;
       if (total > maxBytes) {
-        await reader.cancel();
+        // Cancellation can wait on a slow or malicious producer indefinitely.
+        void reader.cancel().catch(() => {});
         throw new RequestBodyLimitError();
       }
       chunks.push(chunk);
@@ -52,5 +53,6 @@ export async function requestWithBodyLimit(request: Request, maxBytes: number) {
     method: request.method,
     headers: request.headers,
     body: body.byteLength > 0 ? body : undefined,
+    signal: request.signal,
   });
 }

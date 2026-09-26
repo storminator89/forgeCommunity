@@ -180,6 +180,7 @@ export function ProjectsList({ userId, isOwner }: ProjectsListProps) {
               <AnimatePresence mode="popLayout">
                 {projects.map((project) => {
                   const safeProjectLink = getSafeHttpUrl(project.link);
+                  const safeGithubUrl = getSafeHttpUrl(project.githubUrl);
                   return (
                   <motion.div
                     key={project.id}
@@ -210,11 +211,11 @@ export function ProjectsList({ userId, isOwner }: ProjectsListProps) {
                               Demo
                             </Button>
                           )}
-                          {project.githubUrl && (
+                          {safeGithubUrl && (
                             <Button
                               size="sm"
                               variant="secondary"
-                              onClick={() => window.open(project.githubUrl, '_blank')}
+                              onClick={() => window.open(safeGithubUrl, '_blank', 'noopener,noreferrer')}
                             >
                               <Github className="h-4 w-4 mr-2" />
                               Code

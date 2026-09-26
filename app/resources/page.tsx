@@ -21,6 +21,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import { useInView } from 'react-intersection-observer';
 import { ResourcePreview } from "@/components/ResourcePreview";
 import { cn } from "@/lib/utils";
+import { getSafeNavigationUrl } from '@/lib/security';
 
 enum ResourceType {
   ARTICLE = 'ARTICLE',
@@ -565,10 +566,11 @@ function ResourceItem({ resource, isAdmin, currentUserId, onDelete, onEdit }: {
       facebook: `https://www.facebook.com/sharer/sharer.php?u=${shareUrl}`,
     };
 
-    window.open(urls[platform], '_blank');
+    if (urls[platform]) window.open(urls[platform], '_blank', 'noopener,noreferrer');
   };
 
   const Icon = getIcon(resource.type);
+  const safeResourceUrl = getSafeNavigationUrl(resource.url);
 
   return (
     <motion.div
@@ -588,10 +590,12 @@ function ResourceItem({ resource, isAdmin, currentUserId, onDelete, onEdit }: {
                 {resource.type}
               </Badge>
             </div>
-            <CardTitle className="text-lg font-semibold leading-tight line-clamp-2group-hover:text-primary transition-colors">
-              <a href={resource.url} target="_blank" rel="noopener noreferrer" className="hover:underline decoration-primary/30 underline-offset-4">
-                {resource.title}
-              </a>
+            <CardTitle className="text-lg font-semibold leading-tight line-clamp-2 group-hover:text-primary transition-colors">
+              {safeResourceUrl ? (
+                <a href={safeResourceUrl} target="_blank" rel="noopener noreferrer" className="hover:underline decoration-primary/30 underline-offset-4">
+                  {resource.title}
+                </a>
+              ) : resource.title}
             </CardTitle>
           </div>
           <DropdownMenu>
@@ -638,12 +642,12 @@ function ResourceItem({ resource, isAdmin, currentUserId, onDelete, onEdit }: {
               {resource.author.name || "Unbekannt"}
             </span>
           </div>
-          <Button size="sm" variant="outline" className="gap-2 h-8" asChild>
-            <a href={resource.url} target="_blank" rel="noopener noreferrer">
+          {safeResourceUrl && <Button size="sm" variant="outline" className="gap-2 h-8" asChild>
+            <a href={safeResourceUrl} target="_blank" rel="noopener noreferrer">
               <ExternalLink className="h-3 w-3" />
               Öffnen
             </a>
-          </Button>
+          </Button>}
         </CardFooter>
       </Card>
     </motion.div>

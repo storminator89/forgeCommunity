@@ -159,15 +159,7 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
   // Finden des ausgewählten Inhalts basierend auf selectedContentId
   const selectedMainContent = useMemo(() => {
     const currentContents = loadedContentsCourseId === courseId ? mainContents : [];
-    // First check if the content is a subcontent
-    for (const main of currentContents) {
-      if (main.subContents) {
-        const sub = main.subContents.find(sub => sub.id === selectedContentId);
-        if (sub) return sub;
-      }
-    }
-    // If not found in subcontents, check main contents
-    return currentContents.find(content => content.id === selectedContentId) || null;
+    return selectedContentId ? findContentById(selectedContentId, currentContents) : null;
   }, [courseId, loadedContentsCourseId, mainContents, selectedContentId]);
 
   const currentContents = useMemo(

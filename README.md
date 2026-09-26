@@ -172,7 +172,21 @@ The PostgreSQL container does not alter the schema on startup. Provision an
 existing installation's schema using your reviewed deployment procedure before
 serving traffic. For a *disposable development database* only, `npx prisma db
 push` creates the schema; do not run it against production without reviewing
-its proposed changes. Back up PostgreSQL and both uploads volumes separately.
+its proposed changes. After creating a fresh development schema with `db push`,
+record the verified baseline once using
+`npm run db:deploy -- --baseline-current-schema`. This explicit option checks the
+new endorsement table, columns, keys and indexes before recording history; it
+refuses unknown layouts and must not be used to bypass a failed upgrade.
+
+For an existing installation at the previous application schema, back up the
+database, rehearse against a staging copy, and run `npm run db:deploy` with
+`DATABASE_PROVIDER=postgresql` before serving the upgraded application. This
+applies the reviewed additive SQL in `prisma/postgresql-upgrades/`, records
+checksums transactionally, and respects the `?schema=` URL parameter. It does
+not create the full application schema or modify an unknown baseline. In the
+built container the same explicit command is
+`docker compose run --rm app node scripts/db-deploy.mjs` (with the database
+already running). Back up PostgreSQL and both uploads volumes separately.
 
 For an optional small, single-host SQLite deployment, use the separate Compose
 file. It builds an SQLite-specific Prisma client and keeps the database in a
@@ -217,8 +231,9 @@ selected Prisma Client. SQLite schema changes must also have a new, reviewed,
 numbered SQL file in `prisma/sqlite-migrations/`. The SQLite startup runner
 applies these files transactionally and refuses a changed migration checksum or
 an existing database without migration history. Do not edit an applied SQL
-migration. The PostgreSQL path uses its own reviewed schema procedure; the
-SQLite SQL files are not PostgreSQL migrations.
+migration. PostgreSQL uses the separate tracked `prisma/postgresql-upgrades/`
+files and the explicit deployment command described above; SQLite SQL files
+are not PostgreSQL migrations.
 
 SQLite suits a single application instance on a local persistent filesystem.
 Avoid network-mounted database files and multiple containers sharing the same
@@ -315,3 +330,7 @@ independent random passwords that are not printed. Demo accounts cannot be used
 as a production login mechanism. Uploaded files require persistent storage in a
 container deployment and a backup policy. Legacy public chat image paths are blocked
 until their files and database references have been migrated to private storage.
+
+## Repository audit (26 September 2026)
+
+See [the repository audit](docs/REPOSITORY-AUDIT-2026-09-26.md) for confirmed findings, fixes, remaining functional gaps, and validation. Upgrading invalidates old authentication tokens; users must sign in again.
