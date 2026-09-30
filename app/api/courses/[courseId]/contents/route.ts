@@ -54,7 +54,7 @@ export async function GET(
       orderBy: { order: 'asc' },
     });
 
-    return NextResponse.json(groupCourseContents(contents));
+    return NextResponse.json(groupCourseContents(contents.map((content) => ({ ...content, type: content.type ?? 'TEXT' }))));
   } catch (error) {
     console.error('Failed to fetch course contents:', error);
     return NextResponse.json({ error: 'Failed to fetch course contents' }, { status: 500 });
@@ -88,12 +88,12 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    const { title, type, content, order, parentId } = await readJsonObject(request);
+    const { title, type, content, order, parentId, isRequired } = await readJsonObject(request);
     if (parentId !== undefined && parentId !== null && typeof parentId !== 'string') {
       return NextResponse.json({ error: 'Invalid parent content' }, { status: 400 });
     }
 
-    if (typeof title !== 'string' || !title.trim() || (content !== undefined && typeof content !== 'string') ||
+    if ((isRequired !== undefined && typeof isRequired !== 'boolean') || typeof title !== 'string' || !title.trim() || (content !== undefined && typeof content !== 'string') ||
         (type !== undefined && type !== null && !['TEXT', 'VIDEO', 'AUDIO', 'H5P'].includes(String(type))) ||
         (order !== undefined && (!Number.isSafeInteger(order) || Number(order) < 0))) {
       return NextResponse.json({ error: 'Invalid content fields' }, { status: 400 });
@@ -118,6 +118,7 @@ export async function POST(
         orderBy: { order: 'desc' }, select: { order: true },
       });
       return tx.courseContent.create({ data: {
+        isRequired: typeof isRequired === 'boolean' ? isRequired : true,
         title: sanitizedTitle, type: (type || 'TEXT') as Prisma.CourseContentCreateInput['type'],
         content: sanitizedContent, order: typeof order === 'number' ? order : (last?.order ?? 0) + 1,
         parentId: typeof parentId === 'string' && parentId ? parentId : null, courseId,

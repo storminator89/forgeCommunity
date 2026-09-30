@@ -12,7 +12,8 @@ import { CourseContentsSidebar } from './CourseContentsSidebar'
 import { EditContentForm } from './EditContentForm'
 import { ContentRenderer } from './ContentRenderer'
 import { CourseContent } from './types'
-import { markPageAsVisited } from './utils/visitedPages'
+import { courseRequestError, useCourseProgress } from './hooks/useCourseProgress'
+import { CourseAccessManager, CourseDetails, CourseEnrollmentButton } from './components/CourseAccess'
 import { ChevronLeft, ChevronRight, Edit, FileText, Video, Music, Box } from 'lucide-react'
 import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -34,6 +35,11 @@ function findContentById(contentId: string, contentsToSearch: CourseContent[]): 
 
 export default function CourseContentsPage({ params }: { params: Promise<{ courseId: string }> }) {
   const { courseId } = use(params);
+  const { data: session } = useSession();
+  return <CourseContentsState key={`${courseId}:${session?.user?.id || 'anonymous'}`} courseId={courseId} />;
+}
+
+function CourseContentsState({ courseId }: { courseId: string }) {
   const router = useRouter();
   const { data: session, status } = useSession();
   const [mainContents, setMainContents] = useState<CourseContent[]>([]);
@@ -47,14 +53,18 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
   const [editingContentId, setEditingContentId] = useState<string | null>(null);
   const [loadedContentsCourseId, setLoadedContentsCourseId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [course, setCourse] = useState<{ id: string; name: string } | null>(null);
-  const [forceUpdateValue, setForceUpdateValue] = useState(0);
+  const [course, setCourse] = useState<CourseDetails | null>(null);
+  const [loadVersion, setLoadVersion] = useState(0);
   const [newMainContentTitle, setNewMainContentTitle] = useState("");
   const [currentMainContentId, setCurrentMainContentId] = useState<string | null>(null);
   const [expandedTopics, setExpandedTopics] = useState<Set<string>>(new Set());
   const [sidebarWidth, setSidebarWidth] = useState(300);
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
   const [loadedCourseId, setLoadedCourseId] = useState<string | null>(null);
+  const courseController = useRef<AbortController | null>(null);
+  const canManage = !!course?.canManage;
+  const hasAccess = !!course?.hasAccess;
+  const { progress, isLoading: progressLoading, error: progressError, savingContentId, refresh: refreshProgress, setCompleted } = useCourseProgress(courseId, status === 'authenticated' && !!course?.enrollment);
   const isResizing = useRef(false);
   const startX = useRef(0);
   const startWidth = useRef(0);
@@ -62,15 +72,16 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
   const loadCourse = useCallback(async (signal: AbortSignal) => {
     const response = await fetch(`/api/courses/${courseId}`, { signal });
     if (!response.ok) {
-      throw new Error('Failed to fetch course');
+      throw await courseRequestError(response, 'Kursinformationen konnten nicht geladen werden.');
     }
-    return response.json() as Promise<{ id: string; name: string }>;
+    return response.json() as Promise<CourseDetails>;
   }, [courseId]);
 
   useEffect(() => {
     if (status !== 'authenticated') return;
 
     const controller = new AbortController();
+    courseController.current = controller;
     void loadCourse(controller.signal)
       .then(data => {
         if (!controller.signal.aborted) {
@@ -90,7 +101,24 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
       });
 
     return () => controller.abort();
-  }, [courseId, loadCourse, status]);
+  }, [courseId, loadCourse, status, loadVersion]);
+
+  const refreshCourse = useCallback(async () => {
+    courseController.current?.abort();
+    const controller = new AbortController();
+    courseController.current = controller;
+    const data = await loadCourse(controller.signal);
+    if (!controller.signal.aborted) {
+      setCourse(data);
+      setLoadedCourseId(courseId);
+    }
+  }, [courseId, loadCourse]);
+
+  useEffect(() => () => { courseController.current?.abort(); }, []);
+
+  useEffect(() => {
+    if (status === 'unauthenticated') router.push('/auth/signin');
+  }, [status, router]);
 
   // Utility function to update content order
   const updateContentOrder = useCallback((
@@ -229,7 +257,7 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
   }, [courseId, loadContents]);
 
   useEffect(() => {
-    if (status !== 'authenticated') return;
+    if (status !== 'authenticated' || !hasAccess) return;
 
     const controller = new AbortController();
     void loadContents(controller.signal)
@@ -250,7 +278,7 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
       });
 
     return () => controller.abort();
-  }, [courseId, loadContents, status]);
+  }, [courseId, loadContents, status, hasAccess, loadVersion]);
 
   // Add this to your existing useEffect block or create a new one
   useEffect(() => {
@@ -299,6 +327,7 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
       setMainContents(prev => [...prev, newContent]);
       setNewMainContentTitle('');
 
+      void refreshProgress();
       setAlertMessage({
         type: 'success',
         message: 'Hauptthema erfolgreich erstellt.',
@@ -310,7 +339,7 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
         message: error instanceof Error ? error.message : 'Failed to create main content.',
       });
     }
-  }, [courseId]);
+  }, [courseId, refreshProgress]);
 
   // Handler zum Hinzufügen eines neuen Unterthemas
   const handleContentSubmit = useCallback(async (title: string) => {
@@ -357,6 +386,7 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
 
       setNewMainContentTitle('');
       setIsAddingSubContent(null);
+      void refreshProgress();
       setAlertMessage({
         type: 'success',
         message: 'Content created successfully.',
@@ -368,7 +398,7 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
         message: error instanceof Error ? error.message : 'Failed to create content.',
       });
     }
-  }, [courseId, newMainContentTitle, isAddingSubContent]);
+  }, [courseId, newMainContentTitle, isAddingSubContent, refreshProgress]);
 
   const handleSubContentSubmit = useCallback(async (title: string) => {
     if (!currentMainContentId) return;
@@ -404,8 +434,7 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
         return content;
       }));
 
-      setForceUpdateValue(prev => prev + 1);
-
+      void refreshProgress();
       setAlertMessage({
         type: 'success',
         message: 'Unterthema erfolgreich erstellt',
@@ -420,7 +449,7 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
       });
       throw error;
     }
-  }, [courseId, currentMainContentId]);
+  }, [courseId, currentMainContentId, refreshProgress]);
 
   // Handler zum Aktualisieren eines Inhalts (Hauptthema oder Unterthema)
   const handleContentUpdate = useCallback(async (updatedContent: CourseContent) => {
@@ -430,7 +459,7 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(updatedContent),
+        body: JSON.stringify({ ...updatedContent, type: updatedContent.type === 'QUIZ' ? 'TEXT' : updatedContent.type }),
       });
 
       if (!response.ok) {
@@ -439,26 +468,16 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
 
       const updatedData = await response.json();
 
-      // Aktualisiere den State mit dem aktualisierten Inhalt
-      setMainContents(prev =>
-        prev.map(content => {
-          if (content.id === updatedContent.id) {
-            return updatedData;
-          }
-          if (content.subContents) {
-            return {
-              ...content,
-              subContents: content.subContents.map(sub =>
-                sub.id === updatedContent.id ? updatedData : sub
-              ),
-            };
-          }
-          return content;
-        })
+      const replaceContent = (contents: CourseContent[]): CourseContent[] => contents.map(content =>
+        content.id === updatedContent.id
+          ? { ...content, ...updatedData, subContents: content.subContents }
+          : { ...content, subContents: content.subContents ? replaceContent(content.subContents) : undefined }
       );
+      setMainContents(replaceContent);
 
       setIsEditing(false);
       setEditingContentId(null);
+      void refreshProgress();
       setAlertMessage({
         type: 'success',
         message: 'Inhalt erfolgreich aktualisiert.',
@@ -469,8 +488,9 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
         type: 'error',
         message: error instanceof Error ? error.message : 'Failed to update content.',
       });
+      throw error;
     }
-  }, [courseId]);
+  }, [courseId, refreshProgress]);
 
   // Handler zum Initiieren des Löschvorgangs
   const handleDeleteContent = useCallback(async (content: CourseContent) => {
@@ -519,6 +539,7 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
         setIsEditing(false);
       }
 
+      void refreshProgress();
       setAlertMessage({
         type: 'success',
         message: 'Unterthema erfolgreich gelöscht'
@@ -534,7 +555,7 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
       // Optional: State wiederherstellen bei Fehler
       await fetchContents();
     }
-  }, [courseId, selectedContentId, fetchContents]);
+  }, [courseId, selectedContentId, fetchContents, refreshProgress]);
 
   // Handler zum Bestätigen des Löschvorgangs
   const confirmDeleteContent = useCallback(async () => {
@@ -802,16 +823,11 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
   const handleContentSelect = useCallback((contentId: string) => {
     setSelectedContentId(contentId);
 
-    // Mark as visited if it's not null
-    if (contentId) {
-      markPageAsVisited(courseId, contentId);
-    }
-
     // Find the selected content
     const content = findContentById(contentId, mainContents);
 
     // If content is empty, automatically enter edit mode
-    if (content && (!content.content || (typeof content.content === 'string' && content.content.trim() === ''))) {
+    if (canManage && content && (!content.content || (typeof content.content === 'string' && content.content.trim() === ''))) {
       setEditingContentId(contentId);
       setIsEditing(true);
     } else {
@@ -826,7 +842,7 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
         setExpandedTopics(prev => new Set([...prev, parentContent.id]));
       }
     }
-  }, [courseId, mainContents]);
+  }, [canManage, mainContents]);
 
   const handleContentDrop = async (draggedId: string, targetId: string, position: "before" | "after" | "inside") => {
     try {
@@ -857,19 +873,9 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
     }
   };
 
-  const handleVisitedToggle = async (contentId: string) => {
-    // Update local state
-    setMainContents(prevContents => {
-      const newContents = [...prevContents];
-      const content = findContentById(contentId, newContents);
-      if (content) {
-        content.completed = !content.completed;
-      }
-      return newContents;
-    });
-
-    // Force sidebar to update
-    setForceUpdateValue(prev => prev + 1);
+  const handleVisitedToggle = (contentId: string) => {
+    if (!progress || !progress.learningContentIds.includes(contentId)) return;
+    void setCompleted(contentId, !progress.completedContentIds.includes(contentId));
   };
 
   // Add this function to handle topic expansion
@@ -889,7 +895,7 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
   const isLoading = status === 'loading'
     || (status === 'authenticated' && (
       loadedCourseId !== courseId
-      || loadedContentsCourseId !== courseId
+      || (hasAccess && loadedContentsCourseId !== courseId)
     ));
 
   if (isLoading) {
@@ -902,7 +908,6 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
 
   // Redirect if not authenticated
   if (status === "unauthenticated") {
-    router.push('/auth/signin');
     return null;
   }
 
@@ -922,6 +927,7 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
               </div>
             </div>
             <div className="flex items-center space-x-2">
+              {canManage && <CourseAccessManager courseId={courseId} onAccessChanged={refreshCourse} />}
               <ThemeToggle />
               <UserNav />
             </div>
@@ -930,6 +936,16 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
 
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto">
+          {alertMessage && <div className={`m-4 rounded border p-3 text-sm ${alertMessage.type === 'error' ? 'border-destructive text-destructive' : 'border-border'}`} role={alertMessage.type === 'error' ? 'alert' : 'status'}>
+            {alertMessage.message}
+            {alertMessage.type === 'error' && <Button variant="outline" size="sm" className="ml-3" onClick={() => { setAlertMessage(null); setLoadVersion(value => value + 1); }}>Erneut laden</Button>}
+          </div>}
+          {progressError && !isTopicsSidebarOpen && <div role="alert" className="m-4 rounded border border-destructive p-3 text-sm text-destructive">
+            <p>{progressError}</p>
+            <Button variant="outline" size="sm" className="mt-2" onClick={() => void refreshProgress()} disabled={progressLoading || !!savingContentId}>Fortschritt erneut laden</Button>
+          </div>}
+          {!course ? <div className="p-8"><p>Kursinformationen sind nicht verfügbar.</p><Button variant="outline" className="mt-4" onClick={() => router.push('/courses')}>Zur Kursübersicht</Button></div> : !hasAccess ? <div className="max-w-2xl mx-auto p-8 space-y-6"><h1 className="text-2xl font-semibold">{course.name}</h1><p className="text-muted-foreground">{course.description}</p><CourseEnrollmentButton course={course} onEnrolled={refreshCourse} /><Button variant="outline" onClick={() => router.push('/courses')}>Zur Kursübersicht</Button></div> : <>
+          {canManage && !course.enrollment && <div className="m-4 rounded border border-border p-4 space-y-2"><p className="text-sm">Sie sehen den Kurs als Kursleitung. Für persönlichen Lernfortschritt ist eine eigene Einschreibung erforderlich.</p><CourseEnrollmentButton course={course} onEnrolled={refreshCourse} /></div>}
           <div className="flex h-full">
             <div
               className="relative transition-all duration-300 ease-in-out border-r border-border bg-card/30"
@@ -940,12 +956,14 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
                   variant="outline"
                   size="icon"
                   onClick={() => setIsTopicsSidebarOpen(!isTopicsSidebarOpen)}
+                  aria-label={isTopicsSidebarOpen ? 'Inhaltsverzeichnis ausblenden' : 'Inhaltsverzeichnis einblenden'}
+                  aria-expanded={isTopicsSidebarOpen}
                   className="h-6 w-6 rounded-full shadow-sm bg-background border-border hover:bg-accent"
                 >
                   {isTopicsSidebarOpen ? <ChevronLeft className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                 </Button>
               </div>
-              <div className={cn(
+              <div aria-hidden={!isTopicsSidebarOpen} inert={!isTopicsSidebarOpen} className={cn(
                 "h-full overflow-hidden transition-all duration-300",
                 isTopicsSidebarOpen ? "opacity-100 w-full" : "opacity-0 w-0"
               )}>
@@ -975,7 +993,12 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
                   courseName={course?.name || ''}
                   isLoading={isLoading}
                   onMainContentSubmit={handleMainContentSubmit}
-                  forceUpdate={!!forceUpdateValue}
+                  canManage={canManage}
+                  progress={progress}
+                  progressLoading={progressLoading}
+                  progressError={progressError}
+                  onProgressRetry={() => void refreshProgress()}
+                  savingContentId={savingContentId}
                   onVisitedToggle={handleVisitedToggle}
                   onSubContentSubmit={handleSubContentSubmit}
                   onMainContentSelect={setCurrentMainContentId}
@@ -1010,7 +1033,7 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
                             {selectedMainContent.title}
                           </h1>
                         </div>
-                        <Button
+                        {canManage && <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => {
@@ -1021,39 +1044,27 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
                         >
                           <Edit className="h-4 w-4 mr-2" />
                           <span>Bearbeiten</span>
-                        </Button>
+                        </Button>}
                       </div>
                     </div>
 
+                    {!isEditing && progress?.learningContentIds.includes(selectedMainContent.id) && <div className="mb-6 space-y-2">
+                      <Button variant={progress.completedContentIds.includes(selectedMainContent.id) ? 'secondary' : 'default'}
+                        onClick={() => handleVisitedToggle(selectedMainContent.id)}
+                        disabled={progressLoading || !!savingContentId || !!progress.enrollment.completedAt}
+                        aria-pressed={progress.completedContentIds.includes(selectedMainContent.id)}>
+                        {savingContentId === selectedMainContent.id ? 'Wird gespeichert...' : progress.completedContentIds.includes(selectedMainContent.id) ? 'Abgeschlossen' : 'Als abgeschlossen markieren'}
+                      </Button>
+                      <p className="text-xs text-muted-foreground">{progress.requiredContentIds.includes(selectedMainContent.id) ? 'Pflichtinhalt' : 'Optionaler Inhalt'} · {progress.enrollment.completedAt ? 'Ihr Kursabschluss wurde gespeichert.' : progress.completedContentIds.includes(selectedMainContent.id) ? 'Erneut klicken, um die Markierung zurückzunehmen.' : 'Bestätigen Sie hier, dass Sie diesen Inhalt bearbeitet haben.'}</p>
+                    </div>}
                     <div className="relative min-h-[500px]">
-                      {isEditing && editingContentId === selectedMainContent.id ? (
+                      {canManage && isEditing && editingContentId === selectedMainContent.id ? (
                         <div className="bg-card rounded-lg border border-border shadow-sm p-4 animate-in fade-in zoom-in-95 duration-200">
                           <EditContentForm
                             content={selectedMainContent}
                             onSubmit={handleContentUpdate}
-                            onContentChange={(updatedContent) => {
-                              const newContent = {
-                                ...selectedMainContent,
-                                ...updatedContent
-                              };
-
-                              setMainContents(prev =>
-                                prev.map(content => {
-                                  if (content.id === selectedMainContent.id) {
-                                    return newContent;
-                                  }
-                                  if (content.subContents) {
-                                    return {
-                                      ...content,
-                                      subContents: content.subContents.map(sub =>
-                                        sub.id === selectedMainContent.id ? newContent : sub
-                                      ),
-                                    };
-                                  }
-                                  return content;
-                                })
-                              );
-                            }}
+                            key={selectedMainContent.id}
+                            onContentChange={() => { /* Drafts stay in the form until saved. */ }}
                             onCancel={() => {
                               setEditingContentId(null);
                               setIsEditing(false);
@@ -1085,6 +1096,7 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
               </div>
             </div>
           </div>
+          </>}
         </main>
       </div>
     </div>

@@ -9,7 +9,9 @@ function safeDownloadName(value: string) {
 }
 
 export async function certificatePdfResponse(certificate: CertificateSnapshot) {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000';
+  // Server-generated links must follow the runtime origin (for example a
+  // temporary tunnel), not NEXT_PUBLIC_APP_URL frozen into a production build.
+  const baseUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   const verificationUrl = `${baseUrl.replace(/\/$/, '')}/verify-certificate/${certificate.id}`;
   const qrCodeDataUrl = await QRCode.toDataURL(verificationUrl);
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });

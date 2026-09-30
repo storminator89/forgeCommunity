@@ -259,6 +259,8 @@ model CourseContent {
   parent    CourseContent?  @relation("ParentChild", fields: [parentId], references: [id])
   parentId  String?
   children  CourseContent[] @relation("ParentChild")
+  isRequired Boolean         @default(true)
+  progress   ContentProgress[]
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
 }
@@ -271,8 +273,22 @@ model Enrollment {
   courseId    String
   enrolledAt  DateTime  @default(now())
   completedAt DateTime?
+  progress    ContentProgress[]
 
   @@unique([userId, courseId])
+}
+
+// A row records an explicit learner mark, never an inferred view or exam result.
+model ContentProgress {
+  id           String        @id @default(cuid())
+  enrollment   Enrollment    @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  enrollmentId String
+  content      CourseContent @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  contentId    String
+  completedAt  DateTime      @default(now())
+
+  @@unique([enrollmentId, contentId])
+  @@index([contentId])
 }
 
 model Event {

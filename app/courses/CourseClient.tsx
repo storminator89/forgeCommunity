@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -27,9 +27,22 @@ interface Course {
   category: string;
   participants: number;
   imageUrl: string | null;
+  price: number | null;
+  currency: string | null;
+  maxStudents: number | null;
+  isEnrolled: boolean;
+  completedAt: string | null;
+  canManage: boolean;
 }
 
 export default function CourseClient() {
+  const { data: session } = useSession();
+  return <CourseClientState key={session?.user?.id || 'anonymous'} />;
+}
+
+function CourseClientState() {
+  const [error, setError] = useState<string | null>(null);
+  const [reload, setReload] = useState(0);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [categoryFilter, setCategoryFilter] = useState<string>('');
   const [courses, setCourses] = useState<Course[]>([]);
@@ -45,26 +58,31 @@ export default function CourseClient() {
   }, [status, router]);
 
   useEffect(() => {
+    if (status !== 'authenticated') return;
+    const controller = new AbortController();
     const fetchCourses = async () => {
       try {
-        const response = await fetch('/api/courses');
+        const response = await fetch('/api/courses', { signal: controller.signal, cache: 'no-store' });
         if (!response.ok) {
           throw new Error('Failed to fetch courses');
         }
         const data = (await response.json()) as Course[];
+        if (controller.signal.aborted) return;
         setCourses(data);
         // Extract unique categories
         const uniqueCategories = Array.from(new Set(data.map((course) => course.category)));
         setCategories(['Alle', ...uniqueCategories]);
       } catch (error) {
-        console.error('Error fetching courses:', error);
+        if (controller.signal.aborted) return;
+        setError('Kurse konnten nicht geladen werden. Bitte erneut versuchen.');
       } finally {
-        setIsLoading(false);
+        if (!controller.signal.aborted) setIsLoading(false);
       }
     };
 
-    fetchCourses();
-  }, []);
+    void fetchCourses();
+    return () => controller.abort();
+  }, [status, reload]);
 
   const filteredCourses = courses.filter(course =>
     (course.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -82,7 +100,7 @@ export default function CourseClient() {
       }
       setCourses(courses.filter(course => course.id !== courseId));
     } catch (error) {
-      console.error('Error deleting course:', error);
+      setError('Kurs konnte nicht gelöscht werden. Bitte erneut versuchen.');
     }
   };
 
@@ -122,6 +140,7 @@ export default function CourseClient() {
         </header>
         <main className="flex-1 overflow-y-auto">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            {error && <div role="alert" className="mb-6 rounded border border-destructive p-4 text-destructive"><p>{error}</p><Button variant="outline" className="mt-2" onClick={() => { setError(null); setIsLoading(true); setReload(value => value + 1); }}>Erneut laden</Button></div>}
             <div className="mb-8 flex flex-col md:flex-row md:items-center md:space-x-4">
               <div className="relative flex-grow mb-4 md:mb-0">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
@@ -187,8 +206,35 @@ interface CourseCardProps {
 function CourseCard({ course, onDelete }: CourseCardProps) {
   const router = useRouter();
 
-  const handleCourseAction = () => {
-    router.push(`/courses/${course.id}/contents`);
+  const [isEnrolling, setIsEnrolling] = useState(false);
+  const [enrollmentError, setEnrollmentError] = useState<string | null>(null);
+  const enrolling = useRef(false);
+  const isPaid = (course.price ?? 0) > 0;
+  const hasAccess = course.canManage || course.isEnrolled;
+  const isFull = course.maxStudents !== null && course.participants >= course.maxStudents;
+
+  const handleCourseAction = async () => {
+    if (hasAccess || isPaid) {
+      router.push(`/courses/${course.id}/contents`);
+      return;
+    }
+    if (enrolling.current) return;
+    enrolling.current = true;
+    setIsEnrolling(true);
+    setEnrollmentError(null);
+    try {
+      const response = await fetch(`/api/courses/${course.id}/enroll`, { method: 'POST' });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(`Einschreibung fehlgeschlagen.${data.error ? ` (${data.error})` : ' Bitte erneut versuchen.'}`);
+      }
+      router.push(`/courses/${course.id}/contents`);
+    } catch (cause) {
+      setEnrollmentError(cause instanceof Error ? cause.message : 'Einschreibung fehlgeschlagen.');
+    } finally {
+      enrolling.current = false;
+      setIsEnrolling(false);
+    }
   };
 
   return (
@@ -216,7 +262,7 @@ function CourseCard({ course, onDelete }: CourseCardProps) {
       <div className="p-6 flex-grow flex flex-col">
         <div className="flex justify-between items-start mb-2">
           <h3 className="text-xl font-semibold text-gray-900 dark:text-white">{course.title}</h3>
-          <AlertDialog>
+          {course.canManage && <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button variant="ghost" size="icon" className="text-gray-500 hover:text-red-500">
                 <Trash2 className="h-4 w-4" />
@@ -234,7 +280,7 @@ function CourseCard({ course, onDelete }: CourseCardProps) {
                 <AlertDialogAction onClick={() => onDelete(course.id)}>Löschen</AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
-          </AlertDialog>
+          </AlertDialog>}
         </div>
         <p className="text-gray-600 dark:text-gray-300 mb-4">{course.instructor}</p>
         <div className="flex items-center text-sm text-gray-500 dark:text-gray-400 mb-2">
@@ -249,8 +295,10 @@ function CourseCard({ course, onDelete }: CourseCardProps) {
         )}
         <div className="flex items-center text-sm text-gray-500 dark:text-gray-400 mb-4">
           <Users className="w-4 h-4 mr-2" />
-          <span>{course.participants} Teilnehmer</span>
+          <span>{course.participants}{course.maxStudents !== null ? `/${course.maxStudents}` : ''} Teilnehmer</span>
         </div>
+        <p className="mb-3 text-sm font-medium">{isPaid ? `${course.price?.toLocaleString('de-DE')} ${course.currency || ''} · Freischaltung durch Kursleitung` : 'Kostenlos'}</p>
+        {course.completedAt && <Badge variant="secondary" className="mb-3 w-fit">Abgeschlossen</Badge>}
         <div className="mt-auto">
           <TooltipProvider>
             <Tooltip>
@@ -258,15 +306,17 @@ function CourseCard({ course, onDelete }: CourseCardProps) {
                 <Button
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white transition-colors duration-300"
                   onClick={handleCourseAction}
+                  disabled={isEnrolling || (!hasAccess && !isPaid && isFull)}
                 >
-                  Kurs beitreten
+                  {isEnrolling ? 'Wird eingeschrieben...' : hasAccess ? 'Kurs öffnen' : isPaid ? 'Zugangsinformationen' : isFull ? 'Kurs ist ausgebucht' : 'Kostenlos einschreiben'}
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Klicken Sie hier, um sich für den Kurs anzumelden und die Inhalte anzuzeigen</p>
+                <p>{hasAccess ? 'Kursinhalte und Fortschritt öffnen' : isPaid ? 'Freischaltung durch Kursleitung erforderlich; keine Online-Zahlung' : 'Kostenlos einschreiben und Kursinhalte öffnen'}</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
+          {enrollmentError && <p role="alert" className="mt-3 text-sm text-destructive">{enrollmentError}</p>}
         </div>
       </div>
     </motion.div>

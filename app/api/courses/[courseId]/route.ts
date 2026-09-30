@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../auth/[...nextauth]/options";
 import { deleteCourseDependencies } from '@/lib/server/course-deletion';
+import { canManageCourse, enrollmentSnapshot } from '@/lib/server/course-lifecycle';
 
 export async function GET(
   request: NextRequest,
@@ -30,6 +31,10 @@ export async function GET(
         createdAt: true,
         updatedAt: true,
         instructorId: true,
+        price: true,
+        currency: true,
+        maxStudents: true,
+        _count: { select: { enrollments: true } },
       },
     });
 
@@ -37,21 +42,10 @@ export async function GET(
       return NextResponse.json({ error: 'Course not found' }, { status: 404 });
     }
 
-    if (session.user.role !== 'ADMIN' && course.instructorId !== session.user.id) {
-      const enrollment = await prisma.enrollment.findUnique({
-        where: {
-          userId_courseId: {
-            userId: session.user.id,
-            courseId,
-          },
-        },
-        select: { id: true },
-      });
-
-      if (!enrollment) {
-        return NextResponse.json({ error: 'Access denied to this course' }, { status: 403 });
-      }
-    }
+    const enrollment = await prisma.enrollment.findUnique({
+      where: { userId_courseId: { userId: session.user.id, courseId } },
+    });
+    const canManage = canManageCourse(session.user, course);
 
     return NextResponse.json({
       id: course.id,
@@ -59,6 +53,14 @@ export async function GET(
       description: course.description,
       createdAt: course.createdAt,
       updatedAt: course.updatedAt,
+      instructorId: course.instructorId,
+      price: course.price,
+      currency: course.currency,
+      maxStudents: course.maxStudents,
+      participants: course._count.enrollments,
+      canManage,
+      hasAccess: canManage || !!enrollment,
+      enrollment: enrollment ? enrollmentSnapshot(enrollment) : null,
     });
   } catch (error) {
     return NextResponse.json(
