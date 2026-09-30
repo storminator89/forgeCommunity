@@ -26,6 +26,7 @@ function optionalNumber(value: FormDataEntryValue | null, integer = false): numb
 
 export async function GET() {
   try {
+    const session = await getServerSession(authOptions);
     const courses = await prisma.course.findMany({
       include: {
         instructor: {
@@ -36,6 +37,7 @@ export async function GET() {
         enrollments: {
           select: {
             userId: true,
+            completedAt: true,
           },
         },
       },
@@ -53,6 +55,12 @@ export async function GET() {
       category: course.description,
       participants: course.enrollments.length,
       imageUrl: course.imageUrl,
+      price: course.price,
+      currency: course.currency,
+      maxStudents: course.maxStudents,
+      isEnrolled: !!session?.user?.id && course.enrollments.some((entry) => entry.userId === session.user.id),
+      completedAt: course.enrollments.find((entry) => entry.userId === session?.user?.id)?.completedAt ?? null,
+      canManage: !!session?.user?.id && (session.user.role === 'ADMIN' || session.user.id === course.instructorId),
     }));
 
     return NextResponse.json(formattedCourses);

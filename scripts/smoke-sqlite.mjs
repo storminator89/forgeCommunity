@@ -117,9 +117,11 @@ const updated = await (await request(`/api/resources/${resource.id}`, {
 assert.equal(updated.title, marker + ' Updated');
 assert.equal((await (await request(`/api/resources/${resource.id}`)).json()).title, updated.title);
 const certificates = await (await request('/api/user/certificates')).json();
-assert.deepEqual(certificates.map(item => item.id), expectedCertificates);
+// The API orders by course ID, not global issue date; randomized fixture
+// course IDs can appear in either order. Verify membership and latest issue.
+assert.deepEqual(certificates.map(item => item.id).sort(), [...expectedCertificates].sort());
 if (expectedCertificates.length) {
-  assert.equal(certificates[0].issuedAt, '2024-01-01T00:00:00.000Z');
+  assert.equal(certificates.find(item => item.id === expectedCertificates[0])?.issuedAt, '2024-01-01T00:00:00.000Z');
 }
 await request(`/api/resources/${resource.id}`, { method: 'DELETE' });
 await request(`/api/resources/${resource.id}`, { status: 404 });

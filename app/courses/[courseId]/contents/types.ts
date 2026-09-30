@@ -50,5 +50,5 @@ export interface CourseContent {
   order: number;
   parentId: string | null;
   subContents?: CourseContent[];
-  completed?: boolean;
+  isRequired?: boolean;
 }

@@ -120,9 +120,9 @@ export async function PUT(
     }
 
     const body = await readJsonObject(request);
-    const { title, type, content, order, parentId } = body;
+    const { title, type, content, order, parentId, isRequired } = body;
 
-    if ((parentId !== undefined && parentId !== null && (typeof parentId !== 'string' || !parentId)) ||
+    if ((isRequired !== undefined && typeof isRequired !== 'boolean') || (parentId !== undefined && parentId !== null && (typeof parentId !== 'string' || !parentId)) ||
         (title !== undefined && typeof title !== 'string') ||
         (content !== undefined && typeof content !== 'string') ||
         (type !== undefined && type !== null && !['TEXT', 'VIDEO', 'AUDIO', 'H5P'].includes(String(type))) ||
@@ -160,6 +160,7 @@ export async function PUT(
           return tx.courseContent.update({
             where: { id: params.contentId },
             data: {
+              ...(isRequired !== undefined && { isRequired: isRequired as boolean }),
               ...(sanitizedTitle !== undefined && { title: sanitizedTitle }),
               ...(type !== undefined && { type: type as Prisma.CourseContentUpdateInput['type'] }),
               ...(sanitizedContent !== undefined && { content: sanitizedContent }),

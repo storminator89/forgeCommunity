@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +25,7 @@ interface ContentFormData {
   type: 'TEXT' | 'VIDEO' | 'AUDIO' | 'H5P' | 'QUIZ';
   content: string;
   isHtmlMode?: boolean;
+  isRequired: boolean;
 }
 
 const quillModules = {
@@ -71,8 +72,27 @@ export function EditContentForm({
       type: initialContent.type === 'TEXT' && typeof content === 'object' ? 'QUIZ' : initialContent.type,
       content: typeof content === 'object' ? JSON.stringify(content) : content as string,
       isHtmlMode: false,
+      isRequired: initialContent.isRequired !== false,
     };
   });
+
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const inFlight = useRef(false);
+  const handleSave = async () => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await onSubmit({ ...initialContent, ...formData });
+    } catch {
+      setSaveError('Inhalt konnte nicht gespeichert werden. Bitte erneut versuchen.');
+    } finally {
+      inFlight.current = false;
+      setSaving(false);
+    }
+  };
 
   const handleQuizChange = (quizContent: QuizContent) => {
     setFormData(prev => ({
@@ -247,19 +267,32 @@ export function EditContentForm({
         )}
       </div>
 
+      <div className="space-y-2 rounded border border-border p-4">
+        <div className="flex items-center justify-between gap-4">
+          <Label htmlFor="required-content">Pflichtinhalt für den Kursabschluss</Label>
+          <Switch id="required-content" checked={formData.isRequired} onCheckedChange={(isRequired) => {
+            setFormData(previous => ({ ...previous, isRequired }));
+          }} />
+        </div>
+        <p className="text-sm text-muted-foreground">Leere Kapitel zählen nicht als Lerninhalt. Quiz- und H5P-Inhalte werden selbst bestätigt; es wird keine bestandene Prüfung bescheinigt.</p>
+      </div>
+
+      {saveError && <p role="alert" className="text-sm text-destructive">{saveError}</p>}
       <div className="flex justify-end items-center space-x-4 pt-6 border-t border-border/50">
         <Button
           variant="outline"
           onClick={onCancel}
+          disabled={saving}
           className="bg-background/50 hover:bg-background border-border/50 hover:border-border transition-colors duration-200"
         >
           Abbrechen
         </Button>
         <Button
-          onClick={() => onSubmit({ ...initialContent, ...formData })}
+          onClick={handleSave}
+          disabled={saving}
           className="bg-primary hover:bg-primary/90 text-primary-foreground transition-colors duration-200"
         >
-          Speichern
+          {saving ? 'Wird gespeichert...' : 'Speichern'}
         </Button>
       </div>
     </div>

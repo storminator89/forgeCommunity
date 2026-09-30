@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog"
-import { isPageVisited } from './utils/visitedPages'
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 
 interface ContentListProps {
@@ -28,6 +27,10 @@ interface ContentListProps {
   courseId: string;
   isLoading?: boolean;
   onVisitedToggle: (contentId: string) => void;
+  canManage: boolean;
+  completedIds: Set<string>;
+  learningIds: Set<string>;
+  progressDisabled: boolean;
 }
 
 export function ContentList({
@@ -48,6 +51,10 @@ export function ContentList({
   courseId,
   isLoading = false,
   onVisitedToggle,
+  canManage,
+  completedIds,
+  learningIds,
+  progressDisabled,
 }: ContentListProps) {
   const [isDeletingId, setIsDeletingId] = useState<string | null>(null);
 
@@ -72,11 +79,14 @@ export function ContentList({
                     className={cn(
                       "h-7 w-7 flex-shrink-0 p-0 relative bg-background hover:bg-primary/10 border border-primary/20 hover:border-primary shadow-sm hover:shadow transition-all duration-200",
                       selectedContentId === content.id && "text-primary border-primary bg-primary/5",
-                      isPageVisited(courseId, content.id) && "border-green-500/50 bg-green-50 dark:bg-green-500/10"
+                      completedIds.has(content.id) && "border-green-500/50 bg-green-50 dark:bg-green-500/10"
                     )}
                     onClick={() => onVisitedToggle(content.id)}
+                    aria-label={`${completedIds.has(content.id) ? 'Als offen markieren' : 'Als abgeschlossen markieren'}: ${content.title}`}
+                    aria-pressed={completedIds.has(content.id)}
+                    disabled={progressDisabled || !learningIds.has(content.id)}
                   >
-                    {isPageVisited(courseId, content.id) ? (
+                    {completedIds.has(content.id) ? (
                       <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
                     ) : (
                       <FileText className="h-4 w-4" />
@@ -85,20 +95,20 @@ export function ContentList({
                 </TooltipTrigger>
                 <TooltipContent side="right" className="bg-white dark:bg-gray-800 border border-border shadow-lg p-2">
                   <div className="text-xs font-medium">
-                    {isPageVisited(courseId, content.id) ? (
+                    {completedIds.has(content.id) ? (
                       <div className="flex items-center gap-2 text-green-500">
-                        <span>Gelesen</span>
+                        <span>Abgeschlossen</span>
                       </div>
                     ) : (
                       <div className="flex items-center gap-2 text-muted-foreground">
-                        <span>Ungelesen</span>
+                        <span>Noch nicht abgeschlossen</span>
                       </div>
                     )}
                   </div>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
-            {isInlineEditing === content.id ? (
+            {canManage && isInlineEditing === content.id ? (
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -122,16 +132,16 @@ export function ContentList({
                 />
               </form>
             ) : (
-              <span
-                className="text-sm cursor-pointer font-medium text-foreground hover:text-primary transition-colors duration-200 truncate"
+              <button type="button"
+                className="text-sm text-left font-medium text-foreground hover:text-primary transition-colors duration-200 truncate"
                 onClick={() => onContentSelect(content.id)}
               >
                 {content.title}
-              </span>
+              </button>
             )}
           </div>
 
-          <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-all duration-200 flex-shrink-0">
+          {canManage && <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-all duration-200 flex-shrink-0">
             {index > 0 && (
               <Button
                 variant="ghost"
@@ -198,7 +208,7 @@ export function ContentList({
                 </AlertDialogContent>
               </AlertDialog>
             </div>
-          </div>
+          </div>}
         </div>
         {content.subContents && content.subContents.length > 0 && (
           <div className="pl-4 ml-3 border-l border-border/40">
@@ -220,6 +230,10 @@ export function ContentList({
               courseId={courseId}
               isLoading={isLoading}
               onVisitedToggle={onVisitedToggle}
+              canManage={canManage}
+              completedIds={completedIds}
+              learningIds={learningIds}
+              progressDisabled={progressDisabled}
             />
           </div>
         )}

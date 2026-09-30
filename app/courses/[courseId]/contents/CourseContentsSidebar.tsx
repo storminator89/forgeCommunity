@@ -15,7 +15,8 @@ import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
-import { isPageVisited } from './utils/visitedPages';
+import { CourseProgressState } from './hooks/useCourseProgress';
+import { CourseProgress } from './components/CourseProgress';
 import { motion } from 'framer-motion';
 import { CheckCircle } from 'lucide-react';
 
@@ -37,7 +38,12 @@ interface CourseContentsSidebarProps {
   courseId: string;
   courseName: string;
   isLoading: boolean;
-  forceUpdate?: boolean;
+  canManage: boolean;
+  progress: CourseProgressState | null;
+  progressLoading: boolean;
+  progressError: string | null;
+  onProgressRetry: () => void;
+  savingContentId: string | null;
   onMainContentSubmit?: (title: string) => Promise<CourseContent | void>;
   onSubContentSubmit: (title: string) => Promise<CourseContent | void>;
   onMainContentSelect?: (contentId: string | null) => void;
@@ -62,7 +68,12 @@ export function CourseContentsSidebar({
   courseId,
   courseName,
   isLoading,
-  forceUpdate,
+  canManage,
+  progress,
+  progressLoading,
+  progressError,
+  onProgressRetry,
+  savingContentId,
   onMainContentSubmit,
   onSubContentSubmit,
   onMainContentSelect,
@@ -78,63 +89,14 @@ export function CourseContentsSidebar({
   const [editingTitle, setEditingTitle] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
   const [newMainContentTitle, setNewMainContentTitle] = useState("");
-  const [isGeneratingCertificate, setIsGeneratingCertificate] = useState(false);
-  const [visitedPagesVersion, setVisitedPagesVersion] = useState(0);
-
-  const checkCompletion = useCallback(() => {
-    // Check if there are any main topics with subtopics
-    const hasTopicsWithSubtopics = contents.some(topic =>
-      topic.subContents && topic.subContents.length > 0
-    );
-
-    if (hasTopicsWithSubtopics) {
-      // Only consider topics with subtopics for completion
-      return contents.every(mainTopic => {
-        // Skip main topics without subtopics in this check
-        if (!mainTopic.subContents || mainTopic.subContents.length === 0) {
-          return true;
-        }
-
-        // Check if all subtopics are completed
-        return mainTopic.subContents.every(subTopic =>
-          isPageVisited(courseId, subTopic.id)
-        );
-      });
-    } else {
-      // If no topics have subtopics, check main topics directly
-      return contents.every(mainTopic =>
-        isPageVisited(courseId, mainTopic.id)
-      );
-    }
-  }, [contents, courseId]);
-
-  const allTopicsCompleted = useMemo(
-    () => {
-      // These values invalidate the derived completion state after a visit event
-      // or a parent refresh, while the content tree remains the source of truth.
-      void forceUpdate;
-      void visitedPagesVersion;
-      return checkCompletion();
-    },
-    [checkCompletion, forceUpdate, visitedPagesVersion]
-  );
-
-  useEffect(() => {
-    const handleVisitedPagesChange = (event: CustomEvent) => {
-      const { courseId: changedCourseId } = event.detail;
-      if (changedCourseId === courseId) {
-        setVisitedPagesVersion(version => version + 1);
-      }
-    };
-
-    // Add event listener
-    window.addEventListener('visitedPagesChanged', handleVisitedPagesChange as EventListener);
-
-    // Cleanup
-    return () => {
-      window.removeEventListener('visitedPagesChanged', handleVisitedPagesChange as EventListener);
-    };
-  }, [courseId]);
+  const completedIds = new Set(progress?.completedContentIds || []);
+  const requiredIds = new Set(progress?.requiredContentIds || []);
+  const learningIds = new Set(progress?.learningContentIds || []);
+  const topicProgress = (content: CourseContent): { completed: number; total: number } => {
+    const descendants = (node: CourseContent): CourseContent[] => [node, ...(node.subContents || []).flatMap(descendants)];
+    const required = descendants(content).filter(node => requiredIds.has(node.id));
+    return { completed: required.filter(node => completedIds.has(node.id)).length, total: required.length };
+  };
 
   const toggleTopic = (topicId: string) => {
     const newExpanded = new Set(expandedTopics);
@@ -256,6 +218,7 @@ export function CourseContentsSidebar({
                     variant="ghost"
                     size="icon"
                     onClick={() => toggleTopic(content.id)}
+                    aria-label={`${expandedTopics.has(content.id) ? 'Einklappen' : 'Ausklappen'}: ${content.title}`}
                     className="h-6 w-6 shrink-0 hover:bg-background/80"
                   >
                     <ChevronRight
@@ -266,7 +229,7 @@ export function CourseContentsSidebar({
                     />
                   </Button>
                   <div className="flex-1 min-w-0 flex items-center gap-2">
-                    {editingContentId === content.id ? (
+                    {canManage && editingContentId === content.id ? (
                       <form
                         onSubmit={(e) => {
                           e.preventDefault();
@@ -291,37 +254,27 @@ export function CourseContentsSidebar({
                       </form>
                     ) : (
                       <div className="flex items-center justify-between gap-2 w-full">
-                        <span
-                          className="font-medium text-sm cursor-pointer text-foreground/90 hover:text-primary transition-colors truncate"
-                          onClick={() => {
-                            setEditingContentId(content.id);
-                            setEditingTitle(content.title);
-                          }}
+                        <button
+                          type="button"
+                          className="font-medium text-sm text-left text-foreground/90 hover:text-primary transition-colors truncate"
+                          onClick={() => onContentSelect(content.id)}
+                          aria-current={selectedContentId === content.id ? 'page' : undefined}
                         >
                           {content.title}
-                        </span>
-                        {content.subContents?.every(sub => isPageVisited(courseId, sub.id)) && content.subContents.length > 0 && (
-                          <div className="flex items-center gap-1.5 text-green-600 dark:text-green-500 px-1.5 py-0.5 bg-green-50 dark:bg-green-900/10 rounded text-xs font-medium flex-shrink-0">
-                            <CheckCircle className="h-3 w-3" />
-                          </div>
+                        </button>
+                        {topicProgress(content).total > 0 && (
+                          <span className="flex-shrink-0 text-xs text-muted-foreground" aria-label={`Fortschritt ${content.title}`}>
+                            {topicProgress(content).completed === topicProgress(content).total
+                              ? <CheckCircle className="h-3 w-3 text-green-600" aria-label="Abgeschlossen" />
+                              : `${topicProgress(content).completed}/${topicProgress(content).total}`}
+                          </span>
                         )}
-                        {content.subContents?.some(sub => isPageVisited(courseId, sub.id)) &&
-                          !content.subContents?.every(sub => isPageVisited(courseId, sub.id)) && (
-                            <div className="flex items-center gap-1.5 text-muted-foreground text-xs font-medium flex-shrink-0 bg-muted px-1.5 py-0.5 rounded">
-                              {(() => {
-                                const total = content.subContents?.length || 0;
-                                const completed = content.subContents?.filter(sub => isPageVisited(courseId, sub.id)).length || 0;
-                                const percentage = Math.round((completed / total) * 100);
-                                return `${percentage}%`;
-                              })()}
-                            </div>
-                          )}
                       </div>
                     )}
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1 opacity-0 group-hover/topic:opacity-100 transition-opacity duration-200 flex-shrink-0">
+                {canManage && <div className="flex items-center gap-1 opacity-0 group-hover/topic:opacity-100 focus-within:opacity-100 transition-opacity duration-200 flex-shrink-0">
                   <Button
                     variant="ghost"
                     size="icon"
@@ -362,7 +315,7 @@ export function CourseContentsSidebar({
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
-                </div>
+                </div>}
               </div>
 
               {expandedTopics.has(content.id) && (
@@ -380,18 +333,22 @@ export function CourseContentsSidebar({
                         onInlineEditSubmit={onInlineEditSubmit}
                         setIsInlineEditing={setIsInlineEditing}
                         setInlineEditTitle={setInlineEditTitle}
-                        onMoveUp={onMoveUp}
-                        onMoveDown={onMoveDown}
+                        onMoveUp={(_parentId, contentId) => onMoveUp(contentId)}
+                        onMoveDown={(_parentId, contentId) => onMoveDown(contentId)}
                         mainContentId={content.id}
                         mainTopicIndex={index}
                         courseId={courseId}
                         isLoading={isLoading}
                         onVisitedToggle={onVisitedToggle}
+                        canManage={canManage}
+                        completedIds={completedIds}
+                        learningIds={learningIds}
+                        progressDisabled={progressLoading || !!savingContentId || !progress || !!progress.enrollment.completedAt}
                       />
                     </div>
                   )}
 
-                  <Dialog
+                  {canManage && <Dialog
                     open={mainContentId === content.id}
                     onOpenChange={(open) => {
                       if (!open) {
@@ -450,7 +407,7 @@ export function CourseContentsSidebar({
                         </DialogFooter>
                       </form>
                     </DialogContent>
-                  </Dialog>
+                  </Dialog>}
                 </div>
               )}
             </div>
@@ -458,7 +415,7 @@ export function CourseContentsSidebar({
         </div>
 
         {/* Add new main topic button */}
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        {canManage && <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button
               onClick={() => setIsDialogOpen(true)}
@@ -505,70 +462,17 @@ export function CourseContentsSidebar({
               </DialogFooter>
             </form>
           </DialogContent>
-        </Dialog>
+        </Dialog>}
 
-        {/* Certificate button at the bottom of the sidebar */}
-        {contents.length > 0 && (
-          <div className="fixed bottom-0 left-0 w-full p-4 border-t border-border bg-background/95 backdrop-blur z-10" style={{ width: 'inherit' }}>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    onClick={async () => {
-                      try {
-                        setIsGeneratingCertificate(true);
-                        const response = await fetch(`/api/courses/${courseId}/certificate`, {
-                          method: 'POST',
-                        });
-
-                        if (!response.ok) {
-                          throw new Error('Failed to generate certificate');
-                        }
-
-                        const blob = await response.blob();
-                        const url = window.URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `${courseName.replace(/\s+/g, '_')}_Certificate.pdf`;
-                        document.body.appendChild(a);
-                        a.click();
-                        window.URL.revokeObjectURL(url);
-                      } catch (error) {
-                        console.error('Error generating certificate:', error);
-                      } finally {
-                        setIsGeneratingCertificate(false);
-                      }
-                    }}
-                    className={cn(
-                      "w-full transition-all duration-200",
-                      allTopicsCompleted
-                        ? "bg-green-600 hover:bg-green-700 text-white shadow-sm"
-                        : "bg-muted text-muted-foreground cursor-not-allowed"
-                    )}
-                    disabled={isGeneratingCertificate || !allTopicsCompleted}
-                  >
-                    {isGeneratingCertificate ? (
-                      <>Generiere Zertifikat...</>
-                    ) : (
-                      <div className="flex items-center justify-center gap-2">
-                        <Award className="w-4 h-4" />
-                        <span>Zertifikat</span>
-                      </div>
-                    )}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  {allTopicsCompleted ? (
-                    <p>Kurs abgeschlossen - Zertifikat herunterladen</p>
-                  ) : (
-                    <p>Schließen Sie alle Themen ab, um das Zertifikat freizuschalten</p>
-                  )}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-        )}
       </div>
+      {(progress || progressLoading || progressError) && <CourseProgress
+        progress={progress}
+        isLoading={progressLoading}
+        error={progressError}
+        onRetry={onProgressRetry}
+        courseId={courseId}
+        courseName={courseName}
+      />}
     </div>
   );
 }

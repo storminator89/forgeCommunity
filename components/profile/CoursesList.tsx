@@ -220,10 +220,10 @@ export function CoursesList({ userId, isInstructor, showEnrolled = false }: Cour
                           <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white p-2">
                             <div className="flex justify-between items-center text-sm mb-1">
                               <span>Fortschritt</span>
-                              <span>{Math.round((course.progress.completed / course.progress.total) * 100)}%</span>
+                              <span>{(course.progress.total > 0 ? Math.round((course.progress.completed / course.progress.total) * 100) : 0)}%</span>
                             </div>
                             <Progress
-                              value={(course.progress.completed / course.progress.total) * 100}
+                              value={course.progress.total > 0 ? (course.progress.completed / course.progress.total) * 100 : 0}
                               className="h-1"
                             />
                           </div>
