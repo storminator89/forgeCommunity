@@ -7,6 +7,8 @@ import { authOptions } from "../../../auth/[...nextauth]/options";
 import { sanitizeTextServer } from '@/lib/server/sanitize-html';
 import { groupCourseContents } from '@/lib/server/group-course-contents';
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
+import { assertCanAttachH5P } from '@/lib/server/h5p-access';
+import { H5PValidationError } from '@/lib/server/h5p-archive';
 import { assertParent, canEdit, contentTransaction, ContentMutationError, normalizeOrder, presentContent, prepareContent, siblings, validateContentFields } from './content-mutations';
 
 // GET-Methode zum Abrufen der Kursinhalte
@@ -94,6 +96,7 @@ export async function POST(
     const parentId = typeof body.parentId === 'string' ? body.parentId : null;
     const effectiveType = typeof type === 'string' ? type : 'TEXT';
     const sanitizedContent = prepareContent(typeof content === 'string' ? content : '', effectiveType);
+    if (effectiveType === 'H5P' && sanitizedContent) await assertCanAttachH5P(session.user.id, session.user.role, sanitizedContent, request.nextUrl.origin);
     const newContent = await contentTransaction(async (tx) => {
       const currentCourse = await tx.course.findUnique({ where: { id: courseId }, select: { instructorId: true } });
       if (!currentCourse) throw new ContentMutationError('Course not found', 404);
@@ -113,6 +116,7 @@ export async function POST(
 
     return NextResponse.json(newContent, { status: 201 });
   } catch (error) {
+    if (error instanceof H5PValidationError) return NextResponse.json({ error: error.message }, { status: error.status });
     if (error instanceof ContentMutationError) return NextResponse.json({ error: error.message }, { status: error.status });
     const inputError = requestErrorResponse(error);
     if (inputError) return inputError;

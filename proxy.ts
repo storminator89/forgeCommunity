@@ -14,6 +14,7 @@ const publicPaths = [
 ];
 
 function isPublicPath(pathname: string, method: string): boolean {
+  if (['GET', 'HEAD'].includes(method.toUpperCase()) && pathname.startsWith('/h5p-runtime/')) return true;
   if (method.toUpperCase() === 'GET' && publicPaths.includes(pathname)) return true;
 
   if (['/api/auth'].some(path =>
@@ -29,6 +30,9 @@ function isPublicPath(pathname: string, method: string): boolean {
 }
 
 function isPublicApiRequest(pathname: string, method: string): boolean {
+  // The opaque H5P sandbox cannot use session cookies. The asset handler
+  // verifies an expiring, content-scoped signature before serving any bytes.
+  if (['GET', 'HEAD', 'OPTIONS'].includes(method.toUpperCase()) && pathname.startsWith('/api/h5p/assets/')) return true;
   if (pathname === '/api/register') return true;
   if (method.toUpperCase() !== 'GET') return false;
 

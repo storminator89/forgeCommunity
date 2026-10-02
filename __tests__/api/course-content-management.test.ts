@@ -12,7 +12,7 @@ jest.mock('next-auth/next', () => ({ getServerSession: jest.fn() }));
 jest.mock('@/app/api/auth/[...nextauth]/options', () => ({ authOptions: {} }));
 jest.mock('@/lib/server/request-body', () => ({ requestWithBodyLimit: async (request: Request) => request, RequestBodyLimitError: class extends Error {} }));
 jest.mock('@/lib/prisma', () => ({ __esModule: true, default: {
-  course: { findUnique: jest.fn() }, enrollment: { findUnique: jest.fn() },
+  course: { findUnique: jest.fn() }, enrollment: { findUnique: jest.fn() }, h5PContent: { findUnique: jest.fn() },
   courseContent: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn(), deleteMany: jest.fn() },
   $transaction: jest.fn(),
 } }));
@@ -21,13 +21,14 @@ type Node = { id: string; courseId: string; parentId: string | null; title: stri
 let nodes: Node[];
 const db = prisma as unknown as {
   course: { findUnique: jest.Mock }; enrollment: { findUnique: jest.Mock };
+  h5PContent: { findUnique: jest.Mock };
   courseContent: { findUnique: jest.Mock; findMany: jest.Mock; create: jest.Mock; update: jest.Mock; deleteMany: jest.Mock };
   $transaction: jest.Mock;
 };
 function node(id: string, parentId: string | null = null, order = 1, extra: Partial<Node> = {}): Node {
   return { id, parentId, order, courseId: 'course-1', title: id, content: '<p>Content</p>', type: 'TEXT', ...extra };
 }
-function request(body?: unknown) { return { json: async () => body } as never; }
+function request(body?: unknown) { return { json: async () => body, nextUrl: new URL('http://localhost/api/courses/course-1/contents') } as never; }
 const courseParams = { params: Promise.resolve({ courseId: 'course-1' }) };
 function params(contentId: string) { return { params: Promise.resolve({ courseId: 'course-1', contentId }) }; }
 
@@ -37,6 +38,7 @@ beforeEach(() => {
   jest.mocked(getServerSession).mockResolvedValue({ user: { id: 'teacher', role: 'INSTRUCTOR' } } as never);
   db.course.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) => where.id === 'course-1' ? { instructorId: 'teacher' } : null);
   db.enrollment.findUnique.mockResolvedValue(null);
+  db.h5PContent.findUnique.mockResolvedValue(null);
   db.courseContent.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) => {
     const found = nodes.find(item => item.id === where.id);
     return found ? { ...found, course: { instructorId: 'teacher' } } : null;
@@ -217,4 +219,16 @@ test('legacy nullable content type presents ordinary rich text as TEXT without r
   const response = await GET(request(), courseParams);
   expect(await response.json()).toEqual([expect.objectContaining({ type: 'TEXT' })]);
   expect(nodes[0].type).toBeNull();
+});
+
+test('local H5P attachment rejects missing and foreign packages including absolute same-origin URLs', async () => {
+  nodes = [node('h5p', null, 1, { type: 'H5P', content: '' })];
+  expect((await PUT(request({ content: '/h5p/embed/missing' }), params('h5p'))).status).toBe(400);
+  db.h5PContent.findUnique.mockResolvedValue({ userId: 'someone-else' });
+  expect((await POST(request({ title: 'Foreign', type: 'H5P', content: 'foreign' }), courseParams)).status).toBe(403);
+  expect((await PUT(request({ content: 'http://localhost/h5p/embed/foreign' }), params('h5p'))).status).toBe(403);
+  expect(nodes[0].content).toBe('');
+  db.h5PContent.findUnique.mockResolvedValue({ userId: 'teacher' });
+  expect((await PUT(request({ content: 'owned' }), params('h5p'))).status).toBe(200);
+  expect(nodes[0].content).toBe('/h5p/embed/owned');
 });

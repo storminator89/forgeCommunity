@@ -9,12 +9,14 @@ services:
     env_file:
       - .env
     environment:
+      H5P_STORAGE_PATH: /app/data/h5p
       DATABASE_PROVIDER: postgresql
       DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL using host db for this Compose deployment}
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?Generate a strong NEXTAUTH_SECRET}
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3013}
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3013}
     volumes:
+      - h5p_data:/app/data/h5p
       - uploads:/app/public/images/uploads
       - private_uploads:/app/private/chat-uploads
     depends_on:
@@ -38,6 +40,7 @@ services:
     restart: unless-stopped
 
 volumes:
+  h5p_data:
   postgres_data:
   uploads:
   private_uploads:

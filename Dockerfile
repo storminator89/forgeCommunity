@@ -31,7 +31,7 @@ COPY --from=builder --chown=node:node /app/prisma/sqlite-migrations ./prisma/sql
 COPY --from=builder --chown=node:node /app/scripts/db-deploy.mjs /app/scripts/postgresql-upgrades.mjs ./scripts/
 COPY --from=builder --chown=node:node /app/prisma/postgresql-upgrades ./prisma/postgresql-upgrades
 COPY --chown=node:node docker/entrypoint.sh docker/healthcheck.mjs ./docker/
-RUN mkdir -p /app/data /app/public/images/uploads /app/private/chat-uploads && \
+RUN mkdir -p /app/data/h5p /app/public/images/uploads /app/private/chat-uploads && \
     chown -R node:node /app/data /app/public/images/uploads /app/private/chat-uploads && \
     chmod +x /app/docker/entrypoint.sh
 USER node

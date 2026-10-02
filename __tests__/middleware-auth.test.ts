@@ -51,6 +51,15 @@ describe('auth middleware public and API boundaries', () => {
     expect(response).toEqual(expect.objectContaining({ kind: 'json', status: 401 }));
   });
 
+  it('lets the opaque H5P player reach runtime and token-checked assets while keeping metadata private', async () => {
+    await expect(proxy(request('/h5p-runtime/main.bundle.js'))).resolves.toEqual({ kind: 'next' });
+    await expect(proxy(request('/api/h5p/assets/package/token/h5p.json'))).resolves.toEqual({ kind: 'next' });
+    await expect(proxy(request('/api/h5p/assets/package/token/content/video.mp4', 'HEAD'))).resolves.toEqual({ kind: 'next' });
+    await expect(proxy(request('/api/h5p/contents'))).resolves.toEqual(expect.objectContaining({ status: 401 }));
+    await expect(proxy(request('/h5p/embed/package'))).resolves.toEqual(expect.objectContaining({ kind: 'redirect' }));
+    await expect(proxy(request('/api/h5p/upload', 'POST', { Origin: 'null' }))).resolves.toEqual(expect.objectContaining({ status: 403 }));
+  });
+
   it('fails closed for legacy public chat attachment paths, including image extensions', async () => {
     const response = await proxy(request('/images/uploads/chat-legacy-123.png'));
 

@@ -14,6 +14,7 @@ import { getH5PEmbedUrl, getCourseVideoUrl, getCourseAudioEmbedUrl } from './con
 import { getSafeEmbedUrl } from '@/lib/security';
 import { AlertTriangle } from 'lucide-react';
 import { sanitizeRichHtml } from '@/lib/sanitize-html';
+import { H5PEmbed } from '@/components/h5p/H5PEmbed';
 
 interface ContentRendererProps {
   content: CourseContent;
@@ -171,7 +172,7 @@ function ContentRendererState({ content, isEditing: externalIsEditing, onSave, o
       case 'H5P': {
         const safeUrl = getH5PEmbedUrl(content.content);
         if (!safeUrl) return <p role="alert" className="rounded-md bg-destructive/10 p-4 text-destructive">Die H5P-Quelle ist ungültig.</p>;
-        return <div className="aspect-video w-full overflow-hidden rounded-md border border-border/50 bg-muted"><iframe src={safeUrl} title={content.title} className="h-full w-full" allowFullScreen /></div>;
+        return <H5PEmbed src={safeUrl} title={content.title} />;
       }
 
       default:
