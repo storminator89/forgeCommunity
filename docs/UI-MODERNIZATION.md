@@ -63,6 +63,8 @@ Rangliste und Statistik zeigen die tatsächlichen Zahlen kompakt. Projektformula
 
 Der bereinigte Stand bestand 43 Testsuiten mit 223 Tests, ESLint ohne Warnungen, Typprüfung und Produktionsbuild. Die finale Browserprüfung bestand alle 44 Kombinationen aus 11 Seiten, 390/1440 px und Light/Dark; sie prüfte auch die vier Dashboard-Ziele. Der Standalone-Server bestand erneut 12 HTTP-Prüfungen. Die folgenden Review-Ansichten zeigen diesen zweiten Durchgang.
 
+Die anschließende Überarbeitung von Inhaltspflege, Kursbaum, Quiz und Speicherzuständen ist in [Kurseditor: Inhaltspflege und Datenzuverlässigkeit](COURSE-EDITOR.md) dokumentiert.
+
 ## Konkrete nächste Produktverbesserungen
 
 Diese Punkte sind Vorschläge und werden nicht als bereits umgesetzt dargestellt:

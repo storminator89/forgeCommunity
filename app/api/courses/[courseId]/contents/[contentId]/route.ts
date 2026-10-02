@@ -1,184 +1,88 @@
-// app/api/courses/[courseId]/contents/[contentId]/route.ts
-
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "../../../../auth/[...nextauth]/options";
-import prisma from '@/lib/prisma';
-import { sanitizeCourseTextContentServer, sanitizeTextServer } from '@/lib/server/sanitize-html';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '../../../../auth/[...nextauth]/options';
+import { sanitizeTextServer } from '@/lib/server/sanitize-html';
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
-import { Prisma } from '@prisma/client';
+import { assertParent, canEdit, contentTransaction, ContentMutationError, normalizeOrder, presentContent, prepareContent, siblings, validateContentFields } from '../content-mutations';
 
-export async function DELETE(
-  request: NextRequest,
-  props: { params: Promise<{ courseId: string; contentId: string }> }
-) {
-  const params = await props.params;
-
+export async function DELETE(request: NextRequest, props: { params: Promise<{ courseId: string; contentId: string }> }) {
+  const { courseId, contentId } = await props.params;
   try {
     const session = await getServerSession(authOptions);
-
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const existingContent = await prisma.courseContent.findUnique({
-      where: { id: params.contentId },
-      select: {
-        id: true,
-        courseId: true,
-        type: true,
-        course: {
-          select: {
-            instructorId: true,
-          },
-        },
-      },
-    });
-
-    if (!existingContent || existingContent.courseId !== params.courseId) {
-      return NextResponse.json({ error: 'Content not found' }, { status: 404 });
-    }
-
-    if (
-      existingContent.course.instructorId !== session.user.id &&
-      session.user.role !== 'ADMIN'
-    ) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
-
-    const deletedContent = await prisma.$transaction(async (tx) => {
-      const contents = await tx.courseContent.findMany({
-        where: { courseId: params.courseId }, select: { id: true, parentId: true },
-      });
-      const descendants = new Set([params.contentId]);
+    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const deletedContent = await contentTransaction(async (tx) => {
+      const current = await tx.courseContent.findUnique({ where: { id: contentId }, include: { course: { select: { instructorId: true } } } });
+      if (!current || current.courseId !== courseId) throw new ContentMutationError('Content not found', 404);
+      canEdit(current.course.instructorId, session.user);
+      const contents = await tx.courseContent.findMany({ where: { courseId }, select: { id: true, parentId: true } });
+      const descendants = new Set([contentId]);
       let changed = true;
       while (changed) {
         changed = false;
-        for (const content of contents) {
-          if (content.parentId && descendants.has(content.parentId) && !descendants.has(content.id)) {
-            descendants.add(content.id);
-            changed = true;
-          }
+        for (const item of contents) {
+          if (item.parentId && descendants.has(item.parentId) && !descendants.has(item.id)) { descendants.add(item.id); changed = true; }
         }
       }
-      const remaining = contents.filter((content) => descendants.has(content.id) && content.id !== params.contentId);
-      while (remaining.length) {
-        const parents = new Set(remaining.map((content) => content.parentId));
-        const leaves = remaining.filter((content) => !parents.has(content.id));
-        if (!leaves.length) throw new Error('Invalid content hierarchy');
-        await tx.courseContent.deleteMany({ where: { id: { in: leaves.map((content) => content.id) } } });
-        for (const leaf of leaves) remaining.splice(remaining.indexOf(leaf), 1);
+      const remaining = new Map(contents.filter(item => descendants.has(item.id)).map(item => [item.id, item]));
+      while (remaining.size) {
+        const parents = new Set([...remaining.values()].map(item => item.parentId));
+        const leaves = [...remaining.keys()].filter(id => !parents.has(id));
+        if (!leaves.length) throw new ContentMutationError('Invalid content hierarchy', 409);
+        await tx.courseContent.deleteMany({ where: { courseId, id: { in: leaves } } });
+        leaves.forEach(id => remaining.delete(id));
       }
-      return tx.courseContent.delete({ where: { id: params.contentId } });
+      await normalizeOrder(tx, (await siblings(tx, courseId, current.parentId)).map(item => item.id));
+      const { course: _course, ...deleted } = current;
+      return deleted;
     });
-
-    return NextResponse.json({
-      success: true,
-      message: 'Content deleted successfully',
-      deletedContent
-    });
+    return NextResponse.json({ success: true, message: 'Content deleted successfully', deletedContent });
   } catch (error) {
-    console.error('Error in DELETE operation:', error);
+    if (error instanceof ContentMutationError) return NextResponse.json({ error: error.message }, { status: error.status });
+    console.error('Error deleting content:', error);
     return NextResponse.json({ error: 'Failed to delete content' }, { status: 500 });
   }
 }
 
-export async function PUT(
-  request: NextRequest,
-  props: { params: Promise<{ courseId: string; contentId: string }> }
-) {
-  const params = await props.params;
+export async function PUT(request: NextRequest, props: { params: Promise<{ courseId: string; contentId: string }> }) {
+  const { courseId, contentId } = await props.params;
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const existingContent = await prisma.courseContent.findUnique({
-      where: { id: params.contentId },
-      select: {
-        id: true,
-        courseId: true,
-        type: true,
-        course: {
-          select: {
-            instructorId: true,
-          },
-        },
-      },
-    });
-
-    if (!existingContent || existingContent.courseId !== params.courseId) {
-      return NextResponse.json({ error: 'Content not found' }, { status: 404 });
-    }
-
-    if (
-      existingContent.course.instructorId !== session.user.id &&
-      session.user.role !== 'ADMIN'
-    ) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
-
+    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const body = await readJsonObject(request);
-    const { title, type, content, order, parentId } = body;
-
-    if ((parentId !== undefined && parentId !== null && (typeof parentId !== 'string' || !parentId)) ||
-        (title !== undefined && typeof title !== 'string') ||
-        (content !== undefined && typeof content !== 'string') ||
-        (type !== undefined && type !== null && !['TEXT', 'VIDEO', 'AUDIO', 'H5P'].includes(String(type))) ||
-        (order !== undefined && (!Number.isSafeInteger(order) || Number(order) < 0))) {
-      return NextResponse.json({ error: 'Invalid content fields' }, { status: 400 });
-    }
-
-    const sanitizedTitle = title !== undefined ? sanitizeTextServer(title as string) : undefined;
-    const effectiveType = type ?? existingContent.type;
-    const sanitizedContent =
-      content !== undefined
-        ? (effectiveType === 'TEXT' || effectiveType === null
-            ? sanitizeCourseTextContentServer(content as string)
-            : sanitizeTextServer(content as string))
-        : undefined;
-
-    let updatedContent;
-    for (let attempt = 0; attempt < 4; attempt++) {
-      try {
-        updatedContent = await prisma.$transaction(async (tx) => {
-          const current = await tx.courseContent.findUnique({
-            where: { id: params.contentId }, select: { courseId: true, course: { select: { instructorId: true } } },
-          });
-          if (!current || current.courseId !== params.courseId) throw new Error('CONTENT_NOT_FOUND');
-          if (current.course.instructorId !== session.user.id && session.user.role !== 'ADMIN') throw new Error('CONTENT_FORBIDDEN');
-          const visited = new Set<string>();
-          let ancestorId = typeof parentId === 'string' ? parentId : null;
-          while (ancestorId) {
-            if (ancestorId === params.contentId || visited.has(ancestorId)) throw new Error('INVALID_PARENT');
-            visited.add(ancestorId);
-            const ancestor = await tx.courseContent.findUnique({ where: { id: ancestorId }, select: { courseId: true, parentId: true } });
-            if (!ancestor || ancestor.courseId !== params.courseId) throw new Error('INVALID_PARENT');
-            ancestorId = ancestor.parentId;
-          }
-          return tx.courseContent.update({
-            where: { id: params.contentId },
-            data: {
-              ...(sanitizedTitle !== undefined && { title: sanitizedTitle }),
-              ...(type !== undefined && { type: type as Prisma.CourseContentUpdateInput['type'] }),
-              ...(sanitizedContent !== undefined && { content: sanitizedContent }),
-              ...(order !== undefined && { order: order as number }),
-              ...(parentId !== undefined && { parentId: parentId as string | null }),
-            },
-          });
-        }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
-        break;
-      } catch (error) {
-        if (attempt === 3 || !(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2034') throw error;
+    validateContentFields(body, false);
+    const updatedContent = await contentTransaction(async (tx) => {
+      const current = await tx.courseContent.findUnique({ where: { id: contentId }, include: { course: { select: { instructorId: true } } } });
+      if (!current || current.courseId !== courseId) throw new ContentMutationError('Content not found', 404);
+      canEdit(current.course.instructorId, session.user);
+      const destinationParentId = body.parentId === undefined ? current.parentId : body.parentId as string | null;
+      if (body.parentId !== undefined) await assertParent(tx, courseId, destinationParentId, contentId);
+      const effectiveType = body.type === undefined ? current.type : body.type as string | null;
+      const prepared = body.content !== undefined ? prepareContent(body.content as string, effectiveType) :
+        body.type !== undefined ? prepareContent(current.content, effectiveType) : undefined;
+      const data = {
+        ...(body.title !== undefined && { title: sanitizeTextServer(body.title as string) }),
+        ...(body.type !== undefined && { type: effectiveType === 'QUIZ' ? 'TEXT' as const : effectiveType as 'TEXT' | 'VIDEO' | 'AUDIO' | 'H5P' | null }),
+        ...(prepared !== undefined && { content: prepared }),
+        ...(body.parentId !== undefined && { parentId: destinationParentId }),
+      };
+      let order = current.order;
+      let updated;
+      if (body.order !== undefined || destinationParentId !== current.parentId) {
+        const destination = (await siblings(tx, courseId, destinationParentId)).filter(item => item.id !== contentId);
+        const insertionIndex = typeof body.order === 'number' ? Math.max(0, Math.min(body.order - 1, destination.length)) : destination.length;
+        order = insertionIndex + 1;
+        destination.splice(insertionIndex, 0, { id: contentId, order });
+        updated = await tx.courseContent.update({ where: { id: contentId }, data: { ...data, order } });
+        if (destinationParentId !== current.parentId) await normalizeOrder(tx, (await siblings(tx, courseId, current.parentId)).filter(item => item.id !== contentId).map(item => item.id));
+        await normalizeOrder(tx, destination.map(item => item.id));
+      } else {
+        updated = await tx.courseContent.update({ where: { id: contentId }, data });
       }
-    }
-
+      return presentContent({ ...updated, order });
+    });
     return NextResponse.json(updatedContent);
   } catch (error) {
-    if (error instanceof Error && ['INVALID_PARENT', 'CONTENT_NOT_FOUND', 'CONTENT_FORBIDDEN'].includes(error.message)) {
-      return NextResponse.json({ error: error.message }, { status: error.message === 'INVALID_PARENT' ? 400 : error.message === 'CONTENT_NOT_FOUND' ? 404 : 403 });
-    }
+    if (error instanceof ContentMutationError) return NextResponse.json({ error: error.message }, { status: error.status });
     const inputError = requestErrorResponse(error);
     if (inputError) return inputError;
     console.error('Error updating content:', error);

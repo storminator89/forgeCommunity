@@ -56,6 +56,7 @@ export async function GET(
     return NextResponse.json({
       id: course.id,
       name: course.title,
+      canEdit: session.user.role === 'ADMIN' || course.instructorId === session.user.id,
       description: course.description,
       createdAt: course.createdAt,
       updatedAt: course.updatedAt,

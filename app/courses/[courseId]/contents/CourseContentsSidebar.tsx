@@ -1,23 +1,13 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useRouter, useParams } from 'next/navigation';
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { PlusCircle, FileText, Video, Music, Box, ChevronRight, Pen, Trash2, ChevronUp, ChevronDown, Award } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { PlusCircle, Award } from 'lucide-react';
 import { ContentList } from './ContentList';
 import { NewMainTopicDialog } from './NewMainTopicDialog';
 import { NewSubTopicDialog } from './NewSubTopicDialog';
 import { CourseContent } from './types';
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Card } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
-import { AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
-import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { isPageVisited } from './utils/visitedPages';
-import { motion } from 'framer-motion';
-import { CheckCircle } from 'lucide-react';
 
 interface CourseContentsSidebarProps {
   contents: CourseContent[];
@@ -30,553 +20,98 @@ interface CourseContentsSidebarProps {
   onInlineEditSubmit: (contentId: string, newTitle: string) => Promise<void> | void;
   setIsInlineEditing: (contentId: string | null) => void;
   setInlineEditTitle: (title: string) => void;
-  onMoveUp: (contentId: string) => void;
-  onMoveDown: (contentId: string) => void;
+  onMoveUp: (parentId: string, contentId: string) => Promise<void> | void;
+  onMoveDown: (parentId: string, contentId: string) => Promise<void> | void;
+  onMoveMainUp?: (contentId: string) => Promise<void> | void;
+  onMoveMainDown?: (contentId: string) => Promise<void> | void;
   mainContentId: string | null;
   mainTopicIndex: number;
   courseId: string;
   courseName: string;
   isLoading: boolean;
+  isMutating?: boolean;
+  canManage?: boolean;
   forceUpdate?: boolean;
   onMainContentSubmit?: (title: string) => Promise<CourseContent | void>;
-  onSubContentSubmit: (title: string) => Promise<CourseContent | void>;
+  onSubContentSubmit: (title: string, parentId?: string) => Promise<CourseContent | void>;
   onMainContentSelect?: (contentId: string | null) => void;
   onVisitedToggle: (contentId: string) => void;
 }
 
-export function CourseContentsSidebar({
-  contents,
-  selectedContentId,
-  onContentSelect,
-  onEditClick,
-  onDeleteClick,
-  isInlineEditing,
-  inlineEditTitle,
-  onInlineEditSubmit,
-  setIsInlineEditing,
-  setInlineEditTitle,
-  onMoveUp,
-  onMoveDown,
-  mainContentId,
-  mainTopicIndex,
-  courseId,
-  courseName,
-  isLoading,
-  forceUpdate,
-  onMainContentSubmit,
-  onSubContentSubmit,
-  onMainContentSelect,
-  onVisitedToggle,
-}: CourseContentsSidebarProps) {
-  const router = useRouter();
-  const params = useParams();
-  const [newSubtopicTitle, setNewSubtopicTitle] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [expandedTopics, setExpandedTopics] = useState<Set<string>>(new Set());
-  const [editingContentId, setEditingContentId] = useState<string | null>(null);
-  const [editingTitle, setEditingTitle] = useState("");
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [newMainContentTitle, setNewMainContentTitle] = useState("");
+export function CourseContentsSidebar(props: CourseContentsSidebarProps) {
+  const { contents, selectedContentId, onContentSelect, onEditClick, onDeleteClick, isInlineEditing,
+    inlineEditTitle, onInlineEditSubmit, setIsInlineEditing, setInlineEditTitle, onMoveUp, onMoveDown,
+    onMoveMainUp, onMoveMainDown, mainContentId, courseId, courseName, isLoading, isMutating = false,
+    canManage = true, forceUpdate, onMainContentSubmit, onSubContentSubmit, onMainContentSelect, onVisitedToggle } = props;
+  const [mainTitle, setMainTitle] = useState('');
+  const [subTitle, setSubTitle] = useState('');
+  const [mainDialogOpen, setMainDialogOpen] = useState(false);
+  const [subParentId, setSubParentId] = useState<string | null>(null);
   const [isGeneratingCertificate, setIsGeneratingCertificate] = useState(false);
   const [certificateError, setCertificateError] = useState<string | null>(null);
-  const [visitedPagesVersion, setVisitedPagesVersion] = useState(0);
-
-  const checkCompletion = useCallback(() => {
-    // Check if there are any main topics with subtopics
-    const hasTopicsWithSubtopics = contents.some(topic =>
-      topic.subContents && topic.subContents.length > 0
-    );
-
-    if (hasTopicsWithSubtopics) {
-      // Only consider topics with subtopics for completion
-      return contents.every(mainTopic => {
-        // Skip main topics without subtopics in this check
-        if (!mainTopic.subContents || mainTopic.subContents.length === 0) {
-          return true;
-        }
-
-        // Check if all subtopics are completed
-        return mainTopic.subContents.every(subTopic =>
-          isPageVisited(courseId, subTopic.id)
-        );
-      });
-    } else {
-      // If no topics have subtopics, check main topics directly
-      return contents.every(mainTopic =>
-        isPageVisited(courseId, mainTopic.id)
-      );
-    }
-  }, [contents, courseId]);
-
-  const allTopicsCompleted = useMemo(
-    () => {
-      // These values invalidate the derived completion state after a visit event
-      // or a parent refresh, while the content tree remains the source of truth.
-      void forceUpdate;
-      void visitedPagesVersion;
-      return checkCompletion();
-    },
-    [checkCompletion, forceUpdate, visitedPagesVersion]
-  );
+  const [visitedVersion, setVisitedVersion] = useState(0);
 
   useEffect(() => {
-    const handleVisitedPagesChange = (event: CustomEvent) => {
-      const { courseId: changedCourseId } = event.detail;
-      if (changedCourseId === courseId) {
-        setVisitedPagesVersion(version => version + 1);
-      }
-    };
-
-    // Add event listener
-    window.addEventListener('visitedPagesChanged', handleVisitedPagesChange as EventListener);
-
-    // Cleanup
-    return () => {
-      window.removeEventListener('visitedPagesChanged', handleVisitedPagesChange as EventListener);
-    };
+    const handleVisited = (event: Event) => { if ((event as CustomEvent).detail?.courseId === courseId) setVisitedVersion(value => value + 1); };
+    window.addEventListener('visitedPagesChanged', handleVisited);
+    return () => window.removeEventListener('visitedPagesChanged', handleVisited);
   }, [courseId]);
 
-  const toggleTopic = (topicId: string) => {
-    const newExpanded = new Set(expandedTopics);
-    if (newExpanded.has(topicId)) {
-      newExpanded.delete(topicId);
-    } else {
-      newExpanded.add(topicId);
-    }
-    setExpandedTopics(newExpanded);
-  };
+  const leafContents = useMemo(() => {
+    const leaves: CourseContent[] = [];
+    const walk = (items: CourseContent[]) => items.forEach(item => item.subContents?.length ? walk(item.subContents) : leaves.push(item));
+    walk(contents);
+    return leaves;
+  }, [contents]);
+  const allTopicsCompleted = useMemo(() => {
+    void visitedVersion;
+    void forceUpdate;
+    return leafContents.length > 0 && leafContents.every(item => isPageVisited(courseId, item.id));
+  }, [leafContents, courseId, visitedVersion, forceUpdate]);
 
-  const handleDelete = async (content: CourseContent) => {
+  const generateCertificate = useCallback(async () => {
+    if (isGeneratingCertificate) return;
+    setIsGeneratingCertificate(true);
+    setCertificateError(null);
     try {
-      setIsDeleting(true);
-      await onDeleteClick(content);
+      const response = await fetch(`/api/courses/${courseId}/certificate`, { method: 'POST' });
+      if (!response.ok) throw new Error(response.status === 403 ? 'Der Kursabschluss ist noch nicht bestätigt.' : 'Das Zertifikat konnte nicht erstellt werden. Bitte versuche es erneut.');
+      const url = window.URL.createObjectURL(await response.blob());
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${courseName.replace(/\s+/g, '_')}_Certificate.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (cause) { setCertificateError(cause instanceof Error ? cause.message : 'Das Zertifikat konnte nicht erstellt werden.'); }
+    finally { setIsGeneratingCertificate(false); }
+  }, [courseId, courseName, isGeneratingCertificate]);
 
-    } catch (error) {
-      console.error('Error deleting content:', error);
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
-  const handleInlineEdit = async (contentId: string, newTitle: string) => {
-    try {
-      await onInlineEditSubmit(contentId, newTitle);
-
-    } catch (error) {
-      console.error('Error updating title:', error);
-    }
-  };
-
-  const handleMainContentSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newMainContentTitle.trim()) return;
-
-    try {
-      setIsSubmitting(true);
-      if (!onMainContentSubmit) {
-        throw new Error('Main content creation is unavailable');
-      }
-      await onMainContentSubmit(newMainContentTitle.trim());
-      setNewMainContentTitle("");
-      setIsDialogOpen(false); // Close the dialog after successful submission
-    } catch (error) {
-      console.error('Error creating main content:', error);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleDeleteContent = async (content: CourseContent) => {
-    try {
-      // Rufe den übergebenen onDeleteClick Handler auf
-      await onDeleteClick(content);
-
-    } catch (error) {
-      console.error('Error handling content deletion:', error);
-    }
-  };
-
-  const handleSubContentSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newSubtopicTitle.trim()) return;
-
-    try {
-      setIsSubmitting(true);
-      await onSubContentSubmit(newSubtopicTitle);
-
-      setNewSubtopicTitle("");
-      onMainContentSelect?.(null);
-
-      // Automatically expand the parent topic
-      if (mainContentId) {
-        setExpandedTopics(prev => new Set(prev).add(mainContentId));
-      }
-    } catch (error) {
-      console.error('Error creating subtopic:', error);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  if (isLoading) {
-    return (
-      <div className="flex justify-center items-center h-screen">
-        <p>Loading...</p>
-      </div>
-    );
-  }
-
-  if (!contents) {
-    return (
-      <div className="flex justify-center items-center h-screen">
-        <p>No content available</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="bg-muted/10 h-full min-h-0 flex flex-col">
-      <div className="p-4 border-b border-border bg-background/50">
-        <h3 className="font-semibold text-lg text-foreground tracking-tight line-clamp-1" title={courseName}>
-          {courseName || 'Lade Kurs...'}
-        </h3>
-        <p className="text-xs text-muted-foreground mt-1">Inhaltsverzeichnis</p>
-      </div>
-
-      <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-4">
-        <div className="space-y-3">
-          {contents.map((content, index) => (
-            <div key={content.id} className="group relative rounded-md overflow-hidden transition-colors duration-200">
-              <div className={cn(
-                "flex items-center justify-between p-2 rounded-md hover:bg-accent group/topic transition-colors",
-                expandedTopics.has(content.id) && "bg-accent/50"
-              )}>
-                <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`${expandedTopics.has(content.id) ? "Einklappen" : "Aufklappen"}: ${content.title}`}
-                    aria-expanded={expandedTopics.has(content.id)}
-                    onClick={() => toggleTopic(content.id)}
-                    className="h-8 w-8 shrink-0 hover:bg-background/80"
-                  >
-                    <ChevronRight
-                      className={cn(
-                        "h-4 w-4 shrink-0 transition-transform duration-200 text-muted-foreground",
-                        expandedTopics.has(content.id) ? "rotate-90" : ""
-                      )}
-                    />
-                  </Button>
-                  <div className="flex-1 min-w-0 flex items-center gap-2">
-                    {editingContentId === content.id ? (
-                      <form
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          handleInlineEdit(content.id, editingTitle);
-                          setEditingContentId(null);
-                        }}
-                        className="flex-1 min-w-0"
-                      >
-                        <Input
-                          type="text"
-                          value={editingTitle}
-                          onChange={(e) => setEditingTitle(e.target.value)}
-                          onBlur={() => {
-                            if (editingTitle.trim() !== '') {
-                              handleInlineEdit(content.id, editingTitle);
-                            }
-                            setEditingContentId(null);
-                          }}
-                          className="h-7 text-sm"
-                          autoFocus
-                        />
-                      </form>
-                    ) : (
-                      <div className="flex items-center justify-between gap-2 w-full">
-                        <button
-                          type="button"
-                          className="min-w-0 truncate rounded-sm text-left font-medium text-sm text-foreground/90 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                          aria-current={selectedContentId === content.id ? "page" : undefined}
-                          onClick={() => onContentSelect(content.id)}
-                        >
-                          {content.title}
-                        </button>
-                        {content.subContents?.every(sub => isPageVisited(courseId, sub.id)) && content.subContents.length > 0 && (
-                          <div className="flex items-center gap-1.5 text-green-600 dark:text-green-500 px-1.5 py-0.5 bg-green-50 dark:bg-green-900/10 rounded text-xs font-medium flex-shrink-0">
-                            <CheckCircle className="h-3 w-3" />
-                          </div>
-                        )}
-                        {content.subContents?.some(sub => isPageVisited(courseId, sub.id)) &&
-                          !content.subContents?.every(sub => isPageVisited(courseId, sub.id)) && (
-                            <div className="flex items-center gap-1.5 text-muted-foreground text-xs font-medium flex-shrink-0 bg-muted px-1.5 py-0.5 rounded">
-                              {(() => {
-                                const total = content.subContents?.length || 0;
-                                const completed = content.subContents?.filter(sub => isPageVisited(courseId, sub.id)).length || 0;
-                                const percentage = Math.round((completed / total) * 100);
-                                return `${percentage}%`;
-                              })()}
-                            </div>
-                          )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover/topic:opacity-100 focus-within:opacity-100 transition-opacity duration-200 flex-shrink-0">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 hover:bg-background"
-                    onClick={() => {
-                      setEditingContentId(content.id);
-                      setEditingTitle(content.title);
-                    }}
-                  >
-                    <span className="sr-only">{content.title} umbenennen</span>
-                    <Pen className="h-3 w-3 text-muted-foreground" />
-                  </Button>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 hover:text-destructive hover:bg-destructive/10"
-                      >
-                        <span className="sr-only">{content.title} löschen</span>
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Hauptthema löschen</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Dieses Hauptthema löschen? Diese Aktion kann nicht rückgängig gemacht werden.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Abbrechen</AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={() => handleDelete(content)}
-                          disabled={isDeleting}
-                          className="bg-destructive hover:bg-destructive/90"
-                        >
-                          {isDeleting ? "Wird gelöscht..." : "Löschen"}
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </div>
-              </div>
-
-              {expandedTopics.has(content.id) && (
-                <div className="pl-4 pr-1 pb-2 pt-1">
-                  {content.subContents && content.subContents.length > 0 && (
-                    <div className="relative pl-4 border-l border-border/40 ml-3 space-y-1">
-                      <ContentList
-                        contents={content.subContents}
-                        selectedContentId={selectedContentId}
-                        onContentSelect={onContentSelect}
-                        onEditClick={onEditClick}
-                        onDeleteClick={handleDeleteContent}
-                        isInlineEditing={isInlineEditing}
-                        inlineEditTitle={inlineEditTitle}
-                        onInlineEditSubmit={onInlineEditSubmit}
-                        setIsInlineEditing={setIsInlineEditing}
-                        setInlineEditTitle={setInlineEditTitle}
-                        onMoveUp={onMoveUp}
-                        onMoveDown={onMoveDown}
-                        mainContentId={content.id}
-                        mainTopicIndex={index}
-                        courseId={courseId}
-                        isLoading={isLoading}
-                        onVisitedToggle={onVisitedToggle}
-                      />
-                    </div>
-                  )}
-
-                  <Dialog
-                    open={mainContentId === content.id}
-                    onOpenChange={(open) => {
-                      if (!open) {
-                        onMainContentSelect?.(null);
-                        setNewSubtopicTitle("");
-                      }
-                    }}
-                  >
-                    <DialogTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => onMainContentSelect?.(content.id)}
-                        className="w-full mt-2 ml-4 text-xs h-7 justify-start text-muted-foreground hover:text-primary px-2"
-                      >
-                        <PlusCircle className="h-3 w-3 mr-2" />
-                        <span>Inhalt hinzufügen</span>
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-md">
-                      <DialogHeader>
-                        <DialogTitle>Neues Unterthema erstellen</DialogTitle>
-                        <DialogDescription>
-                          Titel für das Unterthema festlegen.
-                        </DialogDescription>
-                      </DialogHeader>
-
-                      <form onSubmit={handleSubContentSubmit} className="space-y-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="title">Titel</Label>
-                          <Input
-                            id="title"
-                            value={newSubtopicTitle}
-                            onChange={(e) => setNewSubtopicTitle(e.target.value)}
-                            placeholder="Titel des Unterthemas"
-                          />
-                        </div>
-
-                        <DialogFooter>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => {
-                              onMainContentSelect?.(null);
-                              setNewSubtopicTitle("");
-                            }}
-                          >
-                            Abbrechen
-                          </Button>
-                          <Button
-                            type="submit"
-                            disabled={!newSubtopicTitle.trim() || isSubmitting}
-                          >
-                            {isSubmitting ? "Wird erstellt..." : "Erstellen"}
-                          </Button>
-                        </DialogFooter>
-                      </form>
-                    </DialogContent>
-                  </Dialog>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-
-        {/* Add new main topic button */}
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button
-              onClick={() => setIsDialogOpen(true)}
-              variant="outline"
-              className="w-full border-dashed border-border hover:border-primary/50 text-muted-foreground hover:bg-accent"
-            >
-              <PlusCircle className="mr-2 h-4 w-4" />
-              Neues Kapitel
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Neues Kapitel</DialogTitle>
-              <DialogDescription>
-                Titel für das Kapitel festlegen.
-              </DialogDescription>
-            </DialogHeader>
-
-            <form onSubmit={handleMainContentSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="mainTitle">Titel</Label>
-                <Input
-                  id="mainTitle"
-                  value={newMainContentTitle}
-                  onChange={(e) => setNewMainContentTitle(e.target.value)}
-                  placeholder="Titel des Kapitels"
-                />
-              </div>
-
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setIsDialogOpen(false)}
-                >
-                  Abbrechen
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={!newMainContentTitle || newMainContentTitle.length === 0 || isSubmitting}
-                >
-                  {isSubmitting ? "Wird erstellt..." : "Erstellen"}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-
-        {/* Certificate button at the bottom of the sidebar */}
-        {contents.length > 0 && (
-          <div className="sticky bottom-0 w-full p-4 border-t border-border bg-background z-10">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    onClick={async () => {
-                      try {
-                        setIsGeneratingCertificate(true);
-                        setCertificateError(null);
-                        const response = await fetch(`/api/courses/${courseId}/certificate`, {
-                          method: 'POST',
-                        });
-
-                        if (!response.ok) {
-                          throw new Error(response.status === 403 ? 'Der Kursabschluss ist noch nicht bestätigt. Ein Zertifikat kann erst nach bestätigtem Abschluss erstellt werden.' : 'Das Zertifikat konnte nicht erstellt werden. Bitte versuche es erneut.');
-                        }
-
-                        const blob = await response.blob();
-                        const url = window.URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `${courseName.replace(/\s+/g, '_')}_Certificate.pdf`;
-                        document.body.appendChild(a);
-                        a.click();
-                        a.remove();
-                        window.URL.revokeObjectURL(url);
-                      } catch (error) {
-                        console.error('Error generating certificate:', error);
-                        setCertificateError(error instanceof Error ? error.message : 'Das Zertifikat konnte nicht erstellt werden.');
-                      } finally {
-                        setIsGeneratingCertificate(false);
-                      }
-                    }}
-                    className={cn(
-                      "w-full transition-colors duration-200",
-                      allTopicsCompleted
-                        ? "bg-green-600 hover:bg-green-700 text-white"
-                        : "bg-muted text-muted-foreground cursor-not-allowed"
-                    )}
-                    disabled={isGeneratingCertificate || !allTopicsCompleted}
-                  >
-                    {isGeneratingCertificate ? (
-                      <>Generiere Zertifikat...</>
-                    ) : (
-                      <div className="flex items-center justify-center gap-2">
-                        <Award className="w-4 h-4" />
-                        <span>Zertifikat</span>
-                      </div>
-                    )}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  {allTopicsCompleted ? (
-                    <p>Kurs abgeschlossen - Zertifikat herunterladen</p>
-                  ) : (
-                    <p>Schließe alle Themen ab, um das Zertifikat freizuschalten.</p>
-                  )}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            {certificateError && <p role="alert" className="mt-2 text-xs text-destructive">{certificateError}</p>}
-          </div>
-        )}
-      </div>
+  // Capture the parent in this component instead of depending on asynchronous parent state updates.
+  const activeParentId = subParentId ?? mainContentId;
+  return <div className="flex h-full min-h-0 min-w-0 flex-col bg-card">
+    <div className="border-b px-4 py-3"><h2 className="truncate text-sm font-semibold" title={courseName}>{courseName || 'Kursinhalte'}</h2><p className="mt-1 text-xs text-muted-foreground">Inhaltsverzeichnis</p></div>
+    <div className="min-h-0 flex-1 overflow-y-auto p-2">
+      {isLoading ? <p role="status" className="p-4 text-sm text-muted-foreground">Inhalte werden geladen …</p> : contents.length === 0 ? <p className="p-4 text-sm text-muted-foreground">Noch keine Inhalte vorhanden.</p> : <ContentList
+        contents={contents} selectedContentId={selectedContentId} onContentSelect={onContentSelect}
+        onEditClick={onEditClick} onDeleteClick={onDeleteClick} isInlineEditing={isInlineEditing}
+        inlineEditTitle={inlineEditTitle} onInlineEditSubmit={onInlineEditSubmit} setIsInlineEditing={setIsInlineEditing}
+        setInlineEditTitle={setInlineEditTitle} mainContentId="" mainTopicIndex={0} courseId={courseId}
+        isLoading={isLoading} isMutating={isMutating} canManage={canManage} onVisitedToggle={onVisitedToggle}
+        allowRootReorder={Boolean(onMoveMainUp && onMoveMainDown)}
+        onMoveUp={(parentId, id) => parentId ? onMoveUp(parentId, id) : onMoveMainUp?.(id)}
+        onMoveDown={(parentId, id) => parentId ? onMoveDown(parentId, id) : onMoveMainDown?.(id)}
+        onAddContent={canManage ? parentId => { setSubParentId(parentId); setSubTitle(''); onMainContentSelect?.(parentId); } : undefined}
+      />}
+      {canManage && onMainContentSubmit && <Button variant="outline" className="mt-3 w-full gap-2 border-dashed" disabled={isLoading || isMutating} onClick={() => { setMainTitle(''); setMainDialogOpen(true); }}><PlusCircle className="h-4 w-4" />Neues Kapitel</Button>}
     </div>
-  );
+    {contents.length > 0 && <div className="shrink-0 space-y-2 border-t p-3">
+      <Button variant="outline" className="w-full gap-2" disabled={isGeneratingCertificate || !allTopicsCompleted} onClick={() => void generateCertificate()} aria-describedby={!allTopicsCompleted ? 'certificate-progress-hint' : undefined}><Award className="h-4 w-4" />{isGeneratingCertificate ? 'Wird erstellt …' : 'Zertifikat herunterladen'}</Button>
+      {!allTopicsCompleted && <p id="certificate-progress-hint" className="text-xs text-muted-foreground">Schließe alle Inhalte ab, um dein Zertifikat herunterzuladen.</p>}
+      {certificateError && <p role="alert" className="text-xs text-destructive">{certificateError}</p>}
+    </div>}
+    {canManage && onMainContentSubmit && <NewMainTopicDialog isOpen={mainDialogOpen} onOpenChange={setMainDialogOpen} title={mainTitle} onTitleChange={setMainTitle} onSubmit={onMainContentSubmit} />}
+    {canManage && <NewSubTopicDialog isOpen={Boolean(activeParentId)} onOpenChange={open => { if (!open) { setSubParentId(null); onMainContentSelect?.(null); } }} title={subTitle} onTitleChange={setSubTitle} onSubmit={async title => { if (!activeParentId) throw new Error('Bitte wähle ein übergeordnetes Thema.'); return onSubContentSubmit(title, activeParentId); }} />}
+  </div>;
 }

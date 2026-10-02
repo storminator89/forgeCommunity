@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useId } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -10,55 +10,51 @@ import { Input } from "@/components/ui/input";
 import {
   QuizContent,
   QuizQuestion,
-  MatchingQuizQuestion,
   TextInputQuizQuestion,
-  FillBlanksQuizQuestion,
-  ChoiceQuizQuestion
+  ChoiceQuizQuestion,
+  parseQuizContent,
+  getQuizValidationError
 } from './types';
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { cn } from "@/lib/utils";
 
-const isMatchingQuestion = (q: QuizQuestion): q is MatchingQuizQuestion => q.type === 'MATCHING';
 const isTextInputQuestion = (q: QuizQuestion): q is TextInputQuizQuestion => q.type === 'TEXT_INPUT';
-const isFillBlanksQuestion = (q: QuizQuestion): q is FillBlanksQuizQuestion => q.type === 'FILL_BLANKS';
 const isChoiceQuestion = (q: QuizQuestion): q is ChoiceQuizQuestion =>
   q.type === 'SINGLE_CHOICE' || q.type === 'MULTIPLE_CHOICE' || q.type === 'TRUE_FALSE';
 
 interface QuizRendererProps {
-  content: QuizContent;
+  content: QuizContent | string;
 }
 
 type Answer = string | number[] | { [key: string]: string } | string[];
 
+function orderedQuestions(content: QuizContent) {
+  const questions = [...content.questions];
+  if (content.shuffleQuestions) {
+    for (let index = questions.length - 1; index > 0; index--) {
+      const target = Math.floor(Math.random() * (index + 1));
+      [questions[index], questions[target]] = [questions[target], questions[index]];
+    }
+  }
+  return questions;
+}
+
 export function QuizRenderer({ content }: QuizRendererProps) {
-  const [questions] = useState(() =>
-    content.shuffleQuestions
-      ? [...content.questions].sort(() => Math.random() - 0.5)
-      : content.questions
-  );
+  const parsed = parseQuizContent(content);
+  if (!parsed) return <Alert variant="destructive"><AlertDescription>Die Quizdaten konnten nicht gelesen werden.</AlertDescription></Alert>;
+  if (!parsed.questions.length) return <Card><CardHeader><CardTitle>Quiz</CardTitle></CardHeader><CardContent>Dieses Quiz enthält noch keine Fragen.</CardContent></Card>;
+  const error = getQuizValidationError(parsed);
+  if (error) return <Alert><AlertDescription>Dieses Quiz ist noch nicht vollständig. {error}</AlertDescription></Alert>;
+  return <QuizRendererState key={JSON.stringify(parsed)} content={parsed} />;
+}
+
+function QuizRendererState({ content }: { content: QuizContent }) {
+  const [questions, setQuestions] = useState(() => orderedQuestions(content));
+  const quizId = useId();
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<{ [key: number]: Answer }>({});
   const [showResults, setShowResults] = useState(false);
   const [score, setScore] = useState(0);
   const [showFeedback, setShowFeedback] = useState(false);
-
-  // Handle empty or invalid quiz content
-  if (!content?.questions || content.questions.length === 0) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Quiz</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Alert>
-            <AlertDescription>
-              Dieses Quiz enthält noch keine Fragen.
-            </AlertDescription>
-          </Alert>
-        </CardContent>
-      </Card>
-    );
-  }
 
   const currentQuestion = questions[currentQuestionIndex];
 
@@ -76,7 +72,7 @@ export function QuizRenderer({ content }: QuizRendererProps) {
       const currentAnswers = (prev[currentQuestionIndex] as number[]) || [];
       const newAnswers = currentAnswers.includes(optionIndex)
         ? currentAnswers.filter(i => i !== optionIndex)
-        : [...currentAnswers, optionIndex].sort();
+        : [...currentAnswers, optionIndex].sort((a, b) => a - b);
 
       return {
         ...prev,
@@ -124,42 +120,41 @@ export function QuizRenderer({ content }: QuizRendererProps) {
   const isAnswerCorrect = (questionIndex: number) => {
     const question = questions[questionIndex];
     const selected = selectedAnswers[questionIndex];
-
+    if (!question || selected === undefined) return false;
+    const normalize = (value: string) => value.trim().toLocaleLowerCase();
     switch (question.type) {
       case 'SINGLE_CHOICE':
       case 'MULTIPLE_CHOICE':
       case 'TRUE_FALSE': {
-        const selectedArray = selected as number[];
-        const correct = question.correctAnswers;
-        return question.type === 'MULTIPLE_CHOICE'
-          ? selectedArray?.length === correct.length && selectedArray.every(answer => correct.includes(answer))
-          : selectedArray?.[0] === correct[0];
+        const answers = selected as number[];
+        return Array.isArray(answers) && answers.length === question.correctAnswers.length && question.correctAnswers.every(answer => answers.includes(answer));
       }
-
       case 'TEXT_INPUT': {
         const answer = selected as string;
-        const correctAnswer = (question as any).correctAnswer;
-        return question.caseSensitive
-          ? answer === correctAnswer
-          : answer?.toLowerCase() === correctAnswer.toLowerCase();
+        return typeof answer === 'string' && (question.caseSensitive ? answer.trim() === question.correctAnswer.trim() : normalize(answer) === normalize(question.correctAnswer));
       }
-
       case 'MATCHING': {
-        const answers = selected as { [key: string]: string };
-        return question.pairs.every((pair, index) =>
-          answers?.[index] === pair.right
-        );
+        const answers = selected as Record<number, string>;
+        return question.pairs.every((pair, index) => typeof answers?.[index] === 'string' && answers[index].trim() === pair.right.trim());
       }
-
       case 'FILL_BLANKS': {
         const answers = selected as string[];
-        return answers?.every((answer, index) =>
-          answer?.toLowerCase() === question.answers[index].toLowerCase()
-        );
+        return question.answers.every((answer, index) => typeof answers?.[index] === 'string' && normalize(answers[index]) === normalize(answer));
       }
+      default: return false;
+    }
+  };
 
-      default:
-        return false;
+  const hasCompleteAnswer = () => {
+    const answer = selectedAnswers[currentQuestionIndex];
+    switch (currentQuestion.type) {
+      case 'SINGLE_CHOICE':
+      case 'TRUE_FALSE': return Array.isArray(answer) && answer.length === 1;
+      case 'MULTIPLE_CHOICE': return Array.isArray(answer) && answer.length > 0;
+      case 'TEXT_INPUT': return typeof answer === 'string' && !!answer.trim();
+      case 'MATCHING': return currentQuestion.pairs.every((_, index) => typeof (answer as Record<number, string>)?.[index] === 'string' && !!(answer as Record<number, string>)[index].trim());
+      case 'FILL_BLANKS': return currentQuestion.answers.every((_, index) => typeof (answer as string[])?.[index] === 'string' && !!(answer as string[])[index].trim());
+      default: return false;
     }
   };
 
@@ -179,15 +174,14 @@ export function QuizRenderer({ content }: QuizRendererProps) {
       setShowFeedback(false);
     } else {
       // Calculate score
-      const correctAnswers = Object.keys(selectedAnswers).reduce((acc, index) => {
-        return acc + (isAnswerCorrect(parseInt(index)) ? 1 : 0);
-      }, 0);
+      const correctAnswers = questions.reduce((total, _, index) => total + (isAnswerCorrect(index) ? 1 : 0), 0);
       setScore((correctAnswers / questions.length) * 100);
       setShowResults(true);
     }
   };
 
   const handleRetry = () => {
+    setQuestions(orderedQuestions(content));
     setCurrentQuestionIndex(0);
     setSelectedAnswers({});
     setShowResults(false);
@@ -196,7 +190,7 @@ export function QuizRenderer({ content }: QuizRendererProps) {
   };
 
   if (showResults) {
-    const passingScore = content.passingScore || 70;
+    const passingScore = content.passingScore ?? 70;
     const passed = score >= passingScore;
 
     return (
@@ -242,7 +236,7 @@ export function QuizRenderer({ content }: QuizRendererProps) {
           </div>
         </CardContent>
         <CardFooter>
-          <Button onClick={handleRetry}>Quiz wiederholen</Button>
+          <Button type="button" onClick={handleRetry}>Quiz wiederholen</Button>
         </CardFooter>
       </Card>
     );
@@ -251,7 +245,7 @@ export function QuizRenderer({ content }: QuizRendererProps) {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <CardTitle>Frage {currentQuestionIndex + 1} von {questions.length}</CardTitle>
           {currentQuestion.type === 'MULTIPLE_CHOICE' && (
             <span className="text-sm text-muted-foreground">(Mehrfachauswahl möglich)</span>
@@ -260,11 +254,12 @@ export function QuizRenderer({ content }: QuizRendererProps) {
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          <p className="text-lg font-medium">{currentQuestion.question}</p>
+          <p className="break-words text-lg font-medium">{currentQuestion.question}</p>
 
           {currentQuestion.type === 'TEXT_INPUT' && (
             <div className="space-y-2">
               <Input
+                aria-label="Deine Antwort"
                 value={(selectedAnswers[currentQuestionIndex] as string) || ''}
                 onChange={(e) => handleTextInputAnswer(e.target.value)}
                 placeholder="Deine Antwort"
@@ -276,14 +271,15 @@ export function QuizRenderer({ content }: QuizRendererProps) {
           {currentQuestion.type === 'MATCHING' && (
             <div className="space-y-4">
               {currentQuestion.pairs.map((pair, index) => (
-                <div key={index} className="flex items-center gap-4">
-                  <div className="flex-1">{pair.left}</div>
+                <div key={index} className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                  <div className="min-w-0 w-full flex-1">{pair.left}</div>
                   <Input
+                    aria-label={`Zuordnung für ${pair.left}`}
                     value={((selectedAnswers[currentQuestionIndex] as { [key: string]: string })?.[index]) || ''}
                     onChange={(e) => handleMatchingAnswer(index, e.target.value)}
                     placeholder="Passende Antwort..."
                     disabled={showFeedback}
-                    className="flex-1"
+                    className="min-w-0 w-full flex-1"
                   />
                 </div>
               ))}
@@ -297,6 +293,7 @@ export function QuizRenderer({ content }: QuizRendererProps) {
                 {currentQuestion.answers.map((_, index) => (
                   <Input
                     key={index}
+                    aria-label={`Lücke ${index + 1}`}
                     value={((selectedAnswers[currentQuestionIndex] as string[])?.[index]) || ''}
                     onChange={(e) => handleFillBlanksAnswer(index, e.target.value)}
                     placeholder={`Lücke ${index + 1}`}
@@ -307,23 +304,23 @@ export function QuizRenderer({ content }: QuizRendererProps) {
             </div>
           )}
 
-          {(currentQuestion.type === 'MULTIPLE_CHOICE' || currentQuestion.type === 'TRUE_FALSE') && (
+          {currentQuestion.type === 'MULTIPLE_CHOICE' && (
             <div className="space-y-2">
               {currentQuestion.options.map((option, index) => (
                 <div key={index} className="flex items-center space-x-2">
                   <Checkbox
-                    id={`option-${index}`}
+                    id={`${quizId}-${currentQuestion.id}-option-${index}`}
                     checked={(selectedAnswers[currentQuestionIndex] as number[] || []).includes(index)}
                     onCheckedChange={() => handleMultipleAnswerSelect(index)}
                     disabled={showFeedback}
                   />
-                  <Label htmlFor={`option-${index}`}>{option}</Label>
+                  <Label htmlFor={`${quizId}-${currentQuestion.id}-option-${index}`}>{option}</Label>
                 </div>
               ))}
             </div>
           )}
 
-          {currentQuestion.type === 'SINGLE_CHOICE' && (
+          {(currentQuestion.type === 'SINGLE_CHOICE' || currentQuestion.type === 'TRUE_FALSE') && (
             <RadioGroup
               onValueChange={handleSingleAnswerSelect}
               value={((selectedAnswers[currentQuestionIndex] as number[])?.[0]?.toString()) ?? ""}
@@ -332,8 +329,8 @@ export function QuizRenderer({ content }: QuizRendererProps) {
               <div className="space-y-2">
                 {currentQuestion.options.map((option, index) => (
                   <div key={index} className="flex items-center space-x-2">
-                    <RadioGroupItem value={index.toString()} id={`option-${index}`} />
-                    <Label htmlFor={`option-${index}`}>{option}</Label>
+                    <RadioGroupItem value={index.toString()} id={`${quizId}-${currentQuestion.id}-option-${index}`} />
+                    <Label htmlFor={`${quizId}-${currentQuestion.id}-option-${index}`}>{option}</Label>
                   </div>
                 ))}
               </div>
@@ -350,7 +347,7 @@ export function QuizRenderer({ content }: QuizRendererProps) {
                     ✗ Falsch
                     <div className="mt-2">
                       {currentQuestion.type === 'TEXT_INPUT' && (
-                        <span>Richtige Antwort: {(currentQuestion as any).correctAnswer}</span>
+                        <span>Richtige Antwort: {currentQuestion.correctAnswer}</span>
                       )}
                       {currentQuestion.type === 'MATCHING' && (
                         <div className="space-y-1">
@@ -396,14 +393,9 @@ export function QuizRenderer({ content }: QuizRendererProps) {
       </CardContent>
       <CardFooter>
         <Button
+          type="button"
           onClick={handleNext}
-          disabled={
-            !selectedAnswers[currentQuestionIndex] ||
-            (currentQuestion.type === 'MATCHING' &&
-              !currentQuestion.pairs.every((_, index) =>
-                ((selectedAnswers[currentQuestionIndex] as { [key: string]: string })?.[index])
-              ))
-          }
+          disabled={!showFeedback && !hasCompleteAnswer()}
         >
           {!showFeedback ? 'Antwort prüfen' :
             currentQuestionIndex < questions.length - 1 ? 'Nächste Frage' : 'Quiz beenden'}

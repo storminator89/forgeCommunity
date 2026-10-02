@@ -1,74 +1,32 @@
-'use client'
+'use client';
 
-import { Button } from "@/components/ui/button"
-import { FileText, Video, Music, Box, HelpCircle } from 'lucide-react'
+import { Button } from '@/components/ui/button';
+import { FileText, Video, Music, Box, HelpCircle } from 'lucide-react';
+import { ContentType } from './content-form-utils';
 
 interface ContentTypeSelectorProps {
-  onSelectType: (type: 'TEXT' | 'VIDEO' | 'AUDIO' | 'H5P' | 'QUIZ') => void
+  onSelectType: (type: ContentType) => void;
+  selectedType?: ContentType;
+  disabled?: boolean;
 }
 
-export function ContentTypeSelector({ onSelectType }: ContentTypeSelectorProps) {
+const types = [
+  { type: 'TEXT', label: 'Text', icon: FileText },
+  { type: 'VIDEO', label: 'Video', icon: Video },
+  { type: 'AUDIO', label: 'Audio', icon: Music },
+  { type: 'H5P', label: 'H5P', icon: Box },
+  { type: 'QUIZ', label: 'Quiz', icon: HelpCircle },
+] as const;
+
+export function ContentTypeSelector({ onSelectType, selectedType, disabled = false }: ContentTypeSelectorProps) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-      <Button
-        variant="outline"
-        className="flex h-auto min-h-24 flex-col items-start whitespace-normal p-4 text-left hover:border-primary hover:bg-accent transition-colors"
-        onClick={() => onSelectType('TEXT')}
-      >
-        <div className="flex items-center gap-2 mb-2">
-          <FileText className="h-4 w-4 text-primary" />
-          <span className="text-base font-medium">Text</span>
-        </div>
-        <p className="text-sm text-muted-foreground">Formatierter Text und Bilder.</p>
-      </Button>
-
-      <Button
-        variant="outline"
-        className="flex h-auto min-h-24 flex-col items-start whitespace-normal p-4 text-left hover:border-primary hover:bg-accent transition-colors"
-        onClick={() => onSelectType('VIDEO')}
-      >
-        <div className="flex items-center gap-2 mb-2">
-          <Video className="h-4 w-4 text-primary" />
-          <span className="text-base font-medium">Video</span>
-        </div>
-        <p className="text-sm text-muted-foreground">Video per URL einbetten.</p>
-      </Button>
-
-      <Button
-        variant="outline"
-        className="flex h-auto min-h-24 flex-col items-start whitespace-normal p-4 text-left hover:border-primary hover:bg-accent transition-colors"
-        onClick={() => onSelectType('AUDIO')}
-      >
-        <div className="flex items-center gap-2 mb-2">
-          <Music className="h-4 w-4 text-primary" />
-          <span className="text-base font-medium">Audio</span>
-        </div>
-        <p className="text-sm text-muted-foreground">Audiodatei per URL einbinden.</p>
-      </Button>
-
-      <Button
-        variant="outline"
-        className="flex h-auto min-h-24 flex-col items-start whitespace-normal p-4 text-left hover:border-primary hover:bg-accent transition-colors"
-        onClick={() => onSelectType('H5P')}
-      >
-        <div className="flex items-center gap-2 mb-2">
-          <Box className="h-4 w-4 text-primary" />
-          <span className="text-base font-medium">H5P</span>
-        </div>
-        <p className="text-sm text-muted-foreground">Interaktive H5P-Inhalte.</p>
-      </Button>
-
-      <Button
-        variant="outline"
-        className="flex h-auto min-h-24 flex-col items-start whitespace-normal p-4 text-left hover:border-primary hover:bg-accent transition-colors"
-        onClick={() => onSelectType('QUIZ')}
-      >
-        <div className="flex items-center gap-2 mb-2">
-          <HelpCircle className="h-4 w-4 text-primary" />
-          <span className="text-base font-medium">Quiz</span>
-        </div>
-        <p className="text-sm text-muted-foreground">Fragen und Antworten erstellen.</p>
-      </Button>
+    <div role="group" aria-label="Inhaltstyp" className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+      {types.map(({ type, label, icon: Icon }) => (
+        <Button key={type} type="button" variant="outline" disabled={disabled} aria-pressed={selectedType === type}
+          className={`justify-start gap-2 ${selectedType === type ? 'border-primary bg-primary/5 text-primary' : ''}`} onClick={() => onSelectType(type)}>
+          <Icon className="h-4 w-4" aria-hidden="true" />{label}
+        </Button>
+      ))}
     </div>
-  )
+  );
 }

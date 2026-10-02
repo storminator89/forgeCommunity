@@ -1,17 +1,16 @@
-'use client'
+'use client';
 
-import { useState } from 'react';
-import dynamic from 'next/dynamic';
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
+import { useId, useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
 import { CourseContent, QuizContent } from './types';
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectGroup, SelectLabel, SelectItem } from "@/components/ui/select";
-import { FileText, Video, Music2, Layers, Info, HelpCircle } from "lucide-react";
 import { QuizEditor } from './QuizEditor';
-import { Editor } from "@/components/Editor";
+import { Editor } from '@/components/Editor';
+import { ContentTypeSelector } from './ContentTypeSelector';
+import { ContentType, EMPTY_QUIZ, draftString, getContentValidationError, inferContentType, serialiseContent, quizEditorDraft } from './content-form-utils';
 
 interface EditContentFormProps {
   content: CourseContent;
@@ -20,248 +19,94 @@ interface EditContentFormProps {
   onCancel: () => void;
 }
 
-interface ContentFormData {
-  title: string;
-  type: 'TEXT' | 'VIDEO' | 'AUDIO' | 'H5P' | 'QUIZ';
-  content: string;
-  isHtmlMode?: boolean;
-}
+export function EditContentForm({ content: initialContent, onSubmit, onContentChange, onCancel }: EditContentFormProps) {
+  const fieldId = useId();
+  const initialType = inferContentType(initialContent);
+  const [title, setTitle] = useState(initialContent.title);
+  const [type, setType] = useState<ContentType>(initialType);
+  const [content, setContent] = useState<CourseContent['content']>(initialContent.content);
+  const [htmlMode, setHtmlMode] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const saving = useRef(false);
+  const typeDrafts = useRef<Partial<Record<ContentType, CourseContent['content']>>>({ [initialType]: initialContent.content });
 
-const quillModules = {
-  toolbar: [
-    [{ 'header': [1, 2, false] }],
-    ['bold', 'italic', 'underline', 'strike', 'blockquote'],
-    [{ 'list': 'ordered' }, { 'list': 'bullet' }, { 'indent': '-1' }, { 'indent': '+1' }],
-    ['link', 'image'],
-    ['clean']
-  ],
-  clipboard: {
-    matchVisual: false
-  }
-};
-
-const quillFormats = [
-  'header',
-  'bold', 'italic', 'underline', 'strike', 'blockquote',
-  'list', 'bullet', 'indent',
-  'link', 'image'
-];
-
-export function EditContentForm({
-  content: initialContent,
-  onSubmit,
-  onContentChange,
-  onCancel,
-}: EditContentFormProps) {
-  const [formData, setFormData] = useState<ContentFormData>(() => {
-    let content = initialContent.content;
-    // If it's a TEXT type but contains quiz content, parse it
-    if (initialContent.type === 'TEXT' &&
-      typeof content === 'string' &&
-      content.includes('"questions":[')) {
-      try {
-        content = JSON.parse(content);
-      } catch (e) {
-        console.error('Failed to parse quiz content:', e);
-      }
-    }
-
-    return {
-      title: initialContent.title,
-      type: initialContent.type === 'TEXT' && typeof content === 'object' ? 'QUIZ' : initialContent.type,
-      content: typeof content === 'object' ? JSON.stringify(content) : content as string,
-      isHtmlMode: false,
-    };
-  });
-
-  const handleQuizChange = (quizContent: QuizContent) => {
-    setFormData(prev => ({
-      ...prev,
-      content: JSON.stringify(quizContent)
-    }));
-    onContentChange({
-      ...initialContent,
-      content: JSON.stringify(quizContent)
-    });
+  const updateContent = (value: CourseContent['content']) => {
+    setContent(value);
+    typeDrafts.current[type] = value;
+    onContentChange({ type, content: value });
+    setError(null);
   };
 
+  const selectType = (nextType: ContentType) => {
+    if (type === nextType) return;
+    typeDrafts.current[type] = content;
+    const nextContent = typeDrafts.current[nextType] ?? (nextType === 'QUIZ' ? EMPTY_QUIZ : '');
+    setType(nextType);
+    setContent(nextContent);
+    setHtmlMode(false);
+    setError(null);
+    onContentChange({ type: nextType, content: nextContent });
+  };
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (saving.current) return;
+    const validationError = !title.trim() ? 'Gib einen Titel ein.' : getContentValidationError(type, content);
+    if (validationError) { setError(validationError); return; }
+    saving.current = true;
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      await onSubmit({ ...initialContent, title: title.trim(), type, content: serialiseContent(content) });
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Der Inhalt konnte nicht gespeichert werden. Dein Entwurf bleibt erhalten.');
+    } finally {
+      saving.current = false;
+      setIsSubmitting(false);
+    }
+  };
+
+  const quiz = type === 'QUIZ' ? quizEditorDraft(content) : null;
   return (
-    <div className="space-y-6 bg-card">
-      <div className="space-y-3">
-        <Label htmlFor="title" className="text-sm font-medium text-foreground">
-          Titel
-        </Label>
-        <Input
-          id="title"
-          value={formData.title}
-          onChange={(e) => {
-            setFormData(prev => ({ ...prev, title: e.target.value }));
-            onContentChange({ ...initialContent, title: e.target.value });
-          }}
-          placeholder="Titel des Inhalts"
-          className="w-full bg-background/50 border-border/50 focus:border-primary/50 transition-colors duration-200"
-        />
-      </div>
-
-      <div className="space-y-3">
-        <Label htmlFor="type" className="text-sm font-medium text-foreground">
-          Inhaltstyp
-        </Label>
-        <Select
-          value={formData.type}
-          onValueChange={(value: 'TEXT' | 'VIDEO' | 'AUDIO' | 'H5P' | 'QUIZ') => {
-            setFormData(prev => ({
-              ...prev,
-              type: value,
-              content: value === 'QUIZ' ? JSON.stringify({ questions: [], shuffleQuestions: false, passingScore: 70 }) : ''
-            }));
-            onContentChange({
-              ...initialContent,
-              type: value,
-              content: value === 'QUIZ' ? JSON.stringify({ questions: [], shuffleQuestions: false, passingScore: 70 }) : ''
-            });
-          }}
-        >
-          <SelectTrigger className="w-full bg-background/50 border-border/50 focus:border-primary/50 transition-colors duration-200">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              <SelectLabel className="text-sm font-medium text-muted-foreground">Wähle einen Inhaltstyp</SelectLabel>
-              <SelectItem value="TEXT" className="group">
-                <div className="flex items-center space-x-3">
-                  <div className="text-muted-foreground">
-                    <FileText className="w-4 h-4" />
-                  </div>
-                  <span>Text</span>
-                </div>
-              </SelectItem>
-              <SelectItem value="VIDEO" className="group">
-                <div className="flex items-center space-x-3">
-                  <div className="text-muted-foreground">
-                    <Video className="w-4 h-4" />
-                  </div>
-                  <span>Video</span>
-                </div>
-              </SelectItem>
-              <SelectItem value="AUDIO" className="group">
-                <div className="flex items-center space-x-3">
-                  <div className="text-muted-foreground">
-                    <Music2 className="w-4 h-4" />
-                  </div>
-                  <span>Audio</span>
-                </div>
-              </SelectItem>
-              <SelectItem value="H5P" className="group">
-                <div className="flex items-center space-x-3">
-                  <div className="text-muted-foreground">
-                    <Layers className="w-4 h-4" />
-                  </div>
-                  <span>H5P</span>
-                </div>
-              </SelectItem>
-              <SelectItem value="QUIZ" className="group">
-                <div className="flex items-center space-x-3">
-                  <div className="text-muted-foreground">
-                    <HelpCircle className="w-4 h-4" />
-                  </div>
-                  <span>Quiz</span>
-                </div>
-              </SelectItem>
-            </SelectGroup>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="space-y-4">
-        {formData.type === 'QUIZ' ? (
-          <div className="bg-background/50 rounded-lg p-6 border border-border/50">
-            <QuizEditor
-              initialContent={JSON.parse(formData.content)}
-              onSave={handleQuizChange}
-            />
+    <form onSubmit={handleSubmit} className="space-y-5" aria-label="Inhalt bearbeiten" aria-busy={isSubmitting}>
+      {error && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{error}</p>}
+      <fieldset disabled={isSubmitting} className="space-y-5 min-w-0">
+        <div className="space-y-2">
+          <Label htmlFor={`${fieldId}-title`}>Titel</Label>
+          <Input id={`${fieldId}-title`} value={title} required onChange={event => { setTitle(event.target.value); onContentChange({ title: event.target.value }); setError(null); }} />
+        </div>
+        <div className="space-y-2">
+          <Label>Inhaltstyp</Label>
+          <ContentTypeSelector selectedType={type} onSelectType={selectType} disabled={isSubmitting} />
+        </div>
+        {type === 'QUIZ' ? quiz ? (
+          <QuizEditor key={`${initialContent.id}-${type}`} initialContent={quiz} onSave={(value: QuizContent) => updateContent(value)} onChange={updateContent} showSaveButton={false} disabled={isSubmitting} />
+        ) : (
+          <div className="space-y-2">
+            <p role="alert" className="text-sm text-destructive">Die gespeicherten Quiz-Daten sind ungültig. Der ursprüngliche Inhalt bleibt erhalten.</p>
+            <Label htmlFor={`${fieldId}-quiz`}>Quiz-Daten (JSON)</Label>
+            <Textarea id={`${fieldId}-quiz`} value={draftString(content)} onChange={event => updateContent(event.target.value)} className="min-h-48 font-mono" />
           </div>
-        ) : formData.type === 'TEXT' ? (
-          <div className="space-y-4">
-            <div className="flex flex-wrap gap-3 items-center justify-between">
-              <Label className="text-sm font-medium text-foreground">
-                Inhalt
-              </Label>
-              <div className="flex items-center space-x-3">
-                <Label htmlFor="html-mode" className="text-sm text-muted-foreground">HTML-Modus</Label>
-                <Switch
-                  id="html-mode"
-                  checked={formData.isHtmlMode}
-                  onCheckedChange={(checked) => {
-                    setFormData(prev => ({ ...prev, isHtmlMode: checked }));
-                  }}
-                  className="data-[state=checked]:bg-primary"
-                />
-              </div>
+        ) : type === 'TEXT' ? (
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <Label id={`${fieldId}-text-label`} htmlFor={htmlMode ? `${fieldId}-html` : undefined}>Inhalt</Label>
+              <div className="flex items-center gap-2"><Label htmlFor={`${fieldId}-html-mode`}>HTML</Label><Switch id={`${fieldId}-html-mode`} checked={htmlMode} onCheckedChange={setHtmlMode} /></div>
             </div>
-            <div className="bg-background/50 rounded-lg border border-border/50 overflow-hidden">
-              {formData.isHtmlMode ? (
-                <Textarea
-                  value={formData.content}
-                  onChange={(e) => {
-                    setFormData(prev => ({ ...prev, content: e.target.value }));
-                    onContentChange({ ...initialContent, content: e.target.value });
-                  }}
-                  className="min-h-[300px] font-mono p-4 bg-transparent focus:border-primary/50"
-                />
-              ) : (
-                <div className="[&_.ql-toolbar]:border-border/50 [&_.ql-container]:border-border/50">
-                  <Editor
-                    content={formData.content}
-                    onChange={(content: string) => {
-                      setFormData(prev => ({ ...prev, content }));
-                      onContentChange({ ...initialContent, content });
-                    }}
-                    className="min-h-[250px]"
-                  />
-                </div>
-              )}
-            </div>
+            {htmlMode ? <Textarea id={`${fieldId}-html`} value={draftString(content)} onChange={event => updateContent(event.target.value)} className="min-h-64 font-mono" /> : <div role="group" aria-labelledby={`${fieldId}-text-label`}><Editor content={draftString(content)} onChange={updateContent} readOnly={isSubmitting} className="min-h-56" /></div>}
           </div>
         ) : (
-          <div className="space-y-3">
-            <Label className="text-sm font-medium text-foreground">
-              URL oder Embed-Code
-            </Label>
-            <Input
-              value={formData.content}
-              onChange={(e) => {
-                setFormData(prev => ({ ...prev, content: e.target.value }));
-                onContentChange({ ...initialContent, content: e.target.value });
-              }}
-              placeholder={
-                formData.type === 'VIDEO'
-                  ? 'YouTube Video URL'
-                  : formData.type === 'AUDIO'
-                    ? 'Audio URL'
-                    : 'H5P Embed Code'
-              }
-              className="w-full bg-background/50 border-border/50 focus:border-primary/50 transition-colors duration-200"
-            />
+          <div className="space-y-2">
+            <Label htmlFor={`${fieldId}-source`}>{type === 'VIDEO' ? 'Video-URL' : type === 'AUDIO' ? 'Audio-URL' : 'H5P-URL, ID oder Einbettungscode'}</Label>
+            {type === 'H5P' ? <Textarea id={`${fieldId}-source`} value={draftString(content)} onChange={event => updateContent(event.target.value)} placeholder="https://…/embed/…" /> : <Input id={`${fieldId}-source`} inputMode="url" value={draftString(content)} onChange={event => updateContent(event.target.value)} placeholder={type === 'VIDEO' ? 'https://www.youtube.com/watch?v=…' : '/uploads/audio.mp3'} />}
           </div>
         )}
+      </fieldset>
+      <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
+        <Button type="button" variant="outline" disabled={isSubmitting} onClick={onCancel}>Abbrechen</Button>
+        <Button type="submit" disabled={isSubmitting || !title.trim()}>{isSubmitting ? 'Wird gespeichert…' : 'Speichern'}</Button>
       </div>
-
-      <div className="flex flex-wrap justify-end items-center gap-3 pt-6 border-t border-border/50">
-        <Button
-          variant="outline"
-          onClick={onCancel}
-          className="bg-background/50 hover:bg-background border-border/50 hover:border-border transition-colors duration-200"
-        >
-          Abbrechen
-        </Button>
-        <Button
-          onClick={() => onSubmit({ ...initialContent, ...formData })}
-          className="bg-primary hover:bg-primary/90 text-primary-foreground transition-colors duration-200"
-        >
-          Speichern
-        </Button>
-      </div>
-    </div>
+    </form>
   );
 }
