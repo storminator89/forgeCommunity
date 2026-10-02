@@ -65,6 +65,10 @@ Diese Punkte sind Vorschläge und werden nicht als bereits umgesetzt dargestellt
 6. **Admin-Tabellen:** Filter-/Sortierzustand persistieren, eindeutige Bestätigung bei riskanten Sammelaktionen und transparente Berechtigungen in der Oberfläche.
 7. **Regressionen automatisieren:** Dauerhafte Browserprüfungen für 390 px und Desktop, Light/Dark, Tastaturnavigation, wichtige Formulare und Dialoge in die CI aufnehmen.
 
+## Sicherheitsupdates vor dem Merge
+
+Die GitHub-CI meldete beim ersten Lauf neu veröffentlichte Advisories für die vorhandenen Pakete. Next.js und die zugehörige ESLint-Konfiguration werden auf 16.3.8 aktualisiert, DOMPurify auf 3.4.16. Die Fixgrenzen sind in [GHSA-vcvr-r3jv-pc5j](https://github.com/advisories/GHSA-vcvr-r3jv-pc5j) und [GHSA-p98j-92pf-mc4p](https://github.com/advisories/GHSA-p98j-92pf-mc4p) dokumentiert. Die Next.js-Lücke betrifft bestimmte Verwendungen von `next/og` mit fremden SVG-Werten; diese API wird in der App nicht eingesetzt. Der vorhandene Audit-Check bleibt unverändert. Nach dem Update meldet `npm audit` 0 bekannte Schwachstellen; die 221 Tests und ESLint ohne Warnungen bestanden erneut.
+
 ## Prüfung
 
 Die Änderung wurde mit bestehenden und neuen Regressionstests und einer lokalen Browserprüfung mit isolierter SQLite-Testdatenbank geprüft. 42 Testsuiten mit 221 Tests bestanden; ESLint ist ohne Warnungen sauber. Produktionsbuild und finale Typprüfung bestanden ebenfalls. Der Standalone-Server bestand 12 HTTP-Prüfungen; die Anmeldung, das Öffnen eines Kursinhalts, die nicht überlappenden Kopfzeilenaktionen und die 404-Seite wurden zusätzlich bei 390 und 1440 px im Produktionsbuild erfolgreich geprüft.
