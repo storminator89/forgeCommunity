@@ -95,7 +95,7 @@ export function ProfileEditForm({ userId, initialData, onUpdate }: ProfileEditFo
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      toast.error('Bitte wählen Sie ein Bild aus');
+      toast.error('Bitte wähle ein Bild aus');
       return;
     }
 
@@ -117,7 +117,7 @@ export function ProfileEditForm({ userId, initialData, onUpdate }: ProfileEditFo
     e.preventDefault();
 
     if (!validateForm()) {
-      toast.error('Bitte korrigieren Sie die markierten Fehler');
+      toast.error('Bitte korrigiere die markierten Fehler');
       return;
     }
 
@@ -170,7 +170,7 @@ export function ProfileEditForm({ userId, initialData, onUpdate }: ProfileEditFo
         <DialogHeader>
           <DialogTitle>Profil bearbeiten</DialogTitle>
           <DialogDescription>
-            Aktualisieren Sie Ihre Profilinformationen. Klicken Sie auf Speichern, wenn Sie fertig sind.
+            Änderungen mit „Speichern“ übernehmen.
           </DialogDescription>
         </DialogHeader>
 
@@ -192,7 +192,7 @@ export function ProfileEditForm({ userId, initialData, onUpdate }: ProfileEditFo
                 <CardHeader>
                   <CardTitle>Persönliche Informationen</CardTitle>
                   <CardDescription>
-                    Bearbeiten Sie Ihre grundlegenden Profilinformationen.
+                    Name, Kontakt und Kurzbeschreibung.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -209,7 +209,7 @@ export function ProfileEditForm({ userId, initialData, onUpdate }: ProfileEditFo
                         if (errors.name) setErrors({ ...errors, name: undefined });
                       }}
                       className={errors.name ? 'border-red-500' : ''}
-                      placeholder="Ihr vollständiger Name"
+                      placeholder="Dein Name"
                     />
                     {errors.name && (
                       <p className="text-sm text-red-500 flex items-center gap-1">
@@ -241,7 +241,7 @@ export function ProfileEditForm({ userId, initialData, onUpdate }: ProfileEditFo
                       id="bio"
                       value={formData.bio || ''}
                       onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
-                      placeholder="Erzählen Sie etwas über sich..."
+                      placeholder="Über dich"
                       className="h-32 resize-none"
                     />
                   </div>
@@ -277,7 +277,7 @@ export function ProfileEditForm({ userId, initialData, onUpdate }: ProfileEditFo
                 <CardHeader>
                   <CardTitle>Profilbild</CardTitle>
                   <CardDescription>
-                    Laden Sie ein Profilbild hoch oder ändern Sie es.
+                    Profilbild auswählen.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -291,7 +291,7 @@ export function ProfileEditForm({ userId, initialData, onUpdate }: ProfileEditFo
                       </Avatar>
                       <label
                         htmlFor="profile-image"
-                        className="absolute bottom-0 right-0 p-2 bg-card rounded-full shadow-lg cursor-pointer focus-within:ring-2 focus-within:ring-ring"
+                        className="absolute bottom-0 right-0 p-2 bg-card rounded-full shadow-sm cursor-pointer focus-within:ring-2 focus-within:ring-ring"
                       >
                         <Camera className="h-4 w-4" />
                         <input

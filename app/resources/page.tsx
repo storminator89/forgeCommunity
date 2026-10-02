@@ -1,6 +1,5 @@
 'use client';
 
-import { PageIntro } from '@/components/page-intro';
 import { AppShell, AppHeader } from '@/components/app-shell';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Sidebar } from "@/components/Sidebar";
@@ -312,7 +311,7 @@ export default function ResourceLibrary() {
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center">
 
-                <h2 className="text-xl font-semibold text-foreground tracking-tight">Ressourcen</h2>
+                <h1 className="text-xl font-semibold text-foreground tracking-tight">Ressourcen</h1>
               </div>
               <div className="flex items-center gap-2">
                 <ThemeToggle />
@@ -325,7 +324,7 @@ export default function ResourceLibrary() {
         <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto">
           <ToastContainer position="top-right" theme="colored" />
           <div className="max-w-[1600px] mx-auto p-4 sm:px-6 lg:px-8 py-8 space-y-6">
-            <PageIntro eyebrow="Wissen & Lernen" title="Gute Quellen. Neue Perspektiven." description="Entdecke Artikel, Videos und Lernmaterialien, die die Community empfiehlt." />
+
 
             {/* Toolbar */}
             <div className="flex flex-col xl:flex-row gap-4 justify-between items-start xl:items-center bg-card p-4 rounded-lg border border-border shadow-sm">

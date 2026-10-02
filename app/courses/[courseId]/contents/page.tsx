@@ -1015,7 +1015,7 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
 
                     <div className="relative min-h-[500px]">
                       {isEditing && editingContentId === selectedMainContent.id ? (
-                        <div className="bg-card rounded-lg border border-border shadow-sm p-4 animate-in fade-in zoom-in-95 duration-200">
+                        <div className="bg-card rounded-lg border border-border shadow-sm p-4 ">
                           <EditContentForm
                             content={selectedMainContent}
                             onSubmit={handleContentUpdate}
@@ -1065,7 +1065,7 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
                         Kein Inhalt ausgewählt
                       </h3>
                       <p className="text-muted-foreground text-sm">
-                        Wählen Sie ein Thema aus der Seitenleiste, um den Inhalt anzuzeigen.
+                        Wähle ein Thema aus der Inhaltsübersicht.
                       </p>
                     </div>
                   </div>

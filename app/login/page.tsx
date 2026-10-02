@@ -6,11 +6,11 @@ import { getProviders, signIn } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { useClientReady } from '@/lib/use-client-ready'
 import Link from 'next/link'
-import { ArrowLeft, ArrowUpRight, Eye, EyeOff, Loader2, LogIn, Network, ShieldCheck } from 'lucide-react'
+import { ArrowUpRight, Eye, EyeOff, Loader2, LogIn, Flame } from 'lucide-react'
 
 function LoginContent() {
   const [email, setEmail] = useState('')
@@ -68,22 +68,15 @@ function LoginContent() {
     <main className="min-h-svh bg-background px-4 py-8 text-foreground sm:px-8">
       <div className="mx-auto flex max-w-6xl items-center justify-between">
         <Link href="/" className="flex items-center gap-2 text-lg font-semibold tracking-tight">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground"><Network className="h-5 w-5" aria-hidden="true" /></span>
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground"><Flame className="h-5 w-5" aria-hidden="true" /></span>
           ForgeCommunity
         </Link>
         <ThemeToggle />
       </div>
-      <div className="mx-auto grid min-h-[calc(100svh-8rem)] max-w-5xl items-center gap-10 py-10 md:grid-cols-2 md:gap-16">
-        <div className="space-y-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Gemeinsam weiterkommen</p>
-          <h1 className="text-4xl font-semibold leading-tight tracking-tight sm:text-5xl">Gute Ideen brauchen eine Community.</h1>
-          <p className="max-w-md text-lg leading-relaxed text-muted-foreground">Lerne Neues, teile dein Wissen und entwickle Projekte mit Menschen, die deine Begeisterung teilen.</p>
-          <div className="flex items-center gap-3 border-t border-border pt-6 text-sm text-muted-foreground"><ShieldCheck className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />Dein nächster Schritt beginnt hier.</div>
-        </div>
+      <div className="mx-auto max-w-md py-12 sm:py-16">
         <Card className="w-full">
           <CardHeader className="space-y-2 p-6 sm:p-8">
-            <CardTitle className="text-2xl tracking-tight">Willkommen zurück</CardTitle>
-            <CardDescription>Melde dich mit deinem Community-Konto an.</CardDescription>
+            <h1 className="text-2xl font-semibold tracking-tight">Anmelden</h1>
           </CardHeader>
           <CardContent className="space-y-6 p-6 pt-0 sm:p-8 sm:pt-0">
             <form method="post" onSubmit={handleSubmit} className="space-y-5" aria-busy={isLoading}>
@@ -108,7 +101,6 @@ function LoginContent() {
             </form>
             {googleAvailable && <><div className="flex items-center gap-3 text-xs text-muted-foreground"><span className="h-px flex-1 bg-border" />oder<span className="h-px flex-1 bg-border" /></div><Button variant="outline" className="h-11 w-full" onClick={handleGoogleSignIn} disabled={isLoading}>Mit Google anmelden</Button></>}
             <p className="text-sm text-muted-foreground">Noch kein Konto? <Link href="/register" className="inline-flex items-center gap-1 font-medium text-primary hover:underline">Konto erstellen <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" /></Link></p>
-            <Link href="/" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" aria-hidden="true" />Zur Startseite</Link>
           </CardContent>
         </Card>
       </div>

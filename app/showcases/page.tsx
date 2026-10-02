@@ -82,29 +82,7 @@ async function loadProjects(signal: AbortSignal): Promise<Project[]> {
   }
 }
 
-const defaultDescription = `<h2>🎯 Projektziel</h2>
-<p>Beschreibe kurz das Hauptziel deines Projekts...</p>
-
-<h2>💡 Besondere Features</h2>
-<ul>
-<li>Feature 1: ...</li>
-<li>Feature 2: ...</li>
-<li>Feature 3: ...</li>
-</ul>
-
-<h2>🛠️ Technologie-Stack</h2>
-<ul>
-<li>Frontend: ...</li>
-<li>Backend: ...</li>
-<li>Datenbank: ...</li>
-<li>Weitere Tools: ...</li>
-</ul>
-
-<h2>🌟 Was macht dein Projekt besonders?</h2>
-<p>Erkläre, was dein Projekt von anderen abhebt...</p>
-
-<h2>🔜 Nächste Schritte</h2>
-<p>Welche Features oder Verbesserungen sind als nächstes geplant?</p>`;
+const defaultDescription = '';
 
 export default function ProjectShowcase() {
   const { data: session } = useSession();
@@ -469,10 +447,10 @@ export default function ProjectShowcase() {
         {/* Header improvements */}
         <AppHeader>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-            <h2 className="text-xl sm:text-2xl font-bold text-foreground flex items-center">
+            <h1 className="text-xl sm:text-2xl font-bold text-foreground flex items-center">
               <Briefcase className="mr-3 h-7 w-7" />
               Projekte-Showcase
-            </h2>
+            </h1>
             <div className="flex flex-wrap items-center gap-3">
               <div className="relative min-w-0 flex-1 sm:flex-none">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
@@ -493,7 +471,7 @@ export default function ProjectShowcase() {
 
         <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto p-4 lg:p-8">
           {/* Filter and sort improvements */}
-          <div className="bg-card/50 dark:bg-card/50 backdrop-blur-sm rounded-xl p-4 mb-6 shadow-sm">
+          <div className="bg-card rounded-xl border p-4 mb-6">
             <div className="flex justify-between items-center flex-wrap gap-4">
               <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                 <TabsList className="flex h-auto flex-wrap justify-start gap-1">
@@ -566,7 +544,7 @@ export default function ProjectShowcase() {
           ) : loadError ? (
             <Card><CardContent role="alert" className="py-10 text-center"><p>{loadError}</p><Button variant="outline" className="mt-4" onClick={() => window.location.reload()}>Erneut laden</Button></CardContent></Card>
           ) : filteredProjects.length === 0 ? (
-            <Card><CardContent className="py-12 text-center"><Briefcase className="mx-auto mb-3 h-8 w-8 text-muted-foreground" /><h3 className="text-lg font-semibold">Keine Projekte gefunden</h3><p className="mt-2 text-muted-foreground">Passe deine Suche an oder teile das erste Projekt mit der Community.</p>{(searchTerm || activeTab !== 'all') && <Button variant="outline" className="mt-4" onClick={() => { setSearchTerm(''); setActiveTab('all'); }}>Filter zurücksetzen</Button>}</CardContent></Card>
+            <Card><CardContent className="py-12 text-center"><Briefcase className="mx-auto mb-3 h-8 w-8 text-muted-foreground" /><h3 className="text-lg font-semibold">Keine Projekte gefunden</h3><p className="mt-2 text-muted-foreground">Passe deine Suche an oder reiche ein Projekt ein.</p>{(searchTerm || activeTab !== 'all') && <Button variant="outline" className="mt-4" onClick={() => { setSearchTerm(''); setActiveTab('all'); }}>Filter zurücksetzen</Button>}</CardContent></Card>
           ) : null}
           <AnimatePresence>
             {viewMode === 'grid' ? (
@@ -586,41 +564,16 @@ export default function ProjectShowcase() {
                     className="group relative"
                   >
                     <div className="relative h-full">
-                      <Card className="h-full transform transition-all duration-300 hover:scale-[1.02] hover:shadow-xl bg-card/80 dark:bg-card/80 backdrop-blur-sm">
-                        <CardHeader className="relative p-0 overflow-hidden rounded-t-xl">
-                          {project.imageUrl ? (
+                      <Card className="h-full transition-colors hover:border-primary/40">
+                        {project.imageUrl && (
+                          <CardHeader className="relative p-0 overflow-hidden rounded-t-xl">
                             <div className="relative h-48 overflow-hidden">
-                              <Image
-                                src={project.imageUrl}
-                                alt={`${project.title} Vorschaubild`}
-                                className="w-full h-full object-cover transform transition-transform duration-500 group-hover:scale-110"
-                                fill
-                                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                              />
-                              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                              <Image src={project.imageUrl} alt={`${project.title} Vorschaubild`} className="w-full h-full object-cover" fill sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw" />
                             </div>
-                          ) : (
-                            <div
-                              className="h-48 transform transition-transform duration-500 group-hover:scale-110"
-                              style={{
-                                background: `linear-gradient(135deg, ${project.gradientFrom}, ${project.gradientTo})`,
-                              }}
-                            />
-                          )}
-                          <div className="absolute top-2 left-2 right-2 flex flex-wrap justify-end gap-2">
-                            {project.tags.map(tag => (
-                              <Badge
-                                key={tag.id}
-                                variant="secondary"
-                                className="bg-card/90 dark:bg-card/90 backdrop-blur-sm shadow-sm"
-                              >
-                                {tag.name}
-                              </Badge>
-                            ))}
-                          </div>
-                        </CardHeader>
-
+                          </CardHeader>
+                        )}
                         <CardContent className="p-5 space-y-4">
+                          {project.tags.length > 0 && <div className="flex flex-wrap gap-2">{project.tags.map(tag => <Badge key={tag.id} variant="secondary">{tag.name}</Badge>)}</div>}
                           <div>
                             <CardTitle className="text-xl font-bold mb-2 line-clamp-1">
                               <Link href={`/projects/${project.id}`} className="after:absolute after:inset-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{project.title}</Link>
@@ -632,9 +585,9 @@ export default function ProjectShowcase() {
 
                           <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-border">
                             <div className="flex items-center space-x-3">
-                              <Avatar className="ring-2 ring-white dark:ring-gray-800">
+                              <Avatar >
                                 <AvatarImage src={project.author.image || undefined} />
-                                <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-500">
+                                <AvatarFallback className="bg-muted text-muted-foreground">
                                   {project.author.name?.charAt(0)}
                                 </AvatarFallback>
                               </Avatar>
@@ -710,27 +663,14 @@ export default function ProjectShowcase() {
                     transition={{ duration: 0.3 }}
                   >
                     <div className="relative h-full">
-                      <Card className="transform transition-all duration-300 hover:shadow-lg bg-card/80 dark:bg-card/80 backdrop-blur-sm">
+                      <Card className="transition-colors hover:border-primary/40">
                         <CardContent className="p-4">
                           <div className="flex items-start space-x-4">
-                            <div className="relative w-16 h-16 rounded-lg overflow-hidden flex-shrink-0">
-                              {project.imageUrl ? (
-                                <Image
-                                  src={project.imageUrl}
-                                  alt={project.title}
-                                  className="w-full h-full object-cover"
-                                  fill
-                                  sizes="64px"
-                                />
-                              ) : (
-                                <div
-                                  className="w-full h-full"
-                                  style={{
-                                    background: `linear-gradient(135deg, ${project.gradientFrom}, ${project.gradientTo})`,
-                                  }}
-                                />
-                              )}
-                            </div>
+                            {project.imageUrl && (
+                              <div className="relative w-16 h-16 rounded-lg overflow-hidden flex-shrink-0">
+                                <Image src={project.imageUrl} alt={project.title} className="w-full h-full object-cover" fill sizes="64px" />
+                              </div>
+                            )}
                             <div className="flex-1 min-w-0">
                               <div className="flex flex-wrap items-center justify-between gap-2">
                                 <h3 className="text-lg font-semibold text-foreground">
@@ -826,7 +766,7 @@ export default function ProjectShowcase() {
       {/* Projekt-Details Dialog */}
       <Dialog open={!!selectedProject} onOpenChange={() => setSelectedProject(null)}>
         <DialogContent className="sm:max-w-[800px] max-h-[90dvh] p-0 overflow-y-auto">
-          <div className="relative h-[300px]">
+          <div className={selectedProject?.imageUrl ? 'relative h-[300px]' : 'p-6 pb-0'}>
             {selectedProject?.imageUrl ? (
               <Image
                 src={selectedProject.imageUrl}
@@ -835,18 +775,9 @@ export default function ProjectShowcase() {
                 fill
                 sizes="(max-width: 768px) 100vw, 800px"
               />
-            ) : (
-              <div
-                className="w-full h-full"
-                style={{
-                  background: selectedProject
-                    ? `linear-gradient(135deg, ${selectedProject.gradientFrom}, ${selectedProject.gradientTo})`
-                    : '',
-                }}
-              />
-            )}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
-            <DialogTitle className="absolute bottom-6 left-6 text-3xl font-bold text-white">
+            ) : null}
+            {selectedProject?.imageUrl && <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />}
+            <DialogTitle className={`text-2xl font-semibold ${selectedProject?.imageUrl ? 'absolute bottom-6 left-6 right-6 text-white' : 'text-foreground'}`}>
               {selectedProject?.title}
             </DialogTitle>
           </div>
@@ -936,8 +867,7 @@ export default function ProjectShowcase() {
             <DialogHeader className="space-y-3 pb-4 border-b">
               <DialogTitle className="text-2xl font-bold">Neues Projekt einreichen</DialogTitle>
               <p className="text-muted-foreground text-sm">
-                Teile dein Projekt mit der Community. Fülle alle erforderlichen Felder aus und stelle sicher,
-                dass deine Projektbeschreibung aussagekräftig ist.
+                Titel, Beschreibung, Kategorie und Link sind erforderlich.
               </p>
             </DialogHeader>
 
@@ -952,7 +882,7 @@ export default function ProjectShowcase() {
                     id="title"
                     value={newProject.title}
                     onChange={(e) => setNewProject({ ...newProject, title: e.target.value })}
-                    placeholder="Ein aussagekräftiger Titel für dein Projekt"
+                    placeholder="Projekttitel"
                     className="h-11"
                     required
                   />

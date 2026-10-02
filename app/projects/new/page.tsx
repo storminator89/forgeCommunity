@@ -94,7 +94,7 @@ export default function NewProjectPage() {
         <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto p-4 lg:p-8">
           {status !== 'authenticated' ? <p role="status" className="flex items-center justify-center gap-2 py-20 text-sm text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />{status === 'loading' ? 'Konto wird geladen…' : 'Weiterleitung zur Anmeldung…'}</p> : <div className="mx-auto max-w-5xl space-y-6">
             <Link href="/showcases" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" aria-hidden="true" />Alle Projekte</Link>
-            <div className="max-w-2xl space-y-2"><p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Projekt-Showcase</p><h2 className="text-3xl font-semibold tracking-tight">Zeigen Sie, was Sie gebaut haben.</h2><p className="text-muted-foreground">Teilen Sie Ihr Projekt, die Idee dahinter und Ihre Erfahrungen mit der Community.</p></div>
+
             <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_260px]">
               <Card><CardHeader className="border-b"><CardTitle className="text-lg">Projektdetails</CardTitle><p className="text-sm text-muted-foreground">Mit * markierte Felder sind erforderlich.</p></CardHeader><CardContent className="pt-6">
                 <form onSubmit={handleSubmit} className="space-y-6" aria-busy={isSubmitting} noValidate>

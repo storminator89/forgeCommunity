@@ -20,8 +20,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { CategorySelect } from "@/components/CategorySelect";
 import { TagSelect } from "@/components/TagSelect";
 import Image from 'next/image';
-import { Type, Image as ImageIcon, FileText, FolderOpen, Tags, Trash2, Save, Loader2 } from 'lucide-react';
-import { Badge } from "@/components/ui/badge";
+import { Image as ImageIcon, Trash2, Save, Loader2 } from 'lucide-react';
 import { Editor } from "@/components/Editor";
 
 interface Tag {
@@ -229,7 +228,7 @@ export default function EditArticle() {
                 type="submit"
                 form="editForm"
                 disabled={isLoading || isSubmitting}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm"
+                className="bg-primary hover:bg-primary/90 text-primary-foreground"
               >
                 {isSubmitting ? (
                   <>
@@ -249,7 +248,7 @@ export default function EditArticle() {
           </div>
         </AppHeader>
 
-        <div className="flex-1 overflow-y-auto bg-gradient-to-b from-accent/5 to-background">
+        <div className="flex-1 overflow-y-auto bg-background">
           <div className="container mx-auto py-8 px-6">
             <div className="max-w-4xl mx-auto">
               {error && (
@@ -262,18 +261,15 @@ export default function EditArticle() {
               <div className="space-y-6">
                 <form id="editForm" onSubmit={handleSubmit} className="space-y-6">
                   {/* Titel */}
-                  <Card className="p-6 shadow-sm transition-all border-muted">
+                  <Card className="p-6 shadow-none border-border">
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
                         <Label
                           htmlFor="title"
                           className="text-base font-medium text-foreground flex items-center gap-2"
                         >
-                          <Type className="h-4 w-4" />
                           <span>Titel</span>
-                          <Badge variant="secondary" className="ml-2 font-normal">
-                            Erforderlich
-                          </Badge>
+                          <span className="text-xs font-normal text-muted-foreground">(erforderlich)</span>
                         </Label>
                         <span className={title.length > 90 ? "text-destructive text-xs" : "text-muted-foreground text-xs"}>
                           {title.length}/100 Zeichen
@@ -292,18 +288,15 @@ export default function EditArticle() {
                   </Card>
 
                   {/* Beitragsbild */}
-                  <Card className="p-6 shadow-sm transition-all border-muted">
+                  <Card className="p-6 shadow-none border-border">
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
                         <Label
                           htmlFor="featuredImage"
                           className="text-base font-medium text-foreground flex items-center gap-2"
                         >
-                          <ImageIcon className="h-4 w-4" />
                           <span>Beitragsbild</span>
-                          <Badge variant="secondary" className="ml-2 font-normal">
-                            Optional
-                          </Badge>
+                          <span className="text-xs font-normal text-muted-foreground">(optional)</span>
                         </Label>
                       </div>
                       <div className="flex flex-col sm:flex-row items-start gap-6">
@@ -320,9 +313,9 @@ export default function EditArticle() {
                             type="button"
                             onClick={() => fileInputRef.current?.click()}
                             variant="secondary"
-                            className="w-full sm:w-auto group hover:bg-primary hover:text-primary-foreground transition-all duration-200"
+                            className="w-full sm:w-auto group hover:bg-primary hover:text-primary-foreground transition-colors duration-200"
                           >
-                            <Upload className="mr-2 h-4 w-4 group-hover:scale-110 transition-transform" />
+                            <Upload className="mr-2 h-4 w-4 " />
                             Bild auswählen
                           </Button>
                           <p className="text-xs text-muted-foreground">
@@ -335,7 +328,7 @@ export default function EditArticle() {
                               src={featuredImagePreview}
                               alt="Vorschau"
                               fill
-                              className="object-cover transition-transform group-hover/image:scale-105"
+                              className="object-cover "
                             />
                             <Button
                               type="button"
@@ -365,21 +358,18 @@ export default function EditArticle() {
                   </Card>
 
                   {/* Inhalt */}
-                  <Card className="p-6 shadow-sm transition-all border-muted">
+                  <Card className="p-6 shadow-none border-border">
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
                         <Label
                           htmlFor="content"
                           className="text-base font-medium text-foreground flex items-center gap-2"
                         >
-                          <FileText className="h-4 w-4" />
                           <span>Inhalt</span>
-                          <Badge variant="secondary" className="ml-2 font-normal">
-                            Erforderlich
-                          </Badge>
+                          <span className="text-xs font-normal text-muted-foreground">(erforderlich)</span>
                         </Label>
                       </div>
-                      <div className="border rounded-lg overflow-hidden bg-background/50 focus-within:ring-1 focus-within:ring-primary transition-all">
+                      <div className="border rounded-lg overflow-hidden bg-background/50 focus-within:ring-1 focus-within:ring-primary transition-colors">
                         <Editor
                           content={content}
                           onChange={setContent}
@@ -390,16 +380,13 @@ export default function EditArticle() {
                   </Card>
 
                   {/* Kategorie und Tags */}
-                  <Card className="p-6 shadow-sm transition-all border-muted">
+                  <Card className="p-6 shadow-none border-border">
                     <div className="space-y-8">
                       <div className="space-y-4">
                         <div className="flex items-center justify-between">
                           <Label className="text-base font-medium text-foreground flex items-center gap-2">
-                            <FolderOpen className="h-4 w-4" />
-                            <span>Kategorie</span>
-                            <Badge variant="secondary" className="ml-2 font-normal">
-                              Erforderlich
-                            </Badge>
+                              <span>Kategorie</span>
+                            <span className="text-xs font-normal text-muted-foreground">(erforderlich)</span>
                           </Label>
                         </div>
                         <CategorySelect
@@ -413,14 +400,8 @@ export default function EditArticle() {
                       <div className="space-y-4">
                         <div className="flex items-center justify-between">
                           <Label className="text-base font-medium text-foreground flex items-center gap-2">
-                            <Tags className="h-4 w-4" />
-                            <span>Tags</span>
-                            <Badge
-                              variant={tags.length >= 5 ? "destructive" : "secondary"}
-                              className="ml-2 font-normal"
-                            >
-                              {tags.length}/5 Tags
-                            </Badge>
+                              <span>Tags</span>
+                            <span className="text-xs font-normal text-muted-foreground">{tags.length}/5</span>
                           </Label>
                         </div>
                         <TagSelect
@@ -431,9 +412,6 @@ export default function EditArticle() {
                           onAddTag={handleAddNewTag}
                           maxTags={5}
                         />
-                        <p className="text-xs text-muted-foreground">
-                          Tags helfen dabei, deinen Artikel besser auffindbar zu machen
-                        </p>
                       </div>
                     </div>
                   </Card>

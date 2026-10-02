@@ -37,7 +37,7 @@ export function PostForm({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
-      className="space-y-6 bg-background dark:bg-card p-8 rounded-lg shadow-lg transition-colors duration-300"
+      className="space-y-6 bg-card p-5 sm:p-6 rounded-xl border"
     >
       <form onSubmit={handleSubmit} className="space-y-6">
         <div>

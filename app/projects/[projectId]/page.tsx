@@ -351,7 +351,6 @@ export default function ProjectDetail() {
                 </div>
                 <div>
                   <h1 className="text-2xl font-semibold text-foreground">Projekt-Detail</h1>
-                  <p className="text-sm text-muted-foreground">Projektinformationen und Updates</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -483,7 +482,7 @@ export default function ProjectDetail() {
                   <div className="pt-8 mt-8 border-t">
                     <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
                       <h3 className="text-2xl font-bold text-foreground">
-                        Community Feedback
+                        Kommentare
                       </h3>
                       <div className="flex items-center space-x-4">
                         <Button

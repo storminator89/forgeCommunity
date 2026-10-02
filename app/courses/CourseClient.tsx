@@ -1,7 +1,6 @@
 'use client'
 
 import { PageState, LoadingScreen, RetryButton } from '@/components/page-state';
-import { PageIntro } from '@/components/page-intro';
 import { AppShell, AppHeader } from '@/components/app-shell';
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
@@ -103,10 +102,10 @@ export default function CourseClient() {
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <AppHeader>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-            <h2 className="text-2xl font-bold text-foreground flex items-center">
+            <h1 className="text-2xl font-bold text-foreground flex items-center">
               <BookOpen className="mr-2 h-6 w-6" />
               Kurse
-            </h2>
+            </h1>
             <div className="flex items-center gap-2">
               <Link href="/courses/new">
                 <Button variant="outline" className="flex items-center">
@@ -121,7 +120,7 @@ export default function CourseClient() {
         </AppHeader>
         <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <PageIntro eyebrow="Wissen & Lernen" title="Dein nächster Schritt." description="Entdecke Kurse, die dich weiterbringen – und lerne gemeinsam mit der Community." />
+
             <div className="mb-8 flex flex-col md:flex-row md:items-center md:space-x-4">
               <div className="relative flex-grow mb-4 md:mb-0">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
@@ -195,11 +194,9 @@ function CourseCard({ course, onDelete }: CourseCardProps) {
 
   return (
     <motion.div
-      className="bg-card rounded-lg shadow-lg overflow-hidden transition-all duration-300 hover:shadow-xl flex flex-col h-full"
-      whileHover={{ scale: 1.03 }}
-      whileTap={{ scale: 0.98 }}
+      className="bg-card rounded-xl border overflow-hidden transition-colors hover:border-primary/40 flex flex-col h-full"
     >
-      <div className="relative h-48 w-full">
+      <div className={`relative w-full ${course.imageUrl ? "h-48" : "px-6 pt-6"}`}>
         {course.imageUrl ? (
           <Image
             src={course.imageUrl}
@@ -209,9 +206,9 @@ function CourseCard({ course, onDelete }: CourseCardProps) {
             className="rounded-t-lg"
           />
         ) : (
-          <div className="w-full h-full bg-gradient-to-br from-blue-400 to-purple-500 rounded-t-lg" />
+          null
         )}
-        <Badge className="absolute top-2 right-2 z-10" variant="secondary">
+        <Badge className={course.imageUrl ? "absolute top-2 right-2 z-10" : ""} variant="secondary">
           {course.category}
         </Badge>
       </div>

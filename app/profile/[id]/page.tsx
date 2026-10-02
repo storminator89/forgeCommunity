@@ -276,13 +276,12 @@ export default function ProfilePage() {
 
         <main id="page-content" tabIndex={-1} ref={mainRef} className="flex-1 overflow-y-auto">
           {/* Cover Image */}
-          <div
-            className="h-48 bg-gradient-to-r from-blue-500 to-purple-600 bg-cover bg-center relative"
-            style={profile.coverImage ? { backgroundImage: `url(${profile.coverImage})` } : undefined}
-          />
+          {profile.coverImage && (
+            <div className="h-48 bg-cover bg-center relative" style={{ backgroundImage: `url(${profile.coverImage})` }} />
+          )}
 
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
-            <div className="relative -mt-16">
+            <div className={`relative ${profile.coverImage ? '-mt-16' : 'pt-6'}`}>
               {/* Profile Header Card */}
               <Card className="mb-6">
                 <CardContent className="pt-6">
@@ -304,11 +303,6 @@ export default function ProfilePage() {
                           <Badge variant="outline" className="ml-3">
                             {profile.role}
                           </Badge>
-                          {profile.isCurrentUser && (
-                            <Badge variant="secondary" className="ml-2">
-                              Das bin ich
-                            </Badge>
-                          )}
                         </div>
                         {profile.title && (
                           <p className="text-sm font-medium text-muted-foreground mt-1">
@@ -404,7 +398,7 @@ export default function ProfilePage() {
                           disabled={isEndorsing || hasEndorsed}
                         >
                           <Star className="mr-1 h-4 w-4" />
-                          {hasEndorsed ? 'Bereits empfohlen' : isEndorsing ? 'Wird empfohlen…' : 'Profil empfehlen'}
+                          {hasEndorsed ? 'Bereits empfohlen' : isEndorsing ? 'Wird empfohlen…' : 'Empfehlen'}
                         </Button>
                       )}
                     </div>
@@ -561,8 +555,8 @@ export default function ProfilePage() {
             <div className="fixed bottom-6 right-6 md:hidden">
               <Button
                 size="lg"
-                className="rounded-full shadow-lg"
-                  aria-label="Zurück nach oben"
+                className="rounded-full shadow-sm"
+                aria-label="Profil bearbeiten"
                 onClick={() => setIsEditing(true)}
               >
                 <Settings className="h-5 w-5" />
@@ -577,7 +571,7 @@ export default function ProfilePage() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black/20 dark:bg-black/40 backdrop-blur-sm flex items-center justify-center z-50"
+                className="fixed inset-0 bg-black/20 dark:bg-black/40 flex items-center justify-center z-50"
               >
                 <Card className="w-[300px]">
                   <CardContent className="py-6">
@@ -617,7 +611,7 @@ export default function ProfilePage() {
                 <Button
                   variant="outline"
                   size="icon"
-                  className="rounded-full shadow-lg"
+                  className="rounded-full shadow-sm"
                   aria-label="Zurück nach oben"
                   onClick={() => mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
                 >

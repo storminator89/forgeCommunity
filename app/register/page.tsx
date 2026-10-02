@@ -6,12 +6,12 @@ import { getProviders, signIn } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { useClientReady } from '@/lib/use-client-ready'
 import { validatePassword } from '@/lib/security'
 import Link from 'next/link'
-import { UserPlus, ArrowLeft, Eye, EyeOff, Loader2, Network, ArrowUpRight } from 'lucide-react'
+import { UserPlus, Eye, EyeOff, Loader2, Flame, ArrowUpRight } from 'lucide-react'
 
 export default function RegisterPage() {
   const [name, setName] = useState('')
@@ -41,7 +41,7 @@ export default function RegisterPage() {
     if (!name.trim()) { setError('Bitte gib deinen Namen ein.'); return }
     const passwordValidation = validatePassword(password)
     if (!passwordValidation.valid) { setError(passwordValidation.errors[0]); return }
-    if (new TextEncoder().encode(password).length > 72) { setError('Das Passwort darf höchstens 72 UTF-8-Bytes lang sein.'); return }
+    if (new TextEncoder().encode(password).length > 72) { setError('Das Passwort ist zu lang. Verwende bitte weniger Zeichen.'); return }
     if (password !== confirmPassword) { setError('Die Passwörter stimmen nicht überein.'); return }
     setIsLoading(true)
     try {
@@ -79,18 +79,12 @@ export default function RegisterPage() {
   return (
     <main className="min-h-svh bg-background px-4 py-8 text-foreground sm:px-8">
       <div className="mx-auto flex max-w-6xl items-center justify-between">
-        <Link href="/" className="flex items-center gap-2 text-lg font-semibold tracking-tight"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground"><Network className="h-5 w-5" aria-hidden="true" /></span>ForgeCommunity</Link>
+        <Link href="/" className="flex items-center gap-2 text-lg font-semibold tracking-tight"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground"><Flame className="h-5 w-5" aria-hidden="true" /></span>ForgeCommunity</Link>
         <ThemeToggle />
       </div>
-      <div className="mx-auto grid max-w-5xl items-center gap-10 py-10 md:grid-cols-2 md:gap-16">
-        <div className="space-y-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Dein Platz in der Community</p>
-          <h1 className="text-4xl font-semibold leading-tight tracking-tight sm:text-5xl">Aus Wissen wird Fortschritt.</h1>
-          <p className="max-w-md text-lg leading-relaxed text-muted-foreground">Entdecke Kurse, tausche Erfahrungen aus und zeige, woran du arbeitest.</p>
-          <Link href="/about" className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline">Die Community kennenlernen <ArrowUpRight className="h-4 w-4" aria-hidden="true" /></Link>
-        </div>
+      <div className="mx-auto max-w-md py-12 sm:py-16">
         <Card className="w-full">
-          <CardHeader className="space-y-2 p-6 sm:p-8"><CardTitle className="text-2xl tracking-tight">Konto erstellen</CardTitle><CardDescription>Starte mit deinem Namen und deiner E-Mail-Adresse.</CardDescription></CardHeader>
+          <CardHeader className="space-y-2 p-6 sm:p-8"><h1 className="text-2xl font-semibold tracking-tight">Konto erstellen</h1></CardHeader>
           <CardContent className="space-y-6 p-6 pt-0 sm:p-8 sm:pt-0">
             <form method="post" onSubmit={handleSubmit} className="space-y-4" aria-busy={isLoading}>
               <div className="space-y-2"><Label htmlFor="name">Name</Label><Input id="name" name="name" autoComplete="name" maxLength={120} placeholder="Dein Name" value={name} onChange={event => setName(event.target.value)} required disabled={isLoading || registered} className="h-11" /></div>
@@ -98,7 +92,7 @@ export default function RegisterPage() {
               <div className="space-y-2">
                 <Label htmlFor="password">Passwort</Label>
                 <div className="relative"><Input id="password" name="password" type={showPassword ? 'text' : 'password'} autoComplete="new-password" minLength={12} value={password} onChange={event => setPassword(event.target.value)} required disabled={isLoading || registered} className="h-11 pr-12" aria-describedby="password-help" /><Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1 h-9 w-9" onClick={() => setShowPassword(value => !value)} aria-label={showPassword ? 'Passwörter verbergen' : 'Passwörter anzeigen'} aria-pressed={showPassword}>{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</Button></div>
-                <p id="password-help" className="text-xs leading-relaxed text-muted-foreground">Mindestens 12 Zeichen mit Groß- und Kleinbuchstaben, Zahl und Sonderzeichen. Höchstens 72 UTF-8-Bytes.</p>
+                <p id="password-help" className="text-xs leading-relaxed text-muted-foreground">Mindestens 12 Zeichen mit Groß- und Kleinbuchstaben, Zahl und Sonderzeichen.</p>
               </div>
               <div className="space-y-2"><Label htmlFor="confirmPassword">Passwort bestätigen</Label><Input id="confirmPassword" name="confirmPassword" type={showPassword ? 'text' : 'password'} autoComplete="new-password" value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} required disabled={isLoading || registered} className="h-11" /></div>
               {error && <p role="alert" className="rounded-xl border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">{error}</p>}
@@ -106,7 +100,6 @@ export default function RegisterPage() {
             </form>
             {googleAvailable && !registered && <><div className="flex items-center gap-3 text-xs text-muted-foreground"><span className="h-px flex-1 bg-border" />oder<span className="h-px flex-1 bg-border" /></div><Button variant="outline" className="h-11 w-full" onClick={handleGoogleSignUp} disabled={isLoading}>Mit Google registrieren</Button></>}
             <p className="text-sm text-muted-foreground">Bereits ein Konto? <Link href="/login" className="font-medium text-primary hover:underline">Anmelden</Link></p>
-            <Link href="/" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" aria-hidden="true" />Zur Startseite</Link>
           </CardContent>
         </Card>
       </div>

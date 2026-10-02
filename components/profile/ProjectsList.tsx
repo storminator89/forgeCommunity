@@ -189,18 +189,18 @@ export function ProjectsList({ userId, isOwner }: ProjectsListProps) {
                     exit={{ opacity: 0, y: -20 }}
                     className="group"
                   >
-                    <Card className="overflow-hidden hover:shadow-lg transition-shadow duration-300">
-                      <div
-                        className="h-48 relative bg-gradient-to-br"
+                    <Card className="overflow-hidden transition-colors hover:border-primary/40">
+                      {(project.imageUrl || safeProjectLink || safeGithubUrl) && <div
+                        className={project.imageUrl ? 'h-48 relative bg-muted' : 'px-4 pt-4'}
                         style={{
                           backgroundImage: project.imageUrl
                             ? `url(${project.imageUrl})`
-                            : `linear-gradient(to bottom right, ${project.gradientFrom}, ${project.gradientTo})`,
+                            : undefined,
                           backgroundSize: 'cover',
                           backgroundPosition: 'center',
                         }}
                       >
-                        <div className="absolute inset-0 bg-black bg-opacity-40 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity duration-300 flex items-center justify-center space-x-4">
+                        <div className={project.imageUrl ? 'absolute inset-0 bg-black/40 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity flex items-center justify-center gap-4' : 'flex flex-wrap items-center gap-2'}>
                           {safeProjectLink && (
                             <Button
                               size="sm"
@@ -222,7 +222,7 @@ export function ProjectsList({ userId, isOwner }: ProjectsListProps) {
                             </Button>
                           )}
                         </div>
-                      </div>
+                      </div>}
                       <CardContent className="p-4">
                         <div className="mb-2">
                           {project.category && (

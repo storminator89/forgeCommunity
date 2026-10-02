@@ -7,7 +7,6 @@ import { SocialLinksForm } from './SocialLinksForm';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -136,7 +135,7 @@ export function ProfileEditor({ profile, onUpdate }: ProfileEditorProps) {
 
   const handleDeleteImage = async (type: 'avatar' | 'cover') => {
     const imageType = type === 'avatar' ? 'Profilbild' : 'Titelbild';
-    if (window.confirm(`Möchten Sie das ${imageType} wirklich entfernen?`)) {
+    if (window.confirm(`${imageType} entfernen?`)) {
       await handleImageUpdate(type)(null);
     }
   };
@@ -230,9 +229,6 @@ export function ProfileEditor({ profile, onUpdate }: ProfileEditorProps) {
                 <h3 className="text-sm font-medium text-foreground">
                   Kein {imageType} vorhanden
                 </h3>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Laden Sie ein {imageType} hoch, um Ihr Profil zu vervollständigen
-                </p>
                 <ImageUpload
                   userId={profile.id}
                   type={type}
@@ -264,21 +260,7 @@ export function ProfileEditor({ profile, onUpdate }: ProfileEditorProps) {
             <div className="flex justify-between items-start">
               <div>
                 <CardTitle>Profil bearbeiten</CardTitle>
-                <CardDescription>
-                  Vervollständigen Sie Ihr Profil, um mehr Sichtbarkeit zu erlangen
-                </CardDescription>
               </div>
-              <Badge
-                variant="secondary"
-                className={`flex items-center gap-1 ${calculateCompletionScore() === 100 ? "text-green-600 bg-green-100 dark:bg-green-900/30 dark:text-green-400" : ""}`}
-              >
-                {calculateCompletionScore() === 100 ? (
-                  <CheckCircle className="h-4 w-4" />
-                ) : (
-                  <AlertCircle className="h-4 w-4" />
-                )}
-                Profil {calculateCompletionScore()}% vollständig
-              </Badge>
             </div>
           </CardHeader>
           <CardContent className="p-6">
@@ -303,9 +285,6 @@ export function ProfileEditor({ profile, onUpdate }: ProfileEditorProps) {
                   <Card>
                     <CardHeader>
                       <CardTitle>Persönliche Informationen</CardTitle>
-                      <CardDescription>
-                        Bearbeiten Sie Ihre grundlegenden Profilinformationen
-                      </CardDescription>
                     </CardHeader>
                     <CardContent>
                       <ProfileEditForm
@@ -327,7 +306,7 @@ export function ProfileEditor({ profile, onUpdate }: ProfileEditorProps) {
                     <CardHeader>
                       <CardTitle>Medien verwalten</CardTitle>
                       <CardDescription>
-                        Laden Sie Ihr Profil- und Titelbild hoch oder ändern Sie diese
+                        Profil- und Titelbild auswählen.
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-8">
@@ -342,9 +321,6 @@ export function ProfileEditor({ profile, onUpdate }: ProfileEditorProps) {
                   <Card>
                     <CardHeader>
                       <CardTitle>Soziale Medien</CardTitle>
-                      <CardDescription>
-                        Verknüpfen Sie Ihre Profile aus sozialen Medien
-                      </CardDescription>
                     </CardHeader>
                     <CardContent>
                       {renderSocialLinks()}
@@ -376,12 +352,12 @@ export function ProfileEditor({ profile, onUpdate }: ProfileEditorProps) {
                 {calculateCompletionScore() === 100 ? (
                   <span className="text-green-500 flex items-center gap-1">
                     <CheckCircle className="h-4 w-4" />
-                    Ihr Profil ist vollständig
+                    Profil vollständig
                   </span>
                 ) : (
                   <span className="text-muted-foreground flex items-center gap-1">
                     <AlertCircle className="h-4 w-4" />
-                    Vervollständigen Sie Ihr Profil für bessere Sichtbarkeit
+                    Noch nicht vollständig.
                   </span>
                 )}
               </p>

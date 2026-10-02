@@ -267,7 +267,7 @@ export function QuizRenderer({ content }: QuizRendererProps) {
               <Input
                 value={(selectedAnswers[currentQuestionIndex] as string) || ''}
                 onChange={(e) => handleTextInputAnswer(e.target.value)}
-                placeholder="Geben Sie Ihre Antwort ein..."
+                placeholder="Deine Antwort"
                 disabled={showFeedback}
               />
             </div>

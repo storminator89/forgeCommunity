@@ -25,20 +25,20 @@ Der gewünschte Hallmark-Skill war in dieser Arbeitsumgebung weder im Skill-Kata
 | Login `/login` | Ruhiges Formular, Passwortanzeige, Autocomplete, sichtbarer Ladezustand, sichere lokale Rückleitung; native Formularübermittlung per POST und Anmeldung erst nach Client-Initialisierung; Google nur bei konfiguriertem Provider. |
 | Registrierung `/register` | Gleiche Gestaltung und Bedienung wie Login; echte Passwortanforderungen; verständlicher Zustand nach erfolgreicher Registrierung bei fehlgeschlagenem Autologin; tote Links entfernt. |
 | Abmeldung `/logout` | Verständlicher Ladezustand und Wiederholung im Fehlerfall. |
-| Community `/community` | Klare Einführung, erreichbarer Composer, lokale Avatar-Initialen, Ladeanzeige und zugängliche Rückmeldungen; ruhigere Beitragskarten. |
-| Mitglieder `/members` | Einheitlicher Einstieg, erreichbare Profilkarten und Filter, verständliche leere Ergebnisse, sinnvolle Sortierung und ein einziger Inhalts-Scrollbereich. |
+| Community `/community` | Ein Seitenkopf, erreichbarer Composer, lokale Avatar-Initialen, Ladeanzeige und zugängliche Rückmeldungen; ruhigere Beitragskarten. |
+| Mitglieder `/members` | Ein Seitenkopf, erreichbare Profilkarten und Filter, verständliche leere Ergebnisse, sinnvolle Sortierung und ein einziger Inhalts-Scrollbereich. |
 | Profil `/profile/[id]` | Mobile Statistiken/Aktionen/Tabs, zugängliche Medienaktionen und korrigierter Chat-Link; konsistente Unterkomponenten. |
-| Kurse `/courses` | Klarer Einstieg, Suche/Kategorien, Lade- und Fehlerzustände innerhalb der Oberfläche; Navigation bleibt beim Laden sichtbar. |
+| Kurse `/courses` | Ein Seitenkopf, Suche/Kategorien, Lade- und Fehlerzustände innerhalb der Oberfläche; Navigation bleibt beim Laden sichtbar. |
 | Neuer Kurs `/courses/new` | Gemeinsamer Seitenrahmen, Formularfarben und Hierarchie; Datepicker submitten nicht mehr versehentlich das Formular; doppelte Erstellung blockiert und Fehler inline erklärt. |
 | Kursdetails `/courses/[courseId]` | Bestehende Weiterleitung zum Kursplayer bleibt erhalten. |
 | Kursplayer `/courses/[courseId]/contents` | Responsive, vollständig einklappbare Inhaltsnavigation; getrennte Öffnen-/Umbenennen-Aktionen; tatsächliches Umschalten des Gelesen-Status; korrektes Fortschrittsereignis je Kurs und verständliche Zertifikatfehler. |
 | Events `/events` | Responsive Such-/Aktionsleiste, mobile Wochenagenda, Tastaturbedienung der Tage, Eventvorschau; heutige Events sichtbar, kein doppelter Bearbeitungsdialog. |
-| Wissensdatenbank `/knowledgebase` | Klarer Einstieg, eine Suchleiste, Tastaturbedienung der Tagfilter, unterscheidbare Lade-/Fehler-/Leerzustände, kompletter Filter-Reset. |
+| Wissensdatenbank `/knowledgebase` | Ein Seitenkopf, eine Suchleiste, Tastaturbedienung der Tagfilter, unterscheidbare Lade-/Fehler-/Leerzustände, kompletter Filter-Reset. |
 | Artikel `/knowledgebase/[id]` | Gemeinsamer Rahmen, semantische Farben, lesbare Detailansicht. |
-| Neuer Artikel `/knowledgebase/new-article` | Klare Einführung, konsistente Aktionen, Felder und Editor. |
+| Neuer Artikel `/knowledgebase/new-article` | Ein Seitenkopf, konsistente Aktionen, Felder und Editor. |
 | Artikel bearbeiten `/knowledgebase/[id]/edit`, `/knowledgebase/edit/[id]` | Beide bestehenden Einstiegspfade behalten; gemeinsamer Rahmen und konsistente Formulare. |
 | Entwürfe `/knowledgebase/drafts` | Klarer persönlicher Bereich, konsistente Karten und Bearbeitungs-/Veröffentlichungsaktionen. |
-| Ressourcen `/resources` | Klarer Einstieg, einheitliche Suche/Filter/Dialogs und Karten; Pagination unabhängig von Kartenanzahl, transparenter Filterumfang und manuelles Nachladen. |
+| Ressourcen `/resources` | Ein Seitenkopf, einheitliche Suche/Filter/Dialogs und Karten; Pagination unabhängig von Kartenanzahl, transparenter Filterumfang und manuelles Nachladen. |
 | Ressourcendetails `/resources/[id]` | Gemeinsamer Rahmen, konsistente Metadaten und Vorschau. |
 | Projekte `/showcases` | Responsive Karten/Listen, Like-/Löschaktionen von der Navigation getrennt; korrekt positionierte Bildvorschau. |
 | Projekt `/projects/[projectId]` | Bearbeiten/Löschen für Eigentümer erreichbar; Like/Unlike synchronisiert; vollständige geladene Kommentare und erreichbarer Kommentarabschnitt. |
@@ -47,11 +47,21 @@ Der gewünschte Hallmark-Skill war in dieser Arbeitsumgebung weder im Skill-Kata
 | Skills `/skills` | Responsive Filter/Tabs, korrekte Sortierung nach Bestätigungen, Sperre mehrfacher Bestätigung und synchronisierte Detailansicht. |
 | Chat `/chat` | Channelwahl auf dem Handy, zugängliche Channelbuttons, robuste Nachrichtenbreiten, beschriftete Aktionen und Sperre gegen Doppelsenden; erneute Channelwahl erhält den Verlauf. |
 | Benachrichtigungen `/notifications` | Responsive Werkzeugleiste, eindeutige Alle/Ungelesen-Filter und Zähler, gut erreichbare Gelesen-Aktion. |
-| Suche `/search` | Klarer Einstieg, konsistente Ergebnisansicht, Übernahme des Suchbegriffs aus der Schnellsuche. |
+| Suche `/search` | Ein Seitenkopf, konsistente Ergebnisansicht, Übernahme des Suchbegriffs aus der Schnellsuche. |
 | Einstellungen `/settings` | Mobile Tabs und Zertifikatsaktionen; Speichern erst nach geladenem Profil; keine erfundenen Formularwerte. |
 | Über uns `/about` | Gemeinsamer Rahmen, konsistente Farben und mobile Darstellung. |
 | Administration `/admin/dashboard`, `/admin/users` | Ein gemeinsamer Seitenkopf, responsive Tabellen/Detailtabs, semantische Karten/Formulare; funktionslose Menüaktionen entfernt und bestehender serverseitiger Admin-Schutz erhalten. |
 | Zertifikat `/verify-certificate/[certificateId]` | Deutsche, responsive Prüfung; ungültiges Zertifikat und Netzwerkfehler klar getrennt; Wiederholung und Abbruch veralteter Anfragen. |
+
+## Zweiter Durchgang: weniger Ablenkung
+
+Die Startseite konzentriert sich auf eine kurze Aussage und sechs direkte Bereichseinstiege. Doppelte Einführungen über Listen sowie zusätzliche Marketingtexte neben Login und Registrierung entfallen. Die funktionalen Seitenköpfe und Formularhinweise bleiben erhalten.
+
+Zufällige Cover-Verläufe, Textgradienten, Glasflächen, starke Kartenschatten, Hover-Vergrößerungen und das springende Punktefeedback wurden entfernt. Ohne hochgeladenes Bild zeigen Profile, Projekte und Kurse keine großen leeren Medienflächen. Echte Bilder und Inhalte bleiben erhalten; zwei dunkle Bildverläufe dienen ausschließlich der Lesbarkeit von Text auf Fotos.
+
+Rangliste und Statistik zeigen die tatsächlichen Zahlen kompakt. Projektformulare starten ohne vorgegebenen Emoji-Beispieltext. Die PDF-Vorschau hat dauerhaft erreichbare Öffnen-/Download-Aktionen; der mobile Profilbearbeiten-Button trägt die richtige Beschriftung. Nicht verwendete Intro-Komponenten und Animationsregeln entfallen. Die Punkteanzeige verschwindet nach 1,5 Sekunden auch ohne Animationsbibliothek; zwei Regressionstests sichern Ablauf und Cleanup. Das Dashboard zeigt ausschließlich echte Bestandszahlen; fest eingetragene Wachstumstrends sind entfernt, drei tote Kartenlinks korrigiert und Aktivitätszeilen mobil umgebrochen.
+
+Der bereinigte Stand bestand 43 Testsuiten mit 223 Tests, ESLint ohne Warnungen, Typprüfung und Produktionsbuild. Die finale Browserprüfung bestand alle 44 Kombinationen aus 11 Seiten, 390/1440 px und Light/Dark; sie prüfte auch die vier Dashboard-Ziele. Der Standalone-Server bestand erneut 12 HTTP-Prüfungen. Die folgenden Review-Ansichten zeigen diesen zweiten Durchgang.
 
 ## Konkrete nächste Produktverbesserungen
 

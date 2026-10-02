@@ -68,7 +68,7 @@ export function CourseMainContent({
 
       {selectedMainContent ? (
         <div className="p-6">
-          <div className="bg-card rounded-lg shadow">
+          <div className="bg-card rounded-lg border border-border">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-2xl font-bold text-foreground">{selectedMainContent.title}</h3>
               <div className="flex space-x-2">
@@ -94,7 +94,7 @@ export function CourseMainContent({
             {/* Content Type Selection when adding new content */}
             {isAddingSubContent && (
               <div className="mt-4 mb-6 w-full">
-                <h4 className="text-lg font-semibold mb-4">Wählen Sie den Inhaltstyp aus:</h4>
+                <h4 className="text-lg font-semibold mb-4">Inhaltstyp auswählen</h4>
                 <ContentTypeSelector onSelectType={(type) => {
                   setNewContent({ ...newContent, type });
                   setIsSelectingContentType(true);
@@ -246,7 +246,7 @@ export function CourseMainContent({
         </div>
       ) : (
         <div className="text-center text-muted-foreground">
-          <p>Wählen Sie ein Thema aus der linken Seitenleiste aus</p>
+          <p>Wähle ein Thema aus der Inhaltsübersicht.</p>
         </div>
       )}
     </div>

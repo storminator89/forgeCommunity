@@ -43,7 +43,7 @@ export function UserList({ users, onEditUser, onDeleteUser }: UserListProps) {
             <TableCell>{user.name}</TableCell>
             <TableCell>{user.email}</TableCell>
             <TableCell>
-              <Badge variant={user.role === 'ADMIN' ? 'destructive' : 'default'}>
+              <Badge variant={user.role === 'ADMIN' ? 'secondary' : 'outline'}>
                 {user.role}
               </Badge>
             </TableCell>

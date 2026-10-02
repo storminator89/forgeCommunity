@@ -204,32 +204,15 @@ export function CoursesList({ userId, isInstructor, showEnrolled = false }: Cour
                     exit={{ opacity: 0, y: -20 }}
                     className="group"
                   >
-                    <Card className="overflow-hidden hover:shadow-lg transition-shadow duration-300">
-                      <div className="relative h-48">
-                        {course.imageUrl ? (
-                          <Image
-                            src={course.imageUrl}
-                            alt={course.title}
-                            fill
-                            className="object-cover"
-                          />
-                        ) : (
-                          <div className="h-full bg-gradient-to-br from-blue-500 to-purple-600" />
-                        )}
+                    <Card className="overflow-hidden transition-colors hover:border-primary/40">
+                      {course.imageUrl && <div className="relative h-48"><Image src={course.imageUrl} alt={course.title} fill className="object-cover" /></div>}
+                      <CardContent className="p-4">
                         {course.enrolled && course.progress && (
-                          <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white p-2">
-                            <div className="flex justify-between items-center text-sm mb-1">
-                              <span>Fortschritt</span>
-                              <span>{Math.round((course.progress.completed / course.progress.total) * 100)}%</span>
-                            </div>
-                            <Progress
-                              value={(course.progress.completed / course.progress.total) * 100}
-                              className="h-1"
-                            />
+                          <div className="mb-4 space-y-2">
+                            <div className="flex justify-between text-sm text-muted-foreground"><span>Fortschritt</span><span>{Math.round((course.progress.completed / Math.max(course.progress.total, 1)) * 100)}%</span></div>
+                            <Progress value={(course.progress.completed / Math.max(course.progress.total, 1)) * 100} className="h-1" />
                           </div>
                         )}
-                      </div>
-                      <CardContent className="p-4">
                         <div className="mb-4">
                           {course.category && (
                             <Badge variant="secondary" className="mb-2">

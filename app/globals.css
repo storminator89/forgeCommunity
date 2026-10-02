@@ -71,88 +71,6 @@
   }
 }
 
-@layer utilities {
-  .animate-fade-in {
-    animation: fade-in 0.8s ease-out;
-    will-change: opacity;
-  }
-
-  .animate-slide-up {
-    animation: slide-up 0.6s ease-out;
-    will-change: transform, opacity;
-  }
-
-  .section-hidden {
-    opacity: 0;
-    filter: blur(5px);
-    transform: translateY(100px);
-    transition: opacity 0.7s ease, transform 0.7s ease, filter 0.7s ease;
-    will-change: transform, opacity, filter;
-  }
-
-  .section-show {
-    opacity: 1;
-    filter: blur(0);
-    transform: translateY(0);
-  }
-
-  .delay-200 {
-    transition-delay: 200ms;
-  }
-
-  .delay-400 {
-    transition-delay: 400ms;
-  }
-
-  .delay-600 {
-    transition-delay: 600ms;
-  }
-
-  .snap-y {
-    scroll-snap-type: y mandatory;
-  }
-
-  .snap-start {
-    scroll-snap-align: start;
-  }
-
-  .animate-gradient {
-    background-size: 200% 200%;
-    animation: gradient 15s ease infinite;
-  }
-
-  @keyframes fade-in {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
-  }
-
-  @keyframes slide-up {
-    from {
-      transform: translateY(20px);
-      opacity: 0;
-    }
-    to {
-      transform: translateY(0);
-      opacity: 1;
-    }
-  }
-
-  @keyframes gradient {
-    0% {
-      background-position: 0% 50%;
-    }
-    50% {
-      background-position: 100% 50%;
-    }
-    100% {
-      background-position: 0% 50%;
-    }
-  }
-}
 @layer base {
   body { -webkit-font-smoothing: antialiased; }
   h1, h2, h3 { text-wrap: balance; }
@@ -170,7 +88,6 @@
   .app-header > div { @apply mx-auto w-full max-w-[1600px] px-4 py-4 sm:px-6 lg:px-8; }
   .app-header h1, .app-header h2 { @apply text-base font-semibold tracking-tight text-foreground; }
   .app-menu { @apply absolute left-3 top-3; }
-  .page-intro { @apply mb-8 flex flex-col justify-between gap-4 border-b pb-7 sm:flex-row sm:items-end; }
   .skip-link { @apply fixed left-4 top-4 z-[100] -translate-y-24 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground focus:translate-y-0; }
 }
 @media (max-width: 1023px) {
@@ -180,5 +97,4 @@
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto !important; }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
-  .section-hidden { opacity: 1; filter: none; transform: none; }
 }

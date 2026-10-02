@@ -1,6 +1,5 @@
 "use client"
 
-import { PageIntro } from '@/components/page-intro';
 import { AppShell, AppHeader } from '@/components/app-shell';
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -354,9 +353,9 @@ function Community() {
               initial={{ opacity: 0, y: -20, x: '-50%' }}
               animate={{ opacity: 1, y: 0, x: '-50%' }}
               exit={{ opacity: 0, y: -20, x: '-50%' }}
-              className={`fixed top-6 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-full shadow-2xl z-[100] flex items-center space-x-2 ${notification.type === 'success'
-                ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white'
-                : 'bg-gradient-to-r from-red-500 to-rose-600 text-white'
+              className={`fixed top-6 left-1/2 transform -translate-x-1/2 max-w-[calc(100vw-2rem)] border bg-card px-4 py-3 rounded-xl shadow-sm z-[100] flex items-center space-x-2 ${notification.type === 'success'
+                ? 'border-border text-foreground'
+                : 'border-destructive/30 text-destructive'
                 }`}
             >
               <span className="font-medium" role={notification.type === 'error' ? 'alert' : 'status'}>{notification.message}</span>
@@ -367,8 +366,7 @@ function Community() {
         <AppHeader>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">Community Hub</h2>
-              <p className="text-sm text-muted-foreground hidden sm:block">Tausche dich aus und sammle Punkte</p>
+              <h1 className="text-2xl font-semibold text-foreground">Community</h1>
             </div>
             <div className="flex items-center space-x-4">
               <ThemeToggle />
@@ -379,7 +377,7 @@ function Community() {
 
         <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto scroll-smooth">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <PageIntro eyebrow="Deine Community" title="Gute Ideen beginnen im Austausch." description="Teile Erfahrungen, stelle Fragen und bring gemeinsam mit anderen neue Ideen voran." />
+
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
               {/* Main Content Feed - 8 cols */}
               <div className="lg:col-span-8 space-y-6">

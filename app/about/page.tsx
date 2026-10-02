@@ -4,16 +4,15 @@ import { AppShell, AppHeader } from '@/components/app-shell';
 import { Sidebar } from "@/components/Sidebar";
 import { UserNav } from "@/components/user-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { Users, Award, Rocket, Github, Linkedin, Mail } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Github, Linkedin, Mail } from 'lucide-react';
+import { Card, CardContent } from "@/components/ui/card";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 
 const developer = {
   name: "Patrick Meyhöfer",
   role: "Full Stack Developer",
-  image: "https://i.pravatar.cc/150?img=4",
-  bio: "Leidenschaftlicher Entwickler mit Fokus auf moderne Webtechnologien und User Experience. Creator von ForgeCommunity.",
+  bio: "Entwickler von ForgeCommunity.",
   links: {
     github: "https://github.com/patrickmeyhoefer",
     linkedin: "https://linkedin.com/in/patrickmeyhoefer",
@@ -37,11 +36,10 @@ export default function About() {
         </AppHeader>
         <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto p-4 lg:p-8">
           <div className="max-w-4xl mx-auto space-y-8">
-            <Card className="border-0 shadow-lg">
+            <Card>
               <CardContent className="pt-6">
                 <div className="text-center mb-8">
-                  <Avatar className="w-40 h-40 mx-auto mb-6 border-4 border-primary">
-                    <AvatarImage src={developer.image} alt={developer.name} />
+                  <Avatar className="w-20 h-20 mx-auto mb-4">
                     <AvatarFallback>{developer.name.charAt(0)}</AvatarFallback>
                   </Avatar>
                   <h1 className="text-3xl font-bold text-foreground mb-2">{developer.name}</h1>
@@ -67,30 +65,6 @@ export default function About() {
                 </div>
               </CardContent>
             </Card>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <Card className="border-0 shadow-lg transform transition-all hover:scale-105">
-                <CardContent className="pt-6">
-                  <Users className="h-12 w-12 text-blue-500 mb-4" />
-                  <h3 className="text-xl font-semibold mb-2">Community First</h3>
-                  <p className="text-muted-foreground">Entwickelt mit Fokus auf Benutzerfreundlichkeit und Community-Engagement.</p>
-                </CardContent>
-              </Card>
-              <Card className="border-0 shadow-lg transform transition-all hover:scale-105">
-                <CardContent className="pt-6">
-                  <Award className="h-12 w-12 text-green-500 mb-4" />
-                  <h3 className="text-xl font-semibold mb-2">Qualität</h3>
-                  <p className="text-muted-foreground">Modernste Technologien und beste Entwicklungspraktiken für optimale Performance.</p>
-                </CardContent>
-              </Card>
-              <Card className="border-0 shadow-lg transform transition-all hover:scale-105">
-                <CardContent className="pt-6">
-                  <Rocket className="h-12 w-12 text-purple-500 mb-4" />
-                  <h3 className="text-xl font-semibold mb-2">Innovation</h3>
-                  <p className="text-muted-foreground">Kontinuierliche Weiterentwicklung und Anpassung an Community-Bedürfnisse.</p>
-                </CardContent>
-              </Card>
-            </div>
           </div>
         </main>
       </div>
