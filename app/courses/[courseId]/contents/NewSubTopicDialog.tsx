@@ -54,7 +54,7 @@ export function NewSubTopicDialog({
         <DialogHeader>
           <DialogTitle>Neues Unterthema erstellen</DialogTitle>
           <DialogDescription>
-            Geben Sie einen Titel für das neue Unterthema ein.
+            Titel für das Unterthema festlegen.
           </DialogDescription>
         </DialogHeader>
 

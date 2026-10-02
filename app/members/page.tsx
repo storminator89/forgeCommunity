@@ -1,7 +1,6 @@
 "use client";
 
 import { PageState } from '@/components/page-state';
-import { PageIntro } from '@/components/page-intro';
 import { AppShell, AppHeader } from '@/components/app-shell';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
@@ -189,7 +188,7 @@ export default function Members() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center">
 
-              <h2 className="text-xl font-bold text-foreground">Mitglieder</h2>
+              <h1 className="text-xl font-bold text-foreground">Mitglieder</h1>
             </div>
             <div className="flex items-center space-x-4">
               <ThemeToggle />
@@ -201,7 +200,7 @@ export default function Members() {
         <main ref={mainRef} onScroll={event => setShowScrollTop(event.currentTarget.scrollTop > 400)} id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto p-4 lg:p-8">
           <TooltipProvider>
             <div className="max-w-7xl mx-auto space-y-6">
-            <PageIntro eyebrow="Entdecken" title="Finde deine Leute." description="Entdecke Mitglieder mit passenden Interessen, Erfahrungen und Fähigkeiten." />
+
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 {[
                   { label: 'Alle Mitglieder', value: members.length },
@@ -209,7 +208,7 @@ export default function Members() {
                   { label: 'Durchschn. Skills', value: members.length > 0 ? Math.round(members.reduce((acc, m) => acc + m.skills.length, 0) / members.length) : 0 },
                   { label: 'Neue diesen Monat', value: members.filter(m => new Date(m.joinedAt).getTime() > currentTime - 30 * 24 * 60 * 60 * 1000).length }
                 ].map((stat, i) => (
-                  <Card key={i} className="bg-card/50 dark:bg-card/50 backdrop-blur-sm">
+                  <Card key={i} className="bg-card">
                     <CardContent className="p-4">
                       <p className="text-sm text-muted-foreground">{stat.label}</p>
                       <h3 className="text-2xl font-bold mt-1">{stat.value}</h3>
@@ -218,7 +217,7 @@ export default function Members() {
                 ))}
               </div>
 
-              <div className="flex flex-col sm:flex-row items-start gap-4 bg-card/50 dark:bg-card/50 backdrop-blur-sm p-4 rounded-lg">
+              <div className="flex flex-col sm:flex-row items-start gap-4 bg-card p-4 rounded-lg">
                 <div className="flex-1 w-full space-y-4">
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
@@ -405,7 +404,7 @@ export default function Members() {
                         transition={{ duration: 0.3, delay: Math.min(index * 0.05, 0.5) }}
                       >
                         <Card
-                          className="group cursor-pointer transition-all duration-200 hover:shadow-lg dark:hover:shadow-primary/5 hover:border-primary/30"
+                          className="group cursor-pointer transition-colors hover:border-primary/30"
                           role="link" tabIndex={0} aria-label={`Profil von ${member.name} öffnen`}
                           onKeyDown={event => { if (event.key === 'Enter') navigateToProfile(member.id); }}
                           onClick={() => navigateToProfile(member.id)}
@@ -512,7 +511,7 @@ export default function Members() {
                         variant="secondary"
                         size="icon"
                         onClick={scrollToTop}
-                        className="rounded-full shadow-lg"
+                        className="rounded-full"
                       >
                         <ChevronUp className="h-4 w-4" />
                       </Button>

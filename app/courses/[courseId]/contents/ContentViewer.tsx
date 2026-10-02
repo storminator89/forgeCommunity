@@ -26,8 +26,8 @@ export function ContentViewer({ content }: ContentViewerProps) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4 p-6 bg-gradient-to-r from-muted/80 to-muted/40 rounded-lg border backdrop-blur-sm">
-        <div className="p-3 bg-background rounded-xl shadow-sm ring-1 ring-inset ring-gray-200 dark:ring-gray-800">
+      <div className="flex items-center gap-4 p-6 bg-muted/40 rounded-lg border ">
+        <div className="shrink-0 text-muted-foreground">
           {getContentTypeIcon(content.type)}
         </div>
         <div>
@@ -43,7 +43,7 @@ export function ContentViewer({ content }: ContentViewerProps) {
         </div>
       </div>
 
-      <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
+      <div className="bg-card rounded-xl border overflow-hidden">
         <div className="divide-y divide-border">
           {content.type === 'TEXT' && (
             <div className="p-6">
@@ -80,7 +80,7 @@ export function ContentViewer({ content }: ContentViewerProps) {
                   frameBorder="0"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
-                  className="absolute top-0 left-0 w-full h-full shadow-lg bg-black"
+                  className="absolute top-0 left-0 w-full h-full shadow-none bg-black"
                 />
               </div>
             );
@@ -116,7 +116,7 @@ export function ContentViewer({ content }: ContentViewerProps) {
             <div className="relative rounded-lg overflow-hidden aspect-video">
               <iframe
                 src={`/h5p/embed/${content.content}`}
-                className="absolute top-0 left-0 w-full h-full shadow-lg bg-background"
+                className="absolute top-0 left-0 w-full h-full shadow-none bg-background"
                 allowFullScreen
               />
             </div>

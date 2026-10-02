@@ -359,12 +359,12 @@ export default function SkillDirectory() {
                 <motion.div
                   key={member.id}
                   layout
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
                   transition={{ duration: 0.2 }}
                 >
-                  <Card className="h-full hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1">
+                  <Card className="h-full transition-colors hover:border-primary/40">
                     <CardHeader className="flex flex-row items-center gap-3 space-y-0 pb-2">
                       <Avatar className="h-16 w-16">
                         <AvatarImage src={member.avatar} alt={member.name} />

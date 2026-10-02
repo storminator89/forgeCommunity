@@ -1,6 +1,5 @@
 'use client'
 
-import { PageIntro } from '@/components/page-intro';
 import { AppShell, AppHeader } from '@/components/app-shell';
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -99,7 +98,7 @@ export default function NewCoursePage() {
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <AppHeader>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-            <h2 className="min-w-0 text-lg sm:text-2xl font-bold text-foreground">Neuen Kurs erstellen</h2>
+            <h1 className="min-w-0 text-lg sm:text-2xl font-bold text-foreground">Neuen Kurs erstellen</h1>
             <div className="flex items-center space-x-4">
               <ThemeToggle />
               <UserNav />
@@ -108,7 +107,7 @@ export default function NewCoursePage() {
         </AppHeader>
         <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto p-4">
           <div className="max-w-2xl mx-auto bg-card rounded-lg shadow-md p-6">
-            <PageIntro eyebrow="Kurse" title="Mach dein Wissen zugänglich." description="Erstelle einen Kurs mit einer klaren Beschreibung und passenden Lerninhalten." />
+
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
                 <Label htmlFor="title">Kurstitel</Label>

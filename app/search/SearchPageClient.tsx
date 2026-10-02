@@ -1,6 +1,5 @@
 "use client";
 
-import { PageIntro } from '@/components/page-intro';
 import { AppShell, AppHeader } from '@/components/app-shell';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Sidebar } from "@/components/Sidebar";
@@ -186,11 +185,11 @@ export default function SearchPageClient({ initialQuery = '' }: { initialQuery?:
 
   const renderIcon = (type: string) => {
     switch (type) {
-      case 'course': return <Book className="h-5 w-5 text-blue-500" />;
-      case 'event': return <Calendar className="h-5 w-5 text-green-500" />;
-      case 'member': return <Users className="h-5 w-5 text-purple-500" />;
-      case 'post': return <MessageSquare className="h-5 w-5 text-yellow-500" />;
-      case 'resource': return <FileText className="h-5 w-5 text-orange-500" />;
+      case 'course': return <Book className="h-5 w-5 text-primary" />;
+      case 'event': return <Calendar className="h-5 w-5 text-primary" />;
+      case 'member': return <Users className="h-5 w-5 text-primary" />;
+      case 'post': return <MessageSquare className="h-5 w-5 text-primary" />;
+      case 'resource': return <FileText className="h-5 w-5 text-primary" />;
       default: return null;
     }
   };
@@ -359,7 +358,7 @@ export default function SearchPageClient({ initialQuery = '' }: { initialQuery?:
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <AppHeader>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-            <h2 className="text-2xl font-bold text-foreground ">Suche</h2>
+            <h1 className="text-2xl font-bold text-foreground ">Suche</h1>
             <div className="flex items-center space-x-4">
               <ThemeToggle />
               <UserNav />
@@ -369,7 +368,7 @@ export default function SearchPageClient({ initialQuery = '' }: { initialQuery?:
 
         <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto p-4 lg:p-8">
           <div className="max-w-4xl mx-auto space-y-6">
-            <PageIntro eyebrow="Entdecken" title="Eine Suche. Viele Möglichkeiten." description="Finde Kurse, Menschen, Events und Beiträge in deiner Community." />
+
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
               <Input aria-label="Suche nach Kursen, Events, Mitgliedern, Beiträgen oder Ressourcen"
@@ -436,7 +435,7 @@ export default function SearchPageClient({ initialQuery = '' }: { initialQuery?:
                               animate={{ opacity: 1, y: 0 }}
                               exit={{ opacity: 0, y: -20 }}
                               transition={{ duration: 0.2 }}
-                              className="bg-card p-4 rounded-lg shadow-md mb-4 hover:shadow-lg transition-shadow duration-200 cursor-pointer"
+                              className="bg-card p-4 rounded-xl border mb-4 hover:border-primary/40 transition-colors cursor-pointer"
                               onClick={() => handleItemClick(result)}
                             >
                               <div className="flex items-start space-x-4">

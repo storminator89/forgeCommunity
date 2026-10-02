@@ -86,9 +86,9 @@ export function EditContentForm({
   };
 
   return (
-    <div className="space-y-8 p-4 sm:p-8 bg-gradient-to-br from-card to-card/95 rounded-lg border border-border/50 shadow-sm">
+    <div className="space-y-6 bg-card">
       <div className="space-y-3">
-        <Label htmlFor="title" className="text-lg font-semibold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+        <Label htmlFor="title" className="text-sm font-medium text-foreground">
           Titel
         </Label>
         <Input
@@ -99,12 +99,12 @@ export function EditContentForm({
             onContentChange({ ...initialContent, title: e.target.value });
           }}
           placeholder="Titel des Inhalts"
-          className="w-full bg-background/50 border-border/50 focus:border-primary/50 transition-all duration-200"
+          className="w-full bg-background/50 border-border/50 focus:border-primary/50 transition-colors duration-200"
         />
       </div>
 
       <div className="space-y-3">
-        <Label htmlFor="type" className="text-lg font-semibold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+        <Label htmlFor="type" className="text-sm font-medium text-foreground">
           Inhaltstyp
         </Label>
         <Select
@@ -122,7 +122,7 @@ export function EditContentForm({
             });
           }}
         >
-          <SelectTrigger className="w-full bg-background/50 border-border/50 focus:border-primary/50 transition-all duration-200">
+          <SelectTrigger className="w-full bg-background/50 border-border/50 focus:border-primary/50 transition-colors duration-200">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -130,7 +130,7 @@ export function EditContentForm({
               <SelectLabel className="text-sm font-medium text-muted-foreground">Wähle einen Inhaltstyp</SelectLabel>
               <SelectItem value="TEXT" className="group">
                 <div className="flex items-center space-x-3">
-                  <div className="p-1.5 rounded-md bg-primary/5 text-primary group-hover:bg-primary/10 transition-colors duration-200">
+                  <div className="text-muted-foreground">
                     <FileText className="w-4 h-4" />
                   </div>
                   <span>Text</span>
@@ -138,7 +138,7 @@ export function EditContentForm({
               </SelectItem>
               <SelectItem value="VIDEO" className="group">
                 <div className="flex items-center space-x-3">
-                  <div className="p-1.5 rounded-md bg-primary/5 text-primary group-hover:bg-primary/10 transition-colors duration-200">
+                  <div className="text-muted-foreground">
                     <Video className="w-4 h-4" />
                   </div>
                   <span>Video</span>
@@ -146,7 +146,7 @@ export function EditContentForm({
               </SelectItem>
               <SelectItem value="AUDIO" className="group">
                 <div className="flex items-center space-x-3">
-                  <div className="p-1.5 rounded-md bg-primary/5 text-primary group-hover:bg-primary/10 transition-colors duration-200">
+                  <div className="text-muted-foreground">
                     <Music2 className="w-4 h-4" />
                   </div>
                   <span>Audio</span>
@@ -154,7 +154,7 @@ export function EditContentForm({
               </SelectItem>
               <SelectItem value="H5P" className="group">
                 <div className="flex items-center space-x-3">
-                  <div className="p-1.5 rounded-md bg-primary/5 text-primary group-hover:bg-primary/10 transition-colors duration-200">
+                  <div className="text-muted-foreground">
                     <Layers className="w-4 h-4" />
                   </div>
                   <span>H5P</span>
@@ -162,7 +162,7 @@ export function EditContentForm({
               </SelectItem>
               <SelectItem value="QUIZ" className="group">
                 <div className="flex items-center space-x-3">
-                  <div className="p-1.5 rounded-md bg-primary/5 text-primary group-hover:bg-primary/10 transition-colors duration-200">
+                  <div className="text-muted-foreground">
                     <HelpCircle className="w-4 h-4" />
                   </div>
                   <span>Quiz</span>
@@ -184,7 +184,7 @@ export function EditContentForm({
         ) : formData.type === 'TEXT' ? (
           <div className="space-y-4">
             <div className="flex flex-wrap gap-3 items-center justify-between">
-              <Label className="text-lg font-semibold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+              <Label className="text-sm font-medium text-foreground">
                 Inhalt
               </Label>
               <div className="flex items-center space-x-3">
@@ -225,7 +225,7 @@ export function EditContentForm({
           </div>
         ) : (
           <div className="space-y-3">
-            <Label className="text-lg font-semibold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+            <Label className="text-sm font-medium text-foreground">
               URL oder Embed-Code
             </Label>
             <Input
@@ -241,7 +241,7 @@ export function EditContentForm({
                     ? 'Audio URL'
                     : 'H5P Embed Code'
               }
-              className="w-full bg-background/50 border-border/50 focus:border-primary/50 transition-all duration-200"
+              className="w-full bg-background/50 border-border/50 focus:border-primary/50 transition-colors duration-200"
             />
           </div>
         )}

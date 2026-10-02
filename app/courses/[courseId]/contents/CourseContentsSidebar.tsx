@@ -247,7 +247,7 @@ export function CourseContentsSidebar({
       <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-4">
         <div className="space-y-3">
           {contents.map((content, index) => (
-            <div key={content.id} className="group relative rounded-md overflow-hidden transition-all duration-200">
+            <div key={content.id} className="group relative rounded-md overflow-hidden transition-colors duration-200">
               <div className={cn(
                 "flex items-center justify-between p-2 rounded-md hover:bg-accent group/topic transition-colors",
                 expandedTopics.has(content.id) && "bg-accent/50"
@@ -351,7 +351,7 @@ export function CourseContentsSidebar({
                       <AlertDialogHeader>
                         <AlertDialogTitle>Hauptthema löschen</AlertDialogTitle>
                         <AlertDialogDescription>
-                          Möchten Sie dieses Hauptthema wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.
+                          Dieses Hauptthema löschen? Diese Aktion kann nicht rückgängig gemacht werden.
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
@@ -419,7 +419,7 @@ export function CourseContentsSidebar({
                       <DialogHeader>
                         <DialogTitle>Neues Unterthema erstellen</DialogTitle>
                         <DialogDescription>
-                          Geben Sie einen Titel für das neue Unterthema ein.
+                          Titel für das Unterthema festlegen.
                         </DialogDescription>
                       </DialogHeader>
 
@@ -477,7 +477,7 @@ export function CourseContentsSidebar({
             <DialogHeader>
               <DialogTitle>Neues Kapitel</DialogTitle>
               <DialogDescription>
-                Geben Sie einen Titel für das neue Kapitel ein.
+                Titel für das Kapitel festlegen.
               </DialogDescription>
             </DialogHeader>
 
@@ -513,7 +513,7 @@ export function CourseContentsSidebar({
 
         {/* Certificate button at the bottom of the sidebar */}
         {contents.length > 0 && (
-          <div className="sticky bottom-0 w-full p-4 border-t border-border bg-background/95 backdrop-blur z-10">
+          <div className="sticky bottom-0 w-full p-4 border-t border-border bg-background z-10">
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -547,9 +547,9 @@ export function CourseContentsSidebar({
                       }
                     }}
                     className={cn(
-                      "w-full transition-all duration-200",
+                      "w-full transition-colors duration-200",
                       allTopicsCompleted
-                        ? "bg-green-600 hover:bg-green-700 text-white shadow-sm"
+                        ? "bg-green-600 hover:bg-green-700 text-white"
                         : "bg-muted text-muted-foreground cursor-not-allowed"
                     )}
                     disabled={isGeneratingCertificate || !allTopicsCompleted}
@@ -568,7 +568,7 @@ export function CourseContentsSidebar({
                   {allTopicsCompleted ? (
                     <p>Kurs abgeschlossen - Zertifikat herunterladen</p>
                   ) : (
-                    <p>Schließen Sie alle Themen ab, um das Zertifikat freizuschalten</p>
+                    <p>Schließe alle Themen ab, um das Zertifikat freizuschalten.</p>
                   )}
                 </TooltipContent>
               </Tooltip>

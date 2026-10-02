@@ -9,65 +9,65 @@ interface ContentTypeSelectorProps {
 
 export function ContentTypeSelector({ onSelectType }: ContentTypeSelectorProps) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
       <Button
         variant="outline"
-        className="flex flex-col items-start h-40 p-6 hover:border-primary hover:bg-accent/50 transition-all group relative overflow-hidden"
+        className="flex h-auto min-h-24 flex-col items-start whitespace-normal p-4 text-left hover:border-primary hover:bg-accent transition-colors"
         onClick={() => onSelectType('TEXT')}
       >
-        <div className="flex items-center gap-3 mb-4">
-          <FileText className="h-8 w-8 text-primary transition-transform group-hover:scale-110" />
-          <span className="text-lg font-semibold">Text</span>
+        <div className="flex items-center gap-2 mb-2">
+          <FileText className="h-4 w-4 text-primary" />
+          <span className="text-base font-medium">Text</span>
         </div>
-        <p className="text-sm text-muted-foreground">Create rich text content with formatting, images, and more.</p>
+        <p className="text-sm text-muted-foreground">Formatierter Text und Bilder.</p>
       </Button>
 
       <Button
         variant="outline"
-        className="flex flex-col items-start h-40 p-6 hover:border-primary hover:bg-accent/50 transition-all group relative overflow-hidden"
+        className="flex h-auto min-h-24 flex-col items-start whitespace-normal p-4 text-left hover:border-primary hover:bg-accent transition-colors"
         onClick={() => onSelectType('VIDEO')}
       >
-        <div className="flex items-center gap-3 mb-4">
-          <Video className="h-8 w-8 text-primary transition-transform group-hover:scale-110" />
-          <span className="text-lg font-semibold">Video</span>
+        <div className="flex items-center gap-2 mb-2">
+          <Video className="h-4 w-4 text-primary" />
+          <span className="text-base font-medium">Video</span>
         </div>
-        <p className="text-sm text-muted-foreground">Upload or embed videos from YouTube and other platforms.</p>
+        <p className="text-sm text-muted-foreground">Video per URL einbetten.</p>
       </Button>
 
       <Button
         variant="outline"
-        className="flex flex-col items-start h-40 p-6 hover:border-primary hover:bg-accent/50 transition-all group relative overflow-hidden"
+        className="flex h-auto min-h-24 flex-col items-start whitespace-normal p-4 text-left hover:border-primary hover:bg-accent transition-colors"
         onClick={() => onSelectType('AUDIO')}
       >
-        <div className="flex items-center gap-3 mb-4">
-          <Music className="h-8 w-8 text-primary transition-transform group-hover:scale-110" />
-          <span className="text-lg font-semibold">Audio</span>
+        <div className="flex items-center gap-2 mb-2">
+          <Music className="h-4 w-4 text-primary" />
+          <span className="text-base font-medium">Audio</span>
         </div>
-        <p className="text-sm text-muted-foreground">Add audio content, podcasts, or music to your course.</p>
+        <p className="text-sm text-muted-foreground">Audiodatei per URL einbinden.</p>
       </Button>
 
       <Button
         variant="outline"
-        className="flex flex-col items-start h-40 p-6 hover:border-primary hover:bg-accent/50 transition-all group relative overflow-hidden"
+        className="flex h-auto min-h-24 flex-col items-start whitespace-normal p-4 text-left hover:border-primary hover:bg-accent transition-colors"
         onClick={() => onSelectType('H5P')}
       >
-        <div className="flex items-center gap-3 mb-4">
-          <Box className="h-8 w-8 text-primary transition-transform group-hover:scale-110" />
-          <span className="text-lg font-semibold">H5P</span>
+        <div className="flex items-center gap-2 mb-2">
+          <Box className="h-4 w-4 text-primary" />
+          <span className="text-base font-medium">H5P</span>
         </div>
-        <p className="text-sm text-muted-foreground">Create interactive content with H5P&apos;s rich set of tools.</p>
+        <p className="text-sm text-muted-foreground">Interaktive H5P-Inhalte.</p>
       </Button>
 
       <Button
         variant="outline"
-        className="flex flex-col items-start h-40 p-6 hover:border-primary hover:bg-accent/50 transition-all group relative overflow-hidden"
+        className="flex h-auto min-h-24 flex-col items-start whitespace-normal p-4 text-left hover:border-primary hover:bg-accent transition-colors"
         onClick={() => onSelectType('QUIZ')}
       >
-        <div className="flex items-center gap-3 mb-4">
-          <HelpCircle className="h-8 w-8 text-primary transition-transform group-hover:scale-110" />
-          <span className="text-lg font-semibold">Quiz</span>
+        <div className="flex items-center gap-2 mb-2">
+          <HelpCircle className="h-4 w-4 text-primary" />
+          <span className="text-base font-medium">Quiz</span>
         </div>
-        <p className="text-sm text-muted-foreground">Create assessments and quizzes to test knowledge.</p>
+        <p className="text-sm text-muted-foreground">Fragen und Antworten erstellen.</p>
       </Button>
     </div>
   )

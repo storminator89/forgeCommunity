@@ -166,7 +166,7 @@ export default function EditArticle({ params }: { params: Promise<{ id: string }
         </AppHeader>
 
         <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto p-4 lg:p-8">
-          <Card className="max-w-5xl mx-auto bg-card rounded-lg shadow-lg">
+          <Card className="max-w-5xl mx-auto bg-card rounded-lg shadow-none">
             <div className="p-6">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
                 <Button

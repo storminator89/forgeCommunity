@@ -175,7 +175,7 @@ export default function SettingsPage() {
       }
 
       if (!skillId) {
-        toast.error("Bitte wählen Sie eine gültige Fähigkeit aus.")
+        toast.error("Bitte wähle eine gültige Fähigkeit aus.")
         return
       }
 
@@ -233,13 +233,13 @@ export default function SettingsPage() {
   const getSkillIcon = (skillName: string) => {
     const name = skillName.toLowerCase()
     if (name.includes('javascript') || name.includes('typescript') || name.includes('python')) {
-      return <Code className="w-5 h-5 text-blue-500" />
+      return <Code className="w-5 h-5 text-primary" />
     } else if (name.includes('design') || name.includes('ui') || name.includes('ux')) {
-      return <Layout className="w-5 h-5 text-pink-500" />
+      return <Layout className="w-5 h-5 text-primary" />
     } else if (name.includes('database') || name.includes('sql') || name.includes('mongodb')) {
-      return <Database className="w-5 h-5 text-green-500" />
+      return <Database className="w-5 h-5 text-primary" />
     } else if (name.includes('language') || name.includes('german') || name.includes('english')) {
-      return <Languages className="w-5 h-5 text-yellow-500" />
+      return <Languages className="w-5 h-5 text-primary" />
     }
     return <CheckCircle className="w-5 h-5 text-muted-foreground" />
   }
@@ -251,7 +251,7 @@ export default function SettingsPage() {
         {/* Header */}
         <AppHeader>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-            <h2 className="text-xl sm:text-2xl font-bold text-foreground">Einstellungen</h2>
+            <h1 className="text-xl sm:text-2xl font-bold text-foreground">Einstellungen</h1>
             <div className="flex items-center space-x-4">
               <ThemeToggle />
               <UserNav />
@@ -288,7 +288,6 @@ export default function SettingsPage() {
                 <Card>
                   <CardHeader>
                     <CardTitle>Kontoinformationen</CardTitle>
-                    <CardDescription>Aktualisieren Sie Ihre Kontoinformationen hier.</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <ImageUpload
@@ -328,7 +327,6 @@ export default function SettingsPage() {
                 <Card>
                   <CardHeader>
                     <CardTitle>Benachrichtigungseinstellungen</CardTitle>
-                    <CardDescription>Verwalten Sie Ihre Benachrichtigungspräferenzen.</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="flex items-center justify-between gap-4">
@@ -365,7 +363,7 @@ export default function SettingsPage() {
                 <Card>
                   <CardHeader>
                     <CardTitle>Privatsphäre-Einstellungen</CardTitle>
-                    <CardDescription>Verwalten Sie Ihre Privatsphäre-Einstellungen.</CardDescription>
+                    <CardDescription>Sichtbarkeit deines Profils.</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="flex items-center justify-between gap-4">
@@ -395,8 +393,7 @@ export default function SettingsPage() {
                   {/* Liste der bestehenden Fähigkeiten */}
                   <Card>
                     <CardHeader>
-                      <CardTitle>Ihre Fähigkeiten</CardTitle>
-                      <CardDescription>Verwalten Sie Ihre bestehenden Fähigkeiten.</CardDescription>
+                      <CardTitle>Fähigkeiten</CardTitle>
                     </CardHeader>
                     <CardContent>
                       {isLoading ? (
@@ -460,7 +457,6 @@ export default function SettingsPage() {
                   <Card>
                     <CardHeader>
                       <CardTitle>Neue Fähigkeit hinzufügen</CardTitle>
-                      <CardDescription>Fügen Sie eine neue Fähigkeit hinzu.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div>
@@ -498,7 +494,7 @@ export default function SettingsPage() {
                           onValueChange={(value) => setNewSkillLevel(Number(value))}
                         >
                           <SelectTrigger id="new-skill-level">
-                            <SelectValue placeholder="Wählen Sie Ihren Kenntnisstand" />
+                            <SelectValue placeholder="Kenntnisstand auswählen" />
                           </SelectTrigger>
                           <SelectContent>
                             {SKILL_LEVELS.map((level) => (
@@ -523,9 +519,6 @@ export default function SettingsPage() {
                       <Award className="w-6 h-6 text-primary" />
                       <CardTitle>Meine Zertifikate</CardTitle>
                     </div>
-                    <CardDescription>
-                      Hier findest du eine Übersicht über alle deine erworbenen Zertifikate.
-                    </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     {certificates.length === 0 ? (
@@ -621,7 +614,7 @@ export default function SettingsPage() {
             <DialogHeader>
               <DialogTitle>Fähigkeit bearbeiten</DialogTitle>
               <DialogDescription>
-                Aktualisieren Sie den Kenntnisstand für &quot;{editSkill.skill?.name}&quot;.
+                Kenntnisstand ändern für &quot;{editSkill.skill?.name}&quot;.
               </DialogDescription>
             </DialogHeader>
             <div className="mt-4 space-y-4">
@@ -631,7 +624,7 @@ export default function SettingsPage() {
                 onValueChange={(value) => setEditSkill({ ...editSkill, level: Number(value) })}
               >
                 <SelectTrigger id="edit-skill-level">
-                  <SelectValue placeholder="Wählen Sie Ihren Kenntnisstand" />
+                  <SelectValue placeholder="Kenntnisstand auswählen" />
                 </SelectTrigger>
                 <SelectContent>
                   {SKILL_LEVELS.map((level) => (

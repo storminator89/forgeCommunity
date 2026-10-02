@@ -137,7 +137,7 @@ export default function ArticlePage() {
                         variant="ghost"
                         size="sm"
                         onClick={() => router.push('/knowledgebase')}
-                        className="hover:bg-accent/50 transition-all duration-200 -ml-2"
+                        className="hover:bg-accent/50 transition-colors duration-200 -ml-2"
                       >
                         <ArrowLeft className="h-4 w-4 mr-2" />
                         <span className="font-medium">Zurück</span>
@@ -158,7 +158,7 @@ export default function ArticlePage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="hover:bg-accent/50 transition-all duration-200"
+                            className="hover:bg-accent/50 transition-colors duration-200"
                             asChild
                           >
                             <Link href={`/knowledgebase/${article.id}/edit`}>
@@ -179,7 +179,7 @@ export default function ArticlePage() {
                             variant="ghost"
                             size="sm"
                             onClick={handleDelete}
-                            className="text-destructive hover:bg-destructive/10 transition-all duration-200"
+                            className="text-destructive hover:bg-destructive/10 transition-colors duration-200"
                           >
                             <Trash className="h-4 w-4 mr-2" />
                             <span className="font-medium">Löschen</span>
@@ -220,9 +220,9 @@ export default function ArticlePage() {
                   {article.title}
                 </h1>
                 <div className="flex flex-wrap items-center gap-3">
-                  <div className="flex items-center gap-2 bg-muted/40 hover:bg-muted/60 transition-colors rounded-full pl-1 pr-3 py-1">
-                    <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center">
-                      <User className="h-3.5 w-3.5 text-primary" />
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <div className="flex items-center">
+                      <User className="h-3.5 w-3.5" />
                     </div>
                     <span className="text-sm font-medium text-foreground/80">
                       {article.author.name || article.author.email}
@@ -232,8 +232,8 @@ export default function ArticlePage() {
                     {article.tags.map((tag) => (
                       <Badge
                         key={tag.id}
-                        variant="secondary"
-                        className="text-xs bg-muted/40 hover:bg-muted/60 transition-colors"
+                        variant="outline"
+                        className="text-xs font-normal"
                       >
                         {tag.name}
                       </Badge>
@@ -243,7 +243,7 @@ export default function ArticlePage() {
               </div>
             </div>
           </div>
-          <div className="h-px bg-gradient-to-r from-border/0 via-border/40 to-border/0" />
+          <div className="border-t border-border" />
         </AppHeader>
 
         <div id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto">
@@ -253,13 +253,12 @@ export default function ArticlePage() {
                 {/* Artikel Inhalt */}
                 <div className="bg-card rounded-xl shadow-sm border border-border/40 overflow-hidden">
                   {article.featuredImage && (
-                    <div className="relative w-full h-[400px] sm:h-[500px] overflow-hidden group">
-                      <div className="absolute inset-0 bg-gradient-to-t from-background/40 to-transparent z-10" />
+                    <div className="relative w-full aspect-video overflow-hidden">
                       <Image
                         src={article.featuredImage}
                         alt={article.title}
                         fill
-                        className="object-contain object-center transition-transform duration-500 group-hover:scale-105"
+                        className="object-contain object-center "
                         priority
                       />
                     </div>

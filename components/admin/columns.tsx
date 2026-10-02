@@ -45,7 +45,7 @@ export const columns: ColumnDef<User>[] = [
     header: "Rolle",
     cell: ({ row }) => {
       const role = row.getValue("role") as string
-      return <Badge>{role}</Badge>
+      return <Badge variant="outline">{role}</Badge>
     },
   },
   {

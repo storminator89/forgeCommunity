@@ -66,7 +66,7 @@ function ContentRendererState({ content, isEditing: externalIsEditing, onSave, o
 
   if (isEditing) {
     return (
-      <Card className="p-6 shadow-lg">
+      <Card className="p-6 shadow-none">
         <div className="space-y-6">
           {content.type === 'TEXT' ? (
             <Editor content={editedContent} onChange={setEditedContent} />

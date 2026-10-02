@@ -418,7 +418,7 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
               <Card
                 key={question.id}
                 className={cn(
-                  "transition-all duration-200 hover:shadow-md",
+                  "transition-colors duration-200 -none",
                   draggedQuestionIndex === questionIndex && "opacity-50 scale-95",
                   "relative border-2",
                   draggedQuestionIndex !== null && dragOverQuestionIndex === questionIndex && "border-primary border-dashed"
@@ -476,7 +476,7 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
                       id={`question-${question.id}`}
                       value={question.question}
                       onChange={(e) => updateQuestion(questionIndex, 'question', e.target.value)}
-                      placeholder="Geben Sie hier Ihre Frage ein..."
+                      placeholder="Frage"
                       className="min-h-[100px] resize-y"
                     />
                   </div>
@@ -549,7 +549,7 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
                       <Input
                         value={question.correctAnswer}
                         onChange={(e) => updateTextInputAnswer(questionIndex, e.target.value)}
-                        placeholder="Geben Sie die richtige Antwort ein"
+                        placeholder="Richtige Antwort"
                         className="w-full"
                       />
                       <div className="flex items-center space-x-2">
@@ -677,7 +677,7 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
                     <Textarea
                       value={question.explanation}
                       onChange={(e) => updateQuestion(questionIndex, 'explanation', e.target.value)}
-                      placeholder="Erklären Sie die richtige Antwort..."
+                      placeholder="Antwort erläutern"
                       className="min-h-[100px] resize-y"
                     />
                   </div>

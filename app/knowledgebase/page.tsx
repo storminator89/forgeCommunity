@@ -1,7 +1,6 @@
 'use client';
 
 import { PageState, RetryButton } from '@/components/page-state';
-import { PageIntro } from '@/components/page-intro';
 import { AppShell, AppHeader } from '@/components/app-shell';
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
@@ -130,7 +129,7 @@ export default function KnowledgeBase() {
 
         <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto bg-accent/5">
           <div className="container mx-auto py-8 px-6">
-            <PageIntro eyebrow="Wissen & Lernen" title="Wissen, das weiterhilft." description="Anleitungen, Erfahrungen und Ideen aus der Community. Finde Antworten oder teile dein Wissen." />
+
             <div className="max-w-7xl mx-auto space-y-8">
               {/* Filter und Aktionen */}
               <div className="grid lg:grid-cols-[300px,1fr] gap-6">
@@ -141,7 +140,7 @@ export default function KnowledgeBase() {
                     <div className="p-4">
                       <Link href="/knowledgebase/new-article">
                         <Button className="w-full shadow-sm hover:shadow group bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg transition-all duration-200">
-                          <Plus className="mr-2 h-4 w-4 group-hover:scale-110 transition-transform duration-200" />
+                          <Plus className="mr-2 h-4 w-4" />
                           Neuer Artikel
                         </Button>
                       </Link>
@@ -306,9 +305,9 @@ export default function KnowledgeBase() {
                                           src={article.featuredImage}
                                           alt={article.title}
                                           fill
-                                          className="object-cover transition-transform duration-300 group-hover:scale-105"
+                                          className="object-cover"
                                         />
-                                        <div className="absolute inset-0 bg-gradient-to-t from-background/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+
                                       </div>
                                     </div>
                                   )}

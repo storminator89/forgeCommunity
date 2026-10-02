@@ -1,6 +1,5 @@
 'use client';
 
-import { PageIntro } from '@/components/page-intro';
 import { AppShell, AppHeader } from '@/components/app-shell';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
@@ -210,7 +209,6 @@ export default function NewArticle() {
                 </Button>
                 <div>
                   <h1 className="text-2xl font-semibold text-foreground tracking-tight">Neuer Artikel</h1>
-                  <p className="text-sm text-muted-foreground mt-0.5">Erstelle einen neuen Wissensartikel</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -224,7 +222,7 @@ export default function NewArticle() {
         <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto">
           <ScrollArea className="h-full">
             <div className="container mx-auto py-8 px-6">
-            <PageIntro eyebrow="Wissensdatenbank" title="Dein Wissen verdient einen Platz." description="Formuliere deine Idee, ergänze passende Tags und veröffentliche deinen Artikel, wenn er bereit ist." />
+
               <div className="max-w-7xl mx-auto">
                 <div className="grid lg:grid-cols-[1fr,300px] gap-6">
                   {/* Hauptbereich - Editor */}

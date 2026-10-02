@@ -1,9 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Loader2, Video, Download, Eye, FileText } from 'lucide-react';
+import { Loader2, Download, Eye, FileText } from 'lucide-react';
 import { Button } from './ui/button';
-import { toast } from 'react-toastify';
-import { clsx } from 'clsx';
-import Script from 'next/script';
 import Image from 'next/image';
 import { getSafeNavigationUrl } from '@/lib/security';
 
@@ -126,8 +123,8 @@ export function ResourcePreview({ url, type }: ResourcePreviewProps) {
 
         if (isMounted) {
           setPreviewData({
-            title: data.title || 'Keine Überschrift verfügbar',
-            description: data.description || 'Keine Beschreibung verfügbar',
+            title: data.title || undefined,
+            description: data.description || undefined,
             image: data.image
           });
         }
@@ -242,7 +239,6 @@ export function ResourcePreview({ url, type }: ResourcePreviewProps) {
           allowFullScreen
           title="Video Preview"
         />
-        <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-transparent to-black/10" />
       </div>
     );
   }
@@ -250,80 +246,39 @@ export function ResourcePreview({ url, type }: ResourcePreviewProps) {
   // PDF Preview
   if (type === 'PDF') {
     return (
-      <div className="h-80 relative bg-card/50 group">
-        <div className="absolute inset-0">
-          {/* Native PDF Viewer */}
+      <div className="h-80 flex flex-col bg-card">
+        <div className="relative min-h-0 flex-1">
           <iframe
             ref={iframeRef}
-            className="w-full h-full"
-            style={{ backgroundColor: 'white' }}
+            src={safeUrl ? `${safeUrl}#toolbar=0&navpanes=0` : undefined}
+            title="PDF-Vorschau"
+            className="w-full h-full bg-white"
           />
-
-          {/* Loading State */}
           {isPdfLoading && (
-            <div className="absolute inset-0 flex items-center justify-center bg-card/50">
-              <div className="flex flex-col items-center">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-2" />
-                <p className="text-sm text-muted-foreground">PDF wird geladen...</p>
-              </div>
+            <div role="status" className="absolute inset-0 flex items-center justify-center bg-card/90">
+              <Loader2 className="mr-2 h-5 w-5 animate-spin text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">PDF wird geladen…</p>
             </div>
           )}
-
-          {/* Error State */}
           {pdfError && (
-            <div className="absolute inset-0 flex items-center justify-center bg-card/50">
+            <div role="alert" className="absolute inset-0 flex items-center justify-center bg-card">
               <div className="text-center p-6">
-                <FileText className="mx-auto h-12 w-12 text-muted-foreground mb-3" />
-                <p className="text-sm text-muted-foreground mb-4">{pdfError}</p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => safeUrl && window.open(safeUrl, '_blank', 'noopener,noreferrer')}
-                >
-                  Im Browser öffnen
-                </Button>
+                <FileText className="mx-auto h-8 w-8 text-muted-foreground mb-3" />
+                <p className="text-sm text-muted-foreground">{pdfError}</p>
               </div>
             </div>
           )}
-
-          {/* Info Overlay on Hover */}
-          <div
-            className={clsx(
-              "absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors duration-300",
-              "opacity-0 group-hover:opacity-100 flex items-center justify-center",
-              isPdfLoading || pdfError ? "pointer-events-none" : ""
-            )}
-          >
-            <div className="bg-card/90 dark:bg-card/90 p-4 rounded-lg shadow-lg space-y-4 transform scale-95 group-hover:scale-100 transition-transform duration-300">
-              <h3 className="text-lg font-medium text-foreground text-center">
-                {previewData?.title || url.split('/').pop() || 'PDF Dokument'}
-              </h3>
-              {previewData?.fileSize && (
-                <p className="text-sm text-muted-foreground text-center">
-                  Größe: {previewData.fileSize}
-                </p>
-              )}
-              <div className="flex justify-center space-x-3">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex items-center space-x-2"
-                  onClick={() => safeUrl && window.open(safeUrl, '_blank', 'noopener,noreferrer')}
-                >
-                  <Eye className="h-4 w-4" />
-                  <span>Öffnen</span>
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex items-center space-x-2"
-                  onClick={handleDownload}
-                >
-                  <Download className="h-4 w-4" />
-                  <span>Download</span>
-                </Button>
-              </div>
-            </div>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t bg-card px-3 py-2">
+          <span className="min-w-0 truncate text-sm text-muted-foreground">PDF</span>
+          {previewData?.fileSize && <span className="text-sm text-muted-foreground">{previewData.fileSize}</span>}
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" disabled={!safeUrl} onClick={() => safeUrl && window.open(safeUrl, '_blank', 'noopener,noreferrer')}>
+              <Eye className="mr-2 h-4 w-4" />Öffnen
+            </Button>
+            <Button variant="outline" size="sm" disabled={!safeUrl} onClick={handleDownload}>
+              <Download className="mr-2 h-4 w-4" />Download
+            </Button>
           </div>
         </div>
       </div>
@@ -338,19 +293,19 @@ export function ResourcePreview({ url, type }: ResourcePreviewProps) {
           <Image
             src={previewData.image}
             alt={previewData.title || 'Preview'}
-            className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-300"
+            className="w-full h-full object-cover"
             fill
             onError={() => setImageError(true)}
           />
           <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/95 via-black/70 to-transparent p-6">
             <div className="relative z-10">
               {previewData.title && (
-                <div className="space-y-2 backdrop-blur-sm bg-black/20 p-4 rounded-lg">
-                  <p className="text-white text-lg font-semibold leading-tight drop-shadow-lg">
+                <div className="space-y-2">
+                  <p className="text-white text-lg font-semibold leading-tight">
                     {previewData.title}
                   </p>
                   {previewData.description && (
-                    <p className="text-white text-sm leading-relaxed line-clamp-2 drop-shadow-lg">
+                    <p className="text-white text-sm leading-relaxed line-clamp-2">
                       {previewData.description}
                     </p>
                   )}
@@ -361,14 +316,13 @@ export function ResourcePreview({ url, type }: ResourcePreviewProps) {
         </div>
       ) : (
         <div className="h-full flex items-center justify-center bg-card/50 p-6">
-          <div className="text-center max-w-lg p-6 rounded-lg bg-card/50 dark:bg-black/20 backdrop-blur-sm">
+          <div className="text-center max-w-lg">
             <p className="text-base text-foreground dark:text-muted-foreground leading-relaxed font-medium">
               {previewData?.description || previewData?.title || 'Keine Vorschau verfügbar'}
             </p>
           </div>
         </div>
       )}
-      <div className="absolute inset-0 border-2 border-transparent group-hover:border-blue-500/20 transition-colors duration-300 pointer-events-none rounded-lg"></div>
     </div>
   );
 }

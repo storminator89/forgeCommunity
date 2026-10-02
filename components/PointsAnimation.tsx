@@ -1,4 +1,4 @@
-import { motion, AnimatePresence } from 'framer-motion'
+import { useEffect, useEffectEvent } from 'react'
 
 interface PointsAnimationProps {
   points: number
@@ -7,29 +7,19 @@ interface PointsAnimationProps {
 }
 
 export function PointsAnimation({ points, isVisible, onComplete }: PointsAnimationProps) {
+  const complete = useEffectEvent(onComplete)
+
+  useEffect(() => {
+    if (!isVisible) return
+    const timeout = setTimeout(() => complete(), 1500)
+    return () => clearTimeout(timeout)
+  }, [isVisible, points])
+
+  if (!isVisible) return null
+
   return (
-    <AnimatePresence>
-      {isVisible && (
-        <motion.div
-          initial={{ opacity: 0, y: 0, scale: 0.5 }}
-          animate={{
-            opacity: [0, 1, 1, 0],
-            y: -100,
-            scale: [0.5, 1.2, 1.2, 0.8]
-          }}
-          transition={{
-            duration: 1.5,
-            times: [0, 0.2, 0.8, 1]
-          }}
-          onAnimationComplete={onComplete}
-          className="fixed bottom-10 right-10 z-50 flex items-center justify-center"
-        >
-          <div className="bg-primary text-white px-4 py-2 rounded-full shadow-lg flex items-center space-x-2">
-            <span className="text-xl font-bold">+{points}</span>
-            <span className="text-sm">Punkte!</span>
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+    <div role="status" className="fixed bottom-4 right-4 z-50 rounded-xl border bg-card px-4 py-2 text-sm text-foreground shadow-sm">
+      <span className="font-semibold tabular-nums">+{points}</span> Punkte
+    </div>
   )
 }

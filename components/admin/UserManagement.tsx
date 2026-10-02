@@ -191,18 +191,7 @@ export default function UserManagement() {
     }
   };
 
-  const getRoleBadgeVariant = (role: string) => {
-    switch (role) {
-      case 'ADMIN':
-        return 'destructive';
-      case 'MODERATOR':
-        return 'secondary';
-      case 'INSTRUCTOR':
-        return 'secondary';
-      default:
-        return 'default';
-    }
-  };
+  const getRoleBadgeVariant = (role: string) => role === 'ADMIN' ? 'secondary' : 'outline';
 
   const getLastActiveStatus = (user: User) => {
     if (!user?.lastLogin) {
@@ -247,7 +236,7 @@ export default function UserManagement() {
   if (status === 'loading' || isLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-blue-500"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
       </div>
     );
   }
@@ -259,9 +248,9 @@ export default function UserManagement() {
   return (
     <>
       <div className="px-4 pt-6 lg:px-8">
-        <h2 className="flex items-center text-xl font-semibold text-foreground">
+        <h1 className="flex items-center text-xl font-semibold text-foreground">
           <Users className="mr-2 h-5 w-5" /> Benutzerverwaltung
-        </h2>
+        </h1>
       </div>
 
       <main className="flex-1 overflow-y-auto p-4 lg:p-8">
@@ -328,13 +317,13 @@ export default function UserManagement() {
                             >
                               <TableCell className="dark:text-muted-foreground">
                                 <div className="flex items-center space-x-3">
-                                  <Avatar className="h-10 w-10">
+                                  <Avatar className="h-10 w-10 shrink-0">
                                     <AvatarImage src={user.image || ''} alt={user.name || ''} />
                                     <AvatarFallback>{user.name?.slice(0, 2).toUpperCase()}</AvatarFallback>
                                   </Avatar>
                                   <div>
-                                    <div className="font-medium"><button type="button" onClick={(event) => { event.stopPropagation(); setSelectedUser(user); }} className="rounded-sm text-left hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Details von ${user.name || user.email} öffnen`}>{user.name || user.email}</button></div>
-                                    <div className="text-sm text-muted-foreground">{user.title || 'Kein Titel'}</div>
+                                    <div className="font-medium"><button type="button" onClick={(event) => { event.stopPropagation(); setSelectedUser(user); }} className="whitespace-nowrap rounded-sm text-left hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Details von ${user.name || user.email} öffnen`}>{user.name || user.email}</button></div>
+                                    {user.title && <div className="text-sm text-muted-foreground">{user.title}</div>}
                                   </div>
                                 </div>
                               </TableCell>
@@ -392,7 +381,7 @@ export default function UserManagement() {
                                         e.stopPropagation();
                                         handleDeleteUser(user.id);
                                       }}
-                                      className="text-red-600 dark:text-red-400 dark:hover:bg-accent"
+                                      className="text-destructive focus:text-destructive dark:hover:bg-accent"
                                     >
                                       <Trash2 className="mr-2 h-4 w-4" />
                                       Löschen
@@ -579,11 +568,7 @@ export default function UserManagement() {
                                   </div>
                                   <div className="w-full bg-muted rounded-full h-2.5 dark:bg-muted">
                                     <div
-                                      className={`h-2.5 rounded-full ${skill.level > 80 ? 'bg-green-500' :
-                                        skill.level > 60 ? 'bg-blue-500' :
-                                          skill.level > 40 ? 'bg-yellow-500' :
-                                            'bg-red-500'
-                                        }`}
+                                      className="h-2.5 rounded-full bg-primary"
                                       style={{ width: `${skill.level}%` }}
                                     ></div>
                                   </div>
@@ -632,9 +617,7 @@ export default function UserManagement() {
                                       Bevorzugtes Theme
                                     </div>
                                   </div>
-                                  <Badge>
-                                    {selectedUser.settings.theme}
-                                  </Badge>
+                                  <span className="text-sm">{selectedUser.settings.theme}</span>
                                 </div>
 
                                 <div className="flex items-center justify-between">
@@ -644,9 +627,7 @@ export default function UserManagement() {
                                       Bevorzugte Sprache
                                     </div>
                                   </div>
-                                  <Badge>
-                                    {selectedUser.settings.language.toUpperCase()}
-                                  </Badge>
+                                  <span className="text-sm">{selectedUser.settings.language.toUpperCase()}</span>
                                 </div>
                               </div>
                             </>
