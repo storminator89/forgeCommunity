@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../../../../../auth/[...nextauth]/options';
-import prisma from '@/lib/prisma';
-import { Prisma } from '@prisma/client';
+import { contentTransaction, ContentMutationError, presentContent } from '../../content-mutations';
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
 import { groupCourseContents } from '@/lib/server/group-course-contents';
 
@@ -21,10 +20,7 @@ export async function PUT(
     }
     if (targetId === params.contentId) return NextResponse.json({ error: 'Content cannot be moved onto itself' }, { status: 400 });
 
-    let contents;
-    for (let attempt = 0; attempt < 4; attempt++) {
-      try {
-        contents = await prisma.$transaction(async (tx) => {
+    const contents = await contentTransaction(async (tx) => {
           const moved = await tx.courseContent.findUnique({
             where: { id: params.contentId },
             select: { id: true, courseId: true, parentId: true, order: true, course: { select: { instructorId: true } } },
@@ -77,14 +73,10 @@ export async function PUT(
           return tx.courseContent.findMany({
             where: { courseId: params.courseId }, orderBy: [{ order: 'asc' }, { id: 'asc' }],
           });
-        }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
-        break;
-      } catch (error) {
-        if (attempt === 3 || !(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2034') throw error;
-      }
-    }
-    return NextResponse.json(groupCourseContents(contents!));
+    });
+    return NextResponse.json(groupCourseContents(contents.map(presentContent)));
   } catch (error) {
+    if (error instanceof ContentMutationError) return NextResponse.json({ error: error.message }, { status: error.status });
     const status: Record<string, number> = {
       CONTENT_NOT_FOUND: 404, CONTENT_FORBIDDEN: 403, TARGET_NOT_FOUND: 404, CONTENT_MOVE_CYCLE: 400,
     };

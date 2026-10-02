@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, useEffectEvent, useId } from 'react';
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -10,7 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { PlusCircle, Trash2, GripVertical, Eye, EyeOff, ArrowUpDown, ArrowUp, ArrowDown, CheckSquare, Square } from 'lucide-react';
+import { PlusCircle, Trash2, GripVertical, Eye, ArrowUpDown, ArrowUp, ArrowDown, CheckSquare, Square } from 'lucide-react';
 import {
   QuizContent,
   QuizQuestion,
@@ -18,31 +18,36 @@ import {
   MatchingQuizQuestion,
   TextInputQuizQuestion,
   FillBlanksQuizQuestion,
-  ChoiceQuizQuestion
+  ChoiceQuizQuestion,
+  getQuizValidationError
 } from './types';
 import { cn } from '@/lib/utils';
+import { quizEditorDraft } from './content-form-utils';
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface QuizEditorProps {
   initialContent?: QuizContent | string;
-  onSave: (content: QuizContent) => void;
+  onSave: (content: QuizContent) => void | Promise<void>;
+  onChange?: (content: QuizContent) => void;
+  showSaveButton?: boolean;
+  disabled?: boolean;
 }
 
 // Local interfaces removed as they are now imported from ./types
 
 const QUESTION_TYPES: { value: QuestionType; label: string }[] = [
-  { value: 'SINGLE_CHOICE', label: 'Single Choice' },
-  { value: 'MULTIPLE_CHOICE', label: 'Multiple Choice' },
-  { value: 'TRUE_FALSE', label: 'True/False' },
-  { value: 'TEXT_INPUT', label: 'Text Input' },
-  { value: 'MATCHING', label: 'Matching' },
-  { value: 'FILL_BLANKS', label: 'Fill in the Blanks' },
+  { value: 'SINGLE_CHOICE', label: 'Einfachauswahl' },
+  { value: 'MULTIPLE_CHOICE', label: 'Mehrfachauswahl' },
+  { value: 'TRUE_FALSE', label: 'Wahr/Falsch' },
+  { value: 'TEXT_INPUT', label: 'Freitext' },
+  { value: 'MATCHING', label: 'Zuordnung' },
+  { value: 'FILL_BLANKS', label: 'Lückentext' },
 ];
 
 const createEmptyQuestion = (type: QuestionType = 'SINGLE_CHOICE'): QuizQuestion => {
   const baseQuestion = {
-    id: crypto.randomUUID(),
+    id: globalThis.crypto?.randomUUID?.() ?? `question-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`,
     question: '',
     type,
   };
@@ -60,7 +65,7 @@ const createEmptyQuestion = (type: QuestionType = 'SINGLE_CHOICE'): QuizQuestion
       return {
         ...baseQuestion,
         type,
-        options: ['True', 'False'],
+        options: ['Wahr', 'Falsch'],
         correctAnswers: [0],
       };
     case 'TEXT_INPUT':
@@ -102,47 +107,20 @@ const isFillBlanksQuestion = (q: QuizQuestion): q is FillBlanksQuizQuestion => q
 const isChoiceQuestion = (q: QuizQuestion): q is ChoiceQuizQuestion =>
   q.type === 'SINGLE_CHOICE' || q.type === 'MULTIPLE_CHOICE' || q.type === 'TRUE_FALSE';
 
-export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
-  const [questions, setQuestions] = useState<QuizQuestion[]>(() => {
-    if (typeof initialContent === 'string') {
-      try {
-        const parsed = JSON.parse(initialContent);
-        // Migrate old questions to new format
-        return (parsed.questions || []).map((q: any) => ({
-          ...q,
-          type: q.type || 'SINGLE_CHOICE',
-          correctAnswers: q.correctAnswers || (typeof q.correctAnswer === 'number' ? [q.correctAnswer] : [0])
-        }));
-      } catch (e) {
-        console.error('Failed to parse initial quiz content:', e);
-        return [];
-      }
-    }
-    const initialQuestions = initialContent?.questions || [];
-    // Migrate existing questions to new format
-    return initialQuestions.map((q: any) => ({
-      ...q,
-      type: q.type || 'SINGLE_CHOICE',
-      correctAnswers: q.correctAnswers || (typeof q.correctAnswer === 'number' ? [q.correctAnswer] : [0])
-    }));
-  });
-
-  const [shuffleQuestions, setShuffleQuestions] = useState(() => {
-    if (typeof initialContent === 'object' && initialContent !== null && 'shuffleQuestions' in initialContent) {
-      return initialContent.shuffleQuestions || false;
-    }
-    return false;
-  });
-  const [passingScore, setPassingScore] = useState(() => {
-    if (typeof initialContent === 'object' && initialContent !== null && 'passingScore' in initialContent) {
-      return initialContent.passingScore?.toString() || '70';
-    }
-    return '70';
-  });
-  const [currentTab, setCurrentTab] = useState('edit');
+export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = true, disabled = false }: QuizEditorProps) {
+  const [initialQuiz] = useState(() => initialContent === undefined ? { questions: [], shuffleQuestions: false, passingScore: 70 } as QuizContent : quizEditorDraft(initialContent));
+  const [questions, setQuestions] = useState<QuizQuestion[]>(initialQuiz?.questions ?? []);
+  const [shuffleQuestions, setShuffleQuestions] = useState(initialQuiz?.shuffleQuestions ?? false);
+  const [passingScore, setPassingScore] = useState(() => Number.isFinite(initialQuiz?.passingScore ?? 70) ? String(initialQuiz?.passingScore ?? 70) : '');
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const questionTypesRef = useRef(new Map<string, QuizQuestion>());
+  const formId = useId();
+  const draft = (): QuizContent => ({ ...initialQuiz, questions, shuffleQuestions, passingScore: passingScore.trim() ? Number(passingScore) : NaN });
+  const notifyChange = useEffectEvent(() => { if (initialQuiz) onChange?.(draft()); });
+  useEffect(() => { notifyChange(); }, [questions, shuffleQuestions, passingScore]);
   const [draggedQuestionIndex, setDraggedQuestionIndex] = useState<number | null>(null);
   const [dragOverQuestionIndex, setDragOverQuestionIndex] = useState<number | null>(null);
-  const dragOverQuestionIndexRef = useRef<number | null>(null);
 
   const moveQuestion = (fromIndex: number, toIndex: number) => {
     const newQuestions = [...questions];
@@ -158,18 +136,18 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
 
   const handleDragOver = (e: React.DragEvent, index: number) => {
     e.preventDefault();
-    dragOverQuestionIndexRef.current = index;
     setDragOverQuestionIndex(index);
   };
 
   const handleDragEnd = () => {
-    const targetIndex = dragOverQuestionIndexRef.current;
-    if (draggedQuestionIndex !== null && targetIndex !== null) {
-      moveQuestion(draggedQuestionIndex, targetIndex);
-    }
     setDraggedQuestionIndex(null);
-    dragOverQuestionIndexRef.current = null;
     setDragOverQuestionIndex(null);
+  };
+
+  const handleDrop = (event: React.DragEvent, index: number) => {
+    event.preventDefault();
+    if (draggedQuestionIndex !== null) moveQuestion(draggedQuestionIndex, index);
+    handleDragEnd();
   };
 
   const addQuestion = () => {
@@ -190,7 +168,13 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
       if (field === 'type') {
         // When changing question type, create a new question of that type
         // while preserving the question text and explanation
-        const newQuestion = createEmptyQuestion(value as QuestionType);
+        const nextType = value as QuestionType;
+        if (nextType === q.type) return q;
+        questionTypesRef.current.set(`${q.id}:${q.type}`, q);
+        let newQuestion = questionTypesRef.current.get(`${q.id}:${nextType}`) ?? createEmptyQuestion(nextType);
+        if (isChoiceQuestion(q) && (nextType === 'SINGLE_CHOICE' || nextType === 'MULTIPLE_CHOICE') && !questionTypesRef.current.has(`${q.id}:${nextType}`)) {
+          newQuestion = { ...q, type: nextType, options: [...q.options], correctAnswers: nextType === 'SINGLE_CHOICE' ? q.correctAnswers.slice(0, 1) : [...q.correctAnswers] };
+        }
         return {
           ...newQuestion,
           id: q.id,
@@ -207,31 +191,13 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
   };
 
   const toggleCorrectAnswer = (questionIndex: number, optionIndex: number) => {
-    const newQuestions = [...questions];
-    const question = newQuestions[questionIndex];
-    if (!question) return;
-
-    // Ensure we are working with a choice question
-    if (!isChoiceQuestion(question)) return;
-
-    // Ensure correctAnswers is an array
-    if (!Array.isArray(question.correctAnswers)) {
-      question.correctAnswers = [];
-    }
-
-    if (question.type === 'SINGLE_CHOICE' || question.type === 'TRUE_FALSE') {
-      question.correctAnswers = [optionIndex];
-    } else {
-      const currentIndex = question.correctAnswers.indexOf(optionIndex);
-      if (currentIndex === -1) {
-        question.correctAnswers.push(optionIndex);
-      } else {
-        question.correctAnswers.splice(currentIndex, 1);
-      }
-      question.correctAnswers.sort();
-    }
-
-    setQuestions(newQuestions);
+    setQuestions(previous => previous.map((question, index) => {
+      if (index !== questionIndex || !isChoiceQuestion(question)) return question;
+      const correctAnswers = question.type !== 'MULTIPLE_CHOICE' ? [optionIndex]
+        : question.correctAnswers.includes(optionIndex) ? question.correctAnswers.filter(answer => answer !== optionIndex)
+          : [...question.correctAnswers, optionIndex].sort((a, b) => a - b);
+      return { ...question, correctAnswers };
+    }));
   };
 
   const isCorrectAnswer = (questionIndex: number, optionIndex: number) => {
@@ -241,35 +207,18 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
   };
 
   const addOption = (questionIndex: number) => {
-    const newQuestions = [...questions];
-    const question = newQuestions[questionIndex];
-    if (isChoiceQuestion(question)) {
-      question.options.push('');
-      setQuestions(newQuestions);
-    }
+    setQuestions(previous => previous.map((question, index) => index === questionIndex && isChoiceQuestion(question) && question.type !== 'TRUE_FALSE' && question.options.length < 6
+      ? { ...question, options: [...question.options, ''] } : question));
   };
 
   const removeOption = (questionIndex: number, optionIndex: number) => {
-    const newQuestions = [...questions];
-    const question = newQuestions[questionIndex];
-    if (isChoiceQuestion(question)) {
-      question.options = question.options.filter(
-        (_, i) => i !== optionIndex
-      );
-      if (question.correctAnswers.includes(optionIndex)) {
-        question.correctAnswers = question.correctAnswers.filter(answer => answer !== optionIndex);
-      }
-      setQuestions(newQuestions);
-    }
+    setQuestions(previous => previous.map((question, index) => index === questionIndex && isChoiceQuestion(question) && question.type !== 'TRUE_FALSE' && question.options.length > 2
+      ? { ...question, options: question.options.filter((_, option) => option !== optionIndex), correctAnswers: question.correctAnswers.filter(answer => answer !== optionIndex).map(answer => answer > optionIndex ? answer - 1 : answer) } : question));
   };
 
   const updateOption = (questionIndex: number, optionIndex: number, value: string) => {
-    const newQuestions = [...questions];
-    const question = newQuestions[questionIndex];
-    if (isChoiceQuestion(question)) {
-      question.options[optionIndex] = value;
-      setQuestions(newQuestions);
-    }
+    setQuestions(previous => previous.map((question, index) => index === questionIndex && isChoiceQuestion(question)
+      ? { ...question, options: question.options.map((option, optionNumber) => optionNumber === optionIndex ? value : option) } : question));
   };
 
   const moveQuestionUp = (index: number) => {
@@ -284,12 +233,16 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
     }
   };
 
-  const handleSave = () => {
-    onSave({
-      questions,
-      shuffleQuestions,
-      passingScore: parseInt(passingScore),
-    });
+  const handleSave = async () => {
+    if (isSaving || disabled) return;
+    const content = draft();
+    const error = getQuizValidationError(content);
+    setValidationError(error);
+    if (error) return;
+    setIsSaving(true);
+    try { await onSave(content); }
+    catch (error) { setValidationError(error instanceof Error ? error.message : 'Das Quiz konnte nicht gespeichert werden.'); }
+    finally { setIsSaving(false); }
   };
 
   const updateMatchingPair = (questionIndex: number, pairIndex: number, side: 'left' | 'right', value: string) => {
@@ -369,16 +322,14 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
     }));
   };
 
+  if (!initialQuiz) return <Alert variant="destructive"><AlertDescription>Die gespeicherten Quizdaten konnten nicht gelesen werden. Der vorhandene Inhalt bleibt erhalten.</AlertDescription></Alert>;
+
   return (
-    <div className="space-y-4">
-      <Tabs defaultValue="edit" className="w-full" onValueChange={(value) => {
-        if (value === "preview") {
-          handleSave();
-        }
-      }}>
+    <fieldset disabled={disabled || isSaving} className="min-w-0 space-y-4">
+      <Tabs defaultValue="edit" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="edit">Bearbeiten</TabsTrigger>
-          <TabsTrigger value="preview">Vorschau & Speichern</TabsTrigger>
+          <TabsTrigger value="preview">Vorschau</TabsTrigger>
         </TabsList>
 
         <TabsContent value="edit">
@@ -391,17 +342,17 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <Label htmlFor="shuffleQuestions" className="font-medium">Fragen mischen</Label>
+                <Label htmlFor={`${formId}-shuffle`} className="font-medium">Fragen mischen</Label>
                 <Switch
-                  id="shuffleQuestions"
+                  id={`${formId}-shuffle`}
                   checked={shuffleQuestions}
                   onCheckedChange={setShuffleQuestions}
                 />
               </div>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <Label htmlFor="passingScore" className="font-medium">Bestehensgrenze (%)</Label>
+                <Label htmlFor={`${formId}-passing-score`} className="font-medium">Bestehensgrenze (%)</Label>
                 <Input
-                  id="passingScore"
+                  id={`${formId}-passing-score`}
                   type="number"
                   min="0"
                   max="100"
@@ -418,18 +369,18 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
               <Card
                 key={question.id}
                 className={cn(
-                  "transition-colors duration-200 -none",
+                  "transition-colors duration-200",
                   draggedQuestionIndex === questionIndex && "opacity-50 scale-95",
                   "relative border-2",
                   draggedQuestionIndex !== null && dragOverQuestionIndex === questionIndex && "border-primary border-dashed"
                 )}
-                draggable
-                onDragStart={(e) => handleDragStart(e, questionIndex)}
                 onDragOver={(e) => handleDragOver(e, questionIndex)}
+                onDrop={(e) => handleDrop(e, questionIndex)}
                 onDragEnd={handleDragEnd}
               >
                 <div className="flex flex-wrap justify-end gap-2 px-4 pt-4">
                   <Button
+                    type="button"
                     variant="ghost"
                     size="icon"
                     aria-label={`Frage ${questionIndex + 1} nach oben verschieben`}
@@ -440,6 +391,7 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
                     <ArrowUp className="h-4 w-4" />
                   </Button>
                   <Button
+                    type="button"
                     variant="ghost"
                     size="icon"
                     aria-label={`Frage ${questionIndex + 1} nach unten verschieben`}
@@ -450,17 +402,18 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
                     <ArrowDown className="h-4 w-4" />
                   </Button>
                   <Button
+                    type="button"
                     variant="ghost"
                     size="icon"
                     aria-label={`Frage ${questionIndex + 1} löschen`}
                     onClick={() => removeQuestion(questionIndex)}
-                    className="hover:bg-red-100 text-red-500"
+                    className="text-destructive hover:bg-destructive/10"
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
 
-                <CardHeader className="cursor-move select-none">
+                <CardHeader className="cursor-move select-none" draggable={!disabled && !isSaving} onDragStart={(event) => handleDragStart(event, questionIndex)}>
                   <div className="flex items-center gap-3">
                     <div className="flex items-center gap-2 bg-muted rounded-lg px-3 py-1">
                       <GripVertical className="h-5 w-5 text-muted-foreground" />
@@ -487,7 +440,7 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
                       value={question.type}
                       onValueChange={(value) => updateQuestion(questionIndex, 'type', value)}
                     >
-                      <SelectTrigger className="w-full">
+                      <SelectTrigger aria-label={`Fragetyp für Frage ${questionIndex + 1}`} className="w-full">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -506,12 +459,14 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
                       {question.pairs.map((pair, pairIndex) => (
                         <div key={pairIndex} className="flex items-center gap-3">
                           <Input
+                            aria-label={`Frage ${questionIndex + 1}, Paar ${pairIndex + 1}, linker Teil`}
                             value={pair.left}
                             onChange={(e) => updateMatchingPair(questionIndex, pairIndex, 'left', e.target.value)}
                             placeholder="Linker Teil"
                             className="flex-1"
                           />
                           <Input
+                            aria-label={`Frage ${questionIndex + 1}, Paar ${pairIndex + 1}, rechter Teil`}
                             value={pair.right}
                             onChange={(e) => updateMatchingPair(questionIndex, pairIndex, 'right', e.target.value)}
                             placeholder="Rechter Teil"
@@ -519,10 +474,12 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
                           />
                           {question.pairs.length > 2 && (
                             <Button
+                              type="button"
                               variant="ghost"
                               size="sm"
+                              aria-label={`Paar ${pairIndex + 1} entfernen`}
                               onClick={() => removeMatchingPair(questionIndex, pairIndex)}
-                              className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                              className="text-destructive hover:text-destructive hover:bg-destructive/10"
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -531,6 +488,7 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
                       ))}
                       {question.pairs.length < 6 && (
                         <Button
+                          type="button"
                           variant="outline"
                           size="sm"
                           onClick={() => addMatchingPair(questionIndex)}
@@ -547,6 +505,7 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
                     <div className="space-y-3">
                       <Label className="text-base font-medium">Richtige Antwort</Label>
                       <Input
+                        aria-label={`Richtige Antwort für Frage ${questionIndex + 1}`}
                         value={question.correctAnswer}
                         onChange={(e) => updateTextInputAnswer(questionIndex, e.target.value)}
                         placeholder="Richtige Antwort"
@@ -571,6 +530,7 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
                     <div className="space-y-3">
                       <Label className="text-base font-medium">Text mit Lücken</Label>
                       <Textarea
+                        aria-label={`Lückentext für Frage ${questionIndex + 1}`}
                         value={question.text}
                         onChange={(e) => updateQuestion(questionIndex, 'text', e.target.value)}
                         placeholder="Text mit [Lücken] in eckigen Klammern"
@@ -583,6 +543,7 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
                             {answerIndex + 1}
                           </div>
                           <Input
+                            aria-label={`Frage ${questionIndex + 1}, Antwort für Lücke ${answerIndex + 1}`}
                             value={answer}
                             onChange={(e) => updateFillBlanksAnswer(questionIndex, answerIndex, e.target.value)}
                             placeholder={`Antwort für Lücke ${answerIndex + 1}`}
@@ -590,10 +551,12 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
                           />
                           {question.answers.length > 1 && (
                             <Button
+                              type="button"
                               variant="ghost"
                               size="sm"
+                              aria-label={`Lücke ${answerIndex + 1} entfernen`}
                               onClick={() => removeFillBlanksAnswer(questionIndex, answerIndex)}
-                              className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                              className="text-destructive hover:text-destructive hover:bg-destructive/10"
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -601,6 +564,7 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
                         </div>
                       ))}
                       <Button
+                        type="button"
                         variant="outline"
                         size="sm"
                         onClick={() => addFillBlanksAnswer(questionIndex)}
@@ -622,21 +586,25 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
                               {String.fromCharCode(65 + optionIndex)}
                             </div>
                             <Input
+                              aria-label={`Frage ${questionIndex + 1}, Option ${optionIndex + 1}`}
                               value={option}
                               onChange={(e) => updateOption(questionIndex, optionIndex, e.target.value)}
                               placeholder={`Option ${optionIndex + 1}`}
                               className={cn(
                                 "flex-1",
-                                isCorrectAnswer(questionIndex, optionIndex) && "border-green-500 ring-1 ring-green-500"
+                                isCorrectAnswer(questionIndex, optionIndex) && "border-primary ring-1 ring-primary"
                               )}
                             />
                             <Button
+                              type="button"
                               variant={isCorrectAnswer(questionIndex, optionIndex) ? "default" : "outline"}
                               size="sm"
+                              aria-label={`Frage ${questionIndex + 1}, Option ${optionIndex + 1} als richtig markieren`}
+                              aria-pressed={isCorrectAnswer(questionIndex, optionIndex)}
                               onClick={() => toggleCorrectAnswer(questionIndex, optionIndex)}
                               className={cn(
                                 "min-w-[40px]",
-                                isCorrectAnswer(questionIndex, optionIndex) && "bg-green-500 hover:bg-green-600"
+                                isCorrectAnswer(questionIndex, optionIndex) && "bg-primary hover:bg-primary/90"
                               )}
                             >
                               {question.type === 'MULTIPLE_CHOICE' ? (
@@ -647,10 +615,12 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
                             </Button>
                             {question.options.length > 2 && question.type !== 'TRUE_FALSE' && (
                               <Button
+                                type="button"
                                 variant="ghost"
                                 size="sm"
+                                aria-label={`Frage ${questionIndex + 1}, Option ${optionIndex + 1} entfernen`}
                                 onClick={() => removeOption(questionIndex, optionIndex)}
-                                className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
                               >
                                 <Trash2 className="h-4 w-4" />
                               </Button>
@@ -658,8 +628,9 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
                           </div>
                         </div>
                       ))}
-                      {question.options.length < 6 && (
+                      {question.options.length < 6 && question.type !== 'TRUE_FALSE' && (
                         <Button
+                          type="button"
                           variant="outline"
                           size="sm"
                           onClick={() => addOption(questionIndex)}
@@ -675,7 +646,8 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
                   <div className="space-y-2">
                     <Label className="text-base font-medium">Erklärung (optional)</Label>
                     <Textarea
-                      value={question.explanation}
+                      aria-label={`Erklärung für Frage ${questionIndex + 1}`}
+                      value={question.explanation ?? ''}
                       onChange={(e) => updateQuestion(questionIndex, 'explanation', e.target.value)}
                       placeholder="Antwort erläutern"
                       className="min-h-[100px] resize-y"
@@ -687,6 +659,8 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
           </div>
 
           <Button
+
+            type="button"
             onClick={addQuestion}
             className="mt-8 w-full"
             variant="outline"
@@ -761,7 +735,7 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
                           className={cn(
                             "p-4 rounded-lg border transition-colors flex items-center gap-3",
                             isCorrectAnswer(index, optIndex)
-                              ? "border-green-500 bg-green-50"
+                              ? "border-primary bg-primary/5"
                               : "border-border hover:border-border"
                           )}
                         >
@@ -770,14 +744,14 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
                           </div>
                           <div className="flex-1">{option}</div>
                           {isCorrectAnswer(index, optIndex) && (
-                            <Badge className="bg-green-500">Richtig</Badge>
+                            <Badge variant="outline">Richtig</Badge>
                           )}
                         </div>
                       ))}
                     </div>
                   )}
                   {question.explanation && (
-                    <Alert className="mt-4 bg-blue-50 text-blue-800 border-blue-200">
+                    <Alert className="mt-4">
                       <AlertDescription>{question.explanation}</AlertDescription>
                     </Alert>
                   )}
@@ -787,6 +761,8 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
           </Card>
         </TabsContent>
       </Tabs>
-    </div>
+      {validationError && <p role="alert" className="text-sm text-destructive">{validationError}</p>}
+      {showSaveButton && <Button type="button" onClick={handleSave} disabled={disabled || isSaving}>{isSaving ? 'Quiz wird gespeichert…' : 'Quiz speichern'}</Button>}
+    </fieldset>
   );
 }

@@ -69,8 +69,8 @@ export function CourseMainContent({
       {selectedMainContent ? (
         <div className="p-6">
           <div className="bg-card rounded-lg border border-border">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-2xl font-bold text-foreground">{selectedMainContent.title}</h3>
+            <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+              <h3 className="min-w-0 break-words text-2xl font-bold text-foreground">{selectedMainContent.title}</h3>
               <div className="flex space-x-2">
                 <Button
                   variant="ghost"
@@ -92,11 +92,11 @@ export function CourseMainContent({
             </div>
 
             {/* Content Type Selection when adding new content */}
-            {isAddingSubContent && (
+            {isAddingSubContent && !isSelectingContentType && (
               <div className="mt-4 mb-6 w-full">
                 <h4 className="text-lg font-semibold mb-4">Inhaltstyp auswählen</h4>
                 <ContentTypeSelector onSelectType={(type) => {
-                  setNewContent({ ...newContent, type });
+                  setNewContent({ ...newContent, type, content: type === 'QUIZ' ? { questions: [], shuffleQuestions: false, passingScore: 70 } : '' });
                   setIsSelectingContentType(true);
                 }} />
               </div>
@@ -106,6 +106,7 @@ export function CourseMainContent({
             {isAddingSubContent && isSelectingContentType && (
               <div className="mt-4">
                 <SubContentForm
+                  key={`${selectedMainContent.id}-new`}
                   content={newContent}
                   onContentChange={setNewContent}
                   onSubmit={async (e) => {
@@ -127,7 +128,7 @@ export function CourseMainContent({
               <div className="mt-4 mb-6 w-full">
                 <h4 className="text-lg font-semibold mb-4">Inhalt erstellen</h4>
                 <ContentEditor
-                  content={newContent}
+                  content={{ ...newContent, title: newContent.title || selectedMainContent.title }}
                   onSave={async (content) => {
                     try {
                       // If we're editing a subtopic that already exists
@@ -135,7 +136,7 @@ export function CourseMainContent({
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                          title: selectedMainContent.title,
+                          title: content.title.trim(),
                           type: content.type,
                           content: content.content,
                           order: selectedMainContent.order
@@ -144,7 +145,7 @@ export function CourseMainContent({
 
                       if (!response.ok) {
                         const errorData = await response.json();
-                        throw new Error(errorData.message || 'Failed to save content');
+                        throw new Error(errorData.error || errorData.message || 'Der Inhalt konnte nicht gespeichert werden.');
                       }
 
                       const savedContent = await response.json();
@@ -172,6 +173,7 @@ export function CourseMainContent({
                         type: 'error',
                         message: error instanceof Error ? error.message : 'Fehler beim Speichern des Inhalts.'
                       });
+                      throw error;
                     }
                   }}
                   onCancel={() => {
@@ -195,7 +197,7 @@ export function CourseMainContent({
                       <p className="text-muted-foreground mb-4">Noch keine Inhalte vorhanden</p>
                       <Button
                         variant="outline"
-                        onClick={() => setIsAddingSubContent(selectedMainContent.id)}
+                        onClick={() => onEditContent(selectedMainContent)}
                         className="flex items-center space-x-2"
                       >
                         <PlusCircle className="h-4 w-4" />

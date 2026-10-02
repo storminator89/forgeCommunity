@@ -1,139 +1,59 @@
-import { useState } from 'react'
-import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { FileText, Video, Music, Box, HelpCircle } from 'lucide-react'
-import { Editor } from '@/components/Editor'
-import { QuizEditor } from './QuizEditor'
-import { QuizContent } from './types'
+'use client';
+
+import { useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Editor } from '@/components/Editor';
+import { QuizEditor } from './QuizEditor';
+import { QuizContent } from './types';
+import { ContentTypeSelector } from './ContentTypeSelector';
+import { ContentType, EMPTY_QUIZ, draftString, getContentValidationError, serialiseContent } from './content-form-utils';
 
 interface ContentFormProps {
-  onSubmit: (type: 'TEXT' | 'VIDEO' | 'AUDIO' | 'H5P' | 'QUIZ', content: string) => Promise<void>
-  mainContentId: string
+  onSubmit: (type: ContentType, content: string) => Promise<void>;
+  mainContentId: string;
 }
 
-export function ContentForm({ onSubmit, mainContentId }: ContentFormProps) {
-  const [selectedType, setSelectedType] = useState<'TEXT' | 'VIDEO' | 'AUDIO' | 'H5P' | 'QUIZ' | null>(null)
-  const [content, setContent] = useState('')
-  const [isSubmitting, setIsSubmitting] = useState(false)
+export function ContentForm(props: ContentFormProps) {
+  return <ContentFormDraft key={props.mainContentId} {...props} />;
+}
 
-  const handleSubmit = async () => {
-    if (!selectedType) return
-    setIsSubmitting(true)
+function ContentFormDraft({ onSubmit }: ContentFormProps) {
+  const [selectedType, setSelectedType] = useState<ContentType | null>(null);
+  const [drafts, setDrafts] = useState<Partial<Record<ContentType, string | QuizContent>>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const saving = useRef(false);
+  const content = selectedType ? drafts[selectedType] ?? (selectedType === 'QUIZ' ? EMPTY_QUIZ : '') : '';
+  const update = (value: string | QuizContent) => { if (selectedType) setDrafts(previous => ({ ...previous, [selectedType]: value })); setError(null); };
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!selectedType || saving.current) return;
+    const validation = getContentValidationError(selectedType, content);
+    if (validation) { setError(validation); return; }
+    saving.current = true;
+    setIsSubmitting(true);
+    setError(null);
     try {
-      await onSubmit(selectedType, content)
-      setSelectedType(null)
-      setContent('')
-    } catch (error) {
-      console.error('Error submitting content:', error)
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  const handleQuizSubmit = async (quizContent: QuizContent) => {
-    setIsSubmitting(true)
-    try {
-      await onSubmit('QUIZ', JSON.stringify(quizContent))
-      setSelectedType(null)
-      setContent('')
-    } catch (error) {
-      console.error('Error submitting quiz:', error)
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  if (!selectedType) {
-    return (
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <Button
-          variant="outline"
-          className="flex flex-col items-center justify-center h-32 space-y-2"
-          onClick={() => setSelectedType('TEXT')}
-        >
-          <FileText className="h-8 w-8" />
-          <span>Text</span>
-        </Button>
-        <Button
-          variant="outline"
-          className="flex flex-col items-center justify-center h-32 space-y-2"
-          onClick={() => setSelectedType('VIDEO')}
-        >
-          <Video className="h-8 w-8" />
-          <span>Video</span>
-        </Button>
-        <Button
-          variant="outline"
-          className="flex flex-col items-center justify-center h-32 space-y-2"
-          onClick={() => setSelectedType('AUDIO')}
-        >
-          <Music className="h-8 w-8" />
-          <span>Audio</span>
-        </Button>
-        <Button
-          variant="outline"
-          className="flex flex-col items-center justify-center h-32 space-y-2"
-          onClick={() => setSelectedType('H5P')}
-        >
-          <Box className="h-8 w-8" />
-          <span>H5P</span>
-        </Button>
-        <Button
-          variant="outline"
-          className="flex flex-col items-center justify-center h-32 space-y-2"
-          onClick={() => setSelectedType('QUIZ')}
-        >
-          <HelpCircle className="h-8 w-8" />
-          <span>Quiz</span>
-        </Button>
-      </div>
-    )
-  }
+      await onSubmit(selectedType, serialiseContent(content));
+      setSelectedType(null);
+      setDrafts({});
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Der Inhalt konnte nicht gespeichert werden. Dein Entwurf bleibt erhalten.');
+    } finally { saving.current = false; setIsSubmitting(false); }
+  };
 
   return (
-    <Card className="p-6">
-      <div className="space-y-4">
-        {selectedType === 'QUIZ' ? (
-          <QuizEditor onSave={handleQuizSubmit} />
-        ) : selectedType === 'TEXT' ? (
-          <Editor content={content} onChange={setContent} />
-        ) : (
-          <Input
-            type="text"
-            placeholder={
-              selectedType === 'VIDEO'
-                ? 'YouTube Video URL'
-                : selectedType === 'AUDIO'
-                ? 'Audio URL'
-                : 'H5P Embed Code'
-            }
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-          />
-        )}
-
-        {selectedType !== 'QUIZ' && (
-          <div className="flex justify-end space-x-2">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setSelectedType(null)
-                setContent('')
-              }}
-              disabled={isSubmitting}
-            >
-              Abbrechen
-            </Button>
-            <Button
-              onClick={handleSubmit}
-              disabled={isSubmitting || !content}
-            >
-              {isSubmitting ? 'Wird gespeichert...' : 'Speichern'}
-            </Button>
-          </div>
-        )}
-      </div>
-    </Card>
-  )
+    <form onSubmit={handleSubmit} className="space-y-4" aria-label="Inhalt hinzufügen" aria-busy={isSubmitting}>
+      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+      <ContentTypeSelector selectedType={selectedType ?? undefined} disabled={isSubmitting} onSelectType={type => { setSelectedType(type); setError(null); }} />
+      {selectedType && <fieldset disabled={isSubmitting} className="min-w-0 space-y-4">
+        {selectedType === 'QUIZ' ? <QuizEditor initialContent={content as QuizContent} onSave={update} onChange={update} showSaveButton={false} disabled={isSubmitting} /> : selectedType === 'TEXT' ? <Editor content={draftString(content)} onChange={update} readOnly={isSubmitting} /> : <div className="space-y-2"><Label htmlFor="new-content-source">{selectedType === 'VIDEO' ? 'Video-URL' : selectedType === 'AUDIO' ? 'Audio-URL' : 'H5P-URL, ID oder Einbettungscode'}</Label>{selectedType === 'H5P' ? <Textarea id="new-content-source" value={draftString(content)} onChange={event => update(event.target.value)} /> : <Input id="new-content-source" inputMode="url" value={draftString(content)} onChange={event => update(event.target.value)} />}</div>}
+        <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="outline" onClick={() => { setSelectedType(null); setDrafts({}); setError(null); }}>Abbrechen</Button><Button type="submit" disabled={isSubmitting || !draftString(content).trim()}>{isSubmitting ? 'Wird gespeichert…' : 'Speichern'}</Button></div>
+      </fieldset>}
+    </form>
+  );
 }

@@ -4,10 +4,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../../auth/[...nextauth]/options";
-import { sanitizeCourseTextContentServer, sanitizeTextServer } from '@/lib/server/sanitize-html';
+import { sanitizeTextServer } from '@/lib/server/sanitize-html';
 import { groupCourseContents } from '@/lib/server/group-course-contents';
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
-import { Prisma } from '@prisma/client';
+import { assertParent, canEdit, contentTransaction, ContentMutationError, normalizeOrder, presentContent, prepareContent, siblings, validateContentFields } from './content-mutations';
 
 // GET-Methode zum Abrufen der Kursinhalte
 export async function GET(
@@ -51,10 +51,10 @@ export async function GET(
 
     const contents = await prisma.courseContent.findMany({
       where: { courseId: courseId },
-      orderBy: { order: 'asc' },
+      orderBy: [{ order: 'asc' }, { id: 'asc' }],
     });
 
-    return NextResponse.json(groupCourseContents(contents));
+    return NextResponse.json(groupCourseContents(contents.map(presentContent)));
   } catch (error) {
     console.error('Failed to fetch course contents:', error);
     return NextResponse.json({ error: 'Failed to fetch course contents' }, { status: 500 });
@@ -88,45 +88,32 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    const { title, type, content, order, parentId } = await readJsonObject(request);
-    if (parentId !== undefined && parentId !== null && typeof parentId !== 'string') {
-      return NextResponse.json({ error: 'Invalid parent content' }, { status: 400 });
-    }
-
-    if (typeof title !== 'string' || !title.trim() || (content !== undefined && typeof content !== 'string') ||
-        (type !== undefined && type !== null && !['TEXT', 'VIDEO', 'AUDIO', 'H5P'].includes(String(type))) ||
-        (order !== undefined && (!Number.isSafeInteger(order) || Number(order) < 0))) {
-      return NextResponse.json({ error: 'Invalid content fields' }, { status: 400 });
-    }
-
-    const sanitizedTitle = sanitizeTextServer(title);
-    const sanitizedContent =
-      type === 'TEXT' || !type
-        ? sanitizeCourseTextContentServer(content as string | undefined)
-        : sanitizeTextServer(content as string | undefined);
-
-    // If order is not provided, find the next available order number
-    const newContent = await prisma.$transaction(async (tx) => {
-      if (parentId) {
-        const parentContent = await tx.courseContent.findUnique({
-          where: { id: parentId }, select: { courseId: true },
-        });
-        if (!parentContent || parentContent.courseId !== courseId) throw new Error('INVALID_PARENT');
-      }
-      const last = typeof order === 'number' ? null : await tx.courseContent.findFirst({
-        where: { courseId, parentId: typeof parentId === 'string' && parentId ? parentId : null },
-        orderBy: { order: 'desc' }, select: { order: true },
-      });
-      return tx.courseContent.create({ data: {
-        title: sanitizedTitle, type: (type || 'TEXT') as Prisma.CourseContentCreateInput['type'],
-        content: sanitizedContent, order: typeof order === 'number' ? order : (last?.order ?? 0) + 1,
-        parentId: typeof parentId === 'string' && parentId ? parentId : null, courseId,
+    const body = await readJsonObject(request);
+    validateContentFields(body, true);
+    const { title, type, content, order } = body;
+    const parentId = typeof body.parentId === 'string' ? body.parentId : null;
+    const effectiveType = typeof type === 'string' ? type : 'TEXT';
+    const sanitizedContent = prepareContent(typeof content === 'string' ? content : '', effectiveType);
+    const newContent = await contentTransaction(async (tx) => {
+      const currentCourse = await tx.course.findUnique({ where: { id: courseId }, select: { instructorId: true } });
+      if (!currentCourse) throw new ContentMutationError('Course not found', 404);
+      canEdit(currentCourse.instructorId, session.user);
+      await assertParent(tx, courseId, parentId);
+      const currentSiblings = await siblings(tx, courseId, parentId);
+      const insertionIndex = typeof order === 'number' ? Math.max(0, Math.min(order - 1, currentSiblings.length)) : currentSiblings.length;
+      const created = await tx.courseContent.create({ data: {
+        title: sanitizeTextServer(title as string), type: effectiveType === 'QUIZ' ? 'TEXT' : effectiveType as 'TEXT' | 'VIDEO' | 'AUDIO' | 'H5P',
+        content: sanitizedContent, order: insertionIndex + 1, parentId, courseId,
       } });
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+      const ids = currentSiblings.map(item => item.id);
+      ids.splice(insertionIndex, 0, created.id);
+      await normalizeOrder(tx, ids);
+      return presentContent({ ...created, order: insertionIndex + 1 });
+    });
 
     return NextResponse.json(newContent, { status: 201 });
   } catch (error) {
-    if (error instanceof Error && error.message === 'INVALID_PARENT') return NextResponse.json({ error: 'Invalid parent content' }, { status: 400 });
+    if (error instanceof ContentMutationError) return NextResponse.json({ error: error.message }, { status: error.status });
     const inputError = requestErrorResponse(error);
     if (inputError) return inputError;
     console.error('Failed to create course content:', error);
