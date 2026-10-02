@@ -134,3 +134,8 @@ public/images/uploads/*
 *.db-wal
 *.sqlite
 *.sqlite3
+
+# Generated self-hosted H5P player
+/public/h5p-runtime/
+# Disposable HTTP smoke credentials, never part of an application release.
+h5p-smoke-fixture.json

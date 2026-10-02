@@ -36,6 +36,8 @@
 - [Contact](#contact)
 - [Acknowledgments](#acknowledgments)
 
+H5P-Pakete im Kurs verwenden: [Import, Player und Docker-Speicherung](docs/H5P.md).
+
 ## 🎯 About
 
 ForgeCommunity is a comprehensive platform designed to foster learning, collaboration, and community engagement. It provides a space for users to access courses, participate in events, and connect with other community members.

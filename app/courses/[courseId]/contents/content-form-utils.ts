@@ -34,7 +34,11 @@ export function getH5PEmbedUrl(value: unknown): string | null {
       return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : entity;
     })
     : iframeSource;
-  return getSafeNavigationUrl(decodedSource);
+  const safe = getSafeNavigationUrl(decodedSource);
+  if (!safe || !safe.startsWith('/')) return safe;
+  const path = new URL(safe, 'https://h5p.invalid').pathname;
+  const local = path.match(/^\/h5p\/embed\/([A-Za-z0-9_-]{1,80})\/?$/);
+  return local ? `/h5p/embed/${local[1]}` : null;
 }
 
 export function getContentValidationError(type: ContentType, value: CourseContent['content']): string | null {

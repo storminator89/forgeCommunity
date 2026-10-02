@@ -46,6 +46,10 @@ const nextConfig = {
   async headers() {
     return [
       {
+        source: '/h5p-runtime/:path*',
+        headers: [{ key: 'Access-Control-Allow-Origin', value: '*' }],
+      },
+      {
         source: '/:path*',
         headers: securityHeaders,
       },

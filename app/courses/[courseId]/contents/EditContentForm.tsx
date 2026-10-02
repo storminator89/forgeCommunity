@@ -1,5 +1,6 @@
 'use client';
 
+import { H5PSourceField } from '@/components/h5p/H5PSourceField';
 import { useId, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,6 +28,7 @@ export function EditContentForm({ content: initialContent, onSubmit, onContentCh
   const [content, setContent] = useState<CourseContent['content']>(initialContent.content);
   const [htmlMode, setHtmlMode] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isH5PBusy, setIsH5PBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const saving = useRef(false);
   const typeDrafts = useRef<Partial<Record<ContentType, CourseContent['content']>>>({ [initialType]: initialContent.content });
@@ -51,7 +53,7 @@ export function EditContentForm({ content: initialContent, onSubmit, onContentCh
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (saving.current) return;
+    if (saving.current || isH5PBusy) return;
     const validationError = !title.trim() ? 'Gib einen Titel ein.' : getContentValidationError(type, content);
     if (validationError) { setError(validationError); return; }
     saving.current = true;
@@ -69,19 +71,19 @@ export function EditContentForm({ content: initialContent, onSubmit, onContentCh
 
   const quiz = type === 'QUIZ' ? quizEditorDraft(content) : null;
   return (
-    <form onSubmit={handleSubmit} className="space-y-5" aria-label="Inhalt bearbeiten" aria-busy={isSubmitting}>
+    <form onSubmit={handleSubmit} className="space-y-5" aria-label="Inhalt bearbeiten" aria-busy={isSubmitting || isH5PBusy}>
       {error && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{error}</p>}
-      <fieldset disabled={isSubmitting} className="space-y-5 min-w-0">
+      <fieldset disabled={isSubmitting || isH5PBusy} className="space-y-5 min-w-0">
         <div className="space-y-2">
           <Label htmlFor={`${fieldId}-title`}>Titel</Label>
           <Input id={`${fieldId}-title`} value={title} required onChange={event => { setTitle(event.target.value); onContentChange({ title: event.target.value }); setError(null); }} />
         </div>
         <div className="space-y-2">
           <Label>Inhaltstyp</Label>
-          <ContentTypeSelector selectedType={type} onSelectType={selectType} disabled={isSubmitting} />
+          <ContentTypeSelector selectedType={type} onSelectType={selectType} disabled={isSubmitting || isH5PBusy} />
         </div>
         {type === 'QUIZ' ? quiz ? (
-          <QuizEditor key={`${initialContent.id}-${type}`} initialContent={quiz} onSave={(value: QuizContent) => updateContent(value)} onChange={updateContent} showSaveButton={false} disabled={isSubmitting} />
+          <QuizEditor key={`${initialContent.id}-${type}`} initialContent={quiz} onSave={(value: QuizContent) => updateContent(value)} onChange={updateContent} showSaveButton={false} disabled={isSubmitting || isH5PBusy} />
         ) : (
           <div className="space-y-2">
             <p role="alert" className="text-sm text-destructive">Die gespeicherten Quiz-Daten sind ungültig. Der ursprüngliche Inhalt bleibt erhalten.</p>
@@ -96,16 +98,18 @@ export function EditContentForm({ content: initialContent, onSubmit, onContentCh
             </div>
             {htmlMode ? <Textarea id={`${fieldId}-html`} value={draftString(content)} onChange={event => updateContent(event.target.value)} className="min-h-64 font-mono" /> : <div role="group" aria-labelledby={`${fieldId}-text-label`}><Editor content={draftString(content)} onChange={updateContent} readOnly={isSubmitting} className="min-h-56" /></div>}
           </div>
+        ) : type === 'H5P' ? (
+          <H5PSourceField id={`${fieldId}-source`} value={draftString(content)} onChange={updateContent} disabled={isSubmitting || isH5PBusy} onBusyChange={setIsH5PBusy} />
         ) : (
           <div className="space-y-2">
-            <Label htmlFor={`${fieldId}-source`}>{type === 'VIDEO' ? 'Video-URL' : type === 'AUDIO' ? 'Audio-URL' : 'H5P-URL, ID oder Einbettungscode'}</Label>
-            {type === 'H5P' ? <Textarea id={`${fieldId}-source`} value={draftString(content)} onChange={event => updateContent(event.target.value)} placeholder="https://…/embed/…" /> : <Input id={`${fieldId}-source`} inputMode="url" value={draftString(content)} onChange={event => updateContent(event.target.value)} placeholder={type === 'VIDEO' ? 'https://www.youtube.com/watch?v=…' : '/uploads/audio.mp3'} />}
+            <Label htmlFor={`${fieldId}-source`}>{type === 'VIDEO' ? 'Video-URL' : 'Audio-URL'}</Label>
+            <Input id={`${fieldId}-source`} inputMode="url" value={draftString(content)} onChange={event => updateContent(event.target.value)} placeholder={type === 'VIDEO' ? 'https://www.youtube.com/watch?v=…' : '/uploads/audio.mp3'} />
           </div>
         )}
       </fieldset>
       <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
-        <Button type="button" variant="outline" disabled={isSubmitting} onClick={onCancel}>Abbrechen</Button>
-        <Button type="submit" disabled={isSubmitting || !title.trim()}>{isSubmitting ? 'Wird gespeichert…' : 'Speichern'}</Button>
+        <Button type="button" variant="outline" disabled={isSubmitting || isH5PBusy} onClick={onCancel}>Abbrechen</Button>
+        <Button type="submit" disabled={isSubmitting || isH5PBusy || !title.trim()}>{isSubmitting ? 'Wird gespeichert…' : 'Speichern'}</Button>
       </div>
     </form>
   );

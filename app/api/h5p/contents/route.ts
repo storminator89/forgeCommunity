@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    return NextResponse.json(h5pContents);
+    return NextResponse.json(h5pContents.map(content => ({ ...content, embedUrl: `/h5p/embed/${content.id}` })), { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     console.error('Failed to fetch H5P contents:', error);
     return NextResponse.json({ error: 'Failed to fetch H5P contents' }, { status: 500 });

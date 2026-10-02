@@ -86,6 +86,8 @@ it('supports safe H5P IDs, URLs and legacy iframe snippets while rejecting execu
   expect(getH5PEmbedUrl('<iframe src="https://h5p.example.org/embed/1" allowfullscreen></iframe>')).toBe('https://h5p.example.org/embed/1');
   expect(getH5PEmbedUrl('<iframe src="javascript:alert(1)"></iframe>')).toBeNull();
   expect(getH5PEmbedUrl('//evil.example/embed')).toBeNull();
+  expect(getH5PEmbedUrl('/api/admin/users')).toBeNull();
+  expect(getH5PEmbedUrl('/h5p/embed/content_123?unused=1')).toBe('/h5p/embed/content_123');
   expect(getH5PEmbedUrl('<iframe src="https://h5p.example.org/embed/1?a=1&amp;b=2"></iframe>')).toBe('https://h5p.example.org/embed/1?a=1&b=2');
   expect(getH5PEmbedUrl('<iframe src="&#106;avascript:alert(1)"></iframe>')).toBeNull();
 });

@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../../../../auth/[...nextauth]/options';
 import { sanitizeTextServer } from '@/lib/server/sanitize-html';
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
+import { assertCanAttachH5P } from '@/lib/server/h5p-access';
+import { H5PValidationError } from '@/lib/server/h5p-archive';
 import { assertParent, canEdit, contentTransaction, ContentMutationError, normalizeOrder, presentContent, prepareContent, siblings, validateContentFields } from '../content-mutations';
 
 export async function DELETE(request: NextRequest, props: { params: Promise<{ courseId: string; contentId: string }> }) {
@@ -59,6 +61,7 @@ export async function PUT(request: NextRequest, props: { params: Promise<{ cours
       const effectiveType = body.type === undefined ? current.type : body.type as string | null;
       const prepared = body.content !== undefined ? prepareContent(body.content as string, effectiveType) :
         body.type !== undefined ? prepareContent(current.content, effectiveType) : undefined;
+      if (effectiveType === 'H5P' && prepared && (current.type !== 'H5P' || prepared !== current.content)) await assertCanAttachH5P(session.user.id, session.user.role, prepared, request.nextUrl.origin, tx);
       const data = {
         ...(body.title !== undefined && { title: sanitizeTextServer(body.title as string) }),
         ...(body.type !== undefined && { type: effectiveType === 'QUIZ' ? 'TEXT' as const : effectiveType as 'TEXT' | 'VIDEO' | 'AUDIO' | 'H5P' | null }),
@@ -84,6 +87,7 @@ export async function PUT(request: NextRequest, props: { params: Promise<{ cours
   } catch (error) {
     if (error instanceof ContentMutationError) return NextResponse.json({ error: error.message }, { status: error.status });
     const inputError = requestErrorResponse(error);
+    if (error instanceof H5PValidationError) return NextResponse.json({ error: error.message }, { status: error.status });
     if (inputError) return inputError;
     console.error('Error updating content:', error);
     return NextResponse.json({ error: 'Failed to update content' }, { status: 500 });
