@@ -1,5 +1,7 @@
 "use client";
 
+import { PageIntro } from '@/components/page-intro';
+import { AppShell, AppHeader } from '@/components/app-shell';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Sidebar } from "@/components/Sidebar";
 import { UserNav } from "@/components/user-nav";
@@ -104,9 +106,9 @@ const SafeHTML = ({ html }: { html: string }) => {
   return <span className="inline">{sanitizeTextPreview(html, 240)}</span>;
 };
 
-export default function SearchPageClient() {
+export default function SearchPageClient({ initialQuery = '' }: { initialQuery?: string }) {
   const { toast } = useToast();
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(initialQuery);
   const [activeTab, setActiveTab] = useState('all');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -216,7 +218,7 @@ export default function SearchPageClient() {
     switch (result.type) {
       case 'course':
         return (
-          <div className="flex space-x-4 text-sm text-gray-500 dark:text-gray-400">
+          <div className="flex space-x-4 text-sm text-muted-foreground">
             <span className="flex items-center">
               <Users className="h-4 w-4 mr-1" />
               {result.stats!.enrollments} / {result.stats!.maxStudents || '∞'} Teilnehmer
@@ -232,7 +234,7 @@ export default function SearchPageClient() {
 
       case 'event':
         return (
-          <div className="flex space-x-4 text-sm text-gray-500 dark:text-gray-400">
+          <div className="flex space-x-4 text-sm text-muted-foreground">
             <span className="flex items-center">
               <Users className="h-4 w-4 mr-1" />
               {result.stats!.attendees} / {result.stats!.maxAttendees || '∞'} Teilnehmer
@@ -248,7 +250,7 @@ export default function SearchPageClient() {
 
       case 'resource':
         return (
-          <div className="flex space-x-4 text-sm text-gray-500 dark:text-gray-400">
+          <div className="flex space-x-4 text-sm text-muted-foreground">
             {result.resourceType && (
               <span className="flex items-center capitalize">
                 <Tag className="h-4 w-4 mr-1" />
@@ -267,7 +269,7 @@ export default function SearchPageClient() {
       case 'member':
         return (
           <div className="space-y-2">
-            <div className="flex space-x-4 text-sm text-gray-500 dark:text-gray-400">
+            <div className="flex space-x-4 text-sm text-muted-foreground">
               <span className="flex items-center">
                 <Users className="h-4 w-4 mr-1" />
                 {result.stats!.followers} Follower
@@ -287,7 +289,7 @@ export default function SearchPageClient() {
                   <div key={index} className="flex items-center space-x-2">
                     <span className="text-sm">{skill.name}</span>
                     <Progress value={skill.level} className="h-2 w-24" />
-                    <span className="text-xs text-gray-500">
+                    <span className="text-xs text-muted-foreground">
                       {skill.endorsements} Endorsements
                     </span>
                   </div>
@@ -299,7 +301,7 @@ export default function SearchPageClient() {
 
       case 'post':
         return (
-          <div className="flex space-x-4 text-sm text-gray-500 dark:text-gray-400">
+          <div className="flex space-x-4 text-sm text-muted-foreground">
             <span className="flex items-center">
               <ThumbsUp className="h-4 w-4 mr-1" />
               {result.stats!.likes}
@@ -352,24 +354,25 @@ export default function SearchPageClient() {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+    <AppShell>
       <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="bg-white dark:bg-gray-800 shadow-md z-10">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <AppHeader>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-            <h2 className="text-2xl font-bold text-gray-800 dark:text-white ml-12 lg:ml-0">Suche</h2>
+            <h2 className="text-2xl font-bold text-foreground ">Suche</h2>
             <div className="flex items-center space-x-4">
               <ThemeToggle />
               <UserNav />
             </div>
           </div>
-        </header>
+        </AppHeader>
 
-        <main className="flex-1 overflow-y-auto p-4 lg:p-8">
+        <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto p-4 lg:p-8">
           <div className="max-w-4xl mx-auto space-y-6">
+            <PageIntro eyebrow="Entdecken" title="Eine Suche. Viele Möglichkeiten." description="Finde Kurse, Menschen, Events und Beiträge in deiner Community." />
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-              <Input
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
+              <Input aria-label="Suche nach Kursen, Events, Mitgliedern, Beiträgen oder Ressourcen"
                 type="text"
                 placeholder="Suche nach Kursen, Events, Mitgliedern, Beiträgen oder Ressourcen"
                 value={searchTerm}
@@ -377,19 +380,19 @@ export default function SearchPageClient() {
                 className="pl-10 pr-10 py-2 w-full rounded-full shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
               {searchTerm && (
-                <Button
+                <Button aria-label="Schließen"
                   variant="ghost"
                   size="sm"
                   className="absolute right-2 top-1/2 transform -translate-y-1/2"
                   onClick={() => setSearchTerm('')}
                 >
-                  <X className="h-4 w-4 text-gray-400" />
+                  <X className="h-4 w-4 text-muted-foreground" />
                 </Button>
               )}
             </div>
 
             <Tabs defaultValue="all" onValueChange={setActiveTab} className="w-full">
-              <TabsList className="w-full justify-start mb-4 bg-white dark:bg-gray-800 p-1 rounded-lg shadow-sm overflow-x-auto">
+              <TabsList className="w-full justify-start mb-4 bg-card p-1 rounded-lg shadow-sm overflow-x-auto">
                 <TabsTrigger value="all">Alle</TabsTrigger>
                 <TabsTrigger value="course">Kurse</TabsTrigger>
                 <TabsTrigger value="event">Events</TabsTrigger>
@@ -414,11 +417,11 @@ export default function SearchPageClient() {
                     <TabsContent value={activeTab} className="mt-6">
                       {results.length === 0 ? (
                         <div className="text-center py-10">
-                          <Search className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                          <Search className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                          <h3 className="text-lg font-medium text-foreground mb-2">
                             {searchTerm ? 'Keine Ergebnisse gefunden' : 'Geben Sie einen Suchbegriff ein'}
                           </h3>
-                          <p className="text-gray-500 dark:text-gray-400">
+                          <p className="text-muted-foreground">
                             {searchTerm
                               ? "Versuchen Sie es mit anderen Suchbegriffen oder wählen Sie eine andere Kategorie."
                               : "Suchen Sie nach Kursen, Events, Mitgliedern oder Beiträgen."}
@@ -433,14 +436,14 @@ export default function SearchPageClient() {
                               animate={{ opacity: 1, y: 0 }}
                               exit={{ opacity: 0, y: -20 }}
                               transition={{ duration: 0.2 }}
-                              className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md mb-4 hover:shadow-lg transition-shadow duration-200 cursor-pointer"
+                              className="bg-card p-4 rounded-lg shadow-md mb-4 hover:shadow-lg transition-shadow duration-200 cursor-pointer"
                               onClick={() => handleItemClick(result)}
                             >
                               <div className="flex items-start space-x-4">
                                 {renderAvatar(result)}
                                 <div className="flex-grow min-w-0">
                                   <div className="flex items-center justify-between">
-                                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white truncate">
+                                    <h3 className="text-lg font-semibold text-foreground truncate">
                                       {result.title}
                                     </h3>
                                     {renderIcon(result.type)}
@@ -454,7 +457,7 @@ export default function SearchPageClient() {
                                     </div>
                                   )}
 
-                                  <div className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                                  <div className="text-sm text-muted-foreground mt-1">
                                     <SafeHTML html={result.description} />
                                   </div>
 
@@ -487,7 +490,7 @@ export default function SearchPageClient() {
                                     </div>
                                   )}
 
-                                  <div className="flex items-center justify-between mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                  <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground">
                                     <div className="flex items-center space-x-2">
                                       {result.author && (
                                         <span className="flex items-center">
@@ -511,7 +514,7 @@ export default function SearchPageClient() {
                                   </div>
 
                                   {result.time && (
-                                    <div className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                                    <div className="mt-2 text-sm text-muted-foreground">
                                       <div className="flex items-center">
                                         <Clock className="h-4 w-4 mr-1" />
                                         {result.time.start} - {result.time.end} ({result.time.timezone})
@@ -540,7 +543,7 @@ export default function SearchPageClient() {
                                   .map((p, i, arr) => (
                                     <React.Fragment key={p}>
                                       {i > 0 && arr[i - 1] !== p - 1 && (
-                                        <span className="text-gray-500">...</span>
+                                        <span className="text-muted-foreground">...</span>
                                       )}
                                       <Button
                                         variant={p === page ? "default" : "outline"}
@@ -573,6 +576,6 @@ export default function SearchPageClient() {
           </div>
         </main>
       </div>
-    </div>
+    </AppShell>
   );
 }

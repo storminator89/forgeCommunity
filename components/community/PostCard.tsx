@@ -13,7 +13,7 @@ import { sanitizeRichHtml } from '@/lib/sanitize-html'
 import { formatDistanceToNow } from 'date-fns'
 import { de } from 'date-fns/locale'
 
-const DEFAULT_AVATAR_URL = 'https://via.placeholder.com/150'
+const DEFAULT_AVATAR_URL = ''
 
 interface Post {
   id: string
@@ -78,7 +78,7 @@ export function PostCard({
       layout
       className="group"
     >
-      <Card className="overflow-hidden border-none shadow-md hover:shadow-xl transition-all duration-300 bg-card border border-border">
+      <Card className="overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 bg-card border border-border">
         <div className="p-6">
           {/* Header */}
           <div className="flex items-start justify-between mb-4">
@@ -103,7 +103,7 @@ export function PostCard({
             {isAuthor && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
+                  <Button aria-label="Beitragsaktionen" variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
                     <MoreHorizontal className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>

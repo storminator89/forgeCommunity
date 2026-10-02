@@ -79,6 +79,7 @@ export function CourseContentsSidebar({
   const [isDeleting, setIsDeleting] = useState(false);
   const [newMainContentTitle, setNewMainContentTitle] = useState("");
   const [isGeneratingCertificate, setIsGeneratingCertificate] = useState(false);
+  const [certificateError, setCertificateError] = useState<string | null>(null);
   const [visitedPagesVersion, setVisitedPagesVersion] = useState(0);
 
   const checkCompletion = useCallback(() => {
@@ -235,7 +236,7 @@ export function CourseContentsSidebar({
   }
 
   return (
-    <div className="bg-muted/10 h-full flex flex-col">
+    <div className="bg-muted/10 h-full min-h-0 flex flex-col">
       <div className="p-4 border-b border-border bg-background/50">
         <h3 className="font-semibold text-lg text-foreground tracking-tight line-clamp-1" title={courseName}>
           {courseName || 'Lade Kurs...'}
@@ -243,7 +244,7 @@ export function CourseContentsSidebar({
         <p className="text-xs text-muted-foreground mt-1">Inhaltsverzeichnis</p>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-4">
         <div className="space-y-3">
           {contents.map((content, index) => (
             <div key={content.id} className="group relative rounded-md overflow-hidden transition-all duration-200">
@@ -255,8 +256,10 @@ export function CourseContentsSidebar({
                   <Button
                     variant="ghost"
                     size="icon"
+                    aria-label={`${expandedTopics.has(content.id) ? "Einklappen" : "Aufklappen"}: ${content.title}`}
+                    aria-expanded={expandedTopics.has(content.id)}
                     onClick={() => toggleTopic(content.id)}
-                    className="h-6 w-6 shrink-0 hover:bg-background/80"
+                    className="h-8 w-8 shrink-0 hover:bg-background/80"
                   >
                     <ChevronRight
                       className={cn(
@@ -291,15 +294,14 @@ export function CourseContentsSidebar({
                       </form>
                     ) : (
                       <div className="flex items-center justify-between gap-2 w-full">
-                        <span
-                          className="font-medium text-sm cursor-pointer text-foreground/90 hover:text-primary transition-colors truncate"
-                          onClick={() => {
-                            setEditingContentId(content.id);
-                            setEditingTitle(content.title);
-                          }}
+                        <button
+                          type="button"
+                          className="min-w-0 truncate rounded-sm text-left font-medium text-sm text-foreground/90 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          aria-current={selectedContentId === content.id ? "page" : undefined}
+                          onClick={() => onContentSelect(content.id)}
                         >
                           {content.title}
-                        </span>
+                        </button>
                         {content.subContents?.every(sub => isPageVisited(courseId, sub.id)) && content.subContents.length > 0 && (
                           <div className="flex items-center gap-1.5 text-green-600 dark:text-green-500 px-1.5 py-0.5 bg-green-50 dark:bg-green-900/10 rounded text-xs font-medium flex-shrink-0">
                             <CheckCircle className="h-3 w-3" />
@@ -321,16 +323,17 @@ export function CourseContentsSidebar({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1 opacity-0 group-hover/topic:opacity-100 transition-opacity duration-200 flex-shrink-0">
+                <div className="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover/topic:opacity-100 focus-within:opacity-100 transition-opacity duration-200 flex-shrink-0">
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-6 w-6 hover:bg-background"
+                    className="h-8 w-8 hover:bg-background"
                     onClick={() => {
                       setEditingContentId(content.id);
                       setEditingTitle(content.title);
                     }}
                   >
+                    <span className="sr-only">{content.title} umbenennen</span>
                     <Pen className="h-3 w-3 text-muted-foreground" />
                   </Button>
                   <AlertDialog>
@@ -338,8 +341,9 @@ export function CourseContentsSidebar({
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-6 w-6 hover:text-destructive hover:bg-destructive/10"
+                        className="h-8 w-8 hover:text-destructive hover:bg-destructive/10"
                       >
+                        <span className="sr-only">{content.title} löschen</span>
                         <Trash2 className="h-3 w-3" />
                       </Button>
                     </AlertDialogTrigger>
@@ -509,7 +513,7 @@ export function CourseContentsSidebar({
 
         {/* Certificate button at the bottom of the sidebar */}
         {contents.length > 0 && (
-          <div className="fixed bottom-0 left-0 w-full p-4 border-t border-border bg-background/95 backdrop-blur z-10" style={{ width: 'inherit' }}>
+          <div className="sticky bottom-0 w-full p-4 border-t border-border bg-background/95 backdrop-blur z-10">
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -517,12 +521,13 @@ export function CourseContentsSidebar({
                     onClick={async () => {
                       try {
                         setIsGeneratingCertificate(true);
+                        setCertificateError(null);
                         const response = await fetch(`/api/courses/${courseId}/certificate`, {
                           method: 'POST',
                         });
 
                         if (!response.ok) {
-                          throw new Error('Failed to generate certificate');
+                          throw new Error(response.status === 403 ? 'Der Kursabschluss ist noch nicht bestätigt. Ein Zertifikat kann erst nach bestätigtem Abschluss erstellt werden.' : 'Das Zertifikat konnte nicht erstellt werden. Bitte versuche es erneut.');
                         }
 
                         const blob = await response.blob();
@@ -532,9 +537,11 @@ export function CourseContentsSidebar({
                         a.download = `${courseName.replace(/\s+/g, '_')}_Certificate.pdf`;
                         document.body.appendChild(a);
                         a.click();
+                        a.remove();
                         window.URL.revokeObjectURL(url);
                       } catch (error) {
                         console.error('Error generating certificate:', error);
+                        setCertificateError(error instanceof Error ? error.message : 'Das Zertifikat konnte nicht erstellt werden.');
                       } finally {
                         setIsGeneratingCertificate(false);
                       }
@@ -566,6 +573,7 @@ export function CourseContentsSidebar({
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
+            {certificateError && <p role="alert" className="mt-2 text-xs text-destructive">{certificateError}</p>}
           </div>
         )}
       </div>

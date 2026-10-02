@@ -13,13 +13,13 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useSession, signOut } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { 
-  User, 
-  Settings, 
-  LogOut, 
-  Shield, 
-  BookOpen, 
-  MessageSquare 
+import {
+  User,
+  Settings,
+  LogOut,
+  Shield,
+  BookOpen,
+  MessageSquare
 } from "lucide-react"
 
 export function UserNav() {
@@ -27,9 +27,9 @@ export function UserNav() {
   const router = useRouter()
 
   const handleSignOut = async () => {
-    await signOut({ 
+    await signOut({
       callbackUrl: '/login',
-      redirect: true 
+      redirect: true
     })
   }
 
@@ -54,7 +54,7 @@ export function UserNav() {
   }
 
   const navigateToAdmin = () => {
-    router.push('/admin/users')
+    router.push('/admin/dashboard')
   }
 
   const navigateToCourses = () => {
@@ -62,23 +62,24 @@ export function UserNav() {
   }
 
   const navigateToMessages = () => {
-    router.push('/notifications')  
+    router.push('/chat')
   }
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button 
-          variant="ghost" 
-          className="relative h-8 w-8 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"
+        <Button
+          variant="ghost"
+          aria-label="Benutzermenü öffnen"
+          className="relative h-8 w-8 rounded-full hover:bg-accent"
         >
           <Avatar className="h-8 w-8">
-            <AvatarImage 
-              src={session?.user?.image || ''} 
-              alt={session?.user?.name || 'User'} 
+            <AvatarImage
+              src={session?.user?.image || ''}
+              alt={session?.user?.name || 'User'}
               className="object-cover"
             />
-            <AvatarFallback className="bg-slate-200 dark:bg-slate-700">
+            <AvatarFallback className="bg-muted">
               {getInitials(session?.user?.name)}
             </AvatarFallback>
           </Avatar>
@@ -102,30 +103,30 @@ export function UserNav() {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem 
+          <DropdownMenuItem
             onClick={navigateToProfile}
-            className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800"
+            className="cursor-pointer hover:bg-accent"
           >
             <User className="mr-2 h-4 w-4" />
             <span>Profil</span>
           </DropdownMenuItem>
-          <DropdownMenuItem 
+          <DropdownMenuItem
             onClick={navigateToSettings}
-            className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800"
+            className="cursor-pointer hover:bg-accent"
           >
             <Settings className="mr-2 h-4 w-4" />
             <span>Einstellungen</span>
           </DropdownMenuItem>
-          <DropdownMenuItem 
+          <DropdownMenuItem
             onClick={navigateToCourses}
-            className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800"
+            className="cursor-pointer hover:bg-accent"
           >
             <BookOpen className="mr-2 h-4 w-4" />
             <span>Meine Kurse</span>
           </DropdownMenuItem>
-          <DropdownMenuItem 
+          <DropdownMenuItem
             onClick={navigateToMessages}
-            className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800"
+            className="cursor-pointer hover:bg-accent"
           >
             <MessageSquare className="mr-2 h-4 w-4" />
             <span>Nachrichten</span>
@@ -135,9 +136,9 @@ export function UserNav() {
           <>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem 
+              <DropdownMenuItem
                 onClick={navigateToAdmin}
-                className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800"
+                className="cursor-pointer hover:bg-accent"
               >
                 <Shield className="mr-2 h-4 w-4" />
                 <span>Admin Dashboard</span>
@@ -146,7 +147,7 @@ export function UserNav() {
           </>
         )}
         <DropdownMenuSeparator />
-        <DropdownMenuItem 
+        <DropdownMenuItem
           onClick={handleSignOut}
           className="text-red-600 dark:text-red-400 cursor-pointer hover:bg-red-50 dark:hover:bg-red-900/10"
         >

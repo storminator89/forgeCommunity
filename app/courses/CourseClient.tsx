@@ -1,5 +1,8 @@
 'use client'
 
+import { PageState, LoadingScreen, RetryButton } from '@/components/page-state';
+import { PageIntro } from '@/components/page-intro';
+import { AppShell, AppHeader } from '@/components/app-shell';
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
@@ -34,6 +37,7 @@ export default function CourseClient() {
   const [categoryFilter, setCategoryFilter] = useState<string>('');
   const [courses, setCourses] = useState<Course[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [loadError, setLoadError] = useState(false);
   const [categories, setCategories] = useState<string[]>([]);
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -58,6 +62,7 @@ export default function CourseClient() {
         setCategories(['Alle', ...uniqueCategories]);
       } catch (error) {
         console.error('Error fetching courses:', error);
+        setLoadError(true);
       } finally {
         setIsLoading(false);
       }
@@ -86,46 +91,41 @@ export default function CourseClient() {
     }
   };
 
-  if (status === 'loading' || isLoading) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-blue-500"></div>
-      </div>
-    );
-  }
+  if (status === 'loading') return <LoadingScreen />;
 
   if (!session) {
     return null;
   }
 
   return (
-    <div className="flex flex-col lg:flex-row min-h-screen h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+    <AppShell>
       <Sidebar />
-      <div className="flex-1 flex flex-col h-screen overflow-hidden">
-        <header className="bg-white dark:bg-gray-800 shadow-md z-10">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <AppHeader>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-            <h2 className="text-2xl font-bold text-gray-800 dark:text-white flex items-center">
+            <h2 className="text-2xl font-bold text-foreground flex items-center">
               <BookOpen className="mr-2 h-6 w-6" />
-              Entdecke unsere Kurse
+              Kurse
             </h2>
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center gap-2">
               <Link href="/courses/new">
                 <Button variant="outline" className="flex items-center">
                   <PlusCircle className="mr-2 h-4 w-4" />
-                  Neuer Kurs
+                  <span className="hidden sm:inline">Neuer Kurs</span>
                 </Button>
               </Link>
               <ThemeToggle />
               <UserNav />
             </div>
           </div>
-        </header>
-        <main className="flex-1 overflow-y-auto">
+        </AppHeader>
+        <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <PageIntro eyebrow="Wissen & Lernen" title="Dein nächster Schritt." description="Entdecke Kurse, die dich weiterbringen – und lerne gemeinsam mit der Community." />
             <div className="mb-8 flex flex-col md:flex-row md:items-center md:space-x-4">
               <div className="relative flex-grow mb-4 md:mb-0">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                <Input
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
+                <Input aria-label="Suche nach Kursen oder Dozenten"
                   type="text"
                   placeholder="Suche nach Kursen oder Dozenten"
                   value={searchTerm}
@@ -134,9 +134,9 @@ export default function CourseClient() {
                 />
               </div>
               <div className="flex items-center space-x-2">
-                <Filter className="text-gray-400" />
+                <Filter className="text-muted-foreground" />
                 <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                  <SelectTrigger className="w-[180px]">
+                  <SelectTrigger aria-label="Kategorie wählen" className="w-[180px]">
                     <SelectValue placeholder="Kategorie wählen" />
                   </SelectTrigger>
                   <SelectContent>
@@ -156,26 +156,28 @@ export default function CourseClient() {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
               >
-                {filteredCourses.map((course) => (
+                {!isLoading && !loadError && filteredCourses.map((course) => (
                   <CourseCard key={course.id} course={course} onDelete={handleDeleteCourse} />
                 ))}
               </motion.div>
             </AnimatePresence>
-            {filteredCourses.length === 0 && (
+            {isLoading && <PageState kind="loading" title="Kurse werden geladen" />}
+            {loadError && <PageState kind="error" title="Kurse konnten nicht geladen werden" description="Prüfe deine Verbindung und versuche es erneut." action={<RetryButton onClick={() => window.location.reload()} />} />}
+            {!isLoading && !loadError && filteredCourses.length === 0 && (
               <motion.div
                 className="text-center py-10"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
               >
-                <Search className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">Keine Kurse gefunden</h3>
-                <p className="text-gray-500 dark:text-gray-400">Versuchen Sie es mit anderen Suchbegriffen oder ändern Sie die Kategorie.</p>
+                <Search className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-medium text-foreground mb-2">Keine Kurse gefunden</h3>
+                <p className="text-muted-foreground">Versuchen Sie es mit anderen Suchbegriffen oder ändern Sie die Kategorie.</p>
               </motion.div>
             )}
           </div>
         </main>
       </div>
-    </div>
+    </AppShell>
   );
 }
 
@@ -193,7 +195,7 @@ function CourseCard({ course, onDelete }: CourseCardProps) {
 
   return (
     <motion.div
-      className="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden transition-all duration-300 hover:shadow-xl flex flex-col h-full"
+      className="bg-card rounded-lg shadow-lg overflow-hidden transition-all duration-300 hover:shadow-xl flex flex-col h-full"
       whileHover={{ scale: 1.03 }}
       whileTap={{ scale: 0.98 }}
     >
@@ -215,10 +217,10 @@ function CourseCard({ course, onDelete }: CourseCardProps) {
       </div>
       <div className="p-6 flex-grow flex flex-col">
         <div className="flex justify-between items-start mb-2">
-          <h3 className="text-xl font-semibold text-gray-900 dark:text-white">{course.title}</h3>
+          <h3 className="text-xl font-semibold text-foreground">{course.title}</h3>
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button variant="ghost" size="icon" className="text-gray-500 hover:text-red-500">
+              <Button aria-label="Löschen" variant="ghost" size="icon" className="text-muted-foreground hover:text-red-500">
                 <Trash2 className="h-4 w-4" />
               </Button>
             </AlertDialogTrigger>
@@ -236,18 +238,18 @@ function CourseCard({ course, onDelete }: CourseCardProps) {
             </AlertDialogContent>
           </AlertDialog>
         </div>
-        <p className="text-gray-600 dark:text-gray-300 mb-4">{course.instructor}</p>
-        <div className="flex items-center text-sm text-gray-500 dark:text-gray-400 mb-2">
+        <p className="text-muted-foreground mb-4">{course.instructor}</p>
+        <div className="flex items-center text-sm text-muted-foreground mb-2">
           <Clock className="w-4 h-4 mr-2" />
           <span>{course.duration}</span>
         </div>
         {course.startDate && (
-          <div className="flex items-center text-sm text-gray-500 dark:text-gray-400 mb-2">
+          <div className="flex items-center text-sm text-muted-foreground mb-2">
             <Calendar className="w-4 h-4 mr-2" />
             <span>Startet am {new Date(course.startDate).toLocaleDateString('de-DE')}</span>
           </div>
         )}
-        <div className="flex items-center text-sm text-gray-500 dark:text-gray-400 mb-4">
+        <div className="flex items-center text-sm text-muted-foreground mb-4">
           <Users className="w-4 h-4 mr-2" />
           <span>{course.participants} Teilnehmer</span>
         </div>

@@ -1,5 +1,7 @@
 'use client';
 
+import { PageIntro } from '@/components/page-intro';
+import { AppShell, AppHeader } from '@/components/app-shell';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
@@ -191,15 +193,16 @@ export default function NewArticle() {
   }
 
   return (
-    <div className="flex flex-col lg:flex-row min-h-screen h-screen bg-gradient-to-br from-background to-background/80">
+    <AppShell>
       <Sidebar />
-      <div className="flex-1 flex flex-col h-screen overflow-hidden">
-        <header className="bg-card shadow-sm z-10 border-b backdrop-blur-sm">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <AppHeader>
           <div className="container mx-auto px-6 py-5">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="flex items-center">
                 <Button
                   variant="ghost"
+                  aria-label="Zurück zur Wissensbasis"
                   onClick={() => router.push('/knowledgebase')}
                   className="mr-4 hover:bg-background/60"
                 >
@@ -216,11 +219,12 @@ export default function NewArticle() {
               </div>
             </div>
           </div>
-        </header>
+        </AppHeader>
 
-        <main className="flex-1 overflow-y-auto">
+        <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto">
           <ScrollArea className="h-full">
             <div className="container mx-auto py-8 px-6">
+            <PageIntro eyebrow="Wissensdatenbank" title="Dein Wissen verdient einen Platz." description="Formuliere deine Idee, ergänze passende Tags und veröffentliche deinen Artikel, wenn er bereit ist." />
               <div className="max-w-7xl mx-auto">
                 <div className="grid lg:grid-cols-[1fr,300px] gap-6">
                   {/* Hauptbereich - Editor */}
@@ -250,7 +254,7 @@ export default function NewArticle() {
                         {/* Beitragsbild */}
                         <div>
                           <Label className="text-sm font-medium text-foreground mb-2 block">Beitragsbild</Label>
-                          <div className="flex items-center gap-4">
+                          <div className="flex flex-wrap items-center gap-4">
                             <Button
                               type="button"
                               onClick={() => fileInputRef.current?.click()}
@@ -264,11 +268,12 @@ export default function NewArticle() {
                               <div className="relative group">
                                 <div className="w-20 h-20 rounded-lg overflow-hidden border border-border relative">
                                   <Image src={featuredImagePreview} alt="Vorschau" fill className="object-cover" />
-                                  <div className="absolute inset-0 bg-background/80 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-10">
+                                  <div className="absolute inset-0 bg-background/80 opacity-100 md:opacity-0 md:group-hover:opacity-100 focus-within:opacity-100 transition-opacity flex items-center justify-center z-10">
                                     <Button
                                       type="button"
                                       variant="ghost"
                                       size="sm"
+                                      aria-label="Beitragsbild entfernen"
                                       className="text-destructive hover:text-destructive/90"
                                       onClick={() => {
                                         setFeaturedImage(null);
@@ -401,6 +406,6 @@ export default function NewArticle() {
           </ScrollArea>
         </main>
       </div>
-    </div>
+    </AppShell>
   );
 }

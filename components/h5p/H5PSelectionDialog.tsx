@@ -92,10 +92,10 @@ export function H5PSelectionDialog({ open, onOpenChange, onSelect }: H5PSelectio
         <DialogHeader>
           <DialogTitle>H5P Inhalt auswählen</DialogTitle>
         </DialogHeader>
-        
+
         <div className="flex gap-4 mb-4">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
             <Input
               type="text"
               placeholder="H5P Inhaltstyp suchen..."
@@ -107,7 +107,7 @@ export function H5PSelectionDialog({ open, onOpenChange, onSelect }: H5PSelectio
           <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
-            className="rounded-md border border-gray-300 bg-white px-3 py-2 dark:bg-gray-800 dark:border-gray-600"
+            className="rounded-md border border-border bg-card px-3 py-2 dark:bg-card dark:border-border"
           >
             {categories.map(category => (
               <option key={category} value={category}>
@@ -121,7 +121,7 @@ export function H5PSelectionDialog({ open, onOpenChange, onSelect }: H5PSelectio
           {filteredTypes.map((type) => (
             <div
               key={type.id}
-              className="p-4 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors"
+              className="p-4 border rounded-lg hover:bg-accent cursor-pointer transition-colors"
               onClick={() => onSelect(type)}
             >
               <div className="flex items-center gap-3 mb-2">
@@ -130,9 +130,9 @@ export function H5PSelectionDialog({ open, onOpenChange, onSelect }: H5PSelectio
                 </div>
                 <h3 className="font-medium text-sm">{type.title}</h3>
               </div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">{type.description}</p>
+              <p className="text-sm text-muted-foreground">{type.description}</p>
               <div className="mt-2">
-                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-muted text-foreground dark:text-muted-foreground">
                   {type.category}
                 </span>
               </div>

@@ -1,7 +1,8 @@
 "use client";
 
+import { AppShell, AppHeader } from '@/components/app-shell';
 import { useRouter, useParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -65,9 +66,9 @@ interface Project {
   comments: ProjectComment[];
 }
 
-export default function ProjectDetail(props: { params: Promise<{ projectId: string }> }) {
+export default function ProjectDetail() {
   const router = useRouter();
-  const params = useParams();
+  const { projectId } = useParams<{ projectId: string }>();
   const { data: session } = useSession();
   const [project, setProject] = useState<Project | null>(null);
   const [comments, setComments] = useState<ProjectComment[]>([]);
@@ -76,6 +77,10 @@ export default function ProjectDetail(props: { params: Promise<{ projectId: stri
 
   const [activeTab, setActiveTab] = useState('overview');
   const [isLoading, setIsLoading] = useState(true);
+  const [isLiking, setIsLiking] = useState(false);
+  const [isCommenting, setIsCommenting] = useState(false);
+  const likeRequest = useRef(false);
+  const commentRequest = useRef(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [editProjectData, setEditProjectData] = useState<{
@@ -96,60 +101,61 @@ export default function ProjectDetail(props: { params: Promise<{ projectId: stri
   const safeProjectLink = project ? getSafeHttpUrl(project.link) : null;
 
   useEffect(() => {
+    const controller = new AbortController();
     const fetchProject = async () => {
-      if (!params?.projectId) {
-        console.error("Kein projectId gefunden in der URL.");
-        return;
-      }
+      if (!projectId) return;
+      setIsLoading(true);
       try {
-        const res = await fetch(`/api/projects/${params.projectId}`);
-        if (!res.ok) {
-          throw new Error('Projekt nicht gefunden.');
-        }
+        const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}`, { signal: controller.signal });
+        if (!res.ok) throw new Error('Projekt nicht gefunden.');
         const data: Project = await res.json();
+        if (controller.signal.aborted) return;
         setProject(data);
-        // Set initial comments from project data
         setComments(data.comments || []);
-        // Check if user has liked the project
         setIsLiked(data.likes?.some(like => like.userId === session?.user?.id) || false);
-      } catch (error) {
-        console.error('Error fetching project:', error);
-        router.push('/showcases'); // Navigiere zurück zur Projektliste bei Fehler
-      }
-    }
+        setIsLoading(false);
 
-    fetchProject();
-  }, [params, router, session?.user?.id]);
-
-  // Separate effect for loading comments
-  useEffect(() => {
-    const fetchComments = async () => {
-      if (!params?.projectId) return;
-
-      try {
-        const data: ProjectComment[] = [];
-        for (let page = 1; ; page++) {
-          const res = await fetch(`/api/projects/${params.projectId}/comments?page=${page}`);
-          if (!res.ok) throw new Error('Fehler beim Laden der Kommentare.');
-          const batch: ProjectComment[] = await res.json();
-          data.push(...batch);
-          if (batch.length < 50) break;
+        // Load every comment page after initializing the project, so a faster
+        // comments request cannot be overwritten by the limited project preview.
+        try {
+          const allComments: ProjectComment[] = [];
+          for (let page = 1; ; page++) {
+            const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/comments?page=${page}`, { signal: controller.signal });
+            if (!response.ok) throw new Error('Fehler beim Laden der Kommentare.');
+            const batch: ProjectComment[] = await response.json();
+            allComments.push(...batch);
+            if (batch.length < 50) break;
+          }
+          if (controller.signal.aborted) return;
+          setComments(current => [
+            ...allComments,
+            ...current.filter(comment => !allComments.some(loaded => loaded.id === comment.id)),
+          ]);
+        } catch (error) {
+          if (!controller.signal.aborted) console.error('Error fetching comments:', error);
         }
-        setComments(data);
       } catch (error) {
-        console.error('Error fetching comments:', error);
+        if (controller.signal.aborted) return;
+        console.error('Error fetching project:', error);
+        router.push('/showcases');
+      } finally {
+        if (!controller.signal.aborted) setIsLoading(false);
       }
     };
 
-    fetchComments();
-  }, [params?.projectId]);
+    void fetchProject();
+    return () => controller.abort();
+  }, [projectId, router, session?.user?.id]);
 
   const handleLike = async () => {
+    if (likeRequest.current) return;
     if (!session || !project) {
       alert('Bitte melde dich an, um zu liken.');
       return;
     }
 
+    likeRequest.current = true;
+    setIsLiking(true);
     try {
       const res = await fetch(`/api/projects/${project.id}/like`, {
         method: 'POST',
@@ -161,16 +167,23 @@ export default function ProjectDetail(props: { params: Promise<{ projectId: stri
       }
 
       // Aktualisiere das Projekt in der Liste
-      const newLike: LikeProject = await res.json();
-      setProject(prev => prev ? { ...prev, likes: [...prev.likes, newLike] } : prev);
-      setIsLiked(true);
+      const result = await res.json();
+      setProject(prev => prev ? {
+        ...prev,
+        likes: isLiked ? prev.likes.filter(like => like.userId !== session.user.id) : [...prev.likes, result as LikeProject],
+      } : prev);
+      setIsLiked(!isLiked);
     } catch (error: any) {
       console.error('Error liking project:', error);
       alert(error.message || 'Fehler beim Liken des Projekts.');
+    } finally {
+      likeRequest.current = false;
+      setIsLiking(false);
     }
   }
 
   const handleComment = async () => {
+    if (commentRequest.current) return;
     if (!session || !project) {
       alert('Bitte melde dich an, um einen Kommentar hinzuzufügen.');
       return;
@@ -181,6 +194,8 @@ export default function ProjectDetail(props: { params: Promise<{ projectId: stri
       return;
     }
 
+    commentRequest.current = true;
+    setIsCommenting(true);
     try {
       const res = await fetch(`/api/projects/${project.id}/comments`, {
         method: 'POST',
@@ -208,6 +223,9 @@ export default function ProjectDetail(props: { params: Promise<{ projectId: stri
     } catch (error: any) {
       console.error('Error adding comment:', error);
       alert(error.message || 'Fehler beim Hinzufügen des Kommentars.');
+    } finally {
+      commentRequest.current = false;
+      setIsCommenting(false);
     }
   }
 
@@ -299,7 +317,7 @@ export default function ProjectDetail(props: { params: Promise<{ projectId: stri
     };
 
     try {
-      if (navigator.share && navigator.canShare(shareData)) {
+      if (navigator.share && (!navigator.canShare || navigator.canShare(shareData))) {
         // Use Web Share API if available
         await navigator.share(shareData);
       } else {
@@ -317,14 +335,14 @@ export default function ProjectDetail(props: { params: Promise<{ projectId: stri
 
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <AppShell>
       {/* Sidebar */}
       <Sidebar />
 
       {/* Main content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {/* Header */}
-        <header className="bg-card shadow-sm z-10 sticky top-0 border-b">
+        <AppHeader>
           <div className="container mx-auto px-6 py-4">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="flex items-center">
@@ -342,18 +360,19 @@ export default function ProjectDetail(props: { params: Promise<{ projectId: stri
               </div>
             </div>
           </div>
-        </header>
+        </AppHeader>
 
         {/* Main scrollable content */}
-        <div className="flex-1 overflow-y-auto bg-background">
+        <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto bg-background">
+          {isLoading && <div role="status" className="mx-auto max-w-5xl space-y-6 p-6" aria-label="Projekt wird geladen"><div className="h-12 w-2/3 animate-pulse rounded-lg bg-muted" /><div className="h-64 animate-pulse rounded-xl bg-muted" /></div>}
           <AnimatePresence>
             {project && (
               <div className="container mx-auto py-6 px-4 max-w-5xl">
                 {/* Project Header */}
                 <div className="flex flex-col space-y-4 mb-8">
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <h1 className="text-4xl font-bold text-foreground mb-4">{project.title}</h1>
+                  <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-start">
+                    <div className="min-w-0 flex-1">
+                      <h1 className="text-3xl sm:text-4xl font-bold text-foreground mb-4 break-words">{project.title}</h1>
                       <div className="flex flex-wrap items-center gap-4 text-muted-foreground">
                         <div className="flex items-center">
                           <Calendar className="w-4 h-4 mr-2" />
@@ -377,7 +396,13 @@ export default function ProjectDetail(props: { params: Promise<{ projectId: stri
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="flex items-center space-x-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {session?.user?.id === project.author.id && (
+                        <>
+                          <Button variant="outline" size="sm" onClick={handleOpenEditDialog}><Edit className="mr-2 h-4 w-4" />Bearbeiten</Button>
+                          <Button variant="outline" size="sm" className="text-destructive" onClick={handleOpenDeleteDialog}><Trash className="mr-2 h-4 w-4" />Löschen</Button>
+                        </>
+                      )}
                       <Button
                         variant="outline"
                         size="sm"
@@ -408,7 +433,7 @@ export default function ProjectDetail(props: { params: Promise<{ projectId: stri
                 {/* Project Content */}
                 <div className="space-y-8">
                   {/* Description */}
-                  <div className="prose dark:prose-invert prose-slate max-w-none">
+                  <div className="prose dark:prose-invert prose-slate max-w-none break-words overflow-x-auto">
                     <div
                       className="[&>h2]:text-2xl [&>h2]:font-bold [&>h2]:text-foreground [&>h2]:mt-8 [&>h2]:mb-4
                                  [&>p]:text-muted-foreground [&>p]:leading-relaxed [&>p]:mb-4
@@ -446,7 +471,7 @@ export default function ProjectDetail(props: { params: Promise<{ projectId: stri
                         href={safeProjectLink}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center text-primary hover:text-primary/80 transition-colors"
+                        className="inline-flex min-w-0 max-w-full items-center gap-2 break-all text-primary hover:text-primary/80 transition-colors"
                       >
                         <ExternalLink className="w-4 h-4 mr-2" />
                         {safeProjectLink}
@@ -456,7 +481,7 @@ export default function ProjectDetail(props: { params: Promise<{ projectId: stri
 
                   {/* Interactions Section */}
                   <div className="pt-8 mt-8 border-t">
-                    <div className="flex items-center justify-between mb-6">
+                    <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
                       <h3 className="text-2xl font-bold text-foreground">
                         Community Feedback
                       </h3>
@@ -464,6 +489,9 @@ export default function ProjectDetail(props: { params: Promise<{ projectId: stri
                         <Button
                           variant={isLiked ? "default" : "outline"}
                           size="sm"
+                          aria-label={isLiked ? 'Gefällt mir zurücknehmen' : 'Projekt gefällt mir'}
+                          aria-pressed={isLiked}
+                          disabled={isLiking}
                           onClick={handleLike}
                           className="flex items-center space-x-2"
                         >
@@ -474,11 +502,12 @@ export default function ProjectDetail(props: { params: Promise<{ projectId: stri
                     </div>
 
                     {/* Comments Section */}
-                    <div className="space-y-6">
+                    <div id="comments" className="space-y-6 scroll-mt-6">
                       {session && (
                         <div className="space-y-4">
                           <Textarea
-                            placeholder="Teile deine Gedanken..."
+                            aria-label="Dein Kommentar zum Projekt"
+                            placeholder="Teile deine Gedanken…"
                             value={newComment}
                             onChange={(e) => setNewComment(e.target.value)}
                             className="min-h-[100px] bg-background"
@@ -487,16 +516,16 @@ export default function ProjectDetail(props: { params: Promise<{ projectId: stri
                             <Button
                               type="button"
                               onClick={handleComment}
-                              disabled={!newComment.trim()}
+                              disabled={isCommenting || !newComment.trim()}
                             >
-                              Kommentieren
+                              {isCommenting ? 'Wird gesendet…' : 'Kommentieren'}
                             </Button>
                           </div>
                         </div>
                       )}
 
                       <div className="space-y-4">
-                        {project.comments.map((comment) => (
+                        {comments.map((comment) => (
                           <div
                             key={comment.id}
                             className="p-4 rounded-lg border bg-card"
@@ -504,7 +533,7 @@ export default function ProjectDetail(props: { params: Promise<{ projectId: stri
                             <div className="flex items-center gap-2 mb-2">
                               <Avatar className="h-8 w-8">
                                 <AvatarImage src={comment.author.image} />
-                                <AvatarFallback>{comment.author.name[0]}</AvatarFallback>
+                                <AvatarFallback>{comment.author.name?.[0] || 'U'}</AvatarFallback>
                               </Avatar>
                               <div>
                                 <p className="font-medium text-foreground">{comment.author.name}</p>
@@ -517,7 +546,7 @@ export default function ProjectDetail(props: { params: Promise<{ projectId: stri
                                 </p>
                               </div>
                             </div>
-                            <p className="text-foreground">{comment.content}</p>
+                            <p className="text-foreground break-words whitespace-pre-wrap">{comment.content}</p>
                           </div>
                         ))}
                       </div>
@@ -527,12 +556,12 @@ export default function ProjectDetail(props: { params: Promise<{ projectId: stri
               </div>
             )}
           </AnimatePresence>
-        </div>
+        </main>
       </div>
 
       {/* Edit Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Projekt bearbeiten</DialogTitle>
             <DialogDescription>
@@ -603,7 +632,7 @@ export default function ProjectDetail(props: { params: Promise<{ projectId: stri
 
       {/* Delete Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Projekt löschen</DialogTitle>
             <DialogDescription>
@@ -620,6 +649,6 @@ export default function ProjectDetail(props: { params: Promise<{ projectId: stri
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </AppShell>
   );
 }

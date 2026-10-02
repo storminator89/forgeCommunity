@@ -1,5 +1,6 @@
 "use client";
 
+import { AppShell, AppHeader } from '@/components/app-shell';
 import { useState, useEffect, useMemo, Suspense, useCallback, useRef } from 'react';
 import { Sidebar } from "@/components/Sidebar";
 import { UserNav } from "@/components/user-nav";
@@ -17,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Progress } from "@/components/ui/progress";
 import { useSession } from 'next-auth/react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { toast } from 'react-toastify';
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface Skill {
@@ -44,7 +46,7 @@ interface Member {
 
 const MemberCardSkeleton = () => (
   <Card className="h-full">
-    <CardHeader className="flex flex-row items-center space-x-4 pb-2">
+    <CardHeader className="flex flex-row items-center gap-3 space-y-0 pb-2">
       <Skeleton className="h-16 w-16 rounded-full" />
       <div className="space-y-2">
         <Skeleton className="h-4 w-32" />
@@ -77,6 +79,8 @@ export default function SkillDirectory() {
   const [error, setError] = useState<string | null>(null);
   const [expandedSkills, setExpandedSkills] = useState<{ [key: string]: boolean }>({});
   const [isRetrying, setIsRetrying] = useState(false);
+  const endorsementRequests = useRef(new Set<string>());
+  const [endorsingMembers, setEndorsingMembers] = useState<string[]>([]);
   const dataRequestRef = useRef<AbortController | null>(null);
 
   const getSkillByName = useCallback((name: string): Skill | undefined => {
@@ -172,7 +176,7 @@ export default function SkillDirectory() {
       })
       .sort((a, b) => {
         const comparison = sortBy === 'endorsements'
-          ? b.endorsements - a.endorsements
+          ? a.endorsements - b.endorsements
           : a.name.localeCompare(b.name);
         return sortOrder === 'asc' ? comparison : -comparison;
       });
@@ -190,6 +194,13 @@ export default function SkillDirectory() {
   };
 
   const endorseMember = async (memberId: string) => {
+    if (!session?.user?.id) {
+      toast.info('Bitte melde dich an, um ein Mitglied zu empfehlen.');
+      return;
+    }
+    if (memberId === session.user.id || endorsementRequests.current.has(memberId)) return;
+    endorsementRequests.current.add(memberId);
+    setEndorsingMembers(prev => [...prev, memberId]);
     try {
       const response = await fetch(`/api/members/${memberId}/endorse`, {
         method: 'POST',
@@ -206,12 +217,18 @@ export default function SkillDirectory() {
           }
           return member;
         }));
+        setSelectedMember(prev => prev?.id === memberId
+          ? { ...prev, endorsements: prev.endorsements + 1, hasEndorsed: true }
+          : prev);
       } else {
-        alert(data.error || 'Fehler beim Empfehlen des Mitglieds.');
+        toast.error(data.error || 'Fehler beim Empfehlen des Mitglieds.');
       }
     } catch (error) {
       console.error("Fehler beim Empfehlen des Mitglieds:", error);
-      alert('Ein unerwarteter Fehler ist aufgetreten.');
+      toast.error('Ein unerwarteter Fehler ist aufgetreten.');
+    } finally {
+      endorsementRequests.current.delete(memberId);
+      setEndorsingMembers(prev => prev.filter(id => id !== memberId));
     }
   };
 
@@ -245,21 +262,22 @@ export default function SkillDirectory() {
   }
 
   return (
-    <div className="flex flex-col lg:flex-row min-h-screen h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
-      <Sidebar className="lg:w-64" />
-      <div className="flex-1 flex flex-col h-screen overflow-hidden">
-        <header className="bg-white dark:bg-gray-800 shadow-md z-10">
+    <AppShell>
+      <Sidebar />
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <AppHeader>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row items-center justify-between">
-            <h2 className="text-2xl font-bold text-gray-800 dark:text-white flex items-center mb-4 sm:mb-0">
+            <h2 className="text-2xl font-bold text-foreground flex items-center mb-4 sm:mb-0">
               <Award className="mr-2 h-6 w-6" />
               Skill-Verzeichnis
             </h2>
             <div className="flex items-center space-x-4">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
                 <Input
                   type="text"
-                  placeholder="Suche..."
+                  placeholder="Name oder Fähigkeit suchen…"
+                  aria-label="Mitglieder nach Name oder Fähigkeit suchen"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10 pr-4 py-2 w-full sm:w-64 rounded-full"
@@ -269,13 +287,13 @@ export default function SkillDirectory() {
               <UserNav />
             </div>
           </div>
-        </header>
-        <main className="flex-1 overflow-y-auto p-4 lg:p-8">
+        </AppHeader>
+        <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto p-4 lg:p-8">
           <div className="flex flex-col space-y-4 mb-6">
             <div className="flex items-center justify-end space-x-2">
-              <Filter className="h-5 w-5 text-gray-500" />
+              <Filter className="h-5 w-5 text-muted-foreground" />
               <Select value={sortBy} onValueChange={setSortBy}>
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="w-[180px]" aria-label="Mitglieder sortieren nach">
                   <SelectValue placeholder="Sortieren nach" />
                 </SelectTrigger>
                 <SelectContent>
@@ -286,7 +304,7 @@ export default function SkillDirectory() {
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button variant="outline" size="icon" onClick={toggleSortOrder}>
+                    <Button variant="outline" size="icon" onClick={toggleSortOrder} aria-label={sortOrder === 'asc' ? 'Absteigend sortieren' : 'Aufsteigend sortieren'}>
                       {sortOrder === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                     </Button>
                   </TooltipTrigger>
@@ -302,14 +320,14 @@ export default function SkillDirectory() {
               onValueChange={(value) => setSelectedCategory(value)}
               className="w-full"
             >
-              <TabsList className="inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground">
+              <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 rounded-md bg-muted p-1 text-muted-foreground">
                 {categories.map((category) => (
                   <TabsTrigger
                     key={category}
                     value={category}
                     className="inline-flex items-center justify-center whitespace-nowrap px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
                   >
-                    {category}
+                    {category === 'All' ? 'Alle' : category}
                   </TabsTrigger>
                 ))}
               </TabsList>
@@ -327,6 +345,16 @@ export default function SkillDirectory() {
               layout
               className="grid grid-cols-1 lg:grid-cols-2 gap-6"
             >
+              {filteredMembers.length === 0 && (
+                <Card className="col-span-full">
+                  <CardContent className="py-12 text-center">
+                    <Search className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
+                    <h3 className="text-lg font-semibold">Keine passenden Mitglieder</h3>
+                    <p className="mt-2 text-muted-foreground">Versuche einen anderen Suchbegriff oder zeige alle Kategorien.</p>
+                    <Button variant="outline" className="mt-4" onClick={() => { setSearchTerm(''); setSelectedCategory('All'); }}>Filter zurücksetzen</Button>
+                  </CardContent>
+                </Card>
+              )}
               {filteredMembers.map((member) => (
                 <motion.div
                   key={member.id}
@@ -337,25 +365,25 @@ export default function SkillDirectory() {
                   transition={{ duration: 0.2 }}
                 >
                   <Card className="h-full hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1">
-                    <CardHeader className="flex flex-row items-center space-x-4 pb-2">
+                    <CardHeader className="flex flex-row items-center gap-3 space-y-0 pb-2">
                       <Avatar className="h-16 w-16">
                         <AvatarImage src={member.avatar} alt={member.name} />
                         <AvatarFallback>{member.name[0]}</AvatarFallback>
                       </Avatar>
-                      <div>
-                        <CardTitle className="text-xl">{member.name}</CardTitle>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">{member.title}</p>
+                      <div className="min-w-0 flex-1">
+                        <CardTitle className="text-xl break-words">{member.name}</CardTitle>
+                        <p className="text-sm text-muted-foreground">{member.title}</p>
                       </div>
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <button
                               onClick={() => endorseMember(member.id)}
-                              disabled={member.hasEndorsed}
-                              className={`ml-auto p-2 rounded-full ${member.hasEndorsed ? 'bg-gray-300 cursor-not-allowed' : 'bg-yellow-200 hover:bg-yellow-300'}`}
+                              disabled={!session || member.id === session.user.id || member.hasEndorsed || endorsingMembers.includes(member.id)}
+                              className={`ml-auto shrink-0 p-2 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ${member.hasEndorsed ? 'bg-secondary' : 'bg-amber-100 hover:bg-amber-200 dark:bg-amber-950 dark:hover:bg-amber-900'}`}
                               aria-label="Mitglied empfehlen"
                             >
-                              <Star className={`h-6 w-6 ${member.hasEndorsed ? 'text-yellow-500' : 'text-gray-500'}`} />
+                              <Star className={`h-6 w-6 ${member.hasEndorsed ? 'text-yellow-500' : 'text-amber-700 dark:text-amber-300'}`} />
                             </button>
                           </TooltipTrigger>
                           <TooltipContent>
@@ -381,7 +409,7 @@ export default function SkillDirectory() {
                                       >
                                         {skill.name}
                                       </Badge>
-                                      <span className="text-sm text-gray-500">{level}%</span>
+                                      <span className="text-sm text-muted-foreground">{level}%</span>
                                     </div>
                                     <Progress value={level} className="w-full" />
                                   </div>
@@ -403,8 +431,8 @@ export default function SkillDirectory() {
                           {expandedSkills[member.id] ? 'Weniger anzeigen' : 'Mehr anzeigen'}
                         </Button>
                       )}
-                      <div className="flex items-center justify-between mt-4">
-                        <span className="flex items-center text-sm text-gray-500">
+                      <div className="flex flex-wrap items-center justify-between gap-3 mt-4">
+                        <span className="flex items-center text-sm text-muted-foreground">
                           <Star className="h-4 w-4 mr-1 text-yellow-500" />
                           {member.endorsements} Empfehlungen
                         </span>
@@ -475,6 +503,7 @@ export default function SkillDirectory() {
               <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t">
                 <Button
                   variant="outline"
+                  disabled={!selectedMember.contact}
                   onClick={() => window.location.href = `mailto:${selectedMember.contact}`}
                   className="flex items-center gap-2"
                 >
@@ -484,7 +513,7 @@ export default function SkillDirectory() {
                 <Button
                   variant="default"
                   onClick={() => endorseMember(selectedMember.id)}
-                  disabled={selectedMember.hasEndorsed}
+                  disabled={!session || selectedMember.id === session.user.id || selectedMember.hasEndorsed || endorsingMembers.includes(selectedMember.id)}
                   className="flex items-center gap-2"
                 >
                   <Star className="h-4 w-4" />
@@ -495,6 +524,6 @@ export default function SkillDirectory() {
           )}
         </DialogContent>
       </Dialog>
-    </div>
+    </AppShell>
   );
 }

@@ -1,6 +1,7 @@
 // app/chat/page.tsx
 "use client"
 
+import { AppShell, AppHeader } from '@/components/app-shell';
 import { useState, useEffect, useRef } from 'react'
 import { Sidebar } from "@/components/Sidebar"
 import { UserNav } from "@/components/user-nav"
@@ -48,6 +49,7 @@ export default function ChatPage() {
   } = useChat()
 
   const [newMessage, setNewMessage] = useState('')
+  const [isSending, setIsSending] = useState(false)
   const [newChannelName, setNewChannelName] = useState('')
   const [isPrivate, setIsPrivate] = useState(false)
   const [isCreateChannelOpen, setIsCreateChannelOpen] = useState(false)
@@ -79,14 +81,16 @@ export default function ChatPage() {
   }, [imagePreview])
 
   const handleSendMessage = async () => {
-    if (newMessage.trim() !== '' || selectedImage) {
+    if (!currentChannel || isSending || (!newMessage.trim() && !selectedImage)) return
+    setIsSending(true)
+    try {
       await sendMessage(newMessage, selectedImage || undefined)
       setNewMessage('')
       setSelectedImage(null)
       setImagePreview(null)
-      if (fileInputRef.current) {
-        fileInputRef.current.value = ''
-      }
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    } finally {
+      setIsSending(false)
     }
   }
 
@@ -137,55 +141,53 @@ export default function ChatPage() {
     return session?.user?.id === message.author.id || session?.user?.role === 'ADMIN'
   }
 
-  if (!session) {
-    return <div className="flex items-center justify-center h-screen">
-      <p>Bitte melden Sie sich an, um den Chat zu nutzen.</p>
-    </div>
-  }
-
-  if (loading) {
-    return <div className="flex items-center justify-center h-screen">
-      <p>Laden...</p>
-    </div>
-  }
-
-  if (error) {
-    return <div className="flex items-center justify-center h-screen">
-      <p>Fehler: {error}</p>
-    </div>
+  if (!session || loading || error) {
+    return (
+      <AppShell>
+        <Sidebar />
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <AppHeader><div className="flex items-center justify-between gap-3"><h1>Community-Chat</h1><div className="flex items-center gap-2"><ThemeToggle /><UserNav /></div></div></AppHeader>
+          <main id="page-content" tabIndex={-1} className="flex flex-1 items-center justify-center p-6 text-center">
+            <div role={error ? 'alert' : 'status'} className="rounded-xl border bg-card p-8">
+              <p className={error ? 'text-destructive' : 'text-muted-foreground'}>{error ? `Fehler: ${error}` : !session ? 'Bitte melde dich an, um den Chat zu nutzen.' : 'Chat wird geladen …'}</p>
+            </div>
+          </main>
+        </div>
+      </AppShell>
+    )
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
-      <Sidebar className="hidden md:block" />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="border-b">
-          <div className="h-16 px-4 flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <h2 className="text-lg font-semibold">
+    <AppShell>
+      <Sidebar />
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <AppHeader>
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <h1 className="truncate text-lg font-semibold">
                 {currentChannel ? `# ${currentChannel.name}` : 'Wähle einen Channel'}
-              </h2>
+              </h1>
               {currentChannel && (
                 <div className="hidden md:flex items-center space-x-2 text-muted-foreground">
                   <span className="text-sm">{currentChannel._count.members} Mitglieder</span>
                 </div>
               )}
             </div>
-            <div className="flex items-center space-x-4">
+            <div className="flex min-w-0 items-center gap-2">
               <ThemeToggle />
               <UserNav />
             </div>
           </div>
-        </header>
+        </AppHeader>
 
-        <div className="flex-1 flex overflow-hidden">
-          <div className="w-64 border-r bg-muted/50 hidden md:flex flex-col">
-            <div className="p-4 flex justify-between items-center">
-              <h3 className="font-semibold">Channels</h3>
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
+          <div className="flex max-h-48 shrink-0 flex-col border-b bg-card md:max-h-none md:w-60 md:border-b-0 md:border-r">
+            <div className="flex items-center justify-between px-4 py-2 md:py-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Channels <span className="ml-1">{channels.length}</span></h3>
               {session.user.role === 'ADMIN' && (
                 <Dialog open={isCreateChannelOpen} onOpenChange={setIsCreateChannelOpen}>
                   <DialogTrigger asChild>
-                    <Button variant="ghost" size="icon">
+                    <Button variant="ghost" size="icon" aria-label="Neuen Channel erstellen">
                       <Plus className="h-5 w-5" />
                     </Button>
                   </DialogTrigger>
@@ -211,7 +213,7 @@ export default function ChatPage() {
                         />
                         <Label htmlFor="private">Privater Channel</Label>
                       </div>
-                      <Button onClick={handleCreateChannel} className="w-full">
+                      <Button onClick={handleCreateChannel} disabled={!newChannelName.trim()} className="w-full">
                         Channel erstellen
                       </Button>
                     </div>
@@ -219,27 +221,27 @@ export default function ChatPage() {
                 </Dialog>
               )}
             </div>
-            <ScrollArea className="flex-1">
+            <ScrollArea className="min-h-0 flex-1">
+              <nav aria-label="Chat-Channels" className="flex flex-wrap gap-1 px-3 pb-3 md:block md:space-y-1">
               {channels.map((channel) => (
-                <div
-                  key={channel.id}
-                  className={`group px-4 py-2 cursor-pointer hover:bg-accent ${currentChannel?.id === channel.id ? 'bg-accent' : ''
-                    }`}
-                  onClick={() => setCurrentChannel(channel)} // Click-Handler auf dem äußeren div
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <Hash className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm font-medium">{channel.name}</span>
-                    </div>
+                <div key={channel.id} className="group flex min-w-0 items-center rounded-lg border border-border/60 md:border-0">
+                  <button
+                    type="button"
+                    className={`flex min-w-0 flex-1 items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${currentChannel?.id === channel.id ? 'bg-accent font-semibold text-primary' : 'text-muted-foreground'}`}
+                    aria-current={currentChannel?.id === channel.id ? 'page' : undefined}
+                    onClick={() => setCurrentChannel(channel)}
+                  >
+                    <Hash className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    <span className="max-w-40 truncate">{channel.name}</span>
+                  </button>
                     {session.user.role === 'ADMIN' && (
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="opacity-0 group-hover:opacity-100 transition-opacity"
-                            onClick={(e) => e.stopPropagation()} // Verhindert Bubble-Up zum Parent
+                            className="shrink-0 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
+                            aria-label={`Channel ${channel.name} löschen`}
                           >
                             <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
@@ -270,14 +272,22 @@ export default function ChatPage() {
                         </AlertDialogContent>
                       </AlertDialog>
                     )}
-                  </div>
                 </div>
               ))}
+              </nav>
+              {channels.length === 0 && <p className="px-4 pb-4 text-sm text-muted-foreground">Noch keine Channels vorhanden.</p>}
             </ScrollArea>
           </div>
 
-          <div className="flex-1 flex flex-col">
-            <ScrollArea className="flex-1 p-4">
+          <main id="page-content" tabIndex={-1} className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <ScrollArea className="min-h-0 flex-1 p-4">
+              {messages.length === 0 && (
+                <div className="flex min-h-48 flex-col items-center justify-center gap-2 text-center">
+                  <Hash className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
+                  <h3 className="font-semibold">{currentChannel ? `Willkommen in # ${currentChannel.name}` : 'Wähle einen Channel'}</h3>
+                  <p className="text-sm text-muted-foreground">{currentChannel ? 'Starte die Unterhaltung mit einer Nachricht.' : 'Öffne einen Channel, um die Unterhaltung zu sehen.'}</p>
+                </div>
+              )}
               {messages.map((message) => (
                 <div key={message.id} className="mb-4">
                   <div className="flex items-start space-x-3">
@@ -287,9 +297,9 @@ export default function ChatPage() {
                         {message.author.name?.[0] ?? '?'}
                       </AvatarFallback>
                     </Avatar>
-                    <div className="flex-1 space-y-1">
-                      <div className="flex items-center space-x-2">
-                        <span className="font-semibold">
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span className="break-words font-semibold">
                           {message.author.name}
                         </span>
                         <span className="text-xs text-muted-foreground">
@@ -305,20 +315,21 @@ export default function ChatPage() {
                             ref={editInputRef}
                             value={editContent}
                             onChange={(e) => setEditContent(e.target.value)}
-                            onKeyPress={(e) => e.key === 'Enter' && handleSaveEdit()}
+                            aria-label="Nachricht bearbeiten"
+                            onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) handleSaveEdit(); if (e.key === 'Escape') handleCancelEdit() }}
                             className="flex-1"
                           />
-                          <Button size="icon" onClick={handleSaveEdit}>
+                          <Button size="icon" aria-label="Änderung speichern" onClick={handleSaveEdit}>
                             <Check className="h-4 w-4" />
                           </Button>
-                          <Button size="icon" variant="ghost" onClick={handleCancelEdit}>
+                          <Button size="icon" variant="ghost" aria-label="Bearbeitung abbrechen" onClick={handleCancelEdit}>
                             <X className="h-4 w-4" />
                           </Button>
                         </div>
                       ) : (
                         <div className="group flex items-start">
-                          <div className="flex-1 space-y-2">
-                            <p className="text-sm leading-relaxed">
+                          <div className="min-w-0 flex-1 space-y-2">
+                            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed [overflow-wrap:anywhere]">
                               {message.content}
                             </p>
                             {message.imageUrl && (
@@ -330,13 +341,14 @@ export default function ChatPage() {
                                     width={512}
                                     height={512}
                                     unoptimized
-                                    className="rounded-lg object-contain cursor-pointer"
+                                    className="h-auto max-w-full rounded-lg object-contain cursor-pointer"
                                     onClick={() => setSelectedImageForModal(message.imageUrl ?? null)}
                                   />
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="absolute top-2 right-2 opacity-0 group-hover/image:opacity-100 transition-opacity"
+                                    className="absolute top-2 right-2 opacity-100 transition-opacity md:opacity-0 md:group-hover/image:opacity-100 md:group-focus-within/image:opacity-100"
+                                    aria-label="Nachrichtenbild vergrößern"
                                     onClick={() => setSelectedImageForModal(message.imageUrl ?? null)}
                                   >
                                     <Maximize2 className="h-4 w-4" />
@@ -349,7 +361,8 @@ export default function ChatPage() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="opacity-0 group-hover:opacity-100 transition-opacity"
+                              className="shrink-0 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
+                              aria-label="Nachricht bearbeiten"
                               onClick={() => handleStartEdit(message)}
                             >
                               <Pencil className="h-4 w-4" />
@@ -378,6 +391,7 @@ export default function ChatPage() {
                       variant="destructive"
                       size="icon"
                       className="absolute top-1 right-1"
+                      aria-label="Bild entfernen"
                       onClick={cancelImageUpload}
                     >
                       <X className="h-4 w-4" />
@@ -391,7 +405,9 @@ export default function ChatPage() {
                   placeholder="Nachricht schreiben..."
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                  aria-label="Nachricht"
+                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.preventDefault(); handleSendMessage() } }}
+                  className="min-w-0"
                   disabled={!currentChannel}
                 />
                 <input
@@ -404,6 +420,8 @@ export default function ChatPage() {
                 <Button
                   variant="ghost"
                   size="icon"
+                  aria-label="Bild anhängen"
+                  className="shrink-0"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={!currentChannel}
                 >
@@ -411,13 +429,16 @@ export default function ChatPage() {
                 </Button>
                 <Button
                   onClick={handleSendMessage}
-                  disabled={!currentChannel || (!newMessage.trim() && !selectedImage)}
+                  aria-label="Nachricht senden"
+                  aria-busy={isSending}
+                  className="shrink-0"
+                  disabled={isSending || !currentChannel || (!newMessage.trim() && !selectedImage)}
                 >
                   <Send className="h-4 w-4" />
                 </Button>
               </div>
             </div>
-          </div>
+          </main>
         </div>
       </div>
 
@@ -429,6 +450,6 @@ export default function ChatPage() {
           imageUrl={selectedImageForModal}
         />
       )}
-    </div>
+    </AppShell>
   )
 }

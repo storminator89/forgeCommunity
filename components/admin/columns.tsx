@@ -8,9 +8,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 
 export type User = {
@@ -71,13 +71,9 @@ export const columns: ColumnDef<User>[] = [
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>Aktionen</DropdownMenuLabel>
-            <DropdownMenuItem onClick={() => navigator.clipboard.writeText(user.id)}>
+            <DropdownMenuItem onClick={async () => { try { await navigator.clipboard.writeText(user.id); toast.success("Benutzer-ID kopiert"); } catch { toast.error("Benutzer-ID konnte nicht kopiert werden"); } }}>
               ID kopieren
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>Benutzer bearbeiten</DropdownMenuItem>
-            <DropdownMenuItem>Passwort zurücksetzen</DropdownMenuItem>
-            <DropdownMenuItem className="text-red-600">Benutzer löschen</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       )

@@ -291,13 +291,14 @@ export function ProfileEditForm({ userId, initialData, onUpdate }: ProfileEditFo
                       </Avatar>
                       <label
                         htmlFor="profile-image"
-                        className="absolute bottom-0 right-0 p-1 bg-white dark:bg-gray-800 rounded-full shadow-lg cursor-pointer"
+                        className="absolute bottom-0 right-0 p-2 bg-card rounded-full shadow-lg cursor-pointer focus-within:ring-2 focus-within:ring-ring"
                       >
                         <Camera className="h-4 w-4" />
                         <input
                           type="file"
                           id="profile-image"
-                          className="hidden"
+                          className="sr-only"
+                          aria-label="Profilbild auswählen"
                           accept="image/*"
                           onChange={handleImageChange}
                         />

@@ -18,13 +18,13 @@ function getVisitedPages(): VisitedPages {
   }
 }
 
-function saveVisitedPages(pages: VisitedPages) {
+function saveVisitedPages(pages: VisitedPages, courseId: string) {
   if (typeof window === 'undefined') return;
   
   try {
     localStorage.setItem(VISITED_PAGES_KEY, JSON.stringify(pages));
     window.dispatchEvent(new CustomEvent('visitedPagesChanged', {
-      detail: { courseId: Object.keys(pages)[0] }
+      detail: { courseId }
     }));
   } catch (error) {
     console.error('Error saving visited pages:', error);
@@ -44,7 +44,7 @@ export function markPageAsVisited(courseId: string, contentId: string) {
   }
   
   visitedPages[courseId][contentId] = true;
-  saveVisitedPages(visitedPages);
+  saveVisitedPages(visitedPages, courseId);
 }
 
 export function unmarkPageAsVisited(courseId: string, contentId: string) {
@@ -52,7 +52,7 @@ export function unmarkPageAsVisited(courseId: string, contentId: string) {
   
   if (visitedPages[courseId]?.[contentId]) {
     delete visitedPages[courseId][contentId];
-    saveVisitedPages(visitedPages);
+    saveVisitedPages(visitedPages, courseId);
   }
 }
 

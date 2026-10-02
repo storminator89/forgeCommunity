@@ -1,5 +1,6 @@
 'use client';
 
+import { AppShell, AppHeader } from '@/components/app-shell';
 import { useRouter, useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Sidebar } from "@/components/Sidebar";
@@ -121,10 +122,10 @@ export default function ArticlePage() {
   const isAuthor = session?.user?.id === article.author.id;
 
   return (
-    <div className="flex flex-col lg:flex-row min-h-screen h-screen bg-background">
+    <AppShell>
       <Sidebar />
-      <div className="flex-1 flex flex-col h-screen">
-        <header className="bg-gradient-to-b from-background via-background to-transparent z-10 sticky top-0 flex-none">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <AppHeader>
           <div className="container mx-auto px-6">
             {/* Top Navigation */}
             <div className="py-3 border-b border-border/40 flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -148,7 +149,7 @@ export default function ArticlePage() {
                   </Tooltip>
                 </TooltipProvider>
               </div>
-              <div className="flex items-center space-x-3">
+              <div className="flex flex-wrap items-center gap-2">
                 {isAuthor && (
                   <>
                     <TooltipProvider>
@@ -199,7 +200,7 @@ export default function ArticlePage() {
 
             {/* Article Title Section */}
             <div className="py-6 flex flex-col gap-4">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                 <BookOpen className="h-4 w-4" />
                 <span>{article.category}</span>
                 <span className="text-border/60">•</span>
@@ -215,10 +216,10 @@ export default function ArticlePage() {
                 </div>
               </div>
               <div className="space-y-4">
-                <h1 className="text-4xl font-bold tracking-tight text-foreground">
+                <h1 className="break-words text-2xl sm:text-4xl font-bold tracking-tight text-foreground">
                   {article.title}
                 </h1>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   <div className="flex items-center gap-2 bg-muted/40 hover:bg-muted/60 transition-colors rounded-full pl-1 pr-3 py-1">
                     <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center">
                       <User className="h-3.5 w-3.5 text-primary" />
@@ -227,7 +228,7 @@ export default function ArticlePage() {
                       {article.author.name || article.author.email}
                     </span>
                   </div>
-                  <div className="flex gap-1.5">
+                  <div className="flex flex-wrap gap-1.5">
                     {article.tags.map((tag) => (
                       <Badge
                         key={tag.id}
@@ -243,9 +244,9 @@ export default function ArticlePage() {
             </div>
           </div>
           <div className="h-px bg-gradient-to-r from-border/0 via-border/40 to-border/0" />
-        </header>
+        </AppHeader>
 
-        <div className="flex-1 overflow-y-auto">
+        <div id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto">
           <div className="container mx-auto py-8 px-6">
             <div className="max-w-4xl mx-auto">
               <div className="space-y-8">
@@ -265,7 +266,7 @@ export default function ArticlePage() {
                   )}
                   <div className="p-6 sm:p-8 sm:pt-10">
                     <div
-                      className="prose prose-neutral dark:prose-invert max-w-none 
+                      className="break-words [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto prose prose-neutral dark:prose-invert max-w-none
                         prose-headings:font-semibold prose-headings:tracking-tight
                         prose-h1:text-3xl prose-h2:text-2xl prose-h3:text-xl
                         prose-h4:text-lg prose-h5:text-base
@@ -292,6 +293,6 @@ export default function ArticlePage() {
           </div>
         </div>
       </div>
-    </div>
+    </AppShell>
   );
 }

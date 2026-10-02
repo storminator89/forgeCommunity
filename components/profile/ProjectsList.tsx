@@ -166,10 +166,10 @@ export function ProjectsList({ userId, isOwner }: ProjectsListProps) {
         <>
           {projects.length === 0 ? (
             <div className="text-center py-12">
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-medium text-foreground mb-2">
                 Keine Projekte vorhanden
               </h3>
-              <p className="text-gray-500 dark:text-gray-400">
+              <p className="text-muted-foreground">
                 {isOwner
                   ? 'Erstellen Sie Ihr erstes Projekt'
                   : 'Dieser Benutzer hat noch keine Projekte erstellt'}
@@ -200,7 +200,7 @@ export function ProjectsList({ userId, isOwner }: ProjectsListProps) {
                           backgroundPosition: 'center',
                         }}
                       >
-                        <div className="absolute inset-0 bg-black bg-opacity-40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center space-x-4">
+                        <div className="absolute inset-0 bg-black bg-opacity-40 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity duration-300 flex items-center justify-center space-x-4">
                           {safeProjectLink && (
                             <Button
                               size="sm"
@@ -231,7 +231,7 @@ export function ProjectsList({ userId, isOwner }: ProjectsListProps) {
                             </Badge>
                           )}
                           <h3 className="text-lg font-semibold mb-1">{project.title}</h3>
-                          <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2">
+                          <p className="text-sm text-muted-foreground line-clamp-2">
                             {project.description}
                           </p>
                         </div>
@@ -244,7 +244,7 @@ export function ProjectsList({ userId, isOwner }: ProjectsListProps) {
                           ))}
                         </div>
 
-                        <div className="flex items-center justify-between text-sm text-gray-500">
+                        <div className="flex items-center justify-between text-sm text-muted-foreground">
                           <div className="flex items-center space-x-4">
                             <Button
                               variant="ghost"
@@ -266,6 +266,7 @@ export function ProjectsList({ userId, isOwner }: ProjectsListProps) {
                             <Button
                               variant="ghost"
                               size="sm"
+                              aria-label="Projekt teilen"
                               onClick={() => handleShare(project)}
                             >
                               <Share2 className="h-4 w-4" />

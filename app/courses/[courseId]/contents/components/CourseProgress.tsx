@@ -26,7 +26,7 @@ export function CourseProgress({ contents, courseId }: CourseProgressProps) {
         ),
       };
     }
-    
+
     return {
       completed: isPageVisited(courseId, topic.id),
       partiallyCompleted: false,
@@ -49,7 +49,7 @@ export function CourseProgress({ contents, courseId }: CourseProgressProps) {
                     ) : status.partiallyCompleted ? (
                       <AlertCircle className="h-4 w-4 text-yellow-500" />
                     ) : (
-                      <Circle className="h-4 w-4 text-gray-400" />
+                      <Circle className="h-4 w-4 text-muted-foreground" />
                     )}
                     <span className="text-sm truncate">{topic.title}</span>
                   </TooltipTrigger>
@@ -59,7 +59,7 @@ export function CourseProgress({ contents, courseId }: CourseProgressProps) {
                         ? "Alle Unterthemen abgeschlossen"
                         : status.partiallyCompleted
                         ? "Einige Unterthemen abgeschlossen"
-                        : topic.subContents?.length 
+                        : topic.subContents?.length
                           ? "Keine Unterthemen abgeschlossen"
                           : "Noch nicht abgeschlossen"}
                     </p>
@@ -71,7 +71,7 @@ export function CourseProgress({ contents, courseId }: CourseProgressProps) {
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
-              
+
               {topic.subContents && topic.subContents.length > 0 && (
                 <div className="ml-6 space-y-1">
                   {topic.subContents.map((subTopic) => (
@@ -81,7 +81,7 @@ export function CourseProgress({ contents, courseId }: CourseProgressProps) {
                           {isPageVisited(courseId, subTopic.id) ? (
                             <CheckCircle2 className="h-3 w-3 text-green-500" />
                           ) : (
-                            <Circle className="h-3 w-3 text-gray-400" />
+                            <Circle className="h-3 w-3 text-muted-foreground" />
                           )}
                           <span className="text-xs text-muted-foreground truncate">
                             {subTopic.title}

@@ -1,5 +1,6 @@
 "use client"
 
+import { AppShell, AppHeader } from '@/components/app-shell';
 import { useState, useEffect } from 'react'
 import { Sidebar } from "@/components/Sidebar"
 import { UserNav } from "@/components/user-nav"
@@ -43,7 +44,7 @@ interface Certificate {
 }
 
 const SKILL_LEVELS = [
-  { label: 'Keine Kenntnisse', value: 0, color: 'bg-gray-300' },
+  { label: 'Keine Kenntnisse', value: 0, color: 'bg-secondary' },
   { label: 'Beginner', value: 33, color: 'bg-blue-500' },
   { label: 'Fortgeschritten', value: 66, color: 'bg-green-500' },
   { label: 'Experte', value: 100, color: 'bg-purple-500' }
@@ -64,8 +65,8 @@ const getLevelLabel = (value: number) => {
 
 export default function SettingsPage() {
   // Grundlegende Benutzerinformationen
-  const [name, setName] = useState('Max Mustermann')
-  const [email, setEmail] = useState('max.mustermann@example.com')
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
   const [userImage, setUserImage] = useState<string | null>(null)
   const [language, setLanguage] = useState('de')
   const [emailNotifications, setEmailNotifications] = useState(true)
@@ -86,7 +87,10 @@ export default function SettingsPage() {
   const [editSkill, setEditSkill] = useState<UserSkill | null>(null)
 
   // Lade- und Fehlerzustände
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [isLoaded, setIsLoaded] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true)
@@ -110,8 +114,10 @@ export default function SettingsPage() {
         setEmailNotifications(userSettings?.emailNotifications ?? true)
         setPushNotifications(userSettings?.pushNotifications ?? true)
         setCertificates(certificatesResponse.data)
+        setIsLoaded(true)
       } catch (error) {
         console.error("Fehler beim Abrufen der Daten:", error)
+        setLoadError("Die Einstellungen konnten nicht geladen werden. Bitte lade die Seite erneut.")
         toast.error("Beim Laden der Daten ist ein Fehler aufgetreten.")
       } finally {
         setIsLoading(false)
@@ -132,6 +138,8 @@ export default function SettingsPage() {
   }
 
   const handleSave = async () => {
+    if (!isLoaded || isLoading || isSaving) return
+    setIsSaving(true)
     try {
       await axios.put('/api/user/profile', {
         name,
@@ -144,6 +152,8 @@ export default function SettingsPage() {
     } catch (error) {
       console.error("Fehler beim Speichern der Einstellungen:", error)
       toast.error("Beim Speichern der Einstellungen ist ein Fehler aufgetreten.")
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -231,29 +241,30 @@ export default function SettingsPage() {
     } else if (name.includes('language') || name.includes('german') || name.includes('english')) {
       return <Languages className="w-5 h-5 text-yellow-500" />
     }
-    return <CheckCircle className="w-5 h-5 text-gray-500" />
+    return <CheckCircle className="w-5 h-5 text-muted-foreground" />
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-100 dark:bg-gray-900">
+    <AppShell>
       <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {/* Header */}
-        <header className="bg-white dark:bg-gray-800 shadow-sm z-10">
+        <AppHeader>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-            <h2 className="text-2xl font-bold text-gray-800 dark:text-white ml-12 lg:ml-0">Einstellungen</h2>
+            <h2 className="text-xl sm:text-2xl font-bold text-foreground">Einstellungen</h2>
             <div className="flex items-center space-x-4">
               <ThemeToggle />
               <UserNav />
             </div>
           </div>
-        </header>
+        </AppHeader>
 
         {/* Hauptinhalt */}
-        <main className="flex-1 overflow-y-auto p-4 lg:p-8">
+        <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto p-4 lg:p-8">
           <div className="max-w-4xl mx-auto">
+            {loadError && <div role="alert" className="mb-6 rounded-xl border border-destructive/30 bg-destructive/5 p-4"><p>{loadError}</p><Button variant="outline" className="mt-3" onClick={() => window.location.reload()}>Erneut laden</Button></div>}
             <Tabs defaultValue="account" className="w-full">
-              <TabsList className="flex space-x-1 rounded-md bg-gray-200 p-1 dark:bg-gray-700 mb-6">
+              <TabsList className="grid h-auto w-full grid-cols-2 gap-1 bg-muted p-1 mb-6 sm:grid-cols-4">
                 <TabsTrigger value="account" className="w-full">
                   <User className="w-4 h-4 mr-2" />
                   Account
@@ -307,7 +318,7 @@ export default function SettingsPage() {
                     </div>
                   </CardContent>
                   <CardFooter>
-                    <Button onClick={handleSave}>Speichern</Button>
+                    <Button onClick={handleSave} disabled={!isLoaded || isLoading || isSaving}>{isSaving ? 'Wird gespeichert…' : 'Speichern'}</Button>
                   </CardFooter>
                 </Card>
               </TabsContent>
@@ -320,9 +331,9 @@ export default function SettingsPage() {
                     <CardDescription>Verwalten Sie Ihre Benachrichtigungspräferenzen.</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-4">
                       <div className="flex items-center space-x-2">
-                        <Bell className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                        <Bell className="w-5 h-5 text-muted-foreground" />
                         <Label htmlFor="email-notifications">E-Mail-Benachrichtigungen</Label>
                       </div>
                       <Switch
@@ -331,9 +342,9 @@ export default function SettingsPage() {
                         onCheckedChange={setEmailNotifications}
                       />
                     </div>
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-4">
                       <div className="flex items-center space-x-2">
-                        <Bell className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                        <Bell className="w-5 h-5 text-muted-foreground" />
                         <Label htmlFor="push-notifications">Push-Benachrichtigungen</Label>
                       </div>
                       <Switch
@@ -344,7 +355,7 @@ export default function SettingsPage() {
                     </div>
                   </CardContent>
                   <CardFooter>
-                    <Button onClick={handleSave}>Speichern</Button>
+                    <Button onClick={handleSave} disabled={!isLoaded || isLoading || isSaving}>{isSaving ? 'Wird gespeichert…' : 'Speichern'}</Button>
                   </CardFooter>
                 </Card>
               </TabsContent>
@@ -357,23 +368,23 @@ export default function SettingsPage() {
                     <CardDescription>Verwalten Sie Ihre Privatsphäre-Einstellungen.</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-4">
                       <div className="flex items-center space-x-2">
-                        <Globe className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                        <Globe className="w-5 h-5 text-muted-foreground" />
                         <Label htmlFor="profile-visibility">Öffentliches Profil</Label>
                       </div>
                       <Switch id="profile-visibility" />
                     </div>
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-4">
                       <div className="flex items-center space-x-2">
-                        <Lock className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                        <Lock className="w-5 h-5 text-muted-foreground" />
                         <Label htmlFor="two-factor-auth">Zwei-Faktor-Authentifizierung</Label>
                       </div>
                       <Switch id="two-factor-auth" />
                     </div>
                   </CardContent>
                   <CardFooter>
-                    <Button onClick={handleSave}>Speichern</Button>
+                    <Button onClick={handleSave} disabled={!isLoaded || isLoading || isSaving}>{isSaving ? 'Wird gespeichert…' : 'Speichern'}</Button>
                   </CardFooter>
                 </Card>
               </TabsContent>
@@ -389,24 +400,24 @@ export default function SettingsPage() {
                     </CardHeader>
                     <CardContent>
                       {isLoading ? (
-                        <p className="text-gray-500 dark:text-gray-400">Lade Fähigkeiten...</p>
+                        <p className="text-muted-foreground">Lade Fähigkeiten...</p>
                       ) : (
                         <ul className="space-y-4">
                           {userSkills.map((userSkill) => (
-                            <li key={userSkill.id} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-md shadow">
+                            <li key={userSkill.id} className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-4 bg-muted/40 rounded-xl border">
                               <div className="flex items-center space-x-4">
                                 {getSkillIcon(userSkill.skill?.name || "")}
                                 <div className="flex-1">
-                                  <span className="font-medium text-gray-700 dark:text-gray-200">
+                                  <span className="font-medium text-foreground">
                                     {userSkill.skill?.name || "Unbekannte Fähigkeit"}
                                   </span>
                                   <div className="mt-2">
                                     <div className="flex items-center justify-between mb-1">
-                                      <span className="text-sm text-gray-600 dark:text-gray-400">
+                                      <span className="text-sm text-muted-foreground">
                                         {getLevelLabel(userSkill.level)}
                                       </span>
                                     </div>
-                                    <div className="w-48 bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
+                                    <div className="w-full min-w-0 sm:w-48 bg-muted rounded-full h-2.5">
                                       <div
                                         className={`h-2.5 rounded-full ${findNearestLevel(userSkill.level).color}`}
                                         style={{ width: `${userSkill.level}%` }}
@@ -419,7 +430,7 @@ export default function SettingsPage() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="text-black hover:bg-gray-200 dark:hover:bg-gray-700"
+                                  className="text-foreground hover:bg-accent"
                                   onClick={() => {
                                     setEditSkill(userSkill)
                                     setIsEditModalOpen(true)
@@ -431,7 +442,7 @@ export default function SettingsPage() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="text-black hover:bg-gray-200 dark:hover:bg-gray-700"
+                                  className="text-foreground hover:bg-accent"
                                   onClick={() => handleDeleteSkill(userSkill.skillId)}
                                   aria-label="Löschen"
                                 >
@@ -518,8 +529,8 @@ export default function SettingsPage() {
                   </CardHeader>
                   <CardContent className="space-y-4">
                     {certificates.length === 0 ? (
-                      <div className="text-center py-6 text-gray-500">
-                        <Award className="w-12 h-12 mx-auto mb-2 text-gray-400" />
+                      <div className="text-center py-6 text-muted-foreground">
+                        <Award className="w-12 h-12 mx-auto mb-2 text-muted-foreground" />
                         Du hast noch keine Zertifikate erworben.
                       </div>
                     ) : (
@@ -527,22 +538,22 @@ export default function SettingsPage() {
                         {certificates.map((cert) => (
                           <div
                             key={cert.id}
-                            className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50"
+                            className="flex flex-col gap-4 p-4 border rounded-xl hover:bg-accent"
                           >
                             <div className="flex items-start space-x-4">
                               <Award className="w-8 h-8 mt-1 text-primary" />
                               <div>
                                 <h3 className="font-medium">{cert.courseName}</h3>
-                                <p className="text-sm text-gray-500">
+                                <p className="text-sm text-muted-foreground">
                                   Ausgestellt am: {new Date(cert.issuedAt).toLocaleDateString('de-DE')}
                                 </p>
                               </div>
                             </div>
-                            <div className="flex gap-2">
+                            <div className="flex flex-wrap gap-2">
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => window.open(`/verify-certificate/${cert.id}`, '_blank')}
+                                onClick={() => window.open(`/verify-certificate/${cert.id}`, '_blank', 'noopener,noreferrer')}
                               >
                                 <Eye className="w-4 h-4 mr-2" />
                                 Anzeigen
@@ -555,11 +566,11 @@ export default function SettingsPage() {
                                     const response = await fetch(`/api/courses/${cert.courseId}/certificate`, {
                                       method: 'POST',
                                     });
-                                    
+
                                     if (!response.ok) {
                                       throw new Error('Failed to generate certificate');
                                     }
-                                    
+
                                     const blob = await response.blob();
                                     const url = window.URL.createObjectURL(blob);
                                     const a = document.createElement('a');
@@ -567,10 +578,11 @@ export default function SettingsPage() {
                                     a.download = `${cert.courseName.replace(/\s+/g, '_')}_Certificate.pdf`;
                                     document.body.appendChild(a);
                                     a.click();
+                                    a.remove();
                                     window.URL.revokeObjectURL(url);
                                   } catch (error) {
                                     console.error('Error downloading certificate:', error);
-                                    toast.error('Failed to download certificate');
+                                    toast.error('Das Zertifikat konnte nicht heruntergeladen werden.');
                                   }
                                 }}
                               >
@@ -640,6 +652,6 @@ export default function SettingsPage() {
         </Dialog>
 
       )}
-    </div>
+    </AppShell>
   )
 }

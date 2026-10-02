@@ -6,11 +6,15 @@
  * or for environments where we want to disable animations globally
  */
 
-import React, { ComponentProps, ReactNode, forwardRef } from 'react';
+import React, { ComponentProps, ReactNode, forwardRef, useSyncExternalStore } from 'react';
+
+// Keep component identities stable so a state update does not remount forms.
+const motionComponents = new Map<string, React.ComponentType<any>>();
 
 // Safe proxy to handle any motion.xyz component access
 const motionProxy = new Proxy({} as any, {
     get: (target, prop) => {
+        if (typeof prop === 'string' && motionComponents.has(prop)) return motionComponents.get(prop);
         // Return a forwardRef component for any property access (div, span, li, etc.)
         const Component = forwardRef((props: any, ref) => {
             const {
@@ -35,6 +39,7 @@ const motionProxy = new Proxy({} as any, {
         });
 
         Component.displayName = `MotionFallback.${String(prop)}`;
+        if (typeof prop === 'string') motionComponents.set(prop, Component);
         return Component;
     }
 });
@@ -45,6 +50,17 @@ export const motion: any = motionProxy;
 export const AnimatePresence = ({ children }: { children: ReactNode }) => {
     return <>{children}</>;
 };
+
+function subscribeReducedMotion(callback: () => void) {
+    const query = window.matchMedia('(prefers-reduced-motion: reduce)');
+    query.addEventListener('change', callback);
+    return () => query.removeEventListener('change', callback);
+}
+export const useReducedMotion = () => useSyncExternalStore(
+    subscribeReducedMotion,
+    () => window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+    () => true,
+);
 
 // Mock other common exports that might be used
 export const useAnimation = () => ({

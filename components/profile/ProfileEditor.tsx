@@ -66,7 +66,7 @@ const socialLabels = {
 };
 
 const socialColors = {
-  github: 'hover:text-gray-900 dark:hover:text-white',
+  github: 'hover:text-foreground dark:hover:text-white',
   linkedin: 'hover:text-blue-600',
   twitter: 'hover:text-blue-400',
   website: 'hover:text-green-500'
@@ -158,7 +158,7 @@ export function ProfileEditor({ profile, onUpdate }: ProfileEditorProps) {
               href={value}
               target="_blank"
               rel="noopener noreferrer"
-              className={`flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors ${socialColors[key]}`}
+              className={`flex items-center gap-2 p-2 rounded-lg hover:bg-accent transition-colors ${socialColors[key]}`}
             >
               {socialIcons[key]}
               <span className="text-sm font-medium">{socialLabels[key]}</span>
@@ -174,10 +174,10 @@ export function ProfileEditor({ profile, onUpdate }: ProfileEditorProps) {
 
     return (
       <div className="space-y-4">
-        <div className="flex justify-between items-center">
+        <div className="flex flex-wrap gap-3 justify-between items-center">
           <div>
             <h4 className="text-sm font-medium">{title}</h4>
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-muted-foreground">
               {currentImage
                 ? `Aktuelles ${imageType} hochgeladen`
                 : `Kein ${imageType} vorhanden`}
@@ -207,8 +207,8 @@ export function ProfileEditor({ profile, onUpdate }: ProfileEditorProps) {
                   className="object-cover"
                 />
               </div>
-              <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-all duration-300 flex items-center justify-center">
-                <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+              <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 group-focus-within:bg-opacity-40 transition-all duration-300 flex items-center justify-center">
+                <div className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity duration-300">
                   <ImageUpload
                     userId={profile.id}
                     type={type}
@@ -224,13 +224,13 @@ export function ProfileEditor({ profile, onUpdate }: ProfileEditorProps) {
               </div>
             </div>
           ) : (
-            <div className="border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg p-8">
+            <div className="border-2 border-dashed border-border rounded-lg p-8">
               <div className="flex flex-col items-center justify-center text-center">
-                <ImageIcon className="h-12 w-12 text-gray-400 mb-4" />
-                <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                <ImageIcon className="h-12 w-12 text-muted-foreground mb-4" />
+                <h3 className="text-sm font-medium text-foreground">
                   Kein {imageType} vorhanden
                 </h3>
-                <p className="text-sm text-gray-500 mt-1">
+                <p className="text-sm text-muted-foreground mt-1">
                   Laden Sie ein {imageType} hoch, um Ihr Profil zu vervollständigen
                 </p>
                 <ImageUpload
@@ -283,7 +283,7 @@ export function ProfileEditor({ profile, onUpdate }: ProfileEditorProps) {
           </CardHeader>
           <CardContent className="p-6">
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="grid w-full grid-cols-3 mb-8">
+              <TabsList className="flex h-auto w-full flex-wrap gap-1 mb-8">
                 <TabsTrigger value="basic" className="flex items-center gap-2">
                   <User className="h-4 w-4" />
                   Basis-Informationen
@@ -364,7 +364,7 @@ export function ProfileEditor({ profile, onUpdate }: ProfileEditorProps) {
                 <span className="text-sm font-medium">
                   Profilvollständigkeit
                 </span>
-                <span className="text-sm text-gray-500">
+                <span className="text-sm text-muted-foreground">
                   {calculateCompletionScore()}%
                 </span>
               </div>
@@ -372,14 +372,14 @@ export function ProfileEditor({ profile, onUpdate }: ProfileEditorProps) {
                 value={calculateCompletionScore()}
                 className="h-2"
               />
-              <p className="text-sm text-gray-500 mt-2">
+              <p className="text-sm text-muted-foreground mt-2">
                 {calculateCompletionScore() === 100 ? (
                   <span className="text-green-500 flex items-center gap-1">
                     <CheckCircle className="h-4 w-4" />
                     Ihr Profil ist vollständig
                   </span>
                 ) : (
-                  <span className="text-gray-500 flex items-center gap-1">
+                  <span className="text-muted-foreground flex items-center gap-1">
                     <AlertCircle className="h-4 w-4" />
                     Vervollständigen Sie Ihr Profil für bessere Sichtbarkeit
                   </span>

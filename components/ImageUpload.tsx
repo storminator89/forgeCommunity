@@ -4,6 +4,7 @@ import { useState, useRef } from 'react'
 import { Button } from "@/components/ui/button"
 import { toast } from 'react-toastify'
 import Image from 'next/image'
+import { UserRound } from 'lucide-react'
 
 interface ImageUploadProps {
   currentImage?: string | null
@@ -12,6 +13,7 @@ interface ImageUploadProps {
 
 export function ImageUpload({ currentImage, onImageUpdate }: ImageUploadProps) {
   const [isUploading, setIsUploading] = useState(false)
+  const [failedImage, setFailedImage] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -66,21 +68,24 @@ export function ImageUpload({ currentImage, onImageUpdate }: ImageUploadProps) {
   return (
     <div className="flex flex-col items-center space-y-4">
       <div className="relative w-32 h-32 rounded-full overflow-hidden">
-        <Image
-          src={currentImage || '/images/placeholder.png'}
+        {currentImage && currentImage !== failedImage ? <Image
+          src={currentImage}
           alt="Profilbild"
           fill
           className="object-cover"
-        />
+          onError={() => setFailedImage(currentImage)}
+        /> : <div role="img" aria-label="Noch kein Profilbild" className="flex h-full w-full items-center justify-center rounded-full bg-accent text-primary"><UserRound className="h-12 w-12" aria-hidden="true" /></div>}
       </div>
       <input
         type="file"
+        aria-label="Profilbild auswählen"
         ref={fileInputRef}
         onChange={handleUpload}
         accept="image/jpeg,image/png,image/gif"
         className="hidden"
       />
       <Button
+        type="button"
         onClick={triggerFileInput}
         disabled={isUploading}
         variant="outline"

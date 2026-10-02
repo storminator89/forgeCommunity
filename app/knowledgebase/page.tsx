@@ -1,5 +1,8 @@
 'use client';
 
+import { PageState, RetryButton } from '@/components/page-state';
+import { PageIntro } from '@/components/page-intro';
+import { AppShell, AppHeader } from '@/components/app-shell';
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from "@/components/Sidebar";
@@ -98,21 +101,14 @@ export default function KnowledgeBase() {
     [articles, selectedCategory, selectedTag, searchTerm]
   );
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p>Laden...</p>
-      </div>
-    );
-  }
 
   return (
-    <div className="flex flex-col lg:flex-row min-h-screen h-screen bg-gradient-to-br from-background to-background/80">
+    <AppShell>
       <Sidebar />
-      <div className="flex-1 flex flex-col h-screen overflow-hidden">
-        <header className="bg-card shadow-sm z-10 sticky top-0 border-b backdrop-blur-sm">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <AppHeader>
           <div className="container mx-auto px-6 py-5">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-5">
+            <div className="flex flex-row items-center justify-between gap-3">
               <div className="flex items-center">
                 <div className="bg-primary/10 p-2.5 rounded-xl mr-4">
                   <Book className="h-5 w-5 text-primary" />
@@ -122,19 +118,7 @@ export default function KnowledgeBase() {
                   <p className="text-sm text-muted-foreground mt-0.5">Entdecke und teile Wissen</p>
                 </div>
               </div>
-              <div className="flex items-center gap-4 w-full sm:w-auto">
-                <div className="relative flex-1 sm:flex-initial">
-                  <div className="relative group">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground transition-colors group-hover:text-primary" />
-                    <Input
-                      type="text"
-                      placeholder="Artikel durchsuchen..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-10 pr-4 w-full sm:w-[300px] bg-background/50 focus:bg-background transition-all border-muted-foreground/20 focus:border-primary rounded-lg"
-                    />
-                  </div>
-                </div>
+              <div className="flex items-center gap-4">
                 <div className="flex items-center gap-3">
                   <ThemeToggle />
                   <UserNav />
@@ -142,10 +126,11 @@ export default function KnowledgeBase() {
               </div>
             </div>
           </div>
-        </header>
+        </AppHeader>
 
-        <main className="flex-1 overflow-y-auto bg-accent/5">
+        <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto bg-accent/5">
           <div className="container mx-auto py-8 px-6">
+            <PageIntro eyebrow="Wissen & Lernen" title="Wissen, das weiterhilft." description="Anleitungen, Erfahrungen und Ideen aus der Community. Finde Antworten oder teile dein Wissen." />
             <div className="max-w-7xl mx-auto space-y-8">
               {/* Filter und Aktionen */}
               <div className="grid lg:grid-cols-[300px,1fr] gap-6">
@@ -225,12 +210,13 @@ export default function KnowledgeBase() {
                       </div>
                       <div className="flex flex-wrap gap-1.5">
                         {Array.from(new Set(articles.flatMap(article => article.tags.map(tag => tag.name)))).map((tag) => (
-                          <Badge
+                          <button
+                            type="button"
+                            aria-pressed={selectedTag === tag}
                             key={tag}
-                            variant={selectedTag === tag ? "default" : "secondary"}
-                            className={`cursor-pointer transition-all duration-200 text-xs ${selectedTag === tag
+                            className={`inline-flex items-center rounded-full px-2.5 py-1 font-medium cursor-pointer transition-all duration-200 text-xs ${selectedTag === tag
                               ? 'bg-primary hover:bg-primary/90 text-primary-foreground'
-                              : 'hover:bg-secondary/80'
+                              : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
                               }`}
                             onClick={() => setSelectedTag(tag === selectedTag ? 'All' : tag)}
                           >
@@ -240,7 +226,7 @@ export default function KnowledgeBase() {
                                 article.tags.some(t => t.name === tag)
                               ).length}
                             </span>
-                          </Badge>
+                          </button>
                         ))}
                       </div>
                     </div>
@@ -274,7 +260,7 @@ export default function KnowledgeBase() {
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                       >
-                        {filteredArticles.length === 0 ? (
+                        {isLoading ? <PageState kind="loading" title="Artikel werden geladen" /> : error ? <PageState kind="error" title="Artikel konnten nicht geladen werden" description="Prüfe deine Verbindung und versuche es erneut." action={<RetryButton onClick={() => window.location.reload()} />} /> : filteredArticles.length === 0 ? (
                           <div className="bg-card p-12 rounded-xl shadow-sm text-center border border-border/40">
                             <div className="flex flex-col items-center gap-5">
                               <div className="bg-primary/10 p-5 rounded-full">
@@ -286,12 +272,13 @@ export default function KnowledgeBase() {
                                   Versuche es mit anderen Suchbegriffen oder Filtern
                                 </p>
                               </div>
-                              {(selectedCategory !== 'All' || selectedTag !== 'All') && (
+                              {(searchTerm || selectedCategory !== 'All' || selectedTag !== 'All') && (
                                 <Button
                                   variant="outline"
                                   onClick={() => {
                                     setSelectedCategory('All');
                                     setSelectedTag('All');
+                                    setSearchTerm('');
                                   }}
                                   className="mt-2"
                                 >
@@ -360,10 +347,6 @@ export default function KnowledgeBase() {
                                           key={tag.id}
                                           variant="secondary"
                                           className="text-xs px-2 py-0.5 hover:bg-secondary/80 transition-colors"
-                                          onClick={(e) => {
-                                            e.preventDefault();
-                                            setSelectedTag(tag.name);
-                                          }}
                                         >
                                           <Tag className="mr-1 h-2.5 w-2.5" />
                                           {tag.name}
@@ -371,13 +354,10 @@ export default function KnowledgeBase() {
                                       ))}
                                     </div>
 
-                                    <Button
-                                      variant="ghost"
-                                      className="group/btn hover:bg-primary hover:text-primary-foreground p-0"
-                                    >
+                                    <span className="inline-flex items-center text-sm font-semibold text-primary">
                                       Weiterlesen
                                       <ChevronRight className="ml-1 h-4 w-4 group-hover/btn:translate-x-0.5 transition-transform" />
-                                    </Button>
+                                    </span>
                                   </div>
                                 </div>
                               </Link>
@@ -393,6 +373,6 @@ export default function KnowledgeBase() {
           </div>
         </main>
       </div>
-    </div>
+    </AppShell>
   );
 }

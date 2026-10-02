@@ -67,6 +67,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const activeSessionIdRef = useRef<string | null>(null);
 
   const setActiveChannel = useCallback((channel: ChatChannel) => {
+    if (activeChannelIdRef.current === channel.id) return;
+    activeChannelIdRef.current = channel.id;
     setMessages([]);
     setLastSync(new Date(0));
     setLastSyncId(null);

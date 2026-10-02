@@ -157,12 +157,12 @@ export function CoursesList({ userId, isInstructor, showEnrolled = false }: Cour
               key={star}
               className={`h-4 w-4 ${star <= rating
                 ? 'text-yellow-400 fill-current'
-                : 'text-gray-300'
+                : 'text-muted-foreground'
                 }`}
             />
           ))}
         </div>
-        <span className="text-sm text-gray-500">({count})</span>
+        <span className="text-sm text-muted-foreground">({count})</span>
       </div>
     );
   };
@@ -177,15 +177,15 @@ export function CoursesList({ userId, isInstructor, showEnrolled = false }: Cour
         <>
           {courses.length === 0 ? (
             <div className="text-center py-12">
-              <BookOpen className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+              <BookOpen className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+              <h3 className="text-lg font-medium text-foreground mb-2">
                 {showEnrolled
                   ? 'Keine eingeschriebenen Kurse'
                   : isInstructor
                     ? 'Keine erstellten Kurse'
                     : 'Keine Kurse vorhanden'}
               </h3>
-              <p className="text-gray-500 dark:text-gray-400">
+              <p className="text-muted-foreground">
                 {showEnrolled
                   ? 'Schreiben Sie sich in Kurse ein, um Ihre Fähigkeiten zu erweitern'
                   : isInstructor
@@ -237,21 +237,21 @@ export function CoursesList({ userId, isInstructor, showEnrolled = false }: Cour
                             </Badge>
                           )}
                           <h3 className="text-lg font-semibold mb-1">{course.title}</h3>
-                          <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2">
+                          <p className="text-sm text-muted-foreground line-clamp-2">
                             {course.description}
                           </p>
                         </div>
 
                         <div className="space-y-3">
                           <div className="flex items-center justify-between text-sm">
-                            <div className="flex items-center text-gray-500">
+                            <div className="flex items-center text-muted-foreground">
                               <Users className="h-4 w-4 mr-1" />
                               {course.stats.enrollments}
                               {course.stats.maxStudents && (
                                 <span>/{course.stats.maxStudents}</span>
                               )}
                             </div>
-                            <div className="flex items-center text-gray-500">
+                            <div className="flex items-center text-muted-foreground">
                               <BookOpen className="h-4 w-4 mr-1" />
                               {course.stats.lessonsCount} Lektionen
                             </div>
@@ -260,7 +260,7 @@ export function CoursesList({ userId, isInstructor, showEnrolled = false }: Cour
                           {renderRating(course.stats.rating, course.stats.ratingCount)}
 
                           {course.startDate && (
-                            <div className="flex items-center text-sm text-gray-500">
+                            <div className="flex items-center text-sm text-muted-foreground">
                               <Calendar className="h-4 w-4 mr-1" />
                               Start: {format(new Date(course.startDate), 'dd.MM.yyyy', { locale: de })}
                             </div>
@@ -297,14 +297,15 @@ export function CoursesList({ userId, isInstructor, showEnrolled = false }: Cour
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => handleShare(course)}
+                            aria-label="Kurs teilen"
+                              onClick={() => handleShare(course)}
                           >
                             <Share2 className="h-4 w-4" />
                           </Button>
                         </div>
 
                         {course.progress?.lastAccessed && (
-                          <div className="mt-3 text-xs text-gray-500">
+                          <div className="mt-3 text-xs text-muted-foreground">
                             <Clock className="h-3 w-3 inline mr-1" />
                             Zuletzt bearbeitet: {format(new Date(course.progress.lastAccessed), 'dd.MM.yyyy HH:mm', { locale: de })}
                           </div>

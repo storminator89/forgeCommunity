@@ -1,5 +1,7 @@
 'use client';
 
+import { PageIntro } from '@/components/page-intro';
+import { AppShell, AppHeader } from '@/components/app-shell';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Sidebar } from "@/components/Sidebar";
 import { UserNav } from "@/components/user-nav";
@@ -75,6 +77,8 @@ export default function ResourceLibrary() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedType, setSelectedType] = useState<string>('all');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'title'>('newest');
+  const [loadedSearchTerm, setLoadedSearchTerm] = useState<string | null>(null);
+  const loadedPageRef = useRef(0);
   const generationRef = useRef(0);
   const activeRequestRef = useRef<AbortController | null>(null);
   const loadingRef = useRef(true);
@@ -98,6 +102,7 @@ export default function ResourceLibrary() {
         return [...prev, ...data.resources.filter(resource => !existingIds.has(resource.id))];
       });
     }
+    loadedPageRef.current = pageNumber;
     setHasMore(data.hasMore);
   }, []);
 
@@ -117,17 +122,23 @@ export default function ResourceLibrary() {
     activeRequestRef.current?.abort();
     activeRequestRef.current = controller;
     const generation = ++generationRef.current;
+    loadingRef.current = true;
+    loadedPageRef.current = 0;
 
     void Promise.all([fetchResources(1, controller.signal), checkAdminStatus(controller.signal)])
       .then(([result, admin]) => {
         if (controller.signal.aborted || generation !== generationRef.current) return;
         applyResourcePage(1, result);
+        setLoadedSearchTerm(searchTerm);
         setIsAdmin(admin);
       })
       .catch(error => {
         if (controller.signal.aborted || generation !== generationRef.current) return;
         console.error('Fehler beim Abrufen der Ressourcen:', error);
         toast.error('Fehler beim Abrufen der Ressourcen.');
+        setLoadedSearchTerm(searchTerm);
+        setDisplayedResources([]);
+        setHasMore(false);
       })
       .finally(() => {
         if (generation === generationRef.current) {
@@ -147,11 +158,11 @@ export default function ResourceLibrary() {
       activeRequestRef.current = null;
       generationRef.current += 1;
     };
-  }, [applyResourcePage, checkAdminStatus, fetchResources]);
+  }, [applyResourcePage, checkAdminStatus, fetchResources, searchTerm]);
 
   const loadMore = useCallback(() => {
     if (loadingRef.current || !hasMore || activeRequestRef.current) return;
-    const nextPage = Math.floor(displayedResources.length / ITEMS_PER_PAGE) + 1;
+    const nextPage = loadedPageRef.current + 1;
     const controller = new AbortController();
     activeRequestRef.current = controller;
     const generation = ++generationRef.current;
@@ -176,7 +187,7 @@ export default function ResourceLibrary() {
           setLoading(false);
         }
       });
-  }, [applyResourcePage, displayedResources.length, fetchResources, hasMore]);
+  }, [applyResourcePage, fetchResources, hasMore]);
 
   useEffect(() => {
     loadMoreRef.current = loadMore;
@@ -266,7 +277,7 @@ export default function ResourceLibrary() {
   };
 
   const filteredAndSortedResources = useMemo(() => {
-    let filtered = [...displayedResources];
+    let filtered = loadedSearchTerm === searchTerm ? [...displayedResources] : [];
 
     if (selectedCategory !== 'all') {
       filtered = filtered.filter(resource => resource.category === selectedCategory);
@@ -288,19 +299,19 @@ export default function ResourceLibrary() {
           return 0;
       }
     });
-  }, [displayedResources, selectedCategory, selectedType, sortBy]);
+  }, [displayedResources, loadedSearchTerm, searchTerm, selectedCategory, selectedType, sortBy]);
+
+  const isLoadingResults = loading || loadedSearchTerm !== searchTerm;
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <AppShell>
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border z-10 sticky top-0">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <AppHeader>
           <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-3">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center">
-                <Button variant="ghost" size="icon" className="lg:hidden mr-2" onClick={() => setIsSidebarOpen(true)}>
-                  <Menu className="h-5 w-5" />
-                </Button>
+
                 <h2 className="text-xl font-semibold text-foreground tracking-tight">Ressourcen</h2>
               </div>
               <div className="flex items-center gap-2">
@@ -309,17 +320,18 @@ export default function ResourceLibrary() {
               </div>
             </div>
           </div>
-        </header>
+        </AppHeader>
 
-        <main className="flex-1 overflow-y-auto">
+        <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto">
           <ToastContainer position="top-right" theme="colored" />
           <div className="max-w-[1600px] mx-auto p-4 sm:px-6 lg:px-8 py-8 space-y-6">
+            <PageIntro eyebrow="Wissen & Lernen" title="Gute Quellen. Neue Perspektiven." description="Entdecke Artikel, Videos und Lernmaterialien, die die Community empfiehlt." />
 
             {/* Toolbar */}
             <div className="flex flex-col xl:flex-row gap-4 justify-between items-start xl:items-center bg-card p-4 rounded-lg border border-border shadow-sm">
               <div className="flex-1 w-full xl:max-w-md relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                <Input
+                <Input aria-label="Ressourcen durchsuchen..."
                   type="text"
                   placeholder="Ressourcen durchsuchen..."
                   value={searchTerm}
@@ -331,7 +343,7 @@ export default function ResourceLibrary() {
               <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
                 <div className="flex items-center gap-2 flex-1 sm:flex-none">
                   <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                    <SelectTrigger className="w-full sm:w-[160px] bg-background">
+                    <SelectTrigger aria-label="Kategorie" className="w-full sm:w-[160px] bg-background">
                       <SelectValue placeholder="Kategorie" />
                     </SelectTrigger>
                     <SelectContent>
@@ -345,7 +357,7 @@ export default function ResourceLibrary() {
 
                 <div className="flex items-center gap-2 flex-1 sm:flex-none">
                   <Select value={selectedType} onValueChange={setSelectedType}>
-                    <SelectTrigger className="w-full sm:w-[160px] bg-background">
+                    <SelectTrigger aria-label="Typ" className="w-full sm:w-[160px] bg-background">
                       <SelectValue placeholder="Typ" />
                     </SelectTrigger>
                     <SelectContent>
@@ -359,7 +371,7 @@ export default function ResourceLibrary() {
 
                 <div className="flex items-center gap-2 flex-1 sm:flex-none">
                   <Select value={sortBy} onValueChange={(v: any) => setSortBy(v)}>
-                    <SelectTrigger className="w-full sm:w-[160px] bg-background">
+                    <SelectTrigger aria-label="Sortierung" className="w-full sm:w-[160px] bg-background">
                       <SelectValue placeholder="Sortierung" />
                     </SelectTrigger>
                     <SelectContent>
@@ -402,7 +414,7 @@ export default function ResourceLibrary() {
                               value={newResource.type}
                               onValueChange={(value) => setNewResource({ ...newResource, type: value })}
                             >
-                              <SelectTrigger id="type">
+                              <SelectTrigger aria-label="Wählen" id="type">
                                 <SelectValue placeholder="Wählen" />
                               </SelectTrigger>
                               <SelectContent>
@@ -418,7 +430,7 @@ export default function ResourceLibrary() {
                               value={newResource.category}
                               onValueChange={(value) => setNewResource({ ...newResource, category: value })}
                             >
-                              <SelectTrigger id="category">
+                              <SelectTrigger aria-label="Wählen" id="category">
                                 <SelectValue placeholder="Wählen" />
                               </SelectTrigger>
                               <SelectContent>
@@ -449,6 +461,10 @@ export default function ResourceLibrary() {
               </div>
             </div>
 
+            {hasMore && (selectedCategory !== 'all' || selectedType !== 'all' || sortBy !== 'newest') && (
+              <p className="text-sm text-muted-foreground">Filter und Sortierung beziehen sich auf die bisher geladenen Ressourcen. Lade weitere Ressourcen, um zusätzliche Treffer zu sehen.</p>
+            )}
+
             {/* Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               <AnimatePresence mode="popLayout">
@@ -466,10 +482,10 @@ export default function ResourceLibrary() {
             </div>
 
             {/* States */}
-            {!loading && filteredAndSortedResources.length === 0 && (
+            {!isLoadingResults && filteredAndSortedResources.length === 0 && (
               <div className="flex flex-col items-center justify-center p-12 text-center border rounded-lg border-dashed border-border bg-muted/10">
                 <Search className="h-10 w-10 text-muted-foreground mb-4" />
-                <h3 className="text-lg font-medium text-foreground">Keine Ressourcen gefunden</h3>
+                <h3 className="text-lg font-medium text-foreground">{hasMore ? "Keine passenden Ressourcen geladen" : "Keine Ressourcen gefunden"}</h3>
                 <p className="text-sm text-muted-foreground mt-1">
                   Versuchen Sie, Ihre Suchbegriffe oder Filter anzupassen.
                 </p>
@@ -487,12 +503,13 @@ export default function ResourceLibrary() {
               </div>
             )}
 
-            {hasMore && !loading && (
-              <div ref={ref} className="h-10" />
+            {hasMore && !isLoadingResults && (
+              <div ref={ref} className="flex justify-center py-4"><Button variant="outline" onClick={loadMore}>Weitere Ressourcen laden</Button></div>
             )}
 
-            {loading && (
-              <div className="flex justify-center p-8">
+            {isLoadingResults && (
+              <div role="status" className="flex justify-center p-8">
+                <span className="sr-only">Ressourcen werden geladen</span>
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
               </div>
             )}
@@ -533,7 +550,7 @@ export default function ResourceLibrary() {
           </DialogContent>
         </Dialog>
       )}
-    </div>
+    </AppShell>
   );
 }
 
@@ -582,7 +599,7 @@ function ResourceItem({ resource, isAdmin, currentUserId, onDelete, onEdit }: {
       <Card className="h-full flex flex-col group overflow-hidden border-border hover:border-primary/50 transition-all duration-300">
         <CardHeader className="p-4 pb-2 flex flex-row items-start justify-between gap-2 space-y-0">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex flex-wrap items-center gap-2 mb-2">
               <Badge variant="secondary" className="text-xs font-normal">
                 {resource.category}
               </Badge>
@@ -600,7 +617,7 @@ function ResourceItem({ resource, isAdmin, currentUserId, onDelete, onEdit }: {
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8 -mr-2 text-muted-foreground">
+              <Button variant="ghost" size="icon" className="h-9 w-9 -mr-2 text-muted-foreground">
                 <MoreVertical className="h-4 w-4" />
                 <span className="sr-only">Menü öffnen</span>
               </Button>

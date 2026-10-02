@@ -1,5 +1,6 @@
 'use client';
 
+import { AppShell, AppHeader } from '@/components/app-shell';
 import { useState, useEffect, useRef, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
@@ -38,6 +39,7 @@ export default function EditArticle({ params }: { params: Promise<{ id: string }
   const maxTitleLength = 100;
 
   useEffect(() => {
+    if (status === 'loading') return;
     if (!session) {
       router.push('/login');
       return;
@@ -88,7 +90,7 @@ export default function EditArticle({ params }: { params: Promise<{ id: string }
     };
 
     fetchArticle();
-  }, [id, session, router]);
+  }, [id, session, status, router]);
 
   const handleSubmit = async (asDraft: boolean) => {
     setIsSubmitting(true);
@@ -147,12 +149,12 @@ export default function EditArticle({ params }: { params: Promise<{ id: string }
   // Nur der Titel und die Buttons sollten angepasst werden
 
   return (
-    <div className="flex flex-col lg:flex-row min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+    <AppShell>
       <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="bg-white dark:bg-gray-800 shadow-md z-10">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex items-center justify-between">
-            <h2 className="text-3xl font-bold text-gray-800 dark:text-white flex items-center">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <AppHeader>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-wrap gap-3 items-center justify-between">
+            <h2 className="text-xl sm:text-3xl font-bold text-foreground flex items-center">
               <BookOpen className="mr-2 h-6 w-6" />
               Artikel bearbeiten
             </h2>
@@ -161,20 +163,20 @@ export default function EditArticle({ params }: { params: Promise<{ id: string }
               <UserNav />
             </div>
           </div>
-        </header>
+        </AppHeader>
 
-        <main className="flex-1 overflow-y-auto p-4 lg:p-8">
-          <Card className="max-w-5xl mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-lg">
+        <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto p-4 lg:p-8">
+          <Card className="max-w-5xl mx-auto bg-card rounded-lg shadow-lg">
             <div className="p-6">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
                 <Button
                   variant="outline"
                   onClick={() => router.push('/knowledgebase/drafts')}
-                  className="bg-transparent border-gray-300 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  className="bg-transparent border-border text-foreground dark:text-muted-foreground hover:bg-accent"
                 >
                   <ArrowLeft className="mr-2 h-4 w-4" /> Zurück
                 </Button>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <Button
                     variant="outline"
                     onClick={() => handleSubmit(true)}
@@ -217,7 +219,7 @@ export default function EditArticle({ params }: { params: Promise<{ id: string }
                     <Label htmlFor="title" className="text-lg font-semibold">
                       Titel <span className="text-red-500">*</span>
                     </Label>
-                    <span className="text-sm text-gray-500">
+                    <span className="text-sm text-muted-foreground">
                       {title.length}/{maxTitleLength}
                     </span>
                   </div>
@@ -335,6 +337,6 @@ export default function EditArticle({ params }: { params: Promise<{ id: string }
           </Card>
         </main>
       </div>
-    </div>
+    </AppShell>
   );
 }

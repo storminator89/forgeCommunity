@@ -42,8 +42,8 @@ describe('ImageUpload', () => {
 
   it('renders with placeholder image when no current image is provided', () => {
     render(<ImageUpload onImageUpdate={mockOnImageUpdate} />)
-    const img = screen.getByAltText('Profilbild')
-    expect(img).toHaveAttribute('src', '/images/placeholder.png')
+    expect(screen.getByRole('img', { name: 'Noch kein Profilbild' })).toBeInTheDocument()
+    expect(screen.queryByAltText('Profilbild')).not.toBeInTheDocument()
   })
 
   it('renders with current image when provided', () => {

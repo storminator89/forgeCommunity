@@ -3,12 +3,12 @@ import prisma from '@/lib/prisma';
 
 export async function GET() {
   try {
-    // Verwenden von groupBy, um eindeutige Kategorien zu erhalten und `null` oder leere Kategorien auszuschließen
+    // category is non-nullable; a null filter makes Prisma reject this query.
     const categoriesData = await prisma.article.groupBy({
       by: ['category'],
       where: {
         category: {
-          notIn: ['', null as any],
+          not: '',
         },
       },
       _count: {

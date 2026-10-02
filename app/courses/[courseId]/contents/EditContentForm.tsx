@@ -86,7 +86,7 @@ export function EditContentForm({
   };
 
   return (
-    <div className="space-y-8 p-8 bg-gradient-to-br from-card to-card/95 rounded-lg border border-border/50 shadow-sm">
+    <div className="space-y-8 p-4 sm:p-8 bg-gradient-to-br from-card to-card/95 rounded-lg border border-border/50 shadow-sm">
       <div className="space-y-3">
         <Label htmlFor="title" className="text-lg font-semibold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
           Titel
@@ -183,7 +183,7 @@ export function EditContentForm({
           </div>
         ) : formData.type === 'TEXT' ? (
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap gap-3 items-center justify-between">
               <Label className="text-lg font-semibold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
                 Inhalt
               </Label>
@@ -247,7 +247,7 @@ export function EditContentForm({
         )}
       </div>
 
-      <div className="flex justify-end items-center space-x-4 pt-6 border-t border-border/50">
+      <div className="flex flex-wrap justify-end items-center gap-3 pt-6 border-t border-border/50">
         <Button
           variant="outline"
           onClick={onCancel}

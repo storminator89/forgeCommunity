@@ -182,14 +182,14 @@ export function ResourcePreview({ url, type }: ResourcePreviewProps) {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-80 bg-gray-50 dark:bg-gray-800/50">
+      <div className="flex justify-center items-center h-80 bg-card/50">
         <div className="space-y-4 w-full px-6">
           <div className="animate-pulse flex space-x-4">
             <div className="flex-1 space-y-4 py-1">
-              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
+              <div className="h-4 bg-muted rounded w-3/4"></div>
               <div className="space-y-2">
-                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded"></div>
-                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-5/6"></div>
+                <div className="h-4 bg-muted rounded"></div>
+                <div className="h-4 bg-muted rounded w-5/6"></div>
               </div>
             </div>
           </div>
@@ -200,9 +200,9 @@ export function ResourcePreview({ url, type }: ResourcePreviewProps) {
 
   if (error) {
     return (
-      <div className="h-80 flex flex-col items-center justify-center text-gray-500 bg-gray-50 dark:bg-gray-800/50">
+      <div className="h-80 flex flex-col items-center justify-center text-muted-foreground bg-card/50">
         <svg
-          className="h-12 w-12 text-gray-400 mb-3"
+          className="h-12 w-12 text-muted-foreground mb-3"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -234,7 +234,7 @@ export function ResourcePreview({ url, type }: ResourcePreviewProps) {
     };
 
     return (
-      <div className="relative h-80 bg-gray-900">
+      <div className="relative h-80 bg-card">
         <iframe
           src={embedUrls[videoProvider.type]}
           className="w-full h-full"
@@ -250,7 +250,7 @@ export function ResourcePreview({ url, type }: ResourcePreviewProps) {
   // PDF Preview
   if (type === 'PDF') {
     return (
-      <div className="h-80 relative bg-gray-50 dark:bg-gray-800/50 group">
+      <div className="h-80 relative bg-card/50 group">
         <div className="absolute inset-0">
           {/* Native PDF Viewer */}
           <iframe
@@ -261,20 +261,20 @@ export function ResourcePreview({ url, type }: ResourcePreviewProps) {
 
           {/* Loading State */}
           {isPdfLoading && (
-            <div className="absolute inset-0 flex items-center justify-center bg-gray-50 dark:bg-gray-800/50">
+            <div className="absolute inset-0 flex items-center justify-center bg-card/50">
               <div className="flex flex-col items-center">
-                <Loader2 className="h-8 w-8 animate-spin text-gray-400 mb-2" />
-                <p className="text-sm text-gray-500">PDF wird geladen...</p>
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-2" />
+                <p className="text-sm text-muted-foreground">PDF wird geladen...</p>
               </div>
             </div>
           )}
 
           {/* Error State */}
           {pdfError && (
-            <div className="absolute inset-0 flex items-center justify-center bg-gray-50 dark:bg-gray-800/50">
+            <div className="absolute inset-0 flex items-center justify-center bg-card/50">
               <div className="text-center p-6">
-                <FileText className="mx-auto h-12 w-12 text-gray-400 mb-3" />
-                <p className="text-sm text-gray-500 mb-4">{pdfError}</p>
+                <FileText className="mx-auto h-12 w-12 text-muted-foreground mb-3" />
+                <p className="text-sm text-muted-foreground mb-4">{pdfError}</p>
                 <Button
                   variant="outline"
                   size="sm"
@@ -294,12 +294,12 @@ export function ResourcePreview({ url, type }: ResourcePreviewProps) {
               isPdfLoading || pdfError ? "pointer-events-none" : ""
             )}
           >
-            <div className="bg-white/90 dark:bg-gray-800/90 p-4 rounded-lg shadow-lg space-y-4 transform scale-95 group-hover:scale-100 transition-transform duration-300">
-              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-200 text-center">
+            <div className="bg-card/90 dark:bg-card/90 p-4 rounded-lg shadow-lg space-y-4 transform scale-95 group-hover:scale-100 transition-transform duration-300">
+              <h3 className="text-lg font-medium text-foreground text-center">
                 {previewData?.title || url.split('/').pop() || 'PDF Dokument'}
               </h3>
               {previewData?.fileSize && (
-                <p className="text-sm text-gray-500 dark:text-gray-400 text-center">
+                <p className="text-sm text-muted-foreground text-center">
                   Größe: {previewData.fileSize}
                 </p>
               )}
@@ -360,9 +360,9 @@ export function ResourcePreview({ url, type }: ResourcePreviewProps) {
           </div>
         </div>
       ) : (
-        <div className="h-full flex items-center justify-center bg-gray-50 dark:bg-gray-800/50 p-6">
-          <div className="text-center max-w-lg p-6 rounded-lg bg-white/50 dark:bg-black/20 backdrop-blur-sm">
-            <p className="text-base text-gray-700 dark:text-gray-300 leading-relaxed font-medium">
+        <div className="h-full flex items-center justify-center bg-card/50 p-6">
+          <div className="text-center max-w-lg p-6 rounded-lg bg-card/50 dark:bg-black/20 backdrop-blur-sm">
+            <p className="text-base text-foreground dark:text-muted-foreground leading-relaxed font-medium">
               {previewData?.description || previewData?.title || 'Keine Vorschau verfügbar'}
             </p>
           </div>
