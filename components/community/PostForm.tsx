@@ -37,7 +37,7 @@ export function PostForm({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
-      className="space-y-6 bg-background dark:bg-gray-800 p-8 rounded-lg shadow-lg transition-colors duration-300"
+      className="space-y-6 bg-background dark:bg-card p-8 rounded-lg shadow-lg transition-colors duration-300"
     >
       <form onSubmit={handleSubmit} className="space-y-6">
         <div>
@@ -50,7 +50,7 @@ export function PostForm({
             required
             disabled={isLoading}
             className={`mt-1 block w-full p-3 border ${!title ? 'border-red-500' : 'border-border'
-              } rounded-md shadow-sm focus:ring-primary focus:border-primary dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 transition-colors duration-200`}
+              } rounded-md shadow-sm focus:ring-primary focus:border-primary dark:bg-muted dark:border-border dark:placeholder-gray-400 transition-colors duration-200`}
           />
           {!title && (
             <span className="text-red-500 text-xs">
@@ -75,7 +75,7 @@ export function PostForm({
               variant="outline"
               onClick={onCancel}
               disabled={isLoading}
-              className="px-4 py-2 border border-border rounded-md text-foreground hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200"
+              className="px-4 py-2 border border-border rounded-md text-foreground hover:bg-accent transition-colors duration-200"
             >
               Abbrechen
             </Button>

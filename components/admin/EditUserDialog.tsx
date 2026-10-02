@@ -207,7 +207,7 @@ function EditUserDialogForm({ user, isOpen, onClose, onUpdateUser }: EditUserDia
             </Avatar>
             <div>
               Benutzer bearbeiten
-              <p className="text-sm text-gray-500 dark:text-gray-400 font-normal mt-1">
+              <p className="text-sm text-muted-foreground font-normal mt-1">
                 ID: {user.id}
               </p>
             </div>
@@ -252,7 +252,7 @@ function EditUserDialogForm({ user, isOpen, onClose, onUpdateUser }: EditUserDia
                 <div className="space-y-2">
                   <Label htmlFor="password">
                     Neues Passwort
-                    <span className="text-sm text-gray-500 ml-2">(optional)</span>
+                    <span className="text-sm text-muted-foreground ml-2">(optional)</span>
                   </Label>
                   <Input
                     id="password"
@@ -262,7 +262,7 @@ function EditUserDialogForm({ user, isOpen, onClose, onUpdateUser }: EditUserDia
                     placeholder="Leer lassen für keine Änderung"
                     minLength={MIN_PASSWORD_LENGTH}
                   />
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-muted-foreground">
                     {PASSWORD_HELP}
                   </p>
                 </div>
@@ -345,7 +345,7 @@ function EditUserDialogForm({ user, isOpen, onClose, onUpdateUser }: EditUserDia
                     <Label htmlFor="emailNotifications">
                       E-Mail Benachrichtigungen
                     </Label>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                    <p className="text-sm text-muted-foreground">
                       Erhält Benachrichtigungen per E-Mail
                     </p>
                   </div>
@@ -363,7 +363,7 @@ function EditUserDialogForm({ user, isOpen, onClose, onUpdateUser }: EditUserDia
                     <Label htmlFor="pushNotifications">
                       Push Benachrichtigungen
                     </Label>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                    <p className="text-sm text-muted-foreground">
                       Erhält Push Benachrichtigungen im Browser
                     </p>
                   </div>
@@ -412,12 +412,12 @@ function EditUserDialogForm({ user, isOpen, onClose, onUpdateUser }: EditUserDia
                   </Select>
                 </div>
 
-                <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                <div className="mt-6 pt-6 border-t border-border">
                   <div className="space-y-2">
-                    <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    <h4 className="text-sm font-medium text-foreground">
                       Kontostatus
                     </h4>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                    <div className="text-sm text-muted-foreground">
                       <p>Erstellt am: {new Date(user.createdAt).toLocaleDateString('de-DE')}</p>
                       {user.emailVerified && (
                         <p>Verifiziert am: {new Date(user.emailVerified).toLocaleDateString('de-DE')}</p>

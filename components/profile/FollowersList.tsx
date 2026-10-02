@@ -87,11 +87,11 @@ export function FollowersList({ userId, count, type }: FollowersListProps) {
       <DialogTrigger asChild>
         <Button
           variant="ghost"
-          className="flex items-center gap-2 hover:bg-gray-100 dark:hover:bg-gray-800"
+          className="flex h-auto w-full flex-wrap items-center justify-center gap-2 px-1 hover:bg-accent"
         >
           <Users className="h-4 w-4" />
           <span className="font-medium">{count}</span>
-          <span className="text-gray-500">
+          <span className="text-muted-foreground">
             {type === 'followers' ? 'Follower' : 'Folge ich'}
           </span>
         </Button>
@@ -113,7 +113,7 @@ export function FollowersList({ userId, count, type }: FollowersListProps) {
               <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
             </div>
           ) : users.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
+            <div className="text-center py-8 text-muted-foreground">
               {type === 'followers'
                 ? 'Noch keine Follower'
                 : 'Folgt niemandem'}
@@ -123,11 +123,11 @@ export function FollowersList({ userId, count, type }: FollowersListProps) {
               {users.map((user) => (
                 <div
                   key={user.id}
-                  className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
+                  className="flex items-center justify-between p-2 rounded-lg hover:bg-accent"
                 >
                   <Link
                     href={`/profile/${user.id}`}
-                    className="flex items-center gap-3 flex-1"
+                    className="flex min-w-0 items-center gap-3 flex-1"
                     onClick={() => setIsOpen(false)}
                   >
                     <Avatar>
@@ -136,9 +136,9 @@ export function FollowersList({ userId, count, type }: FollowersListProps) {
                         {user.name?.slice(0, 2).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
-                    <div>
-                      <p className="font-medium">{user.name}</p>
-                      <p className="text-sm text-gray-500">
+                    <div className="min-w-0">
+                      <p className="font-medium break-words">{user.name}</p>
+                      <p className="text-sm text-muted-foreground">
                         Folgt seit {format(new Date(user.followedAt), 'dd. MMMM yyyy', { locale: de })}
                       </p>
                     </div>

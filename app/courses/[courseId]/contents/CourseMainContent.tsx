@@ -68,9 +68,9 @@ export function CourseMainContent({
 
       {selectedMainContent ? (
         <div className="p-6">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
+          <div className="bg-card rounded-lg shadow">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-2xl font-bold text-gray-800 dark:text-white">{selectedMainContent.title}</h3>
+              <h3 className="text-2xl font-bold text-foreground">{selectedMainContent.title}</h3>
               <div className="flex space-x-2">
                 <Button
                   variant="ghost"
@@ -191,8 +191,8 @@ export function CourseMainContent({
                       <ContentRenderer content={selectedMainContent} />
                     </div>
                   ) : (
-                    <div className="mt-4 text-center p-8 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg w-full">
-                      <p className="text-gray-500 dark:text-gray-400 mb-4">Noch keine Inhalte vorhanden</p>
+                    <div className="mt-4 text-center p-8 border-2 border-dashed border-border rounded-lg w-full">
+                      <p className="text-muted-foreground mb-4">Noch keine Inhalte vorhanden</p>
                       <Button
                         variant="outline"
                         onClick={() => setIsAddingSubContent(selectedMainContent.id)}
@@ -212,7 +212,7 @@ export function CourseMainContent({
                   {selectedMainContent.subContents.map((subContent) => (
                     <li key={subContent.id} className="border-t pt-4">
                       <div className="flex justify-between items-center">
-                        <h4 className="text-xl font-semibold text-gray-700 dark:text-gray-200">
+                        <h4 className="text-xl font-semibold text-foreground">
                           {subContent.title}
                         </h4>
                         <div className="flex space-x-2">
@@ -245,7 +245,7 @@ export function CourseMainContent({
           </div>
         </div>
       ) : (
-        <div className="text-center text-gray-500 dark:text-gray-400">
+        <div className="text-center text-muted-foreground">
           <p>Wählen Sie ein Thema aus der linken Seitenleiste aus</p>
         </div>
       )}

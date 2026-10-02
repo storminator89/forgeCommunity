@@ -8,7 +8,7 @@ import { ThumbsUp, Send, Loader2 } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 
-const DEFAULT_AVATAR_URL = 'https://via.placeholder.com/150'
+const DEFAULT_AVATAR_URL = ''
 
 interface Comment {
   id: string

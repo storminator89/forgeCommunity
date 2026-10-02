@@ -32,11 +32,6 @@ const nextConfig = {
   // Entwicklungsmodus schneller machen
   reactStrictMode: true,
 
-  // Experimentelle Features
-  experimental: {
-    optimizeCss: true
-  },
-
   // Turbopack config (leere Config um Warnung zu unterdrücken)
   turbopack: {},
 

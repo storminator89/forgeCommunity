@@ -2,20 +2,19 @@
 
 "use client";
 
+import { AppShell, AppHeader } from '@/components/app-shell';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   format,
   startOfMonth,
   endOfMonth,
   eachDayOfInterval,
-  isSameMonth,
   isSameDay,
   addMonths,
   subMonths,
   getISODay, // Verwenden Sie getISODay statt getDay
   startOfWeek,
   addDays,
-  isAfter,
   startOfToday
 } from 'date-fns';
 import { de } from 'date-fns/locale';
@@ -61,7 +60,7 @@ interface Event {
 
 type ViewType = 'month' | 'week' | 'list';
 
-export default function Events(props: { params: Promise<any>, searchParams: Promise<any> }) {
+export default function Events() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
@@ -104,6 +103,7 @@ export default function Events(props: { params: Promise<any>, searchParams: Prom
   };
 
   const handleOpenEditDialog = (event: Event) => {
+    setSelectedDate(null);
     setSelectedEvent(event);
     setIsEditDialogOpen(true);
   };
@@ -182,15 +182,6 @@ export default function Events(props: { params: Promise<any>, searchParams: Prom
     return filteredEvents.filter(event => isSameDay(new Date(event.date), date));
   };
 
-  const getEventsForWeek = (date: Date) => {
-    const weekStart = startOfWeek(date, { locale: de, weekStartsOn: 1 }); // Woche beginnt am Montag
-    const weekEnd = addDays(weekStart, 6);
-    return filteredEvents.filter(event => {
-      const eventDate = new Date(event.date);
-      return eventDate >= weekStart && eventDate <= weekEnd;
-    });
-  };
-
   const handleDeleteEvent = async (id: string) => {
     if (!confirm('Sind Sie sicher, dass Sie dieses Event löschen möchten?')) {
       return;
@@ -237,6 +228,7 @@ export default function Events(props: { params: Promise<any>, searchParams: Prom
       a.download = `${event.title.replace(/\s+/g, '_')}.ics`;
       document.body.appendChild(a);
       a.click();
+      a.remove();
       window.URL.revokeObjectURL(url);
       toast({
         title: 'ICS-Datei heruntergeladen',
@@ -253,171 +245,111 @@ export default function Events(props: { params: Promise<any>, searchParams: Prom
     }
   };
 
-  if (loading) {
+  if (loading || error) {
     return (
-      <div className="flex justify-center items-center h-screen">
-        <p className="text-gray-500 dark:text-gray-400">Lade Ereignisse...</p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex justify-center items-center h-screen">
-        <p className="text-red-500 dark:text-red-400">Fehler: {error}</p>
-      </div>
-    );
-  }
-
-  // Komponenten für verschiedene Ansichten
-  const renderMonthView = () => (
-    <div className="max-w-6xl mx-auto bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
-      <div className="flex items-center justify-between p-4 lg:p-6 border-b border-gray-200 dark:border-gray-700">
-        <Button variant="outline" size="sm" onClick={handlePreviousMonth} className="flex items-center">
-          <ChevronLeft className="h-4 w-4 mr-2" />
-          Vorheriger
-        </Button>
-        <h2 className="text-lg lg:text-2xl font-semibold text-gray-800 dark:text-white">
-          {format(currentMonth, 'MMMM yyyy', { locale: de })}
-        </h2>
-        <Button variant="outline" size="sm" onClick={handleNextMonth} className="flex items-center">
-          Nächster
-          <ChevronRight className="h-4 w-4 ml-2" />
-        </Button>
-      </div>
-      <div className="grid grid-cols-7 gap-px bg-gray-200 dark:bg-gray-700">
-        {['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].map((day) => (
-          <div key={day} className="text-center font-medium text-sm py-2 bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
-            {day}
-          </div>
-        ))}
-      </div>
-      <div className="grid grid-cols-7 gap-px bg-gray-200 dark:bg-gray-700">
-        {Array.from({ length: startingDayIndex }).map((_, index) => (
-          <div key={`empty-${index}`} className="bg-white dark:bg-gray-800 p-2 lg:p-4 h-24 lg:h-32" />
-        ))}
-        {days.map((day) => {
-          const dayEvents = getEventsForDate(day);
-          const hasEvents = dayEvents.length > 0;
-          return (
-            <div
-              key={day.toString()}
-              className={cn(
-                "bg-white dark:bg-gray-800 p-2 lg:p-4 h-24 lg:h-32 relative cursor-pointer border border-gray-200 dark:border-gray-700 rounded-md",
-                !isSameMonth(day, currentMonth) && "text-gray-400 dark:text-gray-600",
-                isSameDay(day, new Date()) && "bg-blue-50 dark:bg-blue-900"
-              )}
-              onClick={() => handleSelectDate(day)}
-            >
-              {hasEvents ? (
-                <div className="flex justify-center items-center bg-black text-white rounded-full w-8 h-8 mx-auto">
-                  <time dateTime={format(day, 'yyyy-MM-dd')} className="font-semibold text-sm lg:text-base">
-                    {format(day, 'd')}
-                  </time>
-                </div>
-              ) : (
-                <div className="flex justify-center">
-                  <time dateTime={format(day, 'yyyy-MM-dd')} className="font-semibold text-sm lg:text-base">
-                    {format(day, 'd')}
-                  </time>
-                </div>
-              )}
+      <AppShell>
+        <Sidebar />
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <AppHeader><div className="flex items-center justify-between gap-3"><h1>Events</h1><div className="flex items-center gap-2"><ThemeToggle /><UserNav /></div></div></AppHeader>
+          <main id="page-content" tabIndex={-1} className="flex flex-1 items-center justify-center p-6 text-center">
+            <div role={error ? 'alert' : 'status'} className="space-y-4 rounded-xl border bg-card p-8">
+              <p className={error ? 'text-destructive' : 'text-muted-foreground'}>{error ? 'Die Events konnten nicht geladen werden.' : 'Events werden geladen …'}</p>
+              {error && <Button variant="outline" onClick={fetchEvents}>Erneut versuchen</Button>}
             </div>
-          );
-        })}
+          </main>
+        </div>
+      </AppShell>
+    );
+  }
+
+  const renderDay = (day: Date, week = false) => {
+    const dayEvents = getEventsForDate(day);
+    const today = isSameDay(day, new Date());
+    return (
+      <button key={day.toISOString()} type="button"
+        onClick={() => handleSelectDate(day)}
+        aria-label={`${format(day, 'EEEE, dd. MMMM yyyy', { locale: de })}, ${dayEvents.length} ${dayEvents.length === 1 ? 'Event' : 'Events'}`}
+        aria-current={today ? 'date' : undefined}
+        className={cn(
+          "min-w-0 bg-card p-1.5 text-left transition-colors hover:bg-accent focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:p-3",
+          week ? "flex min-h-20 items-start gap-4 sm:block sm:h-44" : "h-20 sm:h-32 lg:h-40",
+          today && "bg-primary/5"
+        )}>
+        <time dateTime={format(day, 'yyyy-MM-dd')} className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-semibold", today && "bg-primary text-primary-foreground")}>
+          {format(day, 'd')}
+        </time>
+        <span className={cn("mt-1 min-w-0 space-y-1", week ? "block sm:mt-2" : "hidden sm:block")}>
+          {week && <span className="block text-xs text-muted-foreground sm:hidden">{format(day, 'EEEE', { locale: de })}</span>}
+          {dayEvents.slice(0, 2).map(event => <span key={event.id} className="block truncate rounded bg-primary/10 px-1.5 py-1 text-xs font-medium text-primary">{event.startTime ? `${event.startTime} · ` : ''}{event.title}</span>)}
+          {dayEvents.length > 2 && <span className="block text-xs text-muted-foreground">+{dayEvents.length - 2} weitere</span>}
+          {week && dayEvents.length === 0 && <span className="block text-xs text-muted-foreground sm:hidden">Keine Events</span>}
+        </span>
+        {!week && dayEvents.length > 0 && <span className="mt-1 block text-center text-xs font-medium text-primary sm:hidden">{dayEvents.length} <span className="sr-only">Events</span><span aria-hidden="true">●</span></span>}
+      </button>
+    );
+  };
+
+  const renderMonthView = () => (
+    <section aria-label="Monatskalender" className="mx-auto max-w-6xl overflow-hidden rounded-xl border bg-card">
+      <div className="flex items-center justify-between gap-2 border-b p-3 sm:p-5">
+        <Button variant="outline" size="icon" aria-label="Vorheriger Monat" onClick={handlePreviousMonth}><ChevronLeft className="h-4 w-4" /></Button>
+        <h2 className="text-center text-base font-semibold sm:text-xl">{format(currentMonth, 'MMMM yyyy', { locale: de })}</h2>
+        <Button variant="outline" size="icon" aria-label="Nächster Monat" onClick={handleNextMonth}><ChevronRight className="h-4 w-4" /></Button>
       </div>
-    </div>
+      <div className="grid grid-cols-7 gap-px bg-border">
+        {['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].map(day => <div key={day} className="bg-card py-2 text-center text-xs font-medium text-muted-foreground">{day}</div>)}
+        {Array.from({ length: startingDayIndex }).map((_, index) => <div key={`empty-${index}`} className="h-20 bg-muted/30 sm:h-32 lg:h-40" aria-hidden="true" />)}
+        {days.map(day => renderDay(day))}
+        {Array.from({ length: (7 - (startingDayIndex + days.length) % 7) % 7 }).map((_, index) => <div key={`trailing-${index}`} className="h-20 bg-muted/30 sm:h-32 lg:h-40" aria-hidden="true" />)}
+      </div>
+      <p className="border-t px-4 py-3 text-xs text-muted-foreground">Wähle einen Tag, um die Events und Details zu öffnen.</p>
+    </section>
   );
 
   const renderWeekView = () => {
-    const weekStart = startOfWeek(currentMonth, { locale: de, weekStartsOn: 1 }); // Woche beginnt am Montag
-    const weekDays = Array.from({ length: 7 }).map((_, i) => addDays(weekStart, i));
-    const weekEvents = getEventsForWeek(weekStart);
-
+    const weekStart = startOfWeek(currentMonth, { locale: de, weekStartsOn: 1 });
+    const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
     return (
-      <div className="max-w-6xl mx-auto bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
-        <div className="flex items-center justify-between p-4 lg:p-6 border-b border-gray-200 dark:border-gray-700">
-          <Button variant="outline" size="sm" onClick={() => setCurrentMonth(addDays(currentMonth, -7))} className="flex items-center">
-            <ChevronLeft className="h-4 w-4 mr-2" />
-            Vorherige Woche
-          </Button>
-          <h2 className="text-lg lg:text-2xl font-semibold text-gray-800 dark:text-white">
-            Woche: {format(weekStart, 'dd. MMM yyyy', { locale: de })} - {format(addDays(weekStart, 6), 'dd. MMM yyyy', { locale: de })}
-          </h2>
-          <Button variant="outline" size="sm" onClick={() => setCurrentMonth(addDays(currentMonth, 7))} className="flex items-center">
-            Nächste Woche
-            <ChevronRight className="h-4 w-4 ml-2" />
-          </Button>
+      <section aria-label="Wochenkalender" className="mx-auto max-w-6xl overflow-hidden rounded-xl border bg-card">
+        <div className="flex items-center justify-between gap-2 border-b p-3 sm:p-5">
+          <Button variant="outline" size="icon" aria-label="Vorherige Woche" onClick={() => setCurrentMonth(addDays(currentMonth, -7))}><ChevronLeft className="h-4 w-4" /></Button>
+          <h2 className="text-center text-sm font-semibold sm:text-lg">{format(weekStart, 'dd. MMM', { locale: de })} – {format(addDays(weekStart, 6), 'dd. MMM yyyy', { locale: de })}</h2>
+          <Button variant="outline" size="icon" aria-label="Nächste Woche" onClick={() => setCurrentMonth(addDays(currentMonth, 7))}><ChevronRight className="h-4 w-4" /></Button>
         </div>
-        <div className="grid grid-cols-7 gap-px bg-gray-200 dark:bg-gray-700">
-          {['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].map((day) => (
-            <div key={day} className="text-center font-medium text-sm py-2 bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
-              {day}
-            </div>
-          ))}
-        </div>
-        <div className="grid grid-cols-7 gap-px bg-gray-200 dark:bg-gray-700">
-          {weekDays.map((day) => {
-            const dayEvents = getEventsForDate(day);
-            const hasEvents = dayEvents.length > 0;
-            return (
-              <div
-                key={day.toString()}
-                className={cn(
-                  "bg-white dark:bg-gray-800 p-2 lg:p-4 h-32 relative cursor-pointer border border-gray-200 dark:border-gray-700 rounded-md",
-                  isSameDay(day, new Date()) && "bg-blue-50 dark:bg-blue-900"
-                )}
-                onClick={() => handleSelectDate(day)}
-              >
-                {hasEvents ? (
-                  <div className="flex justify-center items-center bg-black text-white rounded-full w-8 h-8 mx-auto">
-                    <time dateTime={format(day, 'yyyy-MM-dd')} className="font-semibold text-sm lg:text-base">
-                      {format(day, 'd')}
-                    </time>
-                  </div>
-                ) : (
-                  <div className="flex justify-center">
-                    <time dateTime={format(day, 'yyyy-MM-dd')} className="font-semibold text-sm lg:text-base">
-                      {format(day, 'd')}
-                    </time>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
+        <div className="hidden grid-cols-7 gap-px bg-border sm:grid">{['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].map(day => <div key={day} className="bg-card py-2 text-center text-xs font-medium text-muted-foreground">{day}</div>)}</div>
+        <div className="grid grid-cols-1 gap-px bg-border sm:grid-cols-7">{weekDays.map(day => renderDay(day, true))}</div>
+      </section>
     );
   };
 
   const renderListView = () => {
     const today = startOfToday();
-    const futureEvents = filteredEvents.filter(event => isAfter(new Date(event.date), today));
+    const futureEvents = filteredEvents.filter(event => new Date(event.date) >= today);
     const sortedEvents = [...futureEvents].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     return (
-      <div className="max-w-6xl mx-auto bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
-        <div className="flex items-center justify-between p-4 lg:p-6 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-lg lg:text-2xl font-semibold text-gray-800 dark:text-white">
+      <div className="mx-auto max-w-6xl overflow-hidden rounded-xl border bg-card">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4 lg:p-6">
+          <h2 className="text-lg lg:text-2xl font-semibold text-foreground">
             Listenansicht
           </h2>
           <Button variant="outline" size="sm" onClick={() => setView('month')} className="flex items-center">
             <ChevronLeft className="h-4 w-4 mr-2" />
-            Zurück zur Monatansicht
+            Monatsansicht
           </Button>
         </div>
         <div className="p-4 lg:p-6">
           {sortedEvents.length > 0 ? (
             sortedEvents.map(event => (
-              <div key={event.id} className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg mb-4 border border-gray-200 dark:border-gray-700">
-                <div className="flex justify-between items-start">
-                  <div>
+              <div key={event.id} className="bg-card p-4 rounded-lg mb-4 border border-border">
+                <div className="flex min-w-0 flex-col items-start justify-between gap-3 sm:flex-row">
+                  <div className="min-w-0 flex-1 break-words [overflow-wrap:anywhere]">
                     <h3 className="text-lg font-semibold mb-2">{event.title}</h3>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                    <p className="text-sm text-muted-foreground">
                       {format(new Date(event.date), 'dd. MMM yyyy', { locale: de })}
                       {event.startTime && event.endTime ? `, ${event.startTime} - ${event.endTime}` : ''}
                     </p>
-                    <div className="space-y-2 text-sm text-gray-500 dark:text-gray-400 mt-2">
+                    <div className="space-y-2 text-sm text-muted-foreground mt-2">
                       <div className="flex items-center">
                         <MapPin className="mr-2 h-4 w-4 flex-shrink-0" />
                         <span>{event.location}</span>
@@ -426,14 +358,14 @@ export default function Events(props: { params: Promise<any>, searchParams: Prom
                       {event.category && <Badge variant="secondary">{event.category}</Badge>}
                     </div>
                   </div>
-                  <div className="flex space-x-2">
-                    <Button variant="ghost" size="sm" onClick={() => handleOpenEditDialog(event)}>
+                  <div className="flex shrink-0 gap-1">
+                    <Button variant="ghost" size="icon" aria-label={`Event ${event.title} bearbeiten`} onClick={() => handleOpenEditDialog(event)}>
                       <Edit className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => handleDeleteEvent(event.id)}>
+                    <Button variant="ghost" size="icon" aria-label={`Event ${event.title} löschen`} onClick={() => handleDeleteEvent(event.id)}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => handleDownloadICS(event)}>
+                    <Button variant="ghost" size="icon" aria-label={`Event ${event.title} als Kalenderdatei herunterladen`} onClick={() => handleDownloadICS(event)}>
                       <Download className="h-4 w-4" />
                     </Button>
                   </div>
@@ -441,7 +373,7 @@ export default function Events(props: { params: Promise<any>, searchParams: Prom
               </div>
             ))
           ) : (
-            <p className="text-center text-gray-500 dark:text-gray-400">Keine zukünftigen Events gefunden.</p>
+            <p className="text-center text-muted-foreground">Keine zukünftigen Events gefunden.</p>
           )}
         </div>
       </div>
@@ -449,64 +381,28 @@ export default function Events(props: { params: Promise<any>, searchParams: Prom
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-100 dark:bg-gray-900">
+    <AppShell>
       <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="bg-white dark:bg-gray-800 shadow-md z-10">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-            <h2 className="text-2xl font-bold text-gray-800 dark:text-white flex items-center">
-              <CalendarIcon className="mr-2 h-6 w-6" />
-              Events
-            </h2>
-            <div className="flex items-center space-x-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                <Input
-                  type="text"
-                  placeholder="Suche nach Events..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 pr-4 py-2 w-64 rounded-full focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <Button variant="secondary" size="sm" onClick={handleOpenAddDialog} className="flex items-center">
-                <Plus className="mr-2 h-4 w-4" />
-                Hinzufügen
-              </Button>
-              <ThemeToggle />
-              <UserNav />
-            </div>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <AppHeader>
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <h1 className="flex min-w-0 items-center gap-2"><CalendarIcon className="h-5 w-5 shrink-0" aria-hidden="true" />Events</h1>
+            <div className="flex shrink-0 items-center gap-2"><ThemeToggle /><UserNav /></div>
           </div>
-        </header>
-        <main className="flex-1 overflow-y-auto p-4 lg:p-8">
-          <div className="flex justify-start mb-4 space-x-2">
-            <Button
-              variant={view === 'month' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setView('month')}
-              className="flex items-center"
-            >
-              <CalendarDays className="h-4 w-4 mr-1" />
-              Monat
-            </Button>
-            <Button
-              variant={view === 'week' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setView('week')}
-              className="flex items-center"
-            >
-              <CalendarIcon className="h-4 w-4 mr-1" />
-              Woche
-            </Button>
-            <Button
-              variant={view === 'list' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setView('list')}
-              className="flex items-center"
-            >
-              <List className="h-4 w-4 mr-1" />
-              Liste
-            </Button>
+        </AppHeader>
+        <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto p-4 lg:p-8">
+          <div className="mx-auto mb-5 flex max-w-6xl flex-wrap items-center justify-between gap-3">
+            <div role="group" aria-label="Kalenderansicht" className="flex gap-1 rounded-xl border bg-card p-1">
+              <Button variant={view === 'month' ? 'default' : 'ghost'} size="sm" aria-pressed={view === 'month'} onClick={() => setView('month')}><CalendarDays className="mr-1 h-4 w-4" aria-hidden="true" />Monat</Button>
+              <Button variant={view === 'week' ? 'default' : 'ghost'} size="sm" aria-pressed={view === 'week'} onClick={() => setView('week')}><CalendarIcon className="mr-1 h-4 w-4" aria-hidden="true" />Woche</Button>
+              <Button variant={view === 'list' ? 'default' : 'ghost'} size="sm" aria-pressed={view === 'list'} onClick={() => setView('list')}><List className="mr-1 h-4 w-4" aria-hidden="true" />Liste</Button>
+            </div>
+            <Button size="sm" onClick={handleOpenAddDialog} className="gap-2"><Plus className="h-4 w-4" aria-hidden="true" />Event erstellen</Button>
+            <div className="relative w-full">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+              <Input type="search" aria-label="Events durchsuchen" placeholder="Titel, Beschreibung oder Kategorie suchen …" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9" />
+            </div>
+            {searchTerm && <p className="w-full text-sm text-muted-foreground" role="status">{filteredEvents.length} {filteredEvents.length === 1 ? 'Event gefunden' : 'Events gefunden'}</p>}
           </div>
 
           {view === 'month' && renderMonthView()}
@@ -517,7 +413,7 @@ export default function Events(props: { params: Promise<any>, searchParams: Prom
 
       {/* Hinzufügen Dialog */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent className="sm:max-w-[600px]">
+        <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-[600px]">
           <DialogHeader>
             <DialogTitle>Neues Event hinzufügen</DialogTitle>
           </DialogHeader>
@@ -535,7 +431,7 @@ export default function Events(props: { params: Promise<any>, searchParams: Prom
 
       {/* Bearbeiten Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="sm:max-w-[600px]">
+        <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-[600px]">
           <DialogHeader>
             <DialogTitle>Event bearbeiten</DialogTitle>
           </DialogHeader>
@@ -556,7 +452,7 @@ export default function Events(props: { params: Promise<any>, searchParams: Prom
 
       {/* Detailansicht Dialog */}
       <Dialog open={!!selectedDate} onOpenChange={handleCloseDialog}>
-        <DialogContent className="sm:max-w-[600px]">
+        <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-[600px]">
           <DialogHeader>
             <DialogTitle>
               {selectedDate && format(selectedDate, 'dd. MMMM yyyy', { locale: de })}
@@ -564,11 +460,11 @@ export default function Events(props: { params: Promise<any>, searchParams: Prom
           </DialogHeader>
           <div className="mt-4 space-y-4">
             {selectedDate && getEventsForDate(selectedDate).map((event) => (
-              <div key={event.id} className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-                <div className="flex justify-between items-start">
-                  <div>
+              <div key={event.id} className="bg-card p-4 rounded-lg border border-border">
+                <div className="flex min-w-0 flex-col items-start justify-between gap-3 sm:flex-row">
+                  <div className="min-w-0 flex-1 break-words [overflow-wrap:anywhere]">
                     <h3 className="text-lg font-semibold mb-2">{event.title}</h3>
-                    <div className="space-y-2 text-sm text-gray-500 dark:text-gray-400">
+                    <div className="space-y-2 text-sm text-muted-foreground">
                       {event.startTime && event.endTime && (
                         <div className="flex items-center">
                           <Clock className="mr-2 h-4 w-4 flex-shrink-0" />
@@ -583,14 +479,14 @@ export default function Events(props: { params: Promise<any>, searchParams: Prom
                       {event.category && <Badge variant="secondary">{event.category}</Badge>}
                     </div>
                   </div>
-                  <div className="flex space-x-2">
-                    <Button variant="ghost" size="sm" onClick={() => handleOpenEditDialog(event)}>
+                  <div className="flex shrink-0 gap-1">
+                    <Button variant="ghost" size="icon" aria-label={`Event ${event.title} bearbeiten`} onClick={() => handleOpenEditDialog(event)}>
                       <Edit className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => handleDeleteEvent(event.id)}>
+                    <Button variant="ghost" size="icon" aria-label={`Event ${event.title} löschen`} onClick={() => handleDeleteEvent(event.id)}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => handleDownloadICS(event)}>
+                    <Button variant="ghost" size="icon" aria-label={`Event ${event.title} als Kalenderdatei herunterladen`} onClick={() => handleDownloadICS(event)}>
                       <Download className="h-4 w-4" />
                     </Button>
                   </div>
@@ -598,11 +494,11 @@ export default function Events(props: { params: Promise<any>, searchParams: Prom
               </div>
             ))}
             {selectedDate && getEventsForDate(selectedDate).length === 0 && (
-              <p className="text-center text-gray-500 dark:text-gray-400">Keine Events an diesem Tag.</p>
+              <p className="text-center text-muted-foreground">Keine Events an diesem Tag.</p>
             )}
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </AppShell>
   );
 }

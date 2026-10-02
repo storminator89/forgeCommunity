@@ -63,9 +63,9 @@ export function SubContentForm({
               H5P Inhaltstyp auswählen
             </Button>
             {content.content && (
-              <div className="p-4 bg-gray-100 dark:bg-gray-700 rounded-lg">
+              <div className="p-4 bg-muted rounded-lg">
                 <p className="font-medium">Ausgewählter H5P Inhaltstyp:</p>
-                <p className="text-sm text-gray-600 dark:text-gray-300">{content.content as string}</p>
+                <p className="text-sm text-muted-foreground">{content.content as string}</p>
               </div>
             )}
           </div>

@@ -1,5 +1,7 @@
 'use client';
 
+import { PageIntro } from '@/components/page-intro';
+import { AppShell, AppHeader } from '@/components/app-shell';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
@@ -9,12 +11,12 @@ import { UserNav } from "@/components/user-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { 
-  Loader2, 
-  Edit, 
-  Trash2, 
-  BookOpen, 
-  Plus, 
+import {
+  Loader2,
+  Edit,
+  Trash2,
+  BookOpen,
+  Plus,
   FileText,
   Calendar,
   Tag,
@@ -108,7 +110,7 @@ export default function DraftsPage() {
   };
 
   const filteredAndSortedDrafts = drafts
-    .filter(draft => 
+    .filter(draft =>
       draft.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       draft.category.toLowerCase().includes(searchQuery.toLowerCase())
     )
@@ -144,7 +146,7 @@ export default function DraftsPage() {
   const renderEmptyState = () => (
     <Card className="text-center p-12">
       <div className="flex flex-col items-center gap-4">
-        <FileText className="h-12 w-12 text-gray-400" />
+        <FileText className="h-12 w-12 text-muted-foreground" />
         <CardTitle>Keine Entwürfe vorhanden</CardTitle>
         <CardDescription>
           Erstellen Sie Ihren ersten Artikel-Entwurf, um ihn später zu veröffentlichen.
@@ -167,19 +169,19 @@ export default function DraftsPage() {
   };
 
   return (
-    <div className="flex flex-col lg:flex-row min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+    <AppShell>
       <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="bg-white dark:bg-gray-800 shadow-md z-10">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <AppHeader>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
-                <h2 className="text-3xl font-bold text-gray-800 dark:text-white flex items-center">
+                <h2 className="text-3xl font-bold text-foreground flex items-center">
                   <BookOpen className="mr-2 h-6 w-6" />
                   Meine Entwürfe
                 </h2>
                 {!isLoading && (
-                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  <p className="mt-1 text-sm text-muted-foreground">
                     {drafts.length} {drafts.length === 1 ? 'Entwurf' : 'Entwürfe'} gespeichert
                   </p>
                 )}
@@ -197,13 +199,13 @@ export default function DraftsPage() {
               </div>
             </div>
           </div>
-        </header>
+        </AppHeader>
 
-        <div className="bg-white/50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700">
+        <div className="bg-card/50 dark:bg-card/50 border-b border-border">
           <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div className="relative flex-1 max-w-sm">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
                 <Input
                   type="search"
                   placeholder="Entwürfe durchsuchen..."
@@ -236,8 +238,8 @@ export default function DraftsPage() {
           </div>
         </div>
 
-        <main className="flex-1 overflow-y-auto p-4 lg:p-8">
-          <motion.div 
+        <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto p-4 lg:p-8">
+          <motion.div
             className="max-w-5xl mx-auto"
             initial="initial"
             animate="animate"
@@ -250,7 +252,8 @@ export default function DraftsPage() {
               searchQuery ? (
                 <Card className="text-center p-12">
                   <div className="flex flex-col items-center gap-4">
-                    <Search className="h-12 w-12 text-gray-400" />
+            <PageIntro eyebrow="Dein Bereich" title="Platz für deine nächsten Ideen." description="Hier findest du deine unveröffentlichten Artikel. Arbeite weiter, bevor du sie mit der Community teilst." />
+                    <Search className="h-12 w-12 text-muted-foreground" />
                     <CardTitle>Keine Ergebnisse gefunden</CardTitle>
                     <CardDescription>
                       Keine Entwürfe gefunden für &quot;{searchQuery}&quot;
@@ -276,15 +279,15 @@ export default function DraftsPage() {
                             <CardTitle className="group-hover:text-blue-600 transition-colors line-clamp-2">
                               {draft.title}
                             </CardTitle>
-                            <div className="flex items-center space-x-2 text-sm text-gray-500 dark:text-gray-400">
+                            <div className="flex items-center space-x-2 text-sm text-muted-foreground">
                               <Calendar className="h-4 w-4 flex-shrink-0" />
                               <span>Zuletzt bearbeitet: {formatDate(draft.updatedAt)}</span>
                             </div>
                           </div>
                           {draft.featuredImage && (
                             <div className="w-20 h-20 rounded-md overflow-hidden flex-shrink-0">
-                              <Image 
-                                src={draft.featuredImage} 
+                              <Image
+                                src={draft.featuredImage}
                                 alt={draft.title}
                                 width={80}
                                 height={80}
@@ -296,11 +299,11 @@ export default function DraftsPage() {
                       </CardHeader>
                       <CardContent>
                         <div className="flex items-center space-x-2">
-                          <Tag className="h-4 w-4 text-gray-500" />
+                          <Tag className="h-4 w-4 text-muted-foreground" />
                           <Badge variant="secondary">{draft.category}</Badge>
                         </div>
                         {draft.content && (
-                          <p className="mt-2 text-sm text-gray-600 dark:text-gray-300 line-clamp-2">
+                          <p className="mt-2 text-sm text-muted-foreground line-clamp-2">
                             {draft.content.replace(/<[^>]*>/g, '')}
                           </p>
                         )}
@@ -360,6 +363,6 @@ export default function DraftsPage() {
           </AlertDialogContent>
         </AlertDialog>
       </div>
-    </div>
+    </AppShell>
   );
 }

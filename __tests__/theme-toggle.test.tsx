@@ -60,7 +60,7 @@ describe('ThemeToggle', () => {
     )
     
     // Check if the button is rendered with icons
-    expect(screen.getByText('Toggle theme')).toBeInTheDocument()
+    expect(screen.getByText('Farbschema auswählen')).toBeInTheDocument()
     expect(screen.getByTestId('sun-icon')).toBeInTheDocument()
     expect(screen.getByTestId('moon-icon')).toBeInTheDocument()
   })
@@ -73,8 +73,8 @@ describe('ThemeToggle', () => {
     )
     
     // Since we're mocking the Radix UI components, the menu items are always visible
-    expect(screen.getByText('Light')).toBeInTheDocument()
-    expect(screen.getByText('Dark')).toBeInTheDocument()
+    expect(screen.getByText('Hell')).toBeInTheDocument()
+    expect(screen.getByText('Dunkel')).toBeInTheDocument()
     expect(screen.getByText('System')).toBeInTheDocument()
   })
 
@@ -86,10 +86,10 @@ describe('ThemeToggle', () => {
     )
     
     // Click theme options and verify setTheme is called
-    fireEvent.click(screen.getByText('Light'))
+    fireEvent.click(screen.getByText('Hell'))
     expect(mockSetTheme).toHaveBeenCalledWith('light')
     
-    fireEvent.click(screen.getByText('Dark'))
+    fireEvent.click(screen.getByText('Dunkel'))
     expect(mockSetTheme).toHaveBeenCalledWith('dark')
     
     fireEvent.click(screen.getByText('System'))

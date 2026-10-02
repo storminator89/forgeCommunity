@@ -185,7 +185,7 @@ export function ActivityFeed({ userId }: ActivityFeedProps) {
                 {activity.type}
               </Badge>
             </div>
-            <span className="text-sm text-gray-500">
+            <span className="text-sm text-muted-foreground">
               {getTimeAgo(activity.createdAt)}
             </span>
           </div>
@@ -193,11 +193,11 @@ export function ActivityFeed({ userId }: ActivityFeedProps) {
           {activity.type === 'post' && (
             <div>
               <h4 className="font-medium">{activity.title}</h4>
-              <p className="text-gray-600 dark:text-gray-300 line-clamp-2">
+              <p className="text-muted-foreground line-clamp-2">
                 <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(activity.content || '') }} />
               </p>
               {activity.stats && (
-                <div className="flex space-x-4 mt-2 text-sm text-gray-500">
+                <div className="flex space-x-4 mt-2 text-sm text-muted-foreground">
                   <span className="flex items-center">
                     <ThumbsUp className="h-4 w-4 mr-1" />
                     {activity.stats.likes}
@@ -213,10 +213,10 @@ export function ActivityFeed({ userId }: ActivityFeedProps) {
 
           {activity.type === 'comment' && (
             <div>
-              <p className="text-gray-600 dark:text-gray-300">
+              <p className="text-muted-foreground">
                 Hat auf <span className="font-medium">{activity.postTitle}</span> kommentiert:
               </p>
-              <p className="text-gray-600 dark:text-gray-300 mt-1">
+              <p className="text-muted-foreground mt-1">
                 <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(activity.content || '') }} />
               </p>
             </div>
@@ -225,11 +225,11 @@ export function ActivityFeed({ userId }: ActivityFeedProps) {
           {activity.type === 'project' && (
             <div>
               <h4 className="font-medium">{activity.title}</h4>
-              <p className="text-gray-600 dark:text-gray-300 line-clamp-2">
+              <p className="text-muted-foreground line-clamp-2">
                 <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(activity.description || '') }} />
               </p>
               {activity.stats && (
-                <div className="flex space-x-4 mt-2 text-sm text-gray-500">
+                <div className="flex space-x-4 mt-2 text-sm text-muted-foreground">
                   <span className="flex items-center">
                     <ThumbsUp className="h-4 w-4 mr-1" />
                     {activity.stats.likes}
@@ -246,11 +246,11 @@ export function ActivityFeed({ userId }: ActivityFeedProps) {
           {activity.type === 'course' && (
             <div>
               <h4 className="font-medium">{activity.title}</h4>
-              <p className="text-gray-600 dark:text-gray-300 line-clamp-2">
+              <p className="text-muted-foreground line-clamp-2">
                 <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(activity.description || '') }} />
               </p>
               {activity.stats && (
-                <div className="flex space-x-4 mt-2 text-sm text-gray-500">
+                <div className="flex space-x-4 mt-2 text-sm text-muted-foreground">
                   <span className="flex items-center">
                     <Users className="h-4 w-4 mr-1" />
                     {activity.stats.enrollments} Teilnehmer
@@ -285,11 +285,11 @@ export function ActivityFeed({ userId }: ActivityFeedProps) {
               exit={{ opacity: 0 }}
               className="text-center py-8"
             >
-              <Calendar className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+              <Calendar className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+              <h3 className="text-lg font-medium text-foreground mb-2">
                 Keine Aktivitäten
               </h3>
-              <p className="text-gray-500 dark:text-gray-400">
+              <p className="text-muted-foreground">
                 Hier erscheinen zukünftige Aktivitäten.
               </p>
             </motion.div>
@@ -298,7 +298,7 @@ export function ActivityFeed({ userId }: ActivityFeedProps) {
               {activities.map((activity) => (
                 <div
                   key={`${activity.type}-${activity.id}`}
-                  className="border-b border-gray-200 dark:border-gray-700 last:border-0 pb-6 last:pb-0"
+                  className="border-b border-border last:border-0 pb-6 last:pb-0"
                 >
                   {renderActivityContent(activity)}
                 </div>

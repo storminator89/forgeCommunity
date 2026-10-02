@@ -27,7 +27,7 @@ interface UserListProps {
 
 export function UserList({ users, onEditUser, onDeleteUser }: UserListProps) {
   return (
-    <Table>
+    <Table className="min-w-[600px]">
       <TableHeader>
         <TableRow>
           <TableHead>Name</TableHead>
@@ -50,10 +50,10 @@ export function UserList({ users, onEditUser, onDeleteUser }: UserListProps) {
             <TableCell>{new Date(user.createdAt).toLocaleDateString('de-DE')}</TableCell>
             <TableCell>
               <div className="flex space-x-2">
-                <Button variant="outline" size="sm" onClick={() => onEditUser(user)}>
+                <Button aria-label={`${user.name} bearbeiten`} variant="outline" size="sm" onClick={() => onEditUser(user)}>
                   <Edit2 className="h-4 w-4" />
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => onDeleteUser(user.id)}>
+                <Button aria-label={`${user.name} löschen`} variant="outline" size="sm" onClick={() => onDeleteUser(user.id)}>
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </div>

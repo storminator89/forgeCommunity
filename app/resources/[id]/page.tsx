@@ -1,6 +1,7 @@
 'use client';
 
 // Erweitere die Imports
+import { AppShell, AppHeader } from '@/components/app-shell';
 import { useState, useEffect, useCallback, useEffectEvent, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -93,7 +94,7 @@ export default function ResourcePage() {
   }, [resourceId]);
 
   const getIcon = (type: ResourceType) => {
-    const iconClass = "h-6 w-6 text-white";
+    const iconClass = "h-6 w-6 shrink-0 text-primary";
     switch (type) {
       case 'ARTICLE': return <File className={iconClass} />;
       case 'VIDEO': return <Video className={iconClass} />;
@@ -103,20 +104,13 @@ export default function ResourcePage() {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-100 dark:bg-gray-900">
+    <AppShell>
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="bg-white dark:bg-gray-800 shadow-sm z-10">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <AppHeader>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
             <div className="flex items-center">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="lg:hidden mr-2"
-                onClick={() => setIsSidebarOpen(true)}
-              >
-                <Menu className="h-6 w-6" />
-              </Button>
+
               <Button
                 variant="ghost"
                 onClick={() => router.push('/resources')}
@@ -126,12 +120,12 @@ export default function ResourcePage() {
                 Zurück zur Übersicht
               </Button>
             </div>
-            <div className="flex items-center space-x-4">
+            <div className="flex min-w-0 items-start gap-3">
               <ThemeToggle />
               <UserNav />
             </div>
           </div>
-        </header>
+        </AppHeader>
 
         <div className="flex-1 overflow-y-auto">
           {/* Loading State */}
@@ -145,10 +139,10 @@ export default function ResourcePage() {
           {loadedForId === resourceId && !loading && !resource && (
             <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)]">
               <div className="text-center space-y-4">
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+                <h1 className="text-3xl font-bold text-foreground">
                   Ressource nicht gefunden
                 </h1>
-                <p className="text-gray-600 dark:text-gray-400">
+                <p className="text-muted-foreground">
                   Die angeforderte Ressource existiert nicht oder wurde entfernt.
                 </p>
                 <Button onClick={() => router.push('/resources')} variant="default">
@@ -161,25 +155,29 @@ export default function ResourcePage() {
 
           {/* Resource Content */}
           {loadedForId === resourceId && !loading && resource && (
-            <main className="max-w-4xl mx-auto px-4 py-8">
+            <main id="page-content" tabIndex={-1} className="w-full min-h-0 flex-1 overflow-y-auto mx-auto px-4 py-8">
               <ToastContainer />
-              <Card className="overflow-hidden shadow-xl">
-                <CardHeader className={`${resource.color} p-8`}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
+              <Card className="max-w-4xl mx-auto overflow-hidden shadow-sm">
+                <CardHeader className="border-b border-border bg-muted/40 p-5 sm:p-8">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-start gap-3">
                       {getIcon(resource.type)}
-                      <h1 className="text-3xl font-bold text-white">{resource.title}</h1>
+                      <h1 className="break-words text-2xl sm:text-3xl font-bold text-foreground">{resource.title}</h1>
                     </div>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="text-white">
+                        <Button aria-label="Teilen" variant="ghost" size="icon" className="shrink-0 text-foreground">
                           <Share2 className="h-5 w-5" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => {
-                          navigator.clipboard.writeText(window.location.href);
-                          toast.success('Link kopiert!');
+                        <DropdownMenuItem onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(window.location.href);
+                            toast.success('Link kopiert!');
+                          } catch {
+                            toast.error('Der Link konnte nicht kopiert werden.');
+                          }
                         }}>
                           Link kopieren
                         </DropdownMenuItem>
@@ -188,42 +186,42 @@ export default function ResourcePage() {
                   </div>
                 </CardHeader>
 
-                <CardContent className="p-8">
+                <CardContent className="p-5 sm:p-8">
                   <div className="space-y-6">
-                    <div className="grid grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                       <div className="space-y-4">
                         <div>
-                          <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                          <h2 className="text-sm font-medium text-muted-foreground">
                             Kategorie
                           </h2>
-                          <p className="mt-1 text-lg font-medium text-gray-900 dark:text-gray-100">
+                          <p className="mt-1 break-words text-lg font-medium text-foreground">
                             {resource.category}
                           </p>
                         </div>
                         <div>
-                          <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                          <h2 className="text-sm font-medium text-muted-foreground">
                             Typ
                           </h2>
-                          <p className="mt-1 text-lg font-medium text-gray-900 dark:text-gray-100">
+                          <p className="mt-1 break-words text-lg font-medium text-foreground">
                             {resource.type}
                           </p>
                         </div>
                       </div>
                       <div className="space-y-4">
                         <div>
-                          <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                          <h2 className="text-sm font-medium text-muted-foreground">
                             Autor
                           </h2>
-                          <p className="mt-1 text-lg font-medium text-gray-900 dark:text-gray-100">
+                          <p className="mt-1 break-words text-lg font-medium text-foreground">
                             {resource.author.name || resource.author.email}
                           </p>
                         </div>
                         <div>
-                          <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                          <h2 className="text-sm font-medium text-muted-foreground">
                             Erstellt am
                           </h2>
-                          <p className="mt-1 text-lg font-medium text-gray-900 dark:text-gray-100">
-                            {new Date(resource.createdAt).toLocaleDateString()}
+                          <p className="mt-1 break-words text-lg font-medium text-foreground">
+                            {new Date(resource.createdAt).toLocaleDateString('de-DE')}
                           </p>
                         </div>
                       </div>
@@ -245,6 +243,6 @@ export default function ResourcePage() {
           )}
         </div>
       </div>
-    </div>
+    </AppShell>
   );
 }

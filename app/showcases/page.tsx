@@ -2,6 +2,7 @@
 
 "use client";
 
+import { AppShell, AppHeader } from '@/components/app-shell';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation'; // Für Navigation
 import Link from 'next/link'; // Für Links
@@ -23,7 +24,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { useSession } from 'next-auth/react';
 import { Editor } from "@/components/Editor";
-import { sanitizeTextPreview } from '@/lib/sanitize-html';
+import { sanitizeTextPreview, sanitizeRichHtml } from '@/lib/sanitize-html';
 import { getSafeHttpUrl } from '@/lib/security';
 
 
@@ -152,6 +153,9 @@ export default function ProjectShowcase() {
   const [commentContent, setCommentContent] = useState('');
   const [currentTag, setCurrentTag] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [isCommenting, setIsCommenting] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   useEffect(() => {
@@ -165,7 +169,9 @@ export default function ProjectShowcase() {
       .catch((error: unknown) => {
         if (!active || controller.signal.aborted) return;
         console.error('Error fetching projects:', error);
-      });
+        setLoadError('Die Projekte konnten nicht geladen werden. Bitte lade die Seite erneut.');
+      })
+      .finally(() => { if (active) setIsLoading(false); });
 
     return () => {
       active = false;
@@ -300,6 +306,7 @@ export default function ProjectShowcase() {
 
   // Handle adding a comment
   const handleAddComment = async (projectId: string) => {
+    if (isCommenting) return;
     if (!session) {
       alert('Bitte melde dich an, um einen Kommentar hinzuzufügen.');
       return;
@@ -310,6 +317,7 @@ export default function ProjectShowcase() {
       return;
     }
 
+    setIsCommenting(true);
     try {
       const res = await fetch(`/api/projects/${projectId}/comments`, {
         method: 'POST',
@@ -326,10 +334,13 @@ export default function ProjectShowcase() {
 
       const newComment: ProjectComment = await res.json();
       setSelectedProject((prev) => prev ? { ...prev, comments: [...prev.comments, newComment] } : prev);
+      setProjects(prev => prev.map(project => project.id === projectId ? { ...project, comments: [...project.comments, newComment] } : project));
       setCommentContent('');
     } catch (error: any) {
       console.error('Error adding comment:', error);
       alert(error.message || 'Fehler beim Hinzufügen des Kommentars.');
+    } finally {
+      setIsCommenting(false);
     }
   }
 
@@ -452,51 +463,54 @@ export default function ProjectShowcase() {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+    <AppShell>
       <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {/* Header improvements */}
-        <header className="bg-white/80 backdrop-blur-sm dark:bg-gray-800/80 shadow-lg z-10 sticky top-0">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-            <h2 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 ml-12 lg:ml-0 flex items-center">
+        <AppHeader>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+            <h2 className="text-xl sm:text-2xl font-bold text-foreground flex items-center">
               <Briefcase className="mr-3 h-7 w-7" />
               Projekte-Showcase
             </h2>
-            <div className="flex items-center space-x-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="relative min-w-0 flex-1 sm:flex-none">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
                 <Input
                   type="text"
-                  placeholder="Suche nach Projekten..."
+                  placeholder="Suche nach Projekten…"
+                  aria-label="Projekte durchsuchen"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 pr-4 py-2 w-64 rounded-full"
+                  className="pl-10 pr-4 py-2 w-full sm:w-64 rounded-full"
                 />
               </div>
               <ThemeToggle />
               <UserNav />
             </div>
           </div>
-        </header>
+        </AppHeader>
 
-        <main className="flex-1 overflow-y-auto p-4 lg:p-8">
+        <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto p-4 lg:p-8">
           {/* Filter and sort improvements */}
-          <div className="bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm rounded-xl p-4 mb-6 shadow-sm">
+          <div className="bg-card/50 dark:bg-card/50 backdrop-blur-sm rounded-xl p-4 mb-6 shadow-sm">
             <div className="flex justify-between items-center flex-wrap gap-4">
               <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList>
+                <TabsList className="flex h-auto flex-wrap justify-start gap-1">
                   {categories.map((category) => (
                     <TabsTrigger key={category} value={category} className="capitalize">
-                      {category}
+                      {category === 'all' ? 'Alle' : category}
                     </TabsTrigger>
                   ))}
                 </TabsList>
               </Tabs>
-              <div className="flex items-center space-x-4">
+              <div className="flex flex-wrap items-center gap-3">
                 <div className="flex items-center space-x-2">
                   <Button
                     variant="outline"
                     size="icon"
+                    aria-label="Rasteransicht"
+                    aria-pressed={viewMode === 'grid'}
                     onClick={() => setViewMode('grid')}
                     className={viewMode === 'grid' ? 'bg-primary/10' : ''}
                   >
@@ -510,6 +524,8 @@ export default function ProjectShowcase() {
                   <Button
                     variant="outline"
                     size="icon"
+                    aria-label="Listenansicht"
+                    aria-pressed={viewMode === 'list'}
                     onClick={() => setViewMode('list')}
                     className={viewMode === 'list' ? 'bg-primary/10' : ''}
                   >
@@ -520,9 +536,9 @@ export default function ProjectShowcase() {
                     </div>
                   </Button>
                 </div>
-                <Filter className="h-5 w-5 text-gray-500" />
+                <Filter className="h-5 w-5 text-muted-foreground" />
                 <Select value={sortBy} onValueChange={setSortBy}>
-                  <SelectTrigger className="w-[180px]">
+                  <SelectTrigger className="w-[180px]" aria-label="Projekte sortieren nach">
                     <SelectValue placeholder="Sortieren nach" />
                   </SelectTrigger>
                   <SelectContent>
@@ -543,6 +559,15 @@ export default function ProjectShowcase() {
               <Plus className="mr-2 h-4 w-4" /> Neues Projekt einreichen
             </Button>
           )}
+          {isLoading ? (
+            <div role="status" className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3" aria-label="Projekte werden geladen">
+              {[0, 1, 2].map(key => <div key={key} className="h-80 animate-pulse rounded-xl bg-muted" />)}
+            </div>
+          ) : loadError ? (
+            <Card><CardContent role="alert" className="py-10 text-center"><p>{loadError}</p><Button variant="outline" className="mt-4" onClick={() => window.location.reload()}>Erneut laden</Button></CardContent></Card>
+          ) : filteredProjects.length === 0 ? (
+            <Card><CardContent className="py-12 text-center"><Briefcase className="mx-auto mb-3 h-8 w-8 text-muted-foreground" /><h3 className="text-lg font-semibold">Keine Projekte gefunden</h3><p className="mt-2 text-muted-foreground">Passe deine Suche an oder teile das erste Projekt mit der Community.</p>{(searchTerm || activeTab !== 'all') && <Button variant="outline" className="mt-4" onClick={() => { setSearchTerm(''); setActiveTab('all'); }}>Filter zurücksetzen</Button>}</CardContent></Card>
+          ) : null}
           <AnimatePresence>
             {viewMode === 'grid' ? (
               <motion.div
@@ -560,8 +585,8 @@ export default function ProjectShowcase() {
                     transition={{ duration: 0.3 }}
                     className="group relative"
                   >
-                    <Link href={`/projects/${project.id}`}>
-                      <Card className="h-full transform transition-all duration-300 hover:scale-[1.02] hover:shadow-xl bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
+                    <div className="relative h-full">
+                      <Card className="h-full transform transition-all duration-300 hover:scale-[1.02] hover:shadow-xl bg-card/80 dark:bg-card/80 backdrop-blur-sm">
                         <CardHeader className="relative p-0 overflow-hidden rounded-t-xl">
                           {project.imageUrl ? (
                             <div className="relative h-48 overflow-hidden">
@@ -582,12 +607,12 @@ export default function ProjectShowcase() {
                               }}
                             />
                           )}
-                          <div className="absolute top-2 right-2 flex gap-2">
+                          <div className="absolute top-2 left-2 right-2 flex flex-wrap justify-end gap-2">
                             {project.tags.map(tag => (
                               <Badge
                                 key={tag.id}
                                 variant="secondary"
-                                className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm shadow-sm"
+                                className="bg-card/90 dark:bg-card/90 backdrop-blur-sm shadow-sm"
                               >
                                 {tag.name}
                               </Badge>
@@ -598,14 +623,14 @@ export default function ProjectShowcase() {
                         <CardContent className="p-5 space-y-4">
                           <div>
                             <CardTitle className="text-xl font-bold mb-2 line-clamp-1">
-                              {project.title}
+                              <Link href={`/projects/${project.id}`} className="after:absolute after:inset-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{project.title}</Link>
                             </CardTitle>
-                              <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2">
+                              <p className="text-sm text-muted-foreground line-clamp-2">
                                 {sanitizeTextPreview(project.description, 180)}
                               </p>
                           </div>
 
-                          <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
+                          <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-border">
                             <div className="flex items-center space-x-3">
                               <Avatar className="ring-2 ring-white dark:ring-gray-800">
                                 <AvatarImage src={project.author.image || undefined} />
@@ -617,19 +642,22 @@ export default function ProjectShowcase() {
                                 <p className="text-sm font-medium leading-none">
                                   {project.author.name}
                                 </p>
-                                <p className="text-xs text-gray-500">
+                                <p className="text-xs text-muted-foreground">
                                   {new Date(project.createdAt).toLocaleDateString()}
                                 </p>
                               </div>
                             </div>
 
-                            <div className="flex items-center space-x-4">
+                            <div className="flex flex-wrap items-center gap-3">
                               <button
-                                className={`flex items-center space-x-1 transition-colors ${project.likes.some(like => like.userId === session?.user.id)
+                                className={`relative z-10 flex items-center space-x-1 rounded-md p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors ${project.likes.some(like => like.userId === session?.user.id)
                                   ? 'text-blue-500'
-                                  : 'text-gray-500 hover:text-blue-500'
+                                  : 'text-muted-foreground hover:text-blue-500'
                                   }`}
+                                aria-label={project.likes.some(like => like.userId === session?.user.id) ? 'Gefällt mir zurücknehmen' : 'Projekt gefällt mir'}
+                                aria-pressed={project.likes.some(like => like.userId === session?.user.id)}
                                 onClick={(e) => {
+                                  e.preventDefault();
                                   e.stopPropagation(); // Verhindert das Navigieren zur Detailseite
                                   const userLike = project.likes.find(like => like.userId === session?.user.id);
                                   if (userLike) {
@@ -643,7 +671,7 @@ export default function ProjectShowcase() {
                                 <span>{project.likes.length}</span>
                               </button>
 
-                              <div className="flex items-center space-x-1 text-gray-500">
+                              <div className="flex items-center space-x-1 text-muted-foreground">
                                 <MessageSquare className="h-4 w-4" />
                                 <span>{project.comments.length}</span>
                               </div>
@@ -651,7 +679,8 @@ export default function ProjectShowcase() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="text-red-500 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/20"
+                                  aria-label={`Projekt „${project.title}“ löschen`}
+                                  className="relative z-10 text-red-500 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/20"
                                   onClick={(e) => handleDeleteClick(e, project)}
                                 >
                                   <Trash className="h-4 w-4" />
@@ -661,7 +690,7 @@ export default function ProjectShowcase() {
                           </div>
                         </CardContent>
                       </Card>
-                    </Link>
+                    </div>
                   </motion.div>
                 ))}
               </motion.div>
@@ -680,11 +709,11 @@ export default function ProjectShowcase() {
                     exit={{ opacity: 0, y: -20 }}
                     transition={{ duration: 0.3 }}
                   >
-                    <Link href={`/projects/${project.id}`}>
-                      <Card className="transform transition-all duration-300 hover:shadow-lg bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
+                    <div className="relative h-full">
+                      <Card className="transform transition-all duration-300 hover:shadow-lg bg-card/80 dark:bg-card/80 backdrop-blur-sm">
                         <CardContent className="p-4">
                           <div className="flex items-start space-x-4">
-                            <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0">
+                            <div className="relative w-16 h-16 rounded-lg overflow-hidden flex-shrink-0">
                               {project.imageUrl ? (
                                 <Image
                                   src={project.imageUrl}
@@ -703,17 +732,17 @@ export default function ProjectShowcase() {
                               )}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between">
-                                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                                  {project.title}
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <h3 className="text-lg font-semibold text-foreground">
+                                  <Link href={`/projects/${project.id}`} className="after:absolute after:inset-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{project.title}</Link>
                                 </h3>
                                 <div className="flex items-center space-x-2">
-                                  <div className="flex items-center space-x-4">
-                                    <span className="flex items-center space-x-1 text-gray-500">
+                                  <div className="flex flex-wrap items-center gap-3">
+                                    <span className="flex items-center space-x-1 text-muted-foreground">
                                       <ThumbsUp className="h-4 w-4" />
                                       <span>{project.likes.length}</span>
                                     </span>
-                                    <span className="flex items-center space-x-1 text-gray-500">
+                                    <span className="flex items-center space-x-1 text-muted-foreground">
                                       <MessageSquare className="h-4 w-4" />
                                       <span>{project.comments.length}</span>
                                     </span>
@@ -722,7 +751,8 @@ export default function ProjectShowcase() {
                                     <Button
                                       variant="ghost"
                                       size="icon"
-                                      className="text-red-500 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/20"
+                                      aria-label={`Projekt „${project.title}“ löschen`}
+                                  className="relative z-10 text-red-500 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/20"
                                       onClick={(e) => handleDeleteClick(e, project)}
                                     >
                                       <Trash className="h-4 w-4" />
@@ -730,10 +760,10 @@ export default function ProjectShowcase() {
                                   )}
                                 </div>
                               </div>
-                                <p className="mt-1 text-sm text-gray-600 dark:text-gray-300 line-clamp-2">
+                                <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
                                   {sanitizeTextPreview(project.description, 180)}
                                 </p>
-                              <div className="mt-2 flex items-center justify-between">
+                              <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                                 <div className="flex items-center space-x-2">
                                   <Avatar className="h-6 w-6">
                                     <AvatarImage src={project.author.image || undefined} />
@@ -741,11 +771,11 @@ export default function ProjectShowcase() {
                                       {project.author.name?.charAt(0)}
                                     </AvatarFallback>
                                   </Avatar>
-                                  <span className="text-sm text-gray-500">
+                                  <span className="text-sm text-muted-foreground">
                                     {project.author.name}
                                   </span>
                                 </div>
-                                <div className="flex gap-2">
+                                <div className="flex flex-wrap gap-2">
                                   {project.tags.map(tag => (
                                     <Badge
                                       key={tag.id}
@@ -761,7 +791,7 @@ export default function ProjectShowcase() {
                           </div>
                         </CardContent>
                       </Card>
-                    </Link>
+                    </div>
                   </motion.div>
                 ))}
               </motion.div>
@@ -795,7 +825,7 @@ export default function ProjectShowcase() {
 
       {/* Projekt-Details Dialog */}
       <Dialog open={!!selectedProject} onOpenChange={() => setSelectedProject(null)}>
-        <DialogContent className="sm:max-w-[800px] p-0 overflow-hidden">
+        <DialogContent className="sm:max-w-[800px] max-h-[90dvh] p-0 overflow-y-auto">
           <div className="relative h-[300px]">
             {selectedProject?.imageUrl ? (
               <Image
@@ -822,7 +852,7 @@ export default function ProjectShowcase() {
           </div>
 
           <div className="p-6 space-y-6">
-            <p className="text-gray-700 dark:text-gray-300">{selectedProject?.description}</p>
+            <div className="prose dark:prose-invert max-w-none break-words" dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(selectedProject?.description || '') }} />
             <div className="flex flex-wrap gap-2">
               {selectedProject?.tags.map((tag) => (
                 <Badge
@@ -834,20 +864,20 @@ export default function ProjectShowcase() {
                 </Badge>
               ))}
             </div>
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center space-x-3">
                 <Avatar className="h-10 w-10">
                   <AvatarImage src={selectedProject?.author.image || undefined} />
                   <AvatarFallback>{selectedProject?.author.name ? selectedProject.author.name.charAt(0) : 'U'}</AvatarFallback>
                 </Avatar>
-                <span className="text-md font-medium text-gray-800 dark:text-gray-200">{selectedProject?.author.name}</span>
+                <span className="text-md font-medium text-foreground">{selectedProject?.author.name}</span>
               </div>
               <div className="flex items-center space-x-6">
-                <span className="flex items-center text-sm text-gray-600 dark:text-gray-400">
+                <span className="flex items-center text-sm text-muted-foreground">
                   <ThumbsUp className="h-5 w-5 mr-1" />
                   {selectedProject?.likes.length}
                 </span>
-                <span className="flex items-center text-sm text-gray-600 dark:text-gray-400">
+                <span className="flex items-center text-sm text-muted-foreground">
                   <MessageSquare className="h-5 w-5 mr-1" />
                   {selectedProject?.comments.length}
                 </span>
@@ -857,18 +887,18 @@ export default function ProjectShowcase() {
             <div className="mt-6">
               <h3 className="text-xl font-semibold mb-3">Kommentare</h3>
               {selectedProject?.comments.map(comment => (
-                <div key={comment.id} className="mb-4 p-3 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                <div key={comment.id} className="mb-4 p-3 bg-muted rounded-lg">
                   <div className="flex items-center space-x-3 mb-2">
                     <Avatar className="h-8 w-8">
                       <AvatarImage src={comment.author.image || undefined} />
                       <AvatarFallback>{comment.author.name ? comment.author.name.charAt(0) : 'U'}</AvatarFallback>
                     </Avatar>
                     <div>
-                      <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{comment.author.name}</span>
-                      <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">{new Date(comment.createdAt).toLocaleString()}</span>
+                      <span className="text-sm font-medium text-foreground">{comment.author.name}</span>
+                      <span className="text-xs text-muted-foreground ml-2">{new Date(comment.createdAt).toLocaleString()}</span>
                     </div>
                   </div>
-                  <p className="text-gray-700 dark:text-gray-300 ml-11">{comment.content}</p>
+                  <p className="text-foreground dark:text-muted-foreground ml-11">{comment.content}</p>
                 </div>
               ))}
             </div>
@@ -877,12 +907,13 @@ export default function ProjectShowcase() {
               <div className="mt-6">
                 <h4 className="text-lg font-semibold mb-2">Einen Kommentar hinzufügen</h4>
                 <Textarea
-                  placeholder="Dein Kommentar..."
-                  className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-gray-100"
+                  aria-label="Dein Kommentar zum Projekt"
+                  placeholder="Dein Kommentar…"
+                  className="w-full p-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-card dark:text-foreground"
                   value={commentContent}
                   onChange={(e) => setCommentContent(e.target.value)}
                 />
-                <Button className="mt-3 px-6 py-2">Kommentar hinzufügen</Button>
+                <Button className="mt-3 px-6 py-2" onClick={() => handleAddComment(selectedProject.id)} disabled={isCommenting || !commentContent.trim()}>{isCommenting ? 'Wird gesendet…' : 'Kommentar hinzufügen'}</Button>
               </div>
             )}
           </div>
@@ -978,13 +1009,14 @@ export default function ProjectShowcase() {
                           onChange={(e) => setCurrentTag(e.target.value)}
                           placeholder="Tag eingeben und Enter drücken"
                           className="h-11"
-                          onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddTag())}
+                          onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddTag())}
                         />
                         <Button
                           type="button"
+                          aria-label="Tag hinzufügen"
                           onClick={handleAddTag}
                           variant="outline"
-                          className="h-11 px-6"
+                          className="h-auto min-h-11 px-4 whitespace-normal"
                         >
                           <Plus className="h-4 w-4" />
                         </Button>
@@ -999,6 +1031,7 @@ export default function ProjectShowcase() {
                             {tag}
                             <button
                               type="button"
+                              aria-label={`Tag ${tag} entfernen`}
                               onClick={() => setNewProject({
                                 ...newProject,
                                 tags: newProject.tags.filter(t => t !== tag)
@@ -1063,14 +1096,14 @@ export default function ProjectShowcase() {
                   type="button"
                   variant="outline"
                   onClick={() => setIsSubmitDialogOpen(false)}
-                  className="h-11 px-6"
+                  className="h-auto min-h-11 px-4 whitespace-normal"
                 >
                   Abbrechen
                 </Button>
                 <Button
                   type="submit"
                   disabled={isSubmitting}
-                  className="h-11 px-8"
+                  className="h-auto min-h-11 px-4 whitespace-normal"
                 >
                   {isSubmitting ? (
                     <>
@@ -1090,83 +1123,83 @@ export default function ProjectShowcase() {
       {/* Projekt Bearbeiten Dialog */}
       {projectToEdit && (
         <Dialog open={isEditDialogOpen} onOpenChange={() => { setIsEditDialogOpen(false); setProjectToEdit(null); }}>
-          <DialogContent className="sm:max-w-[625px]">
+          <DialogContent className="sm:max-w-[625px] max-h-[90dvh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Projekt bearbeiten</DialogTitle>
             </DialogHeader>
             <form onSubmit={(e) => { e.preventDefault(); handleSubmitEditProject() }} encType="multipart/form-data">
               <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-title" className="text-right">
+                <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
+                  <Label htmlFor="edit-title" className="sm:text-right">
                     Titel
                   </Label>
                   <Input
                     id="edit-title"
                     value={editProjectData.title}
                     onChange={(e) => setEditProjectData({ ...editProjectData, title: e.target.value })}
-                    className="col-span-3"
+                    className="sm:col-span-3"
                     placeholder="Projekt Titel"
                     required
                   />
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-description" className="text-right">
+                <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
+                  <Label htmlFor="edit-description" className="sm:text-right">
                     Beschreibung
                   </Label>
                   <Textarea
                     id="edit-description"
                     value={editProjectData.description}
                     onChange={(e) => setEditProjectData({ ...editProjectData, description: e.target.value })}
-                    className="col-span-3"
+                    className="sm:col-span-3"
                     placeholder="Projekt Beschreibung"
                     required
                   />
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-category" className="text-right">
+                <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
+                  <Label htmlFor="edit-category" className="sm:text-right">
                     Kategorie
                   </Label>
                   <Input
                     id="edit-category"
                     value={editProjectData.category}
                     onChange={(e) => setEditProjectData({ ...editProjectData, category: e.target.value })}
-                    className="col-span-3"
+                    className="sm:col-span-3"
                     placeholder="Projekt Kategorie"
                     required
                   />
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-tags" className="text-right">
+                <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
+                  <Label htmlFor="edit-tags" className="sm:text-right">
                     Tags
                   </Label>
                   <Input
                     id="edit-tags"
                     value={editProjectData.tags.join(', ')}
                     onChange={(e) => setEditProjectData({ ...editProjectData, tags: e.target.value.split(',').map(tag => tag.trim()) })}
-                    className="col-span-3"
+                    className="sm:col-span-3"
                     placeholder="Trennen Sie Tags mit Kommas"
                   />
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-link" className="text-right">
+                <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
+                  <Label htmlFor="edit-link" className="sm:text-right">
                     Projekt-Link
                   </Label>
                   <Input
                     id="edit-link"
                     value={editProjectData.link}
                     onChange={(e) => setEditProjectData({ ...editProjectData, link: e.target.value })}
-                    className="col-span-3"
+                    className="sm:col-span-3"
                     placeholder="https://github.com/..."
                     required
                   />
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-image" className="text-right">
+                <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
+                  <Label htmlFor="edit-image" className="sm:text-right">
                     Vorschaubild
                   </Label>
-                  <div className="col-span-3">
-                    <label htmlFor="edit-image-upload" className="flex items-center justify-center w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm bg-white dark:bg-gray-700 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none">
-                      <Upload className="mr-2 h-5 w-5 text-gray-400" />
+                  <div className="sm:col-span-3">
+                    <label htmlFor="edit-image-upload" className="flex items-center justify-center w-full px-4 py-2 border border-border rounded-lg shadow-sm bg-card dark:bg-muted text-sm font-medium text-foreground hover:bg-accent">
+                      <Upload className="mr-2 h-5 w-5 text-muted-foreground" />
                       {editProjectData.image ? editProjectData.image.name : 'Bild auswählen'}
                     </label>
                     <input
@@ -1179,10 +1212,11 @@ export default function ProjectShowcase() {
                           setEditProjectData({ ...editProjectData, image: file })
                         }
                       }}
-                      className="hidden"
+                      className="sr-only"
+                      aria-label="Vorschaubild auswählen"
                     />
                     {editProjectData.image && (
-                      <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                      <p className="mt-2 text-sm text-muted-foreground">
                         Gewähltes Bild: {editProjectData.image.name}
                       </p>
                     )}
@@ -1218,6 +1252,6 @@ export default function ProjectShowcase() {
           </DialogContent>
         </Dialog>
       )}
-    </div>
+    </AppShell>
   );
 }

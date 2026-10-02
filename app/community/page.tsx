@@ -1,7 +1,10 @@
 "use client"
 
+import { PageIntro } from '@/components/page-intro';
+import { AppShell, AppHeader } from '@/components/app-shell';
 import { useState, useEffect, useCallback, useRef } from 'react'
-import Image from 'next/image'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { PageState } from '@/components/page-state'
 import { useSession } from 'next-auth/react'
 import { Button } from "@/components/ui/button"
 import { UserNav } from "@/components/user-nav"
@@ -341,10 +344,10 @@ function Community() {
   }
 
   return (
-    <div className="flex flex-col lg:flex-row h-screen overflow-hidden bg-background transition-colors duration-300">
+    <AppShell>
       <Sidebar />
 
-      <div className="flex-1 flex flex-col overflow-hidden relative">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <AnimatePresence>
           {notification && (
             <motion.div
@@ -356,12 +359,12 @@ function Community() {
                 : 'bg-gradient-to-r from-red-500 to-rose-600 text-white'
                 }`}
             >
-              <span className="font-medium">{notification.message}</span>
+              <span className="font-medium" role={notification.type === 'error' ? 'alert' : 'status'}>{notification.message}</span>
             </motion.div>
           )}
         </AnimatePresence>
 
-        <header className="bg-background/80 backdrop-blur-md shadow-sm sticky top-0 z-40 transition-colors duration-300 border-b border-border">
+        <AppHeader>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
             <div>
               <h2 className="text-2xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">Community Hub</h2>
@@ -372,10 +375,11 @@ function Community() {
               <UserNav />
             </div>
           </div>
-        </header>
+        </AppHeader>
 
-        <main className="flex-1 overflow-y-auto scroll-smooth">
+        <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto scroll-smooth">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <PageIntro eyebrow="Deine Community" title="Gute Ideen beginnen im Austausch." description="Teile Erfahrungen, stelle Fragen und bring gemeinsam mit anderen neue Ideen voran." />
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
               {/* Main Content Feed - 8 cols */}
               <div className="lg:col-span-8 space-y-6">
@@ -386,20 +390,16 @@ function Community() {
                       initial={{ opacity: 0, scale: 0.95 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.95 }}
-                      className="bg-card rounded-xl p-4 shadow-sm border border-border flex items-center space-x-4 cursor-pointer hover:shadow-md transition-shadow"
+                      className="bg-card rounded-2xl p-4 shadow-sm border border-border flex items-center space-x-4 cursor-pointer hover:border-primary/30 transition-colors"
+                      role="button" tabIndex={0} aria-label="Neuen Beitrag erstellen"
+                      onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setIsEditing(true) } }}
                       onClick={() => setIsEditing(true)}
                     >
-                      <Image
-                        src={session?.user?.image || 'https://via.placeholder.com/150'}
-                        alt="User"
-                        width={40}
-                        height={40}
-                        className="rounded-full border border-border"
-                      />
+                      <Avatar className="h-10 w-10"><AvatarImage src={session?.user?.image || ''} alt="" /><AvatarFallback className="bg-accent text-primary">{session?.user?.name?.[0] || 'F'}</AvatarFallback></Avatar>
                       <div className="flex-1 bg-muted rounded-full px-4 py-2.5 text-muted-foreground text-sm hover:bg-accent transition-colors">
-                        Was möchtest du teilen, {session?.user?.name?.split(' ')[0]}?
+                        Was möchtest du teilen{session?.user?.name ? `, ${session.user.name.split(' ')[0]}` : ''}?
                       </div>
-                      <Button variant="ghost" size="icon" className="text-primary">
+                      <Button aria-label="Hinzufügen" variant="ghost" size="icon" className="text-primary">
                         <PlusCircle className="h-6 w-6" />
                       </Button>
                     </motion.div>
@@ -419,6 +419,7 @@ function Community() {
                 </AnimatePresence>
 
                 <div className="space-y-6">
+                  {isLoading && localPosts.length === 0 && <PageState kind="loading" title="Beiträge werden geladen" />}
                   <AnimatePresence>
                     {localPosts.map((post) => (
                       <PostCard
@@ -442,11 +443,11 @@ function Community() {
 
                   {localPosts.length === 0 && !isLoading && (
                     <div className="text-center py-12">
-                      <div className="bg-gray-100 dark:bg-gray-800 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <PlusCircle className="h-8 w-8 text-gray-400" />
+                      <div className="bg-muted dark:bg-card w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <PlusCircle className="h-8 w-8 text-muted-foreground" />
                       </div>
-                      <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">Keine Beiträge gefunden</h3>
-                      <p className="text-gray-500 dark:text-gray-400 mt-2">Sei der Erste, der etwas teilt!</p>
+                      <h3 className="text-lg font-medium text-foreground">Keine Beiträge gefunden</h3>
+                      <p className="text-muted-foreground mt-2">Sei der Erste, der etwas teilt!</p>
                     </div>
                   )}
                 </div>
@@ -470,7 +471,7 @@ function Community() {
         isVisible={pointsAnimation.isVisible}
         onComplete={() => setPointsAnimation({ isVisible: false, points: 0 })}
       />
-    </div>
+    </AppShell>
   )
 }
 

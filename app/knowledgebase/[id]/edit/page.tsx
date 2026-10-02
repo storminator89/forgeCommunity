@@ -1,5 +1,6 @@
 'use client';
 
+import { AppShell, AppHeader } from '@/components/app-shell';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from "@/components/Sidebar";
@@ -60,6 +61,7 @@ export default function EditArticle() {
   const [featuredImagePreview, setFeaturedImagePreview] = useState<string>('');
   const [isImageDeleted, setIsImageDeleted] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [existingCategories, setExistingCategories] = useState<string[]>([]);
   const [existingTags, setExistingTags] = useState<string[]>([]);
@@ -151,12 +153,15 @@ export default function EditArticle() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
 
     if (!title || !content || !category) {
       setError('Titel, Inhalt und Kategorie sind erforderlich.');
       return;
     }
 
+    setIsSubmitting(true);
+    setError(null);
     const formData = new FormData();
     formData.append('title', title);
     formData.append('content', content);
@@ -185,6 +190,8 @@ export default function EditArticle() {
     } catch (error) {
       console.error('Error updating article:', error);
       setError(error instanceof Error ? error.message : 'Fehler beim Aktualisieren des Artikels.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -197,10 +204,10 @@ export default function EditArticle() {
   }
 
   return (
-    <div className="flex flex-col lg:flex-row min-h-screen h-screen bg-background">
+    <AppShell>
       <Sidebar />
-      <div className="flex-1 flex flex-col h-screen">
-        <header className="bg-card shadow-sm z-10 sticky top-0 border-b flex-none">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <AppHeader>
           <div className="container mx-auto px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center space-x-4 w-full sm:w-auto">
               <Button
@@ -217,14 +224,14 @@ export default function EditArticle() {
                 Artikel bearbeiten
               </h1>
             </div>
-            <div className="flex items-center space-x-3">
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 type="submit"
                 form="editForm"
-                disabled={isLoading}
+                disabled={isLoading || isSubmitting}
                 className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm"
               >
-                {isLoading ? (
+                {isSubmitting ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Speichern...
@@ -240,7 +247,7 @@ export default function EditArticle() {
               <UserNav />
             </div>
           </div>
-        </header>
+        </AppHeader>
 
         <div className="flex-1 overflow-y-auto bg-gradient-to-b from-accent/5 to-background">
           <div className="container mx-auto py-8 px-6">
@@ -334,7 +341,7 @@ export default function EditArticle() {
                               type="button"
                               variant="destructive"
                               size="sm"
-                              className="absolute top-2 right-2 opacity-0 group-hover/image:opacity-100 transition-opacity"
+                              className="absolute top-2 right-2 opacity-100 md:opacity-0 md:group-hover/image:opacity-100 focus-visible:opacity-100 transition-opacity"
                               onClick={() => {
                                 setFeaturedImage(null);
                                 setFeaturedImagePreview('');
@@ -436,6 +443,6 @@ export default function EditArticle() {
           </div>
         </div>
       </div>
-    </div>
+    </AppShell>
   );
 }

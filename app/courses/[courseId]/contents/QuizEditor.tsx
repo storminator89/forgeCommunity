@@ -428,28 +428,31 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
                 onDragOver={(e) => handleDragOver(e, questionIndex)}
                 onDragEnd={handleDragEnd}
               >
-                <div className="absolute right-4 top-4 flex gap-2">
+                <div className="flex flex-wrap justify-end gap-2 px-4 pt-4">
                   <Button
                     variant="ghost"
                     size="icon"
+                    aria-label={`Frage ${questionIndex + 1} nach oben verschieben`}
                     onClick={() => moveQuestionUp(questionIndex)}
                     disabled={questionIndex === 0}
-                    className="hover:bg-gray-100"
+                    className="hover:bg-accent"
                   >
                     <ArrowUp className="h-4 w-4" />
                   </Button>
                   <Button
                     variant="ghost"
                     size="icon"
+                    aria-label={`Frage ${questionIndex + 1} nach unten verschieben`}
                     onClick={() => moveQuestionDown(questionIndex)}
                     disabled={questionIndex === questions.length - 1}
-                    className="hover:bg-gray-100"
+                    className="hover:bg-accent"
                   >
                     <ArrowDown className="h-4 w-4" />
                   </Button>
                   <Button
                     variant="ghost"
                     size="icon"
+                    aria-label={`Frage ${questionIndex + 1} löschen`}
                     onClick={() => removeQuestion(questionIndex)}
                     className="hover:bg-red-100 text-red-500"
                   >
@@ -459,8 +462,8 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
 
                 <CardHeader className="cursor-move select-none">
                   <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2 bg-gray-100 rounded-lg px-3 py-1">
-                      <GripVertical className="h-5 w-5 text-gray-500" />
+                    <div className="flex items-center gap-2 bg-muted rounded-lg px-3 py-1">
+                      <GripVertical className="h-5 w-5 text-muted-foreground" />
                       <CardTitle>Frage {questionIndex + 1}</CardTitle>
                     </div>
                   </div>
@@ -468,8 +471,9 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
 
                 <CardContent className="space-y-6">
                   <div className="space-y-2">
-                    <Label className="text-base font-medium">Frage</Label>
+                    <Label htmlFor={`question-${question.id}`} className="text-base font-medium">Frage</Label>
                     <Textarea
+                      id={`question-${question.id}`}
                       value={question.question}
                       onChange={(e) => updateQuestion(questionIndex, 'question', e.target.value)}
                       placeholder="Geben Sie hier Ihre Frage ein..."
@@ -575,7 +579,7 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
                       <Label className="text-base font-medium">Antworten für Lücken</Label>
                       {question.answers.map((answer, answerIndex) => (
                         <div key={answerIndex} className="flex items-center gap-3">
-                          <div className="bg-gray-100 rounded-full px-2 py-1 text-sm font-medium text-gray-600">
+                          <div className="bg-muted rounded-full px-2 py-1 text-sm font-medium text-muted-foreground">
                             {answerIndex + 1}
                           </div>
                           <Input
@@ -613,8 +617,8 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
                       <Label className="text-base font-medium">Antwortmöglichkeiten</Label>
                       {question.options.map((option, optionIndex) => (
                         <div key={optionIndex} className="flex items-center gap-3">
-                          <div className="flex-1 flex items-center gap-3">
-                            <div className="bg-gray-100 rounded-full px-2 py-1 text-sm font-medium text-gray-600">
+                          <div className="min-w-0 flex-1 flex items-center gap-3">
+                            <div className="bg-muted rounded-full px-2 py-1 text-sm font-medium text-muted-foreground">
                               {String.fromCharCode(65 + optionIndex)}
                             </div>
                             <Input
@@ -727,7 +731,7 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
                     <div className="space-y-3">
                       {question.pairs.map((pair, pairIndex) => (
                         <div key={pairIndex} className="flex items-center gap-3">
-                          <div className="bg-gray-100 rounded-full px-2 py-1 text-sm font-medium text-gray-600">
+                          <div className="bg-muted rounded-full px-2 py-1 text-sm font-medium text-muted-foreground">
                             {String.fromCharCode(65 + pairIndex)}
                           </div>
                           <div className="flex-1">{pair.left}</div>
@@ -741,7 +745,7 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
                       <p className="text-lg font-normal">{question.text}</p>
                       {question.answers.map((answer, answerIndex) => (
                         <div key={answerIndex} className="flex items-center gap-3">
-                          <div className="bg-gray-100 rounded-full px-2 py-1 text-sm font-medium text-gray-600">
+                          <div className="bg-muted rounded-full px-2 py-1 text-sm font-medium text-muted-foreground">
                             {String.fromCharCode(65 + answerIndex)}
                           </div>
                           <div className="flex-1">{answer}</div>
@@ -758,10 +762,10 @@ export function QuizEditor({ initialContent, onSave }: QuizEditorProps) {
                             "p-4 rounded-lg border transition-colors flex items-center gap-3",
                             isCorrectAnswer(index, optIndex)
                               ? "border-green-500 bg-green-50"
-                              : "border-gray-200 hover:border-gray-300"
+                              : "border-border hover:border-border"
                           )}
                         >
-                          <div className="bg-gray-100 rounded-full px-2 py-1 text-sm font-medium text-gray-600">
+                          <div className="bg-muted rounded-full px-2 py-1 text-sm font-medium text-muted-foreground">
                             {String.fromCharCode(65 + optIndex)}
                           </div>
                           <div className="flex-1">{option}</div>

@@ -29,6 +29,8 @@ function ensureHooks() {
 }
 
 export function sanitizeRichHtml(html: string | null | undefined) {
+  // Empty client state is also rendered during SSR, before a browser DOM exists.
+  if (!html) return '';
   ensureHooks();
 
   return DOMPurify.sanitize(html ?? '', {
@@ -39,6 +41,7 @@ export function sanitizeRichHtml(html: string | null | undefined) {
 }
 
 export function sanitizeTextPreview(html: string | null | undefined, maxLength?: number) {
+  if (!html) return '';
   ensureHooks();
 
   const plainText = DOMPurify.sanitize(html ?? '', {

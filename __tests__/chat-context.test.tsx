@@ -93,6 +93,27 @@ describe('ChatProvider request lifecycle', () => {
     jest.useRealTimers();
   });
 
+  it('preserves the loaded history when the current channel is selected again', async () => {
+    mockFetch.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/chat/channels') return Promise.resolve(response(channels));
+      if (url.includes('channelId=channel-a')) {
+        return Promise.resolve(response({ items: [message('message-a', 'channel-a', 'Existing message')] }));
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<ChatProvider><ChatProbe /></ChatProvider>);
+    await waitFor(() => expect(screen.getByTestId('messages')).toHaveTextContent('Existing message'));
+    const requestCount = mockFetch.mock.calls.length;
+
+    fireEvent.click(screen.getByRole('button', { name: 'channel-a' }));
+
+    expect(screen.getByTestId('current-channel')).toHaveTextContent('channel-a');
+    expect(screen.getByTestId('messages')).toHaveTextContent('Existing message');
+    expect(mockFetch).toHaveBeenCalledTimes(requestCount);
+  });
+
   it('ignores a late response from a channel that is no longer selected', async () => {
     const channelA = deferred<ReturnType<typeof response>>();
     const channelB = deferred<ReturnType<typeof response>>();

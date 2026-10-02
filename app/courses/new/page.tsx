@@ -1,5 +1,7 @@
 'use client'
 
+import { PageIntro } from '@/components/page-intro';
+import { AppShell, AppHeader } from '@/components/app-shell';
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
@@ -27,6 +29,8 @@ export default function NewCoursePage() {
   const [maxStudents, setMaxStudents] = useState('')
   const [image, setImage] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const router = useRouter()
   const { data: session } = useSession()
@@ -45,12 +49,20 @@ export default function NewCoursePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isSubmitting) return
+    setError(null)
 
     if (!session) {
-      alert('Sie müssen angemeldet sein, um einen Kurs zu erstellen.')
+      setError('Sie müssen angemeldet sein, um einen Kurs zu erstellen.')
       return
     }
 
+    if (startDate && endDate && endDate < startDate) {
+      setError('Das Enddatum muss nach dem Startdatum liegen.')
+      return
+    }
+
+    setIsSubmitting(true)
     try {
       const formData = new FormData()
       formData.append('title', title)
@@ -75,25 +87,28 @@ export default function NewCoursePage() {
       router.push('/courses')
     } catch (error) {
       console.error('Fehler beim Erstellen des Kurses:', error)
-      alert('Fehler beim Erstellen des Kurses. Bitte versuchen Sie es erneut.')
+      setError(error instanceof Error ? error.message : 'Fehler beim Erstellen des Kurses. Bitte versuchen Sie es erneut.')
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
   return (
-    <div className="flex flex-col lg:flex-row min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+    <AppShell>
       <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="bg-white dark:bg-gray-800 shadow-md z-10">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <AppHeader>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-            <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Neuen Kurs erstellen</h2>
+            <h2 className="min-w-0 text-lg sm:text-2xl font-bold text-foreground">Neuen Kurs erstellen</h2>
             <div className="flex items-center space-x-4">
               <ThemeToggle />
               <UserNav />
             </div>
           </div>
-        </header>
-        <main className="flex-1 overflow-y-auto p-4">
-          <div className="max-w-2xl mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+        </AppHeader>
+        <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto p-4">
+          <div className="max-w-2xl mx-auto bg-card rounded-lg shadow-md p-6">
+            <PageIntro eyebrow="Kurse" title="Mach dein Wissen zugänglich." description="Erstelle einen Kurs mit einer klaren Beschreibung und passenden Lerninhalten." />
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
                 <Label htmlFor="title">Kurstitel</Label>
@@ -115,23 +130,14 @@ export default function NewCoursePage() {
                   placeholder="z.B. Webentwicklung"
                 />
               </div>
-              <div className="flex space-x-4">
-                <div className="w-1/2">
-                  <Label>Startdatum (optional)</Label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="min-w-0">
+                  <Label htmlFor="start-date">Startdatum (optional)</Label>
                   <Popover>
                     <PopoverTrigger asChild>
-                      <Button variant="outline" className="w-full justify-start text-left font-normal">
+                      <Button id="start-date" type="button" variant="outline" className="w-full justify-start text-left font-normal">
                         {startDate ? format(startDate, "PPP", { locale: de }) : <span>Datum auswählen</span>}
-                        {startDate && (
-                          <X
-                            className="ml-auto h-4 w-4 opacity-50 hover:opacity-100"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setStartDate(undefined)
-                            }}
-                          />
-                        )}
-                        {!startDate && <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />}
+                        <CalendarIcon className="ml-auto h-4 w-4 shrink-0 opacity-50" />
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
@@ -144,23 +150,15 @@ export default function NewCoursePage() {
                       />
                     </PopoverContent>
                   </Popover>
+                  {startDate && <Button type="button" variant="ghost" size="sm" className="mt-1" onClick={() => setStartDate(undefined)}><X className="mr-1 h-4 w-4" />Startdatum entfernen</Button>}
                 </div>
-                <div className="w-1/2">
-                  <Label>Enddatum (optional)</Label>
+                <div className="min-w-0">
+                  <Label htmlFor="end-date">Enddatum (optional)</Label>
                   <Popover>
                     <PopoverTrigger asChild>
-                      <Button variant="outline" className="w-full justify-start text-left font-normal">
+                      <Button id="end-date" type="button" variant="outline" className="w-full justify-start text-left font-normal">
                         {endDate ? format(endDate, "PPP", { locale: de }) : <span>Datum auswählen</span>}
-                        {endDate && (
-                          <X
-                            className="ml-auto h-4 w-4 opacity-50 hover:opacity-100"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setEndDate(undefined)
-                            }}
-                          />
-                        )}
-                        {!endDate && <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />}
+                        <CalendarIcon className="ml-auto h-4 w-4 shrink-0 opacity-50" />
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
@@ -173,10 +171,11 @@ export default function NewCoursePage() {
                       />
                     </PopoverContent>
                   </Popover>
+                  {endDate && <Button type="button" variant="ghost" size="sm" className="mt-1" onClick={() => setEndDate(undefined)}><X className="mr-1 h-4 w-4" />Enddatum entfernen</Button>}
                 </div>
               </div>
-              <div className="flex space-x-4">
-                <div className="w-1/2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="min-w-0">
                   <Label htmlFor="price">Preis</Label>
                   <Input
                     id="price"
@@ -189,14 +188,14 @@ export default function NewCoursePage() {
                     step="0.01"
                   />
                 </div>
-                <div className="w-1/2">
+                <div className="min-w-0">
                   <Label htmlFor="currency">Währung</Label>
                   <select
                     id="currency"
                     value={currency}
                     onChange={(e) => setCurrency(e.target.value)}
                     required
-                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                    className="w-full rounded-md border border-border bg-card px-3 py-2 text-foreground focus:border-blue-500 focus:ring-blue-500 dark:border-border dark:bg-card dark:text-foreground"
                   >
                     <option value="EUR">EUR</option>
                     <option value="USD">USD</option>
@@ -219,7 +218,7 @@ export default function NewCoursePage() {
               <div>
                 <Label htmlFor="image">Kursbild</Label>
                 <div className="mt-1 flex items-center">
-                  <label htmlFor="image" className="cursor-pointer bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md font-medium text-blue-600 dark:text-blue-400 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500">
+                  <label htmlFor="image" className="cursor-pointer bg-card dark:bg-muted border border-border rounded-md font-medium text-blue-600 dark:text-blue-400 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500">
                     <span className="flex items-center px-3 py-2">
                       <Upload className="h-5 w-5 mr-2" />
                       Bild auswählen
@@ -233,11 +232,12 @@ export default function NewCoursePage() {
                   )}
                 </div>
               </div>
-              <Button type="submit" className="w-full">Kurs erstellen</Button>
+              {error && <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
+              <Button type="submit" disabled={isSubmitting} className="w-full">{isSubmitting ? "Kurs wird erstellt…" : "Kurs erstellen"}</Button>
             </form>
           </div>
         </main>
       </div>
-    </div>
+    </AppShell>
   )
 }

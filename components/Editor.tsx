@@ -64,7 +64,7 @@ const MenuBar = ({ editor }: { editor: any }) => {
 
   return (
     <div className="border-b border-input bg-transparent p-1 flex flex-wrap gap-1">
-      <Toggle
+      <Toggle aria-label="Fett"
         size="sm"
         pressed={editor.isActive('bold')}
         onPressedChange={() => editor.chain().focus().toggleBold().run()}
@@ -72,7 +72,7 @@ const MenuBar = ({ editor }: { editor: any }) => {
       >
         <Bold className="h-4 w-4" data-testid="bold-icon" />
       </Toggle>
-      <Toggle
+      <Toggle aria-label="Kursiv"
         size="sm"
         pressed={editor.isActive('italic')}
         onPressedChange={() => editor.chain().focus().toggleItalic().run()}
@@ -80,7 +80,7 @@ const MenuBar = ({ editor }: { editor: any }) => {
       >
         <Italic className="h-4 w-4" data-testid="italic-icon" />
       </Toggle>
-      <Toggle
+      <Toggle aria-label="Unterstrichen"
         size="sm"
         pressed={editor.isActive('underline')}
         onPressedChange={() => editor.chain().focus().toggleUnderline().run()}
@@ -88,7 +88,7 @@ const MenuBar = ({ editor }: { editor: any }) => {
       >
         <UnderlineIcon className="h-4 w-4" data-testid="underline-icon" />
       </Toggle>
-      <Toggle
+      <Toggle aria-label="Durchgestrichen"
         size="sm"
         pressed={editor.isActive('strike')}
         onPressedChange={() => editor.chain().focus().toggleStrike().run()}
@@ -96,7 +96,7 @@ const MenuBar = ({ editor }: { editor: any }) => {
       >
         <Strikethrough className="h-4 w-4" data-testid="strikethrough-icon" />
       </Toggle>
-      <Toggle
+      <Toggle aria-label="Überschrift"
         size="sm"
         pressed={editor.isActive('heading', { level: 2 })}
         onPressedChange={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
@@ -104,7 +104,7 @@ const MenuBar = ({ editor }: { editor: any }) => {
       >
         <Heading2 className="h-4 w-4" data-testid="heading-icon" />
       </Toggle>
-      <Toggle
+      <Toggle aria-label="Aufzählung"
         size="sm"
         pressed={editor.isActive('bulletList')}
         onPressedChange={() => editor.chain().focus().toggleBulletList().run()}
@@ -112,7 +112,7 @@ const MenuBar = ({ editor }: { editor: any }) => {
       >
         <List className="h-4 w-4" data-testid="bullet-list-icon" />
       </Toggle>
-      <Toggle
+      <Toggle aria-label="Nummerierte Liste"
         size="sm"
         pressed={editor.isActive('orderedList')}
         onPressedChange={() => editor.chain().focus().toggleOrderedList().run()}
@@ -120,7 +120,7 @@ const MenuBar = ({ editor }: { editor: any }) => {
       >
         <ListOrdered className="h-4 w-4" data-testid="ordered-list-icon" />
       </Toggle>
-      <Toggle
+      <Toggle aria-label="Zitat"
         size="sm"
         pressed={editor.isActive('blockquote')}
         onPressedChange={() => editor.chain().focus().toggleBlockquote().run()}
@@ -128,7 +128,7 @@ const MenuBar = ({ editor }: { editor: any }) => {
       >
         <Quote className="h-4 w-4" data-testid="quote-icon" />
       </Toggle>
-      <Toggle
+      <Toggle aria-label="Code"
         size="sm"
         pressed={editor.isActive('code')}
         onPressedChange={() => editor.chain().focus().toggleCode().run()}
@@ -136,7 +136,7 @@ const MenuBar = ({ editor }: { editor: any }) => {
       >
         <Code className="h-4 w-4" data-testid="code-icon" />
       </Toggle>
-      <Toggle
+      <Toggle aria-label="Link einfügen"
         size="sm"
         pressed={editor.isActive('link')}
         onPressedChange={setLink}
@@ -144,14 +144,14 @@ const MenuBar = ({ editor }: { editor: any }) => {
       >
         <LinkIcon className="h-4 w-4" data-testid="link-icon" />
       </Toggle>
-      <Toggle
+      <Toggle aria-label="Bild einfügen"
         size="sm"
         onPressedChange={addImage}
         data-testid="toggle-button"
       >
         <ImageIcon className="h-4 w-4" data-testid="image-icon" />
       </Toggle>
-      <Toggle
+      <Toggle aria-label="Rückgängig"
         size="sm"
         onPressedChange={() => editor.chain().focus().undo().run()}
         disabled={!editor.can().undo()}
@@ -159,7 +159,7 @@ const MenuBar = ({ editor }: { editor: any }) => {
       >
         <Undo className="h-4 w-4" data-testid="undo-icon" />
       </Toggle>
-      <Toggle
+      <Toggle aria-label="Wiederholen"
         size="sm"
         onPressedChange={() => editor.chain().focus().redo().run()}
         disabled={!editor.can().redo()}
@@ -182,6 +182,8 @@ export function Editor({
     immediatelyRender: false,
     extensions: [
       StarterKit.configure({
+        link: false,
+        underline: false,
         heading: {
           levels: [1, 2, 3],
         },
@@ -205,6 +207,9 @@ export function Editor({
       attributes: {
         class: 'min-h-[150px] w-full rounded-md bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 prose prose-sm dark:prose-invert max-w-none',
         'data-testid': 'editor-content',
+        role: 'textbox',
+        'aria-label': 'Text bearbeiten',
+        'aria-multiline': 'true',
       },
     },
     onUpdate: ({ editor }) => {

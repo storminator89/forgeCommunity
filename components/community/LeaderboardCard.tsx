@@ -47,8 +47,8 @@ export function LeaderboardCard({ users, isLoading }: LeaderboardCardProps) {
                   rankIcon = <Crown className="h-5 w-5 text-yellow-500" fill="currentColor" />;
                   rankColor = "bg-yellow-50 dark:bg-accent/40 border-yellow-200 dark:border-accent";
                 } else if (index === 1) {
-                  rankIcon = <Medal className="h-5 w-5 text-gray-400" fill="currentColor" />;
-                  rankColor = "bg-gray-50 dark:bg-transparent border-gray-200 dark:border-border";
+                  rankIcon = <Medal className="h-5 w-5 text-muted-foreground" fill="currentColor" />;
+                  rankColor = "bg-card dark:bg-transparent border-border";
                 } else if (index === 2) {
                   rankIcon = <Medal className="h-5 w-5 text-amber-700" fill="currentColor" />;
                   rankColor = "bg-orange-50 dark:bg-transparent border-orange-200 dark:border-border";
@@ -73,7 +73,7 @@ export function LeaderboardCard({ users, isLoading }: LeaderboardCardProps) {
                       <Avatar className={cn(
                         "h-10 w-10 border-2",
                         index === 0 ? "border-yellow-500" :
-                          index === 1 ? "border-gray-400" :
+                          index === 1 ? "border-border" :
                             index === 2 ? "border-amber-700" : "border-border"
                       )}>
                         <AvatarImage src={user.image || ''} alt={user.name} />

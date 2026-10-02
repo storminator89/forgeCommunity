@@ -114,7 +114,7 @@ function ContentRendererState({ content, isEditing: externalIsEditing, onSave, o
     switch (content.type) {
       case 'TEXT':
         return (
-          <div className="prose prose-sm md:prose-base dark:prose-invert max-w-none">
+          <div className="prose prose-sm md:prose-base dark:prose-invert max-w-none break-words [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_img]:max-w-full">
             <div dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(content.content as string) }} />
           </div>
         );
@@ -136,6 +136,7 @@ function ContentRendererState({ content, isEditing: externalIsEditing, onSave, o
           <div className="aspect-video w-full rounded-md overflow-hidden bg-muted border border-border/50">
             <iframe
               src={safeUrl}
+              title={content.title}
               frameBorder="0"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
@@ -161,6 +162,7 @@ function ContentRendererState({ content, isEditing: externalIsEditing, onSave, o
           <div className="aspect-video w-full rounded-md overflow-hidden bg-muted border border-border/50">
             <iframe
               src={`/h5p/embed/${content.content}`}
+              title={content.title}
               className="w-full h-full"
               allowFullScreen
             />

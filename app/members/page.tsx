@@ -1,6 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { PageState } from '@/components/page-state';
+import { PageIntro } from '@/components/page-intro';
+import { AppShell, AppHeader } from '@/components/app-shell';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import debounce from 'lodash/debounce';
 import { motion } from 'framer-motion';
@@ -32,6 +35,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuCheckboxItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
@@ -164,50 +168,40 @@ export default function Members() {
   }, [members, searchTerm, sortBy, sortOrder, selectedSkills, selectedRoles]);
 
   const filteredMembers = getSortedAndFilteredMembers();
+  const mainRef = useRef<HTMLElement>(null);
 
   const handleSort = (key: 'name' | 'joinedAt' | 'followers') => {
     setSortBy(key);
-    setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+    setSortOrder(prev => sortBy === key ? (prev === 'asc' ? 'desc' : 'asc') : key === 'name' ? 'asc' : 'desc');
   };
 
   const navigateToProfile = (userId: string) => {
     router.push(`/profile/${userId}`);
   };
 
-  useEffect(() => {
-    const handleScroll = () => {
-      setShowScrollTop(window.scrollY > 400);
-    };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  const scrollToTop = () => { mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); };
 
   return (
-    <div className="flex min-h-screen bg-gray-100 dark:bg-gray-900">
+    <AppShell>
       <Sidebar />
-      <div className="flex-1 flex flex-col">
-        <header className="bg-white dark:bg-gray-800 shadow-sm z-40 sticky top-0">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <AppHeader>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center">
-              <Button variant="ghost" size="icon" className="lg:hidden mr-2" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
-                <Menu className="h-6 w-6" />
-              </Button>
-              <h2 className="text-xl font-bold text-gray-800 dark:text-white">Mitglieder</h2>
+
+              <h2 className="text-xl font-bold text-foreground">Mitglieder</h2>
             </div>
             <div className="flex items-center space-x-4">
               <ThemeToggle />
               <UserNav />
             </div>
           </div>
-        </header>
+        </AppHeader>
 
-        <main className="flex-1 overflow-y-auto p-4 lg:p-8">
+        <main ref={mainRef} onScroll={event => setShowScrollTop(event.currentTarget.scrollTop > 400)} id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto p-4 lg:p-8">
           <TooltipProvider>
             <div className="max-w-7xl mx-auto space-y-6">
+            <PageIntro eyebrow="Entdecken" title="Finde deine Leute." description="Entdecke Mitglieder mit passenden Interessen, Erfahrungen und Fähigkeiten." />
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 {[
                   { label: 'Alle Mitglieder', value: members.length },
@@ -215,25 +209,25 @@ export default function Members() {
                   { label: 'Durchschn. Skills', value: members.length > 0 ? Math.round(members.reduce((acc, m) => acc + m.skills.length, 0) / members.length) : 0 },
                   { label: 'Neue diesen Monat', value: members.filter(m => new Date(m.joinedAt).getTime() > currentTime - 30 * 24 * 60 * 60 * 1000).length }
                 ].map((stat, i) => (
-                  <Card key={i} className="bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm">
+                  <Card key={i} className="bg-card/50 dark:bg-card/50 backdrop-blur-sm">
                     <CardContent className="p-4">
-                      <p className="text-sm text-gray-500 dark:text-gray-400">{stat.label}</p>
+                      <p className="text-sm text-muted-foreground">{stat.label}</p>
                       <h3 className="text-2xl font-bold mt-1">{stat.value}</h3>
                     </CardContent>
                   </Card>
                 ))}
               </div>
 
-              <div className="flex flex-col sm:flex-row items-start gap-4 bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm p-4 rounded-lg">
+              <div className="flex flex-col sm:flex-row items-start gap-4 bg-card/50 dark:bg-card/50 backdrop-blur-sm p-4 rounded-lg">
                 <div className="flex-1 w-full space-y-4">
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                     <Input
                       type="text"
                       placeholder="Suche nach Namen, Rollen, Skills oder Orten"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-10 transition-all duration-200 border-2 focus:border-primary/50 hover:border-gray-400 dark:hover:border-gray-600 w-full"
+                      className="pl-10 transition-all duration-200 border-2 focus:border-primary/50 hover:border-border dark:hover:border-border w-full"
                       aria-label="Mitglieder durchsuchen"
                     />
                     {searchTerm && (
@@ -252,6 +246,8 @@ export default function Members() {
                           <Badge
                             key={skill}
                             variant="secondary"
+                            role="button" tabIndex={0} aria-label={`Filter ${skill} entfernen`}
+                            onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelectedSkills(prev => prev.filter(s => s !== skill)); } }}
                             className="cursor-pointer hover:bg-destructive/20 transition-colors"
                             onClick={() => setSelectedSkills(prev => prev.filter(s => s !== skill))}
                           >
@@ -266,6 +262,8 @@ export default function Members() {
                           <Badge
                             key={role}
                             variant="outline"
+                            role="button" tabIndex={0} aria-label={`Filter ${role} entfernen`}
+                            onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelectedRoles(prev => prev.filter(r => r !== role)); } }}
                             className="cursor-pointer hover:bg-destructive/20 transition-colors"
                             onClick={() => setSelectedRoles(prev => prev.filter(r => r !== role))}
                           >
@@ -277,7 +275,7 @@ export default function Members() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 sm:gap-4">
+                <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-4">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="outline" className="min-w-[130px]">
@@ -290,17 +288,11 @@ export default function Members() {
                         <p className="text-sm font-medium mb-2">Skills</p>
                         <div className="space-y-1">
                           {uniqueSkills.map(skill => (
-                            <div
-                              key={skill}
-                              className="flex items-center hover:bg-accent rounded px-2 py-1 cursor-pointer transition-colors"
-                              onClick={() => setSelectedSkills(prev =>
-                                prev.includes(skill) ? prev.filter(s => s !== skill) : [...prev, skill]
-                              )}
-                            >
-                              <div className={`w-3 h-3 border rounded-sm mr-2 transition-colors ${selectedSkills.includes(skill) ? 'bg-primary border-primary' : 'border-input'
-                                }`} />
-                              <span className="text-sm">{skill}</span>
-                            </div>
+                            <DropdownMenuCheckboxItem key={skill} checked={selectedSkills.includes(skill)}
+                              onSelect={event => event.preventDefault()}
+                              onCheckedChange={checked => setSelectedSkills(prev => checked ? [...prev, skill] : prev.filter(value => value !== skill))}>
+                              {skill}
+                            </DropdownMenuCheckboxItem>
                           ))}
                         </div>
                       </div>
@@ -308,17 +300,11 @@ export default function Members() {
                         <p className="text-sm font-medium mb-2">Rollen</p>
                         <div className="space-y-1">
                           {uniqueRoles.map(role => (
-                            <div
-                              key={role}
-                              className="flex items-center hover:bg-accent rounded px-2 py-1 cursor-pointer transition-colors"
-                              onClick={() => setSelectedRoles(prev =>
-                                prev.includes(role) ? prev.filter(r => r !== role) : [...prev, role]
-                              )}
-                            >
-                              <div className={`w-3 h-3 border rounded-sm mr-2 transition-colors ${selectedRoles.includes(role) ? 'bg-primary border-primary' : 'border-input'
-                                }`} />
-                              <span className="text-sm">{role}</span>
-                            </div>
+                            <DropdownMenuCheckboxItem key={role} checked={selectedRoles.includes(role)}
+                              onSelect={event => event.preventDefault()}
+                              onCheckedChange={checked => setSelectedRoles(prev => checked ? [...prev, role] : prev.filter(value => value !== role))}>
+                              {role}
+                            </DropdownMenuCheckboxItem>
                           ))}
                         </div>
                       </div>
@@ -336,19 +322,19 @@ export default function Members() {
                     <DropdownMenuContent align="end" className="w-[180px]">
                       <DropdownMenuItem
                         onClick={() => handleSort('name')}
-                        className="flex items-center justify-between"
+                        className="flex flex-wrap items-center justify-between gap-2"
                       >
                         Name {sortBy === 'name' && <span className="text-primary">{sortOrder === 'asc' ? '↑' : '↓'}</span>}
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={() => handleSort('joinedAt')}
-                        className="flex items-center justify-between"
+                        className="flex flex-wrap items-center justify-between gap-2"
                       >
                         Datum {sortBy === 'joinedAt' && <span className="text-primary">{sortOrder === 'asc' ? '↑' : '↓'}</span>}
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={() => handleSort('followers')}
-                        className="flex items-center justify-between"
+                        className="flex flex-wrap items-center justify-between gap-2"
                       >
                         Follower {sortBy === 'followers' && <span className="text-primary">{sortOrder === 'asc' ? '↑' : '↓'}</span>}
                       </DropdownMenuItem>
@@ -358,7 +344,7 @@ export default function Members() {
                   <div className="flex items-center gap-2">
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button
+                        <Button aria-label="Kartenansicht"
                           variant="ghost"
                           size="icon"
                           onClick={() => setViewMode('grid')}
@@ -371,7 +357,7 @@ export default function Members() {
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button
+                        <Button aria-label="Listenansicht"
                           variant="ghost"
                           size="icon"
                           onClick={() => setViewMode('list')}
@@ -386,18 +372,18 @@ export default function Members() {
                 </div>
               </div>
 
-              <ScrollArea className="h-[calc(100vh-320px)]">
+              <div>
                 {isLoading ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {[...Array(6)].map((_, i) => (
                       <Card key={`skeleton-${i}`} className="animate-pulse">
                         <CardContent className="p-6">
                           <div className="flex space-x-4">
-                            <div className="h-16 w-16 rounded-full bg-gray-200 dark:bg-gray-700" />
+                            <div className="h-16 w-16 rounded-full bg-muted" />
                             <div className="flex-1 space-y-4">
-                              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
-                              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2" />
-                              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/4" />
+                              <div className="h-4 bg-muted rounded w-3/4" />
+                              <div className="h-4 bg-muted rounded w-1/2" />
+                              <div className="h-4 bg-muted rounded w-1/4" />
                             </div>
                           </div>
                         </CardContent>
@@ -410,6 +396,7 @@ export default function Members() {
                       ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
                       : "flex flex-col gap-4"
                   }>
+                    {filteredMembers.length === 0 && <div className="col-span-full"><PageState title="Keine Mitglieder gefunden" description="Versuche einen anderen Suchbegriff oder entferne deine Filter." action={<Button variant="outline" onClick={() => { setSearchTerm(''); setSelectedSkills([]); setSelectedRoles([]); }}>Filter zurücksetzen</Button>} /></div>}
                     {filteredMembers.map((member, index) => (
                       <motion.div
                         key={member.id}
@@ -418,30 +405,32 @@ export default function Members() {
                         transition={{ duration: 0.3, delay: Math.min(index * 0.05, 0.5) }}
                       >
                         <Card
-                          className="group cursor-pointer transition-all duration-200 hover:shadow-lg dark:hover:shadow-primary/5 hover:scale-[1.02]"
+                          className="group cursor-pointer transition-all duration-200 hover:shadow-lg dark:hover:shadow-primary/5 hover:border-primary/30"
+                          role="link" tabIndex={0} aria-label={`Profil von ${member.name} öffnen`}
+                          onKeyDown={event => { if (event.key === 'Enter') navigateToProfile(member.id); }}
                           onClick={() => navigateToProfile(member.id)}
                         >
                           <CardContent className="p-6">
-                            <div className="flex space-x-4">
-                              <Avatar className="h-16 w-16 ring-2 ring-transparent group-hover:ring-primary/20 transition-all duration-200">
+                            <div className="flex min-w-0 gap-3">
+                              <Avatar className="h-12 w-12 shrink-0 ring-2 ring-transparent group-hover:ring-primary/20 transition-all duration-200">
                                 <AvatarImage src={member.image} alt={member.name} />
                                 <AvatarFallback className="bg-primary/10">
                                   {member.name.slice(0, 2).toUpperCase()}
                                 </AvatarFallback>
                               </Avatar>
                               <div className="flex-1 min-w-0">
-                                <div className="flex items-center justify-between">
-                                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <h3 className="text-lg font-semibold text-foreground truncate">
                                     {member.name}
                                   </h3>
                                   <Badge variant="outline">{member.role}</Badge>
                                 </div>
                                 {member.title && (
-                                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                                  <p className="text-sm text-muted-foreground mt-1">
                                     {member.title}
                                   </p>
                                 )}
-                                <div className="flex items-center gap-4 mt-2 text-sm text-gray-500 dark:text-gray-400">
+                                <div className="flex flex-wrap items-center gap-2 mt-2 text-sm text-muted-foreground">
                                   {member.location && (
                                     <Tooltip>
                                       <TooltipTrigger asChild>
@@ -508,8 +497,7 @@ export default function Members() {
                     ))}
                   </div>
                 )}
-                <ScrollBar />
-              </ScrollArea>
+              </div>
 
               {showScrollTop && (
                 <motion.div
@@ -520,7 +508,7 @@ export default function Members() {
                 >
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Button
+                      <Button aria-label="Nach oben"
                         variant="secondary"
                         size="icon"
                         onClick={scrollToTop}
@@ -537,6 +525,6 @@ export default function Members() {
           </TooltipProvider>
         </main>
       </div>
-    </div>
+    </AppShell>
   );
 }

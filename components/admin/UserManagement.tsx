@@ -22,8 +22,6 @@ import {
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
-import { UserNav } from "@/components/user-nav";
-import { ThemeToggle } from "@/components/theme-toggle";
 import {
   UserPlus,
   RefreshCw,
@@ -260,27 +258,20 @@ export default function UserManagement() {
 
   return (
     <>
-      <header className="bg-white dark:bg-gray-800 shadow-sm z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-gray-800 dark:text-white flex items-center ml-12 lg:ml-0">
-            <Users className="mr-2 h-6 w-6" />
-            Benutzerverwaltung
-          </h2>
-          <div className="flex items-center space-x-4">
-            <ThemeToggle />
-            <UserNav />
-          </div>
-        </div>
-      </header>
+      <div className="px-4 pt-6 lg:px-8">
+        <h2 className="flex items-center text-xl font-semibold text-foreground">
+          <Users className="mr-2 h-5 w-5" /> Benutzerverwaltung
+        </h2>
+      </div>
 
       <main className="flex-1 overflow-y-auto p-4 lg:p-8">
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Hauptbereich - Benutzerliste */}
-            <div className="lg:col-span-2 space-y-6">
-              <Card className="bg-white dark:bg-gray-800">
+            <div className="min-w-0 lg:col-span-2 space-y-6">
+              <Card className="bg-card">
                 <CardHeader>
-                  <CardTitle className="text-gray-900 dark:text-gray-100 flex items-center justify-between">
+                  <CardTitle className="text-foreground flex flex-wrap gap-3 items-center justify-between">
                     <span>Benutzer</span>
                     <Button onClick={() => setIsAddUserOpen(true)}>
                       <UserPlus className="mr-2 h-4 w-4" />
@@ -289,40 +280,42 @@ export default function UserManagement() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="mb-4 flex items-center space-x-2">
-                    <div className="relative flex-grow">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <div className="mb-4 flex flex-wrap gap-2 items-center">
+                    <div className="relative min-w-0 basis-48 flex-grow">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
                       <Input
-                        type="text"
+                        type="search"
+                        aria-label="Benutzer suchen"
                         placeholder="Suche nach Namen, E-Mail, Rolle oder Titel..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-10 pr-4 py-2 w-full dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-400"
+                        className="pl-10 pr-4 py-2 w-full dark:bg-muted dark:text-foreground dark:placeholder-gray-400"
                       />
                     </div>
                     <Button
                       variant="outline"
                       onClick={refreshUsers}
-                      className="dark:text-gray-100 dark:hover:bg-gray-700"
+                      className="dark:text-foreground dark:hover:bg-accent"
                     >
                       <RefreshCw className="mr-2 h-4 w-4" />
                       Aktualisieren
                     </Button>
                   </div>
 
-                  <div className="rounded-md border dark:border-gray-700">
+                  <div className="max-w-full overflow-x-auto rounded-md border border-border">
                     <Table>
                       <TableHeader>
-                        <TableRow className="dark:border-gray-700">
-                          <TableHead className="dark:text-gray-300">Benutzer</TableHead>
-                          <TableHead className="dark:text-gray-300">Kontakt</TableHead>
-                          <TableHead className="dark:text-gray-300">Status</TableHead>
-                          <TableHead className="dark:text-gray-300">Aktivität</TableHead>
-                          <TableHead className="text-right dark:text-gray-300">Aktionen</TableHead>
+                        <TableRow className="dark:border-border">
+                          <TableHead className="dark:text-muted-foreground">Benutzer</TableHead>
+                          <TableHead className="dark:text-muted-foreground">Kontakt</TableHead>
+                          <TableHead className="dark:text-muted-foreground">Status</TableHead>
+                          <TableHead className="dark:text-muted-foreground">Aktivität</TableHead>
+                          <TableHead className="text-right dark:text-muted-foreground">Aktionen</TableHead>
                         </TableRow>
                       </TableHeader>
 
                       <TableBody>
+                        {!filteredUsers.length && <TableRow><TableCell colSpan={5} className="py-10 text-center text-muted-foreground">{searchTerm ? "Keine Benutzer zur Suche gefunden." : "Keine Benutzer vorhanden."}</TableCell></TableRow>}
                         <AnimatePresence>
                           {filteredUsers.map((user) => (
                             <motion.tr
@@ -330,29 +323,29 @@ export default function UserManagement() {
                               initial={{ opacity: 0 }}
                               animate={{ opacity: 1 }}
                               exit={{ opacity: 0 }}
-                              className="dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700"
+                              className="dark:border-border cursor-pointer hover:bg-accent"
                               onClick={() => setSelectedUser(user)}
                             >
-                              <TableCell className="dark:text-gray-300">
+                              <TableCell className="dark:text-muted-foreground">
                                 <div className="flex items-center space-x-3">
                                   <Avatar className="h-10 w-10">
                                     <AvatarImage src={user.image || ''} alt={user.name || ''} />
                                     <AvatarFallback>{user.name?.slice(0, 2).toUpperCase()}</AvatarFallback>
                                   </Avatar>
                                   <div>
-                                    <div className="font-medium">{user.name}</div>
-                                    <div className="text-sm text-gray-500 dark:text-gray-400">{user.title || 'Kein Titel'}</div>
+                                    <div className="font-medium"><button type="button" onClick={(event) => { event.stopPropagation(); setSelectedUser(user); }} className="rounded-sm text-left hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Details von ${user.name || user.email} öffnen`}>{user.name || user.email}</button></div>
+                                    <div className="text-sm text-muted-foreground">{user.title || 'Kein Titel'}</div>
                                   </div>
                                 </div>
                               </TableCell>
-                              <TableCell className="dark:text-gray-300">
+                              <TableCell className="dark:text-muted-foreground">
                                 <div className="text-sm">
                                   <div className="flex items-center space-x-1">
-                                    <Mail className="h-4 w-4 text-gray-500" />
+                                    <Mail className="h-4 w-4 text-muted-foreground" />
                                     <span>{user.email}</span>
                                   </div>
                                   {user.contact && (
-                                    <div className="text-gray-500 mt-1">
+                                    <div className="text-muted-foreground mt-1">
                                       {user.contact}
                                     </div>
                                   )}
@@ -365,10 +358,10 @@ export default function UserManagement() {
                                   </Badge>
                                 </div>
                               </TableCell>
-                              <TableCell className="dark:text-gray-300">
+                              <TableCell className="dark:text-muted-foreground">
                                 <div className="text-sm">
                                   <div>{getLastActiveStatus(user)}</div>
-                                  <div className="text-gray-500 dark:text-gray-400 text-xs mt-1">
+                                  <div className="text-muted-foreground text-xs mt-1">
                                     Registriert: {new Date(user.createdAt).toLocaleDateString('de-DE')}
                                   </div>
                                 </div>
@@ -376,30 +369,30 @@ export default function UserManagement() {
                               <TableCell className="text-right">
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" className="h-8 w-8 p-0 dark:text-gray-300 dark:hover:bg-gray-700">
+                                    <Button variant="ghost" className="h-8 w-8 p-0 dark:text-muted-foreground dark:hover:bg-accent">
                                       <span className="sr-only">Menü öffnen</span>
                                       <MoreHorizontal className="h-4 w-4" />
                                     </Button>
                                   </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end" className="dark:bg-gray-800 dark:border-gray-700">
-                                    <DropdownMenuLabel className="dark:text-gray-300">Aktionen</DropdownMenuLabel>
+                                  <DropdownMenuContent align="end" className="dark:bg-card dark:border-border">
+                                    <DropdownMenuLabel className="dark:text-muted-foreground">Aktionen</DropdownMenuLabel>
                                     <DropdownMenuItem
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         handleEditUser(user);
                                       }}
-                                      className="dark:text-gray-300 dark:hover:bg-gray-700"
+                                      className="dark:text-muted-foreground dark:hover:bg-accent"
                                     >
                                       <UserCog className="mr-2 h-4 w-4" />
                                       Bearbeiten
                                     </DropdownMenuItem>
-                                    <DropdownMenuSeparator className="dark:border-gray-700" />
+                                    <DropdownMenuSeparator className="dark:border-border" />
                                     <DropdownMenuItem
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         handleDeleteUser(user.id);
                                       }}
-                                      className="text-red-600 dark:text-red-400 dark:hover:bg-gray-700"
+                                      className="text-red-600 dark:text-red-400 dark:hover:bg-accent"
                                     >
                                       <Trash2 className="mr-2 h-4 w-4" />
                                       Löschen
@@ -418,13 +411,13 @@ export default function UserManagement() {
             </div>
 
             {/* Seitenleiste - Benutzerdetails und Statistiken */}
-            <div className="space-y-6">
+            <div className="min-w-0 space-y-6">
               {selectedUser ? (
                 <>
                   {/* Benutzerdetails */}
-                  <Card className="bg-white dark:bg-gray-800">
+                  <Card className="bg-card">
                     <CardHeader>
-                      <CardTitle className="text-gray-900 dark:text-gray-100">Benutzerdetails</CardTitle>
+                      <CardTitle className="text-foreground">Benutzerdetails</CardTitle>
                     </CardHeader>
                     <CardContent>
                       <div className="flex flex-col items-center space-y-4">
@@ -433,13 +426,13 @@ export default function UserManagement() {
                           <AvatarFallback>{selectedUser.name?.slice(0, 2).toUpperCase()}</AvatarFallback>
                         </Avatar>
                         <div className="text-center">
-                          <h3 className="text-lg font-semibold dark:text-gray-100">{selectedUser.name}</h3>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">{selectedUser.title}</p>
+                          <h3 className="text-lg font-semibold dark:text-foreground">{selectedUser.name}</h3>
+                          <p className="text-sm text-muted-foreground">{selectedUser.title}</p>
                         </div>
                       </div>
 
                       <Tabs defaultValue="overview" className="mt-6">
-                        <TabsList className="grid grid-cols-4 gap-4">
+                        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 p-1">
                           <TabsTrigger value="overview">Übersicht</TabsTrigger>
                           <TabsTrigger value="activity">Aktivität</TabsTrigger>
                           <TabsTrigger value="skills">Skills</TabsTrigger>
@@ -449,22 +442,22 @@ export default function UserManagement() {
                         <TabsContent value="overview" className="mt-4 space-y-4">
                           <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                              <div className="text-sm text-gray-500 dark:text-gray-400">Mitglied seit</div>
-                              <div className="dark:text-gray-300">
+                              <div className="text-sm text-muted-foreground">Mitglied seit</div>
+                              <div className="dark:text-muted-foreground">
                                 {new Date(selectedUser.createdAt).toLocaleDateString('de-DE')}
                               </div>
                             </div>
                             <div className="space-y-2">
-                              <div className="text-sm text-gray-500 dark:text-gray-400">Letzte Aktivität</div>
-                              <div className="dark:text-gray-300">
+                              <div className="text-sm text-muted-foreground">Letzte Aktivität</div>
+                              <div className="dark:text-muted-foreground">
                                 {selectedUser.lastLogin ? new Date(selectedUser.lastLogin).toLocaleDateString('de-DE') : 'Nie'}
                               </div>
                             </div>
                             <div className="space-y-2">
-                              <div className="text-sm text-gray-500 dark:text-gray-400">E-Mail Status</div>
+                              <div className="text-sm text-muted-foreground">E-Mail Status</div>
                             </div>
                             <div className="space-y-2">
-                              <div className="text-sm text-gray-500 dark:text-gray-400">Rolle</div>
+                              <div className="text-sm text-muted-foreground">Rolle</div>
                               <Badge variant={getRoleBadgeVariant(selectedUser.role)}>
                                 {selectedUser.role}
                               </Badge>
@@ -473,17 +466,17 @@ export default function UserManagement() {
 
                           {selectedUser.bio && (
                             <div className="space-y-2">
-                              <div className="text-sm text-gray-500 dark:text-gray-400">Biografie</div>
-                              <p className="text-sm dark:text-gray-300">{selectedUser.bio}</p>
+                              <div className="text-sm text-muted-foreground">Biografie</div>
+                              <p className="text-sm dark:text-muted-foreground">{selectedUser.bio}</p>
                             </div>
                           )}
 
                           {selectedUser.badges && selectedUser.badges.length > 0 && (
                             <div className="space-y-2">
-                              <div className="text-sm text-gray-500 dark:text-gray-400">Errungenschaften</div>
+                              <div className="text-sm text-muted-foreground">Errungenschaften</div>
                               <div className="flex flex-wrap gap-2">
                                 {selectedUser.badges.map((badge, index) => (
-                                  <Badge key={index} variant="outline" className="dark:border-gray-600">
+                                  <Badge key={index} variant="outline" className="dark:border-border">
                                     <Award className="w-3 h-3 mr-1" />
                                     {badge.name}
                                   </Badge>
@@ -496,76 +489,76 @@ export default function UserManagement() {
                         <TabsContent value="activity" className="mt-4 space-y-4">
                           {selectedUser.stats && (
                             <div className="grid grid-cols-2 gap-4">
-                              <Card className="bg-gray-50 dark:bg-gray-700">
+                              <Card className="bg-card dark:bg-muted">
                                 <CardContent className="pt-6">
                                   <div className="flex items-center justify-between">
                                     <div className="space-y-1">
-                                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Beiträge</p>
-                                      <p className="text-2xl font-bold dark:text-gray-100">{selectedUser.stats.postsCount}</p>
+                                      <p className="text-sm font-medium text-muted-foreground">Beiträge</p>
+                                      <p className="text-2xl font-bold dark:text-foreground">{selectedUser.stats.postsCount}</p>
                                     </div>
-                                    <BookOpen className="h-8 w-8 text-gray-400" />
+                                    <BookOpen className="h-8 w-8 text-muted-foreground" />
                                   </div>
                                 </CardContent>
                               </Card>
 
-                              <Card className="bg-gray-50 dark:bg-gray-700">
+                              <Card className="bg-card dark:bg-muted">
                                 <CardContent className="pt-6">
                                   <div className="flex items-center justify-between">
                                     <div className="space-y-1">
-                                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Kommentare</p>
-                                      <p className="text-2xl font-bold dark:text-gray-100">{selectedUser.stats.commentsCount}</p>
+                                      <p className="text-sm font-medium text-muted-foreground">Kommentare</p>
+                                      <p className="text-2xl font-bold dark:text-foreground">{selectedUser.stats.commentsCount}</p>
                                     </div>
-                                    <MessageSquare className="h-8 w-8 text-gray-400" />
+                                    <MessageSquare className="h-8 w-8 text-muted-foreground" />
                                   </div>
                                 </CardContent>
                               </Card>
 
-                              <Card className="bg-gray-50 dark:bg-gray-700">
+                              <Card className="bg-card dark:bg-muted">
                                 <CardContent className="pt-6">
                                   <div className="flex items-center justify-between">
                                     <div className="space-y-1">
-                                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Likes erhalten</p>
-                                      <p className="text-2xl font-bold dark:text-gray-100">{selectedUser.stats.likesReceived}</p>
+                                      <p className="text-sm font-medium text-muted-foreground">Likes erhalten</p>
+                                      <p className="text-2xl font-bold dark:text-foreground">{selectedUser.stats.likesReceived}</p>
                                     </div>
-                                    <Heart className="h-8 w-8 text-gray-400" />
+                                    <Heart className="h-8 w-8 text-muted-foreground" />
                                   </div>
                                 </CardContent>
                               </Card>
 
-                              <Card className="bg-gray-50 dark:bg-gray-700">
+                              <Card className="bg-card dark:bg-muted">
                                 <CardContent className="pt-6">
                                   <div className="flex items-center justify-between">
                                     <div className="space-y-1">
-                                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Endorsements</p>
-                                      <p className="text-2xl font-bold dark:text-gray-100">{selectedUser.endorsements}</p>
+                                      <p className="text-sm font-medium text-muted-foreground">Endorsements</p>
+                                      <p className="text-2xl font-bold dark:text-foreground">{selectedUser.endorsements}</p>
                                     </div>
-                                    <Star className="h-8 w-8 text-gray-400" />
+                                    <Star className="h-8 w-8 text-muted-foreground" />
                                   </div>
                                 </CardContent>
                               </Card>
 
-                              <Card className="bg-gray-50 dark:bg-gray-700">
+                              <Card className="bg-card dark:bg-muted">
                                 <CardContent className="pt-6">
                                   <div className="flex items-center justify-between">
                                     <div className="space-y-1">
-                                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Kurse belegt</p>
-                                      <p className="text-2xl font-bold dark:text-gray-100">
+                                      <p className="text-sm font-medium text-muted-foreground">Kurse belegt</p>
+                                      <p className="text-2xl font-bold dark:text-foreground">
                                         {selectedUser.stats.coursesCompleted} / {selectedUser.stats.coursesEnrolled}
                                       </p>
                                     </div>
-                                    <Activity className="h-8 w-8 text-gray-400" />
+                                    <Activity className="h-8 w-8 text-muted-foreground" />
                                   </div>
                                 </CardContent>
                               </Card>
 
-                              <Card className="bg-gray-50 dark:bg-gray-700">
+                              <Card className="bg-card dark:bg-muted">
                                 <CardContent className="pt-6">
                                   <div className="flex items-center justify-between">
                                     <div className="space-y-1">
-                                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Projekte</p>
-                                      <p className="text-2xl font-bold dark:text-gray-100">{selectedUser.stats.projectsCount}</p>
+                                      <p className="text-sm font-medium text-muted-foreground">Projekte</p>
+                                      <p className="text-2xl font-bold dark:text-foreground">{selectedUser.stats.projectsCount}</p>
                                     </div>
-                                    <Shield className="h-8 w-8 text-gray-400" />
+                                    <Shield className="h-8 w-8 text-muted-foreground" />
                                   </div>
                                 </CardContent>
                               </Card>
@@ -579,12 +572,12 @@ export default function UserManagement() {
                               {selectedUser.skills.map((skill, index) => (
                                 <div key={index} className="space-y-2">
                                   <div className="flex justify-between items-center">
-                                    <span className="text-sm font-medium dark:text-gray-300">{skill.name}</span>
-                                    <span className="text-sm text-gray-500 dark:text-gray-400">
+                                    <span className="text-sm font-medium dark:text-muted-foreground">{skill.name}</span>
+                                    <span className="text-sm text-muted-foreground">
                                       {skill.level}%
                                     </span>
                                   </div>
-                                  <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
+                                  <div className="w-full bg-muted rounded-full h-2.5 dark:bg-muted">
                                     <div
                                       className={`h-2.5 rounded-full ${skill.level > 80 ? 'bg-green-500' :
                                         skill.level > 60 ? 'bg-blue-500' :
@@ -598,7 +591,7 @@ export default function UserManagement() {
                               ))}
                             </div>
                           ) : (
-                            <div className="text-center py-6 text-gray-500 dark:text-gray-400">
+                            <div className="text-center py-6 text-muted-foreground">
                               Keine Fähigkeiten angegeben
                             </div>
                           )}
@@ -610,8 +603,8 @@ export default function UserManagement() {
                               <div className="space-y-4">
                                 <div className="flex items-center justify-between">
                                   <div className="space-y-0.5">
-                                    <div className="text-sm font-medium dark:text-gray-300">E-Mail Benachrichtigungen</div>
-                                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                                    <div className="text-sm font-medium dark:text-muted-foreground">E-Mail Benachrichtigungen</div>
+                                    <div className="text-sm text-muted-foreground">
                                       Erhält E-Mail Benachrichtigungen
                                     </div>
                                   </div>
@@ -622,8 +615,8 @@ export default function UserManagement() {
 
                                 <div className="flex items-center justify-between">
                                   <div className="space-y-0.5">
-                                    <div className="text-sm font-medium dark:text-gray-300">Push Benachrichtigungen</div>
-                                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                                    <div className="text-sm font-medium dark:text-muted-foreground">Push Benachrichtigungen</div>
+                                    <div className="text-sm text-muted-foreground">
                                       Erhält Push Benachrichtigungen
                                     </div>
                                   </div>
@@ -634,8 +627,8 @@ export default function UserManagement() {
 
                                 <div className="flex items-center justify-between">
                                   <div className="space-y-0.5">
-                                    <div className="text-sm font-medium dark:text-gray-300">Theme</div>
-                                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                                    <div className="text-sm font-medium dark:text-muted-foreground">Theme</div>
+                                    <div className="text-sm text-muted-foreground">
                                       Bevorzugtes Theme
                                     </div>
                                   </div>
@@ -646,8 +639,8 @@ export default function UserManagement() {
 
                                 <div className="flex items-center justify-between">
                                   <div className="space-y-0.5">
-                                    <div className="text-sm font-medium dark:text-gray-300">Sprache</div>
-                                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                                    <div className="text-sm font-medium dark:text-muted-foreground">Sprache</div>
+                                    <div className="text-sm text-muted-foreground">
                                       Bevorzugte Sprache
                                     </div>
                                   </div>
@@ -666,42 +659,42 @@ export default function UserManagement() {
               ) : (
 
                 // Statistik-Karte, wenn kein Benutzer ausgewählt ist
-                <Card className="bg-white dark:bg-gray-800">
+                <Card className="bg-card">
                   <CardHeader>
-                    <CardTitle className="text-gray-900 dark:text-gray-100">Benutzerstatistiken</CardTitle>
+                    <CardTitle className="text-foreground">Benutzerstatistiken</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4">
-                      <div className="flex justify-between dark:text-gray-300">
+                      <div className="flex justify-between dark:text-muted-foreground">
                         <span>Gesamtbenutzer:</span>
                         <span className="font-semibold">{users.length}</span>
                       </div>
-                      <div className="flex justify-between dark:text-gray-300">
+                      <div className="flex justify-between dark:text-muted-foreground">
                         <span>Administratoren:</span>
                         <span className="font-semibold">
                           {users.filter(u => u.role === 'ADMIN').length}
                         </span>
                       </div>
-                      <div className="flex justify-between dark:text-gray-300">
+                      <div className="flex justify-between dark:text-muted-foreground">
                         <span>Moderatoren:</span>
                         <span className="font-semibold">
                           {users.filter(u => u.role === 'MODERATOR').length}
                         </span>
                       </div>
-                      <div className="flex justify-between dark:text-gray-300">
+                      <div className="flex justify-between dark:text-muted-foreground">
                         <span>Instruktoren:</span>
                         <span className="font-semibold">
                           {users.filter(u => u.role === 'INSTRUCTOR').length}
                         </span>
                       </div>
-                      <div className="flex justify-between dark:text-gray-300">
+                      <div className="flex justify-between dark:text-muted-foreground">
                         <span>Normale Benutzer:</span>
                         <span className="font-semibold">
                           {users.filter(u => u.role === 'USER').length}
                         </span>
                       </div>
-                      <div className="pt-4 border-t dark:border-gray-700">
-                        <div className="flex justify-between dark:text-gray-300 mt-2">
+                      <div className="pt-4 border-t dark:border-border">
+                        <div className="flex justify-between dark:text-muted-foreground mt-2">
                           <span>Aktive Benutzer (30 Tage):</span>
                           <span className="font-semibold">
                             {users.filter(u => {

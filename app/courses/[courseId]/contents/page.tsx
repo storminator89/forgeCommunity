@@ -1,6 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useState, useMemo, useRef, use } from 'react'
+import { AppShell, AppHeader } from '@/components/app-shell';
+import { useCallback, useEffect, useState, useMemo, useRef, use, type CSSProperties } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import dynamic from 'next/dynamic'
@@ -12,7 +13,7 @@ import { CourseContentsSidebar } from './CourseContentsSidebar'
 import { EditContentForm } from './EditContentForm'
 import { ContentRenderer } from './ContentRenderer'
 import { CourseContent } from './types'
-import { markPageAsVisited } from './utils/visitedPages'
+import { markPageAsVisited, unmarkPageAsVisited, isPageVisited } from './utils/visitedPages'
 import { ChevronLeft, ChevronRight, Edit, FileText, Video, Music, Box } from 'lucide-react'
 import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -857,19 +858,13 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
     }
   };
 
-  const handleVisitedToggle = async (contentId: string) => {
-    // Update local state
-    setMainContents(prevContents => {
-      const newContents = [...prevContents];
-      const content = findContentById(contentId, newContents);
-      if (content) {
-        content.completed = !content.completed;
-      }
-      return newContents;
-    });
-
-    // Force sidebar to update
-    setForceUpdateValue(prev => prev + 1);
+  const handleVisitedToggle = (contentId: string) => {
+    if (isPageVisited(courseId, contentId)) {
+      unmarkPageAsVisited(courseId, contentId);
+    } else {
+      markPageAsVisited(courseId, contentId);
+    }
+    setForceUpdateValue(value => value + 1);
   };
 
   // Add this function to handle topic expansion
@@ -895,61 +890,54 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="animate-spin h-8 w-8 text-gray-500" />
+        <Loader2 className="animate-spin h-8 w-8 text-muted-foreground" />
       </div>
     );
   }
 
   // Redirect if not authenticated
   if (status === "unauthenticated") {
-    router.push('/auth/signin');
+    router.push('/login');
     return null;
   }
 
   return (
-    <div className="flex flex-col lg:flex-row h-screen overflow-hidden bg-background transition-all duration-300">
+    <AppShell>
       <Sidebar />
 
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {/* Header */}
-        <header className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border sticky top-0 z-40">
-          <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <h2 className="text-xl font-semibold text-foreground tracking-tight">{course?.name}</h2>
-              <div className="hidden sm:flex items-center text-muted-foreground">
+        <AppHeader>
+          <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between gap-2">
+            <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-4">
+              <Button variant="outline" size="icon" className="shrink-0" aria-label={isTopicsSidebarOpen ? "Inhaltsverzeichnis schließen" : "Inhaltsverzeichnis öffnen"} aria-expanded={isTopicsSidebarOpen} aria-controls="course-contents-navigation" onClick={() => setIsTopicsSidebarOpen(value => !value)}>
+                {isTopicsSidebarOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+              </Button>
+              <h2 className="truncate text-lg sm:text-xl font-semibold text-foreground tracking-tight">{course?.name}</h2>
+              <div className="hidden shrink-0 sm:flex items-center text-muted-foreground">
                 <span className="text-xs mx-2">/</span>
                 <span className="text-sm font-medium">Kursinhalt</span>
               </div>
             </div>
-            <div className="flex items-center space-x-2">
+            <div className="flex shrink-0 items-center space-x-2">
               <ThemeToggle />
               <UserNav />
             </div>
           </div>
-        </header>
+        </AppHeader>
+
+        {alertMessage && <div role={alertMessage.type === 'error' ? 'alert' : 'status'} className={cn("mx-4 my-2 rounded-lg border p-3 text-sm", alertMessage.type === 'error' ? "border-destructive/30 bg-destructive/10 text-destructive" : "border-border bg-muted text-foreground")}>{alertMessage.message}</div>}
 
         {/* Main Content */}
-        <main className="flex-1 overflow-y-auto">
-          <div className="flex h-full">
+        <main id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto">
+          <div className="flex min-h-full flex-col md:h-full md:min-h-0 md:flex-row">
             <div
-              className="relative transition-all duration-300 ease-in-out border-r border-border bg-card/30"
-              style={{ width: isTopicsSidebarOpen ? `${sidebarWidth}px` : '0px' }}
+              id="course-contents-navigation"
+              className={cn("relative shrink-0 border-b border-border bg-card/30 md:border-b-0 md:border-r", isTopicsSidebarOpen ? "w-full md:w-[var(--course-sidebar-width)]" : "hidden")}
+              style={{ '--course-sidebar-width': `${sidebarWidth}px` } as CSSProperties}
             >
-              <div className="absolute -right-3 top-3 z-50">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setIsTopicsSidebarOpen(!isTopicsSidebarOpen)}
-                  className="h-6 w-6 rounded-full shadow-sm bg-background border-border hover:bg-accent"
-                >
-                  {isTopicsSidebarOpen ? <ChevronLeft className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-                </Button>
-              </div>
-              <div className={cn(
-                "h-full overflow-hidden transition-all duration-300",
-                isTopicsSidebarOpen ? "opacity-100 w-full" : "opacity-0 w-0"
-              )}>
-                <CourseContentsSidebar
+              <div className="h-72 overflow-hidden md:h-full">
+                {isTopicsSidebarOpen && <CourseContentsSidebar
                   contents={currentContents}
                   selectedContentId={selectedContentId}
                   onContentSelect={handleContentSelect}
@@ -979,24 +967,24 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
                   onVisitedToggle={handleVisitedToggle}
                   onSubContentSubmit={handleSubContentSubmit}
                   onMainContentSelect={setCurrentMainContentId}
-                />
+                />}
               </div>
               <div
-                className="absolute top-0 right-0 h-full w-1 cursor-col-resize hover:bg-primary/20 transition-colors"
+                className="hidden md:block absolute top-0 right-0 h-full w-1 cursor-col-resize hover:bg-primary/20 transition-colors"
                 onMouseDown={startResizing}
               />
             </div>
 
             <div className={cn(
-              "flex-1 overflow-y-auto bg-background/50",
+              "min-w-0 flex-1 md:overflow-y-auto bg-background/50",
               !isTopicsSidebarOpen && "px-0"
             )}>
               <div className="h-full max-w-5xl mx-auto w-full">
                 {selectedMainContent ? (
-                  <div className="w-full px-6 py-8 md:px-10 lg:px-12">
+                  <div className="w-full px-4 py-6 sm:px-6 md:px-10 lg:px-12">
                     <div className="mb-8 pb-6 border-b border-border/60">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="space-y-2">
+                      <div className="flex flex-wrap items-start justify-between gap-4">
+                        <div className="min-w-0 space-y-2">
                           <div className="flex items-center gap-2 mb-2">
                             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-secondary text-secondary-foreground">
                               {selectedMainContent.type === 'TEXT' && <FileText className="h-3 w-3" />}
@@ -1006,7 +994,7 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
                               <span className="capitalize">{selectedMainContent.type.toLowerCase()}</span>
                             </span>
                           </div>
-                          <h1 className="text-3xl font-bold tracking-tight text-foreground">
+                          <h1 className="break-words text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
                             {selectedMainContent.title}
                           </h1>
                         </div>
@@ -1087,6 +1075,6 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
           </div>
         </main>
       </div>
-    </div>
+    </AppShell>
   );
 }

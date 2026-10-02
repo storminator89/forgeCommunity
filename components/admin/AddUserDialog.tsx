@@ -192,7 +192,7 @@ export default function AddUserDialog({ isOpen, onClose, onAddUser }: AddUserDia
                     minLength={MIN_PASSWORD_LENGTH}
                     required
                   />
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-muted-foreground">
                     {PASSWORD_HELP}
                   </p>
                 </div>
@@ -259,7 +259,7 @@ export default function AddUserDialog({ isOpen, onClose, onAddUser }: AddUserDia
                     <Label htmlFor="emailNotifications">
                       E-Mail Benachrichtigungen
                     </Label>
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm text-muted-foreground">
                       Erhält Benachrichtigungen per E-Mail
                     </p>
                   </div>
@@ -277,7 +277,7 @@ export default function AddUserDialog({ isOpen, onClose, onAddUser }: AddUserDia
                     <Label htmlFor="pushNotifications">
                       Push Benachrichtigungen
                     </Label>
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm text-muted-foreground">
                       Erhält Push Benachrichtigungen im Browser
                     </p>
                   </div>

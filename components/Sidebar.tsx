@@ -1,271 +1,104 @@
-// components/Sidebar.tsx
 "use client";
 
 import Link from 'next/link';
-import { useState, createContext, useContext } from 'react';
-import { useSession } from 'next-auth/react';
-import { useTheme } from 'next-themes';
-import { signOut } from 'next-auth/react';
-import { useRouter, usePathname } from 'next/navigation';
-import { useNotifications } from "@/contexts/NotificationContext";
-import {
-  Home,
-  Users,
-  GraduationCap,
-  Calendar,
-  Info,
-  Search,
-  MessageCircle,
-  Bell,
-  Menu,
-  X,
-  Settings,
-  HelpCircle,
-  LogOut,
-  BookOpen,
-  Briefcase,
-  Award,
-  Library,
-  LayoutDashboard,
-  Bookmark,
-  ChevronRight,
-  ChevronLeft
-} from 'lucide-react';
-import { Badge } from "@/components/ui/badge";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { useSyncExternalStore } from 'react';
+import { useSession, signOut } from 'next-auth/react';
+import { usePathname } from 'next/navigation';
+import { ChevronLeft, ChevronRight, Flame, LogOut, X } from 'lucide-react';
+import { useNotifications } from '@/contexts/NotificationContext';
+import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useAppNavigation } from '@/components/app-shell';
+import { NavigationSearch } from '@/components/navigation-search';
+import { navigationGroups, utilityNavigation, adminNavigation, isNavigationActive } from '@/lib/navigation';
+import { cn } from '@/lib/utils';
 
-const navItems = {
-  main: [
-    { name: 'Community', icon: Users, href: '/community' },
-    { name: 'Mitglieder', icon: Users, href: '/members' },
-  ],
-  content: [
-    { name: 'Kurse', icon: GraduationCap, href: '/courses' },
-    { name: 'Events', icon: Calendar, href: '/events' },
-    { name: 'Wissensdatenbank', icon: Library, href: '/knowledgebase' },
-    { name: 'Ressourcen', icon: BookOpen, href: '/resources' },
-  ],
-  personal: [
-    { name: 'Meine Entwürfe', icon: Bookmark, href: '/knowledgebase/drafts' },
-    { name: 'Projekte', icon: Briefcase, href: '/showcases' },
-    { name: 'Skills', icon: Award, href: '/skills' },
-  ],
-  interact: [
-    { name: 'Suche', icon: Search, href: '/search' },
-    { name: 'Chat', icon: MessageCircle, href: '/chat' },
-    { name: 'Benachrichtigungen', icon: Bell, href: '/notifications' },
-  ],
-  settings: [
-    { name: 'Einstellungen', icon: Settings, href: '/settings' },
-
-    { name: 'Über uns', icon: Info, href: '/about' },
-  ],
-  admin: [
-    { name: 'Dashboard', icon: LayoutDashboard, href: '/admin/dashboard' },
-    { name: 'Benutzerverwaltung', icon: Users, href: '/admin/users' },
-  ],
-};
-
-interface SidebarProps {
-  className?: string;
-  isOpen?: boolean;
-  onClose?: () => void;
+function subscribeCollapse(callback: () => void) {
+  window.addEventListener('storage', callback);
+  window.addEventListener('forge-navigation-change', callback);
+  return () => { window.removeEventListener('storage', callback); window.removeEventListener('forge-navigation-change', callback); };
+}
+function collapsedSnapshot() {
+  try { return window.localStorage.getItem('forge-sidebar-collapsed') === 'true'; }
+  catch { return false; }
 }
 
-const SidebarContext = createContext({ isCollapsed: false });
+interface SidebarProps { className?: string; isOpen?: boolean; onClose?: () => void }
 
-export function Sidebar({ className, isOpen: externalIsOpen, onClose }: SidebarProps) {
-  const [internalIsOpen, setInternalIsOpen] = useState(false);
-  const [isCollapsed, setIsCollapsed] = useState(false);
-  const { theme } = useTheme();
-  const router = useRouter();
+export function Sidebar({ className, isOpen: externalOpen = false, onClose }: SidebarProps) {
+  const collapsed = useSyncExternalStore(subscribeCollapse, collapsedSnapshot, () => false);
+  const navigation = useAppNavigation();
   const pathname = usePathname();
   const { data: session } = useSession();
-
-  const isControlled = externalIsOpen !== undefined;
-  const isOpen = isControlled ? externalIsOpen : internalIsOpen;
-
-  const toggleSidebar = () => {
-    if (isControlled) {
-      onClose?.();
-    } else {
-      setInternalIsOpen(!internalIsOpen);
-    }
-  };
+  const { unreadCount } = useNotifications();
+  const open = navigation?.open ?? externalOpen;
+  const setOpen = (value: boolean) => { navigation?.setOpen(value); if (!value) onClose?.(); };
 
   const toggleCollapse = () => {
-    setIsCollapsed(!isCollapsed);
+    try { window.localStorage.setItem('forge-sidebar-collapsed', String(!collapsed)); }
+    catch { return; }
+    window.dispatchEvent(new Event('forge-navigation-change'));
   };
 
-  const handleLogout = async () => {
-    await signOut({ redirect: false });
-    router.push('/');
-  };
-
-  return (
-    <SidebarContext.Provider value={{ isCollapsed }}>
-      {!isControlled && (
-        <button
-          onClick={toggleSidebar}
-          className="lg:hidden fixed top-4 left-4 z-20 p-2 rounded-md bg-white dark:bg-gray-800 shadow-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-        >
-          {isOpen ? <X size={24} /> : <Menu size={24} />}
+  const renderNavigation = (compact: boolean, mobile = false) => {
+    const groups = [...navigationGroups, { title: 'Einstellungen', items: utilityNavigation },
+      ...(session?.user?.role === 'ADMIN' ? [{ title: 'Administration', items: adminNavigation }] : [])];
+    return <div className="flex h-full flex-col">
+      <div className={cn("flex h-20 shrink-0 gap-2 px-4", compact ? "flex-col items-center justify-center gap-1" : "items-center")}>
+        <Link href="/community" aria-label="ForgeCommunity Start" className="flex min-w-0 items-center gap-2.5" onClick={() => setOpen(false)}>
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground"><Flame className="h-5 w-5" /></span>
+          {!compact && <span className="text-[15px] font-bold tracking-tight">Forge<span className="font-normal text-muted-foreground">Community</span></span>}
+        </Link>
+        <button className={cn("hidden rounded-lg p-1.5 text-muted-foreground hover:bg-accent lg:block", !compact && "ml-auto")} onClick={toggleCollapse}
+          aria-label={compact ? 'Navigation erweitern' : 'Navigation einklappen'} aria-expanded={!compact}>
+          {compact ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
         </button>
-      )}
-
-      {/* Overlay for mobile when sidebar is open */}
-      {isOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-20 lg:hidden"
-          onClick={toggleSidebar}
-        />
-      )}
-
-      <div className={`
-        w-72 bg-white dark:bg-gray-800 text-gray-800 dark:text-white h-screen overflow-y-auto 
-        fixed lg:static transition-all duration-300 ease-in-out z-30 border-r border-gray-200 dark:border-gray-700
-        ${isOpen ? 'left-0' : '-left-72 lg:left-0'} 
-        ${isCollapsed ? 'lg:w-20' : 'lg:w-72'}
-      `}>
-        <div className="p-4">
-          <div className="flex items-center justify-between mb-6">
-            <div className={`flex items-center space-x-3 ${isCollapsed ? 'lg:justify-center' : ''}`}>
-              <div className="bg-blue-600 w-8 h-8 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-lg">FC</span>
-              </div>
-              {!isCollapsed && <h1 className="text-xl font-bold hidden lg:block">ForgeCommunity</h1>}
-            </div>
-            <div className="flex items-center">
-              <button onClick={toggleSidebar} className="lg:hidden hover:bg-gray-100 dark:hover:bg-gray-700 p-1 rounded-lg transition-colors">
-                <X size={20} />
-              </button>
-              <button
-                onClick={toggleCollapse}
-                className="hidden lg:flex hover:bg-gray-100 dark:hover:bg-gray-700 p-1 rounded-lg transition-colors ml-2"
-              >
-                {isCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
-              </button>
-            </div>
-          </div>
-          <nav className="space-y-4">
-            <NavSection title="Community" items={navItems.main} pathname={pathname} />
-            <NavSection title="Inhalte" items={navItems.content} pathname={pathname} />
-            <NavSection title="Persönlich" items={navItems.personal} pathname={pathname} />
-            <NavSection title="Interaktion" items={navItems.interact} pathname={pathname} />
-            <NavSection title="Einstellungen" items={navItems.settings} pathname={pathname} />
-            {session?.user?.role === 'ADMIN' && (
-              <NavSection title="Administration" items={navItems.admin} pathname={pathname} />
-            )}
-          </nav>
-          <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-            <button
-              onClick={handleLogout}
-              className="flex items-center space-x-3 p-2 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all duration-200 w-full group"
-            >
-              <LogOut className="w-5 h-5 flex-shrink-0 group-hover:scale-110 transition-transform" />
-              <span className="font-medium">Abmelden</span>
-            </button>
-          </div>
-        </div>
       </div>
-    </SidebarContext.Provider>
-  );
-}
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
+        <NavigationSearch collapsed={compact} keyboardShortcut={!mobile} onNavigate={() => setOpen(false)} />
+        <nav aria-label="Hauptnavigation" className="space-y-5">
+          {groups.map(group => <div key={group.title}>
+            {!compact && <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{group.title}</p>}
+            <ul className="space-y-1">
+              {group.items.map(item => {
+                const aliases = 'aliases' in item && Array.isArray(item.aliases) ? item.aliases as string[] : [];
+                const active = isNavigationActive(pathname, item.href, aliases);
+                const count = item.href === '/notifications' ? unreadCount : 0;
+                const link = <Link href={item.href} aria-current={active ? 'page' : undefined} aria-label={compact ? item.name : undefined}
+                  onClick={() => setOpen(false)} className={cn('relative flex min-h-10 items-center gap-3 rounded-xl px-3 text-[13px] transition-colors',
+                    compact && 'justify-center px-2', active ? 'bg-accent font-semibold text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')}>
+                  <item.icon className="h-[18px] w-[18px] shrink-0" />
+                  {!compact && <span className="truncate">{item.name}</span>}
+                  {count > 0 && <span aria-label={`${count} ungelesene Benachrichtigungen`} className={cn('flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground', compact ? 'absolute right-0 top-0' : 'ml-auto')}>
+                    {count > 99 ? '99+' : count}
+                  </span>}
+                </Link>;
+                return <li key={item.href}>{compact ? <Tooltip><TooltipTrigger asChild>{link}</TooltipTrigger><TooltipContent side="right">{item.name}</TooltipContent></Tooltip> : link}</li>;
+              })}
+            </ul>
+          </div>)}
+        </nav>
+      </div>
+      <div className="shrink-0 border-t px-3 py-3">
+        {!compact && <p className="mb-2 truncate px-3 text-xs font-medium">{session?.user?.name || 'Deine Community'}</p>}
+        <button onClick={() => signOut({ callbackUrl: '/login' })} aria-label="Abmelden" className={cn('flex h-10 w-full items-center gap-3 rounded-xl px-3 text-[13px] text-muted-foreground hover:bg-accent hover:text-foreground', compact && 'justify-center')}>
+          <LogOut className="h-[18px] w-[18px]" />{!compact && 'Abmelden'}
+        </button>
+      </div>
+    </div>;
+  };
 
-interface NavItemProps {
-  name: string;
-  icon: any; // Using any for Lucide icon component type as it's complex to type precisely without importing from lucide-react
-  href: string;
-}
-
-interface NavSectionProps {
-  title: string;
-  items: NavItemProps[];
-  pathname: string;
-}
-
-function NavSection({ title, items, pathname }: NavSectionProps) {
-  const { isCollapsed } = useContext(SidebarContext);
-
-  return (
-    <div>
-      {!isCollapsed && (
-        <h2 className="text-xs uppercase text-gray-500 dark:text-gray-400 font-semibold mb-2">{title}</h2>
-      )}
-      <ul className="space-y-2">
-        {items.map((item) => (
-          <NavItem key={item.name} item={item} isActive={pathname === item.href} />
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function NavItem({ item, isActive }: { item: NavItemProps; isActive: boolean }) {
-  const { unreadCount } = useNotifications();
-  const { isCollapsed } = useContext(SidebarContext);
-  const isNotifications = item.name === 'Benachrichtigungen';
-
-  const content = (
-    <Link
-      href={item.href}
-      className={`flex items-center space-x-3 p-2 rounded-lg transition-colors duration-200 relative
-        ${isActive
-          ? 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-200'
-          : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
-        } ${isCollapsed ? 'justify-center' : ''}`}
-    >
-      <item.icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-blue-600 dark:text-blue-400' : ''}`} />
-      {!isCollapsed && <span className="font-medium">{item.name}</span>}
-      {isNotifications && unreadCount > 0 && (
-        <Badge
-          className={`absolute ${isCollapsed ? 'top-0 right-0' : '-right-1 -top-1'} min-w-[20px] h-5 flex items-center justify-center bg-red-500 text-white`}
-          variant="default"
-        >
-          {unreadCount > 99 ? '99+' : unreadCount}
-        </Badge>
-      )}
-    </Link>
-  );
-
-  if (isNotifications && unreadCount > 0) {
-    return (
-      <li>
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              {content}
-            </TooltipTrigger>
-            <TooltipContent side={isCollapsed ? "right" : "top"}>
-              <p>{unreadCount} ungelesene Benachrichtigung{unreadCount !== 1 ? 'en' : ''}</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      </li>
-    );
-  }
-
-  if (isCollapsed) {
-    return (
-      <li>
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              {content}
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              <p>{item.name}</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      </li>
-    );
-  }
-
-  return <li>{content}</li>;
+  return <TooltipProvider delayDuration={150}>
+    <aside id="app-navigation" className={cn('app-sidebar hidden shrink-0 border-r bg-card lg:block', collapsed ? 'w-[88px]' : 'w-[252px]', className)}>
+      {renderNavigation(collapsed)}
+    </aside>
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetContent side="left" className="w-[min(300px,90vw)] p-0 [&>button]:hidden">
+        <SheetTitle className="sr-only">Navigation</SheetTitle>
+        <SheetDescription className="sr-only">Bereiche von ForgeCommunity</SheetDescription>
+        <button onClick={() => setOpen(false)} className="absolute right-3 top-6 rounded-lg p-2 text-muted-foreground" aria-label="Navigation schließen"><X className="h-4 w-4" /></button>
+        {open && renderNavigation(false, true)}
+      </SheetContent>
+    </Sheet>
+  </TooltipProvider>;
 }
