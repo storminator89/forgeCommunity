@@ -1,4 +1,3 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
 
@@ -16,11 +15,9 @@ interface LeaderboardCardProps {
 
 export function LeaderboardCard({ users, isLoading }: LeaderboardCardProps) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-lg">Rangliste</CardTitle>
-      </CardHeader>
-      <CardContent className="pt-0">
+    <section aria-labelledby="community-leaderboard-title" className="border-t pt-5">
+      <h2 id="community-leaderboard-title" className="text-base font-semibold tracking-tight">Rangliste</h2>
+      <div className="mt-4">
         {isLoading ? (
           <div className="space-y-4" role="status" aria-label="Rangliste wird geladen">
             {Array.from({ length: 5 }).map((_, index) => (
@@ -33,7 +30,7 @@ export function LeaderboardCard({ users, isLoading }: LeaderboardCardProps) {
         ) : users.length ? (
           <ol className="divide-y divide-border">
             {users.map((user, index) => (
-              <li key={user.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+              <li key={user.id} className="flex min-w-0 items-center gap-3 py-3 first:pt-0 last:pb-0">
                 <span className="w-4 shrink-0 text-sm tabular-nums text-muted-foreground">{index + 1}</span>
                 <Avatar className="h-9 w-9 shrink-0">
                   <AvatarImage src={user.image || ''} alt={user.name} />
@@ -48,7 +45,7 @@ export function LeaderboardCard({ users, isLoading }: LeaderboardCardProps) {
             ))}
           </ol>
         ) : <p className="text-sm text-muted-foreground">Keine Einträge.</p>}
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   )
 }

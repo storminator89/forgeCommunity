@@ -1,5 +1,8 @@
 "use client"
 
+/* Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V5 */
+/* Hallmark · genre: editorial · macrostructure: conversation workbench · design-system: design.md · designed-as-app */
+
 import { AppShell, AppHeader } from '@/components/app-shell';
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -71,6 +74,7 @@ async function fetchWithErrorHandling(url: string, options?: RequestInit) {
 
 function Community() {
   const { data: session } = useSession()
+  const mainRef = useRef<HTMLElement>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [localPosts, setLocalPosts] = useState<Post[]>([])
   const [isEditing, setIsEditing] = useState(false)
@@ -342,6 +346,12 @@ function Community() {
     totalPoints: leaderboardUsers.find(user => user.id === session?.user.id)?.points || 0
   }
 
+  const openComposer = () => {
+    setEditingPost(null)
+    setIsEditing(true)
+    mainRef.current?.scrollTo?.({ top: 0, behavior: 'smooth' })
+  }
+
   return (
     <AppShell>
       <Sidebar />
@@ -364,43 +374,42 @@ function Community() {
         </AnimatePresence>
 
         <AppHeader>
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-semibold text-foreground">Community</h1>
-            </div>
-            <div className="flex items-center space-x-4">
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <h1>Community</h1>
+            <div className="flex shrink-0 items-center gap-2">
               <ThemeToggle />
               <UserNav />
             </div>
           </div>
         </AppHeader>
 
-        <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto scroll-smooth">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <main ref={mainRef} id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto scroll-smooth">
+          <div className="mx-auto w-full max-w-[1440px] px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
+            <div className="mb-8 flex flex-wrap items-end justify-between gap-4 border-b pb-6">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Austausch / Community</p>
+                <p className="mt-2 max-w-[58ch] text-base leading-relaxed text-muted-foreground">Fragen stellen, Erfahrungen teilen und gemeinsam weiterkommen.</p>
+              </div>
+              <p className="text-sm tabular-nums text-muted-foreground">{localPosts.length} {localPosts.length === 1 ? 'Beitrag' : 'Beiträge'}</p>
+            </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-              {/* Main Content Feed - 8 cols */}
-              <div className="lg:col-span-8 space-y-6">
+            <div className="grid min-w-0 items-start gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,19rem)] lg:gap-12">
+              <section aria-labelledby="community-feed-title" className="min-w-0">
                 <AnimatePresence mode="wait">
                   {!isEditing ? (
-                    <motion.div
+                    <motion.button
                       key="new-post-button"
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.95 }}
-                      className="bg-card rounded-2xl p-4 shadow-sm border border-border flex items-center space-x-4 cursor-pointer hover:border-primary/30 transition-colors"
-                      role="button" tabIndex={0} aria-label="Neuen Beitrag erstellen"
-                      onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setIsEditing(true) } }}
-                      onClick={() => setIsEditing(true)}
+                      type="button"
+                      className="flex min-h-20 w-full min-w-0 items-center gap-3 rounded-[14px] border border-input bg-card p-4 text-left transition-colors hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      aria-label="Neuen Beitrag erstellen"
+                      onClick={openComposer}
                     >
-                      <Avatar className="h-10 w-10"><AvatarImage src={session?.user?.image || ''} alt="" /><AvatarFallback className="bg-accent text-primary">{session?.user?.name?.[0] || 'F'}</AvatarFallback></Avatar>
-                      <div className="flex-1 bg-muted rounded-full px-4 py-2.5 text-muted-foreground text-sm hover:bg-accent transition-colors">
+                      <Avatar className="h-10 w-10 shrink-0"><AvatarImage src={session?.user?.image || ''} alt="" /><AvatarFallback className="bg-accent text-primary">{session?.user?.name?.[0] || 'F'}</AvatarFallback></Avatar>
+                      <span className="min-w-0 flex-1 text-sm text-muted-foreground">
                         Was möchtest du teilen{session?.user?.name ? `, ${session.user.name.split(' ')[0]}` : ''}?
-                      </div>
-                      <Button aria-label="Hinzufügen" variant="ghost" size="icon" className="text-primary">
-                        <PlusCircle className="h-6 w-6" />
-                      </Button>
-                    </motion.div>
+                      </span>
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-accent text-primary"><PlusCircle className="h-5 w-5" aria-hidden="true" /></span>
+                    </motion.button>
                   ) : (
                     <PostForm
                       onSubmit={handleSubmitPost}
@@ -416,49 +425,52 @@ function Community() {
                   )}
                 </AnimatePresence>
 
-                <div className="space-y-6">
-                  {isLoading && localPosts.length === 0 && <PageState kind="loading" title="Beiträge werden geladen" />}
-                  <AnimatePresence>
-                    {localPosts.map((post) => (
-                      <PostCard
-                        key={post.id}
-                        post={post}
-                        currentUserId={session?.user.id}
-                        onLike={handleToggleLike}
-                        onDelete={handleDeletePost}
-                        onEdit={(post) => {
-                          setEditingPost(post)
-                          setIsEditing(true)
-                          // Scroll to top to see form
-                          window.scrollTo({ top: 0, behavior: 'smooth' })
-                        }}
-                        onAddComment={handleAddComment}
-                        onLikeComment={handleLikeComment}
-                        isLoading={isLoading}
-                      />
-                    ))}
-                  </AnimatePresence>
+                <div className="mt-9">
+                  <div className="flex flex-wrap items-baseline justify-between gap-3 border-b pb-4">
+                    <h2 id="community-feed-title" className="text-xl font-semibold tracking-tight">Aktuelle Beiträge</h2>
+                    <span className="text-sm tabular-nums text-muted-foreground">{localPosts.length} {localPosts.length === 1 ? 'Beitrag' : 'Beiträge'}</span>
+                  </div>
+                  <div className="mt-5 space-y-5">
+                    {isLoading && localPosts.length === 0 && <PageState kind="loading" title="Beiträge werden geladen" />}
+                    <AnimatePresence>
+                      {localPosts.map((post) => (
+                        <PostCard
+                          key={post.id}
+                          post={post}
+                          currentUserId={session?.user.id}
+                          onLike={handleToggleLike}
+                          onDelete={handleDeletePost}
+                          onEdit={(post) => {
+                            setEditingPost(post)
+                            setIsEditing(true)
+                            mainRef.current?.scrollTo?.({ top: 0, behavior: 'smooth' })
+                          }}
+                          onAddComment={handleAddComment}
+                          onLikeComment={handleLikeComment}
+                          isLoading={isLoading}
+                        />
+                      ))}
+                    </AnimatePresence>
 
-                  {localPosts.length === 0 && !isLoading && (
-                    <div className="text-center py-12">
-                      <div className="bg-muted dark:bg-card w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <PlusCircle className="h-8 w-8 text-muted-foreground" />
+                    {localPosts.length === 0 && !isLoading && (
+                      <div className="border-t py-12 text-center" role="status">
+                        <PlusCircle className="mx-auto mb-4 h-8 w-8 text-muted-foreground" aria-hidden="true" />
+                        <h3 className="text-lg font-semibold text-foreground">Keine Beiträge gefunden</h3>
+                        <p className="mt-2 text-sm text-muted-foreground">Sei der Erste, der etwas teilt!</p>
+                        <Button type="button" variant="outline" className="mt-5" onClick={openComposer}>Beitrag schreiben</Button>
                       </div>
-                      <h3 className="text-lg font-medium text-foreground">Keine Beiträge gefunden</h3>
-                      <p className="text-muted-foreground mt-2">Sei der Erste, der etwas teilt!</p>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
-              </div>
+              </section>
 
-              {/* Sidebar - 4 cols - Sticky */}
-              <div className="lg:col-span-4 space-y-6 lg:sticky lg:top-8">
+              <aside aria-label="Deine Community im Überblick" className="min-w-0 space-y-9 lg:sticky lg:top-8">
                 <StatsCard stats={userStats} />
                 <LeaderboardCard
                   users={leaderboardUsers}
                   isLoading={isLeaderboardLoading}
                 />
-              </div>
+              </aside>
             </div>
           </div>
         </main>

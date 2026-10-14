@@ -3,8 +3,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Loader2 } from 'lucide-react'
-import { Skeleton } from "@/components/ui/skeleton"
-import { motion } from 'framer-motion'
 import { Editor } from "@/components/Editor"
 
 interface PostFormProps {
@@ -33,12 +31,7 @@ export function PostForm({
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      className="space-y-6 bg-card p-5 sm:p-6 rounded-xl border"
-    >
+    <div className="rounded-[14px] border border-input bg-card p-4 sm:p-6">
       <form onSubmit={handleSubmit} className="space-y-6">
         <div>
           <Label htmlFor="title" className="block text-sm font-medium text-foreground">Titel</Label>
@@ -49,33 +42,27 @@ export function PostForm({
             placeholder="Gib deinem Beitrag einen Titel"
             required
             disabled={isLoading}
-            className={`mt-1 block w-full p-3 border ${!title ? 'border-red-500' : 'border-border'
-              } rounded-md shadow-sm focus:ring-primary focus:border-primary dark:bg-muted dark:border-border dark:placeholder-gray-400 transition-colors duration-200`}
+            className="mt-2"
           />
-          {!title && (
-            <span className="text-red-500 text-xs">
-              Titel ist erforderlich.
-            </span>
-          )}
         </div>
 
         <div>
-          <Label htmlFor="content" className="block text-sm font-medium text-foreground">Inhalt</Label>
+          <p className="mb-2 text-sm font-medium text-foreground">Inhalt</p>
           <Editor
             content={content}
             onChange={setContent}
             readOnly={isLoading}
+            className="focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
           />
         </div>
 
-        <div className="flex justify-end space-x-4">
+        <div className="flex flex-wrap justify-end gap-2 border-t pt-5">
           {onCancel && (
             <Button
               type="button"
               variant="outline"
               onClick={onCancel}
               disabled={isLoading}
-              className="px-4 py-2 border border-border rounded-md text-foreground hover:bg-accent transition-colors duration-200"
             >
               Abbrechen
             </Button>
@@ -83,12 +70,11 @@ export function PostForm({
           <Button
             type="submit"
             disabled={isLoading}
-            className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark flex items-center transition-transform transform active:scale-95 duration-200"
           >
             {isLoading ? (
               <>
-                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                Wird verarbeitet...
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                Wird verarbeitet…
               </>
             ) : (
               isEditing ? 'Beitrag aktualisieren' : 'Beitrag veröffentlichen'
@@ -96,6 +82,6 @@ export function PostForm({
           </Button>
         </div>
       </form>
-    </motion.div>
+    </div>
   )
 }
