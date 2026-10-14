@@ -1,7 +1,7 @@
 "use client";
 
 import { AppShell, AppHeader } from '@/components/app-shell';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Sidebar } from "@/components/Sidebar";
 import { UserNav } from "@/components/user-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -31,13 +31,12 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
-import { format } from 'date-fns';
-import { de } from 'date-fns/locale';
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { sanitizeTextPreview } from '@/lib/sanitize-html';
+import { getSafeNavigationUrl } from '@/lib/security';
 
 
 interface SearchResult {
@@ -105,28 +104,105 @@ const SafeHTML = ({ html }: { html: string }) => {
   return <span className="inline">{sanitizeTextPreview(html, 240)}</span>;
 };
 
-export default function SearchPageClient({ initialQuery = '' }: { initialQuery?: string }) {
+export default function SearchPageClient({
+  initialQuery = '',
+  initialType = 'all',
+  initialPage = 1,
+}: {
+  initialQuery?: string;
+  initialType?: string;
+  initialPage?: number;
+}) {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState(initialQuery);
-  const [activeTab, setActiveTab] = useState('all');
+  const [activeTab, setActiveTab] = useState(initialType);
   const [results, setResults] = useState<SearchResult[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [page, setPage] = useState(1);
+  const [isLoading, setIsLoading] = useState(Boolean(initialQuery.trim()));
+  const [page, setPage] = useState(initialPage);
   const [totalPages, setTotalPages] = useState(1);
-  const router = useRouter();
+  const currentSearch = useRef({
+    query: initialQuery,
+    type: initialType,
+    page: initialPage,
+  });
 
-  const fetchResults = useCallback(async () => {
-    if (!searchTerm.trim()) {
-      setResults([]);
-      return;
-    }
+  useEffect(() => {
+    // Next's URL updates can reach this component after a newer keystroke.
+    // Only apply navigation props when they still describe the current URL.
+    const params = new URLSearchParams(window.location.search);
+    const requestedType = params.get('type') ?? 'all';
+    const urlType = ['all', 'course', 'event', 'member', 'post', 'resource'].includes(requestedType)
+      ? requestedType
+      : 'all';
+    const requestedPage = Number(params.get('page') ?? 1);
+    const urlPage = Number.isSafeInteger(requestedPage) && requestedPage > 0
+      ? Math.min(requestedPage, 1000)
+      : 1;
+    if (
+      (params.get('q') ?? '') !== initialQuery ||
+      urlType !== initialType ||
+      urlPage !== initialPage
+    ) return;
 
+    const current = currentSearch.current;
+    if (current.query === initialQuery && current.type === initialType && current.page === initialPage) return;
+
+    currentSearch.current = { query: initialQuery, type: initialType, page: initialPage };
+    setSearchTerm(initialQuery);
+    setActiveTab(initialType);
+    setPage(initialPage);
+    setResults([]);
+    setTotalPages(0);
+    setIsLoading(Boolean(initialQuery.trim()));
+  }, [initialQuery, initialType, initialPage]);
+
+  const updateSearchUrl = (query: string, type: string, nextPage: number) => {
+    const url = new URL(window.location.href);
+    if (query) url.searchParams.set('q', query);
+    else url.searchParams.delete('q');
+    if (type !== 'all') url.searchParams.set('type', type);
+    else url.searchParams.delete('type');
+    if (nextPage > 1) url.searchParams.set('page', String(nextPage));
+    else url.searchParams.delete('page');
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+  };
+
+  const updateQuery = (query: string) => {
+    currentSearch.current = { query, type: activeTab, page: 1 };
+    setSearchTerm(query);
+    setPage(1);
+    setResults([]);
+    setTotalPages(0);
+    setIsLoading(Boolean(query.trim()));
+    updateSearchUrl(query, activeTab, 1);
+  };
+
+  const updateTab = (type: string) => {
+    currentSearch.current = { query: searchTerm, type, page: 1 };
+    setActiveTab(type);
+    setPage(1);
+    setResults([]);
+    setTotalPages(0);
+    setIsLoading(Boolean(searchTerm.trim()));
+    updateSearchUrl(searchTerm, type, 1);
+  };
+
+  const updatePage = (nextPage: number) => {
+    currentSearch.current = { query: searchTerm, type: activeTab, page: nextPage };
+    setPage(nextPage);
+    setResults([]);
+    setIsLoading(Boolean(searchTerm.trim()));
+    updateSearchUrl(searchTerm, activeTab, nextPage);
+  };
+
+  const fetchResults = useCallback(async (signal: AbortSignal) => {
     setIsLoading(true);
     try {
       const response = await fetch(
         `/api/search?query=${encodeURIComponent(searchTerm)}&type=${activeTab}&page=${page}&limit=10`,
         {
           credentials: 'include',
+          signal,
         }
       );
 
@@ -135,9 +211,11 @@ export default function SearchPageClient({ initialQuery = '' }: { initialQuery?:
       }
 
       const data: SearchResponse = await response.json();
+      if (signal.aborted) return;
       setResults(data.results);
       setTotalPages(data.pagination.pages);
     } catch (error) {
+      if (signal.aborted) return;
       console.error('Search error:', error);
       toast({
         title: "Fehler",
@@ -145,41 +223,34 @@ export default function SearchPageClient({ initialQuery = '' }: { initialQuery?:
         variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
+      if (!signal.aborted) setIsLoading(false);
     }
   }, [searchTerm, activeTab, page, toast]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (searchTerm) {
-        fetchResults();
-      }
-    }, 300);
+    if (!searchTerm.trim()) return;
 
-    return () => clearTimeout(timer);
+    const controller = new AbortController();
+    const timer = setTimeout(() => fetchResults(controller.signal), 300);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
   }, [searchTerm, fetchResults]);
 
-  const handleItemClick = (result: SearchResult) => {
+  const getResultHref = (result: SearchResult) => {
     switch (result.type) {
       case 'course':
-        router.push(`/courses/${result.id}`);
-        break;
+        return `/courses/${result.id}`;
       case 'event':
-        router.push(`/events/${result.id}`);
-        break;
+        return `/events/${result.id}`;
       case 'member':
-        router.push(`/profile/${result.id}`);
-        break;
+        return `/profile/${result.id}`;
       case 'post':
-        router.push(`/posts/${result.id}`);
-        break;
+        return `/posts/${result.id}`;
       case 'resource':
-        if (result.url) {
-          window.open(result.url, '_blank');
-        } else {
-          router.push(`/resources`);
-        }
-        break;
+        return getSafeNavigationUrl(result.url) ?? '/resources';
     }
   };
 
@@ -192,10 +263,6 @@ export default function SearchPageClient({ initialQuery = '' }: { initialQuery?:
       case 'resource': return <FileText className="h-5 w-5 text-primary" />;
       default: return null;
     }
-  };
-
-  const formatDate = (date: Date) => {
-    return format(new Date(date), 'PPp', { locale: de });
   };
 
   const getTimeAgo = (date: Date) => {
@@ -375,22 +442,22 @@ export default function SearchPageClient({ initialQuery = '' }: { initialQuery?:
                 type="text"
                 placeholder="Suche nach Kursen, Events, Mitgliedern, Beiträgen oder Ressourcen"
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => updateQuery(e.target.value)}
                 className="pl-10 pr-10 py-2 w-full rounded-full shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
               {searchTerm && (
-                <Button aria-label="Schließen"
+                <Button aria-label="Suche löschen"
                   variant="ghost"
                   size="sm"
                   className="absolute right-2 top-1/2 transform -translate-y-1/2"
-                  onClick={() => setSearchTerm('')}
+                  onClick={() => updateQuery('')}
                 >
                   <X className="h-4 w-4 text-muted-foreground" />
                 </Button>
               )}
             </div>
 
-            <Tabs defaultValue="all" onValueChange={setActiveTab} className="w-full">
+            <Tabs value={activeTab} onValueChange={updateTab} className="w-full">
               <TabsList className="w-full justify-start mb-4 bg-card p-1 rounded-lg shadow-sm overflow-x-auto">
                 <TabsTrigger value="all">Alle</TabsTrigger>
                 <TabsTrigger value="course">Kurse</TabsTrigger>
@@ -402,7 +469,7 @@ export default function SearchPageClient({ initialQuery = '' }: { initialQuery?:
 
               <AnimatePresence mode="wait">
                 {isLoading ? (
-                  <div className="flex justify-center items-center py-20">
+                  <div role="status" aria-label="Suche läuft" className="flex justify-center items-center py-20">
                     <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
                   </div>
                 ) : (
@@ -428,147 +495,161 @@ export default function SearchPageClient({ initialQuery = '' }: { initialQuery?:
                         </div>
                       ) : (
                         <>
-                          {results.map((result) => (
-                            <motion.div
-                              key={`${result.type}-${result.id}`}
-                              initial={{ opacity: 0, y: 20 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              exit={{ opacity: 0, y: -20 }}
-                              transition={{ duration: 0.2 }}
-                              className="bg-card p-4 rounded-xl border mb-4 hover:border-primary/40 transition-colors cursor-pointer"
-                              onClick={() => handleItemClick(result)}
-                            >
-                              <div className="flex items-start space-x-4">
-                                {renderAvatar(result)}
-                                <div className="flex-grow min-w-0">
-                                  <div className="flex items-center justify-between">
-                                    <h3 className="text-lg font-semibold text-foreground truncate">
-                                      {result.title}
-                                    </h3>
-                                    {renderIcon(result.type)}
-                                  </div>
+                          {results.map((result) => {
+                            const href = getResultHref(result);
+                            const external = result.type === 'resource' && /^https?:\/\//.test(href);
 
-                                  {result.type === 'member' && result.role && (
-                                    <div className="mt-1">
-                                      <Badge variant="outline" className="text-xs">
-                                        {result.role}
-                                      </Badge>
-                                    </div>
-                                  )}
-
-                                  <div className="text-sm text-muted-foreground mt-1">
-                                    <SafeHTML html={result.description} />
-                                  </div>
-
-                                  {result.category && (
-                                    <Badge variant="secondary" className="mt-2">
-                                      {result.category}
-                                    </Badge>
-                                  )}
-
-                                  {renderStats(result)}
-                                  {renderTags(result)}
-
-                                  {result.type === 'member' && result.badges && result.badges.length > 0 && (
-                                    <div className="flex flex-wrap gap-2 mt-2">
-                                      {result.badges.slice(0, 3).map((badge, index) => (
-                                        <Badge
-                                          key={index}
-                                          variant="outline"
-                                          className="flex items-center bg-yellow-50 dark:bg-yellow-900/20"
-                                        >
-                                          <Award className="h-3 w-3 mr-1 text-yellow-500" />
-                                          {badge.name}
-                                        </Badge>
-                                      ))}
-                                      {result.badges.length > 3 && (
-                                        <Badge variant="outline">
-                                          +{result.badges.length - 3} weitere
-                                        </Badge>
-                                      )}
-                                    </div>
-                                  )}
-
-                                  <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground">
-                                    <div className="flex items-center space-x-2">
-                                      {result.author && (
-                                        <span className="flex items-center">
-                                          <User className="h-3 w-3 mr-1" />
-                                          {result.author}
-                                        </span>
-                                      )}
-                                      {result.instructor && (
-                                        <span className="flex items-center">
-                                          <Briefcase className="h-3 w-3 mr-1" />
-                                          {result.instructor}
-                                        </span>
-                                      )}
-                                    </div>
-                                    {result.createdAt && (
-                                      <span className="flex items-center">
-                                        <Clock className="h-3 w-3 mr-1" />
-                                        {getTimeAgo(result.createdAt)}
-                                      </span>
-                                    )}
-                                  </div>
-
-                                  {result.time && (
-                                    <div className="mt-2 text-sm text-muted-foreground">
-                                      <div className="flex items-center">
-                                        <Clock className="h-4 w-4 mr-1" />
-                                        {result.time.start} - {result.time.end} ({result.time.timezone})
+                            return (
+                              <motion.div
+                                key={`${result.type}-${result.id}`}
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -20 }}
+                                transition={{ duration: 0.2 }}
+                                className="mb-4"
+                              >
+                                <Link
+                                  href={href}
+                                  target={external ? '_blank' : undefined}
+                                  rel={external ? 'noopener noreferrer' : undefined}
+                                  className="block bg-card p-4 rounded-xl border hover:border-primary/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                >
+                                  <div className="flex items-start space-x-4">
+                                    {renderAvatar(result)}
+                                    <div className="flex-grow min-w-0">
+                                      <div className="flex items-center justify-between">
+                                        <h3 className="text-lg font-semibold text-foreground truncate">
+                                          {result.title}
+                                        </h3>
+                                        {renderIcon(result.type)}
                                       </div>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </motion.div>
-                          ))}
 
-                          {totalPages > 1 && (
-                            <div className="flex justify-center space-x-2 mt-6">
-                              <Button
-                                variant="outline"
-                                onClick={() => setPage(p => Math.max(1, p - 1))}
-                                disabled={page === 1}
-                                className="flex items-center"
-                              >
-                                <span className="mr-2">←</span>
-                                Vorherige
-                              </Button>
-                              <div className="flex items-center space-x-2">
-                                {Array.from({ length: totalPages }, (_, i) => i + 1)
-                                  .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
-                                  .map((p, i, arr) => (
-                                    <React.Fragment key={p}>
-                                      {i > 0 && arr[i - 1] !== p - 1 && (
-                                        <span className="text-muted-foreground">...</span>
+                                      {result.type === 'member' && result.role && (
+                                        <div className="mt-1">
+                                          <Badge variant="outline" className="text-xs">
+                                            {result.role}
+                                          </Badge>
+                                        </div>
                                       )}
-                                      <Button
-                                        variant={p === page ? "default" : "outline"}
-                                        onClick={() => setPage(p)}
-                                        className="w-10 h-10"
-                                      >
-                                        {p}
-                                      </Button>
-                                    </React.Fragment>
-                                  ))}
-                              </div>
-                              <Button
-                                variant="outline"
-                                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                                disabled={page === totalPages}
-                                className="flex items-center"
-                              >
-                                Nächste
-                                <span className="ml-2">→</span>
-                              </Button>
+
+                                      <div className="text-sm text-muted-foreground mt-1">
+                                        <SafeHTML html={result.description} />
+                                      </div>
+
+                                      {result.category && (
+                                        <Badge variant="secondary" className="mt-2">
+                                          {result.category}
+                                        </Badge>
+                                      )}
+
+                                      {renderStats(result)}
+                                      {renderTags(result)}
+
+                                      {result.type === 'member' && result.badges && result.badges.length > 0 && (
+                                        <div className="flex flex-wrap gap-2 mt-2">
+                                          {result.badges.slice(0, 3).map((badge, index) => (
+                                            <Badge
+                                              key={index}
+                                              variant="outline"
+                                              className="flex items-center bg-yellow-50 dark:bg-yellow-900/20"
+                                            >
+                                              <Award className="h-3 w-3 mr-1 text-yellow-500" />
+                                              {badge.name}
+                                            </Badge>
+                                          ))}
+                                          {result.badges.length > 3 && (
+                                            <Badge variant="outline">
+                                              +{result.badges.length - 3} weitere
+                                            </Badge>
+                                          )}
+                                        </div>
+                                      )}
+
+                                      <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground">
+                                        <div className="flex items-center space-x-2">
+                                          {result.author && (
+                                            <span className="flex items-center">
+                                              <User className="h-3 w-3 mr-1" />
+                                              {result.author}
+                                            </span>
+                                          )}
+                                          {result.instructor && (
+                                            <span className="flex items-center">
+                                              <Briefcase className="h-3 w-3 mr-1" />
+                                              {result.instructor}
+                                            </span>
+                                          )}
+                                        </div>
+                                        {result.createdAt && (
+                                          <span className="flex items-center">
+                                            <Clock className="h-3 w-3 mr-1" />
+                                            {getTimeAgo(result.createdAt)}
+                                          </span>
+                                        )}
+                                      </div>
+
+                                      {result.time && (
+                                        <div className="mt-2 text-sm text-muted-foreground">
+                                          <div className="flex items-center">
+                                            <Clock className="h-4 w-4 mr-1" />
+                                            {result.time.start} - {result.time.end} ({result.time.timezone})
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                  {external && <span className="sr-only"> (öffnet in neuem Tab)</span>}
+                                </Link>
+                              </motion.div>
+                            );
+                          })}
+
+                        {totalPages > 1 && (
+                          <div className="flex justify-center space-x-2 mt-6">
+                            <Button
+                              variant="outline"
+                              onClick={() => updatePage(Math.max(1, page - 1))}
+                              disabled={page === 1}
+                              className="flex items-center"
+                            >
+                              <span className="mr-2">←</span>
+                              Vorherige
+                            </Button>
+                            <div className="flex items-center space-x-2">
+                              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                                .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
+                                .map((p, i, arr) => (
+                                  <React.Fragment key={p}>
+                                    {i > 0 && arr[i - 1] !== p - 1 && (
+                                      <span className="text-muted-foreground">...</span>
+                                    )}
+                                    <Button
+                                      variant={p === page ? "default" : "outline"}
+                                      onClick={() => updatePage(p)}
+                                      aria-current={p === page ? 'page' : undefined}
+                                      aria-label={`Seite ${p}`}
+                                      className="w-10 h-10"
+                                    >
+                                      {p}
+                                    </Button>
+                                  </React.Fragment>
+                                ))}
                             </div>
-                          )}
-                        </>
-                      )}
-                    </TabsContent>
-                  </motion.div>
+                            <Button
+                              variant="outline"
+                              onClick={() => updatePage(Math.min(totalPages, page + 1))}
+                              disabled={page === totalPages}
+                              className="flex items-center"
+                            >
+                              Nächste
+                              <span className="ml-2">→</span>
+                            </Button>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </TabsContent>
+                </motion.div>
                 )}
               </AnimatePresence>
             </Tabs>
