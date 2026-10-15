@@ -14,6 +14,24 @@ test('back-to-top honors reduced motion and live preference changes', async ({ p
       !isAbsolute(databasePath) || basename(databasePath) !== 'forge-browser-qa.db') {
     throw new Error('Reduced-motion QA requires its disposable SQLite fixture database.');
   }
+  // Observe the native call on every page load. The signed-in providers may
+  // replace their children when the session hydrates, so wrapping one main
+  // element after navigation can silently lose the instrumentation.
+  await page.addInitScript(() => {
+    const nativeScrollTo = Element.prototype.scrollTo;
+    Object.defineProperty(Element.prototype, 'scrollTo', {
+      configurable: true,
+      writable: true,
+      value: function (this: Element, options: ScrollToOptions | number, y?: number) {
+        if (typeof options === 'number') Reflect.apply(nativeScrollTo, this, [options, y ?? 0]);
+        else Reflect.apply(nativeScrollTo, this, [options]);
+        if (this instanceof HTMLElement && this.matches('main#page-content') && options && typeof options === 'object') {
+          this.dataset.requestedScrollBehavior = options.behavior;
+          this.dataset.immediateScrollTop = String(this.scrollTop);
+        }
+      },
+    });
+  });
   const id = randomUUID();
   const email = `reduced-motion-${id}@example.test`;
   const password = `ReducedMotionA1!${id}`;
@@ -34,26 +52,26 @@ test('back-to-top honors reduced motion and live preference changes', async ({ p
   await expect(page).toHaveURL(/\/community$/);
   await page.goto('/members');
   await expect(page.getByRole('link', { name: /^Profil von Fixture/ })).toHaveCount(30);
+  await expect(page.getByRole('button', { name: 'Benutzermenü öffnen' })).toContainText('RM');
   const main = page.locator('main#page-content');
-  await main.evaluate(element => {
-    // Preserve the native scroll and record its immediate result. This catches
-    // explicit smooth calls even if a browser suppresses animation itself.
-    const scrollTo = element.scrollTo.bind(element);
-    element.scrollTo = (options: ScrollToOptions | number = {}, y?: number) => {
-      if (typeof options === 'number') scrollTo(options, y ?? 0);
-      else {
-        scrollTo(options);
-        element.dataset.requestedScrollBehavior = options.behavior;
-        element.dataset.immediateScrollTop = String(element.scrollTop);
-      }
-    };
-  });
 
   for (const reducedMotion of ['reduce', 'no-preference', 'reduce'] as const) {
     await page.emulateMedia({ reducedMotion });
-    await main.evaluate(element => { element.scrollTop = 600; });
+    await main.evaluate(element => {
+      delete element.dataset.requestedScrollBehavior;
+      delete element.dataset.immediateScrollTop;
+      element.scrollTop = 600;
+    });
     await expect.poll(() => main.evaluate(element => element.scrollTop)).toBeGreaterThan(400);
-    await page.getByRole('button', { name: 'Nach oben' }).click();
+    const backToTop = page.getByRole('button', { name: 'Nach oben' });
+    await expect(backToTop).toBeVisible();
+    // On a 320px touch viewport Playwright's pointer action can itself scroll
+    // the fixed target into view before dispatching a click. Keyboard
+    // activation exercises the real handler without that unrelated scroll.
+    await backToTop.evaluate(element => element.focus({ preventScroll: true }));
+    await expect(backToTop).toBeFocused();
+    await expect.poll(() => main.evaluate(element => element.scrollTop)).toBeGreaterThan(400);
+    await page.keyboard.press('Enter');
     await expect(main).toHaveAttribute('data-requested-scroll-behavior', reducedMotion === 'reduce' ? 'instant' : 'smooth');
     if (reducedMotion === 'reduce') await expect(main).toHaveAttribute('data-immediate-scroll-top', '0');
     await expect.poll(() => main.evaluate(element => element.scrollTop)).toBe(0);

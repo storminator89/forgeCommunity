@@ -21,19 +21,19 @@ try to focus inside a closing mobile drawer.
   mobile navigation: the first Escape restores its opener in the drawer; the
   second closes the drawer and restores the header opener.
 - `e2e/quick-search-focus.pw.ts` adds three acceptance cases through the existing
-  CI Chromium projects, at 1280, 320, and 390px. It uses the public About page's
-  real shared shell, keyboard-only traversal, both ends of the search focus
+  CI Chromium projects, at 1280, 320, and 390px. It registers and signs in a
+  synthetic account against disposable SQLite, then uses the authenticated
+  About page's real shared shell. It covers keyboard traversal, both ends of the search focus
   trap, Escape, keyboard activation of visible close, reopening, nested mobile
-  dismissal, and shortcut toggle. It creates no accounts or data and adds no
-  success screenshots. Existing failure screenshots remain enabled.
+  dismissal, and shortcut toggle. The real shell APIs are not mocked and the
+  test adds no success screenshots. Existing failure screenshots remain enabled.
 
 The browser test is deliberately CI-only. Listing it is not execution, and the
 new browser assertions have not been run locally. Run the existing supported
 `browser-qa` CI job on the exact published commit before claiming browser proof.
 DOM tests do not establish screen-reader announcements or WCAG conformance.
 
-## Separate follow-up
-
-Explicit JavaScript `behavior: 'smooth'` calls in community, members, and chat
-remain a reduced-motion candidate. This focused patch does not change scrolling,
-theme, zoom, or unrelated accessibility behavior.
+The same PR also covers reduced-motion scrolling in community, members, and
+chat, with separate DOM and disposable-browser regressions. Browser behavior
+requires the exact-head CI result; the earlier red run exposed two browser
+fixture races and is not acceptance evidence.

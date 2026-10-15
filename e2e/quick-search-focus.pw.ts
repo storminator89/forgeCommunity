@@ -1,15 +1,35 @@
+import { randomUUID } from 'node:crypto';
+import { basename, isAbsolute } from 'node:path';
 import { expect, test } from '@playwright/test';
 
 const origin = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3013';
 
-test('quick search restores keyboard focus after Escape, visible close, and reopening', async ({ page }, testInfo) => {
+test('quick search restores keyboard focus after Escape, visible close, and reopening', async ({ page, request }, testInfo) => {
   test.skip(!process.env.CI, 'Run this browser acceptance only in the supported disposable CI browser job.');
-  expect(process.env.BROWSER_QA_DISPOSABLE_DB).toBe('1');
+  const databasePath = process.env.DATABASE_URL?.startsWith('file:') ? process.env.DATABASE_URL.slice(5) : '';
+  if (process.env.BROWSER_QA_DISPOSABLE_DB !== '1' || process.env.DATABASE_PROVIDER !== 'sqlite' ||
+      !isAbsolute(databasePath) || basename(databasePath) !== 'forge-browser-qa.db') {
+    throw new Error('Quick-search QA requires its disposable SQLite fixture database.');
+  }
   expect(['127.0.0.1', 'localhost', '[::1]']).toContain(new URL(origin).hostname);
-  // The public About page uses the real shared shell without account fixtures
-  // or intercepted APIs. This test performs no data writes.
+  const id = randomUUID();
+  const email = `quick-search-${id}@example.test`;
+  const password = `QuickSearchA1!${id}`;
+  const registration = await request.post(`${origin}/api/register`, {
+    headers: { origin }, data: { name: 'Quick Search Fixture', email, password },
+  });
+  expect(registration.status(), await registration.text()).toBe(201);
+  await page.goto('/login');
+  await page.getByRole('textbox', { name: 'E-Mail-Adresse' }).fill(email);
+  await page.getByLabel('Passwort', { exact: true }).fill(password);
+  await page.getByLabel('Passwort', { exact: true }).press('Enter');
+  await expect(page).toHaveURL(/\/community$/);
+  // About is an authenticated page. A fresh navigation gives the focus-order
+  // assertion the same starting point as a keyboard user opening the page.
   await page.goto('/about');
+  await expect(page).toHaveURL(/\/about$/);
   await expect(page.getByRole('heading', { level: 1, name: 'Gemeinsam lernen und Ideen weiterbringen.' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Benutzermenü öffnen' })).toContainText('QS');
   await page.keyboard.press('Tab');
   await expect(page.getByRole('link', { name: 'Zum Inhalt springen' })).toBeFocused();
 
