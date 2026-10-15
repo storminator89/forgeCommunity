@@ -157,7 +157,7 @@ test('landing, account, community, members, chat, and notifications work on desk
   await peerProfile.click();
   await expect(page.getByRole('heading', { name: peerName, exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Folgen', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Folge ich' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Folge ich', exact: true })).toBeVisible();
   await page.goBack();
   await expect(page.getByRole('heading', { name: 'Mitglieder', exact: true })).toBeVisible();
 
