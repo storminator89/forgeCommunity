@@ -49,6 +49,14 @@ async function insideViewport(page: Page, target: Locator) {
   expect(await page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - innerWidth)).toBeLessThanOrEqual(1);
 }
 
+async function capturePopulatedEditor(page: Page, testInfo: { outputPath: (name: string) => string }, filename: string) {
+  // Real pixels from the disposable course and author account, never an API
+  // mock or hidden/rewritten UI. Save only a viewport, with no auth state.
+  await page.evaluate(async () => { await document.fonts.ready; });
+  await expect(page.getByRole('main')).toHaveCount(1);
+  await page.screenshot({ path: testInfo.outputPath(filename), animations: 'disabled' });
+}
+
 async function createContent(page: Page, courseId: string, title: string, type: 'TEXT' | 'QUIZ', parentId: string | null) {
   const dialog = page.getByRole('dialog', { name: 'Inhalt hinzufügen', exact: true });
   await expect(dialog.getByRole('textbox', { name: 'Titel', exact: true })).toBeFocused();
@@ -100,7 +108,7 @@ test('course author creates nested typed content, rehearses an unsaved quiz and 
   await page.getByLabel('Passwort', { exact: true }).press('Enter');
   await expect(page).toHaveURL(/\/community$/);
 
-  const courseTitle = `LMS QA ${id}`;
+  const courseTitle = 'Lernwerkstatt: Fragen und Antworten';
   const createdCourse = await page.request.post(`${origin}/api/courses`, {
     headers: { origin }, multipart: { title: courseTitle, description: 'Disposable course editor acceptance.' },
   });
@@ -122,6 +130,7 @@ test('course author creates nested typed content, rehearses an unsaved quiz and 
   await form.getByRole('textbox', { name: 'Inhalt', exact: true }).fill('<p>Dieser Lerntext ist gespeichert und sofort sichtbar.</p>');
   await expect(form.getByRole('status').filter({ hasText: /^Lokal ungespeichert$/ })).toBeVisible();
   await saveContent(page, courseId, rootId);
+  await capturePopulatedEditor(page, testInfo, 'course-editor-saved-text.png');
 
   await keyboardActivate(page, page.getByRole('button', { name: `Aktionen für ${rootTitle}`, exact: true }));
   await keyboardActivate(page, page.getByRole('menuitem', { name: 'Unterinhalt hinzufügen', exact: true }));
@@ -180,6 +189,7 @@ test('course author creates nested typed content, rehearses an unsaved quiz and 
   const preview = page.getByRole('dialog', { name: 'Kursvorschau', exact: true });
   await expect(preview.getByRole('status').filter({ hasText: /^Ungespeicherter Entwurf/ })).toBeVisible();
   await expect(preview).toContainText(questionText);
+  await capturePopulatedEditor(page, testInfo, 'course-editor-quiz-preview.png');
   await preview.getByRole('textbox', { name: 'Vorschauantwort zu Frage 1', exact: true }).fill('Nur in der Vorschau');
   await expect(preview.getByRole('status').filter({ hasText: /^1 von 1 Vorschaufragen/ })).toBeVisible();
   await insideViewport(page, preview);
@@ -197,6 +207,7 @@ test('course author creates nested typed content, rehearses an unsaved quiz and 
   expect(courseEvidence(courseId)).toEqual(beforePreview);
 
   await saveContent(page, courseId, quizId);
+  await capturePopulatedEditor(page, testInfo, 'course-editor-saved-quiz.png');
   expect(writes).toEqual([`PUT /api/courses/${courseId}/contents/${quizId}`]);
   const savedQuiz = courseEvidence(courseId);
   const storedQuiz = savedQuiz.contents.find(content => content.id === quizId);
