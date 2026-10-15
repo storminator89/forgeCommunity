@@ -1,5 +1,5 @@
 /** @jest-environment node */
-const { audit, composite, contrast, hslToRgb, luminance, resolveColor, utilityColor } = require('../scripts/check-color-contrast.js');
+const { audit, composite, contrast, hslToRgb, oklchToRgb, luminance, resolveColor, utilityColor } = require('../scripts/check-color-contrast.js');
 
 describe('WCAG sRGB contrast arithmetic', () => {
   it('matches the black/white extrema and the sRGB transfer-function threshold', () => {
@@ -20,7 +20,12 @@ describe('WCAG sRGB contrast arithmetic', () => {
 
   it('uses installed Tailwind colors and mode-specific text utilities', () => {
     expect(resolveColor('white', {})).toEqual([1, 1, 1]);
-    expect(resolveColor('red-500', {})).toEqual([239 / 255, 68 / 255, 68 / 255]);
+    const red500 = resolveColor('red-500', {});
+    [0.98266, 0.17180, 0.21307].forEach((channel, index) => {
+      expect(red500[index]).toBeCloseTo(channel, 4);
+    });
+    oklchToRgb('oklch(0% 0 0)').forEach((channel) => expect(channel).toBeCloseTo(0, 7));
+    oklchToRgb('oklch(100% 0 0)').forEach((channel) => expect(channel).toBeCloseTo(1, 7));
     expect(utilityColor('text-sm text-green-700 dark:text-green-400', 'text', 'light')).toBe('green-700');
     expect(utilityColor('text-sm text-green-700 dark:text-green-400', 'text', 'dark')).toBe('green-400');
   });

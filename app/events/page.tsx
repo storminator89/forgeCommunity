@@ -419,7 +419,7 @@ function ScopedEvents({ session, sessionStatus }: {
         aria-label={`${format(day, 'EEEE, dd. MMMM yyyy', { locale: de })}, ${dayEvents.length} ${dayEvents.length === 1 ? 'Event' : 'Events'}`}
         aria-current={today ? 'date' : undefined}
         className={cn(
-          "min-w-0 bg-card p-1.5 text-left transition-colors hover:bg-accent focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:p-3",
+          "min-w-0 bg-card p-1.5 text-left transition-colors hover:bg-accent focus-visible:z-10 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:p-3",
           week ? "flex min-h-20 items-start gap-4 sm:block sm:h-44" : "h-20 sm:h-32 lg:h-40",
           today && "bg-primary/5"
         )}>
@@ -428,7 +428,7 @@ function ScopedEvents({ session, sessionStatus }: {
         </time>
         <span className={cn("mt-1 min-w-0 space-y-1", week ? "block sm:mt-2" : "hidden sm:block")}>
           {week && <span className="block text-xs text-muted-foreground sm:hidden">{format(day, 'EEEE', { locale: de })}</span>}
-          {dayEvents.slice(0, 2).map(event => <span key={event.id} className="block truncate rounded bg-primary/10 px-1.5 py-1 text-xs font-medium text-primary">{event.startTime ? `${event.startTime} · ` : ''}{event.title}</span>)}
+          {dayEvents.slice(0, 2).map(event => <span key={event.id} className="block truncate rounded-[0.25rem] bg-primary/10 px-1.5 py-1 text-xs font-medium text-primary">{event.startTime ? `${event.startTime} · ` : ''}{event.title}</span>)}
           {dayEvents.length > 2 && <span className="block text-xs text-muted-foreground">+{dayEvents.length - 2} weitere</span>}
           {week && dayEvents.length === 0 && <span className="block text-xs text-muted-foreground sm:hidden">Keine Events</span>}
         </span>
@@ -444,7 +444,7 @@ function ScopedEvents({ session, sessionStatus }: {
         <h2 className="text-center text-base font-semibold sm:text-xl">{format(currentMonth, 'MMMM yyyy', { locale: de })}</h2>
         <Button variant="outline" size="icon" aria-label="Nächster Monat" onClick={handleNextMonth}><ChevronRight className="h-4 w-4" /></Button>
       </div>
-      <div role="group" aria-label="Monatskalender horizontal verschieben" tabIndex={0} className="max-w-full overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
+      <div role="group" aria-label="Monatskalender horizontal verschieben" tabIndex={0} className="max-w-full overflow-x-auto focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
         <div className="grid min-w-[314px] grid-cols-7 gap-px bg-border">
           {['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].map(day => <div key={day} className="bg-card py-2 text-center text-xs font-medium text-muted-foreground">{day}</div>)}
           {Array.from({ length: startingDayIndex }).map((_, index) => <div key={`empty-${index}`} className="h-20 bg-muted/30 sm:h-32 lg:h-40" aria-hidden="true" />)}
@@ -572,7 +572,7 @@ function ScopedEvents({ session, sessionStatus }: {
                       <li key={event.id} className="min-w-0">
                         <button type="button" aria-label={`Details öffnen: ${event.title}, ${format(new Date(event.date), 'dd. MMMM yyyy', { locale: de })}`}
                           onClick={e => handleOpenUpcomingEvent(event, e.currentTarget)}
-                          className="h-full w-full min-w-0 rounded-lg border p-3 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                          className="h-full w-full min-w-0 rounded-lg border p-3 text-left transition-colors hover:bg-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
                           <time dateTime={event.date} className="block text-xs text-muted-foreground">{format(new Date(event.date), 'dd. MMM yyyy', { locale: de })}{event.startTime ? ` · ${event.startTime}` : ''}</time>
                           <span className="mt-1 block break-words font-semibold [overflow-wrap:anywhere]">{event.title}</span>
                           <span className="mt-1 block break-words text-sm text-muted-foreground [overflow-wrap:anywhere]">{event.location}</span>

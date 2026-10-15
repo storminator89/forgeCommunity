@@ -86,6 +86,9 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
+      - name: Verify pinned Next ESLint fork
+        run: npm run test:next-eslint-fork
+
       - name: Typecheck
         run: npm run typecheck
 

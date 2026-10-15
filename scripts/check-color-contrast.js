@@ -27,6 +27,30 @@ function hslToRgb(value) {
   return segments[Math.floor(h) % 6].map((channel) => channel + m);
 }
 
+// Tailwind v4's public colors export uses OKLCH instead of v3's hex palette.
+// Convert to sRGB for the source-level WCAG luminance check below.
+function oklchToRgb(value) {
+  const match = /^oklch\(\s*([\d.]+)%\s+([\d.]+)\s+([\d.]+)\s*\)$/i.exec(value);
+  if (!match) throw new Error(`Unsupported OKLCH color ${value}`);
+  const lightness = Number(match[1]) / 100;
+  const chroma = Number(match[2]);
+  const hue = Number(match[3]) * Math.PI / 180;
+  const a = chroma * Math.cos(hue);
+  const b = chroma * Math.sin(hue);
+  const l = (lightness + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+  const m = (lightness - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+  const s = (lightness - 0.0894841775 * a - 1.2914855480 * b) ** 3;
+  const linear = [
+    4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+    -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s,
+  ];
+  return linear.map((channel) => {
+    const bounded = Math.max(0, Math.min(1, channel));
+    return bounded <= 0.0031308 ? 12.92 * bounded : 1.055 * bounded ** (1 / 2.4) - 0.055;
+  });
+}
+
 function luminance(rgb) {
   const linear = rgb.map((channel) => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
   return linear[0] * 0.2126 + linear[1] * 0.7152 + linear[2] * 0.0722;
@@ -57,6 +81,7 @@ function resolveColor(name, tokens) {
   if (tokens[name]) return tokens[name];
   const [family, shade] = name.split('-');
   let hex = shade ? colors[family]?.[shade] : colors[family];
+  if (typeof hex === 'string' && hex.startsWith('oklch(')) return oklchToRgb(hex);
   if (typeof hex === 'string' && /^#[0-9a-f]{3}$/i.test(hex)) hex = '#' + [...hex.slice(1)].map((digit) => digit + digit).join('');
   if (typeof hex !== 'string' || !/^#[0-9a-f]{6}$/i.test(hex)) throw new Error(`Unsupported color ${name}`);
   return [1, 3, 5].map((offset) => parseInt(hex.slice(offset, offset + 2), 16) / 255);
@@ -135,7 +160,7 @@ function audit() {
   return results;
 }
 
-module.exports = { audit, composite, contrast, hslToRgb, luminance, resolveColor, themes, utilityColor };
+module.exports = { audit, composite, contrast, hslToRgb, oklchToRgb, luminance, resolveColor, themes, utilityColor };
 if (require.main === module) {
   const results = audit();
   if (process.argv.includes('--json')) console.log(JSON.stringify(results, null, 2));

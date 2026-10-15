@@ -131,7 +131,7 @@ export default function KnowledgeBase() {
                   <div role="group" aria-label="Kategorie wählen" className="flex max-w-full gap-1 overflow-x-auto pb-2 lg:block lg:space-y-1 lg:overflow-visible">
                     {categories.map(category => (
                       <button type="button" key={category} aria-pressed={selectedCategory === category} onClick={() => setSelectedCategory(category)}
-                        className={'flex min-h-11 shrink-0 items-center justify-between gap-3 whitespace-nowrap rounded-[10px] px-3 text-left text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:w-full lg:min-w-0 lg:whitespace-normal ' + (selectedCategory === category ? 'bg-accent/70 font-semibold text-foreground' : 'text-muted-foreground')}>
+                        className={'flex min-h-11 shrink-0 items-center justify-between gap-3 whitespace-nowrap rounded-[10px] px-3 text-left text-sm transition-colors hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring lg:w-full lg:min-w-0 lg:whitespace-normal ' + (selectedCategory === category ? 'bg-accent/70 font-semibold text-foreground' : 'text-muted-foreground')}>
                         <span className="min-w-0 break-words [overflow-wrap:anywhere]">{category === 'All' ? 'Alle Kategorien' : category}</span>
                         <span className="tabular-nums text-xs text-muted-foreground">{category === 'All' ? articles.length : articles.filter(article => article.category === category).length}</span>
                       </button>
@@ -147,7 +147,7 @@ export default function KnowledgeBase() {
                   <div role="group" aria-label="Tag wählen" className="mt-2 flex flex-wrap gap-2">
                     {tags.slice(1).map(tag => (
                       <button type="button" key={tag} aria-pressed={selectedTag === tag} onClick={() => setSelectedTag(selectedTag === tag ? 'All' : tag)}
-                        className={'inline-flex min-h-9 max-w-full items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ' + (selectedTag === tag ? 'border-primary bg-accent text-foreground' : 'border-border text-muted-foreground hover:bg-muted')}>
+                        className={'inline-flex min-h-9 max-w-full items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring ' + (selectedTag === tag ? 'border-primary bg-accent text-foreground' : 'border-border text-muted-foreground hover:bg-muted')}>
                         <span className="truncate">{tag}</span><span className="tabular-nums">{articles.filter(article => article.tags.some(item => item.name === tag)).length}</span>
                       </button>
                     ))}
@@ -178,7 +178,7 @@ export default function KnowledgeBase() {
                   <ul className="divide-y">
                     {filteredArticles.map(article => (
                       <li key={article.id} className="min-w-0">
-                        <Link href={'/knowledgebase/' + article.id} className={'group grid min-w-0 gap-5 py-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ' + (article.featuredImage ? 'sm:grid-cols-[minmax(0,1fr)_11rem]' : '')}>
+                        <Link href={'/knowledgebase/' + article.id} className={'group grid min-w-0 gap-5 py-6 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ' + (article.featuredImage ? 'sm:grid-cols-[minmax(0,1fr)_11rem]' : '')}>
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                               <span className="font-semibold uppercase tracking-[0.08em]">{article.category}</span>

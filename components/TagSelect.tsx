@@ -44,7 +44,7 @@ export const TagSelect: React.FC<TagSelectProps> = ({
             type="button"
             onClick={() => onTagRemove(tag)}
             aria-label={`Tag ${tag} entfernen`}
-            className="inline-flex min-h-11 max-w-full items-center gap-2 rounded-full border border-border bg-secondary px-3 py-2 text-sm font-medium text-secondary-foreground transition-colors hover:bg-secondary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="inline-flex min-h-11 max-w-full items-center gap-2 rounded-full border border-border bg-secondary px-3 py-2 text-sm font-medium text-secondary-foreground transition-colors hover:bg-secondary/80 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             <span className="min-w-0 break-all text-left">{tag}</span>
             <X className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -62,7 +62,7 @@ export const TagSelect: React.FC<TagSelectProps> = ({
                 e.target.value = '';
               }
             }}
-            className="h-11 min-w-0 flex-1 rounded-xl border border-input bg-background px-3 py-2 text-base text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            className="h-11 min-w-0 flex-1 rounded-xl border border-input bg-background px-3 py-2 text-base text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             disabled={selectedTags.length >= maxTags}
           >
             <option value="">Tag auswählen...</option>

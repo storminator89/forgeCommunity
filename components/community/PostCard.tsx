@@ -82,7 +82,7 @@ export function PostCard({
       layout
       className="group"
     >
-      <Card className="overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 bg-card border border-border">
+      <Card className="overflow-hidden shadow-xs hover:shadow-md transition-all duration-300 bg-card border border-border">
         <div className="p-6">
           {/* Header */}
           <div className="flex items-start justify-between mb-4">
@@ -135,7 +135,7 @@ export function PostCard({
             {!!post.tags?.length && <ul className="flex flex-wrap gap-2" aria-label="Beitragsthemen">
               {post.tags.map(tag => <li key={tag.id}><a href={`/community?tag=${encodeURIComponent(tag.name)}`}
                 onClick={event => { if (onSelectTopic && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey && event.button === 0) { event.preventDefault(); onSelectTopic(tag.name) } }}
-                className="inline-flex min-h-8 items-center rounded-full border border-border bg-muted/50 px-3 text-xs font-medium text-foreground hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{tag.name}</a></li>)}
+                className="inline-flex min-h-8 items-center rounded-full border border-border bg-muted/50 px-3 text-xs font-medium text-foreground hover:border-primary hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">{tag.name}</a></li>)}
             </ul>}
           </div>
           {post.published !== false && post.acceptedSolution && <section aria-label="Ausgewählte Lösung" className="mt-5 rounded-lg border border-primary/30 bg-primary/5 p-4">

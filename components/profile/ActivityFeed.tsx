@@ -109,7 +109,7 @@ export function ActivityFeed({ userId }: { userId: string }) {
           <li key={`${activity.type}-${activity.id}`} className="grid min-w-0 gap-2 py-5 sm:grid-cols-[7rem_minmax(0,1fr)_auto] sm:gap-5">
             <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">{activityTypes[activity.type]}</span>
             <div className="min-w-0">
-              <Link href={activityHref(activity)} className="break-words font-semibold hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 [overflow-wrap:anywhere]">{activityTitle(activity)}</Link>
+              <Link href={activityHref(activity)} className="break-words font-semibold hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 [overflow-wrap:anywhere]">{activityTitle(activity)}</Link>
               {(activity.content || activity.description) && <p className="mt-1 line-clamp-2 break-words text-sm leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">{sanitizeTextPreview(activity.content || activity.description || '', 220)}</p>}
               {activity.stats && <div className="mt-2 flex flex-wrap gap-4 text-xs text-muted-foreground">
                 {typeof activity.stats.likes === 'number' && <span className="inline-flex items-center gap-1"><ThumbsUp className="h-3.5 w-3.5" aria-hidden="true" />{activity.stats.likes} Likes</span>}

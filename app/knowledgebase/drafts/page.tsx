@@ -202,7 +202,7 @@ function AccountDrafts({ accountId, status }: { accountId: string | null; status
                     <div className={'grid min-w-0 gap-4 ' + (draft.featuredImage ? 'sm:grid-cols-[minmax(0,1fr)_5rem]' : '')}>
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2"><Badge variant="secondary">{draft.category}</Badge><span className="text-xs text-muted-foreground">Entwurf</span></div>
-                        <h3 className="mt-2 min-w-0 break-words text-lg font-semibold tracking-tight [overflow-wrap:anywhere]"><Link href={'/knowledgebase/edit/' + draft.id} className="hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">{draft.title}</Link></h3>
+                        <h3 className="mt-2 min-w-0 break-words text-lg font-semibold tracking-tight [overflow-wrap:anywhere]"><Link href={'/knowledgebase/edit/' + draft.id} className="hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">{draft.title}</Link></h3>
                         <time dateTime={draft.updatedAt} className="mt-2 block text-xs text-muted-foreground">Zuletzt bearbeitet: {formatDate(draft.updatedAt)}</time>
                         {draft.content && <p className="mt-3 line-clamp-2 break-words text-sm leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">{draft.content.replace(/<[^>]*>/g, '')}</p>}
                       </div>

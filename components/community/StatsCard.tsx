@@ -117,6 +117,6 @@ function LearningMilestoneProgress({ completedCourses }: { completedCourses: num
         className="mt-2 h-2 w-full accent-primary"
       >{completedCourses} von {nextTarget}</progress>
     </> : <p className="mt-1 text-sm text-muted-foreground">Alle derzeitigen Lernmeilensteine erreicht.</p>}
-    <Link href="/courses" className="mt-3 inline-block text-sm text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Kurse entdecken</Link>
+    <Link href="/courses" className="mt-3 inline-block text-sm text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Kurse entdecken</Link>
   </div>
 }

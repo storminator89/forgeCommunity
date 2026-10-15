@@ -291,7 +291,7 @@ export function ProfileEditForm({ userId, initialData, onUpdate }: ProfileEditFo
                       </Avatar>
                       <label
                         htmlFor="profile-image"
-                        className="absolute bottom-0 right-0 p-2 bg-card rounded-full shadow-sm cursor-pointer focus-within:ring-2 focus-within:ring-ring"
+                        className="absolute bottom-0 right-0 p-2 bg-card rounded-full shadow-xs cursor-pointer focus-within:ring-2 focus-within:ring-ring"
                       >
                         <Camera className="h-4 w-4" />
                         <input

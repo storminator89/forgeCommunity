@@ -293,7 +293,7 @@ function ChatPageContent() {
                 <div key={channel.id} className="group flex min-w-0 items-center rounded-[10px]">
                   <button
                     type="button"
-                    className={`relative flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-[10px] px-3 py-2 text-left text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${currentChannel?.id === channel.id ? 'bg-accent/70 font-semibold text-foreground before:absolute before:bottom-2 before:left-0 before:top-2 before:w-0.5 before:rounded-full before:bg-primary' : 'text-muted-foreground'}`}
+                    className={`relative flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-[10px] px-3 py-2 text-left text-sm transition-colors hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring ${currentChannel?.id === channel.id ? 'bg-accent/70 font-semibold text-foreground before:absolute before:bottom-2 before:left-0 before:top-2 before:w-0.5 before:rounded-full before:bg-primary' : 'text-muted-foreground'}`}
                     aria-current={currentChannel?.id === channel.id ? 'page' : undefined}
                     onClick={() => { setCurrentChannel(channel); setShowChannelsMobile(false) }}
                   >
@@ -363,7 +363,7 @@ function ChatPageContent() {
                 </div>
               )}
               {displayedMessages.map((message) => (
-                <article id={`chat-message-${message.id}`} tabIndex={-1} key={message.id} className={cn('border-b py-5 first:pt-0', linkedTarget?.messageId === message.id && 'rounded-lg bg-accent/50 px-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring')}>
+                <article id={`chat-message-${message.id}`} tabIndex={-1} key={message.id} className={cn('border-b py-5 first:pt-0', linkedTarget?.messageId === message.id && 'rounded-lg bg-accent/50 px-3 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring')}>
                   <div className="flex min-w-0 items-start gap-3">
                     <Avatar className="h-9 w-9 shrink-0">
                       <AvatarImage src={message.author.image ?? undefined} alt="" />
@@ -407,7 +407,7 @@ function ChatPageContent() {
                               {message.content}
                             </p>
                             {message.imageUrl && (
-                              <button type="button" className="block min-h-11 min-w-11 max-w-lg rounded-[10px] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" aria-label="Nachrichtenbild vergrößern" onClick={() => setSelectedImageForModal(message.imageUrl ?? null)}>
+                              <button type="button" className="block min-h-11 min-w-11 max-w-lg rounded-[10px] text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" aria-label="Nachrichtenbild vergrößern" onClick={() => setSelectedImageForModal(message.imageUrl ?? null)}>
                                   <Image
                                     src={message.imageUrl ?? ''}
                                     alt=""

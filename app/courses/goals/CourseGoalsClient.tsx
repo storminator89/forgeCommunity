@@ -114,7 +114,7 @@ function ScopedCourseGoals() {
       <AppHeader><div className="flex items-center justify-between gap-3"><h1>Mein Lernziel</h1><div className="flex items-center gap-2"><ThemeToggle /><UserNav /></div></div></AppHeader>
       <main id="page-content" tabIndex={-1} className="min-w-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-3xl px-4 pb-16 pt-8 sm:px-6 sm:pt-10">
-          <Link href="/courses" className="text-sm text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Zur Kursübersicht</Link>
+          <Link href="/courses" className="text-sm text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Zur Kursübersicht</Link>
           <div className="mt-6 border-b pb-6">
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">In deinem Tempo</p>
             <h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Ein kleines Ziel für deinen nächsten Lernschritt</h2>
@@ -129,11 +129,11 @@ function ScopedCourseGoals() {
               <p className="text-sm text-muted-foreground">Wähle ein erreichbares Ziel. Nur neue Abschlüsse ab dem Start zählen; du kannst jederzeit pausieren oder das Ziel beenden.</p>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div><label htmlFor="goal-target" className="mb-1.5 block text-sm font-medium">Kursinhalte abschließen</label>
-                  <select ref={targetRef} id="goal-target" value={targetLeaves} onChange={event => setTargetLeaves(Number(event.target.value))} className="h-11 w-full rounded-xl border bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  <select ref={targetRef} id="goal-target" value={targetLeaves} onChange={event => setTargetLeaves(Number(event.target.value))} className="h-11 w-full rounded-xl border bg-background px-3 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
                     <option value={1}>1 Inhalt</option><option value={3}>3 Inhalte</option><option value={5}>5 Inhalte</option>
                   </select></div>
                 <div><label htmlFor="goal-duration" className="mb-1.5 block text-sm font-medium">Zeitraum</label>
-                  <select id="goal-duration" value={durationDays} onChange={event => setDurationDays(Number(event.target.value))} className="h-11 w-full rounded-xl border bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  <select id="goal-duration" value={durationDays} onChange={event => setDurationDays(Number(event.target.value))} className="h-11 w-full rounded-xl border bg-background px-3 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
                     <option value={7}>7 Kalendertage</option><option value={14}>14 Kalendertage</option><option value={28}>28 Kalendertage</option>
                   </select></div>
               </div>
@@ -141,7 +141,7 @@ function ScopedCourseGoals() {
               <Button type="submit" disabled={pending}>{pending ? 'Wird gestartet…' : 'Privates Lernziel starten'}</Button>
             </form>}
             {goal && <div className="mt-5">
-              <p ref={goalStateRef} tabIndex={-1} className="text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{goal.status === 'achieved' ? 'Ziel erreicht' : goal.status === 'paused' ? 'Pausiert' : goal.status === 'ended' ? 'Zeitraum beendet' : 'Du bist unterwegs'}</p>
+              <p ref={goalStateRef} tabIndex={-1} className="text-sm font-medium focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">{goal.status === 'achieved' ? 'Ziel erreicht' : goal.status === 'paused' ? 'Pausiert' : goal.status === 'ended' ? 'Zeitraum beendet' : 'Du bist unterwegs'}</p>
               <p className="mt-2 text-2xl font-semibold tabular-nums">{goal.completedLeaves} von {goal.targetLeaves} {goalNoun}</p>
               <progress className="mt-3 h-3 w-full accent-primary" value={Math.min(goal.completedLeaves, goal.targetLeaves)} max={goal.targetLeaves} aria-label={`Lernziel: ${goal.completedLeaves} von ${goal.targetLeaves} ${goalNoun} abgeschlossen`}>{goal.completedLeaves} von {goal.targetLeaves}</progress>
               <p className="mt-3 text-sm text-muted-foreground">{goal.status === 'paused' ? `Vorläufig bis einschließlich ${dueDate} (${goal.timezone}). Das Enddatum verschiebt sich für jeden pausierten Kalendertag; bestätigtes Lernen zählt auch während der Pause.` : `Bis einschließlich ${dueDate} (${goal.timezone}).`}</p>

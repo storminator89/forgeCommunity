@@ -108,7 +108,7 @@ export function CommentSection({
       transition={{ duration: 0.3 }}
       className="mt-4 space-y-4"
     >
-      <div className="bg-card p-4 rounded-lg shadow-sm border border-border">
+      <div className="bg-card p-4 rounded-lg shadow-xs border border-border">
         <div className="relative flex items-center">
           <Input
             value={newCommentContent}
@@ -138,7 +138,7 @@ export function CommentSection({
       </div>
 
       {(comments || []).map((comment) => (
-        <Card id={`comment-${comment.id}`} key={comment.id} className="bg-card p-3 rounded-lg shadow-sm border border-border">
+        <Card id={`comment-${comment.id}`} key={comment.id} className="bg-card p-3 rounded-lg shadow-xs border border-border">
           <CardContent className="p-0">
             <div className="flex items-center space-x-3 mb-2">
               <Avatar className="h-6 w-6">

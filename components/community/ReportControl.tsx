@@ -67,7 +67,7 @@ export function ReportControl({ targetType, targetId }: {
           <div className="space-y-2">
             <label htmlFor={reasonId} className="text-sm font-medium">Grund</label>
             <select id={reasonId} value={reason} onChange={(event) => setReason(event.target.value as ReportReason)}
-              className="flex h-11 w-full rounded-xl border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              className="flex h-11 w-full rounded-xl border border-input bg-background px-3 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
               {reportReasons.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </div>

@@ -323,7 +323,7 @@ function ScopedUserManagement({ viewerId }: { viewerId: string }) {
         </div>}
         {actionError && <p role="alert" className="rounded-xl border border-destructive/40 p-4 text-sm text-destructive">{actionError}</p>}
         {loadState === 'ready' && (filteredUsers.length ?
-          <div role="region" aria-label="Benutzerliste, horizontal verschiebbar" tabIndex={0} className="max-w-full overflow-x-auto rounded-xl border border-border bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <div role="region" aria-label="Benutzerliste, horizontal verschiebbar" tabIndex={0} className="max-w-full overflow-x-auto rounded-xl border border-border bg-card focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
             <table className="w-full min-w-[690px] text-left text-sm">
               <thead className="border-b border-border bg-muted/40 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><tr>
                 <th scope="col" className="px-4 py-3">Benutzer</th><th scope="col" className="px-4 py-3">Kontakt</th>
@@ -333,7 +333,7 @@ function ScopedUserManagement({ viewerId }: { viewerId: string }) {
               <tbody className="divide-y divide-border">{filteredUsers.map(user => <tr key={user.id} className="hover:bg-muted/40 data-[state=selected]:bg-accent/50" data-state={selectedId === user.id ? 'selected' : undefined}>
                 <td className="px-4 py-3"><div className="flex min-w-0 items-center gap-3">
                   <Avatar className="h-9 w-9 shrink-0"><AvatarImage src={user.image || ''} alt="" /><AvatarFallback>{displayName(user).slice(0, 2).toUpperCase()}</AvatarFallback></Avatar>
-                  <div className="min-w-0"><button type="button" aria-pressed={selectedId === user.id} onClick={() => selectUser(user)} className="max-w-48 break-words rounded text-left font-semibold text-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Details von ${displayName(user)} öffnen`}>{displayName(user)}</button>
+                  <div className="min-w-0"><button type="button" aria-pressed={selectedId === user.id} onClick={() => selectUser(user)} className="max-w-48 break-words rounded-[0.25rem] text-left font-semibold text-foreground underline-offset-2 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Details von ${displayName(user)} öffnen`}>{displayName(user)}</button>
                     {user.title && <p className="max-w-48 break-words text-xs text-muted-foreground">{user.title}</p>}</div>
                 </div></td>
                 <td className="max-w-56 break-all px-4 py-3 text-muted-foreground">{user.email}{user.contact && <p className="mt-1 break-words text-xs">{user.contact}</p>}</td>

@@ -18,7 +18,7 @@ export function PointsAnimation({ points, isVisible, onComplete }: PointsAnimati
   if (!isVisible) return null
 
   return (
-    <div role="status" className="fixed bottom-4 right-4 z-50 rounded-xl border bg-card px-4 py-2 text-sm text-foreground shadow-sm">
+    <div role="status" className="fixed bottom-4 right-4 z-50 rounded-xl border bg-card px-4 py-2 text-sm text-foreground shadow-xs">
       <span className="font-semibold tabular-nums">+{points}</span> Punkte
     </div>
   )

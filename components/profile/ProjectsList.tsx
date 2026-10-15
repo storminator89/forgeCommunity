@@ -144,7 +144,7 @@ export function ProjectsList({ userId, isOwner }: { userId: string; isOwner: boo
           return <li key={project.id} className="grid min-w-0 gap-5 py-6 sm:grid-cols-[minmax(0,1fr)_auto]">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">{project.category && <span className="font-semibold uppercase tracking-[0.08em] text-foreground">{project.category}</span>}<time dateTime={project.createdAt}>{format(new Date(project.createdAt), 'dd. MMM yyyy', { locale: de })}</time></div>
-              <h3 className="mt-2 break-words text-lg font-semibold tracking-tight [overflow-wrap:anywhere]"><Link href={`/projects/${encodeURIComponent(project.id)}`} className="hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">{project.title}</Link></h3>
+              <h3 className="mt-2 break-words text-lg font-semibold tracking-tight [overflow-wrap:anywhere]"><Link href={`/projects/${encodeURIComponent(project.id)}`} className="hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">{project.title}</Link></h3>
               <p className="mt-2 line-clamp-2 break-words text-sm leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">{sanitizeTextPreview(project.description, 200)}</p>
               {project.tags.length > 0 && <div className="mt-3 flex flex-wrap gap-1.5">{project.tags.map(tag => <Badge key={tag} variant="secondary" className="max-w-full break-all">{tag}</Badge>)}</div>}
               <div className="mt-4 flex flex-wrap items-center gap-2">

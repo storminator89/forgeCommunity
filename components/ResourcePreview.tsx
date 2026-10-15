@@ -183,10 +183,10 @@ export function ResourcePreview({ url, type }: ResourcePreviewProps) {
         <div className="space-y-4 w-full px-6">
           <div className="animate-pulse flex space-x-4">
             <div className="flex-1 space-y-4 py-1">
-              <div className="h-4 bg-muted rounded w-3/4"></div>
+              <div className="h-4 bg-muted rounded-[0.25rem] w-3/4"></div>
               <div className="space-y-2">
-                <div className="h-4 bg-muted rounded"></div>
-                <div className="h-4 bg-muted rounded w-5/6"></div>
+                <div className="h-4 bg-muted rounded-[0.25rem]"></div>
+                <div className="h-4 bg-muted rounded-[0.25rem] w-5/6"></div>
               </div>
             </div>
           </div>
@@ -213,7 +213,7 @@ export function ResourcePreview({ url, type }: ResourcePreviewProps) {
         </svg>
         <p className="text-center">{error}</p>
         {safeUrl && <a href={safeUrl} target="_blank" rel="noopener noreferrer"
-          className="mt-4 inline-flex min-h-11 items-center text-primary underline hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="mt-4 inline-flex min-h-11 items-center text-primary underline hover:no-underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           Direkt zur Quelle
         </a>}

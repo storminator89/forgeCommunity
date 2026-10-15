@@ -468,7 +468,7 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
                         href={safeProjectLink}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex min-h-11 min-w-0 max-w-full items-center gap-2 break-all text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        className="inline-flex min-h-11 min-w-0 max-w-full items-center gap-2 break-all text-primary hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       >
                         <ExternalLink className="w-4 h-4 mr-2" />
                         {safeProjectLink}

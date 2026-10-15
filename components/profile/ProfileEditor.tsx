@@ -139,7 +139,7 @@ export function ProfileEditor({ profile, onUpdate }: ProfileEditorProps) {
               href={value}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex min-h-11 items-center gap-2 rounded-[10px] px-3 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="inline-flex min-h-11 items-center gap-2 rounded-[10px] px-3 text-sm font-medium hover:bg-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               {socialIcons[key]}
               <span className="text-sm font-medium">{socialLabels[key]}</span>

@@ -62,7 +62,7 @@ export function TopicNavigation({ selected, onSelect, disabled = false }: { sele
           {topics.map(topic => <li key={topic.id}><a href={`/community?tag=${encodeURIComponent(topic.name)}`}
             aria-current={selected === topic.name ? 'page' : undefined}
             onClick={event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey && event.button === 0) { event.preventDefault(); choose(topic.name) } }}
-            className="inline-flex min-h-9 items-center rounded-full border border-border px-3 text-sm text-foreground hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{topic.name}</a></li>)}
+            className="inline-flex min-h-9 items-center rounded-full border border-border px-3 text-sm text-foreground hover:border-primary hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">{topic.name}</a></li>)}
         </ul> : <p className="text-sm text-muted-foreground">Keine öffentlichen Themen gefunden. Versuche einen anderen Suchbegriff.</p>}
       </>}
       <Button type="button" variant="ghost" size="sm" className="mt-2" onClick={() => setOpen(false)}>Vorschläge schließen</Button>

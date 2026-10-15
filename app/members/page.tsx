@@ -292,7 +292,7 @@ export default function Members() {
                   {Array.from({ length: 6 }).map((_, index) => (
                     <div key={index} className="flex gap-3 border-b py-6">
                       <div className="h-12 w-12 shrink-0 rounded-full bg-muted motion-safe:animate-pulse" />
-                      <div className="flex-1 space-y-3"><div className="h-4 w-2/3 rounded bg-muted motion-safe:animate-pulse" /><div className="h-3 w-1/2 rounded bg-muted motion-safe:animate-pulse" /></div>
+                      <div className="flex-1 space-y-3"><div className="h-4 w-2/3 rounded-[0.25rem] bg-muted motion-safe:animate-pulse" /><div className="h-3 w-1/2 rounded-[0.25rem] bg-muted motion-safe:animate-pulse" /></div>
                     </div>
                   ))}
                 </div>
@@ -304,7 +304,7 @@ export default function Members() {
                 <div className={viewMode === 'grid' ? 'grid min-w-0 gap-x-8 sm:grid-cols-2 xl:grid-cols-3' : 'min-w-0'}>
                   {filteredMembers.map(member => (
                     <Link key={member.id} href={'/profile/' + member.id} aria-label={'Profil von ' + member.name + ' öffnen'}
-                      className="group block min-w-0 border-b py-6 transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                      className="group block min-w-0 border-b py-6 transition-colors hover:bg-muted/40 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
                       <div className="flex min-w-0 items-start gap-3">
                         <Avatar className="h-12 w-12 shrink-0">
                           <AvatarImage src={member.image} alt="" />
@@ -336,7 +336,7 @@ export default function Members() {
             </section>
           </div>
 
-          {showScrollTop && <Button type="button" aria-label="Nach oben" variant="secondary" size="icon" onClick={scrollToTop} className="fixed bottom-6 right-6 z-20 border shadow-sm"><ChevronUp className="h-4 w-4" aria-hidden="true" /></Button>}
+          {showScrollTop && <Button type="button" aria-label="Nach oben" variant="secondary" size="icon" onClick={scrollToTop} className="fixed bottom-6 right-6 z-20 border shadow-xs"><ChevronUp className="h-4 w-4" aria-hidden="true" /></Button>}
         </main>
       </div>
     </AppShell>

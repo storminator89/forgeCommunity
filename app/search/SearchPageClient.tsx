@@ -600,7 +600,7 @@ function SearchPageForViewer({
                                   href={href}
                                   target={external ? '_blank' : undefined}
                                   rel={external ? 'noopener noreferrer' : undefined}
-                                  className="-mx-2 block rounded-lg px-2 py-5 transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                  className="-mx-2 block rounded-lg px-2 py-5 transition-colors hover:bg-muted/50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                                 >
                                   <div className="flex min-w-0 items-start gap-3 sm:gap-4">
                                     {renderAvatar(result)}

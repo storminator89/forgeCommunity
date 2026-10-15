@@ -66,7 +66,7 @@ export default function VerifyCertificate() {
   return (
     <div className="min-h-dvh bg-background text-foreground">
       <a href="#page-content" className="skip-link">Zum Inhalt springen</a>
-      <header className="border-b"><div className="mx-auto flex min-h-20 w-full max-w-[1200px] items-center justify-between gap-3 px-4 sm:px-6 lg:px-8"><Link href="/" className="inline-flex min-h-11 items-center gap-2 rounded-[10px] text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"><ArrowLeft className="h-4 w-4" aria-hidden="true" />ForgeCommunity</Link><ThemeToggle /></div></header>
+      <header className="border-b"><div className="mx-auto flex min-h-20 w-full max-w-[1200px] items-center justify-between gap-3 px-4 sm:px-6 lg:px-8"><Link href="/" className="inline-flex min-h-11 items-center gap-2 rounded-[10px] text-sm font-semibold focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"><ArrowLeft className="h-4 w-4" aria-hidden="true" />ForgeCommunity</Link><ThemeToggle /></div></header>
       <main id="page-content" tabIndex={-1} className="mx-auto w-full max-w-[1200px] px-4 py-10 sm:px-6 sm:py-16 lg:px-8">
         <div className="max-w-3xl border-t pt-7">
           <span className={'flex h-12 w-12 items-center justify-center rounded-[10px] ' + (error || (!loading && !certificate) ? 'bg-destructive/10 text-destructive' : 'bg-accent text-primary')}>{certificate ? <BadgeCheck className="h-6 w-6" aria-hidden="true" /> : error || result ? <CircleAlert className="h-6 w-6" aria-hidden="true" /> : <ShieldCheck className="h-6 w-6" aria-hidden="true" />}</span>

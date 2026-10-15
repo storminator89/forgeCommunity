@@ -253,7 +253,7 @@ function AccountProfilePage({ profileId, accountId, status }: { profileId: strin
                             </div>
                           </li>;
                         })}</ul>
-                        {visibleProfile.isCurrentUser && visibleProfile.badges.some(badge => badge.badgeId === VERIFIED_COURSE_BADGE.id) && <p className="mt-3 text-sm text-muted-foreground">Deine Lern-Auszeichnung sehen andere nur, wenn du der öffentlichen Rangliste zustimmst. <Link href="/settings" className="text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Sichtbarkeit einstellen</Link></p>}
+                        {visibleProfile.isCurrentUser && visibleProfile.badges.some(badge => badge.badgeId === VERIFIED_COURSE_BADGE.id) && <p className="mt-3 text-sm text-muted-foreground">Deine Lern-Auszeichnung sehen andere nur, wenn du der öffentlichen Rangliste zustimmst. <Link href="/settings" className="text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Sichtbarkeit einstellen</Link></p>}
                       </section>}
                       {visibleProfile.role === 'INSTRUCTOR' && hasExpertise && <section aria-labelledby="profile-expertise-title" className="border-t pt-5 md:col-span-2"><h2 id="profile-expertise-title" className="text-xl font-semibold tracking-tight">Expertise</h2><div className="mt-4 grid gap-5 sm:grid-cols-2"><div><h3 className="font-medium">Unterrichtssprachen</h3><div className="mt-2 flex flex-wrap gap-2">{visibleProfile.teachingLanguages?.length ? visibleProfile.teachingLanguages.map(language => <Badge key={language} variant="secondary">{language}</Badge>) : <p className="text-sm text-muted-foreground">Keine angegeben</p>}</div></div><div><h3 className="font-medium">Fachgebiete</h3><div className="mt-2 flex flex-wrap gap-2">{visibleProfile.expertise?.length ? visibleProfile.expertise.map(subject => <Badge key={subject} variant="secondary">{subject}</Badge>) : <p className="text-sm text-muted-foreground">Keine angegeben</p>}</div></div></div></section>}
                     </div>
@@ -264,7 +264,7 @@ function AccountProfilePage({ profileId, accountId, status }: { profileId: strin
               </>
             )}
           </div>
-          {showBackToTop && <Button type="button" variant="outline" size="icon" className="fixed bottom-4 right-4 z-40 bg-background shadow-sm" aria-label="Zurück nach oben" onClick={() => mainRef.current?.scrollTo({ top: 0, behavior: 'auto' })}><ArrowUp className="h-4 w-4" aria-hidden="true" /></Button>}
+          {showBackToTop && <Button type="button" variant="outline" size="icon" className="fixed bottom-4 right-4 z-40 bg-background shadow-xs" aria-label="Zurück nach oben" onClick={() => mainRef.current?.scrollTo({ top: 0, behavior: 'auto' })}><ArrowUp className="h-4 w-4" aria-hidden="true" /></Button>}
         </main>
       </div>
     </AppShell>

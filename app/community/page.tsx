@@ -322,7 +322,7 @@ function Community({ session, topic, onSelectTopic }: { session: Session | null;
               initial={{ opacity: 0, y: -20, x: '-50%' }}
               animate={{ opacity: 1, y: 0, x: '-50%' }}
               exit={{ opacity: 0, y: -20, x: '-50%' }}
-              className={`fixed top-6 left-1/2 transform -translate-x-1/2 max-w-[calc(100vw-2rem)] border bg-card px-4 py-3 rounded-xl shadow-sm z-[100] flex items-center space-x-2 ${notification.type === 'success'
+              className={`fixed top-6 left-1/2 transform -translate-x-1/2 max-w-[calc(100vw-2rem)] border bg-card px-4 py-3 rounded-xl shadow-xs z-[100] flex items-center space-x-2 ${notification.type === 'success'
                 ? 'border-border text-foreground'
                 : 'border-destructive/30 text-destructive'
                 }`}
@@ -362,7 +362,7 @@ function Community({ session, topic, onSelectTopic }: { session: Session | null;
                     <motion.button
                       key="new-post-button"
                       type="button"
-                      className="flex min-h-20 w-full min-w-0 items-center gap-3 rounded-[14px] border border-input bg-card p-4 text-left transition-colors hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      className="flex min-h-20 w-full min-w-0 items-center gap-3 rounded-[14px] border border-input bg-card p-4 text-left transition-colors hover:border-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       aria-label="Neuen Beitrag erstellen"
                       onClick={openComposer}
                     >
@@ -390,7 +390,7 @@ function Community({ session, topic, onSelectTopic }: { session: Session | null;
 
                 <div className="mt-9">
                   <div className="flex flex-wrap items-baseline justify-between gap-3 border-b pb-4">
-                    <h2 id="community-feed-title" tabIndex={-1} className="text-xl font-semibold tracking-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Aktuelle Beiträge</h2>
+                    <h2 id="community-feed-title" tabIndex={-1} className="text-xl font-semibold tracking-tight focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Aktuelle Beiträge</h2>
                     <span className="text-sm tabular-nums text-muted-foreground">{feedCount}</span>
                   </div>
                   <div className="mt-5 space-y-5">

@@ -111,7 +111,7 @@ export default function AdminDashboard() {
               href={href}
               aria-label={`${title} öffnen`}
               aria-describedby={!isLoading ? `metric-${key}` : undefined}
-              className="group min-w-0 rounded-xl p-5 transition-colors hover:bg-muted active:bg-accent focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="group min-w-0 rounded-xl p-5 transition-colors hover:bg-muted active:bg-accent focus-visible:z-10 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               <div className="flex items-center justify-between gap-3 text-sm font-medium">
                 <span className="whitespace-nowrap">{title}</span>

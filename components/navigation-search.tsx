@@ -33,7 +33,7 @@ export function NavigationSearch({ collapsed = false, keyboardShortcut = true, o
       className={`mb-5 flex h-11 w-full items-center gap-2 rounded-[10px] border border-input bg-background px-3 text-sm text-muted-foreground transition-colors hover:border-primary hover:text-foreground ${collapsed ? 'lg:justify-center lg:px-0' : ''}`}>
       <Search className="h-4 w-4 shrink-0" />
       <span className={collapsed ? 'lg:hidden' : ''}>Schnellsuche</span>
-      <kbd className={`ml-auto rounded border px-1.5 py-0.5 text-[11px] ${collapsed ? 'lg:hidden' : ''}`}>⌘/Ctrl K</kbd>
+      <kbd className={`ml-auto rounded-[0.25rem] border px-1.5 py-0.5 text-[11px] ${collapsed ? 'lg:hidden' : ''}`}>⌘/Ctrl K</kbd>
     </button>
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="max-w-lg gap-4 border-input p-5 sm:p-7">

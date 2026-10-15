@@ -135,7 +135,7 @@ export function FollowersList({ userId, count, type }: FollowersListProps) {
                 >
                   <Link
                     href={`/profile/${encodeURIComponent(user.id)}`}
-                    className="flex min-h-11 min-w-0 items-center gap-3 rounded-[10px] p-2 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    className="flex min-h-11 min-w-0 items-center gap-3 rounded-[10px] p-2 hover:bg-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     onClick={() => setIsOpen(false)}
                   >
                     <Avatar>

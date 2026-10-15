@@ -70,7 +70,7 @@ function ReviewForm({ reportId, onReviewed }: { reportId: string; onReviewed: ()
     <div className="space-y-1">
       <label htmlFor={statusId} className="text-sm font-medium">Entscheidung</label>
       <select id={statusId} value={status} onChange={(event) => setStatus(event.target.value as typeof status)}
-        className="flex h-11 w-full rounded-xl border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        className="flex h-11 w-full rounded-xl border border-input bg-background px-3 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
         <option value="DISMISSED">Ohne Maßnahme schließen</option>
         <option value="RESOLVED">Bereits durchgeführte Maßnahme dokumentieren</option>
       </select>
@@ -192,7 +192,7 @@ function ModerationQueueForViewer() {
                     {report.targetTitle && <p className="mt-2 font-medium">{report.targetTitle}</p>}
                     {report.targetPreview && <p className="mt-1 text-sm text-muted-foreground">{report.targetPreview}</p>}
                     <Link href={`/community#${report.targetType === 'POST' ? 'post' : 'comment'}-${report.targetId}`}
-                      className="mt-2 inline-block text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                      className="mt-2 inline-block text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
                       Inhalt in der Community öffnen
                     </Link>
                   </> : <p className="mt-2 text-sm text-muted-foreground">Inhalt ist nicht mehr öffentlich verfügbar.</p>}
