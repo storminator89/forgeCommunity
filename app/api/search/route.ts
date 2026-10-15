@@ -59,9 +59,9 @@ export async function GET(request: NextRequest) {
     const memberWhere = {
       OR: [
         { name: containsInsensitive(query) },
-        { email: containsInsensitive(query) },
         { bio: containsInsensitive(query) },
         { title: containsInsensitive(query) },
+        { skills: { some: { skill: { name: containsInsensitive(query) } } } },
       ],
     };
 
