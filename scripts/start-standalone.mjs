@@ -32,7 +32,7 @@ try {
   await import(serverImport);
 } catch (error) {
   // Readiness errors can include course IDs. Keep startup output aggregate-only.
-  const code = typeof error?.code === 'string' && /^[A-Z0-9_]{1,16}$/.test(error.code) ? error.code : 'unknown';
+  const code = typeof error?.code === 'string' && /^[A-Z0-9_]{1,32}$/.test(error.code) ? error.code : 'unknown';
   console.error('practice_startup', JSON.stringify({ event: 'failed', phase, code }));
   process.exitCode = 1;
 }
