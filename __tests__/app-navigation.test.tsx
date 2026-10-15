@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Sidebar } from '@/components/Sidebar';
 import { AppShell, AppHeader } from '@/components/app-shell';
@@ -70,6 +70,25 @@ it('opens content search with the keyboard shortcut and preserves the query', ()
   fireEvent.change(screen.getByRole('textbox', { name: 'Bereich oder Inhalt suchen' }), { target: { value: 'Power Shell' } });
   fireEvent.submit(screen.getByRole('textbox', { name: 'Bereich oder Inhalt suchen' }).closest('form')!);
   expect(push).toHaveBeenCalledWith('/search?q=Power%20Shell');
+});
+
+it('dismisses nested quick search before the mobile drawer and returns focus one level at a time', async () => {
+  const user = userEvent.setup();
+  render(<AppShell><Sidebar /><div><AppHeader><div>Kurse</div></AppHeader><main id="page-content" /></div></AppShell>);
+  const menu = screen.getByRole('button', { name: 'Navigation öffnen' });
+  await user.click(menu);
+  const drawer = screen.getByRole('dialog', { name: 'Navigation' });
+  const search = within(drawer).getByRole('button', { name: 'Schnellsuche öffnen' });
+  search.focus();
+  await user.keyboard('{Enter}');
+  await waitFor(() => expect(screen.getByRole('textbox', { name: 'Bereich oder Inhalt suchen' })).toHaveFocus());
+  await user.keyboard('{Escape}');
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Schnell zum Ziel' })).not.toBeInTheDocument());
+  expect(drawer).toBeInTheDocument();
+  await waitFor(() => expect(search).toHaveFocus());
+  await user.keyboard('{Escape}');
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  await waitFor(() => expect(menu).toHaveFocus());
 });
 
 it('keeps admin navigation hidden for a regular member', () => {

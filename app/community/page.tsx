@@ -29,6 +29,7 @@ import { useCommunityFeed } from '@/hooks/useCommunityFeed'
 import { usePrivateContributions } from '@/hooks/usePrivateContributions'
 import { CommunityPost as Post, CommunityStats, fetchCommunityJson as fetchWithErrorHandling, isAbortError, mergeCommunityRows } from '@/lib/community-feed'
 import { validTopicName } from '@/lib/community-topics'
+import { getPreferredScrollBehavior } from '@/lib/scroll-behavior'
 
 interface LeaderboardUser {
   name: string
@@ -308,7 +309,7 @@ function Community({ session, topic, onSelectTopic }: { session: Session | null;
   const openComposer = () => {
     setEditingPost(null)
     setIsEditing(true)
-    mainRef.current?.scrollTo?.({ top: 0, behavior: 'smooth' })
+    mainRef.current?.scrollTo?.({ top: 0, behavior: getPreferredScrollBehavior() })
   }
 
   return (
@@ -409,7 +410,7 @@ function Community({ session, topic, onSelectTopic }: { session: Session | null;
                           onEdit={(post) => {
                             setEditingPost(post)
                             setIsEditing(true)
-                            mainRef.current?.scrollTo?.({ top: 0, behavior: 'smooth' })
+                            mainRef.current?.scrollTo?.({ top: 0, behavior: getPreferredScrollBehavior() })
                           }}
                           onSelectTopic={onSelectTopic}
                           onAddComment={handleAddComment}
