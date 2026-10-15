@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { chapterReleaseLabel } from '@/lib/course-release'
 import { cn } from '@/lib/utils'
 import { authoringOutline, CONTENT_TYPE_LABELS } from './authoring-outline'
 import type { CourseContent } from './types'
@@ -78,7 +79,7 @@ export function CourseAuthoringOutline({ contents, selectedContentId, onContentS
                 {entry.childCount > 0 ? <Button type="button" variant="ghost" size="icon" className="h-11 w-11 shrink-0" aria-label={`${expanded ? 'Einklappen' : 'Aufklappen'}: ${content.title}`} aria-expanded={expanded} onClick={() => setCollapsed(previous => { const next = new Set(previous); if (next.has(content.id)) next.delete(content.id); else next.add(content.id); return next })}><ChevronRight className={cn('h-4 w-4', expanded && 'rotate-90')} aria-hidden="true" /></Button> : <span className="flex h-11 w-11 shrink-0 items-center justify-center"><Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" /></span>}
                 <button type="button" disabled={blocked} aria-current={selectedContentId === content.id ? 'page' : undefined} title={entry.path.join(' / ')} className="min-h-11 min-w-0 flex-1 rounded-md px-1 py-1 text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50" onClick={() => request(() => onContentSelect(content.id))}>
                   <span className="mb-1 block truncate text-xs tabular-nums text-muted-foreground" aria-label={`Position ${entry.position}`}>{entry.position}</span>
-                  <span className="line-clamp-2 break-words text-sm font-medium [overflow-wrap:anywhere]">{content.title}</span>
+                  <span className="line-clamp-2 break-words text-sm font-medium [overflow-wrap:anywhere]">{content.title}</span>{content.releaseOn && <span className="mt-1 block text-xs text-muted-foreground">Ab {chapterReleaseLabel(content.releaseOn)}</span>}
                   <span className="mt-1 block text-xs text-muted-foreground">{CONTENT_TYPE_LABELS[entry.type]}{entry.childCount ? ` · ${entry.childCount} Untereinträge` : ` · ${entry.readinessLabel}`}</span>
                 </button>
                 <DropdownMenu><DropdownMenuTrigger asChild><Button id={`outline-actions-${content.id}`} type="button" variant="ghost" size="icon" className="h-11 w-11 shrink-0" disabled={blocked} aria-label={`Aktionen für ${content.title}`}><MoreHorizontal className="h-4 w-4" aria-hidden="true" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="max-w-[calc(100vw-2rem)]">

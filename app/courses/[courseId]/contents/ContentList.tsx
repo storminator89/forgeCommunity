@@ -5,6 +5,7 @@ import { CourseContent } from './types'
 import { FileText, ChevronUp, ChevronDown, ChevronRight, Pen, Trash2, CheckCircle, Check, X, Plus, LockKeyhole } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { chapterReleaseLabel } from '@/lib/course-release'
 import { cn } from "@/lib/utils"
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog"
 
@@ -71,7 +72,7 @@ export function ContentList(props: ContentListProps) {
                   <Input autoFocus aria-label={`Titel von ${content.title}`} value={inlineEditTitle} onChange={event => setInlineEditTitle(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); if (!busy) cancelRename(); } }} disabled={busy} className="text-sm" />
                   <div className="mt-1 flex gap-1"><Button type="submit" variant="ghost" size="sm" className="gap-1" disabled={busy || !inlineEditTitle.trim()}><Check className="h-4 w-4" />Speichern</Button><Button type="button" variant="ghost" size="sm" className="gap-1" disabled={busy} onClick={cancelRename}><X className="h-4 w-4" />Abbrechen</Button></div>
                 </form>
-              ) : <button type="button" className="min-h-11 min-w-0 flex-1 rounded-[0.25rem] px-1 text-left text-sm font-medium text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring" aria-current={selectedContentId === content.id ? 'page' : undefined} onClick={() => onContentSelect(content.id)}><span className="line-clamp-2 break-words [overflow-wrap:anywhere]">{content.title}</span>{content.locked && <span className="block text-xs font-normal text-muted-foreground">Gesperrt · Voraussetzung offen</span>}{!content.locked && completed && <span className="sr-only"> · Abgeschlossen</span>}</button>}
+              ) : <button type="button" className="min-h-11 min-w-0 flex-1 rounded-[0.25rem] px-1 text-left text-sm font-medium text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring" aria-current={selectedContentId === content.id ? 'page' : undefined} onClick={() => onContentSelect(content.id)}><span className="line-clamp-2 break-words [overflow-wrap:anywhere]">{content.title}</span>{content.locked && <span className="block text-xs font-normal text-muted-foreground">{completed && 'Abgeschlossen · '}{content.releaseLocked && content.releaseOn ? `Zugriff ab ${chapterReleaseLabel(content.releaseOn)}` : 'Gesperrt · Voraussetzung offen'}</span>}{!content.locked && completed && <span className="sr-only"> · Abgeschlossen</span>}</button>}
             </div>
             {canManage && isInlineEditing !== content.id && <div className="mt-1 flex flex-wrap justify-end gap-1">
               {onMoveUp && (mainContentId || allowRootReorder) && <Button variant="ghost" size="icon" disabled={busy || index === 0} aria-label={`${content.title} nach oben verschieben`} onClick={() => void runMutation(() => onMoveUp(mainContentId, content.id))}><ChevronUp className="h-4 w-4" /></Button>}

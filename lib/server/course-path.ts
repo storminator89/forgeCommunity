@@ -1,4 +1,5 @@
 import 'server-only';
+import { chapterIsReleased, chapterReleaseDates, isChapterReleaseDate } from '@/lib/course-release';
 
 export type PathNode = {
   id: string;
@@ -6,6 +7,7 @@ export type PathNode = {
   order: number;
   title: string;
   prerequisiteIds?: string[];
+  releaseOn?: string;
 };
 
 export class CoursePathError extends Error {
@@ -37,6 +39,9 @@ export function validateCoursePath(nodes: PathNode[]): void {
   visit(null);
   if (position.size !== nodes.length) throw new CoursePathError('Unvollständige Kursstruktur.', 409);
   for (const node of nodes) {
+    if (node.releaseOn !== undefined && (node.parentId !== null || !isChapterReleaseDate(node.releaseOn))) {
+      throw new CoursePathError('Freigabedatum muss ein gültiges Datum (JJJJ-MM-TT) auf der obersten Ebene sein.', 409);
+    }
     const prerequisites = node.prerequisiteIds ?? [];
     if (!Array.isArray(prerequisites) || prerequisites.length > 20 ||
         prerequisites.some(id => typeof id !== 'string') || new Set(prerequisites).size !== prerequisites.length ||
@@ -82,8 +87,9 @@ export function publicationPathNodes(payload: string): PathNode[] {
 }
 
 /** Validate once for a published path and reuse the evaluator across a learner cohort. */
-export function prepareCoursePath(nodes: PathNode[]) {
+export function prepareCoursePath(nodes: PathNode[], now = Date.now()) {
   validateCoursePath(nodes);
+  const releases = chapterReleaseDates(nodes);
   const byId = new Map(nodes.map(node => [node.id, node]));
   const byParent = new Map<string | null, PathNode[]>();
   for (const node of nodes) {
@@ -102,11 +108,15 @@ export function prepareCoursePath(nodes: PathNode[]) {
   return (rawCompletedIds: Iterable<string>) => {
     const rawCompleted = new Set(rawCompletedIds);
     const completed = new Set<string>();
-    // Earlier-only edges guarantee this outline is a topological order.
+    // Earlier-only edges guarantee a topological order. A date controls current
+    // access, never already earned, current-revision credit. Callers supply
+    // authoritative progress/grade proof; new work still uses the locked gate.
     for (const node of outline) if (rawCompleted.has(node.id) &&
         (node.prerequisiteIds ?? []).every(id => completed.has(id))) completed.add(node.id);
     return new Map(nodes.map(node => [node.id, {
-      locked: !(node.prerequisiteIds ?? []).every(id => completed.has(id)),
+      locked: !chapterIsReleased(releases.get(node.id) ?? null, now) || !(node.prerequisiteIds ?? []).every(id => completed.has(id)),
+      releaseOn: releases.get(node.id) ?? null,
+      releaseLocked: !chapterIsReleased(releases.get(node.id) ?? null, now),
       prerequisiteIds: node.prerequisiteIds ?? [],
       missingPrerequisites: (node.prerequisiteIds ?? []).filter(id => !completed.has(id)).map(id => ({ id, title: byId.get(id)!.title })),
       completed: completed.has(node.id),
@@ -115,6 +125,6 @@ export function prepareCoursePath(nodes: PathNode[]) {
 }
 
 /** Call with authoritative current-revision completion IDs, including graded work. */
-export function coursePathAccess(nodes: PathNode[], rawCompletedIds: Iterable<string>) {
-  return prepareCoursePath(nodes)(rawCompletedIds);
+export function coursePathAccess(nodes: PathNode[], rawCompletedIds: Iterable<string>, now = Date.now()) {
+  return prepareCoursePath(nodes, now)(rawCompletedIds);
 }

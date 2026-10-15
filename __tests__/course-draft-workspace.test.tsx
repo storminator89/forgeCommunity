@@ -63,7 +63,7 @@ beforeEach(() => {
   server = initial(); failNextPatch = null; reviewReady = true; onLiveMode.mockClear()
   mockFetch = jest.fn(async (input: string, options: RequestInit = {}) => {
     if (input.endsWith('/authoring/assets')) return result({ id: 'asset-1', url: '/api/courses/course/assets/asset-1', mimeType: 'image/png', size: 3 }, 201)
-    if (input.endsWith('/authoring/review?expectedRevision=2&expectedActivePublicationId=pub-1') || input.includes('/authoring/review?')) return result({ ready: reviewReady, blockers: reviewReady ? [] : ['Der Inhalt ist unvollständig.'], revision: server.draft.revision, digest: server.draft.digest, activePublicationId: server.activePublication?.id ?? null, impact: { added: [], removed: [], changed: ['a'], renamedOrReordered: [], enrolledLearners: 3, completionMayChange: true, rewardsMayChange: false, issuedCertificatesStayValid: true } })
+    if (input.endsWith('/authoring/review?expectedRevision=2&expectedActivePublicationId=pub-1') || input.includes('/authoring/review?')) return result({ ready: reviewReady, blockers: reviewReady ? [] : ['Der Inhalt ist unvollständig.'], revision: server.draft.revision, digest: server.draft.digest, activePublicationId: server.activePublication?.id ?? null, impact: { added: [], removed: [], changed: ['a'], renamedOrReordered: [], releaseScheduleChanged: server.draft.payload.contents[0]?.releaseOn ? [{ id: 'a', title: 'Kapitel', before: null, after: server.draft.payload.contents[0].releaseOn }] : [], enrolledLearners: 3, completionMayChange: true, rewardsMayChange: false, issuedCertificatesStayValid: true } })
     if (input.endsWith('/authoring/publish')) {
       server = { ...server, activePublication: { id: 'pub-2', sequence: 2, digest: server.draft.digest } }
       return result({ publication: server.activePublication, unchanged: false })
@@ -75,6 +75,7 @@ beforeEach(() => {
       const body = JSON.parse(String(options.body))
       const payload = JSON.parse(JSON.stringify(server.draft.payload))
       if (body.operation.kind === 'setMetadata') Object.assign(payload, body.operation.patch)
+      if (body.operation.kind === 'setReleaseOn') { const node = payload.contents.find((node: { id: string }) => node.id === body.operation.id); if (body.operation.releaseOn === null) delete node.releaseOn; else node.releaseOn = body.operation.releaseOn }
       if (body.operation.kind === 'updateNode') Object.assign(payload.contents.find((node: { id: string }) => node.id === body.operation.id), body.operation.patch)
       if (body.operation.kind === 'insertNode') payload.contents.push({ ...body.operation.node, parentId: body.operation.parentId, order: 3 })
       server = { ...server, draft: { revision: server.draft.revision + 1, digest: `draft-${server.draft.revision + 1}`, payload } }
@@ -200,4 +201,50 @@ test('shows the practice authoring entry only for an instructor or administrator
   expect(screen.queryByRole('button', { name: 'Übungspool' })).not.toBeInTheDocument()
   view.rerender(<CourseDraftWorkspace courseId="course" initialState={server} onLiveMode={onLiveMode} canAuthorPractice />)
   expect(screen.getByRole('button', { name: 'Übungspool' })).toBeVisible()
+})
+
+
+test('stages explicit UTC chapter dates, guards unsaved scheduling and reviews effective changes before publishing', async () => {
+  history.replaceState({}, '', '/courses/course/contents?content=a')
+  render(<CourseDraftWorkspace courseId="course" initialState={server} onLiveMode={onLiveMode} />)
+  const date = screen.getByLabelText('Freigabedatum · 00:00 UTC')
+  fireEvent.change(date, { target: { value: '2026-11-01' } })
+  expect(mockFetch).not.toHaveBeenCalled()
+  expect(screen.getByRole('button', { name: 'Änderungen veröffentlichen' })).toBeDisabled()
+  const unload = new Event('beforeunload', { cancelable: true })
+  window.dispatchEvent(unload)
+  expect(unload.defaultPrevented).toBe(true)
+  fireEvent.click(screen.getByRole('button', { name: 'Lernen' }))
+  const guard = within(await screen.findByRole('alertdialog'))
+  expect(guard.getByRole('heading', { name: 'Ungespeicherte Änderungen' })).toBeInTheDocument()
+  fireEvent.click(guard.getByRole('button', { name: 'Weiter bearbeiten' }))
+  expect(onLiveMode).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole('button', { name: 'Freigabe speichern' }))
+  await screen.findByText('Freigabe im Entwurf gespeichert.')
+  expect(mockFetch).toHaveBeenCalledWith('/api/courses/course/authoring', expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ expectedRevision: 2, operation: { kind: 'setReleaseOn', id: 'a', releaseOn: '2026-11-01' } }) }))
+  expect(server.activePublication?.id).toBe('pub-1')
+  fireEvent.click(screen.getByRole('button', { name: 'Änderungen veröffentlichen' }))
+  const review = within(await screen.findByRole('dialog'))
+  expect(await review.findByText('Geänderte Freigaben · jeweils 00:00 UTC:')).toBeInTheDocument()
+  expect(review.getByText('Kapitel: sofort → 01.11.2026 · 00:00 UTC')).toBeInTheDocument()
+  expect(mockFetch.mock.calls.some(([url]) => String(url).endsWith('/publish'))).toBe(false)
+})
+
+test('retains an unsaved date when the same chapter body is saved first, including a failed date save', async () => {
+  history.replaceState({}, '', '/courses/course/contents?content=a')
+  render(<CourseDraftWorkspace courseId="course" initialState={server} onLiveMode={onLiveMode} />)
+  fireEvent.change(screen.getByLabelText('Freigabedatum · 00:00 UTC'), { target: { value: '2026-11-01' } })
+  fireEvent.change(screen.getByLabelText('Inhaltstitel'), { target: { value: 'Neuer Titel' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Entwurf speichern' }))
+  await screen.findByText('Entwurf gespeichert. Für Lernende noch nicht sichtbar.')
+  expect(screen.getByLabelText('Freigabedatum · 00:00 UTC')).toHaveValue('2026-11-01')
+  expect(screen.getByRole('button', { name: 'Änderungen veröffentlichen' })).toBeDisabled()
+  failNextPatch = 500
+  fireEvent.click(screen.getByRole('button', { name: 'Freigabe speichern' }))
+  await screen.findByRole('alert')
+  expect(screen.getByLabelText('Freigabedatum · 00:00 UTC')).toHaveValue('2026-11-01')
+  expect(screen.getByRole('button', { name: 'Freigabe speichern' })).toBeEnabled()
+  fireEvent.click(screen.getByRole('button', { name: 'Freigabe speichern' }))
+  await screen.findByText('Freigabe im Entwurf gespeichert.')
+  expect(server.draft.payload.contents[0].releaseOn).toBe('2026-11-01')
 })

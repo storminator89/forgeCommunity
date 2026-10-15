@@ -128,7 +128,11 @@ export async function revokeCourseRewards(tx: Prisma.TransactionClient, courseId
   }
 }
 
-/** One durable event key; each state transition has a separate append-only explanation. */
+/**
+ * One durable event key; each state transition has an append-only explanation.
+ * The shared completion evaluator preserves earned, current-revision credit
+ * across date-only reschedules, so midnight requires no ledger transition.
+ */
 export async function reconcileLearnerCourseReward(tx: Prisma.TransactionClient, userId: string, courseId: string) {
   const [user, course, enrollment] = await Promise.all([
     tx.user.findUnique({ where: { id: userId }, select: { role: true, isTestAccount: true } }),

@@ -6,7 +6,7 @@ import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
 import { completionState, contentQuiz, courseContentRevision, isQuizLikeContent, matchesContentVersionToken, recordCourseCompletion } from '@/lib/server/course-progress';
 import { contentTransaction } from '../contents/content-mutations';
 import { hasCurrentAdminReadAccess } from '@/lib/server/read-access';
-import { assertCurrentPrerequisites, CoursePathError } from '@/lib/server/course-prerequisites';
+import { assertCurrentChapterRelease, assertCurrentPrerequisites, CoursePathError } from '@/lib/server/course-prerequisites';
 
 type Params = { params: Promise<{ courseId: string }> };
 
@@ -23,7 +23,7 @@ export async function GET(_request: NextRequest, props: Params) {
       if (!course.activePublicationId && !isEditor) return { status: 404 as const };
       if (!enrollment && !isEditor) return { status: 403 as const };
       const certificate = await tx.certificate.findFirst({ where: { userId: session.user.id, courseId }, select: { id: true } });
-      const progress = enrollment && course.activePublicationId ? await completionState(tx, session.user.id, courseId) : { completedContentIds: [], complete: false };
+      const progress = enrollment && course.activePublicationId ? await completionState(tx, session.user.id, courseId) : { completedContentIds: [], complete: false, canIssueCertificate: false };
       return { status: 200 as const, payload: { ...progress, canTrack: Boolean(enrollment && course.activePublicationId),
         hasCertificate: Boolean(certificate), completedAt: enrollment?.completedAt ?? null, publicationId: course.activePublicationId } };
     });
@@ -67,6 +67,9 @@ export async function PATCH(request: NextRequest, props: Params) {
           });
         }
       } else {
+        // Undo may remove prerequisite-invalid credit, but even a current
+        // author-preview token must not mutate learner progress under a date lock.
+        await assertCurrentChapterRelease(tx, courseId, content.id, course.activePublicationId);
         await tx.courseContentProgress.deleteMany({ where: { userId: session.user.id, courseId, contentId: content.id } });
       }
       return { status: 200 as const, progress: await recordCourseCompletion(tx, session.user.id, courseId) };

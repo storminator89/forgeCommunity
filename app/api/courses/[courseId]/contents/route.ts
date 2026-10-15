@@ -65,10 +65,12 @@ export async function GET(
         const path = pathById.get(content.id);
         const gate = access?.get(content.id);
         if (!isEditor && !path) throw new CoursePathError('Published course contents do not match the active publication', 409);
-        if (isEditor) return { ...presented, prerequisiteIds: path?.prerequisiteIds ?? [] };
+        if (isEditor) return { ...presented, prerequisiteIds: path?.prerequisiteIds ?? [], releaseOn: path?.releaseOn ?? null };
         if (gate?.locked) return { ...presented, content: '', contentVersionToken: null,
-          locked: true, prerequisiteIds: gate.prerequisiteIds, missingPrerequisites: gate.missingPrerequisites };
+          locked: true, releaseOn: gate.releaseOn, releaseLocked: gate.releaseLocked,
+          prerequisiteIds: gate.prerequisiteIds, missingPrerequisites: gate.missingPrerequisites };
         return { ...publicCourseContent(presented), locked: false,
+          releaseOn: gate?.releaseOn ?? null, releaseLocked: false,
           prerequisiteIds: gate?.prerequisiteIds ?? [], missingPrerequisites: [] };
       }));
     });

@@ -24,3 +24,14 @@ Members can also opt into **one private learning goal** from Courses: finish 1, 
 The badge is available to its eligible owner through the authenticated profile API. Other signed-in members see this learning badge in profile/search responses only when its owner has `publicRankingOptIn = true`; unrelated existing badges keep their previous visibility. Search fetches one extra badge before filtering so hiding the private award cannot displace an unrelated displayed badge. The profile UI renders only the badges provided by that API and explains the learning badge's opt-in visibility to its owner. The public leaderboard still depends only on opted-in active points. No email, push, or external badge delivery is configured.
 
 Schema changes are in PostgreSQL upgrade `0004_reward_ledger.sql` and SQLite migration `0005_reward_ledger.sql`, after the progress and report upgrades. The guarded demo seed explicitly marks Alice and Bob as test accounts when it creates or updates them; migrations leave existing accounts unclassified instead of guessing from an email address. Administrators can explicitly flag legacy test accounts. New accounts default to non-test. A deployment must apply the full ordered, checksummed migration history before starting the new server. Local verification covered fresh SQLite installation, upgrade from a clean main-schema database, repeat no-op deployment, checksum and foreign-key checks, Prisma validation for both providers, unit/UI tests, and authenticated production HTTP flows including concurrent duplicate submissions, quiz revision/reapproval, certificate retention, and deletion cascades. PostgreSQL execution requires a PostgreSQL service in CI or the deployment environment; none was available locally.
+
+
+Chapter calendar releases control access and new learner work, independently of
+already earned credit. A date-only publication retains current-revision progress,
+valid assignment grades, reward ledger/badge/pathway credit and their timestamps;
+midnight causes no revoke/reinstate transition and needs no scheduler. Authorized
+staff may grade an assignment submitted before a later date lock, crediting that
+prior work when valid. Changed content, prerequisites, grades, account eligibility
+or reward approval still revalidate normally. New certificate issuance additionally
+waits for all chapter releases; existing historical certificates remain available.
+See [chapter releases](CHAPTER-RELEASES.md).

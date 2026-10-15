@@ -55,6 +55,8 @@ export interface CourseContent {
   publicationId?: string | null;
   contentVersionToken?: string | null;
   prerequisiteIds?: string[];
+  releaseOn?: string | null;
+  releaseLocked?: boolean;
   locked?: boolean;
   missingPrerequisites?: Array<{ id: string; title: string }>;
 }
@@ -74,6 +76,7 @@ export interface LearnerQuizContent {
 export interface CourseProgressSnapshot {
   completedContentIds: string[];
   complete: boolean;
+  canIssueCertificate?: boolean;
   canTrack: boolean;
   hasCertificate: boolean;
   completedAt: string | null;

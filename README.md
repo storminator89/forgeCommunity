@@ -92,7 +92,7 @@ inside the preview and do not record a learner attempt or completion.
 | Community | Posts and replies, topic filters, likes, bounded feed/comment pagination, author-selected solutions, and reporting | `/community` |
 | Members | Search/filter, grid/list views, profiles, following, and skill endorsements | `/members`, `/profile/[id]` |
 | Courses | Private course drafts, review/publish/version restore, free self-enrollment with capacity checks, nested text/video/audio/H5P/quiz lessons, revision-aware progress, and completion-gated certificate downloads | `/courses`, `/courses/authoring`, `/courses/new`, `/courses/[courseId]/contents` |
-| Course tools | Private versioned quiz-question bank, assignments with instructor grading, and bounded course analytics/CSV export | `/courses/[courseId]/contents`, `/courses/[courseId]/grading`, `/courses/[courseId]/analytics` |
+| Course tools | Private versioned quiz-question bank, assignments with instructor grading, UTC chapter release dates, and bounded course analytics/CSV export | `/courses/[courseId]/contents`, `/courses/[courseId]/grading`, `/courses/[courseId]/analytics` |
 | Formative practice | Private, versioned instructor-owned single-choice pool; separate course-bound publication; enrolled learner opt-in, recall sessions, corrective feedback, and private controls | `/courses/[courseId]/practice`, `/courses/[courseId]/practice/learn` |
 | Learning pathways | Administrator-curated course sequences with private, opt-in participation and current-credit badges | `/courses/pathways`, `/courses/pathways/[pathwayId]`, `/admin/learning-pathways` |
 | Personal learning | Optional private learning goals, completion milestones, and course-reward history; administrator-approved quiz learning can qualify for a verified-learning badge and opt-in ranking | `/courses/goals`, community reward panels, profiles |
@@ -120,6 +120,11 @@ every App Router page, including redirects.
   discoverable or enrollable before its first publication. Changed lesson bodies
   must be completed again in the current version, while earlier activity and
   issued certificates remain.
+- Top-level chapters can have a shared calendar release date at 00:00 UTC.
+  Descendants inherit it; draft changes take effect only after publication.
+  Earned same-revision completion/rewards stay credited; new work and new
+  certificates wait for release. Issued certificates remain valid. Course
+  start/end dates remain metadata. See [chapter releases](docs/CHAPTER-RELEASES.md).
 - Formative practice starts off. An author must publish a separate pool for the
   active course publication, and each enrolled learner must opt in before any
   practice session starts. A new course publication needs its own matching

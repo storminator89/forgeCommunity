@@ -13,9 +13,10 @@ import { prepareContent } from '@/app/api/courses/[courseId]/contents/content-mu
 import { sanitizeTextServer } from '@/lib/server/sanitize-html';
 import { getSafeNavigationUrl } from '@/lib/security';
 import { CoursePathError, validateCoursePath } from '@/lib/server/course-path';
+import { chapterReleaseDates, isChapterReleaseDate } from '@/lib/course-release';
 
 export type Author = { id: string; role?: string | null };
-export type DraftNode = { id: string; parentId: string | null; title: string; type: 'TEXT' | 'VIDEO' | 'AUDIO' | 'H5P' | 'QUIZ' | 'ASSIGNMENT' | null; content: string; order: number; prerequisiteIds?: string[] };
+export type DraftNode = { id: string; parentId: string | null; title: string; type: 'TEXT' | 'VIDEO' | 'AUDIO' | 'H5P' | 'QUIZ' | 'ASSIGNMENT' | null; content: string; order: number; prerequisiteIds?: string[]; releaseOn?: string };
 export type CoursePayload = { schemaVersion: 1; title: string; description: string; startDate: string | null; endDate: string | null; imageUrl: string | null; contents: DraftNode[] };
 export type AuthorOperation =
   | { kind: 'setMetadata'; patch: Partial<Pick<CoursePayload, 'title' | 'description' | 'startDate' | 'endDate' | 'imageUrl'>> }
@@ -23,6 +24,7 @@ export type AuthorOperation =
   | { kind: 'updateNode'; id: string; patch: Partial<Pick<DraftNode, 'title' | 'type' | 'content'>> }
   | { kind: 'moveNode'; id: string; parentId: string | null; afterId: string | null }
   | { kind: 'setPrerequisites'; id: string; prerequisiteIds: string[] }
+  | { kind: 'setReleaseOn'; id: string; releaseOn: string | null }
   | { kind: 'deleteNode'; id: string };
 
 const MAX_NODES = 500;
@@ -105,7 +107,8 @@ function canonical(payload: CoursePayload): CoursePayload {
     schemaVersion: 1, title: payload.title, description: payload.description,
     startDate: payload.startDate, endDate: payload.endDate, imageUrl: payload.imageUrl,
     contents: payload.contents.map(node => ({ id: node.id, parentId: node.parentId, title: node.title, type: node.type, content: node.content, order: node.order,
-      ...(node.prerequisiteIds !== undefined && { prerequisiteIds: [...node.prerequisiteIds] }) })),
+      ...(node.prerequisiteIds !== undefined && { prerequisiteIds: [...node.prerequisiteIds] }),
+      ...(node.releaseOn !== undefined && { releaseOn: node.releaseOn }) })),
   };
 }
 
@@ -184,6 +187,12 @@ function operationFromUnknown(value: unknown): AuthorOperation {
     }
     return op as AuthorOperation;
   }
+  if (op.kind === 'setReleaseOn') {
+    if (!validId(op.id) || (op.releaseOn !== null && !isChapterReleaseDate(op.releaseOn))) {
+      throw new AuthoringError('Ungültiges Freigabedatum. Verwende JJJJ-MM-TT (00:00 UTC).');
+    }
+    return op as AuthorOperation;
+  }
   if (op.kind === 'deleteNode' && validId(op.id)) return op as AuthorOperation;
   throw new AuthoringError('Ungültige Entwurfsänderung.');
 }
@@ -223,6 +232,9 @@ function applyOperation(payload: CoursePayload, operation: AuthorOperation): Cou
     const destination = operation.parentId;
     if (node.id === destination || node.id === operation.afterId) throw new AuthoringError('Ein Inhalt kann nicht auf sich selbst verschoben werden.');
     insertAt(next.contents, node, destination, operation.afterId);
+    // A moved chapter inherits its destination root, including an immediate
+    // release. Never leave a hidden date on a non-root for a later move back.
+    if (destination !== null) delete node.releaseOn;
     if (oldParent !== destination) {
       next.contents.filter(row => row.parentId === oldParent).sort((a, b) => a.order - b.order || a.id.localeCompare(b.id)).forEach((row, index) => { row.order = index + 1; });
     }
@@ -230,6 +242,12 @@ function applyOperation(payload: CoursePayload, operation: AuthorOperation): Cou
     const node = next.contents.find(row => row.id === operation.id);
     if (!node) throw new AuthoringError('Inhalt nicht gefunden.', 404);
     node.prerequisiteIds = [...operation.prerequisiteIds];
+  } else if (operation.kind === 'setReleaseOn') {
+    const node = next.contents.find(row => row.id === operation.id);
+    if (!node) throw new AuthoringError('Inhalt nicht gefunden.', 404);
+    if (node.parentId !== null) throw new AuthoringError('Die Freigabe wird im Kapitel der obersten Ebene festgelegt.');
+    if (operation.releaseOn === null) delete node.releaseOn;
+    else node.releaseOn = operation.releaseOn;
   } else {
     if (!next.contents.some(row => row.id === operation.id)) throw new AuthoringError('Inhalt nicht gefunden.', 404);
     const removed = new Set([operation.id]);
@@ -453,6 +471,11 @@ function impact(oldPayload: CoursePayload | null, payload: CoursePayload, enroll
     const before = previous.get(row.id);
     return before && JSON.stringify(before.prerequisiteIds ?? []) !== JSON.stringify(row.prerequisiteIds ?? []);
   }).map(row => row.id);
+  const beforeRelease = chapterReleaseDates(oldPayload?.contents ?? []);
+  const afterRelease = chapterReleaseDates(payload.contents);
+  const releaseScheduleChanged = payload.contents.filter(row =>
+    (beforeRelease.get(row.id) ?? null) !== (afterRelease.get(row.id) ?? null)).map(row => ({ id: row.id, title: row.title,
+      before: beforeRelease.get(row.id) ?? null, after: afterRelease.get(row.id) ?? null }));
   const oldLeaves = new Set(courseLeaves((oldPayload?.contents ?? []).map(asPublishedNode)).map(row => row.id));
   const newLeaves = new Set(courseLeaves(payload.contents.map(asPublishedNode)).map(row => row.id));
   const completionMayChange = prerequisitesChanged.length > 0 || added.some(id => newLeaves.has(id)) || removed.some(id => oldLeaves.has(id)) ||
@@ -460,7 +483,7 @@ function impact(oldPayload: CoursePayload | null, payload: CoursePayload, enroll
     [...oldLeaves].some(id => !newLeaves.has(id)) || [...newLeaves].some(id => !oldLeaves.has(id));
   const rewardsMayChange = courseQuizApprovalRevision((oldPayload?.contents ?? []).map(asPublishedNode)) !==
     courseQuizApprovalRevision(payload.contents.map(asPublishedNode)) || completionMayChange;
-  return { added, removed, changed, renamedOrReordered, prerequisitesChanged, enrolledLearners, completionMayChange, rewardsMayChange, issuedCertificatesStayValid: true as const };
+  return { added, removed, changed, renamedOrReordered, prerequisitesChanged, releaseScheduleChanged, enrolledLearners, completionMayChange, rewardsMayChange, issuedCertificatesStayValid: true as const };
 }
 
 async function reviewed(tx: Prisma.TransactionClient, courseId: string, actor: Author, expectedRevision: number, expectedActive: string | null, origin?: string) {
