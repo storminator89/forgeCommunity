@@ -138,7 +138,14 @@ test('course author creates nested typed content, rehearses an unsaved quiz and 
   await form.getByRole('textbox', { name: 'Inhalt', exact: true }).fill('<p>Dieser Lerntext ist gespeichert und sofort sichtbar.</p>');
   await expect(form.getByRole('status').filter({ hasText: /^Lokal ungespeichert$/ })).toBeVisible();
   await saveContent(page, courseId, rootId);
-  await form.getByRole('textbox', { name: 'Titel', exact: true }).scrollIntoViewIfNeeded();
+  // Saving remounts the form with the canonical server response and leaves
+  // focus on the sticky save button. Verify that the rich-text canvas itself
+  // has the persisted text, then scroll it into the screenshot viewport.
+  const savedRichText = form.getByRole('textbox', { name: 'Text bearbeiten', exact: true });
+  await expect(savedRichText).toHaveText('Dieser Lerntext ist gespeichert und sofort sichtbar.');
+  expect(courseEvidence(courseId).contents.find(entry => entry.id === rootId)?.content).toBe('<p>Dieser Lerntext ist gespeichert und sofort sichtbar.</p>');
+  await savedRichText.scrollIntoViewIfNeeded();
+  await expect(savedRichText).toBeInViewport({ ratio: 0.9 });
   await capturePopulatedEditor(page, testInfo, 'course-editor-saved-text.png');
 
   await keyboardActivate(page, page.getByRole('button', { name: `Aktionen für ${rootTitle}`, exact: true }));

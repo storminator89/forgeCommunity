@@ -9,21 +9,22 @@ permissions:
   contents: read
 
 jobs:
-  # Preserve the existing required check context. Neither prerequisite depends
-  # on the other, so audit failures cannot hide application validation results.
+  # Preserve the existing required check context. The prerequisites run
+  # independently, so one failure cannot hide another job's result.
   validate:
-    needs: [quality, security-audit]
+    needs: [quality, security-audit, browser-qa]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - name: Require application validation and security audit
+      - name: Require application validation, security audit, and browser QA
         env:
           QUALITY_RESULT: ${{ needs.quality.result }}
           SECURITY_AUDIT_RESULT: ${{ needs.security-audit.result }}
+          BROWSER_QA_RESULT: ${{ needs.browser-qa.result }}
         run: |
-          printf 'Required checks: quality=%s; security-audit=%s\n' "$QUALITY_RESULT" "$SECURITY_AUDIT_RESULT"
-          if [ "$QUALITY_RESULT" != "success" ] || [ "$SECURITY_AUDIT_RESULT" != "success" ]; then
+          printf 'Required checks: quality=%s; security-audit=%s; browser-qa=%s\n' "$QUALITY_RESULT" "$SECURITY_AUDIT_RESULT" "$BROWSER_QA_RESULT"
+          if [ "$QUALITY_RESULT" != "success" ] || [ "$SECURITY_AUDIT_RESULT" != "success" ] || [ "$BROWSER_QA_RESULT" != "success" ]; then
             exit 1
           fi
 
@@ -194,13 +195,21 @@ jobs:
         run: npm run db:deploy
 
       - name: Build production app
+        id: browser_build
         run: npm run build
 
-      - name: Install official Playwright Chromium
-        run: npx playwright install chromium
+      - name: Install official Playwright browsers and system dependencies
+        id: browser_install
+        run: npx playwright install --with-deps chromium firefox webkit
 
       - name: Exercise desktop and mobile browser flows
         run: npm run test:browser
+
+      # Run afterward because the full Chromium suite clears test-results/.
+      # A Chromium assertion failure must not hide the other engine results.
+      - name: Exercise four desktop Firefox and WebKit critical journeys
+        if: ${{ !cancelled() && steps.browser_build.outcome == 'success' && steps.browser_install.outcome == 'success' }}
+        run: npx playwright test --config=playwright.smoke.config.ts
 
       - name: Upload browser screenshots
         if: always()
