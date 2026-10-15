@@ -87,6 +87,8 @@ const { adminId, memberId, instructorId, skillId } = database(db => {
   const instructorId = db.prepare('SELECT id FROM "User" WHERE email = ?').get(instructorEmail)?.id;
   assert.ok(adminId && memberId && instructorId, 'HTTP registration did not persist fixture users');
   assert.equal(db.prepare('UPDATE "User" SET role = ? WHERE id = ?').run('ADMIN', adminId).changes, 1);
+  assert.equal(db.prepare('UPDATE "User" SET role = ? WHERE id = ?').run('INSTRUCTOR', instructorId).changes, 1);
+  db.prepare('INSERT INTO "UserSettings" (id, userId) VALUES (?, ?)').run(randomUUID(), instructorId);
   const skillId = randomUUID();
   db.prepare('INSERT INTO "Skill" (id, name, category) VALUES (?, ?, ?)').run(skillId, `Smoke ${suffix}`, 'Smoke');
   return { adminId, memberId, instructorId, skillId };
@@ -120,37 +122,87 @@ const profile = await (await admin(`/api/users/${memberId}`)).json();
 assert.equal(profile.skills.find(skill => skill.id === userSkill.id)?.endorsements, 1,
   'Duplicate endorsement changed the aggregate count');
 
-const { courseId, contentIds } = database(db => {
+const { courseId, contentIds, contentUpdatedAt } = database(db => {
   const courseId = randomUUID();
   const contentIds = [randomUUID(), randomUUID(), randomUUID()];
   const now = new Date().toISOString();
   db.prepare('INSERT INTO "Course" (id, title, description, instructorId, updatedAt) VALUES (?, ?, ?, ?, ?)')
     .run(courseId, `Audit Course ${suffix}`, 'Disposable certificate fixture', instructorId, now);
-  db.prepare('INSERT INTO "Enrollment" (id, userId, courseId, completedAt) VALUES (?, ?, ?, ?)')
-    .run(randomUUID(), memberId, courseId, now);
+  db.prepare('INSERT INTO "Enrollment" (id, userId, courseId) VALUES (?, ?, ?)')
+    .run(randomUUID(), memberId, courseId);
   const insert = db.prepare('INSERT INTO "CourseContent" (id, title, content, "order", courseId, parentId, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)');
   contentIds.forEach((id, index) => insert.run(id, `Depth ${index + 1}`, 'Content', index, courseId, index ? contentIds[index - 1] : null, now));
-  return { courseId, contentIds };
+  return { courseId, contentIds, contentUpdatedAt: now };
 });
+const completion = await (await member(`/api/courses/${courseId}/progress`, {
+  method: 'PATCH', body: { contentId: contentIds.at(-1), completed: true, contentUpdatedAt },
+})).json();
+assert.equal(completion.complete, true, 'Certificate fixture did not complete the current course leaf');
 const certificateResponses = await Promise.all([1, 2].map(() => member(`/api/courses/${courseId}/certificate`, { method: 'POST' })));
 for (const response of certificateResponses) {
   assert.match(response.headers.get('content-type') ?? '', /^application\/pdf/);
   assert.equal(Buffer.from(await response.arrayBuffer()).subarray(0, 5).toString(), '%PDF-', 'Certificate is not a PDF');
 }
-database(db => {
+const memberCertificateId = database(db => {
   assert.equal(db.prepare('SELECT count(*) AS count FROM "Certificate" WHERE courseId = ? AND userId = ?').get(courseId, memberId).count, 1,
     'Concurrent issuance duplicated the certificate');
+  // The instructor's own proof must also survive a rejected deletion.
+  db.prepare('INSERT INTO "Certificate" (id, userId, courseId, courseName, userName) VALUES (?, ?, ?, ?, ?)')
+    .run(randomUUID(), instructorId, courseId, `Audit Course ${suffix}`, 'Audit Instructor');
+  return db.prepare('SELECT id FROM "Certificate" WHERE courseId = ? AND userId = ?').get(courseId, memberId).id;
 });
-await admin(`/api/admin/users/${instructorId}`, { method: 'DELETE' });
+const protectedInstructorSnapshot = () => database(db => ({
+  user: db.prepare('SELECT * FROM "User" WHERE id = ?').get(instructorId),
+  settings: db.prepare('SELECT * FROM "UserSettings" WHERE userId = ?').get(instructorId),
+  course: db.prepare('SELECT * FROM "Course" WHERE id = ?').get(courseId),
+  contents: db.prepare('SELECT * FROM "CourseContent" WHERE courseId = ? ORDER BY id').all(courseId),
+  enrollments: db.prepare('SELECT * FROM "Enrollment" WHERE courseId = ? ORDER BY id').all(courseId),
+  progress: db.prepare('SELECT * FROM "CourseContentProgress" WHERE courseId = ? ORDER BY contentId').all(courseId),
+  certificates: db.prepare('SELECT * FROM "Certificate" WHERE courseId = ? ORDER BY id').all(courseId),
+  completionRecords: db.prepare('SELECT * FROM "CourseCompletionRecord" WHERE courseId = ? ORDER BY userId').all(courseId),
+}));
+const beforeBlockedDeletion = protectedInstructorSnapshot();
+const blockedDeletion = await (await admin(`/api/admin/users/${instructorId}`, { method: 'DELETE', status: 409 })).json();
+assert.match(blockedDeletion.error, /andere Mitglieder Zertifikate/);
+assert.deepEqual(protectedInstructorSnapshot(), beforeBlockedDeletion,
+  'Rejected instructor deletion partially changed the account, settings, learning data or certificates');
+const retainedPdf = await member(`/api/certificates/${memberCertificateId}/download`);
+assert.equal(Buffer.from(await retainedPdf.arrayBuffer()).subarray(0, 5).toString(), '%PDF-', 'Retained certificate cannot be downloaded');
+
+// An instructor with only their own certificates remains eligible for erasure.
+// Include their own proof for another instructor's protected course as well.
+const eligible = database(db => {
+  const id = randomUUID();
+  const ownCourseId = randomUUID();
+  const ownContentIds = [randomUUID(), randomUUID(), randomUUID()];
+  const now = new Date().toISOString();
+  db.prepare('INSERT INTO "User" (id, email, role, updatedAt) VALUES (?, ?, ?, ?)')
+    .run(id, `erasable-instructor-${suffix}@example.test`, 'INSTRUCTOR', now);
+  db.prepare('INSERT INTO "UserSettings" (id, userId) VALUES (?, ?)').run(randomUUID(), id);
+  db.prepare('INSERT INTO "Course" (id, title, description, instructorId, updatedAt) VALUES (?, ?, ?, ?, ?)')
+    .run(ownCourseId, `Own Certificate Course ${suffix}`, 'Disposable own-certificate fixture', id, now);
+  const insertContent = db.prepare('INSERT INTO "CourseContent" (id, title, content, "order", courseId, parentId, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)');
+  ownContentIds.forEach((contentId, index) => insertContent.run(contentId, `Depth ${index + 1}`, 'Content', index, ownCourseId, index ? ownContentIds[index - 1] : null, now));
+  db.prepare('INSERT INTO "Enrollment" (id, userId, courseId) VALUES (?, ?, ?)').run(randomUUID(), memberId, ownCourseId);
+  const certificateIds = [randomUUID(), randomUUID()];
+  const insertCertificate = db.prepare('INSERT INTO "Certificate" (id, userId, courseId, courseName, userName) VALUES (?, ?, ?, ?, ?)');
+  insertCertificate.run(certificateIds[0], id, ownCourseId, `Own Certificate Course ${suffix}`, 'Erasable Instructor');
+  insertCertificate.run(certificateIds[1], id, courseId, `Audit Course ${suffix}`, 'Erasable Instructor');
+  return { id, courseId: ownCourseId, contentIds: ownContentIds, certificateIds };
+});
+await admin(`/api/admin/users/${eligible.id}`, { method: 'DELETE' });
 database(db => {
-  assert.equal(db.prepare('SELECT count(*) AS count FROM "User" WHERE id = ?').get(instructorId).count, 0);
-  assert.equal(db.prepare('SELECT count(*) AS count FROM "Course" WHERE id = ?').get(courseId).count, 0);
-  assert.equal(db.prepare(`SELECT count(*) AS count FROM "CourseContent" WHERE id IN (${contentIds.map(() => '?').join(',')})`).get(...contentIds).count, 0);
-  assert.equal(db.prepare('SELECT count(*) AS count FROM "Enrollment" WHERE courseId = ?').get(courseId).count, 0);
-  assert.equal(db.prepare('SELECT count(*) AS count FROM "Certificate" WHERE courseId = ?').get(courseId).count, 0);
+  assert.equal(db.prepare('SELECT count(*) AS count FROM "User" WHERE id = ?').get(eligible.id).count, 0);
+  assert.equal(db.prepare('SELECT count(*) AS count FROM "UserSettings" WHERE userId = ?').get(eligible.id).count, 0);
+  assert.equal(db.prepare('SELECT count(*) AS count FROM "Course" WHERE id = ?').get(eligible.courseId).count, 0);
+  assert.equal(db.prepare(`SELECT count(*) AS count FROM "CourseContent" WHERE id IN (${eligible.contentIds.map(() => '?').join(',')})`).get(...eligible.contentIds).count, 0);
+  assert.equal(db.prepare('SELECT count(*) AS count FROM "Enrollment" WHERE courseId = ?').get(eligible.courseId).count, 0);
+  assert.equal(db.prepare(`SELECT count(*) AS count FROM "Certificate" WHERE id IN (${eligible.certificateIds.map(() => '?').join(',')})`).get(...eligible.certificateIds).count, 0);
   assert.equal(db.prepare('SELECT count(*) AS count FROM "User" WHERE role = ?').get('ADMIN').count, 1,
     'Instructor deletion changed the administrator total');
 });
+assert.deepEqual(protectedInstructorSnapshot(), beforeBlockedDeletion,
+  'Eligible instructor erasure changed another instructor’s protected account or certificates');
 
 const channel = await (await admin('/api/chat/channels', {
   method: 'POST', body: { name: `Private audit ${suffix}`, isPrivate: true },
@@ -174,4 +226,4 @@ await admin(`/api/admin/users/${adminId}`, {
 });
 await admin('/api/user/profile', { status: 401 });
 
-console.log('Audit HTTP smoke passed: account guards, retained skills, duplicate endorsement, concurrent certificate PDF issuance, instructor cleanup, private-channel access, and JSON limits.');
+console.log('Audit HTTP smoke passed: account guards, retained skills, duplicate endorsement, concurrent certificate PDF issuance, atomic third-party certificate deletion guard, own-certificate instructor erasure, private-channel access, and JSON limits.');

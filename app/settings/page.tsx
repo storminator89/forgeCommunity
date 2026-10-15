@@ -20,6 +20,7 @@ import { toast } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { PageState } from '@/components/page-state'
+import { publishBrowserChatAlertPreference } from '@/lib/browser-chat-alerts'
 
 interface Skill {
   id: string
@@ -93,6 +94,8 @@ function AccountSettings({ userId }: { userId: string }) {
   const [language, setLanguage] = useState('de')
   const [emailNotifications, setEmailNotifications] = useState(true)
   const [pushNotifications, setPushNotifications] = useState(true)
+  const [browserPermission, setBrowserPermission] = useState<NotificationPermission | 'checking' | 'unsupported'>('checking')
+  const [permissionError, setPermissionError] = useState('')
   const [publicRankingOptIn, setPublicRankingOptIn] = useState(false)
 
   // Fähigkeiten-Verwaltung
@@ -115,6 +118,31 @@ function AccountSettings({ userId }: { userId: string }) {
   const [isLoaded, setIsLoaded] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   useEffect(() => {
+    const refreshPermission = () => {
+      setBrowserPermission('Notification' in window && typeof Notification.requestPermission === 'function'
+        ? Notification.permission : 'unsupported')
+    }
+    refreshPermission()
+    window.addEventListener('focus', refreshPermission)
+    return () => window.removeEventListener('focus', refreshPermission)
+  }, [])
+
+  const requestBrowserPermission = async () => {
+    if (!('Notification' in window) || typeof Notification.requestPermission !== 'function') {
+      setBrowserPermission('unsupported')
+      return
+    }
+    setPermissionError('')
+    try {
+      // Only a direct button click may open the browser's permission prompt.
+      setBrowserPermission(await Notification.requestPermission())
+    } catch {
+      setPermissionError('Die Browserberechtigung konnte nicht angefragt werden.')
+      setBrowserPermission(Notification.permission)
+    }
+  }
+
+  useEffect(() => {
     const controller = new AbortController()
     const fetchData = async () => {
       setIsLoading(true)
@@ -126,6 +154,7 @@ function AccountSettings({ userId }: { userId: string }) {
           axios.get('/api/user/certificates', { signal: controller.signal })
         ])
         if (controller.signal.aborted) return
+        if (userResponse.data?.id !== userId) throw new Error('Das Profil gehört nicht zum angemeldeten Konto.')
         setAvailableSkills(skillsResponse.data)
         setUserSkills(userSkillsResponse.data)
         setUserImage(userResponse.data.image)
@@ -138,6 +167,7 @@ function AccountSettings({ userId }: { userId: string }) {
         setLanguage(userSettings?.language || 'de')
         setEmailNotifications(userSettings?.emailNotifications ?? true)
         setPushNotifications(userSettings?.pushNotifications ?? true)
+        publishBrowserChatAlertPreference({ userId, enabled: userSettings?.pushNotifications ?? true })
         setPublicRankingOptIn(userSettings?.publicRankingOptIn === true)
         setCertificates(certificatesResponse.data)
         setIsLoaded(true)
@@ -170,7 +200,7 @@ function AccountSettings({ userId }: { userId: string }) {
     if (!isLoaded || isLoading || isSaving) return
     setIsSaving(true)
     try {
-      await axios.put('/api/user/profile', {
+      const response = await axios.put('/api/user/profile', {
         name,
         email,
         language,
@@ -179,6 +209,11 @@ function AccountSettings({ userId }: { userId: string }) {
         publicRankingOptIn
       }, { signal: actionController.current?.signal })
       if (actionController.current?.signal.aborted) return
+      if (response.data?.id !== userId) throw new Error('Das gespeicherte Profil gehört nicht zum angemeldeten Konto.')
+      const savedPreference = response.data?.userSettings?.pushNotifications
+      if (typeof savedPreference === 'boolean') {
+        publishBrowserChatAlertPreference({ userId, enabled: savedPreference })
+      }
       toast.success("Einstellungen erfolgreich gespeichert.")
     } catch (error) {
       if (actionController.current?.signal.aborted) return
@@ -357,7 +392,7 @@ function AccountSettings({ userId }: { userId: string }) {
                 <Card>
                   <CardHeader>
                     <CardTitle>Benachrichtigungseinstellungen</CardTitle>
-                    <CardDescription>Neue Meldungen erscheinen derzeit nur in der App. E-Mail- und Push-Zustellung sind noch nicht eingerichtet; die Schalter speichern lediglich deine Präferenzen für eine mögliche spätere Aktivierung.</CardDescription>
+                    <CardDescription>Meldungen in der App sind von diesen Schaltern unabhängig. Wenn diese App im Browser geöffnet ist, können zusätzlich Desktop-Hinweise für neue Chatnachrichten erscheinen. E-Mails und Hintergrund-Push werden derzeit nicht versendet.</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="flex items-center justify-between gap-4">
@@ -376,15 +411,26 @@ function AccountSettings({ userId }: { userId: string }) {
                     <div className="flex items-center justify-between gap-4">
                       <div className="flex items-center space-x-2">
                         <Bell className="w-5 h-5 text-muted-foreground" />
-                        <Label htmlFor="push-notifications">Push-Wunsch für später (keine Zustellung)</Label>
+                        <Label htmlFor="push-notifications">Desktop-Hinweise für Chatnachrichten</Label>
                       </div>
                       <Switch
                         id="push-notifications"
                         checked={pushNotifications}
                         onCheckedChange={setPushNotifications}
                         disabled={isSaving}
+                        aria-describedby="browser-chat-alert-description"
                         className="relative before:absolute before:-inset-y-3 before:inset-x-0"
                       />
+                    </div>
+                    <p id="browser-chat-alert-description" className="text-sm text-muted-foreground">Nur wenn diese App geöffnet, der Tab nicht aktiv und die Browserberechtigung erteilt ist. Änderungen am Schalter werden mit „Speichern“ übernommen. Meldungen in der App bleiben davon unabhängig.</p>
+                    <div className="space-y-2 border-t pt-4">
+                      <p className="text-sm font-medium">Browserberechtigung</p>
+                      {browserPermission === 'checking' && <p role="status" className="text-sm text-muted-foreground">Browserberechtigung wird geprüft…</p>}
+                      {browserPermission === 'unsupported' && <p role="status" className="text-sm text-muted-foreground">Dieser Browser unterstützt keine Desktop-Hinweise.</p>}
+                      {browserPermission === 'denied' && <p role="status" className="text-sm text-muted-foreground">Desktop-Hinweise sind im Browser blockiert. Du kannst die Berechtigung in den Browser-Einstellungen ändern.</p>}
+                      {browserPermission === 'granted' && <p role="status" className="text-sm text-muted-foreground">Desktop-Hinweise sind im Browser erlaubt.</p>}
+                      {browserPermission === 'default' && <Button type="button" variant="outline" onClick={() => void requestBrowserPermission()} disabled={!pushNotifications}>Browser-Hinweise erlauben</Button>}
+                      {permissionError && <p role="alert" className="text-sm text-destructive">{permissionError}</p>}
                     </div>
                   </CardContent>
                   <CardFooter>

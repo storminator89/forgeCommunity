@@ -8,7 +8,7 @@ jest.mock('@/components/Editor', () => ({ Editor: () => <div role="textbox" aria
 jest.mock('next-auth/react', () => ({ useSession: () => ({ data: { user: { id: 'member', name: 'Ada Lovelace' } }, status: 'authenticated' }) }))
 
 beforeEach(() => {
-  global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => [] })
+  global.fetch = jest.fn().mockImplementation(async (url: string) => ({ ok: true, json: async () => url.startsWith('/api/posts?') ? { posts: [], nextCursor: null } : [] }))
 })
 
 it('opens and cancels the community composer with one native button', async () => {
@@ -22,7 +22,7 @@ it('opens and cancels the community composer with one native button', async () =
   expect(await screen.findByRole('textbox', { name: 'Titel' })).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'Abbrechen' }))
   expect(await screen.findByRole('button', { name: 'Neuen Beitrag erstellen' })).toBeInTheDocument()
-  await waitFor(() => expect(global.fetch).toHaveBeenCalledWith('/api/posts?page=1', expect.anything()))
+  await waitFor(() => expect(global.fetch).toHaveBeenCalledWith('/api/posts?feed=1', expect.anything()))
 })
 
 it('keeps a failed post load distinct from an empty feed and offers retry', async () => {
@@ -31,7 +31,7 @@ it('keeps a failed post load distinct from an empty feed and offers retry', asyn
     if (url.startsWith('/api/posts?') && attempts++ === 0) {
       return { ok: false, json: async () => ({ message: 'Unavailable' }) }
     }
-    return { ok: true, json: async () => [] }
+    return { ok: true, json: async () => url.startsWith('/api/posts?') ? { posts: [], nextCursor: null } : [] }
   })
 
   render(<Community />)
@@ -40,5 +40,5 @@ it('keeps a failed post load distinct from an empty feed and offers retry', asyn
 
   fireEvent.click(screen.getByRole('button', { name: 'Erneut versuchen' }))
   expect(await screen.findByText('Keine Beiträge gefunden')).toBeInTheDocument()
-  expect(global.fetch).toHaveBeenCalledWith('/api/posts?page=1', expect.anything())
+  expect(global.fetch).toHaveBeenCalledWith('/api/posts?feed=1', expect.anything())
 })

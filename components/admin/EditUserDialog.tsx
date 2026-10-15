@@ -348,14 +348,15 @@ function EditUserDialogForm({ user, isOpen, onClose, onUpdateUser }: EditUserDia
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label htmlFor="emailNotifications">
-                      E-Mail Benachrichtigungen
+                      E-Mail-Wunsch für später
                     </Label>
-                    <p className="text-sm text-muted-foreground">
-                      Erhält Benachrichtigungen per E-Mail
+                    <p id="edit-user-email-notices-description" className="text-sm text-muted-foreground">
+                      Für dieses Konto wird eine Präferenz gespeichert; E-Mails werden derzeit nicht versendet.
                     </p>
                   </div>
                   <Switch
                     id="emailNotifications"
+                    aria-describedby="edit-user-email-notices-description"
                     checked={formData.emailNotifications}
                     onCheckedChange={(checked) =>
                       handleInputChange('emailNotifications', checked)
@@ -366,14 +367,15 @@ function EditUserDialogForm({ user, isOpen, onClose, onUpdateUser }: EditUserDia
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label htmlFor="pushNotifications">
-                      Push Benachrichtigungen
+                      Desktop-Hinweise für Chatnachrichten
                     </Label>
-                    <p className="text-sm text-muted-foreground">
-                      Erhält Push Benachrichtigungen im Browser
+                    <p id="edit-user-desktop-notices-description" className="text-sm text-muted-foreground">
+                      Für dieses Konto bei geöffneter App, inaktivem Tab und Browserberechtigung. Bereits geöffnete Tabs übernehmen Admin-Änderungen erst nach Neuladen.
                     </p>
                   </div>
                   <Switch
                     id="pushNotifications"
+                    aria-describedby="edit-user-desktop-notices-description"
                     checked={formData.pushNotifications}
                     onCheckedChange={(checked) =>
                       handleInputChange('pushNotifications', checked)

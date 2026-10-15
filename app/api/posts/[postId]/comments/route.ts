@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import { sanitizeTextServer } from '@/lib/server/sanitize-html'
 import { readJsonObject, readPage, requestErrorResponse } from '@/lib/server/api-input'
+import { afterCommunityCursor, COMMUNITY_ORDER, COMMUNITY_PAGE_SIZE, communityCommentInclude, communityPage, isCurrentCommunityAdmin, normalizeCommunityComment, readCommunityCursor } from '@/lib/server/community-feed'
 
 export async function POST(req: NextRequest, props: { params: Promise<{ postId: string }> }) {
   const params = await props.params;
@@ -30,7 +31,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ postId: 
       return NextResponse.json({ error: 'Beitrag nicht gefunden' }, { status: 404 })
     }
 
-    if (!post.published && post.authorId !== session.user.id && session.user.role !== 'ADMIN') {
+    if (!post.published && post.authorId !== session.user.id && !await isCurrentCommunityAdmin(session.user.id, session.user.role)) {
       return NextResponse.json({ error: 'Beitrag nicht gefunden' }, { status: 404 })
     }
 
@@ -44,7 +45,6 @@ export async function POST(req: NextRequest, props: { params: Promise<{ postId: 
         author: {
           select: { id: true, name: true, image: true },
         },
-        likeComments: true
       },
     })
 
@@ -65,41 +65,26 @@ export async function POST(req: NextRequest, props: { params: Promise<{ postId: 
 }
 
 export async function GET(req: NextRequest, props: { params: Promise<{ postId: string }> }) {
-  const params = await props.params;
+  const { postId } = await props.params
   try {
-    const page = readPage(req)
-    const { postId } = params
+    const feed = new URL(req.url).searchParams.get('feed') === '1'
+    const cursor = feed ? readCommunityCursor(req, 'comments', postId) : null
+    const page = feed ? { take: COMMUNITY_PAGE_SIZE + 1 } : readPage(req)
     const session = await getServerSession(authOptions)
     const userId = session?.user?.id
-
-    const post = await prisma.post.findUnique({
-      where: { id: postId },
-      select: { authorId: true, published: true },
-    })
-
-    if (!post || (!post.published && post.authorId !== userId && session?.user?.role !== 'ADMIN')) {
+    const post = await prisma.post.findUnique({ where: { id: postId }, select: { authorId: true, published: true } })
+    if (!post || (!post.published && post.authorId !== userId && !await isCurrentCommunityAdmin(userId, session?.user?.role))) {
       return NextResponse.json({ error: 'Beitrag nicht gefunden' }, { status: 404 })
     }
-
     const comments = await prisma.comment.findMany({
-      where: { postId },
+      where: { AND: [{ postId }, afterCommunityCursor(cursor)] },
       ...page,
-      include: {
-        author: {
-          select: { id: true, name: true, image: true },
-        },
-        likeComments: true,
-      },
-      orderBy: { createdAt: 'desc' },
+      include: communityCommentInclude(userId),
+      orderBy: COMMUNITY_ORDER,
     })
-
-    const formattedComments = comments.map(comment => ({
-      ...comment,
-      votes: comment.likeComments.length,
-      isLiked: userId ? comment.likeComments.some(like => like.userId === userId) : false,
-    }))
-
-    return NextResponse.json(formattedComments)
+    if (!feed) return NextResponse.json(comments.map(normalizeCommunityComment), { headers: { 'Cache-Control': 'private, no-store' } })
+    const result = communityPage(comments, 'comments', postId)
+    return NextResponse.json({ comments: result.items.map(normalizeCommunityComment), nextCursor: result.nextCursor }, { headers: { 'Cache-Control': 'private, no-store' } })
   } catch (error) {
     console.error('Fehler beim Abrufen der Kommentare:', error)
     const inputError = requestErrorResponse(error)

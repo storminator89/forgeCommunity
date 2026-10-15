@@ -2,6 +2,7 @@ import { GET } from '@/app/api/search/route';
 import prisma from '@/lib/prisma';
 import { containsInsensitive } from '@/lib/server/database-query';
 import { getServerSession } from 'next-auth';
+import { VERIFIED_COURSE_BADGE } from '@/lib/course-achievement-badge';
 
 jest.mock('next/server', () => ({
   NextResponse: {
@@ -18,6 +19,8 @@ jest.mock('@/lib/prisma', () => ({
     event: { findMany: jest.fn() },
     post: { findMany: jest.fn() },
     resource: { findMany: jest.fn() },
+    article: { findMany: jest.fn() },
+    project: { findMany: jest.fn() },
   },
 }));
 jest.mock('@/lib/server/sanitize-html', () => ({
@@ -42,6 +45,8 @@ describe('member search privacy', () => {
     (prisma.event.findMany as jest.Mock).mockResolvedValue([]);
     (prisma.post.findMany as jest.Mock).mockResolvedValue([]);
     (prisma.resource.findMany as jest.Mock).mockResolvedValue([]);
+    (prisma.article.findMany as jest.Mock).mockResolvedValue([]);
+    (prisma.project.findMany as jest.Mock).mockResolvedValue([]);
   });
 
   it('does not run a member lookup without authentication', async () => {
@@ -99,5 +104,35 @@ describe('member search privacy', () => {
     expect(body.results).toHaveLength(1);
     expect(body.results[0].skills).toEqual([{ name: 'TypeScript', level: 80, endorsements: 2 }]);
     expect(JSON.stringify(body)).not.toContain('ada.private@example.com');
+  });
+
+  it('filters only the opted-out course achievement, preserving unrelated badges in search', async () => {
+    const badges = [
+      { badgeId: VERIFIED_COURSE_BADGE.id, awardedAt: new Date('2026-01-02'), badge: { name: VERIFIED_COURSE_BADGE.name } },
+      { badgeId: 'existing-badge', awardedAt: new Date('2026-01-01'), badge: { name: 'Community badge' } },
+    ];
+    const member = { id: 'member-2', name: 'Ada', bio: null, title: null, image: null, role: 'USER',
+      isTestAccount: false, userSettings: { publicRankingOptIn: false }, endorsements: 0,
+      lastLogin: null, createdAt: new Date('2026-01-01'),
+      _count: { followers: 0, following: 0, posts: 0, courses: 0, projects: 0 },
+      skills: [], badges };
+    userFindMany.mockResolvedValue([member]);
+    userCount.mockResolvedValue(1);
+
+    const privateResponse = await GET(request('Ada'));
+    expect((await privateResponse.json()).results[0].badges).toEqual([
+      { name: 'Community badge', awardedAt: '2026-01-01T00:00:00.000Z' },
+    ]);
+    expect(privateResponse.headers.get('Cache-Control')).toBe('private, no-store');
+    expect(userFindMany.mock.calls[0][0].select.badges).toMatchObject({ take: 4 });
+
+    userFindMany.mockResolvedValue([{ ...member, userSettings: { publicRankingOptIn: true } }]);
+    const publicResponse = await GET(request('Ada'));
+    expect((await publicResponse.json()).results[0].badges).toHaveLength(2);
+
+    userFindMany.mockResolvedValue([member]);
+    (getServerSession as jest.Mock).mockResolvedValue({ user: { id: 'member-2', role: 'USER' } });
+    const ownResponse = await GET(request('Ada'));
+    expect((await ownResponse.json()).results[0].badges).toHaveLength(2);
   });
 });

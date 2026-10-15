@@ -54,7 +54,7 @@ it('shows private rewards and milestone independently of leaderboard placement',
 
 it('shows reachable private learning milestones without streak pressure or public ranking', () => {
   const view = render(<StatsCard stats={{ posts: 0, receivedLikes: 0, comments: 0 }} rewards={{ points: 0, completedCourses: 0, firstCourseCompleted: false }} rewardsLoading={false} rewardsError={false} isSignedIn />)
-  expect(screen.getByRole('progressbar', { name: 'Lernmeilenstein: 0 von 1 Kursen abgeschlossen' })).toBeInTheDocument()
+  expect(screen.getByRole('progressbar', { name: 'Lernmeilenstein: 0 von 1 Kurs abgeschlossen' })).toBeInTheDocument()
   expect(screen.getByRole('link', { name: 'Kurse entdecken' })).toHaveAttribute('href', '/courses')
   view.rerender(<StatsCard stats={{ posts: 0, receivedLikes: 0, comments: 0 }} rewards={{ points: 0, completedCourses: 3, firstCourseCompleted: true }} rewardsLoading={false} rewardsError={false} isSignedIn />)
   expect(screen.getByRole('progressbar', { name: 'Lernmeilenstein: 3 von 5 Kursen abgeschlossen' })).toBeInTheDocument()

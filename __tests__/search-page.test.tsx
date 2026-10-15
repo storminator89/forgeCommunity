@@ -34,6 +34,8 @@ const results = [
   { id: 'post-1', title: 'Beitrag Delta', description: '', type: 'post', stats: { likes: 0, comments: 0 } },
   { id: 'resource-1', title: 'Ressource Epsilon', description: '', type: 'resource', url: 'https://example.com/guide' },
   { id: 'resource-2', title: 'Unsichere Ressource', description: '', type: 'resource', url: 'javascript:alert(1)' },
+  { id: 'article-1', title: 'Wissensartikel Zeta', description: 'Wissen', type: 'article' },
+  { id: 'project-1', title: 'Projekt Eta', description: 'Projekt', type: 'project' },
 ];
 
 beforeEach(() => {
@@ -50,7 +52,7 @@ it('renders focusable result links with the existing destinations and safe exter
   render(<SearchPageClient initialQuery="Alpha" />);
 
   const course = await screen.findByRole('link', { name: /Kurs Alpha/ });
-  expect(screen.getByRole('heading', { name: 'Ergebnisse (6)' })).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Ergebnisse (8)' })).toBeInTheDocument();
   expect(course).toHaveAttribute('href', '/courses/course-1');
   expect(screen.getByRole('link', { name: /Event Beta/ })).toHaveAttribute('href', '/events#event-event-1');
   expect(screen.getByRole('link', { name: /Mitglied Gamma/ })).toHaveAttribute('href', '/profile/member-1');
@@ -60,6 +62,9 @@ it('renders focusable result links with the existing destinations and safe exter
   expect(screen.getByRole('link', { name: /Ressource Epsilon/ })).toHaveAttribute('rel', 'noopener noreferrer');
   expect(screen.getByRole('link', { name: /Ressource Epsilon.*öffnet in neuem Tab/ })).toBeInTheDocument();
   expect(screen.getByRole('link', { name: /Unsichere Ressource/ })).toHaveAttribute('href', '/resources');
+  expect(screen.getByRole('link', { name: /Wissensartikel Zeta/ })).toHaveAttribute('href', '/knowledgebase/article-1');
+  expect(screen.getByRole('link', { name: /Projekt Eta/ })).toHaveAttribute('href', '/projects/project-1');
+  expect(screen.getByText(/Bis zu fünf Treffer je Kategorie/)).toBeInTheDocument();
 
   let reachedWithTab = false;
   for (let index = 0; index < 12; index += 1) {
@@ -78,10 +83,10 @@ it('counts displayed results in the All tab when the API has no aggregate total'
     json: async () => ({ results, pagination: { total: 0, page: 1, limit: 10, pages: 0 } }),
   });
   render(<SearchPageClient initialQuery="Alpha" />);
-  expect(await screen.findByRole('heading', { name: 'Ergebnisse (6)' })).toBeInTheDocument();
+  expect(await screen.findByRole('heading', { name: 'Ergebnisse (8)' })).toBeInTheDocument();
 });
 
-it('keeps all six categories and controls reachable with mobile-sized touch targets', async () => {
+it('keeps all eight categories and controls reachable with mobile-sized touch targets', async () => {
   const user = userEvent.setup();
   render(<SearchPageClient initialQuery="Alpha" />);
 
@@ -89,7 +94,7 @@ it('keeps all six categories and controls reachable with mobile-sized touch targ
   expect(screen.getByRole('button', { name: 'Suche löschen' })).toHaveClass('h-11', 'w-11');
   expect(screen.getByRole('tablist', { name: 'Suchkategorie' })).toHaveClass('overflow-x-auto');
   expect(screen.getByText(/Weitere Kategorien seitlich scrollen/)).toBeInTheDocument();
-  expect(screen.getAllByRole('tab')).toHaveLength(6);
+  expect(screen.getAllByRole('tab')).toHaveLength(8);
   screen.getAllByRole('tab').forEach((tab) => expect(tab).toHaveClass('min-h-11'));
 
   await user.click(screen.getByRole('tab', { name: 'Alle' }));
@@ -159,4 +164,50 @@ it('ignores delayed URL props from an older keystroke and applies later navigati
     '/api/search?query=Zur%C3%BCck&type=post&page=2&limit=10',
     expect.objectContaining({ credentials: 'include' }),
   ));
+});
+
+it('paginates the article and project tabs and restores tab/page state through browser history', async () => {
+  const user = userEvent.setup();
+  (global.fetch as jest.Mock).mockImplementation(async (input: string) => {
+    const params = new URL(input, 'http://localhost').searchParams;
+    const type = params.get('type');
+    return {
+      ok: true,
+      json: async () => ({
+        results: type === 'article' ? [results[6]] : type === 'project' ? [results[7]] : results,
+        pagination: { total: 12, page: Number(params.get('page') ?? 1), limit: 10, pages: 2 },
+      }),
+    };
+  });
+
+  render(<SearchPageClient initialQuery="Alpha" />);
+  await screen.findByRole('heading', { name: 'Ergebnisse (8)' });
+  await user.click(screen.getByRole('tab', { name: 'Artikel' }));
+  expect(window.location.search).toBe('?q=Alpha&type=article');
+  expect(await screen.findByRole('heading', { name: 'Ergebnisse (12)' })).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: /Wissensartikel Zeta/ })).toHaveAttribute('href', '/knowledgebase/article-1');
+
+  await user.click(screen.getByRole('button', { name: /Nächste/ }));
+  expect(window.location.search).toBe('?q=Alpha&type=article&page=2');
+  await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
+    '/api/search?query=Alpha&type=article&page=2&limit=10', expect.anything(),
+  ));
+  expect(screen.getByRole('button', { name: 'Seite 2' })).toHaveAttribute('aria-current', 'page');
+
+  await user.click(screen.getByRole('tab', { name: 'Projekte' }));
+  expect(window.location.search).toBe('?q=Alpha&type=project');
+  expect(await screen.findByRole('link', { name: /Projekt Eta/ })).toHaveAttribute('href', '/projects/project-1');
+
+  window.history.back();
+  await waitFor(() => expect(window.location.search).toBe('?q=Alpha&type=article&page=2'));
+  await waitFor(() => expect(screen.getByRole('tab', { name: 'Artikel' })).toHaveAttribute('data-state', 'active'));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Seite 2' })).toHaveAttribute('aria-current', 'page'));
+
+  window.history.back();
+  await waitFor(() => expect(window.location.search).toBe('?q=Alpha&type=article'));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Seite 1' })).toHaveAttribute('aria-current', 'page'));
+
+  window.history.forward();
+  await waitFor(() => expect(window.location.search).toBe('?q=Alpha&type=article&page=2'));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Seite 2' })).toHaveAttribute('aria-current', 'page'));
 });

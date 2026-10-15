@@ -64,6 +64,8 @@ test('normalizes detailed settings, stats and skills from the existing account e
   expect(screen.getByText('Design')).toBeVisible()
   expect(screen.getByText('75%')).toBeVisible()
   await user.click(screen.getByRole('tab', { name: 'Einstellungen' }))
+  expect(screen.getByText('E-Mail-Wunsch (kein Versand)')).toBeVisible()
+  expect(screen.getByText('Desktop-Hinweise für Chat (App geöffnet)')).toBeVisible()
   expect(screen.getByText('Deaktiviert')).toBeVisible()
   expect(screen.getByText('Dunkel')).toBeVisible()
 })
@@ -149,6 +151,17 @@ test('immediately hides admin data and details when the authenticated account lo
   expect(screen.getByRole('alert')).toHaveTextContent('Keine Administratorrechte')
   expect(screen.queryByText('ada@example.com')).not.toBeInTheDocument()
   expect(screen.queryByText('Arbeitet in der Community.')).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Aktionen für Ada Beispiel' })).not.toBeInTheDocument()
+})
+
+test('hides admin data when logout status precedes stale session data clearing', async () => {
+  const { rerender } = render(<UserManagement />)
+  expect(await screen.findByRole('button', { name: 'Details von Ada Beispiel öffnen' })).toBeVisible()
+  jest.mocked(useSession).mockReturnValue({
+    data: { user: { id: 'admin', role: 'ADMIN' }, expires: '2099-01-01' }, status: 'unauthenticated', update: jest.fn(),
+  } as unknown as ReturnType<typeof useSession>)
+  rerender(<UserManagement />)
+  expect(screen.queryByText('ada@example.com')).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Aktionen für Ada Beispiel' })).not.toBeInTheDocument()
 })
 

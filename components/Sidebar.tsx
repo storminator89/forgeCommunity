@@ -94,7 +94,12 @@ export function Sidebar({ className, isOpen: externalOpen = false, onClose }: Si
       {renderNavigation(collapsed)}
     </aside>
     <Sheet open={open} onOpenChange={setOpen}>
-      <SheetContent id="app-navigation" side="left" className="w-[min(300px,90vw)] p-0 [&>button:last-child]:hidden">
+      <SheetContent id="app-navigation" side="left" className="w-[min(300px,90vw)] p-0 [&>button:last-child]:hidden"
+        onCloseAutoFocus={event => {
+          // The opener lives in AppHeader, outside Radix's SheetTrigger tree.
+          const trigger = navigation?.triggerRef.current;
+          if (trigger) { event.preventDefault(); trigger.focus(); }
+        }}>
         <SheetTitle className="sr-only">Navigation</SheetTitle>
         <SheetDescription className="sr-only">Bereiche von ForgeCommunity</SheetDescription>
         <button type="button" onClick={() => setOpen(false)} className="absolute right-2 top-[18px] flex h-11 w-11 items-center justify-center rounded-[10px] text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Navigation schließen"><X className="h-5 w-5" /></button>

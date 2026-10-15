@@ -33,7 +33,7 @@ jest.mock('@/lib/prisma', () => ({ __esModule: true, default: {
   user: { findUnique: jest.fn(), findMany: jest.fn(), update: jest.fn() },
   course: { findUnique: jest.fn(), update: jest.fn() },
   courseCompletionRecord: { count: jest.fn() },
-  rewardLedger: { aggregate: jest.fn() },
+  rewardLedger: { aggregate: jest.fn(), groupBy: jest.fn() },
   rewardLedgerChange: { findMany: jest.fn() },
 } }))
 
@@ -41,7 +41,7 @@ const db = prisma as unknown as {
   user: { findUnique: jest.Mock; findMany: jest.Mock; update: jest.Mock }
   course: { findUnique: jest.Mock; update: jest.Mock }
   courseCompletionRecord: { count: jest.Mock }
-  rewardLedger: { aggregate: jest.Mock }
+  rewardLedger: { aggregate: jest.Mock; groupBy: jest.Mock }
   rewardLedgerChange: { findMany: jest.Mock }
 }
 const session = getServerSession as jest.Mock
@@ -100,22 +100,56 @@ describe('private reward summary', () => {
 })
 
 describe('opt-in public ranking', () => {
-  it('queries only consenting real learners and exposes totals without ledger details', async () => {
-    db.user.findMany.mockResolvedValue([
-      { id: 'b', name: 'B', image: null, rewardLedger: [{ points: 50 }, { points: 50 }] },
-      { id: 'a', name: null, image: null, rewardLedger: [{ points: 100 }] },
+  it('aggregates only active rewards for consenting real learners and bounds identity reads', async () => {
+    db.rewardLedger.groupBy.mockResolvedValue([
+      { userId: 'a', _sum: { points: 100 } },
+      { userId: 'b', _sum: { points: 100 } },
     ])
+    db.user.findMany.mockResolvedValueOnce([
+      { id: 'b', name: 'B', image: null },
+      { id: 'a', name: null, image: null },
+    ]).mockResolvedValueOnce([])
     const response = await getLeaderboard()
     expect(response.status).toBe(200)
     expect(response.headers.get('Cache-Control')).toBe('no-store')
-    expect(db.user.findMany).toHaveBeenCalledWith({
-      where: { role: 'USER', isTestAccount: false, userSettings: { is: { publicRankingOptIn: true } } },
-      select: { id: true, name: true, image: true, rewardLedger: { where: { revokedAt: null }, select: { points: true } } },
+    const eligible = { role: 'USER', isTestAccount: false, userSettings: { is: { publicRankingOptIn: true } } }
+    expect(db.rewardLedger.groupBy).toHaveBeenCalledWith({
+      by: ['userId'], where: { revokedAt: null, user: eligible }, _sum: { points: true },
+      orderBy: [{ _sum: { points: 'desc' } }, { userId: 'asc' }], take: 10,
+    })
+    expect(db.user.findMany).toHaveBeenNthCalledWith(1, {
+      where: { ...eligible, id: { in: ['a', 'b'] } },
+      select: { id: true, name: true, image: true },
+    })
+    expect(db.user.findMany).toHaveBeenNthCalledWith(2, {
+      where: { ...eligible, id: { notIn: ['a', 'b'] }, rewardLedger: { none: { revokedAt: null } } },
+      orderBy: { id: 'asc' }, take: 8, select: { name: true, image: true },
     })
     expect(await response.json()).toEqual([
       { name: 'Anonymous', image: null, points: 100 },
       { name: 'B', image: null, points: 100 },
     ])
+  })
+
+  it('fills only remaining places with opted-in zero-point learners', async () => {
+    db.rewardLedger.groupBy.mockResolvedValue([{ userId: 'b', _sum: { points: 50 } }])
+    db.user.findMany.mockResolvedValueOnce([{ id: 'b', name: 'B', image: null }])
+      .mockResolvedValueOnce([{ name: 'A', image: null }, { name: 'C', image: null }])
+    expect(await (await getLeaderboard()).json()).toEqual([
+      { name: 'B', image: null, points: 50 },
+      { name: 'A', image: null, points: 0 },
+      { name: 'C', image: null, points: 0 },
+    ])
+  })
+
+  it('does not expose an account that revokes consent between aggregate and identity lookup', async () => {
+    db.rewardLedger.groupBy.mockResolvedValue([{ userId: 'removed', _sum: { points: 50 } }])
+    db.user.findMany.mockResolvedValueOnce([])
+    expect(await (await getLeaderboard()).json()).toEqual([])
+    expect(db.user.findMany).toHaveBeenCalledTimes(1)
+    expect(db.user.findMany).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      where: expect.objectContaining({ userSettings: { is: { publicRankingOptIn: true } } }),
+    }))
   })
 })
 

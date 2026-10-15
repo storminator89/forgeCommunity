@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Card, CardContent } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -30,6 +30,11 @@ interface CommentSectionProps {
   currentUserId?: string
   canReport?: boolean
   isLoading?: boolean
+  hasMore?: boolean
+  commentCount?: number
+  onLoadMore?: () => void
+  isLoadingMore?: boolean
+  loadMoreError?: boolean
   onAddComment?: (postId: string, content: string) => Promise<void>
   onLikeComment?: (commentId: string, postId: string) => Promise<void>
 }
@@ -40,10 +45,24 @@ export function CommentSection({
   currentUserId,
   canReport = true,
   isLoading = false,
+  hasMore = false,
+  commentCount,
+  onLoadMore,
+  isLoadingMore = false,
+  loadMoreError = false,
   onAddComment,
   onLikeComment
 }: CommentSectionProps) {
   const [newCommentContent, setNewCommentContent] = useState('')
+  const commentsStatusRef = useRef<HTMLParagraphElement>(null)
+  const focusEndOfCommentsRef = useRef(false)
+
+  useEffect(() => {
+    if (focusEndOfCommentsRef.current && !hasMore && !isLoadingMore) {
+      focusEndOfCommentsRef.current = false
+      if (document.activeElement === document.body) commentsStatusRef.current?.focus()
+    }
+  }, [hasMore, isLoadingMore])
 
   useEffect(() => {
     const followHash = () => {
@@ -89,11 +108,14 @@ export function CommentSection({
             onChange={(e) => setNewCommentContent(e.target.value)}
             onKeyPress={handleKeyPress}
             placeholder="Schreibe einen Kommentar..."
+            aria-label="Kommentar schreiben"
             className="pr-10 bg-muted/50 border-input"
             disabled={isLoading}
           />
           <Button
             onClick={handleSubmit}
+            type="button"
+            aria-label="Kommentar senden"
             disabled={isLoading || !newCommentContent.trim()}
             className="absolute right-2 p-1 hover:bg-accent text-foreground rounded-full flex items-center justify-center transition-colors duration-200"
             size="icon"
@@ -143,6 +165,7 @@ export function CommentSection({
                       variant="ghost"
                       size="sm"
                       onClick={() => onLikeComment?.(comment.id, postId)}
+                      aria-label={comment.isLiked ? 'Kommentar-Like entfernen' : 'Kommentar liken'}
                       className={`hover:bg-accent flex items-center space-x-1 rounded-md p-2 h-auto py-1 transition-colors duration-200 ${comment.isLiked ? 'text-destructive bg-destructive/10 hover:bg-destructive/20' : 'text-muted-foreground'
                         }`}
                       disabled={isLoading}
@@ -162,6 +185,16 @@ export function CommentSection({
           </CardContent>
         </Card>
       ))}
+      {loadMoreError && <p role="alert" className="text-sm text-destructive">Weitere Kommentare konnten nicht geladen werden.</p>}
+      {hasMore && <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={event => {
+        focusEndOfCommentsRef.current = document.activeElement === event.currentTarget
+        onLoadMore?.()
+      }} disabled={isLoadingMore || isLoading}>
+        {isLoadingMore ? 'Kommentare werden geladen…' : loadMoreError ? 'Kommentare erneut laden' : 'Weitere Kommentare laden'}
+      </Button>}
+      <p ref={commentsStatusRef} tabIndex={-1} role="status" aria-live="polite" className="text-sm text-muted-foreground">
+        {comments.length} {comments.length === 1 ? 'Kommentar' : 'Kommentare'} geladen{commentCount !== undefined ? `, ${commentCount} insgesamt` : ''}{!hasMore && comments.length > 0 ? '. Ende der Kommentare.' : '.'}
+      </p>
     </motion.div>
   )
 }

@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '../../auth/[...nextauth]/options'
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input'
+import { canShowBadgeToViewer } from '@/lib/course-achievement-badge'
 
 export async function GET(
   request: NextRequest,
@@ -35,6 +36,8 @@ export async function GET(
         title: true,
         contact: true,
         role: true,
+        isTestAccount: true,
+        userSettings: { select: { publicRankingOptIn: true } },
         endorsements: true,
         createdAt: true,
         lastLogin: isOwnAccount,
@@ -51,6 +54,7 @@ export async function GET(
         badges: {
           select: {
             id: true,
+            badgeId: true,
             awardedAt: true,
             badge: { select: { name: true, description: true, image: true } },
           },
@@ -116,8 +120,9 @@ export async function GET(
         level: userSkill.level,
         endorsements: userSkill.endorsements,
       })),
-      badges: user.badges.map(userBadge => ({
+      badges: user.badges.filter(userBadge => canShowBadgeToViewer(userBadge.badgeId, user, session.user.id)).map(userBadge => ({
         id: userBadge.id,
+        badgeId: userBadge.badgeId,
         name: userBadge.badge.name,
         description: userBadge.badge.description,
         image: userBadge.badge.image,

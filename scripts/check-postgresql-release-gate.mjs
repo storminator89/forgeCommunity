@@ -24,10 +24,21 @@ assert.deepEqual(upgradeNames, [
   '0002_course_progress.sql',
   '0003_reports.sql',
   '0004_reward_ledger.sql',
+  '0005_community_feed_indexes.sql',
 ]);
 const expectedChecksums = new Map(upgradeNames.map(name => [name, createHash('sha256')
   .update(readFileSync(new URL(`../prisma/postgresql-upgrades/${name}`, import.meta.url)))
   .digest('hex')]));
+
+const communityIndexes = {
+  Post_createdAt_id_idx: ['createdAt', 'id'],
+  Post_published_createdAt_id_idx: ['published', 'createdAt', 'id'],
+  Post_authorId_createdAt_id_idx: ['authorId', 'createdAt', 'id'],
+  Comment_postId_createdAt_id_idx: ['postId', 'createdAt', 'id'],
+  Comment_authorId_postId_idx: ['authorId', 'postId'],
+  LikePost_postId_idx: ['postId'],
+  LikeComment_commentId_idx: ['commentId'],
+};
 
 const quoteIdent = value => `"${value.replaceAll('"', '""')}"`;
 const count = async (db, table) => Number((await db.query(`SELECT COUNT(*) AS count FROM ${quoteIdent(table)}`)).rows[0].count);
@@ -106,6 +117,13 @@ async function seedMainData(db) {
     INSERT INTO "Enrollment" ("id", "userId", "courseId", "completedAt") VALUES
       ('old-completed', 'completed', 'legacy-course', TIMESTAMP '2026-09-01 12:00:00'),
       ('old-incomplete', 'incomplete', 'legacy-course', NULL);
+    INSERT INTO "Post" (id, title, content, published, "authorId", "updatedAt") VALUES
+      ('legacy-post', 'Preserved community title', 'Existing post', true, 'teacher', CURRENT_TIMESTAMP),
+      ('legacy-draft', 'Preserved private title', 'Existing draft', false, 'teacher', CURRENT_TIMESTAMP);
+    INSERT INTO "Comment" (id, content, "postId", "authorId", "updatedAt")
+      VALUES ('legacy-comment', 'Existing reply', 'legacy-post', 'completed', CURRENT_TIMESTAMP);
+    INSERT INTO "LikePost" (id, "userId", "postId") VALUES ('legacy-like', 'completed', 'legacy-post');
+    INSERT INTO "LikeComment" (id, "userId", "commentId") VALUES ('legacy-comment-like', 'teacher', 'legacy-comment');
   `);
 }
 
@@ -128,6 +146,8 @@ async function assertCurrentSchema(db) {
     'CourseContentProgress_contentId_fkey', 'QuizAttempt_userId_fkey',
     'QuizAttempt_courseId_fkey', 'RewardLedger_userId_fkey',
     'RewardLedgerChange_ledgerId_fkey', 'CourseCompletionRecord_userId_fkey',
+    'Post_authorId_fkey', 'Comment_postId_fkey', 'Comment_authorId_fkey',
+    'LikePost_userId_fkey', 'LikePost_postId_fkey', 'LikeComment_userId_fkey', 'LikeComment_commentId_fkey',
   ];
   const { rows: foreignKeys } = await db.query(`
     SELECT c.conname AS name, c.convalidated AS validated, c.confdeltype AS on_delete
@@ -135,7 +155,7 @@ async function assertCurrentSchema(db) {
     JOIN pg_class t ON t.oid = c.conrelid
     JOIN pg_namespace n ON n.oid = t.relnamespace
     WHERE n.nspname = current_schema() AND c.contype = 'f' AND t.relname IN
-      ('CourseContentProgress', 'QuizAttempt', 'RewardLedger', 'RewardLedgerChange', 'CourseCompletionRecord')`);
+      ('CourseContentProgress', 'QuizAttempt', 'RewardLedger', 'RewardLedgerChange', 'CourseCompletionRecord', 'Post', 'Comment', 'LikePost', 'LikeComment')`);
   const byName = new Map(foreignKeys.map(fk => [fk.name, fk]));
   for (const name of requiredFks) {
     const fk = byName.get(name);
@@ -166,6 +186,17 @@ async function assertCurrentSchema(db) {
     const check = byCheckName.get(name);
     assert.ok(check, `missing SQL-only check constraint ${name}`);
     assert.equal(check.validated, true, `${name} is unvalidated`);
+  }
+  const { rows: indexes } = await db.query(`
+    SELECT idx.relname AS name, i.indisvalid AS valid, i.indisready AS ready,
+      ARRAY(SELECT a.attname::text FROM unnest(i.indkey) WITH ORDINALITY AS k(attnum, n)
+        JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = k.attnum ORDER BY k.n) AS columns
+    FROM pg_index i JOIN pg_class idx ON idx.oid = i.indexrelid
+    JOIN pg_class t ON t.oid = i.indrelid JOIN pg_namespace n ON n.oid = t.relnamespace
+    WHERE n.nspname = current_schema() AND t.relname IN ('Post', 'Comment', 'LikePost', 'LikeComment')`);
+  const indexesByName = new Map(indexes.map(index => [index.name, index]));
+  for (const [name, columns] of Object.entries(communityIndexes)) {
+    assert.deepEqual(indexesByName.get(name), { name, valid: true, ready: true, columns }, `community index ${name}`);
   }
   const schema = (await db.query('SELECT current_schema() AS name')).rows[0].name;
   const { rows: columns } = await db.query(`
@@ -241,6 +272,13 @@ test('PostgreSQL empty install and main baseline upgrades: replay, checksums and
     }]);
     assert.equal(await count(db, 'RewardLedger'), 0);
     assert.equal(await count(db, 'ContentReport'), 0);
+    assert.deepEqual((await db.query('SELECT id, title, published FROM "Post" ORDER BY id')).rows, [
+      { id: 'legacy-draft', title: 'Preserved private title', published: false },
+      { id: 'legacy-post', title: 'Preserved community title', published: true },
+    ]);
+    assert.deepEqual((await db.query('SELECT id, content FROM "Comment"')).rows, [{ id: 'legacy-comment', content: 'Existing reply' }]);
+    assert.equal(await count(db, 'LikePost'), 1);
+    assert.equal(await count(db, 'LikeComment'), 1);
     await applyPostgresqlUpgrades(url);
     assert.deepEqual(await history(db), firstHistory);
     assert.equal(await count(db, 'CourseCompletionRecord'), 1);
@@ -285,6 +323,10 @@ test('PostgreSQL empty install and main baseline upgrades: replay, checksums and
     assert.equal(await count(db, 'RewardLedger'), 0);
     assert.equal(await count(db, 'RewardLedgerChange'), 0);
     assert.equal(await count(db, 'ContentReport'), 1, 'report review trail must survive account deletion');
+    assert.equal(await count(db, 'Comment'), 0, 'account deletion must cascade community replies');
+    assert.equal(await count(db, 'LikePost'), 0);
+    assert.equal(await count(db, 'LikeComment'), 0);
+    assert.equal(await count(db, 'Post'), 2, 'another author’s posts remain');
     return catalog;
   });
 

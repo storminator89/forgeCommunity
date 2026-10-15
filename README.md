@@ -287,6 +287,21 @@ npm run build
 npm audit
 ```
 
+CI runs application checks (typecheck, lint, Jest, migration checks, build and
+standalone smoke) in the independent `quality` job. The `security-audit` job runs
+the unchanged strict `npm audit --audit-level=high` check and fails on high or
+critical advisories; it has no exceptions or `continue-on-error`. Its dependency
+install skips lifecycle scripts because auditing does not need generated clients
+or native builds.
+
+The existing `validate` check remains the aggregate gate: it always evaluates
+both jobs and fails unless both succeed, including when either fails, is skipped
+or is cancelled. It keeps the existing `validate` check context, so an audit
+failure cannot turn that check green. GitHub branch-protection settings are not
+inspected or changed by this change. An audit failure leaves the application
+results visible and CI failing. PostgreSQL release, browser QA and Docker jobs
+remain independent of this gate.
+
 ## 📁 Project Structure
 
 ```

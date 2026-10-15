@@ -1,9 +1,14 @@
+import { Button } from '@/components/ui/button'
+
 interface StatsCardProps {
   stats: {
     posts: number
     receivedLikes: number
     comments: number
-  }
+  } | null
+  activityLoading?: boolean
+  activityError?: boolean
+  onRetryActivity?: () => void
   rewards: {
     points: number
     completedCourses: number
@@ -29,17 +34,24 @@ const changeReason = {
   COURSE_REMOVED: 'Der Kurs wurde entfernt.',
 } as const
 
-export function StatsCard({ stats, rewards, rewardsLoading, rewardsError, isSignedIn }: StatsCardProps) {
+export function StatsCard({ stats, activityLoading = false, activityError = false, onRetryActivity, rewards, rewardsLoading, rewardsError, isSignedIn }: StatsCardProps) {
   const values = [
-    { label: 'Beiträge', value: stats.posts },
-    { label: 'Likes', value: stats.receivedLikes },
-    { label: 'Kommentare', value: stats.comments },
+    { label: 'Beiträge', value: stats?.posts },
+    { label: 'Likes', value: stats?.receivedLikes },
+    { label: 'Kommentare', value: stats?.comments },
   ]
 
   return (
     <section aria-labelledby="community-stats-title" className="border-t pt-5">
       <h2 id="community-stats-title" className="text-base font-semibold tracking-tight">Deine Aktivität</h2>
       <div className="mt-5">
+        {!isSignedIn ? <p className="text-sm text-muted-foreground">Melde dich an, um deine Aktivität zu sehen.</p>
+          : activityLoading ? <p className="text-sm text-muted-foreground" role="status">Aktivität wird geladen…</p>
+          : activityError || !stats ? <div>
+            <p className="text-sm text-destructive" role="alert">Aktivität konnte nicht geladen werden.</p>
+            {onRetryActivity && <Button type="button" variant="outline" className="mt-3" onClick={onRetryActivity}>Aktivität erneut laden</Button>}
+          </div> : <>
+        <p className="mb-4 text-xs text-muted-foreground">Alle deine Beiträge. Likes auf deine Beiträge, einschließlich eigener Likes. Kommentare in veröffentlichten und deinen eigenen Beiträgen.</p>
         <dl className="grid grid-cols-2 gap-x-6 gap-y-5">
           {values.map(({ label, value }) => (
             <div key={label} className="min-w-0">
@@ -48,6 +60,7 @@ export function StatsCard({ stats, rewards, rewardsLoading, rewardsError, isSign
             </div>
           ))}
         </dl>
+        </>}
         <div className="mt-6 border-t pt-5">
           <h3 className="font-medium">Meine Kursbelohnungen</h3>
           <p className="mt-1 text-sm text-muted-foreground">Deine Punkte und Meilensteine bleiben für dich sichtbar, auch wenn du nicht in der öffentlichen Rangliste stehst.</p>
@@ -91,15 +104,16 @@ import Link from 'next/link'
 
 function LearningMilestoneProgress({ completedCourses }: { completedCourses: number }) {
   const nextTarget = [1, 3, 5].find(target => completedCourses < target)
+  const courseNoun = nextTarget === 1 ? 'Kurs' : 'Kursen'
   return <div className="mt-5 border-t pt-4">
     <h4 className="text-sm font-medium">Dein nächster Lernmeilenstein</h4>
     {nextTarget ? <>
-      <p className="mt-1 text-sm text-muted-foreground">{nextTarget} unterschiedliche Kurse abschließen</p>
-      <p className="mt-2 text-sm font-medium tabular-nums">{completedCourses} von {nextTarget} Kursen</p>
+      <p className="mt-1 text-sm text-muted-foreground">{nextTarget === 1 ? 'Einen Kurs abschließen' : `${nextTarget} unterschiedliche Kurse abschließen`}</p>
+      <p className="mt-2 text-sm font-medium tabular-nums">{completedCourses} von {nextTarget} {courseNoun}</p>
       <progress
         value={completedCourses}
         max={nextTarget}
-        aria-label={`Lernmeilenstein: ${completedCourses} von ${nextTarget} Kursen abgeschlossen`}
+        aria-label={`Lernmeilenstein: ${completedCourses} von ${nextTarget} ${courseNoun} abgeschlossen`}
         className="mt-2 h-2 w-full accent-primary"
       >{completedCourses} von {nextTarget}</progress>
     </> : <p className="mt-1 text-sm text-muted-foreground">Alle derzeitigen Lernmeilensteine erreicht.</p>}

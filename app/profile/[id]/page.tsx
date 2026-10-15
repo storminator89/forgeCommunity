@@ -9,7 +9,7 @@ import { useParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
-import { ArrowUp, Calendar, Github, Globe, Linkedin, Mail, MessageSquare, Settings, Star, Twitter } from 'lucide-react';
+import { ArrowUp, Award, Calendar, Github, Globe, Linkedin, Mail, MessageSquare, Settings, Star, Twitter } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { AppHeader, AppShell } from '@/components/app-shell';
 import { PageState } from '@/components/page-state';
@@ -27,6 +27,7 @@ import { ProjectsList } from '@/components/profile/ProjectsList';
 import { FollowButton } from '@/components/profile/FollowButton';
 import { FollowersList } from '@/components/profile/FollowersList';
 import { getSafeHttpUrl, getSafeNavigationUrl } from '@/lib/security';
+import { VERIFIED_COURSE_BADGE } from '@/lib/course-achievement-badge';
 import type { SocialLinks, User as UserType } from '@/types';
 
 type Profile = Omit<UserType, 'email'> & { email?: string; hasEndorsed?: boolean };
@@ -239,6 +240,21 @@ function AccountProfilePage({ profileId, accountId, status }: { profileId: strin
                         <h2 id="profile-skills-title" className="text-xl font-semibold tracking-tight">Skills</h2>
                         {visibleProfile.skills.length === 0 ? <p className="mt-4 text-base text-muted-foreground">{visibleProfile.isCurrentUser ? 'Ergänze deine Fähigkeiten im Profil.' : 'Noch keine Skills vorhanden.'}</p> : <ul className="mt-4 divide-y">{visibleProfile.skills.map(skill => <li key={skill.id} className="py-3 first:pt-0"><div className="flex flex-wrap items-baseline justify-between gap-2"><span className="min-w-0 break-words font-medium">{skill.name}</span><span className="text-sm text-muted-foreground">{skill.endorsements} Empfehlungen</span></div><Progress value={skill.level} className="mt-2 h-2" aria-label={`${skill.name}: ${skill.level} Prozent`} /></li>)}</ul>}
                       </section>
+                      {visibleProfile.badges.length > 0 && <section aria-labelledby="profile-achievements-title" className="min-w-0 border-t pt-5 md:col-span-2">
+                        <h2 id="profile-achievements-title" className="text-xl font-semibold tracking-tight">Auszeichnungen</h2>
+                        <ul className="mt-4 divide-y border-y">{visibleProfile.badges.map(badge => {
+                          const awardedAt = new Date(badge.awardedAt);
+                          return <li key={badge.id} className="flex min-w-0 items-start gap-3 py-4">
+                            <Award aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+                            <div className="min-w-0">
+                              <p className="break-words font-medium">{badge.name}</p>
+                              <p className="mt-1 break-words text-sm text-muted-foreground">{badge.description}</p>
+                              {Number.isFinite(awardedAt.getTime()) && <time dateTime={awardedAt.toISOString()} className="mt-1 block text-xs text-muted-foreground">Erhalten am {format(awardedAt, 'dd.MM.yyyy', { locale: de })}</time>}
+                            </div>
+                          </li>;
+                        })}</ul>
+                        {visibleProfile.isCurrentUser && visibleProfile.badges.some(badge => badge.badgeId === VERIFIED_COURSE_BADGE.id) && <p className="mt-3 text-sm text-muted-foreground">Deine Lern-Auszeichnung sehen andere nur, wenn du der öffentlichen Rangliste zustimmst. <Link href="/settings" className="text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Sichtbarkeit einstellen</Link></p>}
+                      </section>}
                       {visibleProfile.role === 'INSTRUCTOR' && hasExpertise && <section aria-labelledby="profile-expertise-title" className="border-t pt-5 md:col-span-2"><h2 id="profile-expertise-title" className="text-xl font-semibold tracking-tight">Expertise</h2><div className="mt-4 grid gap-5 sm:grid-cols-2"><div><h3 className="font-medium">Unterrichtssprachen</h3><div className="mt-2 flex flex-wrap gap-2">{visibleProfile.teachingLanguages?.length ? visibleProfile.teachingLanguages.map(language => <Badge key={language} variant="secondary">{language}</Badge>) : <p className="text-sm text-muted-foreground">Keine angegeben</p>}</div></div><div><h3 className="font-medium">Fachgebiete</h3><div className="mt-2 flex flex-wrap gap-2">{visibleProfile.expertise?.length ? visibleProfile.expertise.map(subject => <Badge key={subject} variant="secondary">{subject}</Badge>) : <p className="text-sm text-muted-foreground">Keine angegeben</p>}</div></div></div></section>}
                     </div>
                   </TabsContent>

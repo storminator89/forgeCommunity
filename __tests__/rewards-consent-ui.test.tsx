@@ -18,10 +18,10 @@ beforeEach(() => {
     status: 'authenticated', update: jest.fn(),
   } as ReturnType<typeof useSession>)
   jest.mocked(axios.get).mockImplementation(async (url: string) => {
-    if (url === '/api/user/profile') return { data: { name: 'Ada', email: 'ada@example.com', image: null, userSettings: { publicRankingOptIn: false, emailNotifications: true, pushNotifications: true } } }
+    if (url === '/api/user/profile') return { data: { id: 'alice', name: 'Ada', email: 'ada@example.com', image: null, userSettings: { publicRankingOptIn: false, emailNotifications: true, pushNotifications: true } } }
     return { data: [] }
   })
-  jest.mocked(axios.put).mockResolvedValue({ data: {} })
+  jest.mocked(axios.put).mockResolvedValue({ data: { id: 'alice', userSettings: { pushNotifications: true } } })
 })
 
 it('starts with public ranking consent off and saves explicit opt-in', async () => {
@@ -46,13 +46,13 @@ it('keeps all five settings tabs reachable in the mobile reflow', async () => {
   expect(screen.getByRole('tab', { name: 'Privatsphäre' })).toBeInTheDocument()
 })
 
-it('explains that email and push choices do not currently deliver messages', async () => {
+it('explains that email and background push are unavailable while browser-open chat alerts are optional', async () => {
   const user = userEvent.setup()
   render(<SettingsPage />)
   await user.click(await screen.findByRole('tab', { name: 'Meldungen' }))
-  expect(screen.getByText(/E-Mail- und Push-Zustellung sind noch nicht eingerichtet/)).toBeInTheDocument()
+  expect(screen.getByText(/E-Mails und Hintergrund-Push werden derzeit nicht versendet/)).toBeInTheDocument()
   expect(screen.getByRole('switch', { name: 'E-Mail-Wunsch für später (kein Versand)' })).toBeInTheDocument()
-  expect(screen.getByRole('switch', { name: 'Push-Wunsch für später (keine Zustellung)' })).toBeInTheDocument()
+  expect(screen.getByRole('switch', { name: 'Desktop-Hinweise für Chatnachrichten' })).toBeInTheDocument()
 })
 
 it('shows a retryable error instead of editable defaults when profile loading fails', async () => {

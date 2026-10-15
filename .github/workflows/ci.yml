@@ -9,7 +9,48 @@ permissions:
   contents: read
 
 jobs:
+  # Preserve the existing required check context. Neither prerequisite depends
+  # on the other, so audit failures cannot hide application validation results.
   validate:
+    needs: [quality, security-audit]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require application validation and security audit
+        env:
+          QUALITY_RESULT: ${{ needs.quality.result }}
+          SECURITY_AUDIT_RESULT: ${{ needs.security-audit.result }}
+        run: |
+          printf 'Required checks: quality=%s; security-audit=%s\n' "$QUALITY_RESULT" "$SECURITY_AUDIT_RESULT"
+          if [ "$QUALITY_RESULT" != "success" ] || [ "$SECURITY_AUDIT_RESULT" != "success" ]; then
+            exit 1
+          fi
+
+  security-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        # v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Set up Node.js
+        # v7.0.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies without lifecycle scripts
+        # The audit reads the locked dependency tree; Prisma generation and
+        # native builds are unnecessary in this job.
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Check security floor
+        run: npm audit --audit-level=high
+
+  quality:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
@@ -45,9 +86,6 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
-      - name: Check security floor
-        run: npm audit --audit-level=high
-
       - name: Typecheck
         run: npm run typecheck
 
@@ -55,7 +93,13 @@ jobs:
         run: npm run lint -- --max-warnings 0
 
       - name: Test
-        run: npm test -- --runInBand
+        # The real DB suites use disposable SQLite files and require a SQLite
+        # generated client. Restore the PostgreSQL client before the app build.
+        run: |
+          DATABASE_PROVIDER=sqlite DATABASE_URL="file:${RUNNER_TEMP}/forge-jest.db" npm run db:generate
+          git diff --exit-code -- prisma/schema.sqlite.prisma
+          DATABASE_PROVIDER=sqlite DATABASE_URL="file:${RUNNER_TEMP}/forge-jest.db" npm test -- --runInBand
+          DATABASE_PROVIDER=postgresql npm run db:generate
 
       - name: Verify SQLite migration safety
         run: node --test scripts/check-sqlite-migrations.mjs
@@ -71,7 +115,7 @@ jobs:
       - name: Smoke test standalone server
         run: node scripts/smoke-standalone.mjs
 
-  # Independent of validate: the dependency audit can fail without hiding the
+  # Independent of the validate gate: the audit can fail without hiding the
   # PostgreSQL migration result. Every object is confined to disposable CI DB.
   postgresql-release-gate:
     runs-on: ubuntu-latest
@@ -109,8 +153,8 @@ jobs:
       - name: Exercise empty install and populated PostgreSQL upgrades
         run: node --test --test-concurrency=1 scripts/check-postgresql-upgrades.mjs scripts/check-postgresql-release-gate.mjs
 
-  # A sibling job keeps browser coverage visible even while the audit gate in
-  # validate is blocked by an upstream dependency advisory.
+  # A sibling job keeps browser coverage visible even while security-audit
+  # is blocked by an upstream dependency advisory.
   browser-qa:
     runs-on: ubuntu-latest
     timeout-minutes: 30

@@ -82,6 +82,7 @@ test('landing, account, community, members, chat, and notifications work on desk
     await menu.click();
     await page.getByRole('button', { name: 'Navigation schließen' }).click();
     await expect(page.getByRole('dialog')).toBeHidden();
+    await expect(menu).toBeFocused();
   }
 
   const newPost = page.getByRole('button', { name: 'Neuen Beitrag erstellen' });
@@ -104,20 +105,41 @@ test('landing, account, community, members, chat, and notifications work on desk
   await expect(page.getByRole('link', { name: 'Zum Inhalt springen' })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.locator('#page-content')).toBeFocused();
-  const search = page.getByRole('searchbox', { name: 'Suche nach Kursen, Events, Mitgliedern, Beiträgen oder Ressourcen' });
+  const search = page.getByRole('searchbox', { name: /^Suche nach Kursen/ });
   await search.fill(postTitle);
   await page.getByRole('tab', { name: 'Beiträge' }).click();
   await expect(page.getByRole('heading', { name: postTitle, exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('search-result.png'), fullPage: true });
 
+  // Typing replaces the skip-link entry's query; choosing a tab adds a
+  // separate entry. Browser Back must restore the query-only All view first.
+  await page.goBack();
+  await expect(page).toHaveURL(url => url.pathname === '/search' &&
+    url.searchParams.get('q') === postTitle && url.searchParams.get('type') === null && url.hash === '#page-content');
+  await expect(search).toHaveValue(postTitle);
+  await expect(page.getByRole('tab', { name: 'Alle', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await page.goBack();
+  await expect(page).toHaveURL(url => url.pathname === '/search' && url.search === '' && url.hash === '');
+  await expect(search).toHaveValue('');
   await page.goBack();
   await expect(page).toHaveURL(/\/community$/);
   await page.goForward();
+  await expect(page).toHaveURL(url => url.pathname === '/search' && url.search === '' && url.hash === '');
+  await expect(search).toHaveValue('');
+  await page.goForward();
   await expect(page).toHaveURL(url => url.pathname === '/search' &&
-    url.searchParams.get('q') === postTitle && url.searchParams.get('type') === 'post');
+    url.searchParams.get('q') === postTitle && url.searchParams.get('type') === null && url.hash === '#page-content');
+  await expect(search).toHaveValue(postTitle);
+  await page.goForward();
+  await expect(page).toHaveURL(url => url.pathname === '/search' &&
+    url.searchParams.get('q') === postTitle && url.searchParams.get('type') === 'post' && url.hash === '#page-content');
   await expect(search).toHaveValue(postTitle);
   await expect(page.getByRole('tab', { name: 'Beiträge' })).toHaveAttribute('aria-selected', 'true');
   await search.focus();
+  await expect(search).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('button', { name: 'Suche löschen' })).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
   await expect(search).toBeFocused();
 
   await page.goto('/members');

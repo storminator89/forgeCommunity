@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { test } from 'node:test';
 import pg from 'pg';
 import { applyPostgresqlUpgrades } from './postgresql-upgrades.mjs';
 
 const baseUrl = process.env.DATABASE_URL;
+const baselineSql = readFileSync(new URL('../prisma/postgresql-baselines/0000_main_7814799.sql', import.meta.url), 'utf8');
+const upgradeNames = readdirSync(new URL('../prisma/postgresql-upgrades/', import.meta.url)).filter(name => /^\d+_[\w-]+\.sql$/.test(name)).sort();
 if (!/^postgres(?:ql)?:\/\//.test(baseUrl ?? '')) {
   throw new Error('Set DATABASE_URL to a disposable PostgreSQL database before running this integration test.');
 }
@@ -19,17 +21,23 @@ async function fixture(run) {
   try {
     await database.query(`CREATE SCHEMA "${schema}"`);
     await database.query(`SET search_path TO "${schema}"`);
+    await database.query(baselineSql);
+    // The reviewed main baseline already contains the first upgrade's table.
+    // Remove only that empty table here to exercise the normal 0001 upgrade.
     await database.query(`
-      CREATE TABLE "User" (id TEXT PRIMARY KEY);
-      CREATE TABLE "UserSkill" (
-        id TEXT PRIMARY KEY,
-        "userId" TEXT NOT NULL REFERENCES "User"(id),
-        "skillId" TEXT NOT NULL,
-        endorsements INTEGER NOT NULL DEFAULT 0
-      );
-      INSERT INTO "User" (id) VALUES ('recipient'), ('endorser');
-      INSERT INTO "UserSkill" (id, "userId", "skillId", endorsements)
-      VALUES ('userSkill', 'recipient', 'skill', 7);`);
+      DROP TABLE "SkillEndorsement";
+      INSERT INTO "User" (id, email, "updatedAt") VALUES
+        ('recipient', 'recipient@example.invalid', CURRENT_TIMESTAMP),
+        ('endorser', 'endorser@example.invalid', CURRENT_TIMESTAMP);
+      INSERT INTO "Skill" (id, name, category) VALUES ('skill', 'Legacy skill', 'test');
+      INSERT INTO "UserSkill" (id, "userId", "skillId", level, endorsements)
+      VALUES ('userSkill', 'recipient', 'skill', 2, 7);
+      INSERT INTO "Post" (id, title, content, published, "authorId", "updatedAt")
+        VALUES ('kept-post', 'Preserved title', 'Preserved content', true, 'recipient', CURRENT_TIMESTAMP);
+      INSERT INTO "Comment" (id, content, "postId", "authorId", "updatedAt")
+        VALUES ('kept-comment', 'Preserved reply', 'kept-post', 'endorser', CURRENT_TIMESTAMP);
+      INSERT INTO "LikePost" (id, "postId", "userId") VALUES ('kept-like', 'kept-post', 'endorser');
+      INSERT INTO "LikeComment" (id, "commentId", "userId") VALUES ('kept-comment-like', 'kept-comment', 'recipient');`);
     await run({ database, url: url.toString() });
   } finally {
     // This generated schema is the only object this integration test drops.
@@ -55,7 +63,14 @@ test('upgrades a populated baseline atomically, idempotently, and rejects modifi
       SELECT (SELECT endorsements FROM "UserSkill" WHERE id='userSkill') AS endorsements,
              (SELECT COUNT(*)::int FROM "_app_schema_upgrades") AS migrations`);
     assert.equal(endorsements, 7);
-    assert.equal(migrations, 1);
+    assert.deepEqual((await database.query('SELECT id, title FROM "Post"')).rows, [{ id: 'kept-post', title: 'Preserved title' }]);
+    assert.deepEqual((await database.query('SELECT id, content FROM "Comment"')).rows, [{ id: 'kept-comment', content: 'Preserved reply' }]);
+    for (const name of ['Post_createdAt_id_idx', 'Post_published_createdAt_id_idx', 'Post_authorId_createdAt_id_idx', 'Comment_postId_createdAt_id_idx', 'Comment_authorId_postId_idx', 'LikePost_postId_idx', 'LikeComment_commentId_idx']) {
+      assert.ok((await database.query('SELECT to_regclass($1) AS index', [`"${name}"`])).rows[0].index, `${name} missing`);
+    }
+    assert.equal((await database.query('SELECT COUNT(*)::int AS n FROM "LikePost"')).rows[0].n, 1);
+    assert.equal((await database.query('SELECT COUNT(*)::int AS n FROM "LikeComment"')).rows[0].n, 1);
+    assert.equal(migrations, upgradeNames.length);
     await database.query(`INSERT INTO "SkillEndorsement" (id, "endorserId", "userSkillId")
                           VALUES ('one', 'endorser', 'userSkill')`);
     await assert.rejects(database.query(`INSERT INTO "SkillEndorsement" (id, "endorserId", "userSkillId")
@@ -76,7 +91,7 @@ test('requires an explicit, verified baseline for an already-current fresh schem
     await assert.rejects(applyPostgresqlUpgrades(url), /without upgrade history/);
     await applyPostgresqlUpgrades(url, { baselineCurrentSchema: true });
     await applyPostgresqlUpgrades(url);
-    assert.equal((await database.query('SELECT COUNT(*)::int AS count FROM "_app_schema_upgrades"')).rows[0].count, 1);
+    assert.equal((await database.query('SELECT COUNT(*)::int AS count FROM "_app_schema_upgrades"')).rows[0].count, upgradeNames.length);
     await assert.rejects(applyPostgresqlUpgrades(url, { baselineCurrentSchema: true }), /requires an untracked/);
   });
 });

@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { Prisma, type RewardChangeReason } from '@prisma/client';
 import { getQuizValidationError } from '@/app/courses/[courseId]/contents/types';
 import { completionState, contentQuiz, courseContentRevision, courseLeaves, isQuizLikeContent } from '@/lib/server/course-progress';
+import { VERIFIED_COURSE_BADGE } from '@/lib/course-achievement-badge';
 
 export const COURSE_COMPLETION_POINTS = 50;
 const EVENT = 'COURSE_COMPLETED' as const;
@@ -77,12 +78,38 @@ async function revokeReward(tx: Prisma.TransactionClient, userId: string, course
   if (updated.count === 1) await recordChange(tx, existing.id, existing.stateVersion + 1, 'REVOKED', reason, -COURSE_COMPLETION_POINTS);
 }
 
+/** Mirror current verified learning, never historical completion snapshots. */
+export async function reconcileVerifiedCourseBadge(tx: Prisma.TransactionClient, userId: string) {
+  const [user, activeRewards] = await Promise.all([
+    tx.user.findUnique({ where: { id: userId }, select: { role: true, isTestAccount: true } }),
+    tx.rewardLedger.count({ where: { userId, eventType: EVENT, revokedAt: null } }),
+  ]);
+  const key = { userId, badgeId: VERIFIED_COURSE_BADGE.id };
+  if (!user || user.role !== 'USER' || user.isTestAccount || activeRewards === 0) {
+    await tx.userBadge.deleteMany({ where: key });
+    return;
+  }
+  await tx.badge.upsert({
+    where: { id: VERIFIED_COURSE_BADGE.id },
+    create: VERIFIED_COURSE_BADGE,
+    update: {},
+  });
+  await tx.userBadge.upsert({
+    where: { userId_badgeId: key },
+    create: key,
+    update: {},
+  });
+}
+
 export async function revokeCourseRewards(tx: Prisma.TransactionClient, courseIds: string[], reason: RewardChangeReason) {
   if (!courseIds.length) return;
   const active = await tx.rewardLedger.findMany({
     where: { eventType: EVENT, sourceId: { in: courseIds }, revokedAt: null }, select: { userId: true, sourceId: true },
   });
   for (const item of active) await revokeReward(tx, item.userId, item.sourceId, reason);
+  for (const userId of new Set(active.map(item => item.userId))) {
+    await reconcileVerifiedCourseBadge(tx, userId);
+  }
 }
 
 /** One durable event key; each state transition has a separate append-only explanation. */
@@ -102,6 +129,7 @@ export async function reconcileLearnerCourseReward(tx: Prisma.TransactionClient,
 
   if (!qualifies) {
     await revokeReward(tx, userId, courseId, reason);
+    await reconcileVerifiedCourseBadge(tx, userId);
     return false;
   }
 
@@ -119,6 +147,7 @@ export async function reconcileLearnerCourseReward(tx: Prisma.TransactionClient,
   } else if (row.stateVersion === 1) {
     await recordChange(tx, row.id, 1, 'AWARDED', null, COURSE_COMPLETION_POINTS);
   }
+  await reconcileVerifiedCourseBadge(tx, userId);
   return true;
 }
 
@@ -150,4 +179,5 @@ export async function reconcileUserRewards(tx: Prisma.TransactionClient, userId:
   for (const courseId of new Set([...enrollments.map(row => row.courseId), ...ledger.map(row => row.sourceId)])) {
     await reconcileLearnerCourseReward(tx, userId, courseId);
   }
+  await reconcileVerifiedCourseBadge(tx, userId);
 }

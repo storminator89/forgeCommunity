@@ -6,6 +6,7 @@ import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth' 
 import { sanitizeRichHtmlServer, sanitizeTextServer } from '@/lib/server/sanitize-html'
 import { readJsonObject, readPage, requestErrorResponse } from '@/lib/server/api-input'
+import { afterCommunityCursor, COMMUNITY_ORDER, COMMUNITY_PAGE_SIZE, communityPage, communityPostInclude, communityVisibility, isCurrentCommunityAdmin, normalizeCommunityPost, readCommunityCursor } from '@/lib/server/community-feed'
 
 export async function POST(req: NextRequest) {
   try {
@@ -41,7 +42,7 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    return NextResponse.json(newPost, { status: 201 })
+    return NextResponse.json({ ...newPost, comments: [], commentCount: 0, commentsNextCursor: null, votes: 0, isLiked: false }, { status: 201 })
   } catch (error: any) {
     console.error(error)
     const inputError = requestErrorResponse(error)
@@ -52,48 +53,21 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   try {
-    const page = readPage(req)
+    const feed = new URL(req.url).searchParams.get('feed') === '1'
+    const cursor = feed ? readCommunityCursor(req, 'posts') : null
+    const page = feed ? { take: COMMUNITY_PAGE_SIZE + 1 } : readPage(req)
     const session = await getServerSession(authOptions)
     const userId = session?.user?.id
-    const where = session?.user?.role === 'ADMIN'
-      ? undefined
-      : userId
-        ? { OR: [{ published: true }, { published: false, authorId: userId }] }
-        : { published: true }
-
+    const isAdmin = await isCurrentCommunityAdmin(userId, session?.user?.role)
     const posts = await prisma.post.findMany({
-      where,
+      where: { AND: [communityVisibility(userId, isAdmin), afterCommunityCursor(cursor)] },
       ...page,
-      include: {
-        author: {
-          select: { id: true, name: true, image: true },
-        },
-        likePosts: true,
-        comments: {
-          include: {
-            author: {
-              select: { id: true, name: true, image: true },
-            },
-            likeComments: true,
-          },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
+      include: communityPostInclude(userId),
+      orderBy: COMMUNITY_ORDER,
     })
-
-    // Füge die Like-Informationen hinzu
-    const mappedPosts = posts.map(post => ({
-      ...post,
-      votes: post.likePosts.length,
-      isLiked: userId ? post.likePosts.some(like => like.userId === userId) : false,
-      comments: post.comments.map(comment => ({
-        ...comment,
-        votes: comment.likeComments.length,
-        isLiked: userId ? comment.likeComments.some(like => like.userId === userId) : false,
-      })),
-    }))
-
-    return NextResponse.json(mappedPosts)
+    if (!feed) return NextResponse.json(posts.map(normalizeCommunityPost), { headers: { 'Cache-Control': 'private, no-store' } })
+    const result = communityPage(posts, 'posts')
+    return NextResponse.json({ posts: result.items.map(normalizeCommunityPost), nextCursor: result.nextCursor }, { headers: { 'Cache-Control': 'private, no-store' } })
   } catch (error) {
     console.error(error)
     const inputError = requestErrorResponse(error)

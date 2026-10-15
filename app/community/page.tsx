@@ -22,35 +22,8 @@ import { PostForm } from '@/components/community/PostForm'
 import { PostCard } from '@/components/community/PostCard'
 import { LeaderboardCard } from '@/components/community/LeaderboardCard'
 import { StatsCard } from '@/components/community/StatsCard'
-
-interface Post {
-  id: string
-  title: string
-  content: string
-  authorId: string
-  author: {
-    id: string
-    name: string
-    image: string | null
-  } | null
-  createdAt: string
-  votes: number
-  isLiked: boolean
-  comments: Comment[]
-}
-
-interface Comment {
-  id: string
-  authorId: string
-  author: {
-    name: string
-    image: string | null
-  } | null
-  content: string
-  createdAt: string
-  votes: number
-  isLiked: boolean
-}
+import { useCommunityFeed } from '@/hooks/useCommunityFeed'
+import { CommunityPost as Post, CommunityStats, fetchCommunityJson as fetchWithErrorHandling, isAbortError, mergeCommunityRows } from '@/lib/community-feed'
 
 interface LeaderboardUser {
   name: string
@@ -71,25 +44,24 @@ interface RewardSummary {
   }>
 }
 
-function isAbortError(error: unknown): boolean {
-  return error instanceof Error && error.name === 'AbortError'
-}
-
-async function fetchWithErrorHandling(url: string, options?: RequestInit) {
-  const response = await fetch(url, options)
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.message || 'Ein Fehler ist aufgetreten')
-  }
-  return response.json()
-}
-
 function Community({ session }: { session: Session | null }) {
   const mainRef = useRef<HTMLElement>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [localPosts, setLocalPosts] = useState<Post[]>([])
-  const [postsLoadError, setPostsLoadError] = useState(false)
-  const [postsRetryKey, setPostsRetryKey] = useState(0)
+  const feedStatusRef = useRef<HTMLParagraphElement>(null)
+  const focusEndOfFeedRef = useRef(false)
+  const { posts: localPosts, setPosts: setLocalPosts, isLoading, isLoadingMore, loadError: postsLoadError, nextCursor, cancelPage, removePost, loadComments, commentsLoading, commentsError, initialLoaded, linkedTargetLoading, linkedTargetError, retryLinkedTarget, loadMore, retry: retryPosts } = useCommunityFeed()
+  useEffect(() => {
+    if (focusEndOfFeedRef.current && !isLoadingMore && initialLoaded && !nextCursor) {
+      focusEndOfFeedRef.current = false
+      // The focused load-more button has just disappeared at the end of the
+      // list. Keep keyboard users at the result, without stealing another focus.
+      if (document.activeElement === document.body) feedStatusRef.current?.focus()
+    }
+  }, [isLoadingMore, initialLoaded, nextCursor])
+  const [isMutating, setIsMutating] = useState(false)
+  const [activity, setActivity] = useState<CommunityStats | null>(null)
+  const [activityLoading, setActivityLoading] = useState(!!session?.user?.id)
+  const [activityError, setActivityError] = useState(false)
+  const [activityRefresh, setActivityRefresh] = useState(0)
   const [isEditing, setIsEditing] = useState(false)
   const [editingPost, setEditingPost] = useState<Post | null>(null)
   const [leaderboardUsers, setLeaderboardUsers] = useState<LeaderboardUser[]>([])
@@ -97,14 +69,15 @@ function Community({ session }: { session: Session | null }) {
   const [rewardResult, setRewardResult] = useState<{ userId: string; data: RewardSummary | null; error: boolean } | null>(null)
   const [notification, setNotification] = useState<{ type: 'success' | 'error', message: string } | null>(null)
 
-  const postsRequestRef = useRef<AbortController | null>(null)
+  const mountedRef = useRef(false)
+  const mutationRequestRef = useRef<AbortController | null>(null)
   const leaderboardRequestRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     const userId = session?.user?.id
     if (!userId) return
     const controller = new AbortController()
-    void fetchWithErrorHandling('/api/rewards/me', { signal: controller.signal })
+    void fetchWithErrorHandling<RewardSummary>('/api/rewards/me', { signal: controller.signal })
       .then((data: RewardSummary) => { if (!controller.signal.aborted) setRewardResult({ userId, data, error: false }) })
       .catch((error) => { if (!controller.signal.aborted && !isAbortError(error)) setRewardResult({ userId, data: null, error: true }) })
     return () => controller.abort()
@@ -115,68 +88,58 @@ function Community({ session }: { session: Session | null }) {
   const rewards = activeRewardResult?.data ?? null
   const rewardsError = activeRewardResult?.error ?? false
 
-  // Effects
   useEffect(() => {
-    let active = true
-    const postsController = new AbortController()
-    const leaderboardController = new AbortController()
-    postsRequestRef.current = postsController
-    leaderboardRequestRef.current = leaderboardController
-
-    const loadPosts = async () => {
-      try {
-        const data = []
-        for (let page = 1; ; page++) {
-          const batch = await fetchWithErrorHandling(`/api/posts?page=${page}`, { signal: postsController.signal })
-          data.push(...batch)
-          if (batch.length < 50) break
-        }
-        if (!active || postsRequestRef.current !== postsController) return
-        setLocalPosts(data)
-        setPostsLoadError(false)
-      } catch (error) {
-        if (!active || postsController.signal.aborted || postsRequestRef.current !== postsController || isAbortError(error)) return
-        setPostsLoadError(true)
-      } finally {
-        if (active && postsRequestRef.current === postsController) {
-          postsRequestRef.current = null
-          setIsLoading(false)
-        }
-      }
-    }
-
-    const loadLeaderboard = async () => {
-      try {
-        const data = await fetchWithErrorHandling('/api/leaderboard', { signal: leaderboardController.signal })
-        if (!active || leaderboardRequestRef.current !== leaderboardController) return
-        setLeaderboardUsers(data)
-      } catch (error) {
-        if (!active || leaderboardController.signal.aborted || leaderboardRequestRef.current !== leaderboardController || isAbortError(error)) return
-        setNotification({ type: 'error', message: 'Fehler beim Laden des Leaderboards.' })
-      } finally {
-        if (active && leaderboardRequestRef.current === leaderboardController) {
-          leaderboardRequestRef.current = null
-          setIsLeaderboardLoading(false)
-        }
-      }
-    }
-
-    void loadPosts()
-    void loadLeaderboard()
-
+    mountedRef.current = true
+    const controller = new AbortController()
+    leaderboardRequestRef.current = controller
+    void fetchWithErrorHandling<LeaderboardUser[]>('/api/leaderboard', { signal: controller.signal })
+      .then(data => { if (!controller.signal.aborted) setLeaderboardUsers(data) })
+      .catch(error => {
+        if (!controller.signal.aborted && !isAbortError(error)) setNotification({ type: 'error', message: 'Fehler beim Laden des Leaderboards.' })
+      })
+      .finally(() => { if (!controller.signal.aborted) setIsLeaderboardLoading(false) })
     return () => {
-      active = false
-      postsController.abort()
-      leaderboardController.abort()
-      if (postsRequestRef.current === postsController) postsRequestRef.current = null
-      if (leaderboardRequestRef.current === leaderboardController) leaderboardRequestRef.current = null
+      mountedRef.current = false
+      controller.abort()
+      mutationRequestRef.current?.abort()
+      mutationRequestRef.current = null
     }
-  }, [postsRetryKey])
+  }, [])
 
-  const retryPosts = () => {
-    setPostsLoadError(false)
-    setIsLoading(true)
-    setPostsRetryKey(value => value + 1)
+  useEffect(() => {
+    if (!session?.user?.id) return
+    const controller = new AbortController()
+    void fetchWithErrorHandling<CommunityStats>('/api/posts/me/stats', { signal: controller.signal, cache: 'no-store' })
+      .then(data => {
+        if (![data.posts, data.receivedLikes, data.comments].every(value => Number.isSafeInteger(value) && value >= 0)) throw new Error('Ungültige Aktivität')
+        if (!controller.signal.aborted) setActivity(data)
+      })
+      .catch(error => {
+        if (!controller.signal.aborted && !isAbortError(error)) { setActivity(null); setActivityError(true) }
+      })
+      .finally(() => { if (!controller.signal.aborted) setActivityLoading(false) })
+    return () => controller.abort()
+  }, [session?.user?.id, activityRefresh])
+
+  const refreshActivity = () => {
+    setActivityLoading(true)
+    setActivityError(false)
+    setActivityRefresh(value => value + 1)
+  }
+
+  const beginMutation = () => {
+    if (!mountedRef.current || mutationRequestRef.current || isLoading) return null
+    cancelPage()
+    const controller = new AbortController()
+    mutationRequestRef.current = controller
+    setIsMutating(true)
+    return controller
+  }
+
+  const finishMutation = (controller: AbortController) => {
+    if (mutationRequestRef.current !== controller || controller.signal.aborted) return
+    mutationRequestRef.current = null
+    setIsMutating(false)
   }
 
   useEffect(() => {
@@ -186,46 +149,35 @@ function Community({ session }: { session: Session | null }) {
     }
   }, [notification])
 
-  // Action handlers
+  // Mutations abort a page read without advancing its cursor. A retry can safely
+  // merge that page later without overwriting newer edits, likes or comments.
   const handleSubmitPost = async (title: string, content: string) => {
     if (!session) {
       setNotification({ type: 'error', message: 'Bitte melde dich an, um einen Beitrag zu erstellen.' })
       return
     }
-
-    setIsLoading(true)
+    const controller = beginMutation()
+    if (!controller) return
     try {
-      const endpoint = editingPost ? `/api/posts/${editingPost.id}` : '/api/posts'
-      const method = editingPost ? 'PUT' : 'POST'
-
-      const response = await fetchWithErrorHandling(endpoint, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, content })
+      const response = await fetchWithErrorHandling<Post>(editingPost ? `/api/posts/${editingPost.id}` : '/api/posts', {
+        method: editingPost ? 'PUT' : 'POST', signal: controller.signal,
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, content }),
       })
-
+      if (controller.signal.aborted) return
       if (editingPost) {
-        setLocalPosts(prev => prev.map(post =>
-          post.id === editingPost.id ? { ...post, ...response } : post
-        ))
+        // Keep explicitly loaded older comments when the edit response contains
+        // only the bounded comment preview.
+        setLocalPosts(previous => previous.map(post => post.id === editingPost.id ? { ...post, ...response, comments: post.comments, commentsNextCursor: post.commentsNextCursor } : post))
       } else {
-        setLocalPosts(prev => [response, ...prev])
+        setLocalPosts(previous => mergeCommunityRows([response], previous))
+        refreshActivity()
       }
-
       setIsEditing(false)
       setEditingPost(null)
-      setNotification({
-        type: 'success',
-        message: editingPost ? 'Beitrag aktualisiert!' : 'Beitrag erstellt!'
-      })
+      setNotification({ type: 'success', message: editingPost ? 'Beitrag aktualisiert!' : 'Beitrag erstellt!' })
     } catch (error) {
-      setNotification({
-        type: 'error',
-        message: 'Fehler beim Erstellen/Aktualisieren des Beitrags.'
-      })
-    } finally {
-      setIsLoading(false)
-    }
+      if (!controller.signal.aborted && !isAbortError(error)) setNotification({ type: 'error', message: 'Fehler beim Erstellen/Aktualisieren des Beitrags.' })
+    } finally { finishMutation(controller) }
   }
 
   const handleToggleLike = async (postId: string) => {
@@ -233,27 +185,17 @@ function Community({ session }: { session: Session | null }) {
       setNotification({ type: 'error', message: 'Bitte melde dich an, um Likes zu vergeben.' })
       return
     }
-
+    const controller = beginMutation()
+    if (!controller) return
     try {
-      const response = await fetchWithErrorHandling(`/api/posts/${postId}/like`, {
-        method: 'POST'
-      })
-
-      const isLikeAdded = response.message !== 'Like entfernt'
-      setLocalPosts(prev => prev.map(post => {
-        if (post.id === postId) {
-          return {
-            ...post,
-            votes: isLikeAdded ? post.votes + 1 : post.votes - 1,
-            isLiked: isLikeAdded
-          }
-        }
-        return post
-      }))
-
+      const response = await fetchWithErrorHandling<{ message?: string }>(`/api/posts/${postId}/like`, { method: 'POST', signal: controller.signal })
+      if (controller.signal.aborted) return
+      const isLiked = response.message !== 'Like entfernt'
+      setLocalPosts(previous => previous.map(post => post.id === postId ? { ...post, votes: Math.max(0, post.votes + (isLiked ? 1 : -1)), isLiked } : post))
+      refreshActivity()
     } catch (error) {
-      setNotification({ type: 'error', message: 'Fehler beim Liken.' })
-    }
+      if (!controller.signal.aborted && !isAbortError(error)) setNotification({ type: 'error', message: 'Fehler beim Liken.' })
+    } finally { finishMutation(controller) }
   }
 
   const handleDeletePost = async (postId: string) => {
@@ -261,48 +203,41 @@ function Community({ session }: { session: Session | null }) {
       setNotification({ type: 'error', message: 'Bitte melde dich an, um Beiträge zu löschen.' })
       return
     }
-
     if (!window.confirm('Möchtest du diesen Beitrag wirklich löschen?')) return
-
-    setIsLoading(true)
+    const controller = beginMutation()
+    if (!controller) return
     try {
-      await fetchWithErrorHandling(`/api/posts/${postId}`, { method: 'DELETE' })
-      setLocalPosts(prev => prev.filter(post => post.id !== postId))
+      await fetchWithErrorHandling(`/api/posts/${postId}`, { method: 'DELETE', signal: controller.signal })
+      if (controller.signal.aborted) return
+      removePost(postId)
+      refreshActivity()
       setNotification({ type: 'success', message: 'Beitrag wurde gelöscht!' })
     } catch (error) {
-      setNotification({ type: 'error', message: 'Fehler beim Löschen des Beitrags.' })
-    } finally {
-      setIsLoading(false)
-    }
+      if (!controller.signal.aborted && !isAbortError(error)) setNotification({ type: 'error', message: 'Fehler beim Löschen des Beitrags.' })
+    } finally { finishMutation(controller) }
   }
 
   const handleAddComment = async (postId: string, content: string) => {
     if (!session) {
       setNotification({ type: 'error', message: 'Bitte melde dich an, um zu kommentieren.' })
-      return
+      throw new Error('Nicht authentifiziert')
     }
-
-    setIsLoading(true)
+    const controller = beginMutation()
+    if (!controller) throw new Error('Eine Aktion läuft bereits')
     try {
-      const response = await fetchWithErrorHandling(`/api/posts/${postId}/comments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content })
+      const response = await fetchWithErrorHandling<Post['comments'][number]>(`/api/posts/${postId}/comments`, {
+        method: 'POST', signal: controller.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }),
       })
-
-      setLocalPosts(prev => prev.map(post => {
-        if (post.id === postId) {
-          return { ...post, comments: [response, ...post.comments] }
-        }
-        return post
-      }))
-
+      if (controller.signal.aborted) return
+      setLocalPosts(previous => previous.map(post => post.id === postId ? {
+        ...post, comments: mergeCommunityRows([response], post.comments), commentCount: (post.commentCount ?? post.comments.length) + 1,
+      } : post))
+      refreshActivity()
       setNotification({ type: 'success', message: 'Kommentar wurde hinzugefügt!' })
     } catch (error) {
-      setNotification({ type: 'error', message: 'Fehler beim Hinzufügen des Kommentars.' })
-    } finally {
-      setIsLoading(false)
-    }
+      if (!controller.signal.aborted && !isAbortError(error)) setNotification({ type: 'error', message: 'Fehler beim Hinzufügen des Kommentars.' })
+      throw error
+    } finally { finishMutation(controller) }
   }
 
   const handleLikeComment = async (commentId: string, postId: string) => {
@@ -310,40 +245,20 @@ function Community({ session }: { session: Session | null }) {
       setNotification({ type: 'error', message: 'Bitte melde dich an, um Kommentare zu liken.' })
       return
     }
-
+    const controller = beginMutation()
+    if (!controller) return
     try {
-      const response = await fetchWithErrorHandling(`/api/posts/${postId}/comments/${commentId}/like`, {
-        method: 'POST'
-      })
-
-      setLocalPosts(prev => prev.map(post => ({
-        ...post,
-        comments: post.comments.map(comment => {
-          if (comment.id === commentId) {
-            return {
-              ...comment,
-              votes: response.isLiked ? comment.votes + 1 : comment.votes - 1,
-              isLiked: response.isLiked
-            }
-          }
-          return comment
-        })
-      })))
-
+      const response = await fetchWithErrorHandling<{ isLiked: boolean }>(`/api/posts/${postId}/comments/${commentId}/like`, { method: 'POST', signal: controller.signal })
+      if (controller.signal.aborted) return
+      setLocalPosts(previous => previous.map(post => ({ ...post, comments: post.comments.map(comment => comment.id === commentId ? {
+        ...comment, votes: Math.max(0, comment.votes + (response.isLiked ? 1 : -1)), isLiked: response.isLiked,
+      } : comment) })))
     } catch (error) {
-      setNotification({ type: 'error', message: 'Fehler beim Liken des Kommentars.' })
-    }
+      if (!controller.signal.aborted && !isAbortError(error)) setNotification({ type: 'error', message: 'Fehler beim Liken des Kommentars.' })
+    } finally { finishMutation(controller) }
   }
 
-  // Calculate user stats
-  const userStats = {
-    posts: localPosts.filter(post => post.authorId === session?.user.id).length,
-    receivedLikes: localPosts
-      .filter(post => post.authorId === session?.user.id)
-      .reduce((acc, post) => acc + post.votes, 0),
-    comments: localPosts.reduce((acc, post) =>
-      acc + ((post.comments || []).filter(comment => comment.authorId === session?.user.id).length), 0),
-  }
+  const feedCount = isLoading ? 'Wird geladen…' : postsLoadError && localPosts.length === 0 ? 'Nicht verfügbar' : `${localPosts.length} ${localPosts.length === 1 ? 'Beitrag geladen' : 'Beiträge geladen'}`
 
   const openComposer = () => {
     setEditingPost(null)
@@ -389,7 +304,7 @@ function Community({ session }: { session: Session | null }) {
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Austausch / Community</p>
                 <p className="mt-2 max-w-[58ch] text-base leading-relaxed text-muted-foreground">Fragen stellen, Erfahrungen teilen und gemeinsam weiterkommen.</p>
               </div>
-              <p className="text-sm tabular-nums text-muted-foreground">{isLoading ? 'Wird geladen…' : postsLoadError ? 'Nicht verfügbar' : `${localPosts.length} ${localPosts.length === 1 ? 'Beitrag' : 'Beiträge'}`}</p>
+              <p className="text-sm tabular-nums text-muted-foreground">{feedCount}</p>
             </div>
 
             <div className="grid min-w-0 items-start gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,19rem)] lg:gap-12">
@@ -415,7 +330,7 @@ function Community({ session }: { session: Session | null }) {
                       initialTitle={editingPost?.title}
                       initialContent={editingPost?.content}
                       isEditing={!!editingPost}
-                      isLoading={isLoading}
+                      isLoading={isLoading || isMutating}
                       onCancel={() => {
                         setIsEditing(false)
                         setEditingPost(null)
@@ -427,11 +342,13 @@ function Community({ session }: { session: Session | null }) {
                 <div className="mt-9">
                   <div className="flex flex-wrap items-baseline justify-between gap-3 border-b pb-4">
                     <h2 id="community-feed-title" className="text-xl font-semibold tracking-tight">Aktuelle Beiträge</h2>
-                    <span className="text-sm tabular-nums text-muted-foreground">{isLoading ? 'Wird geladen…' : postsLoadError ? 'Nicht verfügbar' : `${localPosts.length} ${localPosts.length === 1 ? 'Beitrag' : 'Beiträge'}`}</span>
+                    <span className="text-sm tabular-nums text-muted-foreground">{feedCount}</span>
                   </div>
                   <div className="mt-5 space-y-5">
+                    {linkedTargetLoading && <p className="text-sm text-muted-foreground" role="status">Verlinkter Beitrag wird geladen…</p>}
+                    {linkedTargetError && <PageState kind="error" title="Verlinkter Inhalt ist nicht verfügbar" description="Der Inhalt wurde möglicherweise gelöscht oder ist für dieses Konto nicht sichtbar." action={<Button type="button" variant="outline" onClick={() => void retryLinkedTarget()}>Verlinkten Inhalt erneut laden</Button>} />}
                     {isLoading && localPosts.length === 0 && <PageState kind="loading" title="Beiträge werden geladen" />}
-                    {postsLoadError && !isLoading && <PageState kind="error" title="Beiträge konnten nicht geladen werden" description="Prüfe deine Verbindung und versuche es erneut." action={<Button type="button" variant="outline" onClick={retryPosts}>Erneut versuchen</Button>} />}
+                    {postsLoadError && !isLoading && localPosts.length === 0 && <PageState kind="error" title="Beiträge konnten nicht geladen werden" description="Prüfe deine Verbindung und versuche es erneut." action={<Button type="button" variant="outline" onClick={retryPosts}>Erneut versuchen</Button>} />}
                     <AnimatePresence>
                       {localPosts.map((post) => (
                         <PostCard
@@ -447,10 +364,23 @@ function Community({ session }: { session: Session | null }) {
                           }}
                           onAddComment={handleAddComment}
                           onLikeComment={handleLikeComment}
-                          isLoading={isLoading}
+                          onLoadComments={loadComments}
+                          commentsLoading={!!commentsLoading[post.id]}
+                          commentsError={!!commentsError[post.id]}
+                          isLoading={isLoading || isMutating}
                         />
                       ))}
                     </AnimatePresence>
+                    {localPosts.length > 0 && <div className="border-t pt-5">
+                      {postsLoadError && <p className="mb-3 text-sm text-destructive" role="alert">Beiträge konnten nicht vollständig geladen werden. Deine geladenen Beiträge bleiben sichtbar.</p>}
+                      {nextCursor || !initialLoaded ? <Button type="button" variant="outline" className="w-full sm:w-auto" disabled={isLoadingMore || isMutating} onClick={event => {
+                        focusEndOfFeedRef.current = document.activeElement === event.currentTarget
+                        void (postsLoadError ? retryPosts() : loadMore())
+                      }}>
+                        {isLoadingMore ? 'Weitere Beiträge werden geladen…' : postsLoadError ? 'Weitere Beiträge erneut laden' : 'Weitere Beiträge laden'}
+                      </Button> : <p className="text-sm text-muted-foreground">Ende der Liste.</p>}
+                      <p ref={feedStatusRef} tabIndex={-1} className="mt-3 text-sm text-muted-foreground" role="status" aria-live="polite">{isLoadingMore ? 'Weitere Beiträge werden geladen…' : feedCount}</p>
+                    </div>}
 
                     {localPosts.length === 0 && !isLoading && !postsLoadError && (
                       <div className="border-t py-12 text-center" role="status">
@@ -465,7 +395,7 @@ function Community({ session }: { session: Session | null }) {
               </section>
 
 <aside aria-label="Deine Community im Überblick" className="min-w-0 space-y-9 lg:sticky lg:top-8">
-                <StatsCard stats={userStats} rewards={rewards} rewardsLoading={rewardsLoading} rewardsError={rewardsError} isSignedIn={!!session} />
+                <StatsCard stats={activity} activityLoading={activityLoading} activityError={activityError} onRetryActivity={refreshActivity} rewards={rewards} rewardsLoading={rewardsLoading} rewardsError={rewardsError} isSignedIn={!!session} />
                 <LeaderboardCard
                   users={leaderboardUsers}
                   isLoading={isLeaderboardLoading}
@@ -487,5 +417,5 @@ export default function CommunityPage() {
 
   // The posts response can include this viewer's unpublished posts and likes.
   // Reset the whole feed before a different account can see cached rows.
-  return <Community key={session?.user?.id ?? 'anonymous'} session={session} />
+  return <Community key={`${session?.user?.id ?? 'anonymous'}:${session?.user?.role ?? 'USER'}`} session={session} />
 }

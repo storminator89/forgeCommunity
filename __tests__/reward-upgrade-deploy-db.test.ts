@@ -1,12 +1,13 @@
 /** @jest-environment node */
 import { createHash } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const migrations = ['0001_initial.sql', '0002_skill_endorsements.sql', '0003_course_progress.sql', '0004_reports.sql'];
+const migrationCount = readdirSync(join(process.cwd(), 'prisma', 'sqlite-migrations')).filter(name => /^\d+_.*\.sql$/.test(name)).length;
 const sql = (name: string) => readFileSync(join(process.cwd(), 'prisma', 'sqlite-migrations', name), 'utf8');
 
 test('ordered clean-main SQLite upgrade preserves old completions, privacy defaults, and history on repeat deploy', () => {
@@ -45,10 +46,10 @@ test('ordered clean-main SQLite upgrade preserves old completions, privacy defau
     expect(db.prepare('SELECT "rewardEligible" FROM "Course" WHERE "id" = ?').get('legacy-course'))
       .toMatchObject({ rewardEligible: 0 });
     expect(db.prepare('SELECT COUNT(*) AS n FROM "RewardLedger"').get()).toMatchObject({ n: 0 });
-    expect(db.prepare('SELECT COUNT(*) AS n FROM _app_migrations').get()).toMatchObject({ n: 5 });
+    expect(db.prepare('SELECT COUNT(*) AS n FROM _app_migrations').get()).toMatchObject({ n: migrationCount });
     expect(deploy()).toMatchObject({ status: 0 });
     expect(db.prepare('SELECT COUNT(*) AS n FROM "CourseCompletionRecord"').get()).toMatchObject({ n: 1 });
-    expect(db.prepare('SELECT COUNT(*) AS n FROM _app_migrations').get()).toMatchObject({ n: 5 });
+    expect(db.prepare('SELECT COUNT(*) AS n FROM _app_migrations').get()).toMatchObject({ n: migrationCount });
 
     db.prepare('UPDATE "UserSettings" SET "publicRankingOptIn" = true WHERE "userId" = ?').run('other');
     db.prepare('INSERT INTO "RewardLedger" ("id", "userId", "eventType", "sourceId", "courseTitle", "points") VALUES (?, ?, ?, ?, ?, ?)')

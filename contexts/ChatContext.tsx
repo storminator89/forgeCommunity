@@ -7,6 +7,7 @@ import { useSession } from 'next-auth/react';
 import { useNotifications } from './NotificationContext';
 import { ChatMessage, ChatChannel, CreateChannelInput, EditMessageInput } from '@/types/chat';
 import { NotificationType } from '@/types/notifications';
+import { BROWSER_CHAT_ALERT_PREFERENCE_EVENT, type BrowserChatAlertPreference } from '@/lib/browser-chat-alerts';
 
 interface ChatContextType {
   channels: ChatChannel[];
@@ -24,23 +25,10 @@ interface ChatContextType {
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
-const playNotificationSound = () => {
-  try {
-    const audio = new Audio('/sounds/notification.mp3');
-    audio.volume = 0.5;
-    audio.play().catch(err => console.error('Failed to play notification sound:', err));
-  } catch (error) {
-    console.error('Error playing notification sound:', error);
-  }
-};
-
 const showDesktopNotification = (title: string, body: string) => {
   if ('Notification' in window && Notification.permission === 'granted') {
     try {
-      new Notification(title, {
-        body,
-        icon: '/images/notification-icon.png',
-      });
+      new Notification(title, { body });
     } catch (error) {
       console.error('Error showing desktop notification:', error);
     }
@@ -77,6 +65,46 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
   const [processedMessageIds] = useState<Set<string>>(new Set());
   const activeChannelIdRef = useRef<string | null>(null);
   const activeSessionIdRef = useRef<string | null>(null);
+  // An unverified or failed preference load must never enable desktop alerts.
+  const browserAlertsEnabledRef = useRef(false);
+
+  useEffect(() => {
+    const userId = session?.user?.id;
+    browserAlertsEnabledRef.current = false;
+    if (!userId) return;
+
+    const controller = new AbortController();
+    let updatedAfterRequest = false;
+    const onPreferenceChange = (event: Event) => {
+      const preference = (event as CustomEvent<BrowserChatAlertPreference>).detail;
+      if (preference?.userId !== userId) return;
+      updatedAfterRequest = true;
+      browserAlertsEnabledRef.current = preference.enabled === true;
+    };
+    window.addEventListener(BROWSER_CHAT_ALERT_PREFERENCE_EVENT, onPreferenceChange);
+
+    void fetch('/api/user/profile', { signal: controller.signal, cache: 'no-store' })
+      .then(async response => {
+        if (!response.ok) throw new Error('Desktop notification preference unavailable');
+        return response.json() as Promise<{ id?: string; userSettings?: { pushNotifications?: boolean } | null }>;
+      })
+      .then(profile => {
+        if (!controller.signal.aborted && !updatedAfterRequest && profile.id === userId) {
+          // An account without a settings row uses the database default. A
+          // malformed settings response must not enable private desktop text.
+          browserAlertsEnabledRef.current = profile.userSettings === null
+            ? true
+            : profile.userSettings?.pushNotifications === true;
+        }
+      })
+      .catch(() => { /* Keep desktop alerts off when preferences cannot be verified. */ });
+
+    return () => {
+      controller.abort();
+      window.removeEventListener(BROWSER_CHAT_ALERT_PREFERENCE_EVENT, onPreferenceChange);
+      browserAlertsEnabledRef.current = false;
+    };
+  }, [session?.user?.id]);
 
   const setActiveChannel = useCallback((channel: ChatChannel) => {
     if (activeChannelIdRef.current === channel.id) return;
@@ -224,8 +252,7 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
           });
         }
 
-        if (!isWindowFocused) {
-          playNotificationSound();
+        if (!isWindowFocused && browserAlertsEnabledRef.current) {
           showDesktopNotification('Neue Nachricht', notificationContent);
         }
       });
@@ -268,10 +295,6 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
 
 
   useEffect(() => {
-    if ('Notification' in window) {
-      Notification.requestPermission();
-    }
-
     const handleFocus = () => setIsWindowFocused(true);
     const handleBlur = () => setIsWindowFocused(false);
 
@@ -377,8 +400,7 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
           });
         }
 
-        if (!isWindowFocused) {
-          playNotificationSound();
+        if (!isWindowFocused && browserAlertsEnabledRef.current) {
           showDesktopNotification('Neue Nachricht', notificationContent);
         }
       }

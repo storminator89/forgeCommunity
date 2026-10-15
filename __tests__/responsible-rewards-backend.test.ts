@@ -5,8 +5,10 @@ import {
   reconcileCourseRewards,
   reconcileLearnerCourseReward,
   reconcileUserRewards,
+  revokeCourseRewards,
 } from '@/lib/server/rewards'
 import { courseContentRevision } from '@/lib/server/course-progress'
+import { VERIFIED_COURSE_BADGE } from '@/lib/course-achievement-badge'
 
 const courseId = 'course-1'
 const userId = 'learner-1'
@@ -31,12 +33,27 @@ function fixture() {
     attempts: [] as Array<{ userId: string; courseId: string; contentId: string; revision: string; passed: boolean }>,
     ledger: [] as LedgerRow[],
     changes: [] as ChangeRow[],
+    badges: new Map<string, { name: string }>(),
+    userBadges: new Set<string>(),
   }
   state.progress.set('quiz-1', courseContentRevision(state.contents[0]))
   state.course.rewardApprovalRevision = courseQuizApprovalRevision(state.contents)
   state.attempts.push({ userId, courseId, contentId: 'quiz-1', revision: courseContentRevision(state.contents[0]), passed: true })
   const tx = {
     user: { findUnique: jest.fn(async ({ where }: any) => state.users.get(where.id) ?? null) },
+    badge: { upsert: jest.fn(async ({ where, create }: any) => {
+      if (!state.badges.has(where.id)) state.badges.set(where.id, { name: create.name })
+      return state.badges.get(where.id)
+    }) },
+    userBadge: {
+      upsert: jest.fn(async ({ where }: any) => {
+        const key = where.userId_badgeId
+        state.userBadges.add(`${key.userId}:${key.badgeId}`)
+      }),
+      deleteMany: jest.fn(async ({ where }: any) => {
+        state.userBadges.delete(`${where.userId}:${where.badgeId}`)
+      }),
+    },
     course: {
       findUnique: jest.fn(async ({ where }: any) => where.id === courseId ? state.course : null),
       update: jest.fn(async ({ data }: any) => Object.assign(state.course, data)),
@@ -52,6 +69,8 @@ function fixture() {
       row.userId === where.userId && row.courseId === where.courseId && row.passed === where.passed &&
       where.OR.some((candidate: any) => candidate.contentId === row.contentId && candidate.revision === row.revision)) ?? null) },
     rewardLedger: {
+      count: jest.fn(async ({ where }: any) => state.ledger.filter(row =>
+        row.userId === where.userId && row.eventType === where.eventType && row.revokedAt === null).length),
       upsert: jest.fn(async ({ where, create, update }: any) => {
         const key = where.userId_eventType_sourceId
         let row = state.ledger.find(item => item.userId === key.userId && item.eventType === key.eventType && item.sourceId === key.sourceId)
@@ -104,9 +123,12 @@ describe('responsible course rewards', () => {
     expect(state.ledger).toEqual([{ id: 'ledger-1', userId, eventType: 'COURSE_COMPLETED', sourceId: courseId,
       courseTitle: 'Reward course', points: COURSE_COMPLETION_POINTS, stateVersion: 1, revokedAt: null }])
     expect(state.changes).toEqual([{ ledgerId: 'ledger-1', version: 1, type: 'AWARDED', reason: null, pointsDelta: 50 }])
+    expect(state.badges.get(VERIFIED_COURSE_BADGE.id)?.name).toBe(VERIFIED_COURSE_BADGE.name)
+    expect(state.userBadges).toEqual(new Set([`${userId}:${VERIFIED_COURSE_BADGE.id}`]))
     state.course.rewardEligible = false
     expect(await reconcileLearnerCourseReward(tx as never, userId, courseId)).toBe(false)
     expect(state.ledger[0].revokedAt).toBeInstanceOf(Date)
+    expect(state.userBadges.size).toBe(0)
     expect(state.changes).toContainEqual({ ledgerId: 'ledger-1', version: 2, type: 'REVOKED', reason: 'APPROVAL_WITHDRAWN', pointsDelta: -50 })
     state.course.rewardEligible = true
     expect(await reconcileLearnerCourseReward(tx as never, userId, courseId)).toBe(true)
@@ -115,6 +137,7 @@ describe('responsible course rewards', () => {
     expect(state.ledger[0].stateVersion).toBe(3)
     expect(state.changes).toContainEqual({ ledgerId: 'ledger-1', version: 3, type: 'REINSTATED', reason: null, pointsDelta: 50 })
     expect(state.changes).toHaveLength(3)
+    expect(state.userBadges).toEqual(new Set([`${userId}:${VERIFIED_COURSE_BADGE.id}`]))
   })
 
   it.each([['draft', draftQuiz], ['invalid', invalidQuiz], ['malformed', '{"questions":oops']])('%s quizzes cannot be approved or rewarded', async (_, quiz) => {
@@ -142,6 +165,7 @@ describe('responsible course rewards', () => {
     await reconcileCourseRewards(tx as never, courseId)
     expect(state.course).toMatchObject({ rewardEligible: false, rewardApprovalRevision: null })
     expect(state.ledger[0].revokedAt).toBeInstanceOf(Date)
+    expect(state.userBadges.size).toBe(0)
     expect(state.changes).toContainEqual({ ledgerId: 'ledger-1', version: 2, type: 'REVOKED', reason: 'QUIZ_REVISED', pointsDelta: -50 })
     state.course.rewardEligible = true
     state.course.rewardApprovalRevision = courseQuizApprovalRevision(state.contents)
@@ -155,6 +179,7 @@ describe('responsible course rewards', () => {
     expect(state.ledger[0].revokedAt).toBeNull()
     expect(state.changes).toContainEqual({ ledgerId: 'ledger-1', version: 3, type: 'REINSTATED', reason: null, pointsDelta: 50 })
     expect(state.changes).toHaveLength(3)
+    expect(state.userBadges).toEqual(new Set([`${userId}:${VERIFIED_COURSE_BADGE.id}`]))
   })
 
   it('keeps approval for cosmetic title or order changes to a quiz', async () => {
@@ -183,6 +208,8 @@ describe('responsible course rewards', () => {
     expect(state.ledger).toHaveLength(1)
     expect(state.ledger[0]).toMatchObject({ userId, eventType: 'COURSE_COMPLETED', sourceId: courseId, points: COURSE_COMPLETION_POINTS, revokedAt: null })
     expect(state.changes).toEqual([{ ledgerId: 'ledger-1', version: 1, type: 'AWARDED', reason: null, pointsDelta: 50 }])
+    expect(state.userBadges).toEqual(new Set([`${userId}:${VERIFIED_COURSE_BADGE.id}`]))
+    expect(tx.userBadge.upsert).toHaveBeenCalledTimes(8)
   })
 
   it('repeat and concurrent calls create one change per state version', async () => {
@@ -203,6 +230,7 @@ describe('responsible course rewards', () => {
     expect(state.changes.map(change => [change.version, change.type, change.pointsDelta])).toEqual([
       [1, 'AWARDED', 50], [2, 'REVOKED', -50], [3, 'REINSTATED', 50],
     ])
+    expect(state.userBadges).toEqual(new Set([`${userId}:${VERIFIED_COURSE_BADGE.id}`]))
   })
 
   it('requires enrollment and every leaf to be complete', async () => {
@@ -235,6 +263,7 @@ describe('responsible course rewards', () => {
     state.course.rewardEligible = eligible as boolean
     expect(await reconcileLearnerCourseReward(tx as never, userId, courseId)).toBe(false)
     expect(state.ledger).toHaveLength(0)
+    expect(state.userBadges.size).toBe(0)
   })
 
   it('bulk reconciliations revoke active points when approval or test status changes', async () => {
@@ -243,10 +272,23 @@ describe('responsible course rewards', () => {
     state.course.rewardEligible = false
     await reconcileCourseRewards(tx as never, courseId)
     expect(state.ledger[0].revokedAt).toBeInstanceOf(Date)
+    expect(state.userBadges.size).toBe(0)
     state.course.rewardEligible = true
     state.users.get(userId)!.isTestAccount = true
     await reconcileUserRewards(tx as never, userId)
     expect(state.ledger).toHaveLength(1)
     expect(state.ledger[0].revokedAt).toBeInstanceOf(Date)
+    expect(state.userBadges.size).toBe(0)
+  })
+
+  it('removes the badge when its last rewarded course is deleted', async () => {
+    const { state, tx } = fixture()
+    await reconcileLearnerCourseReward(tx as never, userId, courseId)
+    expect(state.userBadges.size).toBe(1)
+    await revokeCourseRewards(tx as never, [courseId], 'COURSE_REMOVED')
+    expect(state.ledger[0].revokedAt).toBeInstanceOf(Date)
+    expect(state.userBadges.size).toBe(0)
+    await revokeCourseRewards(tx as never, [courseId], 'COURSE_REMOVED')
+    expect(state.userBadges.size).toBe(0)
   })
 })

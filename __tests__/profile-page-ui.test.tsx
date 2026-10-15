@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ProfilePage from '@/app/profile/[id]/page';
+import { VERIFIED_COURSE_BADGE } from '@/lib/course-achievement-badge';
 
 let mockSession: { user: { id: string } } | null = { user: { id: 'viewer' } };
 
@@ -48,6 +49,41 @@ it('renders a readable profile with safe social links and working activity tabs'
   await userEvent.click(screen.getByRole('tab', { name: /Projekte 3/ }));
   expect(screen.getByRole('tab', { name: /Projekte 3/ })).toHaveAttribute('data-state', 'active');
   expect(await screen.findByText('Projektliste')).toBeInTheDocument();
+});
+
+it('shows only API-permitted achievements and explains the owner’s learning-badge visibility', async () => {
+  const learningBadge = { ...VERIFIED_COURSE_BADGE, id: 'award-1', badgeId: VERIFIED_COURSE_BADGE.id, awardedAt: '2026-10-14T10:00:00.000Z' };
+  mockSession = { user: { id: 'author' } };
+  jest.mocked(global.fetch).mockImplementation(async (url: RequestInfo | URL) => String(url) === '/api/users/author'
+    ? { ok: true, json: async () => ({ ...profile, isCurrentUser: mockSession?.user.id === 'author', badges: mockSession?.user.id === 'author' ? [learningBadge] : [] }) } as Response
+    : { ok: true, json: async () => ({ socialLinks: profile.socialLinks }) } as Response);
+  const view = render(<ProfilePage />);
+  expect(await screen.findByRole('heading', { name: 'Auszeichnungen' })).toBeInTheDocument();
+  expect(screen.getByText(VERIFIED_COURSE_BADGE.name)).toBeInTheDocument();
+  expect(screen.getByText(VERIFIED_COURSE_BADGE.description)).toBeInTheDocument();
+  expect(screen.getByText('Erhalten am 14.10.2026')).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Sichtbarkeit einstellen' })).toHaveAttribute('href', '/settings');
+
+  mockSession = { user: { id: 'viewer' } };
+  view.rerender(<ProfilePage />);
+  expect(screen.queryByText(VERIFIED_COURSE_BADGE.name)).not.toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: 'Sichtbarkeit einstellen' })).not.toBeInTheDocument();
+  expect(await screen.findByRole('heading', { name: 'Ada', level: 1 })).toBeInTheDocument();
+  expect(screen.queryByRole('heading', { name: 'Auszeichnungen' })).not.toBeInTheDocument();
+});
+
+it('does not present the learning privacy explanation for an unrelated badge with the same name', async () => {
+  mockSession = { user: { id: 'author' } };
+  const legacyBadge = {
+    id: 'legacy-award', badgeId: 'legacy-welcome', name: VERIFIED_COURSE_BADGE.name,
+    description: 'Unrelated legacy award', awardedAt: '2026-01-01T00:00:00.000Z', image: '',
+  };
+  jest.mocked(global.fetch).mockImplementation(async (url: RequestInfo | URL) => String(url) === '/api/users/author'
+    ? { ok: true, json: async () => ({ ...profile, isCurrentUser: true, badges: [legacyBadge] }) } as Response
+    : { ok: true, json: async () => ({ socialLinks: profile.socialLinks }) } as Response);
+  render(<ProfilePage />);
+  expect(await screen.findByRole('heading', { name: 'Auszeichnungen' })).toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: 'Sichtbarkeit einstellen' })).not.toBeInTheDocument();
 });
 
 it('keeps loading failures inside the page and retries them', async () => {

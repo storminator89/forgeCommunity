@@ -127,6 +127,23 @@ describe('moderator queue and review', () => {
     expect(reports.updateMany).not.toHaveBeenCalled();
   });
 
+  it.each(['ADMIN', 'MODERATOR'])('rejects a stale %s session according to the current database role', async (role) => {
+    (getServerSession as jest.Mock).mockResolvedValue({ user: { id: 'reporter-1', role } });
+    (users.findUnique as jest.Mock).mockResolvedValue({ role: 'USER' });
+
+    expect((await getReports(request(undefined, pageUrl))).status).toBe(403);
+    expect((await reviewReport(request({ status: 'DISMISSED', resolutionNote: 'No issue found' }),
+      { params: Promise.resolve({ reportId: 'report-1' }) })).status).toBe(403);
+    expect(users.findUnique).toHaveBeenNthCalledWith(1, {
+      where: { id: 'reporter-1' }, select: { role: true },
+    });
+    expect(users.findUnique).toHaveBeenNthCalledWith(2, {
+      where: { id: 'reporter-1' }, select: { role: true },
+    });
+    expect(reports.findMany).not.toHaveBeenCalled();
+    expect(reports.updateMany).not.toHaveBeenCalled();
+  });
+
   it('returns only current public target previews and never reporter identity', async () => {
     (users.findUnique as jest.Mock).mockResolvedValue({ role: 'MODERATOR' });
     (reports.findMany as jest.Mock).mockResolvedValue([

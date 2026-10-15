@@ -1,6 +1,7 @@
 import { GET } from '@/app/api/users/[id]/route';
 import prisma from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
+import { VERIFIED_COURSE_BADGE } from '@/lib/course-achievement-badge';
 
 jest.mock('next/server', () => ({
   NextResponse: class extends Response {
@@ -72,3 +73,43 @@ it('keeps account-owned fields available on the owner’s profile', async () => 
   expect(body.isCurrentUser).toBe(true);
   expect(prisma.user.findUnique).toHaveBeenCalledWith(expect.objectContaining({ select: expect.objectContaining({ email: true, lastLogin: true }) }));
 });
+
+it('shows a course achievement to its owner, but not an opted-out public viewer; unrelated badges remain', async () => {
+  const badges = [
+    { id: 'course-award', badgeId: VERIFIED_COURSE_BADGE.id, awardedAt: new Date('2026-01-02'), badge: VERIFIED_COURSE_BADGE },
+    { id: 'other-award', badgeId: 'existing-badge', awardedAt: new Date('2026-01-01'), badge: { name: 'Community badge', description: 'Unrelated', image: '' } },
+  ];
+  jest.mocked(prisma.user.findUnique).mockResolvedValue({ ...user, isTestAccount: false,
+    userSettings: { publicRankingOptIn: false }, badges } as never);
+  jest.mocked(getServerSession).mockResolvedValue({ user: { id: 'viewer' } } as never);
+  const publicResponse = await GET({} as never, params);
+  expect((await publicResponse.json()).badges.map((badge: { name: string }) => badge.name)).toEqual(['Community badge']);
+
+  jest.mocked(getServerSession).mockResolvedValue({ user: { id: 'author' } } as never);
+  const ownResponse = await GET({} as never, params);
+  const ownBadges = (await ownResponse.json()).badges;
+  expect(ownBadges.map((badge: { name: string }) => badge.name)).toEqual([
+    VERIFIED_COURSE_BADGE.name, 'Community badge',
+  ]);
+  expect(ownBadges.map((badge: { badgeId: string }) => badge.badgeId)).toEqual([
+    VERIFIED_COURSE_BADGE.id, 'existing-badge',
+  ]);
+
+  jest.mocked(getServerSession).mockResolvedValue({ user: { id: 'viewer' } } as never);
+  jest.mocked(prisma.user.findUnique).mockResolvedValue({ ...user, isTestAccount: false,
+    userSettings: { publicRankingOptIn: true }, badges } as never);
+  const optedInResponse = await GET({} as never, params);
+  expect((await optedInResponse.json()).badges).toHaveLength(2);
+});
+
+it.each([{ role: 'ADMIN', isTestAccount: false }, { role: 'USER', isTestAccount: true }])(
+  'does not reveal a stale course badge for an ineligible account: %p', async (account) => {
+    jest.mocked(getServerSession).mockResolvedValue({ user: { id: 'author' } } as never);
+    jest.mocked(prisma.user.findUnique).mockResolvedValue({ ...user, ...account,
+      userSettings: { publicRankingOptIn: true },
+      badges: [{ id: 'stale', badgeId: VERIFIED_COURSE_BADGE.id, awardedAt: new Date(), badge: VERIFIED_COURSE_BADGE }],
+    } as never);
+    const response = await GET({} as never, params);
+    expect((await response.json()).badges).toEqual([]);
+  },
+);

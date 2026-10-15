@@ -1,5 +1,6 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { Sidebar } from '@/components/Sidebar';
 import { AppShell, AppHeader } from '@/components/app-shell';
 import { UserNav } from '@/components/user-nav';
@@ -44,6 +45,21 @@ it('mobile navigation also closes with its visible close control', () => {
   expect(close).toHaveClass('h-11', 'w-11');
   fireEvent.click(close);
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});
+
+it.each(['Escape', 'close control'])('returns focus to the mobile navigation opener after %s dismissal', async (dismissal) => {
+  const user = userEvent.setup();
+  render(<AppShell><Sidebar /><div><AppHeader><div>Kurse</div></AppHeader><main id="page-content" /></div></AppShell>);
+  const opener = screen.getByRole('button', { name: 'Navigation öffnen' });
+  await user.click(opener);
+  expect(screen.getByRole('dialog')).toBeInTheDocument();
+  expect(opener).not.toHaveFocus();
+
+  if (dismissal === 'Escape') await user.keyboard('{Escape}');
+  else await user.click(screen.getByRole('button', { name: 'Navigation schließen' }));
+
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  await waitFor(() => expect(opener).toHaveFocus());
 });
 
 it('opens content search with the keyboard shortcut and preserves the query', () => {

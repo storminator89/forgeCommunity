@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectGroup, SelectLabel, SelectItem } from "@/components/ui/select";
@@ -57,6 +57,12 @@ function EventFormFields({ initialData, onSuccess, onClose }: EventFormProps) {
   const [maxAttendees, setMaxAttendees] = useState(() => initialData?.maxAttendees?.toString() || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
+  const activeRef = useRef(true);
+
+  useEffect(() => {
+    activeRef.current = true;
+    return () => { activeRef.current = false; };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -112,8 +118,11 @@ function EventFormFields({ initialData, onSuccess, onClose }: EventFormProps) {
 
       if (!res.ok) {
         const errorData = await res.json();
+        if (!activeRef.current) return;
         throw new Error(errorData.error || 'Etwas ist schief gelaufen');
       }
+
+      if (!activeRef.current) return;
 
       toast({
         title: initialData ? 'Event aktualisiert' : 'Event erstellt',
@@ -126,6 +135,7 @@ function EventFormFields({ initialData, onSuccess, onClose }: EventFormProps) {
       onSuccess();
       onClose();
     } catch (error: any) {
+      if (!activeRef.current) return;
       console.error('Error:', error);
       toast({
         title: 'Fehler',
@@ -133,7 +143,7 @@ function EventFormFields({ initialData, onSuccess, onClose }: EventFormProps) {
         variant: 'destructive',
       });
     } finally {
-      setIsSubmitting(false);
+      if (activeRef.current) setIsSubmitting(false);
     }
   };
 

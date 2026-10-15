@@ -96,9 +96,10 @@ export function ModerationQueue() {
   const { data, status } = useSession();
   if (status === 'loading') return <PageState kind="loading" title="Berechtigung wird geprüft" />;
   if (status !== 'authenticated' || !data?.user?.id) return <PageState kind="error" title="Anmeldung erforderlich" />;
-  // The server layout checks the database role. Scope report state to the
-  // authenticated identity here without trusting a possibly stale JWT role.
-  return <ModerationQueueForViewer key={data.user.id} />;
+  // The layout and API authorize against the database. A session role refresh
+  // must also discard private state and pending reads, including a demotion
+  // that keeps the same user ID. The role here only invalidates client state.
+  return <ModerationQueueForViewer key={`${data.user.id}:${data.user.role ?? ''}`} />;
 }
 
 function ModerationQueueForViewer() {

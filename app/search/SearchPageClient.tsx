@@ -42,7 +42,7 @@ interface SearchResult {
   id: string;
   title: string;
   description: string;
-  type: 'course' | 'event' | 'member' | 'post' | 'resource';
+  type: 'course' | 'event' | 'member' | 'post' | 'resource' | 'article' | 'project';
   author?: string;
   authorImage?: string;
   instructor?: string;
@@ -103,6 +103,30 @@ const SafeHTML = ({ html }: { html: string }) => {
   return <span className="inline">{sanitizeTextPreview(html, 240)}</span>;
 };
 
+const SEARCH_TYPES = ['all', 'course', 'event', 'member', 'post', 'resource', 'article', 'project'];
+const RESULT_TYPE_LABELS: Record<SearchResult['type'], string> = {
+  course: 'Kurs',
+  event: 'Event',
+  member: 'Mitglied',
+  post: 'Beitrag',
+  resource: 'Ressource',
+  article: 'Artikel',
+  project: 'Projekt',
+};
+
+function readSearchUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const requestedType = params.get('type') ?? 'all';
+  const requestedPage = Number(params.get('page') ?? 1);
+  return {
+    query: params.get('q') ?? '',
+    type: SEARCH_TYPES.includes(requestedType) ? requestedType : 'all',
+    page: Number.isSafeInteger(requestedPage) && requestedPage > 0
+      ? Math.min(requestedPage, 1000)
+      : 1,
+  };
+}
+
 export default function SearchPageClient({
   initialQuery = '',
   initialType = 'all',
@@ -129,37 +153,39 @@ export default function SearchPageClient({
     page: initialPage,
   });
 
-  useEffect(() => {
-    // Next's URL updates can reach this component after a newer keystroke.
-    // Only apply navigation props when they still describe the current URL.
-    const params = new URLSearchParams(window.location.search);
-    const requestedType = params.get('type') ?? 'all';
-    const urlType = ['all', 'course', 'event', 'member', 'post', 'resource'].includes(requestedType)
-      ? requestedType
-      : 'all';
-    const requestedPage = Number(params.get('page') ?? 1);
-    const urlPage = Number.isSafeInteger(requestedPage) && requestedPage > 0
-      ? Math.min(requestedPage, 1000)
-      : 1;
-    if (
-      (params.get('q') ?? '') !== initialQuery ||
-      urlType !== initialType ||
-      urlPage !== initialPage
-    ) return;
-
+  const applySearchState = useCallback((next: { query: string; type: string; page: number }) => {
     const current = currentSearch.current;
-    if (current.query === initialQuery && current.type === initialType && current.page === initialPage) return;
+    if (current.query === next.query && current.type === next.type && current.page === next.page) return;
 
-    currentSearch.current = { query: initialQuery, type: initialType, page: initialPage };
-    setSearchTerm(initialQuery);
-    setActiveTab(initialType);
-    setPage(initialPage);
+    currentSearch.current = next;
+    setSearchTerm(next.query);
+    setActiveTab(next.type);
+    setPage(next.page);
     setResults([]);
     setHasError(false);
     setTotalResults(0);
     setTotalPages(0);
-    setIsLoading(Boolean(initialQuery.trim()));
-  }, [initialQuery, initialType, initialPage]);
+    setIsLoading(Boolean(next.query.trim()));
+  }, []);
+
+  useEffect(() => {
+    // Next's URL updates can reach this component after a newer keystroke.
+    // Only apply navigation props when they still describe the current URL.
+    const url = readSearchUrl();
+    if (
+      url.query !== initialQuery ||
+      url.type !== initialType ||
+      url.page !== initialPage
+    ) return;
+
+    applySearchState({ query: initialQuery, type: initialType, page: initialPage });
+  }, [initialQuery, initialType, initialPage, applySearchState]);
+
+  useEffect(() => {
+    const restoreFromHistory = () => applySearchState(readSearchUrl());
+    window.addEventListener('popstate', restoreFromHistory);
+    return () => window.removeEventListener('popstate', restoreFromHistory);
+  }, [applySearchState]);
 
   useEffect(() => {
     tabListRef.current
@@ -167,7 +193,7 @@ export default function SearchPageClient({
       ?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
   }, [activeTab]);
 
-  const updateSearchUrl = (query: string, type: string, nextPage: number) => {
+  const updateSearchUrl = (query: string, type: string, nextPage: number, push = false) => {
     const url = new URL(window.location.href);
     if (query) url.searchParams.set('q', query);
     else url.searchParams.delete('q');
@@ -175,7 +201,10 @@ export default function SearchPageClient({
     else url.searchParams.delete('type');
     if (nextPage > 1) url.searchParams.set('page', String(nextPage));
     else url.searchParams.delete('page');
-    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+    const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+    if (nextUrl === `${window.location.pathname}${window.location.search}${window.location.hash}`) return;
+    if (push) window.history.pushState(window.history.state, '', nextUrl);
+    else window.history.replaceState(window.history.state, '', nextUrl);
   };
 
   const updateQuery = (query: string) => {
@@ -199,7 +228,7 @@ export default function SearchPageClient({
     setTotalResults(0);
     setTotalPages(0);
     setIsLoading(Boolean(searchTerm.trim()));
-    updateSearchUrl(searchTerm, type, 1);
+    updateSearchUrl(searchTerm, type, 1, true);
   };
 
   const updatePage = (nextPage: number) => {
@@ -209,7 +238,7 @@ export default function SearchPageClient({
     setHasError(false);
     setTotalResults(0);
     setIsLoading(Boolean(searchTerm.trim()));
-    updateSearchUrl(searchTerm, activeTab, nextPage);
+    updateSearchUrl(searchTerm, activeTab, nextPage, true);
   };
 
   const fetchResults = useCallback(async (signal: AbortSignal) => {
@@ -275,6 +304,10 @@ export default function SearchPageClient({
         return `/community#post-${encodeURIComponent(result.id)}`;
       case 'resource':
         return getSafeNavigationUrl(result.url) ?? '/resources';
+      case 'article':
+        return `/knowledgebase/${encodeURIComponent(result.id)}`;
+      case 'project':
+        return `/projects/${encodeURIComponent(result.id)}`;
     }
   };
 
@@ -285,6 +318,8 @@ export default function SearchPageClient({
       case 'member': return <Users aria-hidden="true" className="h-5 w-5 shrink-0 text-muted-foreground" />;
       case 'post': return <MessageSquare aria-hidden="true" className="h-5 w-5 shrink-0 text-muted-foreground" />;
       case 'resource': return <FileText aria-hidden="true" className="h-5 w-5 shrink-0 text-muted-foreground" />;
+      case 'article': return <FileText aria-hidden="true" className="h-5 w-5 shrink-0 text-muted-foreground" />;
+      case 'project': return <Briefcase aria-hidden="true" className="h-5 w-5 shrink-0 text-muted-foreground" />;
       default: return null;
     }
   };
@@ -462,10 +497,10 @@ export default function SearchPageClient({
 
             <div className="relative">
               <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-              <Input aria-label="Suche nach Kursen, Events, Mitgliedern, Beiträgen oder Ressourcen"
+              <Input aria-label="Suche nach Kursen, Events, Mitgliedern, Beiträgen, Ressourcen, Artikeln oder Projekten"
                 role="searchbox"
                 type="text"
-                placeholder="Suche nach Kursen, Events, Mitgliedern, Beiträgen oder Ressourcen"
+                placeholder="Kurse, Wissen, Projekte und mehr suchen"
                 value={searchTerm}
                 onChange={(e) => updateQuery(e.target.value)}
                 className="w-full rounded-[10px] pl-10 pr-14"
@@ -489,6 +524,8 @@ export default function SearchPageClient({
                 <TabsTrigger className="min-h-11" value="event">Events</TabsTrigger>
                 <TabsTrigger className="min-h-11" value="member">Mitglieder</TabsTrigger>
                 <TabsTrigger className="min-h-11" value="post">Beiträge</TabsTrigger>
+                <TabsTrigger className="min-h-11" value="article">Artikel</TabsTrigger>
+                <TabsTrigger className="min-h-11" value="project">Projekte</TabsTrigger>
                 <TabsTrigger className="min-h-11" value="resource">Ressourcen</TabsTrigger>
               </TabsList>
               <p id="search-tabs-hint" className="mt-2 text-xs text-muted-foreground sm:sr-only">Weitere Kategorien seitlich scrollen oder mit den Pfeiltasten auswählen</p>
@@ -513,7 +550,7 @@ export default function SearchPageClient({
                     </h2>
                     <p className="text-sm text-muted-foreground">
                       {!searchTerm.trim()
-                        ? 'Suchen Sie nach Kursen, Events, Mitgliedern, Beiträgen oder Ressourcen.'
+                        ? 'Suchen Sie nach Kursen, Events, Mitgliedern, Beiträgen, Artikeln, Projekten oder Ressourcen.'
                         : searchTerm.trim().length < 2
                           ? 'Ergänzen Sie Ihren Suchbegriff, um Ergebnisse zu sehen.'
                           : 'Versuchen Sie es mit anderen Suchbegriffen oder wählen Sie eine andere Kategorie.'}
@@ -522,6 +559,7 @@ export default function SearchPageClient({
                 ) : (
                         <>
                           <h2 className="mb-2 text-lg font-semibold text-foreground">Ergebnisse <span className="ml-1 text-sm font-normal text-muted-foreground">({(activeTab === 'all' ? results.length : totalResults).toLocaleString('de-DE')})</span></h2>
+                          {activeTab === 'all' && <p className="mb-4 text-sm text-muted-foreground">Bis zu fünf Treffer je Kategorie. Für weitere Ergebnisse eine Kategorie wählen.</p>}
                           <ol className="divide-y divide-border border-y border-border">
                           {results.map((result) => {
                             const href = getResultHref(result);
@@ -544,6 +582,7 @@ export default function SearchPageClient({
                                         <h3 className="min-w-0 text-lg font-semibold text-foreground [overflow-wrap:anywhere]">
                                           {result.title}
                                         </h3>
+                                        {activeTab === 'all' && <Badge variant="outline" className="shrink-0">{RESULT_TYPE_LABELS[result.type]}</Badge>}
                                         {renderIcon(result.type)}
                                       </div>
 

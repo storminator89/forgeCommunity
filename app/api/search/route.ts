@@ -6,10 +6,11 @@ import { getServerSession } from 'next-auth';
 import prisma from '@/lib/prisma';
 import { containsInsensitive } from '@/lib/server/database-query';
 import { sanitizeHtmlPreviewServer, sanitizeTextServer } from '@/lib/server/sanitize-html';
+import { canShowBadgeToViewer } from '@/lib/course-achievement-badge';
 
 import { authOptions } from '../auth/[...nextauth]/options';
 
-const VALID_TYPES = new Set(['all', 'course', 'event', 'member', 'post', 'resource']);
+const VALID_TYPES = new Set(['all', 'course', 'event', 'member', 'post', 'resource', 'article', 'project']);
 const ALL_RESULTS_LIMIT = 5;
 
 function clamp(value: number, min: number, max: number) {
@@ -44,7 +45,7 @@ export async function GET(request: NextRequest) {
           limit,
           pages: 0,
         },
-      });
+      }, { headers: { 'Cache-Control': 'private, no-store' } });
     }
 
     const skip = (page - 1) * limit;
@@ -84,6 +85,27 @@ export async function GET(request: NextRequest) {
       OR: [
         { title: containsInsensitive(query) },
         { category: containsInsensitive(query) },
+      ],
+    };
+
+    const articleWhere = {
+      isPublished: true,
+      OR: [
+        { title: containsInsensitive(query) },
+        { content: containsInsensitive(query) },
+        { category: containsInsensitive(query) },
+        { tags: { some: { name: containsInsensitive(query) } } },
+      ],
+    };
+
+    // Projects have no draft or visibility field; the existing project index
+    // and detail endpoints expose every persisted project as public content.
+    const projectWhere = {
+      OR: [
+        { title: containsInsensitive(query) },
+        { description: containsInsensitive(query) },
+        { category: containsInsensitive(query) },
+        { tags: { some: { name: containsInsensitive(query) } } },
       ],
     };
 
@@ -155,6 +177,8 @@ export async function GET(request: NextRequest) {
           title: true,
           image: true,
           role: true,
+          isTestAccount: true,
+          userSettings: { select: { publicRankingOptIn: true } },
           endorsements: true,
           lastLogin: true,
           createdAt: true,
@@ -180,8 +204,12 @@ export async function GET(request: NextRequest) {
             },
           },
           badges: {
-            take: 3,
+            // One private achievement can precede three unrelated public
+            // badges; fetch one extra so filtering does not hide those.
+            take: 4,
+            orderBy: [{ awardedAt: 'desc' }, { id: 'desc' }],
             select: {
+              badgeId: true,
               awardedAt: true,
               badge: {
                 select: {
@@ -216,10 +244,11 @@ export async function GET(request: NextRequest) {
           level: skill.level,
           endorsements: skill.endorsements,
         })),
-        badges: member.badges.map((badge) => ({
-          name: badge.badge.name,
-          awardedAt: badge.awardedAt,
-        })),
+        badges: member.badges.filter(badge => canShowBadgeToViewer(badge.badgeId, member, session.user.id))
+          .slice(0, 3).map((badge) => ({
+            name: badge.badge.name,
+            awardedAt: badge.awardedAt,
+          })),
         lastActive: member.lastLogin,
         createdAt: member.createdAt,
       }));
@@ -357,15 +386,79 @@ export async function GET(request: NextRequest) {
       }));
     };
 
-    const [courses, members, posts, events, resources] = await Promise.all([
+    const searchArticles = async () => {
+      if (type !== 'all' && type !== 'article') return [];
+
+      const articles = await prisma.article.findMany({
+        where: articleWhere,
+        select: {
+          id: true,
+          title: true,
+          content: true,
+          category: true,
+          createdAt: true,
+          author: { select: { name: true } },
+          tags: { select: { name: true } },
+        },
+        skip: type === 'article' ? skip : 0,
+        take: type === 'article' ? limit : ALL_RESULTS_LIMIT,
+        orderBy: { createdAt: 'desc' },
+      });
+
+      return articles.map((article) => ({
+        id: article.id,
+        title: article.title,
+        description: sanitizeHtmlPreviewServer(article.content, 220),
+        type: 'article' as const,
+        category: article.category,
+        author: article.author.name,
+        tags: article.tags.map((tag) => tag.name),
+        createdAt: article.createdAt,
+      }));
+    };
+
+    const searchProjects = async () => {
+      if (type !== 'all' && type !== 'project') return [];
+
+      const projects = await prisma.project.findMany({
+        where: projectWhere,
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          category: true,
+          createdAt: true,
+          author: { select: { name: true } },
+          tags: { select: { name: true } },
+        },
+        skip: type === 'project' ? skip : 0,
+        take: type === 'project' ? limit : ALL_RESULTS_LIMIT,
+        orderBy: { createdAt: 'desc' },
+      });
+
+      return projects.map((project) => ({
+        id: project.id,
+        title: project.title,
+        description: sanitizeHtmlPreviewServer(project.description, 220),
+        type: 'project' as const,
+        category: project.category,
+        author: project.author.name,
+        tags: project.tags.map((tag) => tag.name),
+        createdAt: project.createdAt,
+      }));
+    };
+
+    const [courses, members, posts, events, resources, articles, projects] = await Promise.all([
       searchCourses(),
       searchMembers(),
       searchPosts(),
       searchEvents(),
       searchResources(),
+      searchArticles(),
+      searchProjects(),
     ]);
 
-    const results = [...courses, ...members, ...posts, ...events, ...resources];
+    const results = [...courses, ...members, ...posts, ...events, ...resources, ...articles, ...projects];
 
     if (type === 'all') {
       results.sort((a, b) => {
@@ -394,6 +487,12 @@ export async function GET(request: NextRequest) {
         case 'resource':
           total = await prisma.resource.count({ where: resourceWhere });
           break;
+        case 'article':
+          total = await prisma.article.count({ where: articleWhere });
+          break;
+        case 'project':
+          total = await prisma.project.count({ where: projectWhere });
+          break;
       }
     }
 
@@ -405,7 +504,7 @@ export async function GET(request: NextRequest) {
         limit,
         pages: total === 0 ? 0 : Math.ceil(total / limit),
       },
-    });
+    }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     console.error('Search error:', error);
     return NextResponse.json(

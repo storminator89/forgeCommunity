@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useSession } from 'next-auth/react';
 import { ReportControl } from '@/components/community/ReportControl';
@@ -138,6 +138,91 @@ it('clears Alice’s report details and review form before Bob or logout can see
   view.rerender(<ModerationQueue />);
   expect(screen.getByText('Anmeldung erforderlich')).toBeInTheDocument();
   expect(screen.queryByText('Alice private report')).not.toBeInTheDocument();
+});
+
+it.each(['ADMIN', 'MODERATOR'])('clears private queue state when the same %s loses their role', async (role) => {
+  const privateReport = {
+    id: 'private-report', targetType: 'POST', targetId: 'post-1', reason: 'UNSAFE', details: 'Private report details', status: 'OPEN',
+    createdAt: '2026-10-01T10:00:00.000Z', reviewedAt: null, reviewedById: null, resolutionNote: null,
+    targetAvailable: false, targetTitle: null, targetPreview: null,
+  };
+  jest.mocked(useSession).mockReturnValue({
+    data: { user: { id: 'alice', role }, expires: '2099-01-01' },
+    status: 'authenticated', update: jest.fn(),
+  } as ReturnType<typeof useSession>);
+  const fetchMock = global.fetch as jest.Mock;
+  fetchMock
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ items: [privateReport], total: 1, page: 1, pageSize: 20 }) })
+    .mockResolvedValueOnce({ ok: false, json: async () => ({ error: 'Keine Berechtigung' }) });
+
+  const view = render(<ModerationQueue />);
+  expect(await screen.findByText('Private report details')).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('Begründung oder durchgeführte Maßnahme'),
+    { target: { value: 'Private unfinished review' } });
+  const oldReviewForm = screen.getByRole('button', { name: 'Entscheidung speichern' }).closest('form')!;
+
+  jest.mocked(useSession).mockReturnValue({
+    data: { user: { id: 'alice', role: 'USER' }, expires: '2099-01-01' },
+    status: 'authenticated', update: jest.fn(),
+  } as ReturnType<typeof useSession>);
+  view.rerender(<ModerationQueue />);
+
+  expect(screen.queryByText('Private report details')).not.toBeInTheDocument();
+  expect(screen.queryByDisplayValue('Private unfinished review')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Entscheidung speichern' })).not.toBeInTheDocument();
+  fireEvent.submit(oldReviewForm);
+  expect(await screen.findByText('Keine Berechtigung')).toBeInTheDocument();
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+  expect(fetchMock.mock.calls.some(([, options]) => options?.method === 'PATCH')).toBe(false);
+});
+
+it.each(['ADMIN', 'MODERATOR'])('ignores an old privileged response after the same %s loses their role', async (role) => {
+  jest.mocked(useSession).mockReturnValue({
+    data: { user: { id: 'alice', role }, expires: '2099-01-01' },
+    status: 'authenticated', update: jest.fn(),
+  } as ReturnType<typeof useSession>);
+  let finishOldRequest!: (response: unknown) => void;
+  const oldRequest = new Promise((resolve) => { finishOldRequest = resolve; });
+  const fetchMock = global.fetch as jest.Mock;
+  fetchMock
+    .mockReturnValueOnce(oldRequest)
+    .mockResolvedValueOnce({ ok: false, json: async () => ({ error: 'Keine Berechtigung' }) });
+  const view = render(<ModerationQueue />);
+  const oldSignal = fetchMock.mock.calls[0][1].signal as AbortSignal;
+
+  jest.mocked(useSession).mockReturnValue({
+    data: { user: { id: 'alice', role: 'USER' }, expires: '2099-01-01' },
+    status: 'authenticated', update: jest.fn(),
+  } as ReturnType<typeof useSession>);
+  view.rerender(<ModerationQueue />);
+  expect(oldSignal.aborted).toBe(true);
+  expect(await screen.findByText('Keine Berechtigung')).toBeInTheDocument();
+
+  await act(async () => {
+    finishOldRequest({ ok: true, json: async () => ({
+      items: [{ id: 'old-report', targetType: 'POST', targetId: 'post-1', reason: 'SPAM',
+        details: 'Late private report', status: 'OPEN', createdAt: '2026-10-01T10:00:00.000Z',
+        reviewedAt: null, reviewedById: null, resolutionNote: null, targetAvailable: false,
+        targetTitle: null, targetPreview: null }], total: 1, page: 1, pageSize: 20,
+    }) });
+    await oldRequest;
+  });
+
+  expect(screen.queryByText('Late private report')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Entscheidung speichern' })).not.toBeInTheDocument();
+  expect(screen.getByText('Keine Berechtigung')).toBeInTheDocument();
+});
+
+it('leaves authorization to the server when the client session role is stale', async () => {
+  jest.mocked(useSession).mockReturnValue({
+    data: { user: { id: 'alice', role: 'USER' }, expires: '2099-01-01' },
+    status: 'authenticated', update: jest.fn(),
+  } as ReturnType<typeof useSession>);
+  (global.fetch as jest.Mock).mockResolvedValue({ ok: true, json: async () => ({
+    items: [], total: 0, page: 1, pageSize: 20,
+  }) });
+  render(<ModerationQueue />);
+  expect(await screen.findByText('Keine Meldungen in diesem Status.')).toBeInTheDocument();
 });
 
 it('opens a linked comment and shows separate report controls for another member’s post and comment', async () => {

@@ -25,7 +25,7 @@ it('clears private profile and certificates immediately on switch and logout', a
   let account = 'alice'
   setUser(account)
   jest.mocked(axios.get).mockImplementation(async (url: string) => {
-    if (url === '/api/user/profile') return { data: { name: account, email: `${account}@example.test`, userSettings: {} } }
+    if (url === '/api/user/profile') return { data: { id: account, name: account, email: `${account}@example.test`, userSettings: {} } }
     if (url === '/api/user/certificates') return { data: [{ id: account, courseId: 'course', courseName: `${account} private certificate`, issuedAt: '2026-01-01' }] }
     return { data: [] }
   })
@@ -54,7 +54,7 @@ it('ignores a previous account response that resolves after a switch', async () 
     if (url === '/api/user/profile' && !finishAlice) {
       return new Promise(resolve => { finishAlice = resolve })
     }
-    if (url === '/api/user/profile') return Promise.resolve({ data: { name: 'Bob', email: 'bob@example.test', userSettings: {} } })
+    if (url === '/api/user/profile') return Promise.resolve({ data: { id: 'bob', name: 'Bob', email: 'bob@example.test', userSettings: {} } })
     return Promise.resolve({ data: [] })
   })
   const view = render(<SettingsPage />)
@@ -64,7 +64,7 @@ it('ignores a previous account response that resolves after a switch', async () 
   view.rerender(<SettingsPage />)
   expect(aliceSignal?.aborted).toBe(true)
   expect(await screen.findByDisplayValue('bob@example.test')).toBeInTheDocument()
-  await act(async () => { finishAlice({ data: { name: 'Alice', email: 'alice@example.test', userSettings: {} } }) })
+  await act(async () => { finishAlice({ data: { id: 'alice', name: 'Alice', email: 'alice@example.test', userSettings: {} } }) })
   expect(screen.getByDisplayValue('bob@example.test')).toBeInTheDocument()
   expect(screen.queryByDisplayValue('alice@example.test')).not.toBeInTheDocument()
 })
@@ -74,7 +74,7 @@ it('drops an unsaved edit and ignores a late save response on account switch', a
   setUser(account)
   jest.mocked(axios.get).mockImplementation(async (url: string) =>
     url === '/api/user/profile'
-      ? { data: { name: account, email: `${account}@example.test`, userSettings: {} } }
+      ? { data: { id: account, name: account, email: `${account}@example.test`, userSettings: {} } }
       : { data: [] })
   let finishSave!: (value: { data: unknown }) => void
   jest.mocked(axios.put).mockImplementationOnce(() => new Promise(resolve => { finishSave = resolve }))

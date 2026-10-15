@@ -189,6 +189,10 @@ model Post {
   comments  Comment[]
   likePosts LikePost[]
   tags      Tag[]      @relation("PostTags")
+
+  @@index([createdAt, id])
+  @@index([published, createdAt, id])
+  @@index([authorId, createdAt, id])
 }
 
 model Comment {
@@ -204,6 +208,9 @@ model Comment {
   authorId     String
 
   likeComments LikeComment[]
+
+  @@index([postId, createdAt, id])
+  @@index([authorId, postId])
 }
 
 // Polymorphic IDs intentionally keep the moderation audit after a target or
@@ -239,6 +246,7 @@ model LikePost {
   postId    String
 
   @@unique([userId, postId], name: "user_post_unique")
+  @@index([postId])
 }
 
 model LikeComment {
@@ -252,6 +260,7 @@ model LikeComment {
   commentId String
 
   @@unique([userId, commentId], name: "user_comment_unique")
+  @@index([commentId])
 }
 
 model Tag {

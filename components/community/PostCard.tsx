@@ -31,6 +31,8 @@ interface Post {
   votes: number
   isLiked: boolean
   comments: Comment[]
+  commentCount?: number
+  commentsNextCursor?: string | null
 }
 
 interface Comment {
@@ -55,6 +57,9 @@ interface PostCardProps {
   onAddComment?: (postId: string, content: string) => Promise<void>
   onLikeComment?: (commentId: string, postId: string) => Promise<void>
   isLoading?: boolean
+  onLoadComments?: (postId: string) => Promise<void>
+  commentsLoading?: boolean
+  commentsError?: boolean
 }
 
 export function PostCard({
@@ -65,7 +70,10 @@ export function PostCard({
   onEdit,
   onAddComment,
   onLikeComment,
-  isLoading = false
+  isLoading = false,
+  onLoadComments,
+  commentsLoading = false,
+  commentsError = false,
 }: PostCardProps) {
   const [expandedComments, setExpandedComments] = useState(false)
   const cardRef = useRef<HTMLDivElement>(null)
@@ -148,7 +156,7 @@ export function PostCard({
         </div>
 
         {/* Footer */}
-        <CardFooter className="px-6 py-4 bg-muted/50 flex items-center justify-between border-t border-border">
+        <CardFooter className="px-6 py-4 bg-muted/50 flex flex-wrap items-center justify-between gap-2 border-t border-border">
           <div className="flex items-center space-x-2">
             <Button
               variant="ghost"
@@ -168,13 +176,16 @@ export function PostCard({
               variant="ghost"
               size="sm"
               onClick={toggleComments}
+              aria-expanded={expandedComments}
+              aria-controls={`comments-${post.id}`}
+              aria-label={`${post.commentCount ?? (post.comments || []).length} Kommentare ${expandedComments ? 'ausblenden' : 'anzeigen'}`}
               className={cn(
                 "rounded-full px-4 h-9 transition-all hover:bg-primary/10 active:scale-95",
                 expandedComments ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-primary"
               )}
             >
               <MessageSquare className="mr-2 h-4 w-4" />
-              <span className="font-medium">{(post.comments || []).length}</span>
+              <span className="font-medium">{post.commentCount ?? (post.comments || []).length}</span>
               <span className="ml-1 hidden sm:inline">Kommentare</span>
             </Button>
           </div>
@@ -189,6 +200,7 @@ export function PostCard({
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: "auto", opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
+              id={`comments-${post.id}`}
               className="border-t border-border bg-muted/50"
             >
               <div className="p-4 sm:p-6">
@@ -200,6 +212,11 @@ export function PostCard({
                   isLoading={isLoading}
                   onAddComment={onAddComment}
                   onLikeComment={onLikeComment}
+                  hasMore={!!post.commentsNextCursor}
+                  commentCount={post.commentCount}
+                  onLoadMore={() => onLoadComments?.(post.id)}
+                  isLoadingMore={commentsLoading}
+                  loadMoreError={commentsError}
                 />
               </div>
             </motion.div>

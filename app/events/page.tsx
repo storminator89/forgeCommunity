@@ -92,6 +92,7 @@ function ScopedEvents({ session, sessionStatus }: {
   const isAdmin = session?.user?.role === 'ADMIN';
   const [view, setView] = useState<ViewType>('month');
   const eventsRequestRef = useRef<AbortController | null>(null);
+  const activeRef = useRef(true);
 
   const handlePreviousMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
   const handleNextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
@@ -145,6 +146,7 @@ function ScopedEvents({ session, sessionStatus }: {
   }, []);
 
   const fetchEvents = useCallback(() => {
+    if (!activeRef.current) return;
     eventsRequestRef.current?.abort();
     const controller = new AbortController();
     eventsRequestRef.current = controller;
@@ -196,9 +198,13 @@ function ScopedEvents({ session, sessionStatus }: {
     };
   }, [loadEvents, sessionStatus]);
 
-  useEffect(() => () => {
-    eventsRequestRef.current?.abort();
-    eventsRequestRef.current = null;
+  useEffect(() => {
+    activeRef.current = true;
+    return () => {
+      activeRef.current = false;
+      eventsRequestRef.current?.abort();
+      eventsRequestRef.current = null;
+    };
   }, []);
 
   useEffect(() => {
@@ -247,9 +253,11 @@ function ScopedEvents({ session, sessionStatus }: {
       const res = await fetch(`/api/events/${id}`, {
         method: 'DELETE',
       });
+      if (!activeRef.current) return;
 
       if (!res.ok) {
         const errorData = await res.json();
+        if (!activeRef.current) return;
         throw new Error(errorData.error || 'Etwas ist schief gelaufen');
       }
 
@@ -261,6 +269,7 @@ function ScopedEvents({ session, sessionStatus }: {
 
       fetchEvents();
     } catch (error: any) {
+      if (!activeRef.current) return;
       console.error('Fehler beim Löschen des Events:', error);
       toast({
         title: 'Fehler',
@@ -273,10 +282,12 @@ function ScopedEvents({ session, sessionStatus }: {
   const handleDownloadICS = async (event: Event) => {
     try {
       const response = await fetch(`/api/events/${event.id}/ics`);
+      if (!activeRef.current) return;
       if (!response.ok) {
         throw new Error('Fehler beim Generieren der ICS-Datei');
       }
       const blob = await response.blob();
+      if (!activeRef.current) return;
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.style.display = 'none';
@@ -292,6 +303,7 @@ function ScopedEvents({ session, sessionStatus }: {
         variant: 'default',
       });
     } catch (error) {
+      if (!activeRef.current) return;
       console.error('Fehler beim Herunterladen der ICS-Datei:', error);
       toast({
         title: 'Fehler',
@@ -310,15 +322,16 @@ function ScopedEvents({ session, sessionStatus }: {
     try {
       const response = await fetch(`/api/events/${event.id}/rsvp`, { method: event.isAttending ? 'DELETE' : 'POST' });
       const result = await response.json();
+      if (!activeRef.current) return;
       if (!response.ok) throw new Error(result.error || 'Die Zusage konnte nicht geändert werden.');
       setEventsData(current => current.map(item => item.id === event.id
         ? { ...item, isAttending: result.isAttending, canCancelRsvp: result.canCancelRsvp, attendeeCount: result.attendeeCount }
         : item));
       toast({ title: result.isAttending ? 'Du bist dabei' : 'Zusage zurückgenommen' });
     } catch (error) {
-      toast({ title: 'Fehler', description: error instanceof Error ? error.message : 'Bitte erneut versuchen.', variant: 'destructive' });
+      if (activeRef.current) toast({ title: 'Fehler', description: error instanceof Error ? error.message : 'Bitte erneut versuchen.', variant: 'destructive' });
     } finally {
-      setPendingEventId(null);
+      if (activeRef.current) setPendingEventId(null);
     }
   };
 
@@ -519,6 +532,7 @@ function ScopedEvents({ session, sessionStatus }: {
           <div className="mt-4">
             <EventForm
               onSuccess={() => {
+                if (!activeRef.current) return;
                 fetchEvents();
                 handleCloseAddDialog();
               }}
@@ -539,6 +553,7 @@ function ScopedEvents({ session, sessionStatus }: {
               <EventForm
                 initialData={selectedEvent}
                 onSuccess={() => {
+                  if (!activeRef.current) return;
                   fetchEvents();
                   handleCloseEditDialog();
                 }}

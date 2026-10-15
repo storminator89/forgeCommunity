@@ -107,6 +107,7 @@ describe('ChatProvider request lifecycle', () => {
   it('preserves the loaded history when the current channel is selected again', async () => {
     mockFetch.mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
+      if (url === '/api/user/profile') return Promise.resolve(response({ id: 'user-1', userSettings: { pushNotifications: false } }));
       if (url === '/api/chat/channels') return Promise.resolve(response(channels));
       if (url.includes('channelId=channel-a')) {
         return Promise.resolve(response({ items: [message('message-a', 'channel-a', 'Existing message')] }));
@@ -129,6 +130,7 @@ describe('ChatProvider request lifecycle', () => {
     const onResult = jest.fn();
     mockFetch.mockImplementation((input: RequestInfo | URL, options?: RequestInit) => {
       const url = String(input);
+      if (url === '/api/user/profile') return Promise.resolve(response({ id: 'user-1', userSettings: { pushNotifications: false } }));
       if (url === '/api/chat/channels') return Promise.resolve(response(channels));
       if (url.startsWith('/api/chat/messages?')) return Promise.resolve(response({ items: [] }));
       if (url === '/api/chat/messages' && options?.method === 'POST') return Promise.resolve({ ok: false });
@@ -149,6 +151,7 @@ describe('ChatProvider request lifecycle', () => {
 
     mockFetch.mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
+      if (url === '/api/user/profile') return Promise.resolve(response({ id: 'user-1', userSettings: { pushNotifications: false } }));
       if (url === '/api/chat/channels') return Promise.resolve(response(channels));
       if (url.includes('channelId=channel-a')) return channelA.promise;
       if (url.includes('channelId=channel-b')) return channelB.promise;
@@ -191,6 +194,7 @@ describe('ChatProvider request lifecycle', () => {
 
     mockFetch.mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
+      if (url === '/api/user/profile') return Promise.resolve(response({ id: 'user-1', userSettings: { pushNotifications: false } }));
       if (url === '/api/chat/channels') return Promise.resolve(response(channels));
       if (url.includes('channelId=channel-a')) return channelA.promise;
       if (url.includes('channelId=channel-b')) return Promise.resolve(response([]));
@@ -235,6 +239,7 @@ describe('ChatProvider request lifecycle', () => {
 
     mockFetch.mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
+      if (url === '/api/user/profile') return Promise.resolve(response({ id: 'user-1', userSettings: { pushNotifications: false } }));
       if (url === '/api/chat/channels') {
         return mockUseSession().data?.user?.id === 'user-1'
           ? Promise.resolve(response(aliceChannel))
@@ -276,6 +281,7 @@ describe('ChatProvider request lifecycle', () => {
 
     mockFetch.mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
+      if (url === '/api/user/profile') return Promise.resolve(response({ id: 'user-1', userSettings: { pushNotifications: false } }));
       if (url === '/api/chat/channels') {
         return mockUseSession().data?.user?.id === 'user-1'
           ? aliceChannels.promise

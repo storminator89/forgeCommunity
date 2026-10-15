@@ -7,8 +7,12 @@ jest.mock('@/components/Sidebar', () => ({ Sidebar: () => null }));
 jest.mock('@/components/user-nav', () => ({ UserNav: () => null }));
 jest.mock('@/components/theme-toggle', () => ({ ThemeToggle: () => null }));
 jest.mock('@/components/EventForm', () => ({ __esModule: true, default: () => <div>Eventformular</div> }));
-jest.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: jest.fn() }) }));
+jest.mock('@/hooks/use-toast', () => {
+  const toast = jest.fn();
+  return { useToast: () => ({ toast }), mockToast: toast };
+});
 jest.mock('@/lib/sanitize-html', () => ({ sanitizeRichHtml: (value: string) => value }));
+const mockToast = jest.requireMock('@/hooks/use-toast').mockToast as jest.Mock;
 
 const future = () => {
   const date = new Date();
@@ -20,7 +24,7 @@ const event = (isAttending = false, id = 'workshop') => ({
   id, title: 'Workshop', date: future(), description: 'Details', location: 'Community', timezone: 'Europe/Berlin',
   maxAttendees: null, attendeeCount: isAttending ? 1 : 0, isAttending, canCancelRsvp: isAttending,
 });
-const response = (rows: unknown[]) => ({ ok: true, json: async () => rows });
+const response = (body: unknown) => ({ ok: true, json: async () => body });
 const asUser = (id: string) => jest.mocked(useSession).mockReturnValue({
   data: { user: { id, role: 'USER' }, expires: '2099-01-01' }, status: 'authenticated', update: jest.fn(),
 } as ReturnType<typeof useSession>);
@@ -86,5 +90,25 @@ test('ignores a delayed previous-account event response after another account lo
   fireEvent.click(await screen.findByRole('button', { name: 'Liste' }));
   expect(await screen.findByRole('button', { name: 'Teilnehmen' })).toBeVisible();
   await act(async () => { resolveAlice(response([event(true)])); await oldResponse; });
+  expect(screen.queryByRole('button', { name: 'Zusage zurücknehmen' })).not.toBeInTheDocument();
+});
+
+test('does not show a prior account’s RSVP result after switching viewers', async () => {
+  let resolveRsvp!: (value: ReturnType<typeof response>) => void;
+  const pendingRsvp = new Promise<ReturnType<typeof response>>(resolve => { resolveRsvp = resolve; });
+  let calls = 0;
+  global.fetch = jest.fn().mockImplementation(async () => {
+    calls++;
+    return calls === 2 ? pendingRsvp : response([event(false)]);
+  });
+  const { rerender } = render(<Events />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Liste' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Teilnehmen' }));
+  asUser('bob');
+  rerender(<Events />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Liste' }));
+  await screen.findByRole('button', { name: 'Teilnehmen' });
+  await act(async () => resolveRsvp(response({ isAttending: true, canCancelRsvp: true, attendeeCount: 1 })));
+  expect(mockToast).not.toHaveBeenCalled();
   expect(screen.queryByRole('button', { name: 'Zusage zurücknehmen' })).not.toBeInTheDocument();
 });

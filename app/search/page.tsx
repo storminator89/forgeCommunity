@@ -11,7 +11,7 @@ export default function SearchPage() {
   const searchParams = useSearchParams();
   const query = searchParams.get('q') ?? '';
   const requestedType = searchParams.get('type') ?? 'all';
-  const type = ['all', 'course', 'event', 'member', 'post', 'resource'].includes(requestedType)
+  const type = ['all', 'course', 'event', 'member', 'post', 'resource', 'article', 'project'].includes(requestedType)
     ? requestedType
     : 'all';
   const requestedPage = Number(searchParams.get('page') ?? 1);

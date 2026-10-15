@@ -5,6 +5,7 @@ import { deleteCourseDependencies } from '@/lib/server/course-deletion';
 import { rmSync } from 'node:fs';
 import prisma from '@/lib/prisma';
 import { getServerSession } from 'next-auth/next';
+import { VERIFIED_COURSE_BADGE } from '@/lib/course-achievement-badge';
 
 jest.mock('next/server', () => {
   class MockNextResponse extends Response {
@@ -65,6 +66,7 @@ test('distinct simultaneous passing submissions never duplicate a reward or tran
   expect(ledger).toHaveLength(1);
   expect(ledger[0]).toMatchObject({ points: 50, stateVersion: 1, revokedAt: null });
   expect(ledger[0].changes).toMatchObject([{ version: 1, type: 'AWARDED', pointsDelta: 50 }]);
+  expect(await prisma.userBadge.count({ where: { userId: 'learner', badgeId: VERIFIED_COURSE_BADGE.id } })).toBe(1);
 
   await prisma.$transaction(async tx => {
     await deleteCourseDependencies(tx, ['reward-course']);
@@ -75,6 +77,7 @@ test('distinct simultaneous passing submissions never duplicate a reward or tran
   expect(retained.revokedAt).not.toBeNull();
   expect(retained.changes).toHaveLength(2);
   expect(retained.changes.find(change => change.version === 2)).toMatchObject({ type: 'REVOKED', version: 2, reason: 'COURSE_REMOVED', pointsDelta: -50 });
+  expect(await prisma.userBadge.count({ where: { userId: 'learner', badgeId: VERIFIED_COURSE_BADGE.id } })).toBe(0);
   expect(await prisma.courseCompletionRecord.count({ where: { userId: 'learner' } })).toBe(1);
   await prisma.user.delete({ where: { id: 'learner' } });
   expect(await prisma.rewardLedger.count()).toBe(0);
