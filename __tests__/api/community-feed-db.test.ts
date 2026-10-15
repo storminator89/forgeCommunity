@@ -5,6 +5,7 @@ import { GET as getPost, PUT as editPost } from '@/app/api/posts/[postId]/route'
 import { POST as likePost } from '@/app/api/posts/[postId]/like/route';
 import { GET as getLinkedComment } from '@/app/api/posts/linked-comment/[commentId]/route';
 import { GET as getStats } from '@/app/api/posts/me/stats/route';
+import { GET as getTopics } from '@/app/api/posts/topics/route';
 import { encodeCommunityCursor } from '@/lib/server/community-feed';
 import prisma from '@/lib/prisma';
 import { getServerSession } from 'next-auth/next';
@@ -247,6 +248,49 @@ test('creating and editing posts return the complete normalized Post shape', asy
   const edited = await (await editPost(request(`/api/posts/${created.id}`, { title: 'Edited', content: '<p>Updated</p>' }, 'PUT'), params(created.id))).json();
   expect(edited).toMatchObject({ title: 'Edited', votes: 1, isLiked: true, commentCount: 25, commentsNextCursor: expect.any(String) });
   expect(edited.comments).toHaveLength(3);
+});
+
+test('post topic creation, reuse and replacement are bounded and do not mutate on invalid input', async () => {
+  const invalid = await createPost(request('/api/posts', { title: 'Invalid', content: 'Content', tags: ['Valid', '<script>'] }));
+  expect(invalid.status).toBe(400);
+  expect(await prisma.post.count()).toBe(0);
+  expect((await createPost(request('/api/posts', { title: 'Duplicate', content: 'Content', tags: ['Design', 'design'] }))).status).toBe(400);
+  const created = await (await createPost(request('/api/posts', { title: 'Topic post', content: 'Content', tags: ['  Praxis  ', 'Next.js'] }))).json();
+  expect(created.tags.map((tag: { name: string }) => tag.name)).toEqual(['Next.js', 'Praxis']);
+  const repeated = await (await createPost(request('/api/posts', { title: 'Another', content: 'Content', tags: ['Praxis'] }))).json();
+  expect(repeated.tags[0].id).toBe(created.tags.find((tag: { name: string }) => tag.name === 'Praxis').id);
+  const rejected = await editPost(request(`/api/posts/${created.id}`, { title: 'No', content: 'Content', tags: ['one', 'two', 'three', 'four'] }, 'PUT'), params(created.id));
+  expect(rejected.status).toBe(400);
+  const edited = await (await editPost(request(`/api/posts/${created.id}`, { title: 'Edited', content: 'Content', tags: ['Design'] }, 'PUT'), params(created.id))).json();
+  expect(edited.tags.map((tag: { name: string }) => tag.name)).toEqual(['Design']);
+  expect((await prisma.post.findUnique({ where: { id: created.id }, include: { tags: true } }))?.tags.map(tag => tag.name)).toEqual(['Design']);
+});
+
+test('topic discovery excludes draft-only tags, and filtered cursors retain privacy and filter scope', async () => {
+  await prisma.tag.create({ data: { name: 'Secret', posts: { create: { id: 'private-topic-draft', authorId: 'author', title: 'Hidden', content: 'Private', published: false } } } });
+  await prisma.tag.create({ data: { name: 'PublicA', posts: { create: Array.from({ length: 55 }, (_, index) => ({ id: `topic-a-${String(index).padStart(2, '0')}`, authorId: 'author', title: 'A', content: 'Public', published: true, createdAt: timestamp })) } } });
+  await prisma.tag.create({ data: { name: 'PublicB', posts: { create: { id: 'topic-b', authorId: 'author', title: 'B', content: 'Public', published: true } } } });
+  jest.mocked(getServerSession).mockResolvedValue(null);
+  const topics = await (await getTopics(request('/api/posts/topics?q=Public'))).json();
+  expect(topics.topics.map((tag: { name: string }) => tag.name)).toEqual(['PublicA', 'PublicB']);
+  expect((await (await getTopics(request('/api/posts/topics?q=public'))).json()).topics).toHaveLength(2);
+  expect((await (await getTopics(request('/api/posts/topics?q=Secret'))).json()).topics).toEqual([]);
+  const first = await (await getPosts(request('/api/posts?feed=1&tag=PublicA'))).json();
+  expect(first.posts).toHaveLength(50);
+  expect(first.posts.every((post: { tags: { name: string }[] }) => post.tags.some(tag => tag.name === 'PublicA'))).toBe(true);
+  expect(first.nextCursor).toEqual(expect.any(String));
+  expect((await getPosts(request(`/api/posts?feed=1&tag=PublicB&cursor=${first.nextCursor}`))).status).toBe(400);
+  expect((await getPosts(request(`/api/posts?feed=1&cursor=${first.nextCursor}`))).status).toBe(400);
+  const second = await (await getPosts(request(`/api/posts?feed=1&tag=PublicA&cursor=${first.nextCursor}`))).json();
+  expect(second.posts).toHaveLength(5);
+  expect(second.nextCursor).toBeNull();
+  expect(new Set([...first.posts, ...second.posts].map((post: { id: string }) => post.id)).size).toBe(55);
+  expect((await (await getPosts(request('/api/posts?feed=1&tag=Secret'))).json()).posts).toEqual([]);
+  viewer('viewer');
+  expect((await (await getPosts(request('/api/posts?feed=1&tag=Secret'))).json()).posts).toEqual([]);
+  viewer('author');
+  expect((await (await getPosts(request('/api/posts?feed=1&tag=Secret'))).json()).posts.map((post: { id: string }) => post.id)).toEqual(['private-topic-draft']);
+  expect((await getPosts(request('/api/posts?feed=1&tag=PublicA&tag=Secret'))).status).toBe(400);
 });
 
 test('personal totals span all owned posts without loading records or accepting arbitrary target IDs', async () => {

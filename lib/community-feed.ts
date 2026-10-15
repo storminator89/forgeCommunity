@@ -22,6 +22,7 @@ export interface CommunityPost {
   authorId: string
   author: { id: string; name: string; image: string | null } | null
   createdAt: string
+  tags?: { id: string; name: string }[]
   votes: number
   isLiked: boolean
   comments: CommunityComment[]

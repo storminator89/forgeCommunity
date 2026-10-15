@@ -24,6 +24,7 @@ interface PostCardProps {
   onLike: (postId: string) => Promise<void>
   onDelete?: (postId: string) => Promise<void>
   onEdit?: (post: Post) => void
+  onSelectTopic?: (topic: string) => void
   onAddComment?: (postId: string, content: string) => Promise<void>
   onLikeComment?: (commentId: string, postId: string) => Promise<void>
   onSelectSolution?: (postId: string, commentId: string | null) => Promise<void>
@@ -41,6 +42,7 @@ export function PostCard({
   onLike,
   onDelete,
   onEdit,
+  onSelectTopic,
   onAddComment,
   onLikeComment,
   onSelectSolution,
@@ -130,6 +132,11 @@ export function PostCard({
                 dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(post.content) }}
               />
             </div>
+            {!!post.tags?.length && <ul className="flex flex-wrap gap-2" aria-label="Beitragsthemen">
+              {post.tags.map(tag => <li key={tag.id}><a href={`/community?tag=${encodeURIComponent(tag.name)}`}
+                onClick={event => { if (onSelectTopic && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey && event.button === 0) { event.preventDefault(); onSelectTopic(tag.name) } }}
+                className="inline-flex min-h-8 items-center rounded-full border border-border bg-muted/50 px-3 text-xs font-medium text-foreground hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{tag.name}</a></li>)}
+            </ul>}
           </div>
           {post.published !== false && post.acceptedSolution && <section aria-label="Ausgewählte Lösung" className="mt-5 rounded-lg border border-primary/30 bg-primary/5 p-4">
             <h3 className="flex items-center gap-2 text-sm font-semibold"><CheckCircle2 className="h-4 w-4 text-primary" aria-hidden="true" /> Vom Beitragsautor als Lösung ausgewählt</h3>

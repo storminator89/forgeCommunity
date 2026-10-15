@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { CommunityPost, CommentsPage, FeedPage, fetchCommunityJson, isAbortError, mergeCommunityRows } from '@/lib/community-feed'
 
-export function useCommunityFeed() {
+export function useCommunityFeed(tag: string | null = null) {
   const [posts, setPosts] = useState<CommunityPost[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
@@ -32,7 +32,7 @@ export function useCommunityFeed() {
     const controller = new AbortController()
     pageRequest.current = controller
     try {
-      const page = await fetchCommunityJson<FeedPage>(`/api/posts?feed=1${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`, { signal: controller.signal, cache: 'no-store' })
+      const page = await fetchCommunityJson<FeedPage>(`/api/posts?feed=1${tag ? `&tag=${encodeURIComponent(tag)}` : ''}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`, { signal: controller.signal, cache: 'no-store' })
       if (!Array.isArray(page.posts) || !(page.nextCursor === null || typeof page.nextCursor === 'string')) throw new Error('Ungültige Antwort')
       if (controller.signal.aborted || !mounted.current || pageRequest.current !== controller) return
       setPosts(previous => mergeCommunityRows(previous, page.posts.filter(post => !deletedIds.current.has(post.id))))
@@ -47,7 +47,7 @@ export function useCommunityFeed() {
         setIsLoadingMore(false)
       }
     }
-  }, [])
+  }, [tag])
 
   useEffect(() => { postsRef.current = posts }, [posts])
 
@@ -64,6 +64,10 @@ export function useCommunityFeed() {
       .then(post => {
         if (!post.id || !Array.isArray(post.comments)) throw new Error('Ungültiger Beitrag')
         if (controller.signal.aborted || !mounted.current || deletedIds.current.has(post.id)) return
+        if (tag && !post.tags?.some(topic => topic.name === tag)) {
+          setLinkedTargetError(true)
+          return
+        }
         setPosts(previous => {
           const existing = previous.find(row => row.id === post.id)
           const linkedPost = existing ? { ...post, ...existing, comments: mergeCommunityRows(existing.comments, post.comments) } : post
@@ -79,7 +83,7 @@ export function useCommunityFeed() {
           setLinkedTargetLoading(false)
         }
       })
-  }, [])
+  }, [tag])
 
   useEffect(() => {
     mounted.current = true

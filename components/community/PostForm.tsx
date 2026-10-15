@@ -4,11 +4,13 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Loader2 } from 'lucide-react'
 import { Editor } from "@/components/Editor"
+import { PostTopicPicker } from './PostTopicPicker'
 
 interface PostFormProps {
-  onSubmit: (title: string, content: string) => Promise<void>
+  onSubmit: (title: string, content: string, tags: string[]) => Promise<void>
   initialTitle?: string
   initialContent?: string
+  initialTags?: string[]
   isEditing?: boolean
   isLoading?: boolean
   onCancel?: () => void
@@ -18,16 +20,18 @@ export function PostForm({
   onSubmit,
   initialTitle = '',
   initialContent = '',
+  initialTags = [],
   isEditing = false,
   isLoading = false,
   onCancel
 }: PostFormProps) {
   const [title, setTitle] = useState(initialTitle)
   const [content, setContent] = useState(initialContent)
+  const [tags, setTags] = useState(initialTags)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    await onSubmit(title, content)
+    await onSubmit(title, content, tags)
   }
 
   return (
@@ -55,6 +59,8 @@ export function PostForm({
             className="focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
           />
         </div>
+
+        <PostTopicPicker value={tags} onChange={setTags} disabled={isLoading} />
 
         <div className="flex flex-wrap justify-end gap-2 border-t pt-5">
           {onCancel && (

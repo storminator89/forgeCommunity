@@ -4,7 +4,7 @@
 /* Hallmark · genre: editorial · macrostructure: conversation workbench · design-system: design.md · designed-as-app */
 
 import { AppShell, AppHeader } from '@/components/app-shell';
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useSyncExternalStore } from 'react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { PageState } from '@/components/page-state'
 import type { Session } from 'next-auth'
@@ -24,9 +24,11 @@ import { LeaderboardCard } from '@/components/community/LeaderboardCard'
 import { StatsCard } from '@/components/community/StatsCard'
 import { ContributionMilestonesCard } from '@/components/community/ContributionMilestonesCard'
 import { FirstActionGuide } from '@/components/community/FirstActionGuide'
+import { TopicNavigation } from '@/components/community/TopicNavigation'
 import { useCommunityFeed } from '@/hooks/useCommunityFeed'
 import { usePrivateContributions } from '@/hooks/usePrivateContributions'
 import { CommunityPost as Post, CommunityStats, fetchCommunityJson as fetchWithErrorHandling, isAbortError, mergeCommunityRows } from '@/lib/community-feed'
+import { validTopicName } from '@/lib/community-topics'
 
 interface LeaderboardUser {
   name: string
@@ -47,12 +49,12 @@ interface RewardSummary {
   }>
 }
 
-function Community({ session }: { session: Session | null }) {
+function Community({ session, topic, onSelectTopic }: { session: Session | null; topic: string | null; onSelectTopic: (topic: string | null) => void }) {
   const contributions = usePrivateContributions(session?.user?.id)
   const mainRef = useRef<HTMLElement>(null)
   const feedStatusRef = useRef<HTMLParagraphElement>(null)
   const focusEndOfFeedRef = useRef(false)
-  const { posts: localPosts, setPosts: setLocalPosts, isLoading, isLoadingMore, loadError: postsLoadError, nextCursor, cancelPage, removePost, loadComments, commentsLoading, commentsError, initialLoaded, linkedTargetLoading, linkedTargetError, retryLinkedTarget, loadMore, retry: retryPosts } = useCommunityFeed()
+  const { posts: localPosts, setPosts: setLocalPosts, isLoading, isLoadingMore, loadError: postsLoadError, nextCursor, cancelPage, removePost, loadComments, commentsLoading, commentsError, initialLoaded, linkedTargetLoading, linkedTargetError, retryLinkedTarget, loadMore, retry: retryPosts } = useCommunityFeed(topic)
   useEffect(() => {
     if (focusEndOfFeedRef.current && !isLoadingMore && initialLoaded && !nextCursor) {
       focusEndOfFeedRef.current = false
@@ -157,7 +159,7 @@ function Community({ session }: { session: Session | null }) {
 
   // Mutations abort a page read without advancing its cursor. A retry can safely
   // merge that page later without overwriting newer edits, likes or comments.
-  const handleSubmitPost = async (title: string, content: string) => {
+  const handleSubmitPost = async (title: string, content: string, tags: string[] = []) => {
     if (!session) {
       setNotification({ type: 'error', message: 'Bitte melde dich an, um einen Beitrag zu erstellen.' })
       return
@@ -167,15 +169,17 @@ function Community({ session }: { session: Session | null }) {
     try {
       const response = await fetchWithErrorHandling<Post>(editingPost ? `/api/posts/${editingPost.id}` : '/api/posts', {
         method: editingPost ? 'PUT' : 'POST', signal: controller.signal,
-        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, content }),
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, content, tags }),
       })
       if (controller.signal.aborted) return
       if (editingPost) {
         // Keep explicitly loaded older comments when the edit response contains
         // only the bounded comment preview.
-        setLocalPosts(previous => previous.map(post => post.id === editingPost.id ? { ...post, ...response, comments: post.comments, commentsNextCursor: post.commentsNextCursor } : post))
+        setLocalPosts(previous => previous.flatMap(post => post.id === editingPost.id
+          ? topic && !response.tags?.some(tag => tag.name === topic) ? [] : [{ ...post, ...response, comments: post.comments, commentsNextCursor: post.commentsNextCursor }]
+          : [post]))
       } else {
-        setLocalPosts(previous => mergeCommunityRows([response], previous))
+        if (!topic || response.tags?.some(tag => tag.name === topic)) setLocalPosts(previous => mergeCommunityRows([response], previous))
         refreshActivity()
       }
       setIsEditing(false)
@@ -348,6 +352,8 @@ function Community({ session }: { session: Session | null }) {
               <p className="text-sm tabular-nums text-muted-foreground">{feedCount}</p>
             </div>
 
+            <TopicNavigation key={isEditing ? 'composing' : 'browsing'} selected={topic} onSelect={onSelectTopic} disabled={isEditing} />
+
             {session?.user?.id && session.user.role === 'USER' && <FirstActionGuide userId={session.user.id} />}
             <div className="grid min-w-0 items-start gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,19rem)] lg:gap-12">
               <section aria-labelledby="community-feed-title" className="min-w-0">
@@ -371,6 +377,7 @@ function Community({ session }: { session: Session | null }) {
                       onSubmit={handleSubmitPost}
                       initialTitle={editingPost?.title}
                       initialContent={editingPost?.content}
+                      initialTags={editingPost ? editingPost.tags?.map(tag => tag.name) : topic && validTopicName(topic) ? [topic] : []}
                       isEditing={!!editingPost}
                       isLoading={isLoading || isMutating}
                       onCancel={() => {
@@ -404,6 +411,7 @@ function Community({ session }: { session: Session | null }) {
                             setIsEditing(true)
                             mainRef.current?.scrollTo?.({ top: 0, behavior: 'smooth' })
                           }}
+                          onSelectTopic={onSelectTopic}
                           onAddComment={handleAddComment}
                           onLikeComment={handleLikeComment}
                           onSelectSolution={handleSelectSolution}
@@ -431,8 +439,9 @@ function Community({ session }: { session: Session | null }) {
                       <div className="border-t py-12 text-center" role="status">
                         <PlusCircle className="mx-auto mb-4 h-8 w-8 text-muted-foreground" aria-hidden="true" />
                         <h3 className="text-lg font-semibold text-foreground">Keine Beiträge gefunden</h3>
-                        <p className="mt-2 text-sm text-muted-foreground">Sei der Erste, der etwas teilt!</p>
-                        <Button type="button" variant="outline" className="mt-5" onClick={openComposer}>Beitrag schreiben</Button>
+                        <p className="mt-2 text-sm text-muted-foreground">{topic ? `Für „${topic}“ gibt es noch keine sichtbaren Beiträge.` : 'Sei der Erste, der etwas teilt!'}</p>
+                        {topic ? <Button type="button" variant="outline" className="mt-5" onClick={() => document.getElementById('community-topic-search')?.focus()}>Anderes Thema suchen</Button>
+                          : <Button type="button" variant="outline" className="mt-5" onClick={openComposer}>Beitrag schreiben</Button>}
                       </div>
                     )}
                   </div>
@@ -460,6 +469,32 @@ function Community({ session }: { session: Session | null }) {
 export default function CommunityPage() {
   const { data, status } = useSession()
   const session = status === 'authenticated' ? data : null
+  const topic = useSyncExternalStore(
+    callback => {
+      window.addEventListener('popstate', callback)
+      window.addEventListener('community-topic-change', callback)
+      return () => { window.removeEventListener('popstate', callback); window.removeEventListener('community-topic-change', callback) }
+    },
+    () => new URL(window.location.href).searchParams.get('tag'),
+    () => null,
+  )
+  const focusAfterNavigation = useRef(false)
+  useEffect(() => {
+    if (focusAfterNavigation.current) {
+      focusAfterNavigation.current = false
+      document.getElementById('community-feed-title')?.focus()
+    }
+  }, [topic])
+  const selectTopic = (next: string | null) => {
+    if (next === topic) return
+    const url = new URL(window.location.href)
+    if (next) url.searchParams.set('tag', next)
+    else url.searchParams.delete('tag')
+    url.hash = ''
+    focusAfterNavigation.current = true
+    window.history.pushState(window.history.state, '', url)
+    window.dispatchEvent(new Event('community-topic-change'))
+  }
 
   // The session can resolve after the page first hydrates. Do not expose an
   // interactive anonymous composer that will be remounted (and lose edits)
@@ -478,5 +513,5 @@ export default function CommunityPage() {
 
   // The posts response can include this viewer's unpublished posts and likes.
   // Reset the whole feed before a different account can see cached rows.
-  return <Community key={`${session?.user?.id ?? 'anonymous'}:${session?.user?.role ?? 'USER'}`} session={session} />
+  return <Community key={`${session?.user?.id ?? 'anonymous'}:${session?.user?.role ?? 'USER'}:${topic ?? ''}`} session={session} topic={topic} onSelectTopic={selectTopic} />
 }

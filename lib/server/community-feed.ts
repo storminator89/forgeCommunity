@@ -13,11 +13,11 @@ type CursorScope = 'posts' | 'comments';
 type CommunityCursor = { createdAt: Date; id: string };
 
 /** Carry the boundary values, rather than referencing a row which can be deleted. */
-export function encodeCommunityCursor(row: CommunityCursor, scope: CursorScope, postId?: string): string {
-  return Buffer.from(JSON.stringify({ v: 1, scope, ...(postId ? { postId } : {}), createdAt: row.createdAt.toISOString(), id: row.id })).toString('base64url');
+export function encodeCommunityCursor(row: CommunityCursor, scope: CursorScope, postId?: string, tag?: string | null): string {
+  return Buffer.from(JSON.stringify({ v: 1, scope, ...(postId ? { postId } : {}), ...(tag ? { tag } : {}), createdAt: row.createdAt.toISOString(), id: row.id })).toString('base64url');
 }
 
-export function readCommunityCursor(request: Request, scope: CursorScope, postId?: string): CommunityCursor | null {
+export function readCommunityCursor(request: Request, scope: CursorScope, postId?: string, tag?: string | null): CommunityCursor | null {
   const raw = new URL(request.url).searchParams.get('cursor');
   if (raw === null) return null;
   if (!raw || raw.length > 1024 || !/^[A-Za-z0-9_-]+$/.test(raw)) throw new InvalidPaginationError();
@@ -26,7 +26,7 @@ export function readCommunityCursor(request: Request, scope: CursorScope, postId
     if (decoded.toString('base64url') !== raw) throw new Error('Noncanonical cursor');
     const value = JSON.parse(decoded.toString('utf8'));
     if (!value || typeof value !== 'object' || Array.isArray(value) || value.v !== 1 || value.scope !== scope ||
-        value.postId !== postId || typeof value.id !== 'string' || !value.id || value.id.length > 256 ||
+        value.postId !== postId || value.tag !== (tag || undefined) || typeof value.id !== 'string' || !value.id || value.id.length > 256 ||
         /[\u0000-\u001f\u007f]/.test(value.id) || typeof value.createdAt !== 'string') throw new Error('Invalid cursor');
     const createdAt = new Date(value.createdAt);
     if (!Number.isFinite(createdAt.getTime()) || createdAt.toISOString() !== value.createdAt) throw new Error('Invalid cursor date');
@@ -68,6 +68,7 @@ export function communityCommentInclude(userId?: string) {
 export function communityPostInclude(userId?: string) {
   return {
     author,
+    tags: { select: { id: true, name: true }, orderBy: { name: 'asc' } },
     _count: { select: { likePosts: true, comments: true } },
     likePosts: { ...(userId ? { where: { userId } } : {}), take: userId ? 1 : 0, select: { id: true } },
     // Independent bounded include: never expand or shift the comment preview.
@@ -114,12 +115,12 @@ export function normalizeCommunityPost(post: PostRecord, viewerId?: string) {
   };
 }
 
-export function communityPage<T extends CommunityCursor>(rows: T[], scope: CursorScope, postId?: string) {
+export function communityPage<T extends CommunityCursor>(rows: T[], scope: CursorScope, postId?: string, tag?: string | null) {
   const items = rows.slice(0, COMMUNITY_PAGE_SIZE);
   return {
     items,
     nextCursor: rows.length > COMMUNITY_PAGE_SIZE
-      ? encodeCommunityCursor(items[items.length - 1], scope, postId)
+      ? encodeCommunityCursor(items[items.length - 1], scope, postId, tag)
       : null,
   };
 }

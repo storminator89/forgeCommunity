@@ -7,6 +7,7 @@ import { authOptions } from '@/lib/auth'
 import { sanitizeRichHtmlServer, sanitizeTextServer } from '@/lib/server/sanitize-html'
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input'
 import { communityPostInclude, communityVisibility, isCurrentCommunityAdmin, normalizeCommunityPost } from '@/lib/server/community-feed'
+import { parsePostTopics } from '@/lib/community-topics'
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ postId: string }> }) {
   try {
@@ -62,7 +63,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ post
     }
 
     const data = await readJsonObject(req)
-    const { title, content } = data
+    const { title, content, tags } = data
 
     if (typeof title !== 'string' || typeof content !== 'string') {
       return NextResponse.json({ error: 'Titel und Inhalt sind erforderlich' }, { status: 400 })
@@ -72,12 +73,15 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ post
     if (!safeTitle || !sanitizeTextServer(safeContent)) {
       return NextResponse.json({ error: 'Titel und Inhalt sind erforderlich' }, { status: 400 })
     }
+    const topicNames = parsePostTopics(tags)
+    if (!topicNames) return NextResponse.json({ error: 'Bis zu drei gültige Themen sind erlaubt' }, { status: 400 })
 
     const updatedPost = await prisma.post.update({
       where: { id: postId },
       data: {
         title: safeTitle,
         content: safeContent,
+        ...(tags !== undefined ? { tags: { set: [], connectOrCreate: topicNames.map(name => ({ where: { name }, create: { name } })) } } : {}),
       },
       include: communityPostInclude(userId),
     })
