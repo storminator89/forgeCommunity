@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -32,7 +32,7 @@ function passwordError(password: string): string | null {
 
 interface User {
   id: string
-  name: string
+  name: string | null
   email: string
   role: 'USER' | 'ADMIN' | 'MODERATOR' | 'INSTRUCTOR'
   createdAt: string
@@ -40,7 +40,7 @@ interface User {
   bio?: string | null
   contact?: string | null
   image?: string | null
-  endorsements: number
+  endorsements?: number
   lastLogin?: string | null
   emailVerified?: string | null
   settings?: {
@@ -48,7 +48,7 @@ interface User {
     pushNotifications: boolean
     theme: 'LIGHT' | 'DARK'
     language: string
-  }
+  } | null
 }
 
 interface EditUserDialogProps {
@@ -116,6 +116,7 @@ function EditUserDialogForm({ user, isOpen, onClose, onUpdateUser }: EditUserDia
     try {
       // Validierung
       if (!formData.name || !formData.email) {
+        setActiveTab('basic')
         toast.error('Bitte füllen Sie alle Pflichtfelder aus')
         return
       }
@@ -123,6 +124,7 @@ function EditUserDialogForm({ user, isOpen, onClose, onUpdateUser }: EditUserDia
       if (formData.password) {
         const invalidPassword = passwordError(formData.password)
         if (invalidPassword) {
+          setActiveTab('basic')
           toast.error(invalidPassword)
           return
         }
@@ -130,6 +132,7 @@ function EditUserDialogForm({ user, isOpen, onClose, onUpdateUser }: EditUserDia
 
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
       if (!emailRegex.test(formData.email)) {
+        setActiveTab('basic')
         toast.error('Bitte geben Sie eine gültige E-Mail-Adresse ein')
         return
       }
@@ -197,12 +200,12 @@ function EditUserDialogForm({ user, isOpen, onClose, onUpdateUser }: EditUserDia
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleClose}>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) handleClose() }}>
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-4">
             <Avatar className="h-10 w-10">
-              <AvatarImage src={user.image || ''} alt={user.name} />
+              <AvatarImage src={user.image || ''} alt={user.name || user.email} />
               <AvatarFallback>{user.name?.slice(0, 2).toUpperCase()}</AvatarFallback>
             </Avatar>
             <div>
@@ -212,18 +215,19 @@ function EditUserDialogForm({ user, isOpen, onClose, onUpdateUser }: EditUserDia
               </p>
             </div>
           </DialogTitle>
+          <DialogDescription>Kontodaten und Einstellungen von {user.name || user.email} bearbeiten.</DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} noValidate>
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="flex w-full justify-start overflow-x-auto">
               <TabsTrigger value="basic">Basisdaten</TabsTrigger>
               <TabsTrigger value="profile">Profil</TabsTrigger>
               <TabsTrigger value="settings">Einstellungen</TabsTrigger>
             </TabsList>
 
             <TabsContent value="basic" className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="name">Name *</Label>
                   <Input
@@ -248,7 +252,7 @@ function EditUserDialogForm({ user, isOpen, onClose, onUpdateUser }: EditUserDia
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="password">
                     Neues Passwort
@@ -261,8 +265,9 @@ function EditUserDialogForm({ user, isOpen, onClose, onUpdateUser }: EditUserDia
                     onChange={(e) => handleInputChange('password', e.target.value)}
                     placeholder="Leer lassen für keine Änderung"
                     minLength={MIN_PASSWORD_LENGTH}
+                    aria-describedby="edit-user-password-help"
                   />
-                  <p className="text-xs text-muted-foreground">
+                  <p id="edit-user-password-help" className="text-xs text-muted-foreground">
                     {PASSWORD_HELP}
                   </p>
                 </div>
@@ -275,7 +280,7 @@ function EditUserDialogForm({ user, isOpen, onClose, onUpdateUser }: EditUserDia
                       handleInputChange('role', value)
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="role" aria-label="Rolle">
                       <SelectValue placeholder="Rolle auswählen" />
                     </SelectTrigger>
                     <SelectContent>
@@ -383,7 +388,7 @@ function EditUserDialogForm({ user, isOpen, onClose, onUpdateUser }: EditUserDia
                       handleInputChange('theme', value)
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="theme" aria-label="Theme">
                       <SelectValue placeholder="Theme auswählen" />
                     </SelectTrigger>
                     <SelectContent>
@@ -401,7 +406,7 @@ function EditUserDialogForm({ user, isOpen, onClose, onUpdateUser }: EditUserDia
                       handleInputChange('language', value)
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="language" aria-label="Sprache">
                       <SelectValue placeholder="Sprache auswählen" />
                     </SelectTrigger>
                     <SelectContent>

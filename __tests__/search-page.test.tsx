@@ -50,6 +50,7 @@ it('renders focusable result links with the existing destinations and safe exter
   render(<SearchPageClient initialQuery="Alpha" />);
 
   const course = await screen.findByRole('link', { name: /Kurs Alpha/ });
+  expect(screen.getByRole('heading', { name: 'Ergebnisse (6)' })).toBeInTheDocument();
   expect(course).toHaveAttribute('href', '/courses/course-1');
   expect(screen.getByRole('link', { name: /Event Beta/ })).toHaveAttribute('href', '/events/event-1');
   expect(screen.getByRole('link', { name: /Mitglied Gamma/ })).toHaveAttribute('href', '/profile/member-1');
@@ -71,6 +72,52 @@ it('renders focusable result links with the existing destinations and safe exter
   expect(reachedWithTab).toBe(true);
 });
 
+it('counts displayed results in the All tab when the API has no aggregate total', async () => {
+  (global.fetch as jest.Mock).mockResolvedValueOnce({
+    ok: true,
+    json: async () => ({ results, pagination: { total: 0, page: 1, limit: 10, pages: 0 } }),
+  });
+  render(<SearchPageClient initialQuery="Alpha" />);
+  expect(await screen.findByRole('heading', { name: 'Ergebnisse (6)' })).toBeInTheDocument();
+});
+
+it('keeps all six categories and controls reachable with mobile-sized touch targets', async () => {
+  const user = userEvent.setup();
+  render(<SearchPageClient initialQuery="Alpha" />);
+
+  expect(screen.getByRole('searchbox', { name: /Suche nach Kursen/ })).toHaveClass('h-11');
+  expect(screen.getByRole('button', { name: 'Suche löschen' })).toHaveClass('h-11', 'w-11');
+  expect(screen.getByRole('tablist', { name: 'Suchkategorie' })).toHaveClass('overflow-x-auto');
+  expect(screen.getByText(/Weitere Kategorien seitlich scrollen/)).toBeInTheDocument();
+  expect(screen.getAllByRole('tab')).toHaveLength(6);
+  screen.getAllByRole('tab').forEach((tab) => expect(tab).toHaveClass('min-h-11'));
+
+  await user.click(screen.getByRole('tab', { name: 'Alle' }));
+  await user.keyboard('{ArrowRight}');
+  await waitFor(() => expect(screen.getByRole('tab', { name: 'Kurse' })).toHaveAttribute('aria-selected', 'true'));
+  expect(window.location.search).toBe('?q=Alpha&type=course');
+});
+
+it('shows an empty prompt and a visible, retryable error state', async () => {
+  const { unmount } = render(<SearchPageClient />);
+  expect(screen.getByRole('heading', { name: 'Geben Sie einen Suchbegriff ein' })).toBeInTheDocument();
+  expect(global.fetch).not.toHaveBeenCalled();
+  unmount();
+
+  (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('offline'));
+  const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+  try {
+    const user = userEvent.setup();
+    render(<SearchPageClient initialQuery="Alpha" />);
+    expect(screen.getByRole('status')).toHaveTextContent('Suche läuft');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Suche fehlgeschlagen');
+    await user.click(screen.getByRole('button', { name: 'Erneut versuchen' }));
+    expect(await screen.findByRole('link', { name: /Kurs Alpha/ })).toBeInTheDocument();
+  } finally {
+    consoleSpy.mockRestore();
+  }
+});
+
 it('restores filters from the URL and keeps them there before following a result', async () => {
   const user = userEvent.setup();
   window.history.replaceState({}, '', '/search?q=Alpha&type=member&page=2');
@@ -81,19 +128,20 @@ it('restores filters from the URL and keeps them there before following a result
     expect.objectContaining({ credentials: 'include' }),
   ));
   expect(screen.getByRole('tab', { name: 'Mitglieder' })).toHaveAttribute('data-state', 'active');
+  expect(screen.getByRole('button', { name: 'Seite 2' })).toHaveClass('h-11', 'min-w-11');
   await user.click(await screen.findByRole('button', { name: /Vorherige/ }));
   expect(window.location.search).toBe('?q=Alpha&type=member');
   await user.click(screen.getByRole('tab', { name: 'Kurse' }));
   expect(window.location.search).toBe('?q=Alpha&type=course');
 
-  fireEvent.change(screen.getByRole('textbox', { name: /Suche nach Kursen/ }), { target: { value: 'Neue Suche' } });
+  fireEvent.change(screen.getByRole('searchbox', { name: /Suche nach Kursen/ }), { target: { value: 'Neue Suche' } });
   expect(window.location.search).toBe('?q=Neue+Suche&type=course');
-  expect(screen.getByRole('textbox', { name: /Suche nach Kursen/ })).toHaveValue('Neue Suche');
+  expect(screen.getByRole('searchbox', { name: /Suche nach Kursen/ })).toHaveValue('Neue Suche');
 });
 
 it('ignores delayed URL props from an older keystroke and applies later navigation', async () => {
   const { rerender } = render(<SearchPageClient initialQuery="Alpha" />);
-  const input = screen.getByRole('textbox', { name: /Suche nach Kursen/ });
+  const input = screen.getByRole('searchbox', { name: /Suche nach Kursen/ });
 
   fireEvent.change(input, { target: { value: 'Neue Suche' } });
   expect(window.location.search).toBe('?q=Neue+Suche');

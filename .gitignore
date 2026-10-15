@@ -84,6 +84,8 @@ logs
 # Next.js build output
 .next
 out
+playwright-report/
+test-results/
 
 # Nuxt.js build / generate output
 .nuxt

@@ -87,7 +87,12 @@ it('includes events at the start of today and exposes calendar days as keyboard 
   render(<Events />);
   const dayButton = await screen.findByRole('button', { name: /1 Event$/ });
   expect(dayButton).toHaveAttribute('aria-current', 'date');
+  const monthScroller = screen.getByRole('group', { name: 'Monatskalender horizontal verschieben' });
+  expect(monthScroller).toHaveClass('overflow-x-auto');
+  expect(monthScroller.firstElementChild).toHaveClass('min-w-[314px]');
   fireEvent.click(screen.getByRole('button', { name: 'Liste' }));
+  expect(screen.getByRole('region', { name: 'Listenansicht' })).toBeInTheDocument();
+  expect(screen.getByRole('article')).toHaveTextContent('Heute dabei');
   expect(screen.getByRole('heading', { name: 'Heute dabei' })).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Woche' }));
   expect(screen.getByRole('region', { name: 'Wochenkalender' })).toBeVisible();

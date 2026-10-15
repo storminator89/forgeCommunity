@@ -12,12 +12,13 @@ import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Bell, Lock, CheckCircle, XCircle, Code, Database, Languages, Edit, Trash, Award, ExternalLink, Linkedin, Eye, User, Download, Layout } from 'lucide-react'
+import { Bell, CheckCircle, XCircle, Code, Database, Languages, Edit, Trash, Award, ExternalLink, Linkedin, Eye, Download, Layout } from 'lucide-react'
 import { ImageUpload } from "@/components/ImageUpload"
 import axios from 'axios'
 import { toast } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { PageState } from '@/components/page-state'
 
 interface Skill {
   id: string
@@ -45,9 +46,9 @@ interface Certificate {
 
 const SKILL_LEVELS = [
   { label: 'Keine Kenntnisse', value: 0, color: 'bg-secondary' },
-  { label: 'Beginner', value: 33, color: 'bg-blue-500' },
-  { label: 'Fortgeschritten', value: 66, color: 'bg-green-500' },
-  { label: 'Experte', value: 100, color: 'bg-purple-500' }
+  { label: 'Beginner', value: 33, color: 'bg-primary' },
+  { label: 'Fortgeschritten', value: 66, color: 'bg-primary' },
+  { label: 'Experte', value: 100, color: 'bg-primary' }
 ] as const;
 
 // Hilfsfunktion um den nächstgelegenen Level zu finden
@@ -251,43 +252,27 @@ export default function SettingsPage() {
     <AppShell>
       <Sidebar />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        {/* Header */}
         <AppHeader>
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-            <h1 className="text-xl sm:text-2xl font-bold text-foreground">Einstellungen</h1>
-            <div className="flex items-center space-x-4">
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <h1>Einstellungen</h1>
+            <div className="flex shrink-0 items-center gap-2">
               <ThemeToggle />
               <UserNav />
             </div>
           </div>
         </AppHeader>
 
-        {/* Hauptinhalt */}
-        <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto p-4 lg:p-8">
-          <div className="max-w-4xl mx-auto">
-            {loadError && <div role="alert" className="mb-6 rounded-xl border border-destructive/30 bg-destructive/5 p-4"><p>{loadError}</p><Button variant="outline" className="mt-3" onClick={() => window.location.reload()}>Erneut laden</Button></div>}
+        <main id="page-content" tabIndex={-1} aria-busy={isLoading} className="min-w-0 flex-1 overflow-y-auto p-4 lg:p-8">
+          <div className="mx-auto max-w-4xl space-y-6">
+            <div className="border-b pb-6"><h2 className="text-xl font-semibold tracking-tight">Dein Konto verwalten</h2><p className="mt-2 max-w-[68ch] text-sm leading-relaxed text-muted-foreground">Profil, Benachrichtigungen, Privatsphäre und deine eigenen Nachweise an einem Ort.</p></div>
+            {isLoading ? <PageState kind="loading" title="Einstellungen werden geladen" description="Deine gespeicherten Angaben werden vorbereitet." /> : loadError ? <PageState kind="error" title="Einstellungen konnten nicht geladen werden" description={loadError} action={<Button variant="outline" onClick={() => window.location.reload()}>Erneut laden</Button>} /> : (
             <Tabs defaultValue="account" className="w-full">
-              <TabsList className="grid h-auto w-full grid-cols-2 gap-1 bg-muted p-1 mb-6 sm:grid-cols-5">
-                <TabsTrigger value="account" className="w-full">
-                  <User className="w-4 h-4 mr-2" />
-                  Account
-                </TabsTrigger>
-                <TabsTrigger value="notifications" className="w-full">
-                  <Bell className="w-4 h-4 mr-2" />
-                  Benachrichtigungen
-                </TabsTrigger>
-                <TabsTrigger value="privacy" className="w-full">
-                  <Lock className="w-4 h-4 mr-2" />
-                  Privatsphäre
-                </TabsTrigger>
-                <TabsTrigger value="skills" className="w-full">
-                  <Code className="w-4 h-4 mr-2" />
-                  Fähigkeiten
-                </TabsTrigger>
-                <TabsTrigger value="certificates" className="w-full">
-                  <Award className="w-4 h-4 mr-2" />
-                  Zertifikate
-                </TabsTrigger>
+              <TabsList className="mb-6 grid h-auto w-full grid-cols-2 gap-1 p-1 sm:grid-cols-3 lg:grid-cols-5">
+                <TabsTrigger value="account" className="min-h-11 min-w-0 px-2">Konto</TabsTrigger>
+                <TabsTrigger value="notifications" className="min-h-11 min-w-0 px-2">Meldungen</TabsTrigger>
+                <TabsTrigger value="privacy" className="min-h-11 min-w-0 px-2">Privatsphäre</TabsTrigger>
+                <TabsTrigger value="skills" className="min-h-11 min-w-0 px-2">Fähigkeiten</TabsTrigger>
+                <TabsTrigger value="certificates" className="min-h-11 min-w-0 px-2">Zertifikate</TabsTrigger>
               </TabsList>
 
               {/* Konto-Tab */}
@@ -345,6 +330,8 @@ export default function SettingsPage() {
                         id="email-notifications"
                         checked={emailNotifications}
                         onCheckedChange={setEmailNotifications}
+                        disabled={isSaving}
+                        className="relative before:absolute before:-inset-y-3 before:inset-x-0"
                       />
                     </div>
                     <div className="flex items-center justify-between gap-4">
@@ -356,6 +343,8 @@ export default function SettingsPage() {
                         id="push-notifications"
                         checked={pushNotifications}
                         onCheckedChange={setPushNotifications}
+                        disabled={isSaving}
+                        className="relative before:absolute before:-inset-y-3 before:inset-x-0"
                       />
                     </div>
                   </CardContent>
@@ -378,7 +367,7 @@ export default function SettingsPage() {
                         <Label htmlFor="public-ranking-opt-in">In der öffentlichen Rangliste erscheinen</Label>
                         <p id="ranking-consent-description" className="text-sm text-muted-foreground">Standardmäßig aus. Wenn du zustimmst, können andere deinen Namen, dein Profilbild und deine Punkte in der Rangliste sehen. Deine Punkte und Meilensteine bleiben auch ohne Zustimmung für dich sichtbar. Punkte gibt es für von Admins freigegebene Kurse mit gespeichertem gültigem Quiz und bestandenem Versuch für die aktuelle Kursversion. Du kannst die Zustimmung jederzeit zurücknehmen.</p>
                       </div>
-                      <Switch id="public-ranking-opt-in" aria-describedby="ranking-consent-description" checked={publicRankingOptIn} onCheckedChange={setPublicRankingOptIn} disabled={!isLoaded || isLoading || isSaving} />
+                      <Switch id="public-ranking-opt-in" aria-describedby="ranking-consent-description" checked={publicRankingOptIn} onCheckedChange={setPublicRankingOptIn} disabled={!isLoaded || isLoading || isSaving} className="relative before:absolute before:-inset-y-3 before:inset-x-0" />
                     </div>
                   </CardContent>
                   <CardFooter>
@@ -399,31 +388,33 @@ export default function SettingsPage() {
                       {isLoading ? (
                         <p className="text-muted-foreground">Lade Fähigkeiten...</p>
                       ) : (
-                        <ul className="space-y-4">
+                        <ul className="divide-y divide-border">
+                          {userSkills.length === 0 && <li className="py-5 text-sm text-muted-foreground">Du hast noch keine Fähigkeiten hinzugefügt.</li>}
                           {userSkills.map((userSkill) => (
-                            <li key={userSkill.id} className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-4 bg-muted/40 rounded-xl border">
-                              <div className="flex items-center space-x-4">
+                            <li key={userSkill.id} className="flex min-w-0 flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+                              <div className="flex min-w-0 items-center gap-4">
                                 {getSkillIcon(userSkill.skill?.name || "")}
-                                <div className="flex-1">
-                                  <span className="font-medium text-foreground">
+                                <div className="min-w-0 flex-1">
+                                  <span className="break-words font-medium text-foreground">
                                     {userSkill.skill?.name || "Unbekannte Fähigkeit"}
                                   </span>
                                   <div className="mt-2">
-                                    <div className="flex items-center justify-between mb-1">
+                                    <div className="mb-1 flex items-center justify-between gap-2">
                                       <span className="text-sm text-muted-foreground">
                                         {getLevelLabel(userSkill.level)}
                                       </span>
+                                      <span className="text-sm tabular-nums text-muted-foreground">{userSkill.level}%</span>
                                     </div>
-                                    <div className="w-full min-w-0 sm:w-48 bg-muted rounded-full h-2.5">
+                                    <div className="h-2.5 w-full min-w-0 rounded-full bg-muted sm:w-48" role="progressbar" aria-label={`Kenntnisstand ${userSkill.skill?.name || 'Unbekannte Fähigkeit'}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.max(0, Math.min(100, userSkill.level))}>
                                       <div
                                         className={`h-2.5 rounded-full ${findNearestLevel(userSkill.level).color}`}
-                                        style={{ width: `${userSkill.level}%` }}
+                                        style={{ width: `${Math.max(0, Math.min(100, userSkill.level))}%` }}
                                       ></div>
                                     </div>
                                   </div>
                                 </div>
                               </div>
-                              <div className="flex items-center space-x-2">
+                              <div className="flex items-center gap-2">
                                 <Button
                                   variant="ghost"
                                   size="icon"
@@ -432,7 +423,7 @@ export default function SettingsPage() {
                                     setEditSkill(userSkill)
                                     setIsEditModalOpen(true)
                                   }}
-                                  aria-label="Bearbeiten"
+                                  aria-label={`${userSkill.skill?.name || 'Fähigkeit'} bearbeiten`}
                                 >
                                   <Edit className="w-4 h-4" />
                                 </Button>
@@ -441,7 +432,7 @@ export default function SettingsPage() {
                                   size="icon"
                                   className="text-foreground hover:bg-accent"
                                   onClick={() => handleDeleteSkill(userSkill.skillId)}
-                                  aria-label="Löschen"
+                                  aria-label={`${userSkill.skill?.name || 'Fähigkeit'} löschen`}
                                 >
                                   <Trash className="w-4 h-4" />
                                 </Button>
@@ -527,16 +518,16 @@ export default function SettingsPage() {
                         Du hast noch keine Zertifikate erworben.
                       </div>
                     ) : (
-                      <div className="grid gap-4">
+                      <div className="divide-y divide-border border-y">
                         {certificates.map((cert) => (
                           <div
                             key={cert.id}
-                            className="flex flex-col gap-4 p-4 border rounded-xl hover:bg-accent"
+                            className="flex min-w-0 flex-col gap-4 py-4"
                           >
-                            <div className="flex items-start space-x-4">
-                              <Award className="w-8 h-8 mt-1 text-primary" />
-                              <div>
-                                <h3 className="font-medium">{cert.courseName}</h3>
+                            <div className="flex min-w-0 items-start gap-4">
+                              <Award className="mt-1 h-8 w-8 shrink-0 text-primary" />
+                              <div className="min-w-0">
+                                <h4 className="font-medium">{cert.courseName}</h4>
                                 <p className="text-sm text-muted-foreground">
                                   Ausgestellt am: {new Date(cert.issuedAt).toLocaleDateString('de-DE')}
                                 </p>
@@ -546,6 +537,7 @@ export default function SettingsPage() {
                               <Button
                                 variant="outline"
                                 size="sm"
+                                aria-label={`${cert.courseName} anzeigen`}
                                 onClick={() => window.open(`/verify-certificate/${cert.id}`, '_blank', 'noopener,noreferrer')}
                               >
                                 <Eye className="w-4 h-4 mr-2" />
@@ -554,6 +546,7 @@ export default function SettingsPage() {
                               <Button
                                 variant="outline"
                                 size="sm"
+                                aria-label={`${cert.courseName} herunterladen`}
                                 onClick={async () => {
                                   try {
                                     const response = await fetch(`/api/courses/${cert.courseId}/certificate`, {
@@ -585,10 +578,11 @@ export default function SettingsPage() {
                               <Button
                                 variant="outline"
                                 size="sm"
+                                aria-label={`${cert.courseName} zu LinkedIn hinzufügen`}
                                 onClick={() => {
                                   const baseUrl = window.location.origin;
                                   const verificationUrl = `${baseUrl}/verify-certificate/${cert.id}`;
-                                  window.open(`https://www.linkedin.com/profile/add?startTask=CERTIFICATION_NAME&name=${encodeURIComponent(cert.courseName)}&organizationName=Forge%20Community&issueYear=${new Date(cert.issuedAt).getFullYear()}&issueMonth=${new Date(cert.issuedAt).getMonth() + 1}&certUrl=${encodeURIComponent(verificationUrl)}`, '_blank');
+                                  window.open(`https://www.linkedin.com/profile/add?startTask=CERTIFICATION_NAME&name=${encodeURIComponent(cert.courseName)}&organizationName=Forge%20Community&issueYear=${new Date(cert.issuedAt).getFullYear()}&issueMonth=${new Date(cert.issuedAt).getMonth() + 1}&certUrl=${encodeURIComponent(verificationUrl)}`, '_blank', 'noopener,noreferrer');
                                 }}
                               >
                                 <Linkedin className="w-4 h-4 mr-2" />
@@ -603,6 +597,7 @@ export default function SettingsPage() {
                 </Card>
               </TabsContent>
             </Tabs>
+            )}
           </div>
         </main>
       </div>

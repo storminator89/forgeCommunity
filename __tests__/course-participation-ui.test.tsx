@@ -65,3 +65,37 @@ it('shows the certificate protection error when a course deletion is rejected', 
   await waitFor(() => expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ description: 'Der Kurs hat ausgestellte Zertifikate und kann nicht gelöscht werden.', variant: 'destructive' })));
   expect(screen.getByText('Zertifizierter Kurs')).toBeInTheDocument();
 });
+
+it('filters the directory by title or instructor and offers a reset with an updated count', async () => {
+  const user = userEvent.setup();
+  render(<CourseClient />);
+  expect(await screen.findByText('Freier Kurs')).toBeInTheDocument();
+  expect(screen.getByText('2 Kurse verfügbar')).toBeInTheDocument();
+
+  await user.type(screen.getByRole('searchbox', { name: 'Suche nach Kursen oder Dozenten' }), 'Bezahlter');
+  expect(screen.getByText('1 Kurs gefunden')).toBeInTheDocument();
+  expect(screen.queryByText('Freier Kurs')).not.toBeInTheDocument();
+
+  await user.clear(screen.getByRole('searchbox', { name: 'Suche nach Kursen oder Dozenten' }));
+  await user.type(screen.getByRole('searchbox', { name: 'Suche nach Kursen oder Dozenten' }), 'Unbekannt');
+  expect(screen.getByText('Keine Kurse gefunden')).toBeInTheDocument();
+  expect(screen.getAllByRole('button', { name: 'Filter zurücksetzen' })).toHaveLength(1);
+
+  await user.click(screen.getByRole('button', { name: 'Filter zurücksetzen' }));
+  expect(screen.getByText('2 Kurse verfügbar')).toBeInTheDocument();
+  expect(screen.getByText('Freier Kurs')).toBeInTheDocument();
+});
+
+it('keeps a full course unavailable to visitors but manageable by its owner', async () => {
+  const fullCourse = { ...freeCourse, participants: 2 };
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => [fullCourse] });
+  const view = render(<CourseClient />);
+  expect(await screen.findByRole('button', { name: 'Kurs ausgebucht' })).toBeDisabled();
+  expect(screen.queryByRole('button', { name: 'Löschen' })).not.toBeInTheDocument();
+  view.unmount();
+
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => [{ ...fullCourse, canDelete: true }] });
+  render(<CourseClient />);
+  expect(await screen.findByRole('button', { name: 'Kurs verwalten' })).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'Löschen' })).toBeInTheDocument();
+});

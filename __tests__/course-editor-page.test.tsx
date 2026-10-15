@@ -129,6 +129,21 @@ it('lädt den in der URL ausgewählten Inhalt wieder', async () => {
   await waitFor(() => expect(location.search).toBe('?content=child'))
 })
 
+it('keeps one page title and a scrollable mobile contents pane as topics change', async () => {
+  render(<CourseContentsEditor courseId="course" />)
+  expect(await screen.findByRole('heading', { level: 1, name: 'Testkurs' })).toBeInTheDocument()
+  const navigation = document.getElementById('course-contents-navigation')
+  expect(navigation?.firstElementChild).toHaveClass('h-72')
+
+  fireEvent.click(screen.getByRole('button', { name: 'Kapitel' }))
+  expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
+  expect(screen.getByRole('heading', { level: 2, name: 'Kapitel' })).toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Inhaltsverzeichnis schließen' }))
+  expect(navigation).toHaveClass('hidden')
+  expect(screen.getByRole('button', { name: 'Inhaltsverzeichnis öffnen' })).toHaveAttribute('aria-expanded', 'false')
+})
+
 it('behandelt ein normalisiertes leeres Textfeld als unverändert', async () => {
   mockEmptyText = true
   await editChapter()

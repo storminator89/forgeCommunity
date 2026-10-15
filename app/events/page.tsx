@@ -343,11 +343,13 @@ export default function Events() {
         <h2 className="text-center text-base font-semibold sm:text-xl">{format(currentMonth, 'MMMM yyyy', { locale: de })}</h2>
         <Button variant="outline" size="icon" aria-label="Nächster Monat" onClick={handleNextMonth}><ChevronRight className="h-4 w-4" /></Button>
       </div>
-      <div className="grid grid-cols-7 gap-px bg-border">
-        {['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].map(day => <div key={day} className="bg-card py-2 text-center text-xs font-medium text-muted-foreground">{day}</div>)}
-        {Array.from({ length: startingDayIndex }).map((_, index) => <div key={`empty-${index}`} className="h-20 bg-muted/30 sm:h-32 lg:h-40" aria-hidden="true" />)}
-        {days.map(day => renderDay(day))}
-        {Array.from({ length: (7 - (startingDayIndex + days.length) % 7) % 7 }).map((_, index) => <div key={`trailing-${index}`} className="h-20 bg-muted/30 sm:h-32 lg:h-40" aria-hidden="true" />)}
+      <div role="group" aria-label="Monatskalender horizontal verschieben" tabIndex={0} className="max-w-full overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
+        <div className="grid min-w-[314px] grid-cols-7 gap-px bg-border">
+          {['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].map(day => <div key={day} className="bg-card py-2 text-center text-xs font-medium text-muted-foreground">{day}</div>)}
+          {Array.from({ length: startingDayIndex }).map((_, index) => <div key={`empty-${index}`} className="h-20 bg-muted/30 sm:h-32 lg:h-40" aria-hidden="true" />)}
+          {days.map(day => renderDay(day))}
+          {Array.from({ length: (7 - (startingDayIndex + days.length) % 7) % 7 }).map((_, index) => <div key={`trailing-${index}`} className="h-20 bg-muted/30 sm:h-32 lg:h-40" aria-hidden="true" />)}
+        </div>
       </div>
       <p className="border-t px-4 py-3 text-xs text-muted-foreground">Wähle einen Tag, um die Events und Details zu öffnen.</p>
     </section>
@@ -375,9 +377,9 @@ export default function Events() {
     const sortedEvents = [...futureEvents].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     return (
-      <div className="mx-auto max-w-6xl overflow-hidden rounded-xl border bg-card">
+      <section aria-labelledby="event-list-heading" className="mx-auto max-w-6xl border-y">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4 lg:p-6">
-          <h2 className="text-lg lg:text-2xl font-semibold text-foreground">
+          <h2 id="event-list-heading" className="text-lg font-semibold text-foreground lg:text-2xl">
             Listenansicht
           </h2>
           <Button variant="outline" size="sm" onClick={() => setView('month')} className="flex items-center">
@@ -385,10 +387,10 @@ export default function Events() {
             Monatsansicht
           </Button>
         </div>
-        <div className="p-4 lg:p-6">
+        <div className="divide-y divide-border px-4 lg:px-6">
           {sortedEvents.length > 0 ? (
             sortedEvents.map(event => (
-              <div key={event.id} className="bg-card p-4 rounded-lg mb-4 border border-border">
+              <article key={event.id} className="py-5">
                 <div className="flex min-w-0 flex-col items-start justify-between gap-3 sm:flex-row">
                   <div className="min-w-0 flex-1 break-words [overflow-wrap:anywhere]">
                     <h3 className="text-lg font-semibold mb-2">{event.title}</h3>
@@ -420,13 +422,13 @@ export default function Events() {
                     </Button>
                   </div>
                 </div>
-              </div>
+              </article>
             ))
           ) : (
-            <p className="text-center text-muted-foreground">Keine zukünftigen Events gefunden.</p>
+            <p className="py-10 text-center text-sm text-muted-foreground">Keine zukünftigen Events gefunden.</p>
           )}
         </div>
-      </div>
+      </section>
     );
   };
 

@@ -28,7 +28,6 @@ import {
   FileText,
   Link as LinkIcon
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import Link from 'next/link';
@@ -118,8 +117,12 @@ export default function SearchPageClient({
   const [activeTab, setActiveTab] = useState(initialType);
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isLoading, setIsLoading] = useState(Boolean(initialQuery.trim()));
+  const [hasError, setHasError] = useState(false);
   const [page, setPage] = useState(initialPage);
+  const [totalResults, setTotalResults] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
+  const [retryToken, setRetryToken] = useState(0);
+  const tabListRef = useRef<HTMLDivElement>(null);
   const currentSearch = useRef({
     query: initialQuery,
     type: initialType,
@@ -152,9 +155,17 @@ export default function SearchPageClient({
     setActiveTab(initialType);
     setPage(initialPage);
     setResults([]);
+    setHasError(false);
+    setTotalResults(0);
     setTotalPages(0);
     setIsLoading(Boolean(initialQuery.trim()));
   }, [initialQuery, initialType, initialPage]);
+
+  useEffect(() => {
+    tabListRef.current
+      ?.querySelector<HTMLElement>('[data-state="active"]')
+      ?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+  }, [activeTab]);
 
   const updateSearchUrl = (query: string, type: string, nextPage: number) => {
     const url = new URL(window.location.href);
@@ -172,6 +183,8 @@ export default function SearchPageClient({
     setSearchTerm(query);
     setPage(1);
     setResults([]);
+    setHasError(false);
+    setTotalResults(0);
     setTotalPages(0);
     setIsLoading(Boolean(query.trim()));
     updateSearchUrl(query, activeTab, 1);
@@ -182,6 +195,8 @@ export default function SearchPageClient({
     setActiveTab(type);
     setPage(1);
     setResults([]);
+    setHasError(false);
+    setTotalResults(0);
     setTotalPages(0);
     setIsLoading(Boolean(searchTerm.trim()));
     updateSearchUrl(searchTerm, type, 1);
@@ -191,6 +206,8 @@ export default function SearchPageClient({
     currentSearch.current = { query: searchTerm, type: activeTab, page: nextPage };
     setPage(nextPage);
     setResults([]);
+    setHasError(false);
+    setTotalResults(0);
     setIsLoading(Boolean(searchTerm.trim()));
     updateSearchUrl(searchTerm, activeTab, nextPage);
   };
@@ -213,10 +230,13 @@ export default function SearchPageClient({
       const data: SearchResponse = await response.json();
       if (signal.aborted) return;
       setResults(data.results);
+      setHasError(false);
+      setTotalResults(data.pagination.total);
       setTotalPages(data.pagination.pages);
     } catch (error) {
       if (signal.aborted) return;
       console.error('Search error:', error);
+      setHasError(true);
       toast({
         title: "Fehler",
         description: "Fehler bei der Suche",
@@ -226,6 +246,10 @@ export default function SearchPageClient({
       if (!signal.aborted) setIsLoading(false);
     }
   }, [searchTerm, activeTab, page, toast]);
+
+  const retrySearch = () => {
+    setRetryToken((token) => token + 1);
+  };
 
   useEffect(() => {
     if (!searchTerm.trim()) return;
@@ -237,7 +261,7 @@ export default function SearchPageClient({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [searchTerm, fetchResults]);
+  }, [searchTerm, fetchResults, retryToken]);
 
   const getResultHref = (result: SearchResult) => {
     switch (result.type) {
@@ -256,11 +280,11 @@ export default function SearchPageClient({
 
   const renderIcon = (type: string) => {
     switch (type) {
-      case 'course': return <Book className="h-5 w-5 text-primary" />;
-      case 'event': return <Calendar className="h-5 w-5 text-primary" />;
-      case 'member': return <Users className="h-5 w-5 text-primary" />;
-      case 'post': return <MessageSquare className="h-5 w-5 text-primary" />;
-      case 'resource': return <FileText className="h-5 w-5 text-primary" />;
+      case 'course': return <Book aria-hidden="true" className="h-5 w-5 shrink-0 text-muted-foreground" />;
+      case 'event': return <Calendar aria-hidden="true" className="h-5 w-5 shrink-0 text-muted-foreground" />;
+      case 'member': return <Users aria-hidden="true" className="h-5 w-5 shrink-0 text-muted-foreground" />;
+      case 'post': return <MessageSquare aria-hidden="true" className="h-5 w-5 shrink-0 text-muted-foreground" />;
+      case 'resource': return <FileText aria-hidden="true" className="h-5 w-5 shrink-0 text-muted-foreground" />;
       default: return null;
     }
   };
@@ -284,7 +308,7 @@ export default function SearchPageClient({
     switch (result.type) {
       case 'course':
         return (
-          <div className="flex space-x-4 text-sm text-muted-foreground">
+          <div className="flex min-w-0 flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
             <span className="flex items-center">
               <Users className="h-4 w-4 mr-1" />
               {result.stats!.enrollments} / {result.stats!.maxStudents || '∞'} Teilnehmer
@@ -300,14 +324,14 @@ export default function SearchPageClient({
 
       case 'event':
         return (
-          <div className="flex space-x-4 text-sm text-muted-foreground">
+          <div className="flex min-w-0 flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
             <span className="flex items-center">
               <Users className="h-4 w-4 mr-1" />
               {result.stats!.attendees} / {result.stats!.maxAttendees || '∞'} Teilnehmer
             </span>
             {result.location && (
-              <span className="flex items-center">
-                <MapPin className="h-4 w-4 mr-1" />
+              <span className="flex min-w-0 items-center [overflow-wrap:anywhere]">
+                <MapPin className="mr-1 h-4 w-4 shrink-0" />
                 {result.location}
               </span>
             )}
@@ -316,7 +340,7 @@ export default function SearchPageClient({
 
       case 'resource':
         return (
-          <div className="flex space-x-4 text-sm text-muted-foreground">
+          <div className="flex min-w-0 flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
             {result.resourceType && (
               <span className="flex items-center capitalize">
                 <Tag className="h-4 w-4 mr-1" />
@@ -324,7 +348,7 @@ export default function SearchPageClient({
               </span>
             )}
             {result.url && (
-              <span className="flex items-center text-primary truncate max-w-[200px]">
+              <span className="flex min-w-0 max-w-[200px] items-center text-muted-foreground">
                 <LinkIcon className="h-4 w-4 mr-1 flex-shrink-0" />
                 <span className="truncate">{result.url}</span>
               </span>
@@ -335,7 +359,7 @@ export default function SearchPageClient({
       case 'member':
         return (
           <div className="space-y-2">
-            <div className="flex space-x-4 text-sm text-muted-foreground">
+            <div className="flex min-w-0 flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
               <span className="flex items-center">
                 <Users className="h-4 w-4 mr-1" />
                 {result.stats!.followers} Follower
@@ -352,7 +376,7 @@ export default function SearchPageClient({
             {result.skills && result.skills.length > 0 && (
               <div className="space-y-1">
                 {result.skills.slice(0, 3).map((skill, index) => (
-                  <div key={index} className="flex items-center space-x-2">
+                  <div key={index} className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                     <span className="text-sm">{skill.name}</span>
                     <Progress value={skill.level} className="h-2 w-24" />
                     <span className="text-xs text-muted-foreground">
@@ -367,7 +391,7 @@ export default function SearchPageClient({
 
       case 'post':
         return (
-          <div className="flex space-x-4 text-sm text-muted-foreground">
+          <div className="flex min-w-0 flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
             <span className="flex items-center">
               <ThumbsUp className="h-4 w-4 mr-1" />
               {result.stats!.likes}
@@ -395,7 +419,7 @@ export default function SearchPageClient({
     const name = result.author || result.instructor || result.title;
 
     return (
-      <Avatar className="h-10 w-10">
+      <Avatar aria-hidden="true" className="h-10 w-10 shrink-0">
         <AvatarImage src={image || ''} alt={name} />
         <AvatarFallback>
           {name?.slice(0, 2).toUpperCase()}
@@ -408,9 +432,9 @@ export default function SearchPageClient({
     if (!result.tags || result.tags.length === 0) return null;
 
     return (
-      <div className="flex flex-wrap gap-2 mt-2">
+      <div className="mt-2 flex flex-wrap gap-2">
         {result.tags.map((tag, index) => (
-          <Badge key={index} variant="secondary" className="flex items-center">
+          <Badge key={index} variant="secondary" className="min-w-0 max-w-full [overflow-wrap:anywhere]">
             <Tag className="h-3 w-3 mr-1" />
             {tag}
           </Badge>
@@ -424,8 +448,8 @@ export default function SearchPageClient({
       <Sidebar />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <AppHeader>
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-            <h1 className="text-2xl font-bold text-foreground ">Suche</h1>
+          <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
+            <h1 className="text-[clamp(1.65rem,1.1rem+2vw,2.35rem)] font-semibold tracking-tight text-foreground">Suche</h1>
             <div className="flex items-center space-x-4">
               <ThemeToggle />
               <UserNav />
@@ -433,92 +457,91 @@ export default function SearchPageClient({
           </div>
         </AppHeader>
 
-        <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto p-4 lg:p-8">
-          <div className="max-w-4xl mx-auto space-y-6">
+        <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+          <div className="mx-auto max-w-4xl space-y-6">
 
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
+              <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
               <Input aria-label="Suche nach Kursen, Events, Mitgliedern, Beiträgen oder Ressourcen"
+                role="searchbox"
                 type="text"
                 placeholder="Suche nach Kursen, Events, Mitgliedern, Beiträgen oder Ressourcen"
                 value={searchTerm}
                 onChange={(e) => updateQuery(e.target.value)}
-                className="pl-10 pr-10 py-2 w-full rounded-full shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full rounded-[10px] pl-10 pr-14"
               />
               {searchTerm && (
                 <Button aria-label="Suche löschen"
                   variant="ghost"
-                  size="sm"
-                  className="absolute right-2 top-1/2 transform -translate-y-1/2"
+                  size="icon"
+                  className="absolute right-0 top-1/2 -translate-y-1/2"
                   onClick={() => updateQuery('')}
                 >
-                  <X className="h-4 w-4 text-muted-foreground" />
+                  <X aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
                 </Button>
               )}
             </div>
 
             <Tabs value={activeTab} onValueChange={updateTab} className="w-full">
-              <TabsList className="w-full justify-start mb-4 bg-card p-1 rounded-lg shadow-sm overflow-x-auto">
-                <TabsTrigger value="all">Alle</TabsTrigger>
-                <TabsTrigger value="course">Kurse</TabsTrigger>
-                <TabsTrigger value="event">Events</TabsTrigger>
-                <TabsTrigger value="member">Mitglieder</TabsTrigger>
-                <TabsTrigger value="post">Beiträge</TabsTrigger>
-                <TabsTrigger value="resource">Ressourcen</TabsTrigger>
+              <TabsList ref={tabListRef} aria-label="Suchkategorie" aria-describedby="search-tabs-hint" className="w-full justify-start gap-1 overflow-x-auto rounded-[10px] bg-muted p-1">
+                <TabsTrigger className="min-h-11" value="all">Alle</TabsTrigger>
+                <TabsTrigger className="min-h-11" value="course">Kurse</TabsTrigger>
+                <TabsTrigger className="min-h-11" value="event">Events</TabsTrigger>
+                <TabsTrigger className="min-h-11" value="member">Mitglieder</TabsTrigger>
+                <TabsTrigger className="min-h-11" value="post">Beiträge</TabsTrigger>
+                <TabsTrigger className="min-h-11" value="resource">Ressourcen</TabsTrigger>
               </TabsList>
+              <p id="search-tabs-hint" className="mt-2 text-xs text-muted-foreground sm:sr-only">Weitere Kategorien seitlich scrollen oder mit den Pfeiltasten auswählen</p>
 
-              <AnimatePresence mode="wait">
+              <TabsContent value={activeTab} className="mt-6">
                 {isLoading ? (
-                  <div role="status" aria-label="Suche läuft" className="flex justify-center items-center py-20">
-                    <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                  <div role="status" className="flex flex-col items-center justify-center gap-3 py-20 text-sm text-muted-foreground">
+                    <Loader2 aria-hidden="true" className="h-7 w-7 animate-spin text-primary motion-reduce:animate-none" />
+                    <span>Suche läuft …</span>
+                  </div>
+                ) : hasError ? (
+                  <div role="alert" className="border-t border-border py-10 text-center">
+                    <h2 className="text-lg font-semibold text-foreground">Suche fehlgeschlagen</h2>
+                    <p className="mt-2 text-sm text-muted-foreground">Die Ergebnisse konnten nicht geladen werden.</p>
+                    <Button variant="outline" onClick={retrySearch} className="mt-4">Erneut versuchen</Button>
+                  </div>
+                ) : results.length === 0 ? (
+                  <div role="status" className="border-t border-border py-10 text-center">
+                    <Search aria-hidden="true" className="mx-auto mb-4 h-10 w-10 text-muted-foreground" />
+                    <h2 className="mb-2 text-lg font-semibold text-foreground">
+                      {!searchTerm.trim() ? 'Geben Sie einen Suchbegriff ein' : searchTerm.trim().length < 2 ? 'Mindestens zwei Zeichen eingeben' : 'Keine Ergebnisse gefunden'}
+                    </h2>
+                    <p className="text-sm text-muted-foreground">
+                      {!searchTerm.trim()
+                        ? 'Suchen Sie nach Kursen, Events, Mitgliedern, Beiträgen oder Ressourcen.'
+                        : searchTerm.trim().length < 2
+                          ? 'Ergänzen Sie Ihren Suchbegriff, um Ergebnisse zu sehen.'
+                          : 'Versuchen Sie es mit anderen Suchbegriffen oder wählen Sie eine andere Kategorie.'}
+                    </p>
                   </div>
                 ) : (
-                  <motion.div
-                    key={activeTab}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -20 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <TabsContent value={activeTab} className="mt-6">
-                      {results.length === 0 ? (
-                        <div className="text-center py-10">
-                          <Search className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                          <h3 className="text-lg font-medium text-foreground mb-2">
-                            {searchTerm ? 'Keine Ergebnisse gefunden' : 'Geben Sie einen Suchbegriff ein'}
-                          </h3>
-                          <p className="text-muted-foreground">
-                            {searchTerm
-                              ? "Versuchen Sie es mit anderen Suchbegriffen oder wählen Sie eine andere Kategorie."
-                              : "Suchen Sie nach Kursen, Events, Mitgliedern oder Beiträgen."}
-                          </p>
-                        </div>
-                      ) : (
                         <>
+                          <h2 className="mb-2 text-lg font-semibold text-foreground">Ergebnisse <span className="ml-1 text-sm font-normal text-muted-foreground">({(activeTab === 'all' ? results.length : totalResults).toLocaleString('de-DE')})</span></h2>
+                          <ol className="divide-y divide-border border-y border-border">
                           {results.map((result) => {
                             const href = getResultHref(result);
                             const external = result.type === 'resource' && /^https?:\/\//.test(href);
 
                             return (
-                              <motion.div
+                              <li
                                 key={`${result.type}-${result.id}`}
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: -20 }}
-                                transition={{ duration: 0.2 }}
-                                className="mb-4"
                               >
                                 <Link
                                   href={href}
                                   target={external ? '_blank' : undefined}
                                   rel={external ? 'noopener noreferrer' : undefined}
-                                  className="block bg-card p-4 rounded-xl border hover:border-primary/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                  className="-mx-2 block rounded-lg px-2 py-5 transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                                 >
-                                  <div className="flex items-start space-x-4">
+                                  <div className="flex min-w-0 items-start gap-3 sm:gap-4">
                                     {renderAvatar(result)}
-                                    <div className="flex-grow min-w-0">
-                                      <div className="flex items-center justify-between">
-                                        <h3 className="text-lg font-semibold text-foreground truncate">
+                                    <div className="min-w-0 flex-grow">
+                                      <div className="flex min-w-0 items-start justify-between gap-2">
+                                        <h3 className="min-w-0 text-lg font-semibold text-foreground [overflow-wrap:anywhere]">
                                           {result.title}
                                         </h3>
                                         {renderIcon(result.type)}
@@ -526,18 +549,18 @@ export default function SearchPageClient({
 
                                       {result.type === 'member' && result.role && (
                                         <div className="mt-1">
-                                          <Badge variant="outline" className="text-xs">
+                                          <Badge variant="outline" className="max-w-full text-xs [overflow-wrap:anywhere]">
                                             {result.role}
                                           </Badge>
                                         </div>
                                       )}
 
-                                      <div className="text-sm text-muted-foreground mt-1">
+                                      <div className="mt-1 text-sm text-muted-foreground [overflow-wrap:anywhere]">
                                         <SafeHTML html={result.description} />
                                       </div>
 
                                       {result.category && (
-                                        <Badge variant="secondary" className="mt-2">
+                                        <Badge variant="secondary" className="mt-2 max-w-full [overflow-wrap:anywhere]">
                                           {result.category}
                                         </Badge>
                                       )}
@@ -551,9 +574,9 @@ export default function SearchPageClient({
                                             <Badge
                                               key={index}
                                               variant="outline"
-                                              className="flex items-center bg-yellow-50 dark:bg-yellow-900/20"
+                                              className="max-w-full bg-muted [overflow-wrap:anywhere]"
                                             >
-                                              <Award className="h-3 w-3 mr-1 text-yellow-500" />
+                                              <Award aria-hidden="true" className="mr-1 h-3 w-3 text-muted-foreground" />
                                               {badge.name}
                                             </Badge>
                                           ))}
@@ -565,17 +588,17 @@ export default function SearchPageClient({
                                         </div>
                                       )}
 
-                                      <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground">
-                                        <div className="flex items-center space-x-2">
+                                      <div className="mt-2 flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                                        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                                           {result.author && (
-                                            <span className="flex items-center">
-                                              <User className="h-3 w-3 mr-1" />
+                                            <span className="flex min-w-0 items-center [overflow-wrap:anywhere]">
+                                              <User aria-hidden="true" className="mr-1 h-3 w-3 shrink-0" />
                                               {result.author}
                                             </span>
                                           )}
                                           {result.instructor && (
-                                            <span className="flex items-center">
-                                              <Briefcase className="h-3 w-3 mr-1" />
+                                            <span className="flex min-w-0 items-center [overflow-wrap:anywhere]">
+                                              <Briefcase aria-hidden="true" className="mr-1 h-3 w-3 shrink-0" />
                                               {result.instructor}
                                             </span>
                                           )}
@@ -590,7 +613,7 @@ export default function SearchPageClient({
 
                                       {result.time && (
                                         <div className="mt-2 text-sm text-muted-foreground">
-                                          <div className="flex items-center">
+                                          <div className="flex min-w-0 items-center [overflow-wrap:anywhere]">
                                             <Clock className="h-4 w-4 mr-1" />
                                             {result.time.start} - {result.time.end} ({result.time.timezone})
                                           </div>
@@ -600,12 +623,13 @@ export default function SearchPageClient({
                                   </div>
                                   {external && <span className="sr-only"> (öffnet in neuem Tab)</span>}
                                 </Link>
-                              </motion.div>
+                              </li>
                             );
                           })}
+                          </ol>
 
                         {totalPages > 1 && (
-                          <div className="flex justify-center space-x-2 mt-6">
+                          <nav aria-label="Suchergebnisseiten" className="mt-6 flex flex-wrap items-center justify-center gap-2">
                             <Button
                               variant="outline"
                               onClick={() => updatePage(Math.max(1, page - 1))}
@@ -615,20 +639,20 @@ export default function SearchPageClient({
                               <span className="mr-2">←</span>
                               Vorherige
                             </Button>
-                            <div className="flex items-center space-x-2">
+                            <div className="flex flex-wrap items-center justify-center gap-2">
                               {Array.from({ length: totalPages }, (_, i) => i + 1)
                                 .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
                                 .map((p, i, arr) => (
                                   <React.Fragment key={p}>
                                     {i > 0 && arr[i - 1] !== p - 1 && (
-                                      <span className="text-muted-foreground">...</span>
+                                      <span aria-hidden="true" className="text-muted-foreground">…</span>
                                     )}
                                     <Button
                                       variant={p === page ? "default" : "outline"}
                                       onClick={() => updatePage(p)}
                                       aria-current={p === page ? 'page' : undefined}
                                       aria-label={`Seite ${p}`}
-                                      className="w-10 h-10"
+                                      className="h-11 min-w-11"
                                     >
                                       {p}
                                     </Button>
@@ -644,14 +668,11 @@ export default function SearchPageClient({
                               Nächste
                               <span className="ml-2">→</span>
                             </Button>
-                          </div>
+                          </nav>
                         )}
                       </>
                     )}
                   </TabsContent>
-                </motion.div>
-                )}
-              </AnimatePresence>
             </Tabs>
           </div>
         </main>

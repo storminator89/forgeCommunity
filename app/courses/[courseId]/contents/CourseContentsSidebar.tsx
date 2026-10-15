@@ -74,9 +74,9 @@ export function CourseContentsSidebar(props: CourseContentsSidebarProps) {
   // Capture the parent in this component instead of depending on asynchronous parent state updates.
   const activeParentId = subParentId ?? mainContentId;
   return <div className="flex h-full min-h-0 min-w-0 flex-col bg-card">
-    <div className="border-b px-4 py-3"><h2 className="truncate text-sm font-semibold" title={courseName}>{courseName || 'Kursinhalte'}</h2><p className="mt-1 text-xs text-muted-foreground">Inhaltsverzeichnis</p></div>
+    <div className="border-b px-4 py-3"><h2 className="text-sm font-semibold">Inhaltsverzeichnis</h2><p className="mt-1 truncate text-sm text-muted-foreground" title={courseName}>{courseName || 'Kursinhalte'}</p></div>
     <div className="min-h-0 flex-1 overflow-y-auto p-2">
-      {isLoading ? <p role="status" className="p-4 text-sm text-muted-foreground">Inhalte werden geladen …</p> : contents.length === 0 ? <p className="p-4 text-sm text-muted-foreground">Noch keine Inhalte vorhanden.</p> : <ContentList
+      {isLoading ? <p role="status" className="p-4 text-sm text-muted-foreground">Inhalte werden geladen …</p> : contents.length === 0 ? <p className="p-4 text-sm text-muted-foreground">Noch keine Inhalte vorhanden.</p> : <nav aria-label="Kursinhalte"><ContentList
         contents={contents} selectedContentId={selectedContentId} onContentSelect={onContentSelect}
         onEditClick={onEditClick} onDeleteClick={onDeleteClick} isInlineEditing={isInlineEditing}
         inlineEditTitle={inlineEditTitle} onInlineEditSubmit={onInlineEditSubmit} setIsInlineEditing={setIsInlineEditing}
@@ -86,7 +86,7 @@ export function CourseContentsSidebar(props: CourseContentsSidebarProps) {
         onMoveUp={(parentId, id) => parentId ? onMoveUp(parentId, id) : onMoveMainUp?.(id)}
         onMoveDown={(parentId, id) => parentId ? onMoveDown(parentId, id) : onMoveMainDown?.(id)}
         onAddContent={canManage ? parentId => { setSubParentId(parentId); setSubTitle(''); onMainContentSelect?.(parentId); } : undefined}
-      />}
+      /></nav>}
       {canManage && onMainContentSubmit && <Button variant="outline" className="mt-3 w-full gap-2 border-dashed" disabled={isLoading || isMutating} onClick={() => { setMainTitle(''); setMainDialogOpen(true); }}><PlusCircle className="h-4 w-4" />Neues Kapitel</Button>}
     </div>
     {(contents.length > 0 || progress?.hasCertificate) && (progress?.canTrack || progress?.hasCertificate) && <div className="shrink-0 space-y-2 border-t p-3">
