@@ -19,6 +19,7 @@ jest.mock('@/lib/prisma', () => ({ __esModule: true, default: {
   enrollment: { findUnique: jest.fn(), updateMany: jest.fn() },
   certificate: { findFirst: jest.fn() },
   courseContent: { findMany: jest.fn(), findUnique: jest.fn() },
+  coursePublication: { findUnique: jest.fn() },
   courseContentProgress: { findMany: jest.fn(), findUnique: jest.fn(), upsert: jest.fn(), deleteMany: jest.fn() },
   courseCompletionRecord: { upsert: jest.fn() },
   quizAttempt: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn() },
@@ -43,6 +44,11 @@ const publicationId = 'publication-123'
 function versionFields(row: typeof content, id = publicationId) {
   return { publicationId: id, contentVersionToken: contentVersionToken(id, row) }
 }
+function setPublishedContents(rows: typeof content[]) {
+  db.courseContent.findMany.mockResolvedValue(rows)
+  db.coursePublication.findUnique.mockResolvedValue({ courseId: 'course', payload: JSON.stringify({ schemaVersion: 1,
+    contents: rows.map(({ id, parentId, order, title }) => ({ id, parentId, order, title, prerequisiteIds: [] })) }) })
+}
 
 beforeEach(() => {
   process.env.NEXTAUTH_SECRET = 'test-only-publication-token-secret'
@@ -50,7 +56,7 @@ beforeEach(() => {
   ;(getServerSession as jest.Mock).mockResolvedValue({ user: { id: 'learner', role: 'USER' } })
   db.course.findUnique.mockResolvedValue({ instructorId: 'editor', activePublicationId: publicationId })
   db.enrollment.findUnique.mockResolvedValue({ id: 'enrollment' })
-  db.courseContent.findMany.mockResolvedValue([content])
+  setPublishedContents([content])
   db.courseContent.findUnique.mockResolvedValue(content)
   db.courseContentProgress.findMany.mockResolvedValue([])
   db.certificate.findFirst.mockResolvedValue(null)
@@ -84,7 +90,7 @@ test('does not disclose lessons, progress or grading to a non-enrolled user', as
 
 test('fails closed for malformed legacy quiz JSON rather than leaking keys or allowing self-attestation', async () => {
   const malformed = { ...content, content: JSON.stringify({ questions: [{ id: 'bad', type: 'TEXT_INPUT', question: 'Secret?', correctAnswer: 123, explanation: 'Hidden' }] }) }
-  db.courseContent.findMany.mockResolvedValue([malformed])
+  setPublishedContents([malformed])
   db.courseContent.findUnique.mockResolvedValue(malformed)
   const response = await readContents(new Request('http://localhost/api/courses/course/contents') as never, params)
   const learner = (await response.json())[0]
@@ -96,7 +102,7 @@ test('fails closed for malformed legacy quiz JSON rather than leaking keys or al
 
 test('fails closed for explicitly typed quizzes even when their JSON cannot be parsed', async () => {
   const malformed = { ...content, type: 'QUIZ', content: '{broken correctAnswer: Secret' }
-  db.courseContent.findMany.mockResolvedValue([malformed])
+  setPublishedContents([malformed])
   db.courseContent.findUnique.mockResolvedValue(malformed)
   const response = await readContents(new Request('http://localhost/api/courses/course/contents') as never, params)
   const learner = (await response.json())[0]
@@ -109,7 +115,7 @@ test('fails closed for explicitly typed quizzes even when their JSON cannot be p
 
 test('fails closed for unparseable legacy TEXT quiz JSON with a questions key', async () => {
   const malformed = { ...content, content: '{"questions":[{"correctAnswer":"Secret"}' }
-  db.courseContent.findMany.mockResolvedValue([malformed])
+  setPublishedContents([malformed])
   db.courseContent.findUnique.mockResolvedValue(malformed)
   const response = await readContents(new Request('http://localhost/api/courses/course/contents') as never, params)
   expect(JSON.stringify(await response.json())).not.toMatch(/correctAnswer|Secret/)
@@ -139,7 +145,7 @@ test('tracks only current-revision leaf progress and rejects self-attesting a qu
   expect(db.courseContentProgress.upsert).not.toHaveBeenCalled()
   const lesson = { ...content, id: 'lesson', type: 'TEXT', content: '<p>Lesson</p>' }
   db.courseContent.findUnique.mockResolvedValue(lesson)
-  db.courseContent.findMany.mockResolvedValue([lesson])
+  setPublishedContents([lesson])
   db.courseContentProgress.findMany.mockResolvedValue([{ contentId: 'lesson', revision: courseContentRevision(lesson) }])
   const stale = await markProgress(new Request('http://localhost/api/courses/course/progress', { method: 'PATCH', body: JSON.stringify({ contentId: 'lesson', completed: true, ...versionFields(lesson, 'old-publication-123') }) }) as never, params)
   expect(stale.status).toBe(412)
@@ -154,7 +160,7 @@ test('repeating a completed leaf request leaves the saved revision untouched', a
   const lesson = { ...content, id: 'lesson', type: 'TEXT', content: '<p>Lesson</p>' }
   const revision = courseContentRevision(lesson)
   db.courseContent.findUnique.mockResolvedValue(lesson)
-  db.courseContent.findMany.mockResolvedValue([lesson])
+  setPublishedContents([lesson])
   db.courseContentProgress.findUnique.mockResolvedValue({ revision })
   db.courseContentProgress.findMany.mockResolvedValue([{ contentId: 'lesson', revision }])
   for (let index = 0; index < 2; index++) {
@@ -170,7 +176,7 @@ test('saves the verified first completion as a private snapshot without rewritin
   const revision = courseContentRevision(lesson)
   const firstCompletedAt = new Date('2026-10-01T13:00:00Z')
   db.courseContent.findUnique.mockResolvedValue(lesson)
-  db.courseContent.findMany.mockResolvedValue([lesson])
+  setPublishedContents([lesson])
   db.courseContentProgress.findMany.mockResolvedValue([{ contentId: 'lesson', revision }])
   db.enrollment.findUnique.mockResolvedValue({ id: 'enrollment', completedAt: firstCompletedAt })
   db.course.findUnique.mockResolvedValue({ instructorId: 'editor', title: 'Original course title', activePublicationId: publicationId })

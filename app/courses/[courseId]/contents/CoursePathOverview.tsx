@@ -27,7 +27,7 @@ function quizLike(content: CourseContent): boolean {
   }
 }
 
-/** Current curriculum only: no prerequisite, publication, or completion state is invented. */
+/** Authoring outline; learner access is computed separately by the server. */
 export function getCoursePathEntries(contents: CourseContent[]): CoursePathEntry[] {
   const entries: CoursePathEntry[] = [];
   const ordered = (items: CourseContent[]) => [...items].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
@@ -57,7 +57,7 @@ export interface CoursePathOverviewProps {
   onEditContent?: (contentId: string) => void;
 }
 
-const typeNames: Record<CourseContent['type'], string> = { TEXT: 'Text', VIDEO: 'Video', AUDIO: 'Audio', H5P: 'H5P', QUIZ: 'Quiz' };
+const typeNames: Record<CourseContent['type'], string> = { TEXT: 'Text', VIDEO: 'Video', AUDIO: 'Audio', H5P: 'H5P', QUIZ: 'Quiz', ASSIGNMENT: 'Aufgabe' };
 
 /** Mount only inside the owner/administrator authoring workspace. */
 export function CoursePathOverview({ contents, disabled = false, onContentSelect, onEditContent }: CoursePathOverviewProps) {
@@ -66,12 +66,13 @@ export function CoursePathOverview({ contents, disabled = false, onContentSelect
   const chapters = entries.length - leaves.length;
   const quizzes = leaves.filter(entry => entry.isQuiz).length;
   const findings = entries.flatMap(entry => entry.findings);
+  const titles = new Map(entries.map(entry => [entry.content.id, entry.content.title]));
   return <section className="min-w-0 space-y-5" aria-label="Lernpfad im Kurs">
     <div className="space-y-2 border-b pb-4">
       <h2 className="text-xl font-semibold tracking-tight">Lernpfad im Kurs</h2>
-      <p className="text-sm leading-relaxed text-muted-foreground">Prüfe die Reihenfolge und das Material deiner verschachtelten Kursinhalte. Änderungen speicherst du im jeweiligen Inhalt.</p>
+      <p className="text-sm leading-relaxed text-muted-foreground">Prüfe Reihenfolge, Material und Voraussetzungen deiner Kursinhalte. Änderungen speicherst du im jeweiligen Inhalt.</p>
       <p className="text-sm">{chapters} Kapitel · {leaves.length} Inhalte ohne Unterthemen · davon {quizzes} Quiz</p>
-      <p className="text-sm text-muted-foreground">Für den Kursabschluss zählen alle Inhalte ohne Unterthemen. Quiz müssen bestanden werden; andere Inhalte bestätigen Lernende selbst.</p>
+      <p className="text-sm text-muted-foreground">Für den Kursabschluss zählen alle Inhalte ohne Unterthemen. Quiz müssen bestanden, Aufgaben durch die Kursleitung bewertet werden. Andere Inhalte bestätigen Lernende selbst.</p>
     </div>
     {!entries.length ? <p className="py-6 text-sm text-muted-foreground">Noch kein Lernpfad vorhanden. Lege im Inhaltsverzeichnis das erste Kapitel oder einen Inhalt an.</p> : <>
       <p className="text-sm font-medium">{findings.length ? `${findings.length} ${findings.length === 1 ? 'Hinweis' : 'Hinweise'} zur Inhaltspflege` : 'Keine Hinweise zur Inhaltspflege'}</p>
@@ -81,6 +82,7 @@ export function CoursePathOverview({ contents, disabled = false, onContentSelect
             <div className="min-w-0 flex-1 basis-40 space-y-1">
               <p className="text-sm text-muted-foreground">{entry.path} · {entry.isLeaf ? entry.isQuiz ? 'Quiz' : typeNames[entry.content.type] : 'Kapitel'}</p>
               <h3 className="break-words text-base font-medium [overflow-wrap:anywhere]">{entry.content.title}</h3>
+              {!!entry.content.prerequisiteIds?.length && <p className="break-words text-sm text-muted-foreground">Erst nach: {entry.content.prerequisiteIds.map(id => titles.get(id) ?? 'Entfernter Inhalt').join(', ')}</p>}
               {!entry.isLeaf && <p className="text-sm text-muted-foreground">Bündelt {entry.content.subContents?.length ?? 0} Unterthemen</p>}
             </div>
             <div className="flex shrink-0 flex-wrap gap-1">

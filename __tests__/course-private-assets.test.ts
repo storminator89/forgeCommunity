@@ -22,6 +22,8 @@ jest.mock('@/lib/prisma', () => ({ __esModule: true, default: {
   $transaction: jest.fn(),
   user: { findUnique: jest.fn() },
   course: { findUnique: jest.fn() },
+  courseContent: { findMany: jest.fn() },
+  courseContentProgress: { findMany: jest.fn() },
   courseAsset: { create: jest.fn(), findUnique: jest.fn() },
   coursePublication: { findUnique: jest.fn() },
   enrollment: { findUnique: jest.fn() },
@@ -31,6 +33,8 @@ const db = prisma as unknown as {
   $transaction: jest.Mock;
   user: { findUnique: jest.Mock };
   course: { findUnique: jest.Mock };
+  courseContent: { findMany: jest.Mock };
+  courseContentProgress: { findMany: jest.Mock };
   courseAsset: { create: jest.Mock; findUnique: jest.Mock };
   coursePublication: { findUnique: jest.Mock };
   enrollment: { findUnique: jest.Mock };
@@ -73,6 +77,8 @@ beforeEach(async () => {
   nextId = 1;
   db.user.findUnique.mockImplementation(async ({ where }) => users.get(where.id) ?? null);
   db.course.findUnique.mockImplementation(async ({ where }) => courses.get(where.id) ?? null);
+  db.courseContent.findMany.mockResolvedValue([]);
+  db.courseContentProgress.findMany.mockResolvedValue([]);
   db.courseAsset.findUnique.mockImplementation(async ({ where }) => assets.get(where.id) ?? null);
   db.courseAsset.create.mockImplementation(async ({ data }) => {
     const id = `asset-${nextId++}`;
@@ -106,9 +112,10 @@ it('stores a normalized image outside public, private before first publication',
 
 it('allows the published cover in the directory, but gates lesson bytes to enrollment', async () => {
   const saved = await (await postImage()).json();
+  const lesson = { id: 'lesson-1', parentId: null, order: 1, title: 'Lektion', type: 'TEXT', content: `<p><img src="${saved.url}"></p>` };
   courses.get('course-a')!.activePublicationId = 'publication-1';
   courses.get('course-a')!.imageUrl = saved.url;
-  publications.set('publication-1', { courseId: 'course-a', payload: JSON.stringify({ imageUrl: saved.url, contents: [] }) });
+  publications.set('publication-1', { courseId: 'course-a', payload: JSON.stringify({ schemaVersion: 1, imageUrl: saved.url, contents: [] }) });
   session(null);
   let response = await getAsset(new Request(`http://localhost:3013${saved.url}`) as never, assetParams('course-a', saved.id));
   expect(response.status).toBe(200);
@@ -116,7 +123,8 @@ it('allows the published cover in the directory, but gates lesson bytes to enrol
   expect(response.headers.get('x-content-type-options')).toBe('nosniff');
   expect((await headAsset(new Request(`http://localhost:3013${saved.url}`, { method: 'HEAD' }) as never, assetParams('course-a', saved.id))).status).toBe(200);
 
-  publications.set('publication-1', { courseId: 'course-a', payload: JSON.stringify({ imageUrl: null, contents: [{ type: 'TEXT', content: `<p><img src="${saved.url}"></p>` }] }) });
+  publications.set('publication-1', { courseId: 'course-a', payload: JSON.stringify({ schemaVersion: 1, imageUrl: null, contents: [lesson] }) });
+  db.courseContent.findMany.mockResolvedValue([{ ...lesson, courseId: 'course-a' }]);
   courses.get('course-a')!.imageUrl = null;
   response = await getAsset(new Request(`http://localhost:3013${saved.url}`) as never, assetParams('course-a', saved.id));
   expect(response.status).toBe(404);
@@ -125,7 +133,7 @@ it('allows the published cover in the directory, but gates lesson bytes to enrol
   enrolled.add('student:course-a');
   session('student');
   expect((await getAsset(new Request(`http://localhost:3013${saved.url}`) as never, assetParams('course-a', saved.id))).status).toBe(200);
-  publications.set('publication-1', { courseId: 'course-a', payload: JSON.stringify({ imageUrl: null, contents: [{ type: 'QUIZ', content: JSON.stringify({ questions: [{ correctAnswer: `<img src="${saved.url}">` }] }) }] }) });
+  publications.set('publication-1', { courseId: 'course-a', payload: JSON.stringify({ schemaVersion: 1, imageUrl: null, contents: [{ ...lesson, type: 'QUIZ', content: JSON.stringify({ questions: [{ correctAnswer: `<img src="${saved.url}">` }] }) }] }) });
   expect((await getAsset(new Request(`http://localhost:3013${saved.url}`) as never, assetParams('course-a', saved.id))).status).toBe(404);
   publications.set('publication-1', { courseId: 'course-a', payload: JSON.stringify({ imageUrl: null, contents: [] }) });
   expect((await getAsset(new Request(`http://localhost:3013${saved.url}`) as never, assetParams('course-a', saved.id))).status).toBe(404);

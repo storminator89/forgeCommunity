@@ -2,7 +2,7 @@ import type { CourseContent } from './types'
 import { getContentValidationError, inferContentType } from './content-form-utils'
 
 export const CONTENT_TYPE_LABELS: Record<CourseContent['type'], string> = {
-  TEXT: 'Text', VIDEO: 'Video', AUDIO: 'Audio', H5P: 'H5P', QUIZ: 'Quiz',
+  TEXT: 'Text', VIDEO: 'Video', AUDIO: 'Audio', H5P: 'H5P', QUIZ: 'Quiz', ASSIGNMENT: 'Aufgabe',
 }
 
 export interface AuthoringOutlineEntry {
@@ -28,7 +28,7 @@ export function outlineReadiness(content: CourseContent): Pick<AuthoringOutlineE
     ? !source.replace(/<[^>]*>/g, '').replace(/&nbsp;|&#160;|\u00a0/g, ' ').trim() && !/<(?:img|hr)\b/i.test(source)
     : !source.trim()
   if (empty) return { readiness: 'empty', readinessLabel: 'Noch leer' }
-  if (getContentValidationError(type, content.content)) return { readiness: 'check', readinessLabel: type === 'QUIZ' ? 'Quiz prüfen' : 'Quelle prüfen' }
+  if (getContentValidationError(type, content.content)) return { readiness: 'check', readinessLabel: type === 'QUIZ' ? 'Quiz prüfen' : type === 'ASSIGNMENT' ? 'Aufgabe prüfen' : 'Quelle prüfen' }
   return { readiness: 'present', readinessLabel: 'Inhalt vorhanden' }
 }
 

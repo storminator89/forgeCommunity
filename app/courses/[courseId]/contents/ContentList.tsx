@@ -2,7 +2,7 @@
 
 import { Fragment, useRef, useState } from 'react'
 import { CourseContent } from './types'
-import { FileText, ChevronUp, ChevronDown, ChevronRight, Pen, Trash2, CheckCircle, Check, X, Plus } from 'lucide-react'
+import { FileText, ChevronUp, ChevronDown, ChevronRight, Pen, Trash2, CheckCircle, Check, X, Plus, LockKeyhole } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
@@ -65,13 +65,13 @@ export function ContentList(props: ContentListProps) {
           <div className={cn('group min-w-0 rounded-lg border border-transparent px-2 py-2', selectedContentId === content.id ? 'border-primary/20 bg-primary/10' : 'hover:bg-accent/60')}>
             <div className="flex min-w-0 items-center gap-2">
               {hasChildren && <Button variant="ghost" size="icon" className="shrink-0" aria-label={`${expanded ? 'Einklappen' : 'Aufklappen'}: ${content.title}`} aria-expanded={expanded} aria-controls={`topic-children-${content.id}`} onClick={() => setCollapsedIds(previous => { const next = new Set(previous); if (next.has(content.id)) next.delete(content.id); else next.add(content.id); return next; })}><ChevronRight className={cn('h-4 w-4', expanded && 'rotate-90')} /></Button>}
-              <span className="flex h-11 w-5 shrink-0 items-center justify-center" role={completed ? 'img' : undefined} title={completed ? 'Abgeschlossen' : undefined} aria-label={completed ? `${content.title}: abgeschlossen` : undefined} aria-hidden={!completed}>{completed ? <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" /> : <FileText className="h-4 w-4 text-muted-foreground" />}</span>
+              <span className="flex h-11 w-5 shrink-0 items-center justify-center" aria-hidden="true">{content.locked ? <LockKeyhole className="h-4 w-4 text-muted-foreground" /> : completed ? <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" /> : <FileText className="h-4 w-4 text-muted-foreground" />}</span>
               {canManage && isInlineEditing === content.id ? (
                 <form className="min-w-0 flex-1" onSubmit={event => { event.preventDefault(); const title = inlineEditTitle.trim(); if (!title) return; if (title === content.title) { cancelRename(); return; } void runMutation(() => onInlineEditSubmit(content.id, title), cancelRename); }}>
                   <Input autoFocus aria-label={`Titel von ${content.title}`} value={inlineEditTitle} onChange={event => setInlineEditTitle(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); if (!busy) cancelRename(); } }} disabled={busy} className="text-sm" />
                   <div className="mt-1 flex gap-1"><Button type="submit" variant="ghost" size="sm" className="gap-1" disabled={busy || !inlineEditTitle.trim()}><Check className="h-4 w-4" />Speichern</Button><Button type="button" variant="ghost" size="sm" className="gap-1" disabled={busy} onClick={cancelRename}><X className="h-4 w-4" />Abbrechen</Button></div>
                 </form>
-              ) : <button type="button" className="min-h-11 min-w-0 flex-1 rounded-[0.25rem] px-1 text-left text-sm font-medium text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring" aria-current={selectedContentId === content.id ? 'page' : undefined} onClick={() => onContentSelect(content.id)}><span className="line-clamp-2 break-words [overflow-wrap:anywhere]">{content.title}</span></button>}
+              ) : <button type="button" className="min-h-11 min-w-0 flex-1 rounded-[0.25rem] px-1 text-left text-sm font-medium text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring" aria-current={selectedContentId === content.id ? 'page' : undefined} onClick={() => onContentSelect(content.id)}><span className="line-clamp-2 break-words [overflow-wrap:anywhere]">{content.title}</span>{content.locked && <span className="block text-xs font-normal text-muted-foreground">Gesperrt · Voraussetzung offen</span>}{!content.locked && completed && <span className="sr-only"> · Abgeschlossen</span>}</button>}
             </div>
             {canManage && isInlineEditing !== content.id && <div className="mt-1 flex flex-wrap justify-end gap-1">
               {onMoveUp && (mainContentId || allowRootReorder) && <Button variant="ghost" size="icon" disabled={busy || index === 0} aria-label={`${content.title} nach oben verschieben`} onClick={() => void runMutation(() => onMoveUp(mainContentId, content.id))}><ChevronUp className="h-4 w-4" /></Button>}

@@ -16,7 +16,7 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
     const origin = h5pAppOrigin(new URL(request.url).origin);
     const content = await authorizedH5PContent(id, session.user, origin);
     await readH5PAsset(id, ['h5p.json']);
-    const token = createH5PAssetToken(id);
+    const token = createH5PAssetToken(id, session.user.id);
     const assetBase = `${origin}/api/h5p/assets/${id}/${token}`;
     const runtimeBase = `${origin}/h5p-runtime`;
     const options = { id, h5pJsonPath: assetBase, frameJs: `${runtimeBase}/frame.bundle.js`, frameCss: `${runtimeBase}/styles/h5p.css`, embedType: 'div', frame: false, fullScreen: true, export: false, embed: false, assetsRequestFetchOptions: { credentials: 'omit', mode: 'cors' } };

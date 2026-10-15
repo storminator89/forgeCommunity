@@ -19,6 +19,7 @@ jest.mock('@/lib/prisma', () => ({ __esModule: true, default: {
   courseDraft: { findUnique: jest.fn(), update: jest.fn() }, coursePublication: { findUnique: jest.fn() },
   h5PContent: { findUnique: jest.fn() },
   courseContent: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn(), deleteMany: jest.fn() },
+  courseContentProgress: { findMany: jest.fn() },
   $transaction: jest.fn(),
 } }))
 
@@ -28,6 +29,7 @@ const db = prisma as unknown as {
   courseDraft: { findUnique: jest.Mock; update: jest.Mock }; coursePublication: { findUnique: jest.Mock };
   h5PContent: { findUnique: jest.Mock };
   courseContent: { findUnique: jest.Mock; findMany: jest.Mock; create: jest.Mock; update: jest.Mock; deleteMany: jest.Mock };
+  courseContentProgress: { findMany: jest.Mock };
   $transaction: jest.Mock;
 }
 const params = { params: Promise.resolve({ courseId: 'course-1' }) }
@@ -61,6 +63,12 @@ function expectNoLiveWrites() {
   expect(db.courseContent.update).not.toHaveBeenCalled()
   expect(db.courseContent.deleteMany).not.toHaveBeenCalled()
 }
+function publishLive() {
+  db.coursePublication.findUnique.mockResolvedValue({ courseId: course.id, payload: JSON.stringify(payload(
+    live.filter(item => !item.archivedAt).map(({ id, parentId, order, title, type, content }) =>
+      ({ id, parentId, order, title, type, content, prerequisiteIds: [] })),
+  )) })
+}
 
 beforeEach(() => {
   jest.clearAllMocks()
@@ -78,6 +86,7 @@ beforeEach(() => {
     return { ...staged }
   })
   db.coursePublication.findUnique.mockResolvedValue(null)
+  db.courseContentProgress.findMany.mockResolvedValue([])
   db.h5PContent.findUnique.mockResolvedValue(null)
   db.courseContent.findMany.mockImplementation(async ({ where }: { where: { id?: { in: string[] }; courseId?: string; archivedAt?: null } }) =>
     live.filter(item => (!where.id || where.id.in.includes(item.id)) && (!where.courseId || where.courseId === item.courseId) &&
@@ -109,6 +118,7 @@ test('private draft and unpublished live course are invisible to anonymous users
 test('enrolled learners read only active live contents and cannot read the private draft', async () => {
   course.activePublicationId = 'publication-1'
   live = [{ ...node('live-node'), courseId: 'course-1' }, { ...node('archived-node'), courseId: 'course-1', archivedAt: new Date() }]
+  publishLive()
   jest.mocked(getServerSession).mockResolvedValue({ user: { id: 'student', role: 'USER' } } as never)
   db.user.findUnique.mockResolvedValue({ role: 'USER' })
   expect((await getLiveContents(request(), params)).status).toBe(403)
@@ -214,6 +224,7 @@ test('tree grouping keeps orphan and cyclic legacy records visible without recur
 test('legacy nullable published content is presented as rich text without rewriting storage', async () => {
   course.activePublicationId = 'publication-1'
   live = [{ ...node('legacy-node', null, 1, { type: null }), courseId: 'course-1' }]
+  publishLive()
   const response = await getLiveContents(request(), params)
   expect(response.status).toBe(200)
   expect(await response.json()).toEqual([expect.objectContaining({ type: 'TEXT' })])

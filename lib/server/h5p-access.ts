@@ -1,10 +1,11 @@
 import 'server-only';
 
-import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import prisma from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { H5PValidationError } from './h5p-archive';
 import { validH5PId } from './h5p-storage';
+import { assertCurrentPrerequisites, CoursePathError } from './course-prerequisites';
 
 export interface H5PUser { id: string; role?: string | null }
 const TOKEN_TTL_SECONDS = 2 * 60 * 60;
@@ -23,21 +24,38 @@ function secret() {
   if (!value) throw new Error('NEXTAUTH_SECRET is required for private H5P assets');
   return value;
 }
-function signature(id: string, payload: string) { return createHmac('sha256', secret()).update(`forge:h5p:assets:v1:${id}:${payload}`).digest('base64url'); }
-export function createH5PAssetToken(id: string, now = Date.now()) {
-  if (!validH5PId(id)) throw new H5PValidationError('Ungültige H5P-ID.');
-  const payload = `${Math.floor(now / 1_000) + TOKEN_TTL_SECONDS}.${randomBytes(12).toString('base64url')}`;
-  return `${payload}.${signature(id, payload)}`;
+function tokenKey() { return createHash('sha256').update(secret()).digest(); }
+function tokenAAD(id: string) { return Buffer.from(`forge:h5p:assets:v2:${id}`); }
+
+/** Credential-free sandbox fetches carry an encrypted actor ID, reauthorized on each asset read. */
+export function createH5PAssetToken(id: string, actorId: string, now = Date.now()) {
+  if (!validH5PId(id) || !/^[A-Za-z0-9_-]{1,100}$/.test(actorId)) throw new H5PValidationError('Ungültige H5P-ID.');
+  const issued = Math.floor(now / 1_000);
+  const iv = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', tokenKey(), iv);
+  cipher.setAAD(tokenAAD(id));
+  const data = Buffer.concat([cipher.update(JSON.stringify([actorId, issued, issued + TOKEN_TTL_SECONDS]), 'utf8'), cipher.final()]);
+  return `v2.${iv.toString('base64url')}.${data.toString('base64url')}.${cipher.getAuthTag().toString('base64url')}`;
 }
+
+export function h5pAssetTokenActor(id: string, token: string, now = Date.now()): string | null {
+  if (!validH5PId(id) || !/^v2\.[A-Za-z0-9_-]{16}\.[A-Za-z0-9_-]{1,256}\.[A-Za-z0-9_-]{22}$/.test(token)) return null;
+  try {
+    const [, iv, encrypted, tag] = token.split('.');
+    const decipher = createDecipheriv('aes-256-gcm', tokenKey(), Buffer.from(iv, 'base64url'));
+    decipher.setAAD(tokenAAD(id));
+    decipher.setAuthTag(Buffer.from(tag, 'base64url'));
+    const claim = JSON.parse(Buffer.concat([decipher.update(Buffer.from(encrypted, 'base64url')), decipher.final()]).toString('utf8')) as unknown;
+    if (!Array.isArray(claim) || claim.length !== 3 || typeof claim[0] !== 'string' ||
+        !/^[A-Za-z0-9_-]{1,100}$/.test(claim[0]) || !Number.isSafeInteger(claim[1]) || !Number.isSafeInteger(claim[2])) return null;
+    const seconds = Math.floor(now / 1_000);
+    if (claim[1] > seconds + 60 || claim[2] <= seconds || claim[2] - claim[1] !== TOKEN_TTL_SECONDS) return null;
+    return claim[0];
+  } catch { return null; }
+}
+
 export function verifyH5PAssetToken(id: string, token: string, now = Date.now()) {
-  if (!validH5PId(id) || !/^\d{10,12}\.[A-Za-z0-9_-]{16}\.[A-Za-z0-9_-]{43}$/.test(token)) return false;
-  const [expiration, nonce, signed] = token.split('.');
-  const expiry = Number(expiration);
-  const seconds = Math.floor(now / 1_000);
-  if (expiry <= seconds || expiry > seconds + TOKEN_TTL_SECONDS) return false;
-  const expected = Buffer.from(signature(id, `${expiration}.${nonce}`));
-  const actual = Buffer.from(signed);
-  return actual.length === expected.length && timingSafeEqual(actual, expected);
+  return h5pAssetTokenActor(id, token, now) !== null;
 }
 
 export async function authorizedH5PContent(id: string, user: H5PUser, origin?: string) {
@@ -51,18 +69,34 @@ export async function authorizedH5PContent(id: string, user: H5PUser, origin?: s
     // package preview rights after the role/account change commits.
     const actor = await tx.user.findUnique({ where: { id: user.id }, select: { role: true } });
     if (!actor) throw new H5PValidationError('Kein Zugriff auf diesen H5P-Inhalt.', 403);
-    if (content.userId === user.id || (user.role === 'ADMIN' && actor.role === 'ADMIN')) return content;
+    if (content.userId === user.id || actor.role === 'ADMIN') return content;
     const embedPath = `/h5p/embed/${id}`;
-    const reference = await tx.courseContent.findFirst({
+    const references = await tx.courseContent.findMany({
       where: {
         type: 'H5P', archivedAt: null,
         content: { in: [embedPath, id, ...localOrigins(origin).map(value => `${value}${embedPath}`)] },
         course: { activePublicationId: { not: null }, enrollments: { some: { userId: user.id } } },
       },
-      select: { id: true },
+      select: { id: true, courseId: true, content: true, course: { select: { activePublicationId: true } } },
     });
-    if (!reference) throw new H5PValidationError('Kein Zugriff auf diesen H5P-Inhalt.', 403);
-    return content;
+    for (const reference of references) {
+      const publicationId = reference.course.activePublicationId;
+      if (!publicationId) continue;
+      const publication = await tx.coursePublication.findUnique({ where: { id: publicationId }, select: { courseId: true, payload: true } });
+      if (!publication || publication.courseId !== reference.courseId) continue;
+      let published: { contents?: Array<{ id?: string; type?: string | null; content?: string }> };
+      try { published = JSON.parse(publication.payload); } catch { continue; }
+      const node = Array.isArray(published.contents) ? published.contents.find(row => row?.id === reference.id) : null;
+      if (!node || node.type !== 'H5P' || node.content !== reference.content) continue;
+      try {
+        await assertCurrentPrerequisites(tx, user.id, reference.courseId, reference.id, publicationId);
+        return content;
+      } catch (error) {
+        if (!(error instanceof CoursePathError)) throw error;
+        // Another enrolled, unlocked published reference can still grant read.
+      }
+    }
+    throw new H5PValidationError('Kein Zugriff auf diesen H5P-Inhalt.', 403);
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 

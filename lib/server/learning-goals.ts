@@ -1,11 +1,10 @@
 import 'server-only';
 
 import type { LearningGoal, Prisma } from '@prisma/client';
-import { contentQuiz, courseContentRevision, courseLeaves, isQuizLikeContent } from '@/lib/server/course-progress';
 import { pausedCalendarDays, shiftGoalDeadline } from '@/lib/learning-goal-clock';
-import { activeCourseContentWhere, publishedCourseWhere } from '@/lib/server/published-course';
+import { projectEffectiveCourseLeaves } from '@/lib/server/course-profile-completion';
 
-type GoalReadClient = Pick<Prisma.TransactionClient, 'enrollment' | 'courseContent' | 'courseContentProgress' | 'quizAttempt'>;
+type GoalReadClient = Pick<Prisma.TransactionClient, 'enrollment' | 'coursePublication' | 'courseContent' | 'courseContentProgress' | 'quizAttempt' | '$queryRaw'>;
 
 export function effectiveGoalDeadline(goal: LearningGoal, now: Date): Date {
   if (!goal.pausedAt) return goal.endsAt;
@@ -13,9 +12,10 @@ export function effectiveGoalDeadline(goal: LearningGoal, now: Date): Date {
 }
 
 /**
- * Count only current leaves in enrolled courses, completed after opt-in and
- * before the local-calendar deadline. A revision, deletion, unenrollment, or
- * revoked quiz pass can lower the count. There is deliberately no point ledger.
+ * Count only current, path-effective leaves in enrolled courses, completed
+ * after opt-in and before the local-calendar deadline. There is deliberately
+ * no point ledger: a revision, unenrollment, lock or withdrawn grade may lower
+ * the count. Prerequisites completed before opt-in can still unlock a new leaf.
  */
 export async function countVerifiedGoalLeaves(db: GoalReadClient, goal: LearningGoal, now: Date): Promise<number> {
   const end = effectiveGoalDeadline(goal, now);
@@ -23,48 +23,13 @@ export async function countVerifiedGoalLeaves(db: GoalReadClient, goal: Learning
     where: { userId: goal.userId },
     select: { courseId: true, course: { select: { instructorId: true, activePublicationId: true } } },
   });
-  const courseIds = enrollments.filter(row => row.course.instructorId !== goal.userId && row.course.activePublicationId !== null).map(row => row.courseId);
-  if (!courseIds.length) return 0;
-
-  const progress = await db.courseContentProgress.findMany({
-    where: { userId: goal.userId, courseId: { in: courseIds }, completedAt: { gte: goal.startedAt, lt: end, lte: now } },
-    select: { courseId: true, contentId: true, revision: true },
+  const courses = enrollments.filter(row => row.course.instructorId !== goal.userId && row.course.activePublicationId !== null)
+    .map(row => ({ id: row.courseId, activePublicationId: row.course.activePublicationId, userIds: [goal.userId] }));
+  if (!courses.length) return 0;
+  const projected = await projectEffectiveCourseLeaves(db, courses, {
+    window: { startedAt: goal.startedAt, endsAt: end, now }, verifyQuizPass: true,
   });
-  if (!progress.length) return 0;
-  const progressedCourseIds = [...new Set(progress.map(row => row.courseId))];
-  const contents = await db.courseContent.findMany({
-    where: { courseId: { in: progressedCourseIds }, ...activeCourseContentWhere, course: publishedCourseWhere },
-    select: { id: true, courseId: true, parentId: true, type: true, content: true, order: true },
-  });
-
-  const contentsByCourse = new Map<string, typeof contents>();
-  for (const content of contents) {
-    const grouped = contentsByCourse.get(content.courseId) ?? [];
-    grouped.push(content);
-    contentsByCourse.set(content.courseId, grouped);
-  }
-  const leaves = new Map<string, ReturnType<typeof courseLeaves>[number]>();
-  for (const courseId of progressedCourseIds) {
-    for (const leaf of courseLeaves(contentsByCourse.get(courseId) ?? [])) leaves.set(leaf.id, leaf);
-  }
-  const valid = progress.flatMap(row => {
-    const leaf = leaves.get(row.contentId);
-    return leaf && leaf.courseId === row.courseId && row.revision === courseContentRevision(leaf) ? [leaf] : [];
-  });
-  if (!valid.length) return 0;
-
-  const quizLeaves = valid.filter(leaf => contentQuiz(leaf) || isQuizLikeContent(leaf));
-  const passed = quizLeaves.length ? await db.quizAttempt.findMany({
-    where: { userId: goal.userId, courseId: { in: progressedCourseIds }, contentId: { in: quizLeaves.map(leaf => leaf.id) }, passed: true },
-    select: { courseId: true, contentId: true, revision: true },
-  }) : [];
-  const passedKeys = new Set(passed.map(row => `${row.courseId}:${row.contentId}:${row.revision}`));
-  return valid.filter(leaf => {
-    if (isQuizLikeContent(leaf)) {
-      return Boolean(contentQuiz(leaf)) && passedKeys.has(`${leaf.courseId}:${leaf.id}:${courseContentRevision(leaf)}`);
-    }
-    return true;
-  }).length;
+  return courses.reduce((count, course) => count + (projected.get(course.id)?.completedByUser.get(goal.userId)?.size ?? 0), 0);
 }
 
 export async function privateGoalView(db: GoalReadClient, goal: LearningGoal, now = new Date()) {

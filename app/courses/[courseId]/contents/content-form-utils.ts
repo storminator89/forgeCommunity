@@ -1,5 +1,6 @@
 import { getSafeEmbedUrl, getSafeNavigationUrl, getYouTubeEmbedUrl } from '@/lib/security';
 import { CourseContent, QuizContent, getQuizValidationError, parseQuizContent } from './types';
+import { getAssignmentValidationError } from './assignment-content';
 
 export type ContentType = CourseContent['type'];
 export const EMPTY_QUIZ: QuizContent = { questions: [], shuffleQuestions: false, passingScore: 70 };
@@ -43,6 +44,7 @@ export function getH5PEmbedUrl(value: unknown): string | null {
 
 export function getContentValidationError(type: ContentType, value: CourseContent['content']): string | null {
   const text = draftString(value).trim();
+  if (type === 'ASSIGNMENT') return getAssignmentValidationError(value);
   if (type === 'QUIZ') {
     const quiz = quizEditorDraft(value);
     return quiz ? getQuizValidationError(quiz) : 'Die Quiz-Daten sind ungültig. Bitte korrigiere sie, bevor du speicherst.';

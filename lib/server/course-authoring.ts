@@ -4,22 +4,25 @@ import { createHash, randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { getQuizValidationError } from '@/app/courses/[courseId]/contents/types';
+import { getAssignmentValidationError } from '@/app/courses/[courseId]/contents/assignment-content';
 import { assertCanAttachH5P } from '@/lib/server/h5p-access';
 import { assertCanReferenceCourseAsset, extractCourseAssetUrls } from '@/lib/server/course-assets';
 import { contentQuiz, courseContentRevision, courseLeaves, isQuizLikeContent } from '@/lib/server/course-progress';
-import { courseQuizApprovalRevision, reconcileCourseRewards } from '@/lib/server/rewards';
+import { courseAssignmentApprovalRevision, courseQuizApprovalRevision, reconcileCourseRewards } from '@/lib/server/rewards';
 import { prepareContent } from '@/app/api/courses/[courseId]/contents/content-mutations';
 import { sanitizeTextServer } from '@/lib/server/sanitize-html';
 import { getSafeNavigationUrl } from '@/lib/security';
+import { CoursePathError, validateCoursePath } from '@/lib/server/course-path';
 
 export type Author = { id: string; role?: string | null };
-export type DraftNode = { id: string; parentId: string | null; title: string; type: 'TEXT' | 'VIDEO' | 'AUDIO' | 'H5P' | 'QUIZ' | null; content: string; order: number };
+export type DraftNode = { id: string; parentId: string | null; title: string; type: 'TEXT' | 'VIDEO' | 'AUDIO' | 'H5P' | 'QUIZ' | 'ASSIGNMENT' | null; content: string; order: number; prerequisiteIds?: string[] };
 export type CoursePayload = { schemaVersion: 1; title: string; description: string; startDate: string | null; endDate: string | null; imageUrl: string | null; contents: DraftNode[] };
 export type AuthorOperation =
   | { kind: 'setMetadata'; patch: Partial<Pick<CoursePayload, 'title' | 'description' | 'startDate' | 'endDate' | 'imageUrl'>> }
   | { kind: 'insertNode'; node: Pick<DraftNode, 'id' | 'title' | 'type' | 'content'>; parentId: string | null; afterId: string | null }
   | { kind: 'updateNode'; id: string; patch: Partial<Pick<DraftNode, 'title' | 'type' | 'content'>> }
   | { kind: 'moveNode'; id: string; parentId: string | null; afterId: string | null }
+  | { kind: 'setPrerequisites'; id: string; prerequisiteIds: string[] }
   | { kind: 'deleteNode'; id: string };
 
 const MAX_NODES = 500;
@@ -72,7 +75,7 @@ function checkTopology(payload: CoursePayload, strictOrder = false) {
         (node.parentId !== null && !validId(node.parentId)) ||
         typeof node.title !== 'string' || node.title.length > 300 ||
         typeof node.content !== 'string' || node.content.length > 100_000 ||
-        ![null, 'TEXT', 'VIDEO', 'AUDIO', 'H5P', 'QUIZ'].includes(node.type) ||
+        ![null, 'TEXT', 'VIDEO', 'AUDIO', 'H5P', 'QUIZ', 'ASSIGNMENT'].includes(node.type) ||
         !Number.isSafeInteger(node.order) || node.order < 1) {
       throw new AuthoringError('Ungültige Kursstruktur.');
     }
@@ -93,13 +96,16 @@ function checkTopology(payload: CoursePayload, strictOrder = false) {
       parentId = map.get(parentId)?.parentId ?? null;
     }
   }
+  try { validateCoursePath(payload.contents); }
+  catch (error) { if (error instanceof CoursePathError) throw new AuthoringError(error.message, error.status); throw error; }
 }
 
 function canonical(payload: CoursePayload): CoursePayload {
   return {
     schemaVersion: 1, title: payload.title, description: payload.description,
     startDate: payload.startDate, endDate: payload.endDate, imageUrl: payload.imageUrl,
-    contents: payload.contents.map(node => ({ id: node.id, parentId: node.parentId, title: node.title, type: node.type, content: node.content, order: node.order })),
+    contents: payload.contents.map(node => ({ id: node.id, parentId: node.parentId, title: node.title, type: node.type, content: node.content, order: node.order,
+      ...(node.prerequisiteIds !== undefined && { prerequisiteIds: [...node.prerequisiteIds] }) })),
   };
 }
 
@@ -152,7 +158,7 @@ function operationFromUnknown(value: unknown): AuthorOperation {
   if (op.kind === 'insertNode') {
     const node = op.node as Record<string, unknown> | undefined;
     if (!node || !validId(node.id) || typeof node.title !== 'string' || typeof node.content !== 'string' ||
-        ![null, 'TEXT', 'VIDEO', 'AUDIO', 'H5P', 'QUIZ'].includes(node.type as string | null) ||
+        ![null, 'TEXT', 'VIDEO', 'AUDIO', 'H5P', 'QUIZ', 'ASSIGNMENT'].includes(node.type as string | null) ||
         (op.parentId !== null && !validId(op.parentId)) || (op.afterId !== null && !validId(op.afterId))) {
       throw new AuthoringError('Ungültiger neuer Kursinhalt.');
     }
@@ -162,13 +168,20 @@ function operationFromUnknown(value: unknown): AuthorOperation {
     const patch = op.patch as Record<string, unknown> | undefined;
     if (!validId(op.id) || !patch || !Object.keys(patch).length || Object.entries(patch).some(([key, val]) =>
       !['title', 'type', 'content'].includes(key) ||
-      (key === 'type' ? ![null, 'TEXT', 'VIDEO', 'AUDIO', 'H5P', 'QUIZ'].includes(val as string | null) : typeof val !== 'string'))) {
+      (key === 'type' ? ![null, 'TEXT', 'VIDEO', 'AUDIO', 'H5P', 'QUIZ', 'ASSIGNMENT'].includes(val as string | null) : typeof val !== 'string'))) {
       throw new AuthoringError('Ungültige Kursinhalt-Änderung.');
     }
     return op as AuthorOperation;
   }
   if (op.kind === 'moveNode') {
     if (!validId(op.id) || (op.parentId !== null && !validId(op.parentId)) || (op.afterId !== null && !validId(op.afterId))) throw new AuthoringError('Ungültige Verschiebung.');
+    return op as AuthorOperation;
+  }
+  if (op.kind === 'setPrerequisites') {
+    if (!validId(op.id) || !Array.isArray(op.prerequisiteIds) || op.prerequisiteIds.length > 20 ||
+        op.prerequisiteIds.some(id => !validId(id)) || new Set(op.prerequisiteIds).size !== op.prerequisiteIds.length) {
+      throw new AuthoringError('Ungültige Lernvoraussetzungen.');
+    }
     return op as AuthorOperation;
   }
   if (op.kind === 'deleteNode' && validId(op.id)) return op as AuthorOperation;
@@ -213,6 +226,10 @@ function applyOperation(payload: CoursePayload, operation: AuthorOperation): Cou
     if (oldParent !== destination) {
       next.contents.filter(row => row.parentId === oldParent).sort((a, b) => a.order - b.order || a.id.localeCompare(b.id)).forEach((row, index) => { row.order = index + 1; });
     }
+  } else if (operation.kind === 'setPrerequisites') {
+    const node = next.contents.find(row => row.id === operation.id);
+    if (!node) throw new AuthoringError('Inhalt nicht gefunden.', 404);
+    node.prerequisiteIds = [...operation.prerequisiteIds];
   } else {
     if (!next.contents.some(row => row.id === operation.id)) throw new AuthoringError('Inhalt nicht gefunden.', 404);
     const removed = new Set([operation.id]);
@@ -222,6 +239,8 @@ function applyOperation(payload: CoursePayload, operation: AuthorOperation): Cou
       for (const row of next.contents) if (row.parentId && removed.has(row.parentId) && !removed.has(row.id)) { removed.add(row.id); changed = true; }
     }
     const oldParent = next.contents.find(row => row.id === operation.id)!.parentId;
+    const dependent = next.contents.find(row => !removed.has(row.id) && row.prerequisiteIds?.some(id => removed.has(id)));
+    if (dependent) throw new AuthoringError(`„${dependent.title}“ benötigt einen zu löschenden Inhalt. Entferne zuerst diese Lernvoraussetzung.`, 409);
     next.contents = next.contents.filter(row => !removed.has(row.id));
     next.contents.filter(row => row.parentId === oldParent).sort((a, b) => a.order - b.order || a.id.localeCompare(b.id)).forEach((row, index) => { row.order = index + 1; });
   }
@@ -400,10 +419,13 @@ function publicationBlockers(payload: CoursePayload) {
   for (const node of payload.contents) {
     if (!sanitizeTextServer(node.title)) blockers.push(`Ein Inhalt ohne Titel ist vorhanden (${node.id}).`);
     const quiz = contentQuiz(asPublishedNode(node));
+    if (children.has(node.id) && node.type === 'ASSIGNMENT') blockers.push(`Aufgabe darf keine Unterinhalte haben (${node.id}).`);
     if (children.has(node.id) && (node.type === 'QUIZ' || quiz || isQuizLikeContent(asPublishedNode(node)))) blockers.push(`Quiz darf keine Unterinhalte haben (${node.id}).`);
     if (!children.has(node.id)) {
       if (!node.content.trim()) blockers.push(`Ein lernbarer Inhalt ist leer (${node.id}).`);
-      if (node.type === 'QUIZ' || isQuizLikeContent(asPublishedNode(node))) {
+      if (node.type === 'ASSIGNMENT') {
+        if (getAssignmentValidationError(node.content)) blockers.push(`Eine Aufgabe ist noch nicht bereit (${node.id}).`);
+      } else if (node.type === 'QUIZ' || isQuizLikeContent(asPublishedNode(node))) {
         if (!quiz || getQuizValidationError(quiz)) blockers.push(`Ein Quiz ist noch nicht bereit (${node.id}).`);
       } else if (node.content.trim()) {
         try { prepareContent(node.content, node.type); }
@@ -427,14 +449,18 @@ function impact(oldPayload: CoursePayload | null, payload: CoursePayload, enroll
     const before = previous.get(row.id);
     return before && (before.title !== row.title || before.parentId !== row.parentId || before.order !== row.order) && !changed.includes(row.id);
   }).map(row => row.id);
+  const prerequisitesChanged = payload.contents.filter(row => {
+    const before = previous.get(row.id);
+    return before && JSON.stringify(before.prerequisiteIds ?? []) !== JSON.stringify(row.prerequisiteIds ?? []);
+  }).map(row => row.id);
   const oldLeaves = new Set(courseLeaves((oldPayload?.contents ?? []).map(asPublishedNode)).map(row => row.id));
   const newLeaves = new Set(courseLeaves(payload.contents.map(asPublishedNode)).map(row => row.id));
-  const completionMayChange = added.some(id => newLeaves.has(id)) || removed.some(id => oldLeaves.has(id)) ||
+  const completionMayChange = prerequisitesChanged.length > 0 || added.some(id => newLeaves.has(id)) || removed.some(id => oldLeaves.has(id)) ||
     changed.some(id => newLeaves.has(id) || oldLeaves.has(id)) ||
     [...oldLeaves].some(id => !newLeaves.has(id)) || [...newLeaves].some(id => !oldLeaves.has(id));
   const rewardsMayChange = courseQuizApprovalRevision((oldPayload?.contents ?? []).map(asPublishedNode)) !==
     courseQuizApprovalRevision(payload.contents.map(asPublishedNode)) || completionMayChange;
-  return { added, removed, changed, renamedOrReordered, enrolledLearners, completionMayChange, rewardsMayChange, issuedCertificatesStayValid: true as const };
+  return { added, removed, changed, renamedOrReordered, prerequisitesChanged, enrolledLearners, completionMayChange, rewardsMayChange, issuedCertificatesStayValid: true as const };
 }
 
 async function reviewed(tx: Prisma.TransactionClient, courseId: string, actor: Author, expectedRevision: number, expectedActive: string | null, origin?: string) {
@@ -539,7 +565,10 @@ export async function publishDraft(courseId: string, actor: Author, expected: un
     } });
     await materialize(tx, courseId, state.payload);
     await tx.course.update({ where: { id: courseId }, data: { activePublicationId: publication.id } });
-    await reconcileCourseRewards(tx, courseId);
+    const previousContents = state.active ? parsePayload(state.active.payload).contents.map(asPublishedNode) : [];
+    const assignmentScoringChanged = courseAssignmentApprovalRevision(previousContents) !==
+      courseAssignmentApprovalRevision(state.payload.contents.map(asPublishedNode));
+    await reconcileCourseRewards(tx, courseId, assignmentScoringChanged ? 'LEARNING_CHANGED' : 'QUIZ_REVISED');
     await tx.courseDraft.update({ where: { courseId }, data: { basePublicationId: publication.id } });
     await tx.publicationRequest.create({ data: { courseId, requestId, actorId: actor.id,
       requestDigest, publicationId: publication.id } });

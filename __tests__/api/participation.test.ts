@@ -21,6 +21,7 @@ jest.mock('@/lib/prisma', () => ({ __esModule: true, default: {
   course: { findUnique: jest.fn(), findMany: jest.fn() },
   courseContent: { findMany: jest.fn() },
   courseContentProgress: { findMany: jest.fn() },
+  coursePublication: { findMany: jest.fn() },
   enrollment: { findUnique: jest.fn(), count: jest.fn(), create: jest.fn(), deleteMany: jest.fn() },
   event: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn() },
   eventAttendee: { findUnique: jest.fn(), count: jest.fn(), create: jest.fn(), update: jest.fn() },
@@ -31,6 +32,7 @@ type MockDb = {
   course: { findUnique: jest.Mock; findMany: jest.Mock };
   courseContent: { findMany: jest.Mock };
   courseContentProgress: { findMany: jest.Mock };
+  coursePublication: { findMany: jest.Mock };
   enrollment: { findUnique: jest.Mock; count: jest.Mock; create: jest.Mock; deleteMany: jest.Mock };
   event: { findUnique: jest.Mock; findMany: jest.Mock; create: jest.Mock; update: jest.Mock };
   eventAttendee: { findUnique: jest.Mock; count: jest.Mock; create: jest.Mock; update: jest.Mock };
@@ -55,6 +57,8 @@ beforeEach(() => {
   db.course.findUnique.mockImplementation(async () => course);
   db.courseContent.findMany.mockResolvedValue([]);
   db.courseContentProgress.findMany.mockResolvedValue([]);
+  db.coursePublication.findMany.mockResolvedValue([{ id: 'publication-1', courseId: 'course-1',
+    payload: JSON.stringify({ schemaVersion: 1, contents: [] }) }]);
   db.enrollment.findUnique.mockImplementation(async ({ where }: { where: { userId_courseId: { userId: string } } }) => enrollments.get(where.userId_courseId.userId) ?? null);
   db.enrollment.count.mockImplementation(async () => enrollments.size);
   db.enrollment.create.mockImplementation(async ({ data }: { data: { userId: string } }) => {
@@ -182,7 +186,7 @@ test('event capacity input is strict, and admins cannot reduce capacity below li
 
 test('listing exposes counts and own state without sending another participant’s ID', async () => {
   db.course.findMany.mockResolvedValue([{
-    id: 'course-1', title: 'Course', description: 'Description', instructorId: 'teacher',
+    id: 'course-1', title: 'Course', description: 'Description', instructorId: 'teacher', activePublicationId: 'publication-1',
     instructor: { name: 'Teacher' }, startDate: null, endDate: null, price: null,
     currency: null, maxStudents: 5, imageUrl: null, _count: { enrollments: 2 },
     enrollments: [{ completedAt: null }],

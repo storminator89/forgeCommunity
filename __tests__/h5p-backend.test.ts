@@ -6,9 +6,10 @@ import path from 'node:path';
 import { H5P_MAX_EXPANDED_BYTES, H5PValidationError, extractH5PArchive, validateH5PPackage } from '@/lib/server/h5p-archive';
 import { storeH5PPackage, readH5PAsset } from '@/lib/server/h5p-storage';
 import { assertCanAttachH5P, authorizedH5PContent, createH5PAssetToken, verifyH5PAssetToken, h5pAppOrigin } from '@/lib/server/h5p-access';
+import { assertCurrentPrerequisites, CoursePathError } from '@/lib/server/course-prerequisites';
 import { POST as upload } from '@/app/api/h5p/upload/route';
 import { GET as embed } from '@/app/h5p/embed/[id]/route';
-import { GET as assets } from '@/app/api/h5p/assets/[id]/[token]/[...path]/route';
+import { GET as assets, HEAD as headAssets } from '@/app/api/h5p/assets/[id]/[token]/[...path]/route';
 import { GET as metadata } from '@/app/api/h5p/contents/[id]/route';
 import { getServerSession } from 'next-auth/next';
 import prisma from '@/lib/prisma';
@@ -17,16 +18,21 @@ jest.mock('next-auth/next', () => ({ getServerSession: jest.fn() }));
 jest.mock('@/app/api/auth/[...nextauth]/options', () => ({ authOptions: {} }));
 jest.mock('@/lib/server/request-body', () => ({ requestWithBodyLimit: async (request: Request) => request, RequestBodyLimitError: class extends Error {} }));
 jest.mock('@/lib/server/rate-limit', () => ({ consumeRateLimit: () => ({ allowed: true }), rateLimitHeaders: () => ({}), UPLOAD_RATE_LIMIT: {} }));
+jest.mock('@/lib/server/course-prerequisites', () => ({
+  CoursePathError: class extends Error { constructor(message: string, public status: number) { super(message); } }, assertCurrentPrerequisites: jest.fn(async () => {}),
+}));
 jest.mock('@/lib/prisma', () => ({ __esModule: true, default: {
   $transaction: jest.fn(),
   h5PContent: { create: jest.fn(), findUnique: jest.fn(), findMany: jest.fn() },
-  courseContent: { findFirst: jest.fn() },
+  courseContent: { findMany: jest.fn() },
+  coursePublication: { findUnique: jest.fn() },
   user: { findUnique: jest.fn() },
 } }));
 const db = prisma as unknown as {
   $transaction: jest.Mock;
   h5PContent: { create: jest.Mock; findUnique: jest.Mock; findMany: jest.Mock };
-  courseContent: { findFirst: jest.Mock };
+  courseContent: { findMany: jest.Mock };
+  coursePublication: { findUnique: jest.Mock };
   user: { findUnique: jest.Mock };
 };
 const defaultManifest = { title: 'Interaktives Beispiel', mainLibrary: 'H5P.Example', preloadedDependencies: [{ machineName: 'H5P.Example', majorVersion: 1, minorVersion: 0 }] };
@@ -67,8 +73,9 @@ beforeEach(async () => {
   records = new Map();
   db.h5PContent.create.mockImplementation(async ({ data }) => { const saved = { ...data, createdAt: new Date() }; records.set(data.id, saved); return saved; });
   db.h5PContent.findUnique.mockImplementation(async ({ where }) => records.get(where.id) || null);
-  db.courseContent.findFirst.mockResolvedValue(null);
-  db.user.findUnique.mockResolvedValue({ role: 'ADMIN' });
+  db.courseContent.findMany.mockResolvedValue([]);
+  db.coursePublication.findUnique.mockResolvedValue({ courseId: 'course-1', payload: JSON.stringify({ contents: [{ id: 'authorized-reference', type: 'H5P', content: '/h5p/embed/content-1' }] }) });
+  db.user.findUnique.mockResolvedValue({ role: 'INSTRUCTOR' });
   db.$transaction.mockImplementation(async (work: (tx: typeof db) => unknown) => work(db));
   jest.mocked(getServerSession).mockResolvedValue({ user: { id: 'owner', role: 'INSTRUCTOR' } } as never);
 });
@@ -161,19 +168,51 @@ it('rejects a private storage configuration that points through a symlink into p
 
 it('issues short-lived content-scoped asset capabilities and refuses tampering or expiry', () => {
   const now = Date.UTC(2026, 9, 2);
-  const token = createH5PAssetToken('content-1', now);
+  const token = createH5PAssetToken('content-1', 'student', now);
+  expect(token).not.toContain('student');
   expect(verifyH5PAssetToken('content-1', token, now)).toBe(true);
   expect(verifyH5PAssetToken('content-2', token, now)).toBe(false);
   expect(verifyH5PAssetToken('content-1', `${token.slice(0, -1)}!`, now)).toBe(false);
   expect(verifyH5PAssetToken('content-1', token, now + 2 * 60 * 60 * 1_000)).toBe(false);
 });
 
+it('reauthorizes credential-free v2 asset GET, HEAD, and range reads after path and account changes', async () => {
+  const imported = await storeH5PPackage(validateH5PPackage(archive()), 'owner');
+  const token = createH5PAssetToken(imported.id, 'student');
+  const reference = { id: 'authorized-reference', courseId: 'course-1', content: `/h5p/embed/${imported.id}`, course: { activePublicationId: 'publication-1' } };
+  db.courseContent.findMany.mockResolvedValue([reference]);
+  db.coursePublication.findUnique.mockResolvedValue({ courseId: 'course-1', payload: JSON.stringify({ contents: [{ id: reference.id, type: 'H5P', content: reference.content }] }) });
+  const params = { params: Promise.resolve({ id: imported.id, token, path: ['H5P.Example-1.0', 'example.js'] }) };
+  const request = (range?: string) => new Request('http://localhost/api/h5p/assets/file', range ? { headers: { Range: range } } : undefined) as never;
+  expect((await assets(request(), params)).status).toBe(200);
+  const partial = await assets(request('bytes=0-2'), params);
+  expect(partial.status).toBe(206);
+  expect(await partial.text()).toBe('H5P');
+  const head = await headAssets(request(), params);
+  expect(head.status).toBe(200);
+  expect(await head.text()).toBe('');
+  db.courseContent.findMany.mockResolvedValue([]); // Unenrolled or unpublished.
+  expect((await assets(request(), params)).status).toBe(403);
+  db.courseContent.findMany.mockResolvedValue([reference]);
+  jest.mocked(assertCurrentPrerequisites).mockRejectedValueOnce(new CoursePathError('Locked', 423));
+  expect((await assets(request(), params)).status).toBe(403);
+  db.user.findUnique.mockResolvedValueOnce(null); // Deleted account.
+  expect((await assets(request(), params)).status).toBe(403);
+  db.courseContent.findMany.mockResolvedValue([]);
+  db.user.findUnique.mockResolvedValue({ role: 'ADMIN' });
+  expect((await assets(request(), params)).status).toBe(200);
+  db.user.findUnique.mockResolvedValue({ role: 'USER' }); // Demoted administrator.
+  expect((await assets(request(), params)).status).toBe(403);
+  const v1 = { params: Promise.resolve({ id: imported.id, token: '1999999999.aaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', path: ['h5p.json'] }) };
+  expect((await assets(request(), v1)).status).toBe(403);
+});
+
 it('grants existing course references only read access and blocks foreign package attachments', async () => {
   records.set('content-1', { id: 'content-1', title: 'Private', contentType: 'H5P.Example', userId: 'owner' });
   await expect(authorizedH5PContent('content-1', { id: 'stranger' }, 'http://localhost')).rejects.toMatchObject({ status: 403 });
-  db.courseContent.findFirst.mockResolvedValue({ id: 'authorized-reference' });
+  db.courseContent.findMany.mockResolvedValue([{ id: 'authorized-reference', courseId: 'course-1', content: '/h5p/embed/content-1', course: { activePublicationId: 'publication-1' } }]);
   await expect(authorizedH5PContent('content-1', { id: 'student' }, 'http://localhost')).resolves.toMatchObject({ id: 'content-1' });
-  expect(db.courseContent.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({
+  expect(db.courseContent.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({
     archivedAt: null,
     course: { activePublicationId: { not: null }, enrollments: { some: { userId: 'student' } } },
   }) }));
@@ -252,7 +291,8 @@ it('blocks unshared embed and metadata access while hiding the package owner fro
   jest.mocked(getServerSession).mockResolvedValue({ user: { id: 'stranger', role: 'USER' } } as never);
   expect((await embed(request as never, params)).status).toBe(403);
   expect((await metadata(request as never, params)).status).toBe(403);
-  db.courseContent.findFirst.mockResolvedValue({ id: 'enrolled-course-reference' });
+  db.courseContent.findMany.mockResolvedValue([{ id: 'authorized-reference', courseId: 'course-1', content: `/h5p/embed/${imported.id}`, course: { activePublicationId: 'publication-1' } }]);
+  db.coursePublication.findUnique.mockResolvedValue({ courseId: 'course-1', payload: JSON.stringify({ contents: [{ id: 'authorized-reference', type: 'H5P', content: `/h5p/embed/${imported.id}` }] }) });
   const response = await metadata(request as never, params);
   expect(response.status).toBe(200);
   expect((await response.json()).userId).toBeUndefined();

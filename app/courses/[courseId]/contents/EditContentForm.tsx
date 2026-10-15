@@ -13,6 +13,7 @@ import { Editor } from '@/components/Editor';
 import { ContentTypeSelector } from './ContentTypeSelector';
 import { ContentType, EMPTY_QUIZ, draftString, getContentValidationError, inferContentType, serialiseContent, quizEditorDraft } from './content-form-utils';
 import { editableSignature } from './content-tree';
+import { EMPTY_ASSIGNMENT, MAX_ASSIGNMENT_PROMPT, parseAssignmentContent } from './assignment-content';
 
 interface EditContentFormProps {
   content: CourseContent;
@@ -31,6 +32,10 @@ export function EditContentForm({ content: initialContent, onSubmit, onContentCh
   const [title, setTitle] = useState(initialContent.title);
   const [type, setType] = useState<ContentType>(initialType);
   const [content, setContent] = useState<CourseContent['content']>(initialContent.content);
+  const initialAssignment = initialType === 'ASSIGNMENT' ? parseAssignmentContent(initialContent.content) : null;
+  const [assignmentPrompt, setAssignmentPrompt] = useState(initialAssignment?.prompt ?? '');
+  const [assignmentScore, setAssignmentScore] = useState(String(initialAssignment?.passingScore ?? 70));
+  const [localAssignmentDirty, setLocalAssignmentDirty] = useState(false);
   const [htmlMode, setHtmlMode] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isH5PBusy, setIsH5PBusy] = useState(false);
@@ -48,7 +53,13 @@ export function EditContentForm({ content: initialContent, onSubmit, onContentCh
   const selectType = (nextType: ContentType) => {
     if (type === nextType) return;
     typeDrafts.current[type] = content;
-    const nextContent = typeDrafts.current[nextType] ?? (nextType === 'QUIZ' ? EMPTY_QUIZ : '');
+    const nextContent = typeDrafts.current[nextType] ?? (nextType === 'QUIZ' ? EMPTY_QUIZ : nextType === 'ASSIGNMENT' ? JSON.stringify(EMPTY_ASSIGNMENT) : '');
+    if (nextType === 'ASSIGNMENT') {
+      const assignment = parseAssignmentContent(nextContent) ?? EMPTY_ASSIGNMENT;
+      setAssignmentPrompt(assignment.prompt);
+      setAssignmentScore(String(assignment.passingScore));
+    }
+    setLocalAssignmentDirty(false);
     setType(nextType);
     setContent(nextContent);
     setHtmlMode(false);
@@ -59,13 +70,17 @@ export function EditContentForm({ content: initialContent, onSubmit, onContentCh
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (saving.current || isH5PBusy) return;
-    const validationError = staged ? null : !title.trim() ? 'Gib einen Titel ein.' : getContentValidationError(type, content);
+    const score = Number(assignmentScore);
+    const assignmentDraft = { prompt: assignmentPrompt, passingScore: score };
+    const validationError = type === 'ASSIGNMENT' && (!Number.isInteger(score) || score < 1 || score > 100)
+      ? 'Die Bestehensgrenze muss zwischen 1 und 100 % liegen.'
+      : staged ? null : !title.trim() ? 'Gib einen Titel ein.' : getContentValidationError(type, type === 'ASSIGNMENT' ? JSON.stringify(assignmentDraft) : content);
     if (validationError) { setError(validationError); return; }
     saving.current = true;
     setIsSubmitting(true);
     setError(null);
     try {
-      await onSubmit({ ...initialContent, title: title.trim(), type, content: serialiseContent(content) });
+      await onSubmit({ ...initialContent, title: title.trim(), type, content: type === 'ASSIGNMENT' ? JSON.stringify(assignmentDraft) : serialiseContent(content) });
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : 'Der Inhalt konnte nicht gespeichert werden. Dein Entwurf bleibt erhalten.');
     } finally {
@@ -75,7 +90,7 @@ export function EditContentForm({ content: initialContent, onSubmit, onContentCh
   };
 
   const quiz = type === 'QUIZ' ? quizEditorDraft(content) : null;
-  const dirty = saveState ? saveState === 'dirty' : editableSignature({ ...initialContent, title, type, content }) !== editableSignature(initialContent);
+  const dirty = localAssignmentDirty || (saveState ? saveState === 'dirty' : editableSignature({ ...initialContent, title, type, content }) !== editableSignature(initialContent));
   const stateLabel = isSubmitting ? 'Änderungen werden gespeichert …' : error ? 'Speichern nicht abgeschlossen' : dirty ? 'Lokal ungespeichert' : 'Gespeicherter Inhalt';
   return (
     <form onSubmit={handleSubmit} className="space-y-5" aria-label="Inhalt bearbeiten" aria-busy={isSubmitting || isH5PBusy}>
@@ -100,6 +115,24 @@ export function EditContentForm({ content: initialContent, onSubmit, onContentCh
             <p role="alert" className="text-sm text-destructive">Die gespeicherten Quiz-Daten sind ungültig. Der ursprüngliche Inhalt bleibt erhalten.</p>
             <Label htmlFor={`${fieldId}-quiz`}>Quiz-Daten (JSON)</Label>
             <Textarea id={`${fieldId}-quiz`} value={draftString(content)} onChange={event => updateContent(event.target.value)} className="min-h-48 font-mono" />
+          </div>
+        ) : type === 'ASSIGNMENT' ? (
+          <div className="space-y-4">
+            <div className="space-y-2"><Label htmlFor={`${fieldId}-prompt`}>Aufgabentext</Label>
+              <Textarea id={`${fieldId}-prompt`} className="min-h-40 resize-y" maxLength={MAX_ASSIGNMENT_PROMPT} value={assignmentPrompt} onChange={event => {
+                const prompt = event.target.value; setAssignmentPrompt(prompt);
+                const score = Number(assignmentScore);
+                if (Number.isInteger(score) && score >= 1 && score <= 100) { updateContent(JSON.stringify({ prompt, passingScore: score })); setLocalAssignmentDirty(false); }
+                else setLocalAssignmentDirty(true);
+              }} aria-describedby={`${fieldId}-prompt-hint`} />
+              <p id={`${fieldId}-prompt-hint`} className="text-sm text-muted-foreground">Nur Textantworten. Lernende können keine Dateien hochladen.</p></div>
+            <div className="space-y-2"><Label htmlFor={`${fieldId}-passing-score`}>Bestehensgrenze in Prozent</Label>
+              <Input id={`${fieldId}-passing-score`} type="number" inputMode="numeric" min={1} max={100} step={1} value={assignmentScore} onChange={event => {
+                const value = event.target.value; setAssignmentScore(value);
+                if (value !== '' && Number.isInteger(Number(value)) && Number(value) >= 1 && Number(value) <= 100) { updateContent(JSON.stringify({ prompt: assignmentPrompt, passingScore: Number(value) })); setLocalAssignmentDirty(false); }
+                else setLocalAssignmentDirty(true);
+              }} aria-invalid={Boolean(error && error.includes('Bestehensgrenze'))} />
+              <p className="text-sm text-muted-foreground">Lehrende bewerten jede Abgabe manuell mit 0 bis 100 Punkten.</p></div>
           </div>
         ) : type === 'TEXT' ? (
           <div className="space-y-2">

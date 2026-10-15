@@ -11,6 +11,7 @@ import { PUT as updateProfile } from '@/app/api/user/profile/route'
 import { POST as issueCertificate } from '@/app/api/courses/[courseId]/certificate/route'
 import { PATCH as saveCourseDraft } from '@/app/api/courses/[courseId]/authoring/route'
 import { publicationDigest, type CoursePayload } from '@/lib/server/course-authoring'
+import { courseContentRevision } from '@/lib/server/course-progress'
 import prisma from '@/lib/prisma'
 import { getServerSession as getNextAuthSession } from 'next-auth'
 import { getServerSession } from 'next-auth/next'
@@ -39,12 +40,14 @@ jest.mock('@/lib/prisma', () => ({
     chatMember: { findMany: jest.fn(), create: jest.fn() },
     user: { findMany: jest.fn(), findFirst: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
     course: { findUnique: jest.fn() },
+    coursePublication: { findUnique: jest.fn() },
     courseDraft: { findUnique: jest.fn(), update: jest.fn() },
     courseContent: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn() },
     courseContentProgress: { findMany: jest.fn() },
     enrollment: { findUnique: jest.fn() },
     certificate: { create: jest.fn(), findFirst: jest.fn() },
     $transaction: jest.fn(),
+    $queryRaw: jest.fn(),
   },
 }))
 
@@ -69,12 +72,14 @@ const mockedPrisma = prisma as unknown as {
   chatMember: { findMany: jest.Mock; create: jest.Mock }
   user: { findMany: jest.Mock; findFirst: jest.Mock; findUnique: jest.Mock; update: jest.Mock }
   course: { findUnique: jest.Mock }
+  coursePublication: { findUnique: jest.Mock }
   courseDraft: { findUnique: jest.Mock; update: jest.Mock }
   courseContent: { findUnique: jest.Mock; findMany: jest.Mock; create: jest.Mock }
   courseContentProgress: { findMany: jest.Mock }
   enrollment: { findUnique: jest.Mock }
   certificate: { create: jest.Mock; findFirst: jest.Mock }
   $transaction: jest.Mock
+  $queryRaw: jest.Mock
 }
 
 function jsonRequest(url: string, init: RequestInit = {}): any {
@@ -292,8 +297,15 @@ describe('API authorization regressions', () => {
     mockedPrisma.course.findUnique.mockResolvedValue({ id: 'course-1', title: 'Course', activePublicationId: 'publication-1' })
     mockedPrisma.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'user@example.com', name: 'User' })
     mockedPrisma.enrollment.findUnique.mockResolvedValue({ id: 'enrollment-1', completedAt: null })
-    mockedPrisma.courseContent.findMany.mockResolvedValue([])
-    mockedPrisma.courseContentProgress.findMany.mockResolvedValue([])
+    const assignment = { id: 'assignment-1', courseId: 'course-1', parentId: null, order: 1,
+      title: 'Written task', type: 'ASSIGNMENT', content: JSON.stringify({ prompt: 'Explain the concept.', passingScore: 70 }) }
+    mockedPrisma.courseContent.findMany.mockResolvedValue([assignment])
+    mockedPrisma.coursePublication.findUnique.mockResolvedValue({ courseId: 'course-1', payload: JSON.stringify({
+      schemaVersion: 1, contents: [{ id: assignment.id, parentId: null, order: 1, title: assignment.title, prerequisiteIds: [] }],
+    }) })
+    // A legacy progress mirror is not proof of a passing instructor grade.
+    mockedPrisma.courseContentProgress.findMany.mockResolvedValue([{ contentId: assignment.id, revision: courseContentRevision(assignment) }])
+    mockedPrisma.$queryRaw.mockResolvedValue([])
 
     const response = await issueCertificate(
       jsonRequest('http://localhost/api/courses/course-1/certificate', { method: 'POST' }),
@@ -301,6 +313,7 @@ describe('API authorization regressions', () => {
     )
 
     expect(response.status).toBe(403)
+    expect(mockedPrisma.$queryRaw).toHaveBeenCalled()
     expect(mockedPrisma.certificate.create).not.toHaveBeenCalled()
   })
 

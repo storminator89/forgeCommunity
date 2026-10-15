@@ -8,7 +8,10 @@ jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn(), repla
 jest.mock('@/components/Sidebar', () => ({ Sidebar: () => <span>Kurse</span> }))
 jest.mock('@/components/theme-toggle', () => ({ ThemeToggle: () => null }))
 jest.mock('@/components/user-nav', () => ({ UserNav: () => null }))
-jest.mock('@/app/courses/[courseId]/contents/CoursePathOverview', () => ({ CoursePathOverview: () => <p>Lernpfad</p> }))
+jest.mock('@/app/courses/[courseId]/contents/CoursePathOverview', () => ({
+  getCoursePathEntries: jest.requireActual<typeof import('@/app/courses/[courseId]/contents/CoursePathOverview')>('@/app/courses/[courseId]/contents/CoursePathOverview').getCoursePathEntries,
+  CoursePathOverview: () => <p>Lernpfad</p>,
+}))
 jest.mock('@/app/courses/[courseId]/contents/ContentRenderer', () => ({ ContentRenderer: () => null }))
 jest.mock('@/app/courses/[courseId]/contents/CourseAuthoringOutline', () => ({
   CourseAuthoringOutline: ({ contents, onContentSelect, onRename, onReorder, onAddContent, onDelete }: {

@@ -30,10 +30,11 @@ private packages. Quiz submission already requires an enrollment without an
 administrator bypass; its behavior is unchanged.
 
 The snapshot checks do not promise that revocation always wins genuinely
-overlapping transactions. Previously issued H5P asset capabilities retain their
-existing two-hour lifetime; this patch prevents newly unauthorized previews
-from issuing another capability. It does not change token lifetime, existing
-capabilities, upload behavior, course-directory UI flags or reward policy.
+overlapping transactions. The subsequent prerequisite-path package replaced
+H5P asset capabilities with encrypted-subject v2 tokens and rechecks current
+authority on every asset request. V1 tokens stop working at deployment. The
+remaining bearer-token boundary is documented in
+[Course learning prerequisites](COURSE-PREREQUISITES.md).
 
 ## Evidence
 

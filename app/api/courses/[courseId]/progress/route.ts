@@ -6,6 +6,7 @@ import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
 import { completionState, contentQuiz, courseContentRevision, isQuizLikeContent, matchesContentVersionToken, recordCourseCompletion } from '@/lib/server/course-progress';
 import { contentTransaction } from '../contents/content-mutations';
 import { hasCurrentAdminReadAccess } from '@/lib/server/read-access';
+import { assertCurrentPrerequisites, CoursePathError } from '@/lib/server/course-prerequisites';
 
 type Params = { params: Promise<{ courseId: string }> };
 
@@ -29,6 +30,7 @@ export async function GET(_request: NextRequest, props: Params) {
     if (result.status !== 200) return NextResponse.json({ error: result.status === 404 ? 'Course not found' : 'Unauthorized' }, { status: result.status });
     return NextResponse.json(result.payload, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
+    if (error instanceof CoursePathError) return NextResponse.json({ error: error.message }, { status: error.status });
     console.error('Failed to read course progress:', error);
     return NextResponse.json({ error: 'Failed to read course progress' }, { status: 500 });
   }
@@ -51,9 +53,10 @@ export async function PATCH(request: NextRequest, props: Params) {
       if (!enrollment) return { status: 403 as const };
       const content = await tx.courseContent.findUnique({ where: { id: body.contentId as string }, select: { id: true, courseId: true, parentId: true, type: true, content: true, archivedAt: true, children: { where: { archivedAt: null }, select: { id: true }, take: 1 } } });
       if (!content || content.courseId !== courseId || content.archivedAt) return { status: 404 as const };
-      if (content.children.length || contentQuiz(content) || isQuizLikeContent(content)) return { status: 409 as const };
+      if (content.children.length || content.type === 'ASSIGNMENT' || contentQuiz(content) || isQuizLikeContent(content)) return { status: 409 as const };
       if (course.activePublicationId !== body.publicationId || !matchesContentVersionToken(body.contentVersionToken, course.activePublicationId, content)) return { status: 412 as const };
       if (body.completed) {
+        await assertCurrentPrerequisites(tx, session.user.id, courseId, content.id, course.activePublicationId);
         const revision = courseContentRevision(content);
         const existing = await tx.courseContentProgress.findUnique({ where: { userId_contentId: { userId: session.user.id, contentId: content.id } }, select: { revision: true } });
         if (existing?.revision !== revision) {
@@ -70,10 +73,11 @@ export async function PATCH(request: NextRequest, props: Params) {
     });
     if (state.status === 403) return NextResponse.json({ error: 'Enrollment required' }, { status: 403 });
     if (state.status === 404) return NextResponse.json({ error: 'Content not found' }, { status: 404 });
-    if (state.status === 409) return NextResponse.json({ error: 'Only non-quiz leaf content can be marked complete' }, { status: 409 });
+    if (state.status === 409) return NextResponse.json({ error: 'Only non-quiz, non-assignment leaf content can be marked complete' }, { status: 409 });
     if (state.status === 412) return NextResponse.json({ error: 'Course publication changed; reload before updating progress' }, { status: 412 });
     return NextResponse.json(state.progress);
   } catch (error) {
+    if (error instanceof CoursePathError) return NextResponse.json({ error: error.message }, { status: error.status });
     const inputError = requestErrorResponse(error);
     if (inputError) return inputError;
     console.error('Failed to update course progress:', error);
