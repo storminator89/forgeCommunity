@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '../../../auth/[...nextauth]/options'
+import { publishedCourseWhere } from '@/lib/server/published-course'
 
 export async function GET(
   request: NextRequest,
@@ -92,7 +93,7 @@ export async function GET(
 
       // Letzte Kurse
       prisma.course.findMany({
-        where: { instructorId: params.id },
+        where: { instructorId: params.id, ...publishedCourseWhere },
         include: {
           instructor: {
             select: {
@@ -166,7 +167,7 @@ export async function GET(
         limit,
         hasMore: activities.length > skip + limit,
       },
-    })
+    }, { headers: { 'Cache-Control': 'private, no-store' } })
   } catch (error) {
     if (error instanceof PaginationError) return NextResponse.json({ error: error.message }, { status: 400 });
     console.error('Error fetching activity:', error)

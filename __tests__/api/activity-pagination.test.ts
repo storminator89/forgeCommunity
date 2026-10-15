@@ -27,6 +27,8 @@ it('paginates the merged chronological feed without skipping each source separat
   expect(body.pagination.hasMore).toBe(true);
   expect(db.post.findMany.mock.calls[0][0]).toMatchObject({ take: 5, where: { published: true } });
   expect(db.post.findMany.mock.calls[0][0].skip).toBeUndefined();
+  expect(db.course.findMany.mock.calls[0][0].where).toEqual({ instructorId: 'u', activePublicationId: { not: null } });
+  expect(response.headers.get('Cache-Control')).toBe('private, no-store');
 });
 it.each(['page=0', 'page=-1', 'page=101', 'page=1x', 'limit=0', 'limit=51', 'limit=1.5'])('rejects invalid or unbounded pagination: %s', (query) => {
   expect(() => readPagination(new URLSearchParams(query))).toThrow();

@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../../auth/[...nextauth]/options";
+import { activeCourseContentWhere, publishedCourseWhere } from '@/lib/server/published-course';
+import { hasCurrentAdminReadAccess } from '@/lib/server/read-access';
+import { contentTransaction } from '@/app/api/courses/[courseId]/contents/content-mutations';
+import { profileCourseCompletionStats } from '@/lib/server/course-profile-completion';
 
 export async function GET(
   request: NextRequest,
@@ -15,7 +19,7 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (session.user.id !== params.id && session.user.role !== 'ADMIN') {
+    if (session.user.id !== params.id && !await hasCurrentAdminReadAccess(prisma, session.user)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -24,10 +28,12 @@ export async function GET(
     const limit = Math.max(1, Math.min(50, Number.parseInt(searchParams.get('limit') || '6', 10) || 6));
     const skip = (page - 1) * limit;
 
+    const { enrollments, total, completion } = await contentTransaction(async tx => {
     const [enrollments, total] = await Promise.all([
-      prisma.enrollment.findMany({
+      tx.enrollment.findMany({
         where: {
-          userId: params.id
+          userId: params.id,
+          course: publishedCourseWhere,
         },
         include: {
           course: {
@@ -42,19 +48,10 @@ export async function GET(
               _count: {
                 select: {
                   enrollments: true,
-                  lessons: true,
+                  contents: { where: activeCourseContentWhere },
                 },
               },
-              enrollments: {
-                where: {
-                  completedAt: {
-                    not: null
-                  }
-                },
-                select: {
-                  completedAt: true,
-                },
-              },
+              enrollments: { select: { userId: true, completedAt: true } },
             },
           },
         },
@@ -64,18 +61,18 @@ export async function GET(
         skip,
         take: limit,
       }),
-      prisma.enrollment.count({
+      tx.enrollment.count({
         where: {
-          userId: params.id
+          userId: params.id,
+          course: publishedCourseWhere,
         }
       })
     ]);
+    return { enrollments, total, completion: await profileCourseCompletionStats(tx, enrollments.map(row => row.course)) };
+    });
 
     const formattedCourses = enrollments.map(enrollment => {
       const course = enrollment.course;
-      const completedCount = course.enrollments.length;
-      const totalEnrollments = course._count.enrollments;
-
       return {
         id: course.id,
         title: course.title,
@@ -90,10 +87,9 @@ export async function GET(
         stats: {
           enrollments: course._count.enrollments,
           maxStudents: course.maxStudents,
-          completionRate: totalEnrollments > 0
-            ? (completedCount / totalEnrollments) * 100
-            : 0,
-          lessonsCount: course._count.lessons,
+          completionRate: completion.get(course.id)?.completionRate ?? 0,
+          everCompletionRate: completion.get(course.id)?.everCompletionRate ?? 0,
+          lessonsCount: course._count.contents,
         },
         enrolled: true,
         // The schema tracks course completion, but has no per-lesson progress
@@ -113,7 +109,7 @@ export async function GET(
         currentPage: page,
         hasMore: skip + enrollments.length < total
       }
-    });
+    }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     console.error('Failed to fetch user enrollments:', error);
     return NextResponse.json(

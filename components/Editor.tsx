@@ -5,7 +5,7 @@ import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
 import Image from '@tiptap/extension-image'
 import Underline from '@tiptap/extension-underline'
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useRef, useState } from 'react'
 import { Toggle } from "@/components/ui/toggle"
 import {
   Bold,
@@ -29,9 +29,13 @@ interface EditorProps {
   placeholder?: string
   className?: string
   readOnly?: boolean
+  uploadImage?: (file: File) => Promise<string>
 }
 
-const MenuBar = ({ editor }: { editor: any }) => {
+const MenuBar = ({ editor, uploadImage }: { editor: any; uploadImage?: (file: File) => Promise<string> }) => {
+  const uploadInput = useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
   const setLink = useCallback(() => {
     if (!editor) return;
     const previousUrl = editor.getAttributes('link').href
@@ -57,6 +61,21 @@ const MenuBar = ({ editor }: { editor: any }) => {
       editor.chain().focus().setImage({ src: url }).run()
     }
   }, [editor])
+
+  const upload = async (file: File | undefined) => {
+    if (!file || !uploadImage || !editor || uploading) return
+    setUploading(true)
+    setUploadError(null)
+    try {
+      const url = await uploadImage(file)
+      editor.chain().focus().setImage({ src: url }).run()
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : 'Das Bild konnte nicht hochgeladen werden.')
+    } finally {
+      setUploading(false)
+      if (uploadInput.current) uploadInput.current.value = ''
+    }
+  }
 
   if (!editor) {
     return null
@@ -151,6 +170,8 @@ const MenuBar = ({ editor }: { editor: any }) => {
       >
         <ImageIcon className="h-4 w-4" data-testid="image-icon" />
       </Toggle>
+      {uploadImage && <><input ref={uploadInput} type="file" accept="image/jpeg,image/png,image/gif,image/webp" className="sr-only" tabIndex={-1} aria-label="Privates Bild auswählen" onChange={event => { void upload(event.currentTarget.files?.[0]) }} /><button type="button" disabled={uploading} className="min-h-10 rounded-md px-2 text-sm hover:bg-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50" onClick={() => uploadInput.current?.click()}>{uploading ? 'Bild wird hochgeladen …' : 'Bild hochladen'}</button></>}
+      {uploadError && <span role="alert" className="w-full p-2 text-sm text-destructive">{uploadError}</span>}
       <Toggle aria-label="Rückgängig"
         size="sm"
         onPressedChange={() => editor.chain().focus().undo().run()}
@@ -176,7 +197,8 @@ export function Editor({
   onChange,
   placeholder = 'Beginnen Sie hier mit der Eingabe...',
   className = '',
-  readOnly = false
+  readOnly = false,
+  uploadImage
 }: EditorProps) {
   const editor = useEditor({
     immediatelyRender: false,
@@ -231,7 +253,7 @@ export function Editor({
 
   return (
     <div className={`w-full border rounded-md border-input bg-background ${className}`}>
-      {!readOnly && <MenuBar editor={editor} />}
+      {!readOnly && <MenuBar editor={editor} uploadImage={uploadImage} />}
       <EditorContent editor={editor} />
     </div>
   )

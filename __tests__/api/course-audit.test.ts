@@ -21,6 +21,7 @@ jest.mock('next/server', () => {
 
 jest.mock('@/lib/prisma', () => ({ __esModule: true, default: {
   course: { create: jest.fn(), findUnique: jest.fn() },
+  courseDraft: { create: jest.fn() },
   user: { findUnique: jest.fn() },
   enrollment: { findUnique: jest.fn() },
   certificate: { findFirst: jest.fn(), create: jest.fn(), findUnique: jest.fn() },
@@ -43,6 +44,7 @@ jest.mock('uuid', () => ({ v4: jest.fn(() => 'new-cert-id') }))
 
 const db = prisma as unknown as {
   course: { create: jest.Mock; findUnique: jest.Mock };
+  courseDraft: { create: jest.Mock };
   user: { findUnique: jest.Mock };
   enrollment: { findUnique: jest.Mock };
   certificate: { findFirst: jest.Mock; create: jest.Mock; findUnique: jest.Mock };
@@ -57,7 +59,7 @@ beforeEach(() => {
   db.$transaction.mockImplementation(async (callback: (tx: typeof db) => unknown) => callback(db))
 })
 
-test('course creation stores empty optional numbers as null', async () => {
+test('course creation atomically saves a private draft with empty optional numbers as null', async () => {
   const form = new FormData()
   form.append('title', 'Course')
   form.append('description', 'Description')
@@ -67,8 +69,14 @@ test('course creation stores empty optional numbers as null', async () => {
   const response = await createCourse({ headers: { get: () => null }, formData: async () => ({ get: (key: string) => form.get(key) ?? null }) } as never)
   expect(response.status).toBe(201)
   expect(db.course.create).toHaveBeenCalledWith(expect.objectContaining({
-    data: expect.objectContaining({ price: null, maxStudents: null, startDate: null, endDate: null }),
+    data: expect.objectContaining({ title: 'Unveröffentlichter Kurs', description: '', price: null, maxStudents: null }),
   }))
+  expect(db.courseDraft.create).toHaveBeenCalledWith({ data: expect.objectContaining({
+    courseId: 'course-1', revision: 0, lastEditorId: 'user-1', payload: expect.any(String), digest: expect.any(String),
+  }) })
+  const saved = JSON.parse(db.courseDraft.create.mock.calls[0][0].data.payload)
+  expect(saved).toMatchObject({ schemaVersion: 1, title: 'Course', description: 'Description',
+    startDate: null, endDate: null, imageUrl: null, contents: [] })
 })
 
 test('course creation rejects malformed date and numbers before writes', async () => {
@@ -81,6 +89,7 @@ test('course creation rejects malformed date and numbers before writes', async (
     expect(response.status).toBe(400)
   }
   expect(db.course.create).not.toHaveBeenCalled()
+  expect(db.courseDraft.create).not.toHaveBeenCalled()
 })
 
 test('certificate issuance reuses saved snapshot instead of current profile/course name', async () => {

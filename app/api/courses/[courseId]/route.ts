@@ -5,6 +5,7 @@ import { Prisma } from '@prisma/client';
 import { authOptions } from "../../auth/[...nextauth]/options";
 import { deleteCourseDependencies } from '@/lib/server/course-deletion';
 import { hasCurrentAdminReadAccess } from '@/lib/server/read-access';
+import { contentTransaction } from './contents/content-mutations';
 
 class CourseHasCertificatesError extends Error {}
 class CourseNotFoundError extends Error {}
@@ -28,38 +29,29 @@ export async function GET(
       return NextResponse.json({ error: 'Course ID is required' }, { status: 400 });
     }
 
-    const course = await prisma.course.findUnique({
-      where: { id: courseId },
-      select: {
-        id: true,
-        title: true,
-        description: true,
-        createdAt: true,
-        updatedAt: true,
-        instructorId: true,
-      },
-    });
-
-    if (!course) {
-      return NextResponse.json({ error: 'Course not found' }, { status: 404 });
-    }
-
-    const canEdit = course.instructorId === session.user.id || await hasCurrentAdminReadAccess(prisma, session.user);
-    if (!canEdit) {
-      const enrollment = await prisma.enrollment.findUnique({
-        where: {
-          userId_courseId: {
-            userId: session.user.id,
-            courseId,
-          },
-        },
-        select: { id: true },
+    const result = await contentTransaction(async tx => {
+      const course = await tx.course.findUnique({
+        where: { id: courseId },
+        select: { id: true, title: true, description: true, createdAt: true, updatedAt: true,
+          instructorId: true, activePublicationId: true },
       });
-
-      if (!enrollment) {
-        return NextResponse.json({ error: 'Access denied to this course' }, { status: 403 });
+      if (!course) return { status: 404 as const };
+      const account = await tx.user.findUnique({ where: { id: session.user.id }, select: { id: true } });
+      if (!account) return { status: 403 as const };
+      const canEdit = course.instructorId === session.user.id || await hasCurrentAdminReadAccess(tx, session.user);
+      if (!canEdit) {
+        // Guessing an unpublished course ID or retaining a stale enrollment
+        // must not reveal its staged metadata.
+        if (!course.activePublicationId) return { status: 404 as const };
+        const enrollment = await tx.enrollment.findUnique({
+          where: { userId_courseId: { userId: session.user.id, courseId } }, select: { id: true },
+        });
+        if (!enrollment) return { status: 403 as const };
       }
-    }
+      return { status: 200 as const, course, canEdit };
+    });
+    if (result.status !== 200) return NextResponse.json({ error: result.status === 404 ? 'Course not found' : 'Access denied to this course' }, { status: result.status });
+    const { course, canEdit } = result;
 
     return NextResponse.json({
       id: course.id,
@@ -68,7 +60,8 @@ export async function GET(
       description: course.description,
       createdAt: course.createdAt,
       updatedAt: course.updatedAt,
-    });
+      activePublicationId: course.activePublicationId,
+    }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     return NextResponse.json(
       {

@@ -1,9 +1,15 @@
 # App screenshot provenance
 
-These images show actual ForgeCommunity rendering with no image generation,
-API-response substitution, compositing, hidden/rewritten UI, or added browser or
-phone chrome. All four PNGs were copied byte-for-byte from the same approved
-merged-main GitHub Actions artifact and inspected at their original dimensions.
+These are **historical pre-phase-2** images. They show actual ForgeCommunity
+rendering with no image generation, API-response substitution, compositing,
+hidden/rewritten UI, or added browser or phone chrome. All four PNGs were
+copied byte-for-byte from the same approved merged-main GitHub Actions
+artifact and inspected at their original dimensions.
+
+The two course captures document the earlier immediate-save authoring flow.
+They are not evidence that the new private-draft, review, publish, version
+history, or restore flow has passed browser QA. This document reserves no
+replacement image names until a real capture has been reviewed.
 
 ## Source and reviewed gallery
 
@@ -17,8 +23,8 @@ merged-main GitHub Actions artifact and inspected at their original dimensions.
 | --- | --- | --- | --- |
 | `readme/landing-desktop-light.png` | `browser-qa.pw.ts-landing-a-79ba0--work-on-desktop-and-mobile-desktop-chromium/landing.png` | 1280×800 / 1280×1471 | Anonymous landing, light, full document |
 | `readme/landing-mobile-light.png` | `browser-qa.pw.ts-landing-a-79ba0--work-on-desktop-and-mobile-mobile-390-chromium/landing.png` | 390×844 / 390×1809 | Anonymous landing, light, full document |
-| `readme/course-quiz-authoring-desktop-light.png` | `course-editor.pw.ts-course-6523a-licitly-enters-learner-mode-desktop-chromium/course-editor-saved-quiz.png` | 1280×800 / 1280×800 | Synthetic owner, saved quiz authoring, light; editor panel scrolled to question/save controls |
-| `readme/course-quiz-preview-desktop-light.png` | `course-editor.pw.ts-course-6523a-licitly-enters-learner-mode-desktop-chromium/course-editor-quiz-preview.png` | 1280×800 / 1280×800 | Synthetic owner, course preview of a local unsaved quiz draft, light |
+| `readme/course-quiz-authoring-desktop-light.png` | `course-editor.pw.ts-course-6523a-licitly-enters-learner-mode-desktop-chromium/course-editor-saved-quiz.png` | 1280×800 / 1280×800 | Historical pre-phase-2 synthetic owner, saved quiz authoring, light; editor panel scrolled to question/save controls |
+| `readme/course-quiz-preview-desktop-light.png` | `course-editor.pw.ts-course-6523a-licitly-enters-learner-mode-desktop-chromium/course-editor-quiz-preview.png` | 1280×800 / 1280×800 | Historical pre-phase-2 synthetic owner, course preview of a local unsaved quiz draft, light |
 
 SHA-256 of committed PNGs:
 
@@ -67,22 +73,33 @@ browser journey and API/database evidence have their own scope in the
 
 ## Refresh instructions
 
+For phase 2, capture the actual private author worklist, saved-draft indicator,
+review dialog with real synthetic impact data, published learner view, and
+version-restore-as-draft state. Include a narrow viewport; inspect scrolled
+panels and distinguish a local unsaved change from a saved private draft.
+These are capture targets, not claims that screenshots already exist or tests
+have passed. Do not replace the historical files until the new source commit,
+successful run and pixels have been verified.
+
 1. Use the existing approved GitHub Actions browser job on the intended app
    commit. It builds the production app and uses official Chromium with a
    loopback origin and explicitly disposable synthetic SQLite data. Do not aim
    these tests at a deployed app or personal database.
-2. The normal `e2e/browser-qa.pw.ts` and `e2e/course-editor.pw.ts` flows generate
-   the gallery's source PNGs. This documentation update changes no workflow,
-   browser configuration, runtime code, or test case. No temporary capture flag
-   was needed or activated.
+2. The historical gallery came from `e2e/browser-qa.pw.ts` and the earlier
+   `e2e/course-editor.pw.ts` flow. Use the staged-publication Playwright journey
+   on the intended phase-2 commit for new course captures, then inspect that
+   run's real artifacts before selecting any. This documentation change adds
+   no browser test, runtime change, or temporary capture flag.
 3. Retrieve the exact run's artifact and inspect actual pixels before copying.
    Reject blank/loading, error, credential-bearing, UUID-heavy, or stale-editor
    frames. Do not replace the app's state or composite a prettier interface.
 4. Copy selected files without pixel editing. Record the real capture SHA/tree,
    run/artifact link, path, viewport/theme/state, dimensions, and SHA-256 here.
    A later docs-only commit necessarily has a different Git SHA; do not relabel
-   images as captured at that later SHA. Verify that app/rendering/dependency
-   files are unchanged between the capture source and documentation head.
+   images as captured at that later SHA. For a current-state gallery, verify
+   app/rendering/dependency files are unchanged between the capture source and
+   documentation head. The older images here remain explicitly historical
+   because phase-2 source differs from their capture commit.
 5. Check every Markdown image link and retain the synthetic-data captions.
    The CI uploader retains PNG artifacts for seven days, so the checked-in files
    preserve the reviewed evidence after the temporary artifact expires.

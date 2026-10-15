@@ -20,6 +20,7 @@ export interface InstructorCoursePreviewProps {
   contents: CourseContent[]
   selectedContentId?: string | null
   draft?: CourseContent | null
+  staged?: boolean
 }
 
 interface PreviewRow { content: CourseContent; depth: number; path: string[] }
@@ -28,14 +29,14 @@ function previewRows(contents: CourseContent[], depth = 0, path: string[] = []):
   return contents.flatMap(content => [{ content, depth, path }, ...previewRows(content.subContents ?? [], depth + 1, [...path, content.title])])
 }
 
-export function InstructorCoursePreview({ open, onOpenChange, courseTitle, contents, selectedContentId, draft }: InstructorCoursePreviewProps) {
+export function InstructorCoursePreview({ open, onOpenChange, courseTitle, contents, selectedContentId, draft, staged = false }: InstructorCoursePreviewProps) {
   const returnFocus = useRef<HTMLElement | null>(null)
   return <Dialog open={open} onOpenChange={onOpenChange}>
     <DialogContent className="h-[90dvh] w-[calc(100%_-_1rem)] max-w-6xl grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0 sm:w-[calc(100%_-_2rem)]" onOpenAutoFocus={() => { returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null }} onCloseAutoFocus={event => { event.preventDefault(); if (returnFocus.current?.isConnected) returnFocus.current.focus() }}>
       <DialogHeader className="border-b p-4 pr-14 sm:p-6 sm:pr-16">
         <DialogTitle>Kursvorschau</DialogTitle>
         <p className="break-words text-base font-medium [overflow-wrap:anywhere]">{courseTitle}</p>
-        <DialogDescription className="leading-relaxed">Nur zum Ausprobieren. Antworten und Abschlüsse werden nicht gespeichert. Gespeicherte Änderungen im Editor sind sofort für eingeschriebene Lernende sichtbar.</DialogDescription>
+        <DialogDescription className="leading-relaxed">{staged ? 'Entwurfsvorschau. Antworten und Abschlüsse werden nicht gespeichert. Der gespeicherte Entwurf ist für Lernende erst nach einer Veröffentlichung sichtbar.' : 'Nur zum Ausprobieren. Antworten und Abschlüsse werden nicht gespeichert. Gespeicherte Änderungen im Editor sind sofort für eingeschriebene Lernende sichtbar.'}</DialogDescription>
       </DialogHeader>
       {open && <PreviewContents contents={contents} selectedContentId={selectedContentId} draft={draft} />}
     </DialogContent>

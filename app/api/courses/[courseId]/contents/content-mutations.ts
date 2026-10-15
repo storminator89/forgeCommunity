@@ -24,10 +24,13 @@ export async function canEdit(tx: Prisma.TransactionClient, instructorId: string
   // Course ownership was read in this transaction. Administrator authority
   // must share that snapshot too, including every serialization retry: session
   // validation can precede a committed demotion or account deletion.
-  if (instructorId === user.id) return;
-  if (user.role !== 'ADMIN') throw new ContentMutationError('Unauthorized', 403);
   const actor = await tx.user.findUnique({ where: { id: user.id }, select: { role: true } });
-  if (actor?.role !== 'ADMIN') throw new ContentMutationError('Unauthorized', 403);
+  if (!actor || (instructorId !== user.id && (user.role !== 'ADMIN' || actor.role !== 'ADMIN'))) {
+    throw new ContentMutationError('Unauthorized', 403);
+  }
+  // Phase 2 never silently turns an old "save" request into a publication.
+  // Authoring mutations must use /authoring with an expected draft revision.
+  throw new ContentMutationError('Dieser Editor ist veraltet. Bitte neu laden und Änderungen im Entwurf speichern.', 409);
 }
 
 export function validateContentFields(body: Record<string, unknown>, creating: boolean) {

@@ -39,7 +39,7 @@ type MockDb = {
 const db = prisma as unknown as MockDb;
 const courseParams = { params: Promise.resolve({ courseId: 'course-1' }) };
 const eventParams = { params: Promise.resolve({ id: 'event-1' }) };
-let course: { id: string; price: number | null; maxStudents: number | null } | null;
+let course: { id: string; activePublicationId: string | null; price: number | null; maxStudents: number | null } | null;
 let event: { id: string; date: Date; maxAttendees: number | null } | null;
 let enrollments: Map<string, { id: string; completedAt: Date | null }>;
 let attendees: Map<string, { id: string; status: string }>;
@@ -47,7 +47,7 @@ let attendees: Map<string, { id: string; status: string }>;
 beforeEach(() => {
   jest.clearAllMocks();
   jest.mocked(getServerSession).mockResolvedValue({ user: { id: 'student', role: 'USER' } } as never);
-  course = { id: 'course-1', price: null, maxStudents: 2 };
+  course = { id: 'course-1', activePublicationId: 'publication-1', price: null, maxStudents: 2 };
   event = { id: 'event-1', date: new Date('2030-10-14T10:00:00Z'), maxAttendees: 2 };
   enrollments = new Map();
   attendees = new Map();
@@ -97,7 +97,7 @@ test('course join is authenticated, free-only, capacity-limited and idempotent',
   expect((await joinCourse(new Request('http://localhost'), courseParams)).status).toBe(201);
   jest.mocked(getServerSession).mockResolvedValue({ user: { id: 'third', role: 'USER' } } as never);
   expect((await joinCourse(new Request('http://localhost'), courseParams)).status).toBe(409);
-  course = { id: 'course-1', price: 49, maxStudents: null };
+  course = { id: 'course-1', activePublicationId: 'publication-1', price: 49, maxStudents: null };
   expect((await joinCourse(new Request('http://localhost'), courseParams)).status).toBe(403);
   expect(enrollments.size).toBe(2);
 });
@@ -109,8 +109,16 @@ test('free-course leave is idempotent but preserves completed and paid enrollmen
   enrollments.set('student', { id: 'enrollment-student', completedAt: new Date() });
   expect((await leaveCourse(new Request('http://localhost'), courseParams)).status).toBe(409);
   expect(enrollments.has('student')).toBe(true);
-  course = { id: 'course-1', price: 10, maxStudents: null };
+  course = { id: 'course-1', activePublicationId: 'publication-1', price: 10, maxStudents: null };
   expect((await leaveCourse(new Request('http://localhost'), courseParams)).status).toBe(403);
+});
+
+test('a guessed unpublished course ID cannot create or remove an enrollment', async () => {
+  course!.activePublicationId = null;
+  expect((await joinCourse(new Request('http://localhost'), courseParams)).status).toBe(404);
+  expect((await leaveCourse(new Request('http://localhost'), courseParams)).status).toBe(404);
+  expect(db.enrollment.create).not.toHaveBeenCalled();
+  expect(db.enrollment.deleteMany).not.toHaveBeenCalled();
 });
 
 test('event RSVP/cancellation reuses the unique attendee record and releases capacity', async () => {

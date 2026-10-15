@@ -9,7 +9,7 @@ import { groupCourseContents } from '@/lib/server/group-course-contents';
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
 import { assertCanAttachH5P } from '@/lib/server/h5p-access';
 import { H5PValidationError } from '@/lib/server/h5p-archive';
-import { publicCourseContent } from '@/lib/server/course-progress';
+import { contentVersionToken, publicCourseContent } from '@/lib/server/course-progress';
 import { reconcileCourseRewards } from '@/lib/server/rewards';
 import { hasCurrentAdminReadAccess } from '@/lib/server/read-access';
 import { assertParent, canEdit, contentTransaction, ContentMutationError, normalizeOrder, presentContent, prepareContent, siblings, validateContentFields } from './content-mutations';
@@ -31,24 +31,26 @@ export async function GET(
 
     const contents = await contentTransaction(async tx => {
       const course = await tx.course.findUnique({
-        where: { id: courseId }, select: { instructorId: true },
+        where: { id: courseId }, select: { instructorId: true, activePublicationId: true },
       });
       if (!course) throw new ContentMutationError('Course not found', 404);
       // Keep the editor decision, enrollment and returned scoring material in
       // one snapshot. Demoted enrolled admins receive the learner allowlist.
       const isEditor = course.instructorId === session.user.id || await hasCurrentAdminReadAccess(tx, session.user);
       if (!isEditor) {
+        if (!course.activePublicationId) throw new ContentMutationError('Course not found', 404);
         const enrollment = await tx.enrollment.findUnique({
           where: { userId_courseId: { userId: session.user.id, courseId } }, select: { id: true },
         });
         if (!enrollment) throw new ContentMutationError('Unauthorized', 403);
       }
       const rows = await tx.courseContent.findMany({
-        where: { courseId }, orderBy: [{ order: 'asc' }, { id: 'asc' }],
+        where: { courseId, archivedAt: null }, orderBy: [{ order: 'asc' }, { id: 'asc' }],
       });
       // Only current editors receive persisted quiz keys.
       return groupCourseContents(rows.map(content => {
-        const presented = presentContent(content);
+        const presented = { ...presentContent(content), publicationId: course.activePublicationId,
+          contentVersionToken: course.activePublicationId ? contentVersionToken(course.activePublicationId, content) : null };
         return isEditor ? presented : publicCourseContent(presented);
       }));
     });

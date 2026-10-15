@@ -33,6 +33,9 @@ function isPublicApiRequest(pathname: string, method: string): boolean {
   // The opaque H5P sandbox cannot use session cookies. The asset handler
   // verifies an expiring, content-scoped signature before serving any bytes.
   if (['GET', 'HEAD', 'OPTIONS'].includes(method.toUpperCase()) && pathname.startsWith('/api/h5p/assets/')) return true;
+  // The course asset handler itself checks the active publication. Only its
+  // published cover can be read anonymously; draft and lesson bytes stay private.
+  if (['GET', 'HEAD'].includes(method.toUpperCase()) && /^\/api\/courses\/[^/]+\/assets\/[^/]+$/.test(pathname)) return true;
   if (pathname === '/api/register') return true;
   if (method.toUpperCase() !== 'GET') return false;
 

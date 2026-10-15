@@ -1,7 +1,7 @@
 /** @jest-environment node */
 import { GET, POST, PATCH, DELETE } from '@/app/api/learning-goals/me/route';
 import { PATCH as markProgress } from '@/app/api/courses/[courseId]/progress/route';
-import { courseContentRevision } from '@/lib/server/course-progress';
+import { contentVersionToken, courseContentRevision } from '@/lib/server/course-progress';
 import { goalDeadline, pausedCalendarDays, shiftGoalDeadline } from '@/lib/learning-goal-clock';
 import { rmSync } from 'node:fs';
 import prisma from '@/lib/prisma';
@@ -46,12 +46,15 @@ const goal = async () => (await GET().then(result => result.json())).goal;
 async function mark(userId: string, courseId: string, contentId: string) {
   sessionFor(userId);
   const content = await prisma.courseContent.findUniqueOrThrow({ where: { id: contentId } });
+  const course = await prisma.course.findUniqueOrThrow({ where: { id: courseId } });
   return markProgress(new Request(`http://localhost/api/courses/${courseId}/progress`, {
-    method: 'PATCH', body: JSON.stringify({ contentId, completed: true, contentUpdatedAt: content.updatedAt.toISOString() }),
+    method: 'PATCH', body: JSON.stringify({ contentId, completed: true, publicationId: course.activePublicationId,
+      contentVersionToken: contentVersionToken(course.activePublicationId!, content) }),
   }) as never, { params: Promise.resolve({ courseId }) });
 }
 
 beforeAll(async () => {
+  process.env.NEXTAUTH_SECRET ??= 'test-only-learning-goal-secret';
   for (const id of ['teacher', 'alice', 'bob']) await prisma.user.create({ data: { id, email: `${id}@example.invalid` } });
   await prisma.course.create({ data: { id: 'mixed', title: 'Mixed course', description: 'Course', instructorId: 'teacher' } });
   await prisma.course.create({ data: { id: 'short', title: 'Short course', description: 'Course', instructorId: 'teacher' } });
@@ -59,6 +62,19 @@ beforeAll(async () => {
   for (const [id, courseId, value] of [
     ['lesson', 'mixed', 'Read this'], ['quiz', 'mixed', quiz], ['single', 'short', 'Short content'], ['own-leaf', 'own', 'Own content'],
   ]) await prisma.courseContent.create({ data: { id, title: id, courseId, content: value, type: 'TEXT', order: 1 } });
+  for (const courseId of ['mixed', 'short', 'own']) {
+    const course = await prisma.course.findUniqueOrThrow({ where: { id: courseId } });
+    const contents = await prisma.courseContent.findMany({ where: { courseId }, orderBy: { id: 'asc' } });
+    const payload = { schemaVersion: 1, title: course.title, description: course.description, startDate: null, endDate: null,
+      imageUrl: null, contents: contents.map(content => ({ id: content.id, parentId: content.parentId, title: content.title,
+        type: content.type, content: content.content, order: content.order })) };
+    const publicationId = `publication-${courseId}`;
+    await prisma.coursePublication.create({ data: { id: publicationId, courseId, sequence: 1, source: 'AUTHOR',
+      payload: JSON.stringify(payload), digest: `fixture-${courseId}`, contentCount: contents.length } });
+    await prisma.course.update({ where: { id: courseId }, data: { activePublicationId: publicationId } });
+    await prisma.courseDraft.create({ data: { courseId, basePublicationId: publicationId, payload: JSON.stringify(payload),
+      digest: `fixture-${courseId}` } });
+  }
   for (const userId of ['alice', 'bob']) for (const courseId of ['mixed', 'short']) {
     await prisma.enrollment.create({ data: { id: `${userId}-${courseId}`, userId, courseId } });
   }

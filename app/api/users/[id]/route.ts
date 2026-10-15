@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '../../auth/[...nextauth]/options'
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input'
 import { canShowBadgeToViewer } from '@/lib/course-achievement-badge'
+import { publishedCourseWhere } from '@/lib/server/published-course'
 
 export async function GET(
   request: NextRequest,
@@ -76,7 +77,7 @@ export async function GET(
             followers: true,
             following: true,
             posts: canViewDrafts ? true : { where: { published: true } },
-            courses: true,
+            courses: { where: publishedCourseWhere },
             projects: true,
             articles: canViewDrafts ? true : { where: { isPublished: true } },
           },

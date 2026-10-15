@@ -3,15 +3,22 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { useSession } from 'next-auth/react'
 import CourseContentsPage from '@/app/courses/[courseId]/contents/page'
 
+const mockRouter = { push: jest.fn(), replace: jest.fn() }
 jest.mock('next-auth/react', () => ({ useSession: jest.fn() }))
-jest.mock('@/app/courses/[courseId]/contents/CourseContentsEditor', () => ({
-  CourseContentsEditor: ({ courseId }: { courseId: string }) => <div>
+jest.mock('next/navigation', () => ({ useRouter: () => mockRouter }))
+jest.mock('@/components/Sidebar', () => ({ Sidebar: () => null }))
+jest.mock('@/app/courses/[courseId]/contents/CourseDraftWorkspace', () => ({
+  CourseDraftWorkspace: ({ courseId }: { courseId: string }) => <div>
     <span>{courseId}</span>
     <input aria-label="Private draft" defaultValue="" />
   </div>,
 }))
 
-it('remounts the course player before a different viewer sees an unsaved draft', async () => {
+const authorState = { draft: { revision: 1, digest: 'draft', payload: { schemaVersion: 1, title: 'Course', description: '', startDate: null, endDate: null, imageUrl: null, contents: [] } }, activePublication: null }
+
+it('re-authorizes and remounts the private workspace before a different viewer sees an unsaved draft', async () => {
+  let finishBob!: (response: Response) => void
+  global.fetch = jest.fn().mockResolvedValueOnce({ ok: true, status: 200, json: async () => authorState }).mockImplementationOnce(() => new Promise<Response>(resolve => { finishBob = resolve }))
   const params = Object.assign(Promise.resolve({ courseId: 'course-1' }), {
     status: 'fulfilled', value: { courseId: 'course-1' },
   })
@@ -29,11 +36,14 @@ it('remounts the course player before a different viewer sees an unsaved draft',
     data: null, status: 'loading', update: jest.fn(),
   } as ReturnType<typeof useSession>)
   view.rerender(<Suspense fallback={<p>Loading</p>}><CourseContentsPage params={params} /></Suspense>)
-  expect(screen.getByRole('textbox', { name: 'Private draft' })).toHaveValue('')
+  expect(screen.queryByRole('textbox', { name: 'Private draft' })).not.toBeInTheDocument()
 
   jest.mocked(useSession).mockReturnValue({
     data: { user: { id: 'bob' }, expires: '2099-01-01' }, status: 'authenticated', update: jest.fn(),
   } as ReturnType<typeof useSession>)
   view.rerender(<Suspense fallback={<p>Loading</p>}><CourseContentsPage params={params} /></Suspense>)
-  expect(screen.getByRole('textbox', { name: 'Private draft' })).toHaveValue('')
+  expect(screen.queryByRole('textbox', { name: 'Private draft' })).not.toBeInTheDocument()
+  finishBob({ ok: true, status: 200, json: async () => authorState } as Response)
+  expect(await screen.findByRole('textbox', { name: 'Private draft' })).toHaveValue('')
+  expect(fetch).toHaveBeenCalledTimes(2)
 })

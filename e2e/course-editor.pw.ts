@@ -1,291 +1,235 @@
-import { randomUUID } from 'node:crypto';
-import { lstatSync, realpathSync } from 'node:fs';
-import { basename, isAbsolute, resolve } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { randomUUID } from 'node:crypto'
+import { lstatSync, realpathSync } from 'node:fs'
+import { basename, isAbsolute, resolve } from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 
-const origin = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3013';
+const origin = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3013'
+const candidateSha = /^[a-f0-9]{40}$/.test(process.env.GITHUB_SHA ?? '') ? process.env.GITHUB_SHA! : 'local-unverified-sha'
 
 function disposableDatabasePath() {
-  const browserOrigin = new URL(origin);
-  const databasePath = process.env.DATABASE_URL?.startsWith('file:') ? process.env.DATABASE_URL.slice(5) : '';
-  // Check before registration, login or course creation. Never seed a real
-  // server or follow a fixture-named symlink to another database.
+  const browserOrigin = new URL(origin)
+  const path = process.env.DATABASE_URL?.startsWith('file:') ? process.env.DATABASE_URL.slice(5) : ''
   if (browserOrigin.protocol !== 'http:' || browserOrigin.origin !== origin ||
       !['127.0.0.1', 'localhost', '[::1]'].includes(browserOrigin.hostname) ||
       process.env.BROWSER_QA_DISPOSABLE_DB !== '1' || process.env.DATABASE_PROVIDER !== 'sqlite' ||
-      !isAbsolute(databasePath) || basename(databasePath) !== 'forge-browser-qa.db' ||
-      !lstatSync(databasePath).isFile() || realpathSync(databasePath) !== resolve(databasePath)) {
-    throw new Error('Course editor QA requires a loopback origin and the explicitly disposable SQLite fixture.');
+      !isAbsolute(path) || basename(path) !== 'forge-browser-qa.db' ||
+      !lstatSync(path).isFile() || realpathSync(path) !== resolve(path)) {
+    throw new Error('Course publication QA requires a loopback origin and the explicitly disposable SQLite fixture.')
   }
-  return databasePath;
+  return path
 }
 
 function courseEvidence(courseId: string) {
-  const db = new DatabaseSync(disposableDatabasePath(), { readOnly: true });
+  const db = new DatabaseSync(disposableDatabasePath(), { readOnly: true })
   try {
-    db.exec('PRAGMA busy_timeout = 5000');
-    return {
-      contents: db.prepare('SELECT "id", "title", "type", "content", "parentId", "order", "updatedAt" FROM "CourseContent" WHERE "courseId" = ? ORDER BY "id"').all(courseId),
-      attempts: db.prepare('SELECT COUNT(*) AS count FROM "QuizAttempt" WHERE "courseId" = ?').get(courseId)?.count,
-      progress: db.prepare('SELECT COUNT(*) AS count FROM "CourseContentProgress" WHERE "courseId" = ?').get(courseId)?.count,
-    };
+    db.exec('PRAGMA busy_timeout = 5000')
+    const course = db.prepare('SELECT "activePublicationId" FROM "Course" WHERE "id" = ?').get(courseId) as { activePublicationId: string | null } | undefined
+    const live = db.prepare('SELECT COUNT(*) AS count FROM "CourseContent" WHERE "courseId" = ? AND "archivedAt" IS NULL').get(courseId) as { count: number }
+    const attempts = db.prepare('SELECT COUNT(*) AS count FROM "QuizAttempt" WHERE "courseId" = ?').get(courseId) as { count: number }
+    const progress = db.prepare('SELECT COUNT(*) AS count FROM "CourseContentProgress" WHERE "courseId" = ?').get(courseId) as { count: number }
+    return { activePublicationId: course?.activePublicationId ?? null, liveNodes: live.count, attempts: attempts.count, progress: progress.count }
   } finally {
-    db.close();
+    db.close()
   }
 }
 
 async function keyboardActivate(page: Page, target: Locator) {
-  await target.focus();
-  await expect(target).toBeFocused();
-  await page.keyboard.press('Enter');
+  await target.focus()
+  await expect(target).toBeFocused()
+  await page.keyboard.press('Enter')
 }
 
-async function insideViewport(page: Page, target: Locator) {
-  // Dialogs enter with a short slide animation. Check their settled bounds,
-  // while still failing if the final UI remains clipped.
-  await expect.poll(async () => (await target.boundingBox())?.x ?? -999).toBeGreaterThanOrEqual(-1);
-  const box = await target.boundingBox();
-  expect(box).not.toBeNull();
-  expect(box!.x).toBeGreaterThanOrEqual(-1);
-  expect(box!.x + box!.width).toBeLessThanOrEqual(page.viewportSize()!.width + 1);
-  expect(await page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - innerWidth)).toBeLessThanOrEqual(1);
+async function login(page: Page, email: string, password: string) {
+  await page.goto('/login')
+  await page.getByRole('textbox', { name: 'E-Mail-Adresse' }).fill(email)
+  await page.getByLabel('Passwort', { exact: true }).fill(password)
+  await page.getByLabel('Passwort', { exact: true }).press('Enter')
+  await expect(page).toHaveURL(/\/community$/)
 }
 
-async function capturePopulatedEditor(page: Page, testInfo: { outputPath: (name: string) => string }, filename: string) {
-  // Real pixels from the disposable course and author account, never an API
-  // mock or hidden/rewritten UI. Save only a viewport, with no auth state.
-  await page.evaluate(async () => { await document.fonts.ready; });
-  await expect(page.getByRole('main')).toHaveCount(1);
-  await page.screenshot({ path: testInfo.outputPath(filename), animations: 'disabled' });
+async function createNode(page: Page, courseId: string, title: string, type: 'TEXT' | 'QUIZ') {
+  await keyboardActivate(page, page.locator('#course-authoring-add'))
+  const dialog = page.getByRole('dialog', { name: 'Inhalt hinzufügen', exact: true })
+  await expect(dialog.getByRole('textbox', { name: 'Titel', exact: true })).toBeFocused()
+  await dialog.getByRole('textbox', { name: 'Titel', exact: true }).fill(title)
+  if (type === 'QUIZ') await keyboardActivate(page, dialog.getByRole('group', { name: 'Inhaltstyp' }).getByRole('button', { name: 'Quiz', exact: true }))
+  await expect(dialog).toContainText('nur im privaten Entwurf gespeichert')
+  const response = page.waitForResponse(entry => new URL(entry.url()).pathname === '/api/courses/' + courseId + '/authoring' && entry.request().method() === 'PATCH')
+  await keyboardActivate(page, dialog.getByRole('button', { name: 'Im Entwurf anlegen', exact: true }))
+  const saved = await response
+  expect(saved.status()).toBe(200)
+  const body = await saved.json() as { draft: { payload: { contents: Array<{ id: string; title: string; type: string }> } } }
+  const node = body.draft.payload.contents.find(row => row.title === title && row.type === type)
+  expect(node).toBeDefined()
+  await expect(dialog).toHaveCount(0)
+  return node!.id
 }
 
-async function createContent(page: Page, courseId: string, title: string, type: 'TEXT' | 'QUIZ', parentId: string | null) {
-  const dialog = page.getByRole('dialog', { name: 'Inhalt hinzufügen', exact: true });
-  await expect(dialog.getByRole('textbox', { name: 'Titel', exact: true })).toBeFocused();
-  await dialog.getByRole('textbox', { name: 'Titel', exact: true }).fill(title);
-  const typeButton = dialog.getByRole('group', { name: 'Inhaltstyp', exact: true }).getByRole('button', { name: type === 'TEXT' ? 'Text' : 'Quiz', exact: true });
-  await keyboardActivate(page, typeButton);
-  await expect(typeButton).toHaveAttribute('aria-pressed', 'true');
-  await expect(dialog).toContainText('Mit „Anlegen“ wird der Eintrag für eingeschriebene Lernende sichtbar.');
-  await insideViewport(page, dialog);
-  const response = page.waitForResponse(entry => new URL(entry.url()).pathname === `/api/courses/${courseId}/contents` && entry.request().method() === 'POST');
-  await keyboardActivate(page, dialog.getByRole('button', { name: 'Anlegen', exact: true }));
-  const created = await response;
-  expect(created.status()).toBe(201);
-  const content = await created.json() as { id: string; type: string; title: string; parentId: string | null };
-  expect(content).toMatchObject({ title, type, parentId });
-  await expect(dialog).toHaveCount(0);
-  return content.id;
+async function saveNode(page: Page, courseId: string) {
+  const form = page.getByRole('form', { name: 'Inhalt bearbeiten', exact: true })
+  const response = page.waitForResponse(entry => new URL(entry.url()).pathname === '/api/courses/' + courseId + '/authoring' && entry.request().method() === 'PATCH')
+  await keyboardActivate(page, form.getByRole('button', { name: 'Entwurf speichern', exact: true }))
+  expect((await response).status()).toBe(200)
+  await expect(form.getByRole('status').filter({ hasText: /^Gespeicherter Inhalt$/ })).toBeVisible()
 }
 
-async function saveContent(page: Page, courseId: string, contentId: string) {
-  const response = page.waitForResponse(entry => new URL(entry.url()).pathname === `/api/courses/${courseId}/contents/${contentId}` && entry.request().method() === 'PUT');
-  await keyboardActivate(page, page.getByRole('form', { name: 'Inhalt bearbeiten', exact: true }).getByRole('button', { name: 'Speichern', exact: true }));
-  expect((await response).status()).toBe(200);
-  const form = page.getByRole('form', { name: 'Inhalt bearbeiten', exact: true });
-  await expect(form.getByRole('status').filter({ hasText: /^Gespeicherter Inhalt$/ })).toBeVisible();
-  await expect(form.getByRole('button', { name: 'Speichern', exact: true })).toBeFocused();
-  await expect(page.getByText('Inhalt gespeichert. Änderungen sind sofort für Teilnehmende sichtbar.', { exact: true })).toBeVisible();
-  await expect(form).toContainText('Gespeicherte Änderungen sind sofort für Teilnehmende sichtbar.');
+async function reviewAndPublish(page: Page, courseId: string, sequence: number, onReady?: () => Promise<void>) {
+  const reviewResponse = page.waitForResponse(entry => new URL(entry.url()).pathname === '/api/courses/' + courseId + '/authoring/review')
+  await keyboardActivate(page, page.getByRole('button', { name: 'Änderungen veröffentlichen', exact: true }).first())
+  expect((await reviewResponse).status()).toBe(200)
+  const dialog = page.getByRole('dialog', { name: 'Veröffentlichung prüfen', exact: true })
+  await expect(dialog.getByText('Bereit zur Veröffentlichung', { exact: true })).toBeVisible()
+  await expect(dialog).toContainText('Bereits ausgestellte Zertifikate bleiben gültig')
+  await onReady?.()
+  const publishResponse = page.waitForResponse(entry => new URL(entry.url()).pathname === '/api/courses/' + courseId + '/authoring/publish' && entry.request().method() === 'POST')
+  await keyboardActivate(page, dialog.getByRole('button', { name: 'Änderungen veröffentlichen', exact: true }))
+  expect((await publishResponse).status()).toBe(200)
+  await expect(page.getByText('Veröffentlicht · Version ' + sequence, { exact: true }).first()).toBeVisible()
 }
 
-// Existing CI discovers this with every other *.pw.ts file. Keep the full
-// acceptance on desktop and the narrowest touch layout; 390px adds the same
-// server writes and branch coverage without a distinct authoring breakpoint.
-test('course author creates nested typed content, rehearses an unsaved quiz and explicitly enters learner mode', async ({ page, request }, testInfo) => {
-  test.skip(testInfo.project.name === 'mobile-390-chromium', 'Desktop and 320px cover both authoring layouts; avoid a third full synthetic course flow.');
-  disposableDatabasePath();
-  // Never record request headers, credentials, cookies or browser storage.
-  // The CI screenshot policy captures only synthetic account/course screens.
-  const id = randomUUID();
-  const email = `course-editor-${id}@example.test`;
-  const password = `CourseEditorA1!${id}`;
-  const registration = await request.post(`${origin}/api/register`, {
-    headers: { origin }, data: { name: 'Course Editor Fixture', email, password },
-  });
-  expect(registration.status()).toBe(201);
-  await page.goto('/login');
-  await page.getByRole('textbox', { name: 'E-Mail-Adresse' }).fill(email);
-  await page.getByLabel('Passwort', { exact: true }).fill(password);
-  await page.getByLabel('Passwort', { exact: true }).press('Enter');
-  await expect(page).toHaveURL(/\/community$/);
+// Replace the pre-cutover live-save test: every browser mutation now goes
+// through a private CAS draft, and publishing requires a separate review.
+test('private course authoring, publication and latest learner content use real disposable data', async ({ page, request, browser }, testInfo) => {
+  test.skip(testInfo.project.name === 'mobile-390-chromium', 'Desktop and 320px cover the author workspace breakpoints without a third synthetic publication.')
+  test.setTimeout(240_000)
+  disposableDatabasePath()
 
-  const courseTitle = 'Lernwerkstatt: Fragen und Antworten';
-  const createdCourse = await page.request.post(`${origin}/api/courses`, {
-    headers: { origin }, multipart: { title: courseTitle, description: 'Disposable course editor acceptance.' },
-  });
-  expect(createdCourse.status()).toBe(201);
-  const { id: courseId } = await createdCourse.json() as { id: string };
-  await page.goto(`/courses/${courseId}/contents`);
-  await expect(page.getByRole('heading', { level: 1, name: courseTitle, exact: true })).toBeVisible();
-  const outlineToggle = page.getByRole('button', { name: 'Inhaltsverzeichnis schließen', exact: true });
-  const outlineToggleBox = await outlineToggle.boundingBox();
-  expect(outlineToggleBox).not.toBeNull();
-  expect(outlineToggleBox!.width).toBeGreaterThanOrEqual(44);
-  expect(outlineToggleBox!.height).toBeGreaterThanOrEqual(44);
-  const modes = page.getByRole('group', { name: 'Kursansicht', exact: true });
-  await expect(modes.getByRole('button', { name: 'Bearbeiten', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  await expect(modes.getByRole('button', { name: 'Lernen', exact: true })).toHaveAttribute('aria-pressed', 'false');
-  await expect(page.getByRole('heading', { name: 'Noch keine Kursinhalte', exact: true })).toBeVisible();
+  const id = randomUUID()
+  const courseTitle = 'Private publication ' + id.slice(0, 8)
+  const email = 'course-author-' + id + '@example.test'
+  const password = 'CourseAuthorA1!' + id
+  const registration = await request.post(origin + '/api/register', {
+    headers: { origin }, data: { name: 'Publication Author Fixture', email, password },
+  })
+  expect(registration.status()).toBe(201)
+  await login(page, email, password)
 
-  await keyboardActivate(page, page.locator('#course-authoring-add'));
-  const rootId = await createContent(page, courseId, 'Willkommen', 'TEXT', null);
-  const form = page.getByRole('form', { name: 'Inhalt bearbeiten', exact: true });
-  const rootTitle = 'Willkommen, gemeinsam lernen';
-  await form.getByRole('textbox', { name: 'Titel', exact: true }).fill(rootTitle);
-  await form.getByRole('switch', { name: 'HTML', exact: true }).press('Space');
-  await form.getByRole('textbox', { name: 'Inhalt', exact: true }).fill('<p>Dieser Lerntext ist gespeichert und sofort sichtbar.</p>');
-  await expect(form.getByRole('status').filter({ hasText: /^Lokal ungespeichert$/ })).toBeVisible();
-  await saveContent(page, courseId, rootId);
-  // Saving remounts the form with the canonical server response and leaves
-  // focus on the sticky save button. Verify the persisted rich-text canvas,
-  // then scroll its paragraph above that button's panel for the screenshot.
-  const savedRichText = form.getByRole('textbox', { name: 'Text bearbeiten', exact: true });
-  await expect(savedRichText).toHaveText('Dieser Lerntext ist gespeichert und sofort sichtbar.');
-  expect(courseEvidence(courseId).contents.find(entry => entry.id === rootId)?.content).toBe('<p>Dieser Lerntext ist gespeichert und sofort sichtbar.</p>');
-  const savedParagraph = savedRichText.locator('p');
-  await expect(savedParagraph).toHaveText('Dieser Lerntext ist gespeichert und sofort sichtbar.');
-  await savedParagraph.evaluate(element => element.scrollIntoView({ block: 'center', inline: 'nearest' }));
-  await expect.poll(async () => {
-    const paragraph = await savedParagraph.boundingBox();
-    const stickySavePanel = await form.locator('div.sticky.bottom-0').boundingBox();
-    const viewportHeight = page.viewportSize()?.height ?? 0;
-    return Boolean(paragraph && stickySavePanel && paragraph.y >= 8 &&
-      paragraph.y + paragraph.height + 8 <= Math.min(stickySavePanel.y, viewportHeight));
-  }).toBe(true);
-  await capturePopulatedEditor(page, testInfo, 'course-editor-saved-text.png');
+  await page.goto('/courses/new')
+  await page.getByRole('textbox', { name: 'Kurstitel' }).fill(courseTitle)
+  await page.getByRole('textbox', { name: 'Kurskategorie' }).fill('Synthetische Browserprüfung')
+  await page.getByRole('spinbutton', { name: 'Preis' }).fill('0')
+  await page.getByRole('spinbutton', { name: 'Maximale Teilnehmerzahl' }).fill('20')
+  const creation = page.waitForResponse(entry => new URL(entry.url()).pathname === '/api/courses' && entry.request().method() === 'POST')
+  await keyboardActivate(page, page.getByRole('button', { name: 'Kursentwurf anlegen', exact: true }))
+  const created = await creation
+  expect(created.status()).toBe(201)
+  const { id: courseId } = await created.json() as { id: string }
+  await expect(page).toHaveURL(origin + '/courses/' + courseId + '/contents')
+  await expect(page.getByText('Noch nicht veröffentlicht', { exact: true })).toBeVisible()
+  expect(courseEvidence(courseId)).toMatchObject({ activePublicationId: null, liveNodes: 0, attempts: 0, progress: 0 })
 
-  await keyboardActivate(page, page.getByRole('button', { name: `Aktionen für ${rootTitle}`, exact: true }));
-  await keyboardActivate(page, page.getByRole('menuitem', { name: 'Unterinhalt hinzufügen', exact: true }));
-  await expect(page.getByRole('dialog', { name: 'Inhalt hinzufügen', exact: true })).toContainText(`Unter „${rootTitle}“`);
-  const quizTitle = 'Wissenscheck mit Kurzantwort';
-  const quizId = await createContent(page, courseId, quizTitle, 'QUIZ', rootId);
-  await expect(form.getByRole('group', { name: 'Inhaltstyp', exact: true }).getByRole('button', { name: 'Quiz', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  await expect(form.getByRole('status').filter({ hasText: /^Gespeicherter Inhalt$/ })).toBeVisible();
-  const currentOutlineEntry = page.getByRole('navigation', { name: 'Kursstruktur bearbeiten', exact: true }).locator('button[aria-current="page"]');
-  await expect(currentOutlineEntry).toContainText('1.1');
-  await expect(currentOutlineEntry).toContainText(quizTitle);
-  // A mounted, normalized quiz must remain clean even when reselected.
-  await keyboardActivate(page, currentOutlineEntry);
-  await expect(page.getByRole('alertdialog')).toHaveCount(0);
+  // A saved draft must be rediscoverable by its owner, while the ordinary
+  // course catalogue remains publication-only.
+  await page.goto('/courses')
+  await expect(page.getByRole('link', { name: 'Meine Kursentwürfe' })).toBeVisible()
+  await expect(page.getByText(courseTitle, { exact: true })).toHaveCount(0)
+  const publicBefore = await page.request.get(origin + '/api/courses')
+  expect(publicBefore.status()).toBe(200)
+  expect((await publicBefore.json() as Array<{ id: string }>).some(row => row.id === courseId)).toBe(false)
+  await page.getByRole('link', { name: 'Meine Kursentwürfe' }).click()
+  const listItem = page.getByRole('listitem').filter({ hasText: courseTitle })
+  await expect(listItem.getByText('Privater Entwurf', { exact: true })).toBeVisible()
+  await listItem.getByRole('link', { name: 'Im Autorenarbeitsplatz öffnen' }).click()
+  await expect(page.getByRole('heading', { level: 1, name: courseTitle })).toBeVisible()
 
-  const writes: string[] = [];
+  const textId = await createNode(page, courseId, 'Erste Lektion', 'TEXT')
+  let form = page.getByRole('form', { name: 'Inhalt bearbeiten', exact: true })
+  await form.getByRole('switch', { name: 'HTML' }).focus()
+  await page.keyboard.press('Space')
+  const firstText = 'Synthetischer Lerntext der ersten Veröffentlichung.'
+  await form.getByRole('textbox', { name: 'Inhalt' }).fill('<p>' + firstText + '</p>')
+  await expect(page.getByText('Ungespeicherte Änderungen', { exact: true }).first()).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Änderungen veröffentlichen', exact: true }).first()).toBeDisabled()
+  await saveNode(page, courseId)
+  if (testInfo.project.name === 'desktop-chromium') {
+    await page.evaluate(async () => { await document.fonts.ready })
+    await page.screenshot({ path: testInfo.outputPath('private-author-outline-editor-desktop-' + candidateSha + '.png'), animations: 'disabled' })
+  }
+
+  await createNode(page, courseId, 'Wissenscheck', 'QUIZ')
+  form = page.getByRole('form', { name: 'Inhalt bearbeiten', exact: true })
+  await expect(form.getByLabel('Neue Frage als')).toBeVisible()
+  await form.getByLabel('Neue Frage als').selectOption('TEXT_INPUT')
+  await keyboardActivate(page, form.getByRole('button', { name: 'Neue Frage', exact: true }))
+  await form.getByRole('textbox', { name: 'Frage', exact: true }).fill('Welches Testwort gehört zum Kurs?')
+  await form.getByRole('textbox', { name: 'Richtige Antwort für Frage 1' }).fill('Lernpfad')
+
+  const learnerWrites: string[] = []
   page.on('request', entry => {
-    const url = new URL(entry.url());
-    if (url.origin === origin && url.pathname.startsWith(`/api/courses/${courseId}`) && !['GET', 'HEAD'].includes(entry.method())) {
-      writes.push(`${entry.method()} ${url.pathname}`);
+    const url = new URL(entry.url())
+    if (url.origin === origin && url.pathname.startsWith('/api/courses/' + courseId) &&
+        (url.pathname.endsWith('/progress') || url.pathname.endsWith('/attempts')) &&
+        !['GET', 'HEAD'].includes(entry.method())) learnerWrites.push(entry.method() + ' ' + url.pathname)
+  })
+  const beforePreview = courseEvidence(courseId)
+  await keyboardActivate(page, page.getByRole('button', { name: 'Vorschau', exact: true }))
+  const preview = page.getByRole('dialog', { name: 'Kursvorschau', exact: true })
+  await expect(preview).toContainText('Entwurfsvorschau. Antworten und Abschlüsse werden nicht gespeichert.')
+  await expect(preview).toContainText('Welches Testwort gehört zum Kurs?')
+  await preview.getByRole('textbox', { name: 'Vorschauantwort zu Frage 1' }).fill('Probeantwort')
+  await page.keyboard.press('Escape')
+  await expect(preview).toHaveCount(0)
+  expect(learnerWrites).toEqual([])
+  expect(courseEvidence(courseId)).toEqual(beforePreview)
+
+  await saveNode(page, courseId)
+  await page.getByRole('navigation', { name: 'Kursstruktur bearbeiten' }).getByTitle('Erste Lektion', { exact: true }).click()
+  await reviewAndPublish(page, courseId, 1, async () => {
+    if (testInfo.project.name === 'desktop-chromium') {
+      await page.evaluate(async () => { await document.fonts.ready })
+      await page.screenshot({ path: testInfo.outputPath('publication-review-desktop-' + candidateSha + '.png'), animations: 'disabled' })
     }
-  });
-  const beforePreview = courseEvidence(courseId);
-  expect(beforePreview.attempts).toBe(0);
-  expect(beforePreview.progress).toBe(0);
-  await form.getByLabel('Neue Frage als', { exact: true }).selectOption('TEXT_INPUT');
-  await keyboardActivate(page, form.getByRole('button', { name: 'Neue Frage', exact: true }));
-  const question = form.getByRole('textbox', { name: 'Frage', exact: true });
-  await expect(question).toBeFocused();
-  // Incomplete local edits must not claim success or reach the live-save API.
-  await keyboardActivate(page, form.getByRole('button', { name: 'Speichern', exact: true }));
-  await expect(form.getByRole('alert')).toHaveText('Frage 1: Der Fragetext fehlt.');
-  await expect(form.getByRole('status').filter({ hasText: /^Speichern nicht abgeschlossen$/ })).toBeVisible();
-  const questionText = 'Welches Wort ist unsere synthetische Testantwort?';
-  await question.fill(questionText);
-  await form.getByRole('textbox', { name: 'Richtige Antwort für Frage 1', exact: true }).fill('Lernpfad');
-  await expect(form.getByRole('status').filter({ hasText: /^Lokal ungespeichert$/ })).toBeVisible();
-  await insideViewport(page, form);
+  })
+  expect(courseEvidence(courseId)).toMatchObject({ liveNodes: 2, attempts: 0, progress: 0 })
+  expect(courseEvidence(courseId).activePublicationId).not.toBeNull()
+  const publicAfter = await page.request.get(origin + '/api/courses')
+  expect((await publicAfter.json() as Array<{ id: string }>).some(row => row.id === courseId)).toBe(true)
 
-  // Radix tab keyboard activation and Enter in a short-answer rehearsal must
-  // never submit the enclosing live-save form (a previous regression).
-  await form.getByRole('tab', { name: 'Bearbeiten', exact: true }).focus();
-  await page.keyboard.press('ArrowRight');
-  await expect(form.getByRole('tab', { name: 'Vorschau', exact: true })).toHaveAttribute('aria-selected', 'true');
-  const localPreview = form.getByRole('region', { name: 'Interaktive Quizvorschau', exact: true });
-  await localPreview.getByRole('textbox', { name: 'Vorschauantwort zu Frage 1', exact: true }).fill('Lernpfad');
-  await localPreview.getByRole('textbox', { name: 'Vorschauantwort zu Frage 1', exact: true }).press('Enter');
-  await expect(localPreview.getByRole('status')).toHaveText('1 von 1 Vorschaufragen beantwortet. Diese Ansicht vergibt kein Ergebnis.');
-  await keyboardActivate(page, localPreview.getByRole('button', { name: 'Lösungen anzeigen', exact: true }));
-  await expect(localPreview.getByText('Lernpfad', { exact: true })).toBeVisible();
-  await keyboardActivate(page, localPreview.getByRole('button', { name: 'Antworten zurücksetzen', exact: true }));
-  await expect(localPreview.getByRole('status')).toHaveText('0 von 1 Vorschaufragen beantwortet. Diese Ansicht vergibt kein Ergebnis.');
+  // Capture one real post-publication mobile viewport only. The selected text
+  // lesson has no quiz answer key and all content/account data are synthetic.
+  await page.goto('/courses/' + courseId + '/contents?content=' + textId)
+  await expect(page.getByRole('form', { name: 'Inhalt bearbeiten' })).toBeVisible()
+  if (testInfo.project.name === 'mobile-320-chromium') {
+    await keyboardActivate(page, page.getByRole('button', { name: 'Kursstruktur schließen' }))
+    await page.evaluate(() => document.getElementById('page-content')?.scrollTo(0, 0))
+    await page.evaluate(async () => { await document.fonts.ready })
+    const overflow = await page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - innerWidth)
+    expect(overflow).toBeLessThanOrEqual(1)
+    await page.screenshot({ path: testInfo.outputPath('published-author-workspace-320-' + candidateSha + '.png'), animations: 'disabled' })
+    return
+  }
 
-  const previewTrigger = page.getByRole('button', { name: 'Vorschau', exact: true });
-  await keyboardActivate(page, previewTrigger);
-  const preview = page.getByRole('dialog', { name: 'Kursvorschau', exact: true });
-  await expect(preview.getByRole('status').filter({ hasText: /^Ungespeicherter Entwurf/ })).toBeVisible();
-  await expect(preview).toContainText(questionText);
-  await capturePopulatedEditor(page, testInfo, 'course-editor-quiz-preview.png');
-  await preview.getByRole('textbox', { name: 'Vorschauantwort zu Frage 1', exact: true }).fill('Nur in der Vorschau');
-  await expect(preview.getByRole('status').filter({ hasText: /^1 von 1 Vorschaufragen/ })).toBeVisible();
-  await insideViewport(page, preview);
-  await keyboardActivate(page, preview.getByRole('navigation', { name: 'Inhaltsverzeichnis der Vorschau', exact: true }).getByTitle(rootTitle, { exact: true }));
-  await expect(preview.getByRole('heading', { name: rootTitle, exact: true })).toBeFocused();
-  await expect(preview.getByText('Dieser Lerntext ist gespeichert und sofort sichtbar.', { exact: true })).toBeVisible();
-  await keyboardActivate(page, preview.getByRole('button', { name: 'Weiter', exact: true }));
-  await expect(preview.getByRole('heading', { name: quizTitle, exact: true })).toBeFocused();
-  await expect(preview.getByRole('textbox', { name: 'Vorschauantwort zu Frage 1', exact: true })).toHaveValue('');
-  await page.keyboard.press('Escape');
-  await expect(preview).toHaveCount(0);
-  await expect(previewTrigger).toBeFocused();
-  await expect(form.getByRole('status').filter({ hasText: /^Lokal ungespeichert$/ })).toBeVisible();
-  expect(writes).toEqual([]);
-  expect(courseEvidence(courseId)).toEqual(beforePreview);
+  // A real learner follows the newest publication and a changed lesson needs
+  // a fresh current completion; no historical mark is fabricated or erased.
+  const learnerEmail = 'course-learner-' + id + '@example.test'
+  const learnerPassword = 'CourseLearnerA1!' + id
+  const learnerRegistration = await request.post(origin + '/api/register', {
+    headers: { origin }, data: { name: 'Publication Learner Fixture', email: learnerEmail, password: learnerPassword },
+  })
+  expect(learnerRegistration.status()).toBe(201)
+  const learnerContext = await browser.newContext({ baseURL: origin })
+  try {
+    const learner = await learnerContext.newPage()
+    await login(learner, learnerEmail, learnerPassword)
+    const enrollment = await learnerContext.request.post(origin + '/api/courses/' + courseId + '/enrollment', { headers: { origin } })
+    expect(enrollment.status()).toBe(201)
+    await learner.goto('/courses/' + courseId + '/contents?content=' + textId)
+    await expect(learner.getByText(firstText, { exact: true })).toBeVisible()
+    await keyboardActivate(learner, learner.getByRole('button', { name: 'Als abgeschlossen markieren', exact: true }))
+    await expect(learner.getByRole('button', { name: 'Abschlussmarkierung entfernen', exact: true })).toBeVisible()
 
-  await saveContent(page, courseId, quizId);
-  await form.getByRole('textbox', { name: 'Frage', exact: true }).scrollIntoViewIfNeeded();
-  await capturePopulatedEditor(page, testInfo, 'course-editor-saved-quiz.png');
-  expect(writes).toEqual([`PUT /api/courses/${courseId}/contents/${quizId}`]);
-  const savedQuiz = courseEvidence(courseId);
-  const storedQuiz = savedQuiz.contents.find(content => content.id === quizId);
-  expect(storedQuiz).toMatchObject({ title: quizTitle, parentId: rootId });
-  expect(JSON.parse(storedQuiz!.content as string).questions).toEqual([
-    expect.objectContaining({ type: 'TEXT_INPUT', question: questionText, correctAnswer: 'Lernpfad' }),
-  ]);
-  writes.length = 0;
-
-  // Cancel preserves local fields; discarding the same selected row must
-  // remount those fields from the server baseline rather than leak the draft.
-  const title = form.getByRole('textbox', { name: 'Titel', exact: true });
-  await title.fill('Dieser Titel bleibt nur lokal');
-  await keyboardActivate(page, currentOutlineEntry);
-  const guard = page.getByRole('alertdialog', { name: 'Ungespeicherte Änderungen', exact: true });
-  await expect(guard).toBeVisible();
-  await keyboardActivate(page, guard.getByRole('button', { name: 'Weiter bearbeiten', exact: true }));
-  await expect(title).toHaveValue('Dieser Titel bleibt nur lokal');
-  await keyboardActivate(page, currentOutlineEntry);
-  await keyboardActivate(page, guard.getByRole('button', { name: 'Änderungen verwerfen', exact: true }));
-  await expect(title).toHaveValue(quizTitle);
-  await expect(form.getByRole('status').filter({ hasText: /^Gespeicherter Inhalt$/ })).toBeVisible();
-  await expect(form.getByRole('textbox', { name: 'Frage', exact: true })).toHaveValue(questionText);
-
-  await title.fill('Auch der Ansichtswechsel verwirft nur lokal');
-  await keyboardActivate(page, modes.getByRole('button', { name: 'Lernen', exact: true }));
-  await expect(guard).toBeVisible();
-  await keyboardActivate(page, guard.getByRole('button', { name: 'Weiter bearbeiten', exact: true }));
-  await expect(modes.getByRole('button', { name: 'Bearbeiten', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  await expect(title).toHaveValue('Auch der Ansichtswechsel verwirft nur lokal');
-  await keyboardActivate(page, modes.getByRole('button', { name: 'Lernen', exact: true }));
-  await keyboardActivate(page, guard.getByRole('button', { name: 'Änderungen verwerfen', exact: true }));
-  await expect(modes.getByRole('button', { name: 'Lernen', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  await expect(form).toHaveCount(0);
-  await expect(page.getByText('Lernansicht des gespeicherten Kursinhalts.', { exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: quizTitle, exact: true })).toBeVisible();
-  await expect(page.getByText(questionText, { exact: true })).toBeVisible();
-  await expect(page.getByRole('navigation', { name: 'Kursstruktur bearbeiten', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Als abgeschlossen markieren', exact: true })).toHaveCount(0);
-  await insideViewport(page, page.getByRole('region', { name: 'Ausgewählter Kursinhalt', exact: true }));
-  await keyboardActivate(page, page.getByRole('button', { name: 'Inhaltsverzeichnis schließen', exact: true }));
-  await expect(page.getByRole('button', { name: 'Inhaltsverzeichnis öffnen', exact: true })).toHaveAttribute('aria-expanded', 'false');
-  await keyboardActivate(page, page.getByRole('button', { name: 'Inhaltsverzeichnis öffnen', exact: true }));
-  await expect(page.getByRole('button', { name: 'Inhaltsverzeichnis schließen', exact: true })).toHaveAttribute('aria-expanded', 'true');
-
-  await keyboardActivate(page, modes.getByRole('button', { name: 'Bearbeiten', exact: true }));
-  await expect(title).toHaveValue(quizTitle);
-  await expect(form.getByRole('status').filter({ hasText: /^Gespeicherter Inhalt$/ })).toBeVisible();
-  await page.reload();
-  await expect(page).toHaveURL(new RegExp(`/courses/${courseId}/contents\\?content=${quizId}$`));
-  await expect(title).toHaveValue(quizTitle);
-  await expect(form.getByRole('textbox', { name: 'Frage', exact: true })).toHaveValue(questionText);
-  await expect(form.getByRole('status').filter({ hasText: /^Gespeicherter Inhalt$/ })).toBeVisible();
-  expect(writes).toEqual([]);
-  expect(courseEvidence(courseId)).toEqual(savedQuiz);
-});
+    form = page.getByRole('form', { name: 'Inhalt bearbeiten', exact: true })
+    await form.getByRole('switch', { name: 'HTML' }).focus()
+    await page.keyboard.press('Space')
+    const updatedText = 'Synthetischer Lerntext der zweiten Veröffentlichung.'
+    await form.getByRole('textbox', { name: 'Inhalt' }).fill('<p>' + updatedText + '</p>')
+    await saveNode(page, courseId)
+    await reviewAndPublish(page, courseId, 2)
+    await learner.reload()
+    await expect(learner.getByText(updatedText, { exact: true })).toBeVisible()
+    await expect(learner.getByRole('button', { name: 'Als abgeschlossen markieren', exact: true })).toBeVisible()
+  } finally {
+    await learnerContext.close()
+  }
+})

@@ -6,7 +6,10 @@ import { POST as submitQuiz } from '@/app/api/courses/[courseId]/contents/[conte
 import { GET as readH5PMetadata } from '@/app/api/h5p/contents/[id]/route';
 import { GET as previewH5P } from '@/app/h5p/embed/[id]/route';
 import { GET as listH5P } from '@/app/api/h5p/contents/route';
+import { PATCH as saveDraft } from '@/app/api/courses/[courseId]/authoring/route';
 import { readH5PAsset } from '@/lib/server/h5p-storage';
+import { publishDraft, publicationDigest, type CoursePayload } from '@/lib/server/course-authoring';
+import { contentVersionToken } from '@/lib/server/course-progress';
 import prisma from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth/next';
@@ -53,9 +56,16 @@ jest.mock('@/lib/prisma', () => {
 });
 
 const courseParams = { params: Promise.resolve({ courseId: 'paid-course' }) };
-const quizParams = { params: Promise.resolve({ courseId: 'paid-course', contentId: 'quiz' }) };
+const lessonId = 'lesson-content';
+const quizId = 'quiz-content';
+const packageReferenceId = 'package-reference';
+const quizParams = { params: Promise.resolve({ courseId: 'paid-course', contentId: quizId }) };
 const h5pParams = { params: Promise.resolve({ id: 'course-package' }) };
 const request = (path = '/api/courses/paid-course/contents') => new Request(`http://localhost${path}`) as never;
+function authoringRequest(operation: object) {
+  const url = new URL('http://localhost/api/courses/paid-course/authoring');
+  return Object.assign(new Request(url, { method: 'PATCH', body: JSON.stringify({ expectedRevision: 0, operation }) }), { nextUrl: url }) as never;
+}
 const viewer = (id = 'admin', role = 'ADMIN') => jest.mocked(getServerSession).mockResolvedValue({ user: { id, role } } as never);
 const reads = [
   ['course contents', () => readContents(request(), courseParams)],
@@ -65,6 +75,17 @@ const reads = [
   ['H5P preview', () => previewH5P(request('/h5p/embed/course-package'), h5pParams)],
 ] as const;
 const originalSecret = process.env.NEXTAUTH_SECRET;
+const quizBody = JSON.stringify({ questions: [
+  { id: 'secret-question', type: 'TEXT_INPUT', question: 'What is the answer?', correctAnswer: 'PRIVATE-SCORING-KEY', explanation: 'PRIVATE-EXPLANATION' },
+] });
+const publishedPayload: CoursePayload = {
+  schemaVersion: 1, title: 'Paid material', description: 'Paid course', startDate: null, endDate: null, imageUrl: null,
+  contents: [
+    { id: lessonId, parentId: null, title: 'Paid lesson', type: 'TEXT', content: 'PRIVATE-LESSON-MATERIAL', order: 1 },
+    { id: quizId, parentId: null, title: 'Quiz', type: 'QUIZ', content: quizBody, order: 2 },
+    { id: packageReferenceId, parentId: null, title: 'H5P lesson', type: 'H5P', content: '/h5p/embed/course-package', order: 3 },
+  ],
+};
 
 beforeEach(async () => {
   jest.restoreAllMocks(); jest.clearAllMocks();
@@ -79,17 +100,13 @@ beforeEach(async () => {
     { id: 'stranger', email: 'stranger@example.invalid', role: 'USER' },
   ] });
   await prisma.course.create({ data: { id: 'paid-course', title: 'Paid material', description: 'Paid course', instructorId: 'teacher', price: 50 } });
-  await prisma.courseContent.createMany({ data: [
-    { id: 'lesson', title: 'Paid lesson', courseId: 'paid-course', type: 'TEXT', content: 'PRIVATE-LESSON-MATERIAL', order: 1 },
-    { id: 'quiz', title: 'Quiz', courseId: 'paid-course', type: 'TEXT', content: JSON.stringify({ questions: [
-      { id: 'secret-question', type: 'TEXT_INPUT', question: 'What is the answer?', correctAnswer: 'PRIVATE-SCORING-KEY', explanation: 'PRIVATE-EXPLANATION' },
-    ] }), order: 2 },
-    { id: 'package-reference', title: 'H5P lesson', courseId: 'paid-course', type: 'H5P', content: '/h5p/embed/course-package', order: 3 },
-  ] });
   await prisma.h5PContent.createMany({ data: [
     { id: 'course-package', title: 'PRIVATE-PACKAGE-TITLE', contentType: 'H5P.QuestionSet', userId: 'teacher' },
     { id: 'unreferenced-package', title: 'UNREFERENCED-PRIVATE-PACKAGE', contentType: 'H5P.QuestionSet', userId: 'teacher' },
   ] });
+  await prisma.courseDraft.create({ data: { courseId: 'paid-course', revision: 0,
+    payload: JSON.stringify(publishedPayload), digest: publicationDigest(publishedPayload), lastEditorId: 'teacher' } });
+  await publishDraft('paid-course', { id: 'teacher', role: 'INSTRUCTOR' }, 0, null, 'fixture-publish-request');
   await prisma.enrollment.create({ data: { userId: 'learner', courseId: 'paid-course' } });
   viewer();
 });
@@ -217,10 +234,43 @@ test('an enrolled learner cannot preview an unrelated private H5P package', asyn
   expect(readH5PAsset).not.toHaveBeenCalled();
 });
 
+test.each([
+  ['missing', '/h5p/embed/missing-package', 400],
+  ['foreign', '/h5p/embed/foreign-package', 403],
+] as const)('draft save returns %s H5P attachment error without persisting it', async (_label, source, status) => {
+  await prisma.h5PContent.create({ data: { id: 'foreign-package', title: 'Other private package', contentType: 'H5P.QuestionSet', userId: 'learner' } });
+  viewer('teacher', 'INSTRUCTOR');
+  const response = await saveDraft(authoringRequest({ kind: 'insertNode',
+    node: { id: 'private-h5p-node', title: 'Private package', type: 'H5P', content: source }, parentId: null, afterId: null }), courseParams);
+  expect(response.status).toBe(status);
+  expect(response.headers.get('Cache-Control')).toBe('private, no-store');
+  expect((await response.json()).error).toEqual(expect.any(String));
+  const draft = await prisma.courseDraft.findUniqueOrThrow({ where: { courseId: 'paid-course' } });
+  expect(draft.revision).toBe(0);
+  expect(draft.payload).not.toContain('private-h5p-node');
+  expect(await prisma.courseContent.findUnique({ where: { id: 'private-h5p-node' } })).toBeNull();
+});
+
+test('draft save reports unsafe media validation as a private client error', async () => {
+  viewer('teacher', 'INSTRUCTOR');
+  const response = await saveDraft(authoringRequest({ kind: 'insertNode',
+    node: { id: 'unsafe-media-node', title: 'Unsafe video', type: 'VIDEO', content: 'javascript:alert(1)' },
+    parentId: null, afterId: null }), courseParams);
+  expect(response.status).toBe(400);
+  expect(response.headers.get('Cache-Control')).toBe('private, no-store');
+  expect((await response.json()).error).toBe('Unsupported media source');
+  const draft = await prisma.courseDraft.findUniqueOrThrow({ where: { courseId: 'paid-course' } });
+  expect(draft.revision).toBe(0);
+  expect(draft.payload).not.toContain('unsafe-media-node');
+});
+
 test('quiz submission never gains an enrollment bypass from an ADMIN session claim', async () => {
-  const content = await prisma.courseContent.findUniqueOrThrow({ where: { id: 'quiz' } });
-  const response = await submitQuiz(new Request('http://localhost/api/courses/paid-course/contents/quiz/attempts', {
-    method: 'POST', body: JSON.stringify({ submissionId: 'test-attempt', contentUpdatedAt: content.updatedAt.toISOString(), answers: { 'secret-question': 'PRIVATE-SCORING-KEY' } }),
+  const content = await prisma.courseContent.findUniqueOrThrow({ where: { id: quizId } });
+  const course = await prisma.course.findUniqueOrThrow({ where: { id: 'paid-course' }, select: { activePublicationId: true } });
+  const publicationId = course.activePublicationId!;
+  const response = await submitQuiz(new Request(`http://localhost/api/courses/paid-course/contents/${quizId}/attempts`, {
+    method: 'POST', body: JSON.stringify({ submissionId: 'test-attempt', publicationId,
+      contentVersionToken: contentVersionToken(publicationId, content), answers: { 'secret-question': 'PRIVATE-SCORING-KEY' } }),
   }) as never, quizParams);
   expect(response.status).toBe(403);
   expect(await prisma.quizAttempt.count()).toBe(0);

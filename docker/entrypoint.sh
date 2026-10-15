@@ -16,9 +16,13 @@ fi
 case "$runtime_provider:$DATABASE_URL" in
   sqlite:file:/*)
     node /app/scripts/sqlite-init.mjs
+    # Fresh development installations start normally. Old unversioned course
+    # rows fail clearly and remain untouched for an explicit operator decision.
+    node /app/scripts/assert-course-publication-ready.mjs
     ;;
   postgresql:postgresql://*|postgresql:postgres://*)
-    # PostgreSQL migrations are a reviewed deployment step, never run on boot.
+    # PostgreSQL schema initialization remains an explicit deployment step.
+    node /app/scripts/assert-course-publication-ready.mjs
     ;;
   *)
     echo "DATABASE_URL scheme does not match the $runtime_provider image (SQLite requires an absolute file: URL)." >&2

@@ -126,15 +126,30 @@ if (phase === 'create') {
   fixture.embedUrl = uploaded.embedUrl;
 
   // A foreign, unassigned package must remain private. Attach it through the
-  // same HTTP API used by the editor, then grant one enrolled learner access.
+  // saved author draft and an explicit publication, then enroll one learner.
   await outsider(`/api/h5p/contents/${fixture.packageId}`, { status: 403 });
-  fixture.courseId = randomUUID();
-  database(db => db.prepare('INSERT INTO "Course" (id,title,description,instructorId,updatedAt) VALUES (?,?,?,?,?)').run(fixture.courseId, fixture.title, 'Disposable H5P course fixture', fixture.userIds.admin, new Date().toISOString()));
-  const attached = await (await admin(`/api/courses/${fixture.courseId}/contents`, { method: 'POST', status: 201, body: { title: 'Interactive smoke content', type: 'H5P', content: fixture.embedUrl, parentId: null } })).json();
-  assert.equal(attached.type, 'H5P');
-  assert.equal(attached.content, fixture.embedUrl);
-  fixture.contentId = attached.id;
-  database(db => db.prepare('INSERT INTO "Enrollment" (id,userId,courseId) VALUES (?,?,?)').run(randomUUID(), fixture.userIds.learner, fixture.courseId));
+  const courseForm = new FormData();
+  courseForm.set('title', fixture.title);
+  courseForm.set('description', 'Disposable H5P course fixture');
+  const course = await (await admin('/api/courses', { method: 'POST', status: 201, body: courseForm })).json();
+  fixture.courseId = course.id;
+  assert.equal(course.activePublicationId, null, 'New H5P fixture course must start unpublished');
+  const authoring = await (await admin(`/api/courses/${fixture.courseId}/authoring`)).json();
+  fixture.contentId = randomUUID();
+  const saved = await (await admin(`/api/courses/${fixture.courseId}/authoring`, {
+    method: 'PATCH', body: {
+      expectedRevision: authoring.draft.revision,
+      operation: { kind: 'insertNode', node: { id: fixture.contentId, title: 'Interactive smoke content', type: 'H5P', content: fixture.embedUrl }, parentId: null, afterId: null },
+    },
+  })).json();
+  assert.equal(saved.draft.payload.contents[0].content, fixture.embedUrl);
+  const review = await (await admin(`/api/courses/${fixture.courseId}/authoring/review?expectedRevision=${saved.draft.revision}&expectedActivePublicationId=null`)).json();
+  assert.equal(review.ready, true, `H5P publication blocked: ${JSON.stringify(review.blockers)}`);
+  const published = await (await admin(`/api/courses/${fixture.courseId}/authoring/publish`, {
+    method: 'POST', body: { expectedRevision: saved.draft.revision, expectedActivePublicationId: null, requestId: randomUUID() },
+  })).json();
+  assert.equal(published.publication.sequence, 1);
+  await learner(`/api/courses/${fixture.courseId}/enrollment`, { method: 'POST', status: 201 });
   writeFileSync(markerFile, JSON.stringify(fixture), { encoding: 'utf8', mode: 0o600 });
 }
 

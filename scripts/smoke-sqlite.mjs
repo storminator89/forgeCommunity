@@ -11,16 +11,17 @@ const password = 'StrongPassword123!';
 const marker = `SQLite Smoke ${randomUUID()}`;
 
 async function request(path, { status = 200, method = 'GET', body, headers = {} } = {}) {
+  const multipart = body instanceof FormData;
   const response = await fetch(origin + path, {
     method,
     redirect: 'manual',
     headers: {
       ...(cookies.size ? { cookie: [...cookies].map(([key, value]) => `${key}=${value}`).join('; ') } : {}),
       ...(method !== 'GET' ? { origin } : {}),
-      ...(body !== undefined && typeof body !== 'string' ? { 'content-type': 'application/json' } : {}),
+      ...(body !== undefined && !multipart && typeof body !== 'string' ? { 'content-type': 'application/json' } : {}),
       ...headers,
     },
-    body: body === undefined ? undefined : typeof body === 'string' ? body : JSON.stringify(body),
+    body: body === undefined ? undefined : multipart || typeof body === 'string' ? body : JSON.stringify(body),
   });
   for (const header of response.headers.getSetCookie()) {
     const [pair] = header.split(';');
@@ -75,24 +76,34 @@ const profile = await (await request('/api/user/profile')).json();
 assert.equal(profile.email, storedEmail);
 let expectedCertificates = [];
 if (process.env.SMOKE_SQLITE_FILE) {
+  async function publishedFixture(title) {
+    const form = new FormData();
+    form.set('title', title);
+    form.set('description', 'Disposable certificate order fixture');
+    const course = await (await request('/api/courses', { method: 'POST', status: 201, body: form })).json();
+    const authoring = await (await request(`/api/courses/${course.id}/authoring`)).json();
+    const saved = await (await request(`/api/courses/${course.id}/authoring`, {
+      method: 'PATCH', body: {
+        expectedRevision: authoring.draft.revision,
+        operation: { kind: 'insertNode', node: { id: randomUUID(), title: 'Course lesson', type: 'TEXT', content: '<p>Certificate order</p>' }, parentId: null, afterId: null },
+      },
+    })).json();
+    await request(`/api/courses/${course.id}/authoring/publish`, {
+      method: 'POST', body: { expectedRevision: saved.draft.revision, expectedActivePublicationId: null, requestId: randomUUID() },
+    });
+    return course.id;
+  }
   // Opposite lexical course order to the expected issuance order catches
   // grouping by courseId before sorting the certificate list.
-  const courseA = `ffffffff-${randomUUID().slice(9)}`;
-  const courseB = `00000000-${randomUUID().slice(9)}`;
+  const [courseA, courseB] = [await publishedFixture('Certificate course A'), await publishedFixture('Certificate course B')].sort().reverse();
   const oldId = randomUUID();
   const latestId = randomUUID();
   const otherId = randomUUID();
   const db = new DatabaseSync(process.env.SMOKE_SQLITE_FILE);
   try {
-    const courseInsert = db.prepare(
-      'INSERT INTO "Course" (id, title, description, instructorId, updatedAt) VALUES (?, ?, ?, ?, ?)',
-    );
     const certificateInsert = db.prepare(
       'INSERT INTO "Certificate" (id, userId, courseId, issuedAt, courseName, userName) VALUES (?, ?, ?, ?, ?, ?)',
     );
-    const now = new Date().toISOString();
-    courseInsert.run(courseA, 'Certificate course A', 'Smoke fixture', profile.id, now);
-    courseInsert.run(courseB, 'Certificate course B', 'Smoke fixture', profile.id, now);
     certificateInsert.run(oldId, profile.id, courseA, '2023-01-01T00:00:00.000+00:00', 'Certificate course A', 'SQLite Smoke');
     certificateInsert.run(latestId, profile.id, courseA, '2024-01-01T00:00:00.000+00:00', 'Certificate course A', 'SQLite Smoke');
     certificateInsert.run(otherId, profile.id, courseB, '2023-06-01T00:00:00.000+00:00', 'Certificate course B', 'SQLite Smoke');

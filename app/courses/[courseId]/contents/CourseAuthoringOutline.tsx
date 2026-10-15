@@ -23,12 +23,13 @@ export interface CourseAuthoringOutlineProps {
   onDelete: (content: CourseContent) => Promise<void>
   disabled?: boolean
   requestAction?: (action: () => void) => void
+  staged?: boolean
 }
 
 const icons = { TEXT: FileText, VIDEO: Video, AUDIO: Music, H5P: Box, QUIZ: HelpCircle }
 
 /** Author-only structure tool. The shell owns permissions, writes and dirty decisions. */
-export function CourseAuthoringOutline({ contents, selectedContentId, onContentSelect, onAddContent, onRename, onMoveContent, onReorder, onDelete, disabled = false, requestAction }: CourseAuthoringOutlineProps) {
+export function CourseAuthoringOutline({ contents, selectedContentId, onContentSelect, onAddContent, onRename, onMoveContent, onReorder, onDelete, disabled = false, requestAction, staged = false }: CourseAuthoringOutlineProps) {
   const entries = useMemo(() => authoringOutline(contents), [contents])
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [renameTarget, setRenameTarget] = useState<CourseContent | null>(null)
@@ -98,7 +99,7 @@ export function CourseAuthoringOutline({ contents, selectedContentId, onContentS
       {error && !renameTarget && !deleteTarget && <p role="alert" className="px-2 py-3 text-sm text-destructive">{error}</p>}
       {notice && <p role="status" className="px-2 py-3 text-sm text-muted-foreground">{notice}</p>}
     </div>
-    <p className="shrink-0 border-t px-4 py-3 text-xs text-muted-foreground">Gespeicherte Änderungen sind für eingeschriebene Lernende sichtbar.</p>
+    <p className="shrink-0 border-t px-4 py-3 text-xs text-muted-foreground">{staged ? 'Gespeicherte Entwürfe sind für Lernende noch nicht sichtbar.' : 'Gespeicherte Änderungen sind für eingeschriebene Lernende sichtbar.'}</p>
     <Dialog open={Boolean(renameTarget)} onOpenChange={open => { if (!open && !pending.current) { setRenameTarget(null); setError(null) } }}>
       <DialogContent className="sm:max-w-md" onCloseAutoFocus={restoreFocus} onEscapeKeyDown={event => { if (pending.current) event.preventDefault() }} onPointerDownOutside={event => { if (pending.current) event.preventDefault() }}><DialogHeader><DialogTitle>Inhalt umbenennen</DialogTitle><DialogDescription>Nur der Titel ändert sich. Inhalt und Untereinträge bleiben erhalten.</DialogDescription></DialogHeader>
         <form className="min-w-0 space-y-4" aria-busy={busy} onSubmit={event => { event.preventDefault(); if (renameTarget && renameTitle.trim()) void run(() => onRename(renameTarget.id, renameTitle.trim()), 'Titel gespeichert.', () => setRenameTarget(null)) }}>
@@ -109,7 +110,7 @@ export function CourseAuthoringOutline({ contents, selectedContentId, onContentS
       </DialogContent>
     </Dialog>
     <AlertDialog open={Boolean(deleteTarget)} onOpenChange={open => { if (!open && !pending.current) { setDeleteTarget(null); setError(null) } }}>
-      <AlertDialogContent onCloseAutoFocus={restoreFocus}><AlertDialogHeader><AlertDialogTitle>Inhalt löschen</AlertDialogTitle><AlertDialogDescription className="break-words [overflow-wrap:anywhere]">„{deleteTarget?.title}“ und alle zugehörigen Unterinhalte werden dauerhaft gelöscht.</AlertDialogDescription></AlertDialogHeader>{error && <p role="alert" className="text-sm text-destructive">{error}</p>}<AlertDialogFooter><AlertDialogCancel disabled={blocked}>Abbrechen</AlertDialogCancel><AlertDialogAction disabled={blocked} className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={event => { event.preventDefault(); if (deleteTarget) void run(() => onDelete(deleteTarget), 'Inhalt gelöscht.', () => setDeleteTarget(null)) }}>{busy ? 'Wird gelöscht …' : 'Löschen'}</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
+      <AlertDialogContent onCloseAutoFocus={restoreFocus}><AlertDialogHeader><AlertDialogTitle>Inhalt löschen</AlertDialogTitle><AlertDialogDescription className="break-words [overflow-wrap:anywhere]">{staged ? `„${deleteTarget?.title}“ und seine Unterinhalte werden aus dem Entwurf entfernt. Die veröffentlichte Fassung bleibt bis zur nächsten Veröffentlichung sichtbar.` : `„${deleteTarget?.title}“ und alle zugehörigen Unterinhalte werden dauerhaft gelöscht.`}</AlertDialogDescription></AlertDialogHeader>{error && <p role="alert" className="text-sm text-destructive">{error}</p>}<AlertDialogFooter><AlertDialogCancel disabled={blocked}>Abbrechen</AlertDialogCancel><AlertDialogAction disabled={blocked} className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={event => { event.preventDefault(); if (deleteTarget) void run(() => onDelete(deleteTarget), staged ? 'Aus dem Entwurf entfernt.' : 'Inhalt gelöscht.', () => setDeleteTarget(null)) }}>{busy ? 'Wird gelöscht …' : 'Löschen'}</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
     </AlertDialog>
   </div>
 }

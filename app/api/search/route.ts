@@ -7,6 +7,7 @@ import prisma from '@/lib/prisma';
 import { containsInsensitive } from '@/lib/server/database-query';
 import { sanitizeHtmlPreviewServer, sanitizeTextServer } from '@/lib/server/sanitize-html';
 import { canShowBadgeToViewer } from '@/lib/course-achievement-badge';
+import { publishedCourseWhere } from '@/lib/server/published-course';
 
 import { authOptions } from '../auth/[...nextauth]/options';
 
@@ -51,6 +52,7 @@ export async function GET(request: NextRequest) {
     const skip = (page - 1) * limit;
 
     const courseWhere = {
+      ...publishedCourseWhere,
       OR: [
         { title: containsInsensitive(query) },
         { description: containsInsensitive(query) },
@@ -195,7 +197,7 @@ export async function GET(request: NextRequest) {
               followers: true,
               following: true,
               posts: true,
-              courses: true,
+              courses: { where: publishedCourseWhere },
               projects: true,
             },
           },

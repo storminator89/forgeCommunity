@@ -16,6 +16,7 @@ export interface NewCourseContentDialogProps {
   parentTitle?: string
   onCreate: (input: NewCourseContentInput) => Promise<unknown>
   disabled?: boolean
+  staged?: boolean
 }
 
 /** Title and type are selected before the explicit, live create action. */
@@ -27,7 +28,7 @@ export function NewCourseContentDialog(props: NewCourseContentDialogProps) {
   </Dialog>
 }
 
-function NewCourseContentDraft({ onOpenChange, parentId, parentTitle, onCreate, disabled = false, pendingRef }: NewCourseContentDialogProps & { pendingRef: RefObject<boolean> }) {
+function NewCourseContentDraft({ onOpenChange, parentId, parentTitle, onCreate, disabled = false, staged = false, pendingRef }: NewCourseContentDialogProps & { pendingRef: RefObject<boolean> }) {
   const id = useId()
   const [title, setTitle] = useState('')
   const [type, setType] = useState<CourseContent['type']>('TEXT')
@@ -54,9 +55,9 @@ function NewCourseContentDraft({ onOpenChange, parentId, parentTitle, onCreate, 
         <div className="space-y-2"><Label htmlFor={`${id}-title`}>Titel</Label><Input id={`${id}-title`} autoFocus required maxLength={300} value={title} onChange={event => { setTitle(event.target.value); setError(null) }} placeholder="Zum Beispiel: Willkommen im Kurs" /></div>
         <div className="space-y-2"><Label>Inhaltstyp</Label><ContentTypeSelector selectedType={type} onSelectType={next => { setType(next); setError(null) }} disabled={busy} showDescriptions /></div>
       </fieldset>
-      <p className="text-sm text-muted-foreground">Mit „Anlegen“ wird der Eintrag für eingeschriebene Lernende sichtbar. Weitere Änderungen werden erst nach dem Speichern sichtbar.</p>
+      <p className="text-sm text-muted-foreground">{staged ? 'Der neue Eintrag wird nur im privaten Entwurf gespeichert. Für Lernende noch nicht sichtbar.' : 'Mit „Anlegen“ wird der Eintrag für eingeschriebene Lernende sichtbar. Weitere Änderungen werden erst nach dem Speichern sichtbar.'}</p>
       {error && <p role="alert" className="rounded-lg border border-destructive/30 p-3 text-sm text-destructive">{error}</p>}
-      <DialogFooter className="gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => onOpenChange(false)}>Abbrechen</Button><Button type="submit" disabled={busy || !title.trim()}>{saving ? 'Wird angelegt …' : 'Anlegen'}</Button></DialogFooter>
+      <DialogFooter className="gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => onOpenChange(false)}>Abbrechen</Button><Button type="submit" disabled={busy || !title.trim()}>{saving ? 'Wird angelegt …' : staged ? 'Im Entwurf anlegen' : 'Anlegen'}</Button></DialogFooter>
     </form>
   </DialogContent>
 }

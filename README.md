@@ -16,27 +16,31 @@ PostgreSQL is an explicit alternative.
 
 ## Screenshots
 
-Four actual app captures from the verified merged-main Chromium run on
-`1025767`. The public landing pages contain no member data. The quiz authoring
-and preview images use a disposable synthetic account/course, not production
-activity. See [screenshot provenance](docs/ui/README.md) for the exact commit,
-artifact paths, dimensions, hashes, and reviewed limits.
+These four actual app captures are **historical, pre-phase-2** evidence from the
+merged-main Chromium run on `1025767`. The public landing pages contain no
+member data. The quiz authoring and preview images use a disposable synthetic
+account/course, not production activity. The two course images show the earlier
+immediate-save editor, not the staged-publication workspace described below.
+New phase-2 screenshots will be added only after an actual Playwright CI run of
+the intended source has produced and validated them. See [screenshot
+provenance](docs/ui/README.md) for the exact older commit, artifact paths,
+dimensions, hashes, and reviewed limits.
 
 ![ForgeCommunity public landing page, desktop light mode](docs/ui/readme/landing-desktop-light.png)
 
-Quiz authoring after save, 1280px light mode. The independently scrollable editor
+Earlier quiz authoring after save, 1280px light mode. The independently scrollable editor
 panel is positioned at the question and save controls; not every field is shown.
 Synthetic example content.
 
-![Current course quiz authoring with nested outline and saved-state controls](docs/ui/readme/course-quiz-authoring-desktop-light.png)
+![Historical course quiz authoring with nested outline and saved-state controls](docs/ui/readme/course-quiz-authoring-desktop-light.png)
 
 <details>
-<summary>Course preview, 1280px light mode, synthetic unsaved draft</summary>
+<summary>Earlier course preview, 1280px light mode, synthetic unsaved draft</summary>
 
 The course preview displays a local unsaved quiz draft. Rehearsal answers stay
 inside the preview and do not record a learner attempt or completion.
 
-![Current course preview showing an isolated synthetic quiz draft](docs/ui/readme/course-quiz-preview-desktop-light.png)
+![Historical course preview showing an isolated synthetic quiz draft](docs/ui/readme/course-quiz-preview-desktop-light.png)
 
 </details>
 
@@ -53,7 +57,7 @@ inside the preview and do not record a learner attempt or completion.
 | --- | --- | --- |
 | Community | Posts and replies, topic filters, likes, bounded feed/comment pagination, author-selected solutions, and reporting | `/community` |
 | Members | Search/filter, grid/list views, profiles, following, and skill endorsements | `/members`, `/profile/[id]` |
-| Courses | Course creation, free self-enrollment with capacity checks, nested content, text/video/audio/H5P/quiz lessons, saved progress, and completion-gated certificate downloads | `/courses`, `/courses/new`, `/courses/[courseId]/contents` |
+| Courses | Private course drafts, review/publish/version restore, free self-enrollment with capacity checks, nested text/video/audio/H5P/quiz lessons, revision-aware progress, and completion-gated certificate downloads | `/courses`, `/courses/authoring`, `/courses/new`, `/courses/[courseId]/contents` |
 | Personal learning | Optional private learning goals, completion milestones, and course-reward history; administrator-approved quiz learning can qualify for a verified-learning badge and opt-in ranking | `/courses/goals`, community reward panels, profiles |
 | Knowledge base | Published articles, category/tag search, rich-text authoring, and private drafts | `/knowledgebase`, `/knowledgebase/[id]`, `/knowledgebase/new-article`, `/knowledgebase/drafts` |
 | Resources and projects | Resource browsing/details, project submission/details, likes and project comments | `/resources`, `/resources/[id]`, `/projects/new`, `/projects/[projectId]`, `/showcases` |
@@ -74,6 +78,10 @@ every App Router page, including redirects.
 - Progress is server-owned and content-revision aware. Non-quiz lessons use an
   explicit completion action; quizzes are graded on the server. An issued
   certificate remains a historical credential after later course edits.
+- A saved course draft is private. Learners and public discovery see the latest
+  published version only; a new course is not discoverable or enrollable before
+  its first publication. Changed lesson bodies must be completed again in the
+  current version, while earlier activity and issued certificates remain.
 - H5P packages can be imported, reused, and played in an isolated iframe. There
   is no built-in H5P authoring tool or centralized xAPI result store. External
   media providers must permit embedding. See [H5P](docs/H5P.md).
@@ -87,21 +95,22 @@ every App Router page, including redirects.
 
 ### Course authoring
 
-Course owners work in **Bearbeiten**: select a lesson in the nested outline,
-choose a content type when adding a topic, and edit it directly. The outline
-keeps keyboard-accessible structure actions alongside the editor. **Kurs prüfen**
-collects actionable content checks and a course-path overview.
+Course owners can find private and published courses under **Meine Kursentwürfe**
+at `/courses/authoring`. In the author workspace they edit metadata and nested
+lessons, explicitly save a private draft, then use **Änderungen veröffentlichen**
+to review blockers and learner impact before publishing. Saving alone never
+changes the live course. The review shows added, removed, changed, and
+renamed/reordered content and warns about possible completion/reward changes.
 
-**Vorschau** opens an isolated course preview, including an unsaved draft when
-present. Reading and quiz rehearsal there do not save learner attempts or
-completion. **Lernen** shows the saved course content; actual progress actions
-remain subject to the normal enrollment and learner rules. Learners do not get
-authoring controls.
-
-Saving in the editor updates the live course immediately. Preview and readiness
-checks do not add a separate publication/release step. Unsaved-change prompts
-protect local edits, and explicit save/error states distinguish those edits from
-persisted content. See the [course editor guide](docs/COURSE-EDITOR.md).
+**Vorschau** includes the saved draft and, where present, a local unsaved lesson
+edit. Reading and quiz rehearsal there do not save attempts or completion.
+**Lernen** shows the current published version, if one exists. **Versionen** can
+copy an older publication into a new private draft; it does not roll back the
+live version until that draft is reviewed and published. **Entwurf verwerfen**
+resets to the current publication, or clears an unpublished course's draft,
+without deleting the course. Unsaved-change prompts protect local edits;
+revision conflicts ask authors to compare/reload rather than silently merge.
+Learners do not get authoring controls. See the [course editor guide](docs/COURSE-EDITOR.md).
 
 ## Local development
 
@@ -131,7 +140,8 @@ local setup. Do not commit `.env` or reuse example/CI secrets. Optional Google
 OAuth is disabled when its two environment values are blank.
 
 Select SQLite **before installation**, so the postinstall step generates the
-correct Prisma client. Use an absolute database path:
+correct Prisma client. Use a **new, empty** database at an absolute path for
+phase 2; do not reuse a development database containing older courses:
 
 ```bash
 export DATABASE_PROVIDER=sqlite
@@ -139,6 +149,7 @@ export DATABASE_URL="file:$PWD/data/forge.db"
 mkdir -p data
 npm ci
 npm run db:deploy
+npm run db:publication:ready
 npm run dev
 ```
 
@@ -146,6 +157,15 @@ Open [localhost:3013](http://localhost:3013) and create an account through the
 registration page. The exported database values take precedence over the
 placeholder in `.env`; replace that placeholder if you prefer to configure the
 same absolute path entirely in `.env`.
+
+The read-only readiness command checks the recorded migration names/checksums,
+saved drafts, and active-publication pointers. If it fails, stop and inspect
+the database; no setup step here deletes or converts existing data. Back up an
+older database and provision a fresh one for this release. Keep course images
+in private, persistent `data/course-assets` storage outside `public/` and back
+them up together with the database. Set `COURSE_ASSET_STORAGE_PATH` if you
+need another private, persistent location; it cannot point inside `public/`
+or through symlinks.
 
 An optional seed is restricted to a disposable, non-production database:
 
@@ -163,6 +183,7 @@ not an idempotent production migration.
 npm run dev                  # Development server on port 3013
 npm run db:generate          # Regenerate SQLite schema and selected Prisma client
 npm run db:deploy            # Apply the selected provider's tracked SQL history
+npm run db:publication:ready # Read-only phase-2 schema/data readiness guard
 npm run build                # Webpack production build + standalone preparation
 npm run start                # Run the prepared standalone build on port 3013
 ```
@@ -190,8 +211,8 @@ checksummed SQLite migrations transactionally and does not seed demo accounts.
 
 Persistent volumes hold:
 
-- `sqlite_data`: the database and private H5P packages
-- `uploads`: article/course/project and other public image uploads
+- `sqlite_data`: the database, private H5P packages, and private course images
+- `uploads`: article/project and older public image uploads
 - `private_uploads`: private chat attachments
 
 `docker compose down --volumes` deletes these volumes and their data. Back up
@@ -200,6 +221,9 @@ online backup or stop writes and copy the database with its journal/WAL state.
 Use a local persistent filesystem and one application instance per SQLite file;
 do not share that file over a network filesystem or between app containers.
 SQLite's case-insensitive matching remains limited for non-ASCII text.
+The SQLite Compose entrypoint applies migrations and runs the read-only
+publication readiness guard before serving. It refuses an old database with
+courses lacking drafts; it does not erase those courses.
 
 Configure canonical HTTPS `NEXTAUTH_URL` and `NEXT_PUBLIC_APP_URL` in production.
 Set `TRUST_PROXY=true` only behind a trusted proxy that overwrites forwarded
@@ -211,15 +235,22 @@ out; see the [security upgrade notes](docs/SECURITY-MODERNIZATION.md).
 
 Use `docker-compose.postgresql.yml` with an independent `POSTGRES_PASSWORD` and
 a `DATABASE_URL` that uses the Compose service hostname `db`. Back up
-`postgres_data`, `h5p_data`, `uploads`, and `private_uploads` together.
+`postgres_data`, `h5p_data`, `course_assets`, `uploads`, and `private_uploads`
+together. `course_assets` mounts private `/app/data/course-assets`; keep it
+persistent and outside the public upload volume.
 
 The PostgreSQL stack **does not migrate its schema on startup**. Select
 `DATABASE_PROVIDER=postgresql`, provide the connection URL, and generate the
-matching client before running the deployment runner. The supported paths are:
+matching client before running the deployment runner. Phase 2 supports a
+**verified empty schema**: `npm run db:deploy -- --initialize-empty-schema`
+installs the fixed baseline and upgrades in one transaction and refuses
+pre-existing schema objects. Then run `npm run db:publication:ready` with the
+same provider and URL. The Compose entrypoint runs this read-only guard again
+and refuses startup if it fails.
 
-- **Verified empty schema:** `npm run db:deploy -- --initialize-empty-schema`
-  installs the fixed baseline and upgrades in one transaction; it refuses
-  pre-existing schema objects.
+The deployment runner also has these history-repair paths, but they are **not
+phase-2 upgrade support for a database with pre-publication courses**:
+
 - **Tracked existing installation:** `npm run db:deploy` checks history and
   applies the remaining ordered upgrades.
 - **Legacy schema with `SkillEndorsement` but no upgrade history:** after verifying
@@ -227,14 +258,21 @@ matching client before running the deployment runner. The supported paths are:
   `npm run db:deploy -- --baseline-current-schema`. Do not use this option to
   bless an arbitrary current or populated schema.
 
+An older database may accept additive SQL and still fail phase-2 readiness
+because historical courses lack saved drafts. Back it up and provision a new
+empty database; do not reset or delete it automatically. See [publication
+storage](docs/COURSE-PUBLICATION-STORAGE.md).
+
 For the Compose deployment, run the appropriate command in a one-off app
 container before starting the application, for example for a verified empty schema:
 
 ```bash
 docker compose -f docker-compose.postgresql.yml build app
 docker compose -f docker-compose.postgresql.yml up -d db
-docker compose -f docker-compose.postgresql.yml run --rm app \
-  node scripts/db-deploy.mjs --initialize-empty-schema
+docker compose -f docker-compose.postgresql.yml run --rm --entrypoint node app \
+  scripts/db-deploy.mjs --initialize-empty-schema
+docker compose -f docker-compose.postgresql.yml run --rm --entrypoint node app \
+  scripts/assert-course-publication-ready.mjs
 docker compose -f docker-compose.postgresql.yml up -d
 ```
 
@@ -276,7 +314,7 @@ server; never aim it at a production or personal database. Run
 1280px and 320px; the journey suites also run at 390px. Some dynamic route-sweep
 responses are synthetic API fixtures, as documented in [route-sweep coverage](docs/ROUTE-SWEEP-QA.md).
 
-The verified merged-main baseline is
+The **historical, pre-phase-2** verified merged-main baseline is
 [run 38717775096](https://github.com/storminator89/forgeCommunity/actions/runs/38717775096)
 on `102576735dd3b7cb23c8657e3a74098228582bc6`, checked on 15 October 2026.
 All six jobs passed: application quality, strict security audit, PostgreSQL
@@ -286,6 +324,14 @@ results apply to that commit; they are not a perpetual security guarantee or
 proof that later code has passed. See the [course editor guide](docs/COURSE-EDITOR.md)
 for its current workflow/acceptance scope and the
 [release handoff](docs/RELEASE-HANDOFF-2026-10-15.md) for earlier integration history.
+
+No CI run on this phase-2 documentation/source head is claimed here. The
+current workflow defines quality, strict audit, browser QA, and fresh
+PostgreSQL publication-runtime checks; their results must be inspected on the
+exact commit before claiming the phase-2 release has passed. The checked-in
+course editor screenshots describe the earlier author journey and are not
+phase-2 publication-browser evidence; new captures remain pending real CI
+artifacts and provenance review.
 
 This is repository integration evidence. Production deployment still requires
 operational review and a backed-up migration rehearsal. Chromium viewport tests
@@ -317,6 +363,7 @@ within the existing routes and product boundaries. Screenshots show real app
 rendering; no generated mock interfaces or added browser/phone chrome are used.
 
 - [Course editor](docs/COURSE-EDITOR.md)
+- [Staged publication storage and fresh-database boundary](docs/COURSE-PUBLICATION-STORAGE.md)
 - [H5P import, storage, and player](docs/H5P.md)
 - [Responsible rewards and private learning goals](docs/RESPONSIBLE-REWARDS.md)
 - [Accepted solutions](docs/ACCEPTED-SOLUTIONS.md)

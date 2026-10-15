@@ -13,6 +13,7 @@
     "db:schema:sqlite": "node scripts/generate-sqlite-schema.mjs",
     "db:generate": "npm run db:schema:sqlite && prisma generate",
     "db:deploy": "node scripts/db-deploy.mjs",
+    "db:publication:ready": "node scripts/assert-course-publication-ready.mjs",
     "db:seed": "ts-node --project prisma/tsconfig.seed.json prisma/seed.ts",
     "test": "jest",
     "test:watch": "jest --watch",

@@ -1,0 +1,81 @@
+import { createHash } from 'node:crypto';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { DatabaseSync } from 'node:sqlite';
+import { sqlitePath } from './sqlite-init.mjs';
+
+const root = fileURLToPath(new URL('../', import.meta.url));
+
+function expectedHistory(provider) {
+  const directory = resolve(root, provider === 'sqlite' ? 'prisma/sqlite-migrations' : 'prisma/postgresql-upgrades');
+  const names = readdirSync(directory).filter(name => /^\d+_[\w-]+\.sql$/.test(name)).sort();
+  const tail = provider === 'sqlite' ? '0010_staged_course_publication.sql' : '0009_staged_course_publication.sql';
+  if (names.at(-1) !== tail) throw new Error('Publication migration tail is not the reviewed fresh-install version.');
+  return names.map(name => ({
+    name,
+    checksum: createHash('sha256').update(readFileSync(resolve(directory, name))).digest('hex'),
+  }));
+}
+
+async function inspect(query, provider) {
+  const historyTable = provider === 'sqlite' ? '_app_migrations' : '_app_schema_upgrades';
+  let actual;
+  try { actual = await query(`SELECT name, checksum FROM "${historyTable}" ORDER BY name`); }
+  catch { throw new Error('Publication schema is missing or incomplete; run the reviewed database deployment on an empty database.'); }
+  if (JSON.stringify(actual) !== JSON.stringify(expectedHistory(provider))) {
+    throw new Error('Publication migration history is missing, divergent or has changed checksums; startup refused.');
+  }
+  const missingDraft = await query(`SELECT c."id" FROM "Course" c
+    LEFT JOIN "CourseDraft" d ON d."courseId" = c."id"
+    WHERE d."courseId" IS NULL LIMIT 1`);
+  if (missingDraft.length) {
+    throw new Error(`Legacy course ${missingDraft[0].id} has no saved draft. This release requires a fresh empty database; back up the existing database and do not serve it with phase 2.`);
+  }
+  const invalidPointer = await query(`SELECT c."id" FROM "Course" c
+    LEFT JOIN "CoursePublication" p ON p."id" = c."activePublicationId" AND p."courseId" = c."id"
+    WHERE c."activePublicationId" IS NOT NULL AND p."id" IS NULL LIMIT 1`);
+  if (invalidPointer.length) throw new Error(`Course ${invalidPointer[0].id} has an invalid active publication; startup refused.`);
+  return true;
+}
+
+export async function assertCoursePublicationReady(url, provider) {
+  if (provider === 'sqlite') {
+    const path = sqlitePath(url);
+    if (!existsSync(path)) throw new Error('SQLite database does not exist; run npm run db:deploy on a fresh database first.');
+    const db = new DatabaseSync(path, { readOnly: true });
+    try {
+      db.exec('BEGIN');
+      try {
+        const result = await inspect(sql => db.prepare(sql).all(), provider);
+        db.exec('COMMIT');
+        return result;
+      } catch (error) { db.exec('ROLLBACK'); throw error; }
+    } finally { db.close(); }
+  }
+  if (provider !== 'postgresql' || !/^postgres(?:ql)?:\/\//.test(url ?? '')) {
+    throw new Error('Set DATABASE_PROVIDER and DATABASE_URL for SQLite or PostgreSQL.');
+  }
+  const schema = new URL(url).searchParams.get('schema') ?? 'public';
+  if (!schema) throw new Error('PostgreSQL schema must not be empty.');
+  const { default: pg } = await import('pg');
+  const client = new pg.Client({ connectionString: url });
+  await client.connect();
+  try {
+    await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    try {
+      await client.query(`SET LOCAL search_path TO "${schema.replaceAll('"', '""')}"`);
+      const selected = (await client.query('SELECT current_schema() AS name')).rows[0].name;
+      if (selected !== schema) throw new Error(`PostgreSQL schema ${schema} is unavailable.`);
+      const result = await inspect(async sql => (await client.query(sql)).rows, provider);
+      await client.query('COMMIT');
+      return result;
+    } catch (error) { await client.query('ROLLBACK'); throw error; }
+  } finally { await client.end(); }
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  if (existsSync('.env')) process.loadEnvFile('.env');
+  await assertCoursePublicationReady(process.env.DATABASE_URL, process.env.DATABASE_PROVIDER ?? 'postgresql');
+  console.log('Fresh-install course publication storage is ready.');
+}

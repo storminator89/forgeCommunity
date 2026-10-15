@@ -22,7 +22,7 @@ export async function POST(
     for (let attempt = 0; attempt < 4; attempt++) {
       try {
         certificate = await prisma.$transaction(async (tx) => {
-          const course = await tx.course.findUnique({ where: { id: courseId }, select: { title: true } });
+          const course = await tx.course.findUnique({ where: { id: courseId }, select: { title: true, activePublicationId: true } });
           if (!course) return null;
           const user = await tx.user.findUnique({ where: { id: session.user.id }, select: { name: true, email: true } });
           if (!user) return null;
@@ -32,6 +32,7 @@ export async function POST(
           });
           // A previously issued credential remains valid after later edits.
           if (existing) return existing;
+          if (!course.activePublicationId) return false;
           const enrollment = await tx.enrollment.findUnique({
             where: { userId_courseId: { userId: session.user.id, courseId } },
             select: { id: true },
@@ -41,6 +42,7 @@ export async function POST(
             data: {
               id: uuidv4(), userId: session.user.id, courseId,
               issuedAt: new Date(), courseName: course.title, userName: user.name || user.email,
+              publicationId: course.activePublicationId,
             },
           });
         }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });

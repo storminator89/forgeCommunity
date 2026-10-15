@@ -12,11 +12,10 @@ import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { format } from "date-fns"
 import { de } from "date-fns/locale"
-import { Calendar as CalendarIcon, X, Upload } from "lucide-react"
+import { Calendar as CalendarIcon, X } from "lucide-react"
 import { Sidebar } from "@/components/Sidebar"
 import { UserNav } from "@/components/user-nav"
 import { ThemeToggle } from "@/components/theme-toggle"
-import Image from 'next/image'
 import Link from 'next/link'
 
 export default function NewCoursePage() {
@@ -33,24 +32,10 @@ function CourseComposer({ session }: { session: Session | null }) {
   const [price, setPrice] = useState('')
   const [currency, setCurrency] = useState('EUR')
   const [maxStudents, setMaxStudents] = useState('')
-  const [image, setImage] = useState<File | null>(null)
-  const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const router = useRouter()
-
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0]
-      setImage(file)
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setImagePreview(reader.result as string)
-      }
-      reader.readAsDataURL(file)
-    }
-  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -77,7 +62,6 @@ function CourseComposer({ session }: { session: Session | null }) {
       formData.append('price', price)
       formData.append('currency', currency)
       formData.append('maxStudents', maxStudents)
-      if (image) formData.append('image', image)
 
       const response = await fetch('/api/courses', {
         method: 'POST',
@@ -89,7 +73,9 @@ function CourseComposer({ session }: { session: Session | null }) {
         throw new Error(errorData.error || 'Fehler beim Erstellen des Kurses')
       }
 
-      router.push('/courses')
+      const created = await response.json() as { id?: unknown }
+      if (typeof created.id !== 'string' || !created.id) throw new Error('Der Kursentwurf wurde angelegt, aber seine Kennung fehlt. Bitte öffne deinen Autorenarbeitsplatz erneut.')
+      router.push(`/courses/${encodeURIComponent(created.id)}/contents`)
     } catch (error) {
       console.error('Fehler beim Erstellen des Kurses:', error)
       setError(error instanceof Error ? error.message : 'Fehler beim Erstellen des Kurses. Bitte versuchen Sie es erneut.')
@@ -104,17 +90,17 @@ function CourseComposer({ session }: { session: Session | null }) {
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <AppHeader>
           <div className="flex items-center justify-between gap-3">
-            <h1 className="min-w-0 truncate">Neuen Kurs erstellen</h1>
+            <h1 className="min-w-0 truncate">Neuen Kursentwurf anlegen</h1>
             <div className="flex shrink-0 items-center gap-1 sm:gap-2"><ThemeToggle /><UserNav /></div>
           </div>
         </AppHeader>
         <main id="page-content" tabIndex={-1} className="min-w-0 flex-1 overflow-y-auto">
           <div className="mx-auto max-w-[1200px] px-4 pb-16 pt-7 sm:px-6 sm:pt-10 lg:px-8">
-            <Link href="/courses" className="inline-flex min-h-11 items-center text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:rounded-sm">← Zur Kursübersicht</Link>
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-1"><Link href="/courses" className="inline-flex min-h-11 items-center text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:rounded-sm">← Zur Kursübersicht</Link><Link href="/courses/authoring" className="inline-flex min-h-11 items-center text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:rounded-sm">Meine Kursentwürfe</Link></div>
             <div className="mt-3 border-b pb-7">
               <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Wissen weitergeben</p>
-              <h2 className="max-w-2xl text-[clamp(1.65rem,1.2rem+2vw,2.4rem)] font-semibold leading-tight tracking-tight">Ein neuer Kurs für die Community.</h2>
-              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">Beschreibe das Thema und lege die wichtigsten Eckdaten fest. Die Kursinhalte kannst du danach verwalten.</p>
+              <h2 className="max-w-2xl text-[clamp(1.65rem,1.2rem+2vw,2.4rem)] font-semibold leading-tight tracking-tight">Ein neuer Kursentwurf.</h2>
+              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">Beschreibe das Thema und lege die wichtigsten Eckdaten fest. Nach dem Anlegen bearbeitest du den privaten Entwurf und veröffentlichst ihn später ausdrücklich. Für Lernende ist er bis dahin nicht sichtbar.</p>
             </div>
 
             <div className="mt-8 grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1fr)_260px] lg:gap-12">
@@ -166,22 +152,16 @@ function CourseComposer({ session }: { session: Session | null }) {
                   </div>
                 </section>
 
-                <section aria-labelledby="course-image-title" className="space-y-4 border-t pt-8">
-                  <div><h3 id="course-image-title" className="text-lg font-semibold">Kursbild</h3><p className="mt-1 text-sm text-muted-foreground">Optional. Ein Bild macht dein Thema leichter erkennbar.</p></div>
-                  <div className="flex min-w-0 flex-wrap items-center gap-4">
-                    <label htmlFor="image" className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-[10px] border border-input bg-background px-4 py-2 text-sm font-semibold text-foreground hover:bg-accent hover:text-accent-foreground focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"><Upload aria-hidden="true" className="h-4 w-4" />Bild auswählen<input id="image" name="image" type="file" className="sr-only" onChange={handleImageChange} accept="image/*" /></label>
-                    {imagePreview && <div className="flex min-w-0 items-center gap-3"><Image src={imagePreview} alt="Vorschau" width={64} height={64} className="h-16 w-16 shrink-0 rounded-xl border object-cover" /><span className="min-w-0 truncate text-sm text-muted-foreground">{image?.name}</span></div>}
-                  </div>
-                </section>
+                <section aria-labelledby="course-image-title" className="space-y-2 border-t pt-8"><h3 id="course-image-title" className="text-lg font-semibold">Kursbild</h3><p className="text-sm leading-relaxed text-muted-foreground">Ein privates Titelbild kannst du im Autorenarbeitsplatz hochladen, sobald der Kursentwurf angelegt ist.</p></section>
 
                 <div className="space-y-5 border-t pt-7">
                   {error && <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">{error}</p>}
-                  <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"><Button asChild variant="outline"><Link href="/courses">Abbrechen</Link></Button><Button type="submit" disabled={isSubmitting} aria-busy={isSubmitting}>{isSubmitting ? 'Kurs wird erstellt…' : 'Kurs erstellen'}</Button></div>
+                  <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"><Button asChild variant="outline"><Link href="/courses">Abbrechen</Link></Button><Button type="submit" disabled={isSubmitting} aria-busy={isSubmitting}>{isSubmitting ? 'Entwurf wird angelegt …' : 'Kursentwurf anlegen'}</Button></div>
                 </div>
               </form>
               <aside className="h-fit rounded-2xl border bg-card p-5 text-sm leading-relaxed text-muted-foreground" aria-label="Hinweise zur Kurserstellung">
                 <p className="font-semibold text-foreground">Auf einen Blick</p>
-                <ul className="mt-3 list-inside list-disc space-y-2"><li>Gib deinem Kurs einen klaren Titel.</li><li>Mit optionalen Terminen wissen Teilnehmende, wann es losgeht.</li><li>Nach dem Erstellen kannst du die Kursinhalte verwalten.</li></ul>
+                <ul className="mt-3 list-inside list-disc space-y-2"><li>Gib deinem Kurs einen klaren Titel.</li><li>Termine bleiben optional.</li><li>Nach dem Anlegen bearbeitest du den privaten Entwurf und lädst bei Bedarf ein Bild hoch.</li><li>Erst deine spätere Veröffentlichung macht den Kurs für Lernende sichtbar.</li></ul>
               </aside>
             </div>
           </div>

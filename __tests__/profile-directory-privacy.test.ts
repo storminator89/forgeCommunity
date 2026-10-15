@@ -54,6 +54,7 @@ it('keeps account email, last login, and recovery fields out of another member\'
       lastLogin: false,
       _count: expect.objectContaining({ select: expect.objectContaining({
         posts: { where: { published: true } },
+        courses: { where: { activePublicationId: { not: null } } },
         articles: { where: { isPublished: true } },
       }) }),
     }),

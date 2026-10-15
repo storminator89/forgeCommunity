@@ -54,7 +54,7 @@ async function responseData<T>(response: Response, fallback: string): Promise<T>
   return response.json() as Promise<T>
 }
 
-export function CourseContentsEditor({ courseId }: { courseId: string }) {
+export function CourseContentsEditor({ courseId, forceLearner = false, onReturnToAuthor }: { courseId: string; forceLearner?: boolean; onReturnToAuthor?: () => void }) {
   const router = useRouter()
   const { data: session, status } = useSession()
   const [course, setCourse] = useState<CourseDetails | null>(null)
@@ -75,7 +75,7 @@ export function CourseContentsEditor({ courseId }: { courseId: string }) {
   const [sidebarWidth, setSidebarWidth] = useState(300)
   const [resizing, setResizing] = useState(false)
   const resizeStart = useRef({ x: 0, width: 300 })
-  const [mode, setMode] = useState<'author' | 'learner'>('author')
+  const [mode, setMode] = useState<'author' | 'learner'>(forceLearner ? 'learner' : 'author')
   const [createOpen, setCreateOpen] = useState(false)
   const [createParentId, setCreateParentId] = useState<string | null>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
@@ -92,7 +92,7 @@ export function CourseContentsEditor({ courseId }: { courseId: string }) {
   const selected = useMemo(() => selectedId ? findContent(contents, selectedId) : null, [contents, selectedId])
   const savedDraft = editingId ? findContent(contents, editingId) : null
   const dirty = Boolean(draft && savedDraft && authoringSignature(draft) !== authoringSignature(savedDraft))
-  const canManage = Boolean(course?.canEdit && session?.user?.id)
+  const canManage = Boolean(!forceLearner && course?.canEdit && session?.user?.id)
   const authorMode = canManage && mode === 'author'
   const completedIds = progress?.completedContentIds ?? []
   const selectedComplete = Boolean(selected && completedIds.includes(selected.id))
@@ -125,7 +125,7 @@ export function CourseContentsEditor({ courseId }: { courseId: string }) {
       const requestedContent = requested ? findContent(tree, requested) : null
       if (requestedContent) {
         setSelectedId(requestedContent.id)
-        if (details.canEdit) { setEditingId(requestedContent.id); setDraft(requestedContent) }
+        if (details.canEdit && !forceLearner) { setEditingId(requestedContent.id); setDraft(requestedContent) }
       }
       setLoading(false)
     }).catch(error => {
@@ -134,7 +134,7 @@ export function CourseContentsEditor({ courseId }: { courseId: string }) {
       setLoading(false)
     })
     return () => controller.abort()
-  }, [courseId, retry, status])
+  }, [courseId, forceLearner, retry, status])
 
   useEffect(() => {
     if (notice?.type !== 'success') return
@@ -213,13 +213,13 @@ export function CourseContentsEditor({ courseId }: { courseId: string }) {
     setDraft(edit && canManage ? { ...content } : null)
   }
 
-  const setCompletion = async (contentId: string, completed: boolean, contentUpdatedAt?: string) => {
-    if (authorMode || progressLock.current || !progress?.canTrack) return
+  const setCompletion = async (contentId: string, completed: boolean, publicationId?: string | null, contentVersionToken?: string | null) => {
+    if (authorMode || progressLock.current || !progress?.canTrack || !publicationId || !contentVersionToken) return
     progressLock.current = true
     setProgressBusy(true)
     try {
       const response = await fetch(`/api/courses/${courseId}/progress`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contentId, completed, contentUpdatedAt }),
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contentId, completed, publicationId, contentVersionToken }),
       })
       const changed = await responseData<Pick<CourseProgressSnapshot, 'completedContentIds' | 'complete'>>(response, 'Der Kursfortschritt konnte nicht gespeichert werden.')
       setProgress(previous => previous ? { ...previous, ...changed } : previous)
@@ -380,6 +380,7 @@ export function CourseContentsEditor({ courseId }: { courseId: string }) {
               <Button variant="outline" size="icon" className="shrink-0" aria-label={topicsOpen ? 'Inhaltsverzeichnis schließen' : 'Inhaltsverzeichnis öffnen'} aria-expanded={topicsOpen} aria-controls="course-contents-navigation" onClick={() => setTopicsOpen(value => !value)}>
                 {topicsOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
               </Button>
+              {onReturnToAuthor && <Button type="button" size="sm" variant="outline" className="shrink-0" onClick={onReturnToAuthor}>Zum Entwurf</Button>}
               <h1 className="min-w-0 line-clamp-2 break-words [overflow-wrap:anywhere] max-sm:text-base" title={course?.name || 'Kursinhalt'}>{course?.name || 'Kursinhalt'}</h1>
             </div>
             <div className="flex shrink-0 items-center gap-1 sm:gap-2"><ThemeToggle /><UserNav /></div>
@@ -436,7 +437,7 @@ export function CourseContentsEditor({ courseId }: { courseId: string }) {
                       onSubmit={updateContent} onContentChange={change => {
                         setDraft(previous => previous ? { ...previous, ...change } : { ...selected, ...change })
                       }} onCancel={cancelEdit} />
-                  </div> : <div className="space-y-6">{selected.type === 'TEXT' && typeof selected.content === 'string' && !selected.content.trim() ? <div className="space-y-3">{selected.subContents?.length ? <><h3 className="text-sm font-semibold">Themen in diesem Kapitel</h3>{selected.subContents.map(child => <button type="button" key={child.id} className="block min-h-11 w-full rounded-xl border bg-card p-4 text-left text-sm hover:border-input focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring" onClick={() => requestNavigation(() => selectContent(child.id, authorMode))}>{child.title}</button>)}</> : <p className="text-sm text-muted-foreground">Für dieses Thema wurde noch kein Inhalt hinterlegt.</p>}</div> : <ContentRenderer key={selected.id} content={selected} learnerQuiz={!authorMode && Boolean(progress?.canTrack)} onQuizPassed={authorMode ? undefined : () => { void refreshProgress().catch(() => setNotice({ type: 'error', message: 'Quiz bestanden. Bitte lade den Fortschritt erneut.' })) }} />}{selectedTrackable && <div className="border-t pt-5"><Button type="button" variant={selectedComplete ? 'outline' : 'default'} disabled={progressBusy || mutating || (!selectedComplete && !selected.updatedAt)} onClick={() => void setCompletion(selected.id, !selectedComplete, selected.updatedAt)}>{progressBusy ? 'Wird gespeichert …' : selectedComplete ? 'Abschlussmarkierung entfernen' : 'Als abgeschlossen markieren'}</Button><p className="mt-2 text-sm text-muted-foreground">Bestätige selbst, wenn du diesen Inhalt abgeschlossen hast.</p></div>}</div>}
+                  </div> : <div className="space-y-6">{selected.type === 'TEXT' && typeof selected.content === 'string' && !selected.content.trim() ? <div className="space-y-3">{selected.subContents?.length ? <><h3 className="text-sm font-semibold">Themen in diesem Kapitel</h3>{selected.subContents.map(child => <button type="button" key={child.id} className="block min-h-11 w-full rounded-xl border bg-card p-4 text-left text-sm hover:border-input focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring" onClick={() => requestNavigation(() => selectContent(child.id, authorMode))}>{child.title}</button>)}</> : <p className="text-sm text-muted-foreground">Für dieses Thema wurde noch kein Inhalt hinterlegt.</p>}</div> : <ContentRenderer key={selected.id} content={selected} learnerQuiz={!authorMode && Boolean(progress?.canTrack)} onQuizPassed={authorMode ? undefined : () => { void refreshProgress().catch(() => setNotice({ type: 'error', message: 'Quiz bestanden. Bitte lade den Fortschritt erneut.' })) }} />}{selectedTrackable && <div className="border-t pt-5"><Button type="button" variant={selectedComplete ? 'outline' : 'default'} disabled={progressBusy || mutating || !selected.publicationId || !selected.contentVersionToken} onClick={() => void setCompletion(selected.id, !selectedComplete, selected.publicationId, selected.contentVersionToken)}>{progressBusy ? 'Wird gespeichert …' : selectedComplete ? 'Abschlussmarkierung entfernen' : 'Als abgeschlossen markieren'}</Button><p className="mt-2 text-sm text-muted-foreground">Bestätige selbst, wenn du diesen Inhalt abgeschlossen hast.</p></div>}</div>}
                 </div> : <div className="mx-auto flex max-w-md flex-col items-center gap-3 px-6 py-16 text-center"><FileText className="h-8 w-8 text-muted-foreground" /><h2 className="text-xl font-semibold">{contents.length ? 'Wähle ein Thema' : 'Noch keine Kursinhalte'}</h2><p className="text-sm text-muted-foreground">{contents.length ? authorMode ? 'Wähle in der Kursstruktur einen Inhalt zum Ausarbeiten.' : 'Die Inhalte findest du im Inhaltsverzeichnis.' : authorMode ? 'Lege in der Kursstruktur den ersten Inhalt an.' : 'Für diesen Kurs wurden noch keine Inhalte angelegt.'}</p>{authorMode && <Button type="button" disabled={mutating} onClick={() => requestNavigation(() => openCreate(null))}><Plus aria-hidden="true" className="mr-2 h-4 w-4" />Inhalt hinzufügen</Button>}</div>}
               </section>
               </div>

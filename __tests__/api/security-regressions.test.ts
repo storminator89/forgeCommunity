@@ -9,8 +9,8 @@ import { GET as getAdminUsers } from '@/app/api/admin/users/route'
 import { GET as getMembers } from '@/app/api/members/route'
 import { PUT as updateProfile } from '@/app/api/user/profile/route'
 import { POST as issueCertificate } from '@/app/api/courses/[courseId]/certificate/route'
-import { POST as addCourseContent } from '@/app/api/courses/[courseId]/contents/route'
-import { PUT as moveCourseContent } from '@/app/api/courses/[courseId]/contents/[contentId]/move/route'
+import { PATCH as saveCourseDraft } from '@/app/api/courses/[courseId]/authoring/route'
+import { publicationDigest, type CoursePayload } from '@/lib/server/course-authoring'
 import prisma from '@/lib/prisma'
 import { getServerSession as getNextAuthSession } from 'next-auth'
 import { getServerSession } from 'next-auth/next'
@@ -39,6 +39,7 @@ jest.mock('@/lib/prisma', () => ({
     chatMember: { findMany: jest.fn(), create: jest.fn() },
     user: { findMany: jest.fn(), findFirst: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
     course: { findUnique: jest.fn() },
+    courseDraft: { findUnique: jest.fn(), update: jest.fn() },
     courseContent: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn() },
     courseContentProgress: { findMany: jest.fn() },
     enrollment: { findUnique: jest.fn() },
@@ -68,6 +69,7 @@ const mockedPrisma = prisma as unknown as {
   chatMember: { findMany: jest.Mock; create: jest.Mock }
   user: { findMany: jest.Mock; findFirst: jest.Mock; findUnique: jest.Mock; update: jest.Mock }
   course: { findUnique: jest.Mock }
+  courseDraft: { findUnique: jest.Mock; update: jest.Mock }
   courseContent: { findUnique: jest.Mock; findMany: jest.Mock; create: jest.Mock }
   courseContentProgress: { findMany: jest.Mock }
   enrollment: { findUnique: jest.Mock }
@@ -79,6 +81,7 @@ function jsonRequest(url: string, init: RequestInit = {}): any {
   const body = typeof init.body === 'string' ? init.body : undefined
   return {
     url,
+    nextUrl: new URL(url),
     headers: { get: () => null },
     body: null,
     json: async () => (body ? JSON.parse(body) : {}),
@@ -286,9 +289,9 @@ describe('API authorization regressions', () => {
 
   it('does not issue a certificate before completion', async () => {
     ;(getServerSession as jest.Mock).mockResolvedValue({ user: { id: 'user-1' } })
-    mockedPrisma.course.findUnique.mockResolvedValue({ id: 'course-1', title: 'Course', contents: [] })
+    mockedPrisma.course.findUnique.mockResolvedValue({ id: 'course-1', title: 'Course', activePublicationId: 'publication-1' })
     mockedPrisma.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'user@example.com', name: 'User' })
-    mockedPrisma.enrollment.findUnique.mockResolvedValue({ completedAt: null })
+    mockedPrisma.enrollment.findUnique.mockResolvedValue({ id: 'enrollment-1', completedAt: null })
     mockedPrisma.courseContent.findMany.mockResolvedValue([])
     mockedPrisma.courseContentProgress.findMany.mockResolvedValue([])
 
@@ -301,116 +304,79 @@ describe('API authorization regressions', () => {
     expect(mockedPrisma.certificate.create).not.toHaveBeenCalled()
   })
 
-  it('rejects a course content parent from another course', async () => {
+  function draft(contents: CoursePayload['contents']): CoursePayload {
+    return { schemaVersion: 1, title: 'Private draft', description: 'Description', startDate: null,
+      endDate: null, imageUrl: null, contents }
+  }
+
+  function arrangeAuthoring(contents: CoursePayload['contents']) {
+    let current = draft(contents)
+    let revision = 0
+    mockedPrisma.course.findUnique.mockResolvedValue({ id: 'course-1', instructorId: 'instructor-1', activePublicationId: null })
+    mockedPrisma.user.findUnique.mockResolvedValue({ role: 'INSTRUCTOR' })
+    mockedPrisma.courseDraft.findUnique.mockImplementation(async () => ({ revision, payload: JSON.stringify(current), digest: publicationDigest(current) }))
+    mockedPrisma.courseDraft.update.mockImplementation(async ({ data }: { data: { payload: string; revision: { increment: number } } }) => {
+      current = JSON.parse(data.payload) as CoursePayload
+      revision += data.revision.increment
+      return { revision, payload: JSON.stringify(current), digest: publicationDigest(current) }
+    })
+    mockedPrisma.courseContent.findMany.mockResolvedValue([])
+    return { current: () => current, revision: () => revision }
+  }
+
+  function saveOperation(operation: unknown) {
+    return saveCourseDraft(jsonRequest('http://localhost/api/courses/course-1/authoring', {
+      method: 'PATCH', body: JSON.stringify({ expectedRevision: 0, operation }),
+    }), { params: Promise.resolve({ courseId: 'course-1' }) })
+  }
+
+  it('does not accept an existing content ID from another course into a private draft', async () => {
     ;(getServerSession as jest.Mock).mockResolvedValue({ user: { id: 'instructor-1', role: 'INSTRUCTOR' } })
-    mockedPrisma.course.findUnique.mockResolvedValue({ instructorId: 'instructor-1' })
-    mockedPrisma.courseContent.findUnique.mockResolvedValue({ id: 'parent-1', courseId: 'other-course' })
-
-    const response = await addCourseContent(
-      jsonRequest('http://localhost/api/courses/course-1/contents', {
-        method: 'POST',
-        body: JSON.stringify({ title: 'Child', content: 'content', parentId: 'parent-1' }),
-        headers: { 'Content-Type': 'application/json' },
-      }),
-      { params: Promise.resolve({ courseId: 'course-1' }) },
-    )
-
-    expect(response.status).toBe(400)
+    const state = arrangeAuthoring([])
+    mockedPrisma.courseContent.findMany.mockResolvedValue([{ id: 'foreign-id', courseId: 'another-course' }])
+    const response = await saveOperation({ kind: 'insertNode', node: {
+      id: 'foreign-id', title: 'Child', type: 'TEXT', content: 'content',
+    }, parentId: null, afterId: null })
+    expect(response.status).toBe(409)
+    expect(state.revision()).toBe(0)
+    expect(mockedPrisma.courseDraft.update).not.toHaveBeenCalled()
     expect(mockedPrisma.courseContent.create).not.toHaveBeenCalled()
   })
 
-  it('does not let a non-instructor move course content', async () => {
+  it('does not let a non-instructor change a private course draft', async () => {
     ;(getServerSession as jest.Mock).mockResolvedValue({ user: { id: 'member-1', role: 'USER' } })
-    mockedPrisma.courseContent.findUnique.mockResolvedValue({
-      id: 'content-1',
-      courseId: 'course-1',
-      parentId: null,
-      order: 1,
-      course: { instructorId: 'instructor-1' },
-    })
-
-    const response = await moveCourseContent(
-      jsonRequest('http://localhost/api/courses/course-1/contents/content-1/move', {
-        method: 'PUT',
-        body: JSON.stringify({ targetId: 'content-2', position: 'after' }),
-        headers: { 'Content-Type': 'application/json' },
-      }),
-      { params: Promise.resolve({ courseId: 'course-1', contentId: 'content-1' }) },
-    )
-
+    arrangeAuthoring([{ id: 'content-1', parentId: null, order: 1, title: 'Content', type: 'TEXT', content: 'Body' }])
+    mockedPrisma.user.findUnique.mockResolvedValue({ role: 'USER' })
+    const response = await saveOperation({ kind: 'moveNode', id: 'content-1', parentId: null, afterId: null })
     expect(response.status).toBe(403)
+    expect(mockedPrisma.courseDraft.update).not.toHaveBeenCalled()
   })
 
-  it('moves course content atomically and returns the grouped course tree', async () => {
+  it('moves private content atomically without changing live course rows', async () => {
     ;(getServerSession as jest.Mock).mockResolvedValue({ user: { id: 'instructor-1', role: 'INSTRUCTOR' } })
-    mockedPrisma.courseContent.findUnique
-      .mockResolvedValueOnce({
-        id: 'content-1',
-        courseId: 'course-1',
-        parentId: null,
-        order: 2,
-        course: { instructorId: 'instructor-1' },
-      })
-      .mockResolvedValueOnce({
-        id: 'content-2',
-        courseId: 'course-1',
-        parentId: null,
-        order: 1,
-      })
-
-    const tx = {
-      courseContent: {
-        findUnique: mockedPrisma.courseContent.findUnique,
-        findMany: jest.fn()
-          .mockResolvedValueOnce([
-            { id: 'content-2', parentId: null, order: 1 },
-            { id: 'content-1', parentId: null, order: 2 },
-          ])
-          .mockResolvedValueOnce([
-            { id: 'content-1', parentId: null, order: 1 },
-            { id: 'content-2', parentId: null, order: 2 },
-          ]),
-        update: jest.fn().mockResolvedValue({}),
-      },
-    }
-    mockedPrisma.$transaction.mockImplementation(async (callback: (value: typeof tx) => unknown) => callback(tx))
-
-    const response = await moveCourseContent(
-      jsonRequest('http://localhost/api/courses/course-1/contents/content-1/move', {
-        method: 'PUT',
-        body: JSON.stringify({ targetId: 'content-2', position: 'before' }),
-        headers: { 'Content-Type': 'application/json' },
-      }),
-      { params: Promise.resolve({ courseId: 'course-1', contentId: 'content-1' }) },
-    )
+    const state = arrangeAuthoring([
+      { id: 'content-1', parentId: null, order: 2, title: 'Second', type: 'TEXT', content: 'Body' },
+      { id: 'content-2', parentId: null, order: 1, title: 'First', type: 'TEXT', content: 'Body' },
+    ])
+    const response = await saveOperation({ kind: 'moveNode', id: 'content-1', parentId: null, afterId: null })
     const body = await response.json()
-
     expect(response.status).toBe(200)
-    expect(body.map((content: { id: string }) => content.id)).toEqual(['content-1', 'content-2'])
-    expect(tx.courseContent.update).toHaveBeenCalled()
+    expect(body.draft.revision).toBe(1)
+    expect(state.current().contents.sort((a, b) => a.order - b.order).map(content => content.id))
+      .toEqual(['content-1', 'content-2'])
+    expect(mockedPrisma.courseDraft.update).toHaveBeenCalledTimes(1)
+    expect(mockedPrisma.courseContent.create).not.toHaveBeenCalled()
   })
 
-  it('rejects moving a parent beside its descendant inside the transaction', async () => {
+  it('rejects moving a parent below its descendant without saving', async () => {
     ;(getServerSession as jest.Mock).mockResolvedValue({ user: { id: 'instructor-1', role: 'INSTRUCTOR' } })
-    const tx = {
-      courseContent: {
-        findUnique: jest.fn()
-          .mockResolvedValueOnce({ id: 'parent', courseId: 'course-1', parentId: null, order: 1, course: { instructorId: 'instructor-1' } })
-          .mockResolvedValueOnce({ id: 'child', courseId: 'course-1', parentId: 'parent', order: 1 }),
-        findMany: jest.fn(),
-        update: jest.fn(),
-      },
-    }
-    mockedPrisma.$transaction.mockImplementation(async (callback: (value: typeof tx) => unknown) => callback(tx))
-    const response = await moveCourseContent(
-      jsonRequest('http://localhost/api/courses/course-1/contents/parent/move', {
-        method: 'PUT',
-        body: JSON.stringify({ targetId: 'child', position: 'before' }),
-        headers: { 'Content-Type': 'application/json' },
-      }),
-      { params: Promise.resolve({ courseId: 'course-1', contentId: 'parent' }) },
-    )
+    const state = arrangeAuthoring([
+      { id: 'parent-id', parentId: null, order: 1, title: 'Parent', type: 'TEXT', content: 'Body' },
+      { id: 'child-id', parentId: 'parent-id', order: 1, title: 'Child', type: 'TEXT', content: 'Body' },
+    ])
+    const response = await saveOperation({ kind: 'moveNode', id: 'parent-id', parentId: 'child-id', afterId: null })
     expect(response.status).toBe(400)
-    expect(tx.courseContent.update).not.toHaveBeenCalled()
+    expect(state.revision()).toBe(0)
+    expect(mockedPrisma.courseDraft.update).not.toHaveBeenCalled()
   })
 })

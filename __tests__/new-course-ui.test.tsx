@@ -41,24 +41,25 @@ it('prevents repeat submits and exposes failed creation inline', async () => {
   jest.mocked(fetch).mockImplementationOnce(() => new Promise<Response>(resolve => { resolveRequest = resolve }))
   render(<NewCoursePage />)
   completeRequiredFields()
-  const submitButton = screen.getByRole('button', { name: 'Kurs erstellen' })
+  const submitButton = screen.getByRole('button', { name: 'Kursentwurf anlegen' })
   fireEvent.click(submitButton)
-  expect(screen.getByRole('button', { name: 'Kurs wird erstellt…' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Entwurf wird angelegt …' })).toBeDisabled()
   fireEvent.submit(submitButton.closest('form')!)
   expect(fetch).toHaveBeenCalledTimes(1)
   resolveRequest({ ok: false, json: async () => ({ error: 'Keine Berechtigung' }) } as Response)
   await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Keine Berechtigung'))
-  expect(screen.getByRole('button', { name: 'Kurs erstellen' })).toBeEnabled()
+  expect(screen.getByRole('button', { name: 'Kursentwurf anlegen' })).toBeEnabled()
   expect(mockRouter.push).not.toHaveBeenCalled()
 })
 
-it('keeps the existing multipart course creation contract and returns to the directory', async () => {
+it('creates a private draft without public image upload or premature directory navigation', async () => {
   global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ id: 'new-course' }) })
   render(<NewCoursePage />)
   completeRequiredFields()
-  fireEvent.click(screen.getByRole('button', { name: 'Kurs erstellen' }))
+  expect(screen.getByText(/Für Lernende ist er bis dahin nicht sichtbar/)).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Kursentwurf anlegen' }))
 
-  await waitFor(() => expect(mockRouter.push).toHaveBeenCalledWith('/courses'))
+  await waitFor(() => expect(mockRouter.push).toHaveBeenCalledWith('/courses/new-course/contents'))
   expect(fetch).toHaveBeenCalledWith('/api/courses', expect.objectContaining({ method: 'POST' }))
   const request = jest.mocked(fetch).mock.calls[0][1]
   const body = request?.body as FormData
@@ -69,6 +70,9 @@ it('keeps the existing multipart course creation contract and returns to the dir
   expect(body.get('maxStudents')).toBe('20')
   expect(body.get('startDate')).toBeUndefined()
   expect(body.get('endDate')).toBeUndefined()
+  expect(body.get('image')).toBeUndefined()
+  expect(fetch).toHaveBeenCalledTimes(1)
+  expect(screen.queryByLabelText('Bild auswählen')).not.toBeInTheDocument()
 })
 
 it('clears an unfinished course before another account sees the composer', () => {

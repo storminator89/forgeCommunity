@@ -8,6 +8,7 @@ jest.mock('next/server', () => ({ NextResponse: class extends Response {
   static json(value: unknown, init?: ResponseInit) { return new Response(JSON.stringify(value), init); }
 } }));
 jest.mock('@/lib/prisma', () => ({ __esModule: true, default: {
+  $transaction: jest.fn(),
   course: { findMany: jest.fn() },
   courseContent: { findMany: jest.fn() },
   courseContentProgress: { findMany: jest.fn() },
@@ -16,13 +17,14 @@ jest.mock('next-auth', () => ({ getServerSession: jest.fn() }));
 jest.mock('@/app/api/auth/[...nextauth]/options', () => ({ authOptions: {} }));
 
 const db = prisma as unknown as {
+  $transaction: jest.Mock;
   course: { findMany: jest.Mock };
   courseContent: { findMany: jest.Mock };
   courseContentProgress: { findMany: jest.Mock };
 };
 const history = new Date('2026-09-01T12:00:00Z');
 const course = (id: string, enrolled = true) => ({
-  id, title: id, description: 'Course', instructorId: 'teacher', instructor: { name: 'Teacher' },
+  id, title: id, description: 'Course', activePublicationId: `publication-${id}`, instructorId: 'teacher', instructor: { name: 'Teacher' },
   startDate: null, endDate: null, price: null, currency: null, maxStudents: null,
   rewardEligible: true, imageUrl: null, _count: { enrollments: 1 },
   enrollments: enrolled ? [{ completedAt: history }] : [],
@@ -36,6 +38,7 @@ const marked = (item: ReturnType<typeof leaf>, revision = courseContentRevision(
 
 beforeEach(() => {
   jest.resetAllMocks();
+  db.$transaction.mockImplementation((work: (tx: typeof db) => Promise<unknown>) => work(db));
   jest.mocked(getServerSession).mockResolvedValue({ user: { id: 'alice', role: 'USER' } } as never);
   db.course.findMany.mockResolvedValue([course('one'), course('other', false)]);
   const lesson = leaf('lesson');
@@ -77,9 +80,10 @@ test('batches both revision queries only for the authenticated viewer’s enroll
   const rows = await (await GET()).json();
   expect(rows.map((row: { completed: boolean }) => row.completed)).toEqual([true, true, false]);
   expect(db.courseContent.findMany).toHaveBeenCalledTimes(1);
-  expect(db.courseContent.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { courseId: { in: ['one', 'two'] } } }));
+  expect(db.courseContent.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { courseId: { in: ['one', 'two'] }, archivedAt: null } }));
   expect(db.courseContentProgress.findMany).toHaveBeenCalledTimes(1);
   expect(db.courseContentProgress.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: 'alice', courseId: { in: ['one', 'two'] } } }));
+  expect(db.course.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { activePublicationId: { not: null } } }));
 
   jest.mocked(getServerSession).mockResolvedValue({ user: { id: 'bob', role: 'USER' } } as never);
   db.course.findMany.mockResolvedValue([course('one', false), course('two', false), course('other', false)]);

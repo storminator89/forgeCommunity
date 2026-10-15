@@ -82,4 +82,11 @@ describe('auth middleware public and API boundaries', () => {
     await expect(proxy(request('/api/private.png')))
       .resolves.toEqual(expect.objectContaining({ status: 401 }));
   });
+
+  it('lets the asset handler decide whether a course cover is public without opening author uploads', async () => {
+    await expect(proxy(request('/api/courses/course-a/assets/asset-1'))).resolves.toEqual({ kind: 'next' });
+    await expect(proxy(request('/api/courses/course-a/assets/asset-1', 'HEAD'))).resolves.toEqual({ kind: 'next' });
+    await expect(proxy(request('/api/courses/course-a/authoring/assets', 'POST'))).resolves.toEqual(expect.objectContaining({ status: 401 }));
+    await expect(proxy(request('/api/courses/course-a/assets/asset-1/extra'))).resolves.toEqual(expect.objectContaining({ status: 401 }));
+  });
 });

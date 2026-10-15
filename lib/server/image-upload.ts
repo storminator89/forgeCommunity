@@ -89,7 +89,7 @@ async function validateAndNormalizeImage(fileType: string, bytes: Uint8Array) {
   }
 }
 
-async function readAndNormalizeImage(file: File) {
+export async function readAndNormalizeImage(file: File) {
   validateImageFile(file);
   const bytes = await file.arrayBuffer();
   const sourceBytes = new Uint8Array(bytes);
