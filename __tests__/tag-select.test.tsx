@@ -64,7 +64,7 @@ describe('TagSelect', () => {
   it('allows removing a selected tag', () => {
     render(<TagSelect {...mockProps} />)
     
-    const removeButton = screen.getByText('×')
+    const removeButton = screen.getByRole('button', { name: 'Tag React entfernen' })
     fireEvent.click(removeButton)
     
     expect(mockProps.onTagRemove).toHaveBeenCalledWith('React')

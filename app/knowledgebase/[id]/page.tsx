@@ -1,6 +1,10 @@
 'use client';
 
+/* Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V5 */
+/* Hallmark · genre: editorial · macrostructure: article reading · design-system: design.md · designed-as-app */
+
 import { AppShell, AppHeader } from '@/components/app-shell';
+import { PageState } from '@/components/page-state';
 import { useRouter, useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Sidebar } from "@/components/Sidebar";
@@ -8,14 +12,10 @@ import { UserNav } from "@/components/user-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { User, Calendar, Edit, Trash, ArrowLeft, Tag, BookOpen } from 'lucide-react';
+import { Edit, Trash, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 
-import { Card } from "@/components/ui/card";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import Image from 'next/image';
 import { sanitizeRichHtml } from '@/lib/sanitize-html';
 
@@ -101,196 +101,60 @@ export default function ArticlePage() {
   };
 
   const isCurrentArticleSettled = article?.id === id || errorArticleId === id;
-
-  if (isLoading || !isCurrentArticleSettled) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p className="text-lg">Lade Artikel...</p>
-      </div>
-    );
-  }
-
-  if (error || !article || article.id !== id) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen">
-        <p className="text-lg text-red-500 mb-4">{error || 'Artikel nicht gefunden.'}</p>
-        <Button onClick={() => router.push('/knowledgebase')}>Zurück zur Übersicht</Button>
-      </div>
-    );
-  }
-
-  const isAuthor = session?.user?.id === article.author.id;
+  const displayedArticle = !isLoading && isCurrentArticleSettled && !error && article?.id === id ? article : null;
+  const isAuthor = Boolean(displayedArticle && session?.user?.id === displayedArticle.author.id);
 
   return (
     <AppShell>
       <Sidebar />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <AppHeader>
-          <div className="container mx-auto px-6">
-            {/* Top Navigation */}
-            <div className="py-3 border-b border-border/40 flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="flex items-center gap-4 w-full sm:w-auto">
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => router.push('/knowledgebase')}
-                        className="hover:bg-accent/50 transition-colors duration-200 -ml-2"
-                      >
-                        <ArrowLeft className="h-4 w-4 mr-2" />
-                        <span className="font-medium">Zurück</span>
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" className="text-xs">
-                      Zurück zur Übersicht
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                {isAuthor && (
-                  <>
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="hover:bg-accent/50 transition-colors duration-200"
-                            asChild
-                          >
-                            <Link href={`/knowledgebase/${article.id}/edit`}>
-                              <Edit className="h-4 w-4 mr-2" />
-                              <span className="font-medium">Bearbeiten</span>
-                            </Link>
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom" className="text-xs">
-                          Artikel bearbeiten
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={handleDelete}
-                            className="text-destructive hover:bg-destructive/10 transition-colors duration-200"
-                          >
-                            <Trash className="h-4 w-4 mr-2" />
-                            <span className="font-medium">Löschen</span>
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom" className="text-xs">
-                          Artikel löschen
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </>
-                )}
-                <div className="h-4 w-px bg-border/50 hidden sm:block" />
-                <ThemeToggle />
-                <UserNav />
-              </div>
-            </div>
-
-            {/* Article Title Section */}
-            <div className="py-6 flex flex-col gap-4">
-              <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                <BookOpen className="h-4 w-4" />
-                <span>{article.category}</span>
-                <span className="text-border/60">•</span>
-                <div className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4" />
-                  <span>
-                    {new Date(article.createdAt).toLocaleDateString('de-DE', {
-                      day: '2-digit',
-                      month: '2-digit',
-                      year: 'numeric'
-                    })}
-                  </span>
-                </div>
-              </div>
-              <div className="space-y-4">
-                <h1 className="break-words text-2xl sm:text-4xl font-bold tracking-tight text-foreground">
-                  {article.title}
-                </h1>
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <div className="flex items-center">
-                      <User className="h-3.5 w-3.5" />
-                    </div>
-                    <span className="text-sm font-medium text-foreground/80">
-                      {article.author.name || article.author.email}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {article.tags.map((tag) => (
-                      <Badge
-                        key={tag.id}
-                        variant="outline"
-                        className="text-xs font-normal"
-                      >
-                        {tag.name}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <Button asChild variant="ghost" size="sm"><Link href="/knowledgebase" aria-label="Zur Artikelübersicht"><ArrowLeft className="h-4 w-4" aria-hidden="true" />Zurück</Link></Button>
+            <div className="flex shrink-0 items-center gap-2"><ThemeToggle /><UserNav /></div>
           </div>
-          <div className="border-t border-border" />
         </AppHeader>
 
-        <div id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto">
-          <div className="container mx-auto py-8 px-6">
-            <div className="max-w-4xl mx-auto">
-              <div className="space-y-8">
-                {/* Artikel Inhalt */}
-                <div className="bg-card rounded-xl shadow-sm border border-border/40 overflow-hidden">
-                  {article.featuredImage && (
-                    <div className="relative w-full aspect-video overflow-hidden">
-                      <Image
-                        src={article.featuredImage}
-                        alt={article.title}
-                        fill
-                        className="object-contain object-center "
-                        priority
-                      />
-                    </div>
-                  )}
-                  <div className="p-6 sm:p-8 sm:pt-10">
-                    <div
-                      className="break-words [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto prose prose-neutral dark:prose-invert max-w-none
-                        prose-headings:font-semibold prose-headings:tracking-tight
-                        prose-h1:text-3xl prose-h2:text-2xl prose-h3:text-xl
-                        prose-h4:text-lg prose-h5:text-base
-                        prose-a:text-primary prose-a:no-underline hover:prose-a:underline
-                        prose-strong:text-foreground/90 prose-strong:font-semibold
-                        prose-code:text-primary prose-code:bg-primary/5 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:before:content-none prose-code:after:content-none
-                        prose-pre:bg-muted prose-pre:border prose-pre:border-border/40
-                        prose-img:rounded-lg prose-img:ring-1 prose-img:ring-border/40
-                        prose-blockquote:border-l-primary/30 prose-blockquote:bg-muted/30 prose-blockquote:not-italic
-                        prose-blockquote:pl-6 prose-blockquote:py-1 prose-blockquote:text-muted-foreground
-                      prose-ul:list-none prose-ul:pl-0
-                      prose-li:relative prose-li:pl-6
-                      prose-li:before:absolute prose-li:before:left-1 prose-li:before:top-3
-                        prose-li:before:h-1.5 prose-li:before:w-1.5 prose-li:before:rounded-full
-                        prose-li:before:bg-primary/40
-                        [&_ul_li]:mt-2 first:[&_ul_li]:mt-0
-                        prose-hr:border-border/40"
-                      dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(article.content) }}
-                    />
-                  </div>
+        <main id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto">
+          <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
+            {isLoading || !isCurrentArticleSettled ? (
+              <><h1 className="sr-only">Artikel</h1><PageState kind="loading" title="Artikel wird geladen" /></>
+            ) : !displayedArticle ? (
+              <><h1 className="sr-only">Artikel</h1><PageState kind="error" title="Artikel nicht verfügbar" description={error || 'Artikel nicht gefunden.'} action={<Button asChild variant="outline"><Link href="/knowledgebase">Zurück zur Übersicht</Link></Button>} /></>
+            ) : (
+              <article>
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-5">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Wissensdatenbank / Artikel</p>
+                  {isAuthor && <div className="flex flex-wrap items-center gap-2">
+                    <Button asChild variant="outline" size="sm"><Link href={'/knowledgebase/' + displayedArticle.id + '/edit'}><Edit className="h-4 w-4" aria-hidden="true" />Bearbeiten</Link></Button>
+                    <Button type="button" variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={handleDelete}><Trash className="h-4 w-4" aria-hidden="true" />Löschen</Button>
+                  </div>}
                 </div>
-              </div>
-            </div>
+
+                <header className="mx-auto max-w-[72ch] py-8 sm:py-12">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                    <span className="font-semibold text-foreground">{displayedArticle.category}</span>
+                    <time dateTime={displayedArticle.createdAt}>{new Date(displayedArticle.createdAt).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}</time>
+                    <span>{displayedArticle.author.name || displayedArticle.author.email}</span>
+                  </div>
+                  <h1 className="mt-5 min-w-0 break-words text-[clamp(2rem,1.35rem+2.5vw,3.5rem)] font-semibold leading-tight tracking-[-0.045em] [overflow-wrap:anywhere]">{displayedArticle.title}</h1>
+                  {displayedArticle.tags.length > 0 && <div className="mt-5 flex flex-wrap gap-2">
+                    {displayedArticle.tags.map(tag => <Badge key={tag.id} variant="secondary" className="max-w-full truncate">{tag.name}</Badge>)}
+                  </div>}
+                </header>
+
+                {displayedArticle.featuredImage && <div className="relative mx-auto aspect-video w-full max-w-4xl overflow-hidden rounded-[14px] border bg-muted">
+                  <Image src={displayedArticle.featuredImage} alt="" fill priority className="object-contain" />
+                </div>}
+
+                <div className="mx-auto max-w-[72ch] border-t py-8 sm:py-10">
+                  <div className="prose prose-neutral dark:prose-invert max-w-none break-words text-base leading-relaxed prose-headings:font-semibold prose-headings:tracking-tight prose-a:text-primary prose-pre:max-w-full prose-pre:overflow-x-auto prose-img:rounded-[10px] [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto"
+                    dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(displayedArticle.content) }} />
+                </div>
+              </article>
+            )}
           </div>
-        </div>
+        </main>
       </div>
     </AppShell>
   );

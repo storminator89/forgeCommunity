@@ -1,5 +1,3 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-
 interface StatsCardProps {
   stats: {
     posts: number
@@ -39,11 +37,9 @@ export function StatsCard({ stats, rewards, rewardsLoading, rewardsError, isSign
   ]
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-lg">Statistik</CardTitle>
-      </CardHeader>
-      <CardContent>
+    <section aria-labelledby="community-stats-title" className="border-t pt-5">
+      <h2 id="community-stats-title" className="text-base font-semibold tracking-tight">Deine Aktivität</h2>
+      <div className="mt-5">
         <dl className="grid grid-cols-2 gap-x-6 gap-y-5">
           {values.map(({ label, value }) => (
             <div key={label} className="min-w-0">
@@ -85,7 +81,7 @@ export function StatsCard({ stats, rewards, rewardsLoading, rewardsError, isSign
               </div>}
               </>}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   )
 }

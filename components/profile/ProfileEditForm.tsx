@@ -163,7 +163,7 @@ export function ProfileEditForm({ userId, initialData, onUpdate }: ProfileEditFo
       <DialogTrigger asChild>
         <Button variant="outline" size="sm" className="gap-2">
           <Edit2 className="h-4 w-4" />
-          Profil bearbeiten
+          Stammdaten bearbeiten
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[700px] h-[80vh] overflow-y-auto">

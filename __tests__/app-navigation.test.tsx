@@ -25,9 +25,22 @@ it('marks nested routes active without activating knowledge twice for drafts', (
 
 it('mobile navigation opens from the page header and closes after selection', () => {
   render(<AppShell><Sidebar /><div><AppHeader><div>Kurse</div></AppHeader><main id="page-content" /></div></AppShell>);
-  fireEvent.click(screen.getByRole('button', { name: 'Navigation öffnen' }));
+  const trigger = screen.getByRole('button', { name: 'Navigation öffnen' });
+  expect(trigger).not.toHaveAttribute('aria-controls');
+  fireEvent.click(trigger);
   expect(screen.getByRole('dialog')).toBeInTheDocument();
+  expect(trigger).toHaveAttribute('aria-controls', 'app-navigation');
+  expect(document.getElementById('app-navigation')).toBeInTheDocument();
   fireEvent.click(screen.getAllByRole('link', { name: 'Community' }).at(-1)!);
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});
+
+it('mobile navigation also closes with its visible close control', () => {
+  render(<AppShell><Sidebar /><div><AppHeader><div>Kurse</div></AppHeader><main id="page-content" /></div></AppShell>);
+  fireEvent.click(screen.getByRole('button', { name: 'Navigation öffnen' }));
+  const close = screen.getByRole('button', { name: 'Navigation schließen' });
+  expect(close).toHaveClass('h-11', 'w-11');
+  fireEvent.click(close);
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });
 

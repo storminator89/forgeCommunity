@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useEffectEvent, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,13 +35,14 @@ export function FollowersList({ userId, count, type }: FollowersListProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [users, setUsers] = useState<Follower[]>([]);
   const [loadedForKey, setLoadedForKey] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState(false);
   const requestIdRef = useRef(0);
   const activeControllerRef = useRef<AbortController | null>(null);
   const requestKey = `${userId}:${type}`;
 
   const fetchUsers = useCallback(async (signal: AbortSignal, requestId: number) => {
     try {
-      const response = await fetch(`/api/users/${userId}/${type}`, {
+      const response = await fetch(`/api/users/${encodeURIComponent(userId)}/${type}`, {
         credentials: 'include',
         signal,
       });
@@ -51,10 +52,12 @@ export function FollowersList({ userId, count, type }: FollowersListProps) {
       const data = await response.json();
       if (signal.aborted || requestIdRef.current !== requestId) return;
       setUsers(data.users);
+      setLoadError(false);
       setLoadedForKey(requestKey);
     } catch (error) {
       if (signal.aborted || requestIdRef.current !== requestId) return;
       console.error(`Error fetching ${type}:`, error);
+      setLoadError(true);
       setLoadedForKey(requestKey);
     } finally {
       if (!signal.aborted && requestIdRef.current === requestId) {
@@ -63,35 +66,38 @@ export function FollowersList({ userId, count, type }: FollowersListProps) {
     }
   }, [requestKey, type, userId]);
 
-  const startFetch = useEffectEvent(() => {
+  const startFetch = useCallback(() => {
     activeControllerRef.current?.abort();
     const controller = new AbortController();
     activeControllerRef.current = controller;
     const requestId = ++requestIdRef.current;
+    setIsLoading(true);
+    setLoadError(false);
     void fetchUsers(controller.signal, requestId);
-  });
+  }, [fetchUsers]);
 
   useEffect(() => {
     if (!isOpen) return;
 
-    startFetch();
+    const timer = window.setTimeout(startFetch, 0);
 
     return () => {
+      window.clearTimeout(timer);
       activeControllerRef.current?.abort();
       requestIdRef.current += 1;
     };
-  }, [isOpen, requestKey]);
+  }, [isOpen, startFetch]);
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         <Button
           variant="ghost"
-          className="flex h-auto w-full flex-wrap items-center justify-center gap-2 px-1 hover:bg-accent"
+          className="flex min-h-11 w-full flex-col items-start gap-0.5 px-2 py-2 text-left hover:bg-accent"
         >
-          <Users className="h-4 w-4" />
-          <span className="font-medium">{count}</span>
-          <span className="text-muted-foreground">
+          <span className="text-2xl font-semibold tabular-nums">{count}</span>
+          <span className="inline-flex items-center gap-1 text-sm font-normal text-muted-foreground">
+            <Users className="h-3.5 w-3.5" aria-hidden="true" />
             {type === 'followers' ? 'Follower' : 'Folge ich'}
           </span>
         </Button>
@@ -109,9 +115,11 @@ export function FollowersList({ userId, count, type }: FollowersListProps) {
         </DialogHeader>
         <ScrollArea className="max-h-[60vh] pr-4">
           {isLoading || loadedForKey !== requestKey ? (
-            <div className="flex justify-center py-8">
-              <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+            <div role="status" className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" /> Liste wird geladen
             </div>
+          ) : loadError ? (
+            <div role="alert" className="space-y-3 py-6 text-center"><p>Die Liste konnte nicht geladen werden.</p><Button type="button" variant="outline" onClick={startFetch}>Erneut versuchen</Button></div>
           ) : users.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               {type === 'followers'
@@ -119,15 +127,15 @@ export function FollowersList({ userId, count, type }: FollowersListProps) {
                 : 'Folgt niemandem'}
             </div>
           ) : (
-            <div className="space-y-4">
+            <ul className="divide-y">
               {users.map((user) => (
-                <div
+                <li
                   key={user.id}
-                  className="flex items-center justify-between p-2 rounded-lg hover:bg-accent"
+                  className="py-2"
                 >
                   <Link
-                    href={`/profile/${user.id}`}
-                    className="flex min-w-0 items-center gap-3 flex-1"
+                    href={`/profile/${encodeURIComponent(user.id)}`}
+                    className="flex min-h-11 min-w-0 items-center gap-3 rounded-[10px] p-2 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     onClick={() => setIsOpen(false)}
                   >
                     <Avatar>
@@ -143,9 +151,9 @@ export function FollowersList({ userId, count, type }: FollowersListProps) {
                       </p>
                     </div>
                   </Link>
-                </div>
+                </li>
               ))}
-            </div>
+            </ul>
           )}
         </ScrollArea>
       </DialogContent>

@@ -1,6 +1,10 @@
 'use client';
 
+/* Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V5 */
+/* Hallmark · genre: editorial · macrostructure: article editor · design-system: design.md · designed-as-app */
+
 import { AppShell, AppHeader } from '@/components/app-shell';
+import { PageState } from '@/components/page-state';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from "@/components/Sidebar";
@@ -9,19 +13,16 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import { useSession } from 'next-auth/react';
 import { useParams } from 'next/navigation';
-import dynamic from 'next/dynamic';
-import { Card } from "@/components/ui/card";
-import { AlertCircle, ArrowLeft, BookOpen, Upload } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Upload } from 'lucide-react';
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { CategorySelect } from "@/components/CategorySelect";
 import { TagSelect } from "@/components/TagSelect";
 import Image from 'next/image';
 import { Image as ImageIcon, Trash2, Save, Loader2 } from 'lucide-react';
 import { Editor } from "@/components/Editor";
+import Link from 'next/link';
 
 interface Tag {
   id: string;
@@ -60,6 +61,7 @@ export default function EditArticle() {
   const [featuredImagePreview, setFeaturedImagePreview] = useState<string>('');
   const [isImageDeleted, setIsImageDeleted] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [existingCategories, setExistingCategories] = useState<string[]>([]);
@@ -86,6 +88,7 @@ export default function EditArticle() {
         }
 
         const articleData: Article = await articleResponse.json();
+        setLoadError(false);
         setTitle(articleData.title);
         setContent(articleData.content);
         setCategory(articleData.category);
@@ -102,15 +105,16 @@ export default function EditArticle() {
       } catch (error) {
         console.error('Error fetching article:', error);
         setError('Fehler beim Laden des Artikels.');
+        setLoadError(true);
       } finally {
         setIsLoading(false);
       }
     };
 
-    if (id) {
+    if (id && status !== 'loading' && session) {
       fetchArticleAndMetadata();
     }
-  }, [id]);
+  }, [id, session, status]);
 
   const handleAddTag = (tag: string) => {
     if (!tags.includes(tag) && tags.length < 5) {
@@ -142,6 +146,7 @@ export default function EditArticle() {
     const file = e.target.files?.[0];
     if (file) {
       setFeaturedImage(file);
+      setIsImageDeleted(false);
       const reader = new FileReader();
       reader.onloadend = () => {
         setFeaturedImagePreview(reader.result as string);
@@ -194,11 +199,9 @@ export default function EditArticle() {
     }
   };
 
-  if (isLoading) {
+  if (status === 'loading' || (session && isLoading)) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p className="text-lg">Artikel wird geladen...</p>
-      </div>
+      <AppShell><Sidebar /><div className="flex min-h-0 min-w-0 flex-1 flex-col"><AppHeader><div><h1>Artikel bearbeiten</h1></div></AppHeader><main id="page-content" tabIndex={-1} className="flex min-h-0 flex-1 items-center justify-center p-4"><PageState kind="loading" title="Artikel wird geladen" /></main></div></AppShell>
     );
   }
 
@@ -207,219 +210,76 @@ export default function EditArticle() {
       <Sidebar />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <AppHeader>
-          <div className="container mx-auto px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center space-x-4 w-full sm:w-auto">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.push(`/knowledgebase/${id}`)}
-                className="hover:bg-accent transition-colors"
-              >
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Zurück
-              </Button>
-              <div className="h-4 w-px bg-border hidden sm:block" />
-              <h1 className="text-lg font-semibold text-foreground hidden sm:block">
-                Artikel bearbeiten
-              </h1>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                type="submit"
-                form="editForm"
-                disabled={isLoading || isSubmitting}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground"
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Speichern...
-                  </>
-                ) : (
-                  <>
-                    <Save className="mr-2 h-4 w-4" />
-                    Speichern
-                  </>
-                )}
-              </Button>
-              <ThemeToggle />
-              <UserNav />
-            </div>
-          </div>
+          <div className="flex min-w-0 items-center justify-between gap-3"><h1>Artikel bearbeiten</h1><div className="flex shrink-0 items-center gap-2"><ThemeToggle /><UserNav /></div></div>
         </AppHeader>
 
-        <div className="flex-1 overflow-y-auto bg-background">
-          <div className="container mx-auto py-8 px-6">
-            <div className="max-w-4xl mx-auto">
-              {error && (
-                <Alert variant="destructive" className="mb-6 animate-in slide-in-from-top-2">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-
-              <div className="space-y-6">
-                <form id="editForm" onSubmit={handleSubmit} className="space-y-6">
-                  {/* Titel */}
-                  <Card className="p-6 shadow-none border-border">
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <Label
-                          htmlFor="title"
-                          className="text-base font-medium text-foreground flex items-center gap-2"
-                        >
-                          <span>Titel</span>
-                          <span className="text-xs font-normal text-muted-foreground">(erforderlich)</span>
-                        </Label>
-                        <span className={title.length > 90 ? "text-destructive text-xs" : "text-muted-foreground text-xs"}>
-                          {title.length}/100 Zeichen
-                        </span>
-                      </div>
-                      <Input
-                        id="title"
-                        value={title}
-                        onChange={(e) => setTitle(e.target.value)}
-                        className="text-lg py-2.5 px-3 bg-background/50 transition-colors focus-visible:ring-1 focus-visible:ring-primary"
-                        placeholder="Gib einen aussagekräftigen Titel ein..."
-                        maxLength={100}
-                        required
-                      />
-                    </div>
-                  </Card>
-
-                  {/* Beitragsbild */}
-                  <Card className="p-6 shadow-none border-border">
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <Label
-                          htmlFor="featuredImage"
-                          className="text-base font-medium text-foreground flex items-center gap-2"
-                        >
-                          <span>Beitragsbild</span>
-                          <span className="text-xs font-normal text-muted-foreground">(optional)</span>
-                        </Label>
-                      </div>
-                      <div className="flex flex-col sm:flex-row items-start gap-6">
-                        <div className="space-y-4 w-full sm:w-auto">
-                          <input
-                            type="file"
-                            id="featuredImage"
-                            ref={fileInputRef}
-                            onChange={handleImageUpload}
-                            accept="image/*"
-                            className="hidden"
-                          />
-                          <Button
-                            type="button"
-                            onClick={() => fileInputRef.current?.click()}
-                            variant="secondary"
-                            className="w-full sm:w-auto group hover:bg-primary hover:text-primary-foreground transition-colors duration-200"
-                          >
-                            <Upload className="mr-2 h-4 w-4 " />
-                            Bild auswählen
-                          </Button>
-                          <p className="text-xs text-muted-foreground">
-                            Empfohlene Größe: 1200x630px, Max. 5MB
-                          </p>
-                        </div>
-                        {featuredImagePreview ? (
-                          <div className="relative w-full sm:w-[400px] aspect-video rounded-lg overflow-hidden bg-accent/10 group/image ring-1 ring-border">
-                            <Image
-                              src={featuredImagePreview}
-                              alt="Vorschau"
-                              fill
-                              className="object-cover "
-                            />
-                            <Button
-                              type="button"
-                              variant="destructive"
-                              size="sm"
-                              className="absolute top-2 right-2 opacity-100 md:opacity-0 md:group-hover/image:opacity-100 focus-visible:opacity-100 transition-opacity"
-                              onClick={() => {
-                                setFeaturedImage(null);
-                                setFeaturedImagePreview('');
-                                setIsImageDeleted(true);
-                              }}
-                            >
-                              <Trash2 className="h-4 w-4 mr-2" />
-                              Entfernen
-                            </Button>
-                          </div>
-                        ) : (
-                          <div className="w-full sm:w-[400px] aspect-video rounded-lg border-2 border-dashed border-muted-foreground/20 bg-accent/5 flex items-center justify-center">
-                            <div className="text-center text-muted-foreground">
-                              <ImageIcon className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                              <p className="text-sm">Noch kein Bild ausgewählt</p>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </Card>
-
-                  {/* Inhalt */}
-                  <Card className="p-6 shadow-none border-border">
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <Label
-                          htmlFor="content"
-                          className="text-base font-medium text-foreground flex items-center gap-2"
-                        >
-                          <span>Inhalt</span>
-                          <span className="text-xs font-normal text-muted-foreground">(erforderlich)</span>
-                        </Label>
-                      </div>
-                      <div className="border rounded-lg overflow-hidden bg-background/50 focus-within:ring-1 focus-within:ring-primary transition-colors">
-                        <Editor
-                          content={content}
-                          onChange={setContent}
-                          className="min-h-[400px]"
-                        />
-                      </div>
-                    </div>
-                  </Card>
-
-                  {/* Kategorie und Tags */}
-                  <Card className="p-6 shadow-none border-border">
-                    <div className="space-y-8">
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                          <Label className="text-base font-medium text-foreground flex items-center gap-2">
-                              <span>Kategorie</span>
-                            <span className="text-xs font-normal text-muted-foreground">(erforderlich)</span>
-                          </Label>
-                        </div>
-                        <CategorySelect
-                          categories={existingCategories}
-                          selectedCategory={category}
-                          setSelectedCategory={setCategory}
-                          onAddCategory={handleAddNewCategory}
-                        />
-                      </div>
-
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                          <Label className="text-base font-medium text-foreground flex items-center gap-2">
-                              <span>Tags</span>
-                            <span className="text-xs font-normal text-muted-foreground">{tags.length}/5</span>
-                          </Label>
-                        </div>
-                        <TagSelect
-                          availableTags={existingTags}
-                          selectedTags={tags}
-                          onTagSelect={handleAddTag}
-                          onTagRemove={handleRemoveTag}
-                          onAddTag={handleAddNewTag}
-                          maxTags={5}
-                        />
-                      </div>
-                    </div>
-                  </Card>
-                </form>
+        <main id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto">
+          <div className="mx-auto w-full max-w-[1440px] px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
+            <div className="flex flex-wrap items-end justify-between gap-4 border-b pb-6">
+              <div>
+                <Button type="button" variant="ghost" size="sm" onClick={() => router.push('/knowledgebase/' + id)}><ArrowLeft className="h-4 w-4" aria-hidden="true" />Zum Artikel</Button>
+                <p className="mt-4 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Wissen / Bearbeiten</p>
+                <p className="mt-2 max-w-[55ch] text-base leading-relaxed text-muted-foreground">Änderungen am Artikel prüfen und speichern.</p>
               </div>
+              {!loadError && <Button type="submit" form="editForm" disabled={isSubmitting}>{isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Save className="h-4 w-4" aria-hidden="true" />}{isSubmitting ? 'Speichern…' : 'Speichern'}</Button>}
             </div>
+
+            {!session ? (
+              <div className="mt-8"><PageState kind="error" title="Anmeldung erforderlich" description="Melde dich an, um einen Artikel zu bearbeiten." action={<Button asChild variant="outline"><Link href="/login">Zur Anmeldung</Link></Button>} /></div>
+            ) : loadError ? (
+              <div className="mt-8"><PageState kind="error" title="Artikel konnte nicht geladen werden" description={error || 'Bitte versuche es später erneut.'} action={<Button type="button" variant="outline" onClick={() => router.push('/knowledgebase')}>Zur Übersicht</Button>} /></div>
+            ) : (
+              <>
+                {error && <Alert variant="destructive" role="alert" className="my-6"><AlertCircle className="h-4 w-4" aria-hidden="true" /><AlertDescription>{error}</AlertDescription></Alert>}
+                <form id="editForm" method="post" onSubmit={handleSubmit} className="grid min-w-0 items-start gap-10 pt-8 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-12">
+                  <section aria-labelledby="edit-article-content-title" className="min-w-0 border-t pt-5">
+                    <h2 id="edit-article-content-title" className="text-lg font-semibold tracking-tight">Artikelinhalt</h2>
+                    <div className="mt-6 space-y-8">
+                      <div className="border-b pb-7">
+                        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                          <Label htmlFor="title">Titel <span className="text-destructive">*</span></Label>
+                          <span className="text-xs tabular-nums text-muted-foreground">{title.length}/100 Zeichen</span>
+                        </div>
+                        <Input id="title" value={title} onChange={event => setTitle(event.target.value)} placeholder="Gib einen aussagekräftigen Titel ein" maxLength={100} required className="text-base" />
+                      </div>
+
+                      <div className="border-b pb-7">
+                        <p className="mb-2 text-sm font-medium">Beitragsbild <span className="font-normal text-muted-foreground">(optional)</span></p>
+                        <div className="flex flex-wrap items-start gap-4">
+                          <div>
+                            <input type="file" id="featuredImage" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
+                            <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}><Upload className="h-4 w-4" aria-hidden="true" />Bild auswählen</Button>
+                            <p className="mt-2 text-xs text-muted-foreground">Empfohlene Größe: 1200 × 630 px, max. 5 MB</p>
+                          </div>
+                          {featuredImagePreview ? <div className="relative aspect-video w-full max-w-sm overflow-hidden rounded-[10px] border bg-muted">
+                            <Image src={featuredImagePreview} alt="Beitragsbildvorschau" fill className="object-cover" />
+                            <Button type="button" variant="destructive" size="sm" className="absolute right-2 top-2" onClick={() => { setFeaturedImage(null); setFeaturedImagePreview(''); setIsImageDeleted(true); }}><Trash2 className="h-4 w-4" aria-hidden="true" />Entfernen</Button>
+                          </div> : <div className="flex aspect-video w-full max-w-sm items-center justify-center rounded-[10px] border border-dashed text-sm text-muted-foreground"><ImageIcon className="mr-2 h-4 w-4" aria-hidden="true" />Noch kein Bild ausgewählt</div>}
+                        </div>
+                      </div>
+
+                      <div>
+                        <p className="mb-2 text-sm font-medium">Inhalt <span className="text-destructive">*</span></p>
+                        <div className="overflow-hidden rounded-[10px] focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"><Editor content={content} onChange={setContent} className="min-h-[400px]" /></div>
+                      </div>
+                    </div>
+                  </section>
+
+                  <aside aria-label="Artikeloptionen" className="min-w-0 space-y-7">
+                    <section className="border-t pt-5">
+                      <h2 className="text-base font-semibold tracking-tight">Kategorie <span className="text-xs font-normal text-muted-foreground">(erforderlich)</span></h2>
+                      <div className="mt-4"><CategorySelect categories={existingCategories} selectedCategory={category} setSelectedCategory={setCategory} onAddCategory={handleAddNewCategory} /></div>
+                    </section>
+                    <section className="border-t pt-5">
+                      <h2 className="text-base font-semibold tracking-tight">Tags <span className="text-xs font-normal tabular-nums text-muted-foreground">{tags.length}/5</span></h2>
+                      <div className="mt-4"><TagSelect availableTags={existingTags} selectedTags={tags} onTagSelect={handleAddTag} onTagRemove={handleRemoveTag} onAddTag={handleAddNewTag} maxTags={5} /></div>
+                    </section>
+                  </aside>
+                </form>
+              </>
+            )}
           </div>
-        </div>
+        </main>
       </div>
     </AppShell>
   );

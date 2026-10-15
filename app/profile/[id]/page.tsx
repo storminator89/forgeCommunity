@@ -1,630 +1,243 @@
 "use client";
 
-import { AppShell, AppHeader } from '@/components/app-shell';
-import { useEffect, useState, useCallback, useRef } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+/* Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V5 */
+/* Hallmark · genre: editorial · macrostructure: member profile and activity · design-system: design.md · designed-as-app */
+
+import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { Sidebar } from "@/components/Sidebar";
-import { UserNav } from "@/components/user-nav";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { format } from 'date-fns';
+import { de } from 'date-fns/locale';
+import { ArrowUp, Calendar, Github, Globe, Linkedin, Mail, MessageSquare, Settings, Star, Twitter } from 'lucide-react';
+import { toast } from 'react-toastify';
+import { AppHeader, AppShell } from '@/components/app-shell';
+import { PageState } from '@/components/page-state';
+import { Sidebar } from '@/components/Sidebar';
+import { UserNav } from '@/components/user-nav';
+import { ThemeToggle } from '@/components/theme-toggle';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ProfileEditor } from '@/components/profile/ProfileEditor';
 import { ActivityFeed } from '@/components/profile/ActivityFeed';
 import { ProjectsList } from '@/components/profile/ProjectsList';
 import { FollowButton } from '@/components/profile/FollowButton';
 import { FollowersList } from '@/components/profile/FollowersList';
-import { toast } from 'react-toastify';
-import {
-  User,
-  Mail,
-  Calendar,
-  MapPin,
-  Briefcase,
-  Award,
-  Github,
-  Linkedin,
-  Twitter,
-  Globe,
-  Loader2,
-  Users,
-  MessageSquare,
-  Plus,
-  Settings,
-  Star,
-  CheckCircle,
-  AlertCircle
-} from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { format } from 'date-fns';
-import { de } from 'date-fns/locale';
-import type { User as UserType, SocialLinks } from '@/types';
-import { getSafeHttpUrl } from '@/lib/security';
+import { getSafeHttpUrl, getSafeNavigationUrl } from '@/lib/security';
+import type { SocialLinks, User as UserType } from '@/types';
 
-interface TabStats {
-  [key: string]: {
-    count: number;
-    label: string;
-    icon: React.ReactNode;
-  };
-}
+type Profile = Omit<UserType, 'email'> & { email?: string; hasEndorsed?: boolean };
+type LoadState = 'loading' | 'ready' | 'missing' | 'unauthorized' | 'error';
 
-const socialIcons = {
-  github: <Github className="h-5 w-5" />,
-  linkedin: <Linkedin className="h-5 w-5" />,
-  twitter: <Twitter className="h-5 w-5" />,
-  website: <Globe className="h-5 w-5" />
-};
+const socialDestinations = [
+  { key: 'github', label: 'GitHub', Icon: Github },
+  { key: 'linkedin', label: 'LinkedIn', Icon: Linkedin },
+  { key: 'twitter', label: 'Twitter', Icon: Twitter },
+  { key: 'website', label: 'Website', Icon: Globe },
+] as const satisfies ReadonlyArray<{ key: keyof SocialLinks; label: string; Icon: typeof Github }>;
 
-const socialLabels = {
-  github: 'GitHub',
-  linkedin: 'LinkedIn',
-  twitter: 'Twitter',
-  website: 'Website'
-};
-
-const socialColors = {
-  github: 'hover:text-foreground dark:hover:text-white',
-  linkedin: 'hover:text-blue-600',
-  twitter: 'hover:text-blue-400',
-  website: 'hover:text-green-500'
+const roleLabels: Record<Profile['role'], string> = {
+  USER: 'Mitglied',
+  ADMIN: 'Administration',
+  MODERATOR: 'Moderation',
+  INSTRUCTOR: 'Lehrperson',
 };
 
 export default function ProfilePage() {
   const { id: profileId } = useParams<{ id: string }>();
-  const router = useRouter();
   const { data: session } = useSession();
-  const [profile, setProfile] = useState<UserType | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const mainRef = useRef<HTMLElement>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [loadState, setLoadState] = useState<LoadState>('loading');
+  const [retryKey, setRetryKey] = useState(0);
   const [activeTab, setActiveTab] = useState('overview');
   const [isEditing, setIsEditing] = useState(false);
   const [isEndorsing, setIsEndorsing] = useState(false);
   const [hasEndorsed, setHasEndorsed] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [showBackToTop, setShowBackToTop] = useState(false);
-  const mainRef = useRef<HTMLElement>(null);
-
-  const tabStats: TabStats = {
-    overview: {
-      count: 0,
-      label: 'Übersicht',
-      icon: <User className="h-4 w-4" />,
-    },
-    activity: {
-      count: profile?.stats.posts || 0,
-      label: 'Aktivität',
-      icon: <MessageSquare className="h-4 w-4" />,
-    },
-    projects: {
-      count: profile?.stats.projects || 0,
-      label: 'Projekte',
-      icon: <Briefcase className="h-4 w-4" />,
-    },
-  };
-
-  const fetchProfile = useCallback(async () => {
-    if (!profileId) {
-      setIsLoading(false);
-      return;
-    }
-
-    try {
-      setHasEndorsed(false);
-      const encodedProfileId = encodeURIComponent(profileId);
-      const [response, socialResponse] = await Promise.all([
-        fetch(`/api/users/${encodedProfileId}`, {
-          credentials: 'include',
-        }),
-        fetch(`/api/users/${encodedProfileId}/social`, {
-          credentials: 'include',
-        }),
-      ]);
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch profile');
-      }
-
-      const data = await response.json();
-      // The profile endpoint may return placeholder links while the dedicated
-      // endpoint owns the persisted social link values.
-      if (socialResponse.ok) {
-        const socialData = await socialResponse.json();
-        data.socialLinks = socialData.socialLinks ?? data.socialLinks;
-      }
-      setProfile(data);
-    } catch (error) {
-      console.error('Error fetching profile:', error);
-      toast.error('Fehler beim Laden des Profils');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [profileId]);
 
   useEffect(() => {
-    const fetchTimer = setTimeout(() => {
-      void fetchProfile();
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      setLoadState('loading');
+      setProfile(null);
+      setHasEndorsed(false);
+      setActionError(null);
+
+      if (!profileId) {
+        setLoadState('missing');
+        return;
+      }
+
+      const encodedId = encodeURIComponent(profileId);
+      void Promise.all([
+        fetch(`/api/users/${encodedId}`, { credentials: 'include', signal: controller.signal }),
+        fetch(`/api/users/${encodedId}/social`, { credentials: 'include', signal: controller.signal }).catch(() => null),
+      ]).then(async ([response, socialResponse]) => {
+        if (response.status === 404) { setLoadState('missing'); return; }
+        if (response.status === 401) { setLoadState('unauthorized'); return; }
+        if (!response.ok) throw new Error('Profil konnte nicht geladen werden');
+
+        const data = await response.json() as Profile;
+        if (socialResponse?.ok) {
+          const socialData = await socialResponse.json() as { socialLinks?: SocialLinks };
+          data.socialLinks = socialData.socialLinks ?? data.socialLinks;
+        }
+        if (controller.signal.aborted) return;
+        setProfile(data);
+        setHasEndorsed(Boolean(data.hasEndorsed));
+        setLoadState('ready');
+      }).catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        console.error('Error fetching profile:', error);
+        setLoadState('error');
+      });
     }, 0);
 
-    return () => clearTimeout(fetchTimer);
-  }, [fetchProfile]);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [profileId, retryKey]);
 
-  useEffect(() => {
-    const main = mainRef.current;
-    if (!main) return;
-
-    const updateBackToTopVisibility = () => {
-      setShowBackToTop(main.scrollTop > 500);
-    };
-
-    updateBackToTopVisibility();
-    main.addEventListener('scroll', updateBackToTopVisibility, { passive: true });
-    return () => main.removeEventListener('scroll', updateBackToTopVisibility);
-  }, [isLoading]);
-
-  const handleProfileUpdate = async (data: Partial<UserType>) => {
-    try {
-      setProfile(prev => prev ? { ...prev, ...data } : null);
-      toast.success('Profil erfolgreich aktualisiert');
-      setIsEditing(false);
-    } catch (error) {
-      console.error('Error updating profile:', error);
-      toast.error('Fehler beim Aktualisieren des Profils');
-    }
+  const handleProfileUpdate = (data: Partial<Profile>) => {
+    setProfile(previous => previous ? { ...previous, ...data } : null);
+    setIsEditing(false);
   };
 
   const handleEndorseProfile = async () => {
     if (!profile || profile.isCurrentUser || hasEndorsed || isEndorsing) return;
-
+    if (!session?.user?.id) {
+      setActionError('Bitte melde dich an, um dieses Profil zu empfehlen.');
+      return;
+    }
+    setActionError(null);
     setIsEndorsing(true);
     try {
       const response = await fetch(`/api/members/${encodeURIComponent(profile.id)}/endorse`, {
-        method: 'POST',
-        credentials: 'include',
+        method: 'POST', credentials: 'include',
       });
-
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to endorse profile');
-      }
-
-      setProfile(prev => {
-        if (!prev) return null;
-        return {
-          ...prev,
-          endorsements: prev.endorsements + 1,
-        };
-      });
+      if (!response.ok) throw new Error(data.error || 'Profil konnte nicht empfohlen werden.');
+      setProfile(previous => previous ? { ...previous, endorsements: previous.endorsements + 1 } : null);
       setHasEndorsed(true);
-
       toast.success('Profil erfolgreich empfohlen');
     } catch (error) {
       console.error('Error endorsing profile:', error);
-      toast.error(error instanceof Error ? error.message : 'Fehler beim Empfehlen des Profils');
+      setActionError(error instanceof Error ? error.message : 'Profil konnte nicht empfohlen werden.');
     } finally {
       setIsEndorsing(false);
     }
   };
 
-  const renderSocialLinks = () => {
-    if (!profile?.socialLinks) return null;
-
-    const hasLinks = Object.values(profile.socialLinks).some(value => getSafeHttpUrl(value));
-    if (!hasLinks) return null;
-
-    return (
-      <div className="flex flex-wrap gap-4 mt-6">
-        {(Object.entries(profile.socialLinks) as [keyof typeof socialIcons, string][])
-          .map(([key, value]) => [key, getSafeHttpUrl(value)] as const)
-          .filter((entry): entry is readonly [keyof typeof socialIcons, string] => entry[1] !== null)
-          .map(([key, value]) => (
-            <a
-              key={key}
-              href={value}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={`flex items-center gap-2 p-2 rounded-lg hover:bg-accent transition-colors ${socialColors[key]}`}
-            >
-              {socialIcons[key]}
-              <span className="text-sm font-medium">{socialLabels[key]}</span>
-            </a>
-          ))}
-      </div>
-    );
-  };
-  if (isLoading) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-      </div>
-    );
-  }
-
-  if (!profile) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold mb-2">Profil nicht gefunden</h2>
-          <p className="text-muted-foreground">Das angeforderte Profil existiert nicht.</p>
-          <Button
-            className="mt-4"
-            onClick={() => router.push('/')}
-          >
-            Zurück zur Startseite
-          </Button>
-        </div>
-      </div>
-    );
-  }
+  const visibleProfile = loadState === 'ready' && profile?.id === profileId ? profile : null;
+  const safeCoverImage = getSafeNavigationUrl(visibleProfile?.coverImage);
+  const availableSocialLinks = socialDestinations.flatMap(({ key, label, Icon }) => {
+    const href = getSafeHttpUrl(visibleProfile?.socialLinks?.[key]);
+    return href ? [{ key, label, Icon, href }] : [];
+  });
+  const hasExpertise = Boolean(visibleProfile?.teachingLanguages?.length || visibleProfile?.expertise?.length);
 
   return (
     <AppShell>
       <Sidebar />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <AppHeader>
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-            <h2 className="text-2xl font-bold text-foreground">Profil</h2>
-            <div className="flex items-center space-x-4">
-              <ThemeToggle />
-              <UserNav />
-            </div>
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <span className="min-w-0 truncate text-sm font-semibold">Profil</span>
+            <div className="flex shrink-0 items-center gap-2"><ThemeToggle /><UserNav /></div>
           </div>
         </AppHeader>
-
-        <main id="page-content" tabIndex={-1} ref={mainRef} className="flex-1 overflow-y-auto">
-          {/* Cover Image */}
-          {profile.coverImage && (
-            <div className="h-48 bg-cover bg-center relative" style={{ backgroundImage: `url(${profile.coverImage})` }} />
-          )}
-
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
-            <div className={`relative ${profile.coverImage ? '-mt-16' : 'pt-6'}`}>
-              {/* Profile Header Card */}
-              <Card className="mb-6">
-                <CardContent className="pt-6">
-                  <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-                    <div className="min-w-0 sm:flex sm:gap-5">
-                      <div className="relative flex-shrink-0">
-                        <Avatar className="h-32 w-32 border-4 border-white dark:border-border">
-                          <AvatarImage src={profile.image || ''} alt={profile.name || ''} />
-                          <AvatarFallback>
-                            {profile.name?.slice(0, 2).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
+        <main id="page-content" tabIndex={-1} ref={mainRef} onScroll={event => setShowBackToTop(event.currentTarget.scrollTop > 500)} className="min-h-0 flex-1 overflow-y-auto">
+          <div className="mx-auto w-full max-w-[1200px] px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
+            {!visibleProfile ? (
+              <>
+                <h1 className="sr-only">Profil</h1>
+                {loadState === 'loading' || loadState === 'ready' ? (
+                  <PageState kind="loading" title="Profil wird geladen" />
+                ) : loadState === 'missing' ? (
+                  <PageState title="Profil nicht gefunden" description="Das angeforderte Mitgliedsprofil ist nicht verfügbar." action={<Button asChild variant="outline"><Link href="/members">Zu den Mitgliedern</Link></Button>} />
+                ) : loadState === 'unauthorized' ? (
+                  <PageState kind="error" title="Anmeldung erforderlich" description="Melde dich an, um dieses Profil zu sehen." action={<Button asChild><Link href={`/login?callbackUrl=${encodeURIComponent(`/profile/${encodeURIComponent(profileId)}`)}`}>Zur Anmeldung</Link></Button>} />
+                ) : (
+                  <PageState kind="error" title="Profil konnte nicht geladen werden" description="Prüfe deine Verbindung und versuche es erneut." action={<Button variant="outline" onClick={() => setRetryKey(value => value + 1)}>Erneut versuchen</Button>} />
+                )}
+              </>
+            ) : (
+              <>
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Community / Mitgliedsprofil</p>
+                {safeCoverImage && <div className="mt-5 h-32 overflow-hidden rounded-[14px] bg-muted bg-cover bg-center sm:h-44" style={{ backgroundImage: `url("${safeCoverImage.replaceAll('"', '%22')}")` }} role="img" aria-label="Titelbild" />}
+                <header className="mt-6 flex min-w-0 flex-wrap items-start justify-between gap-6 border-b pb-7">
+                  <div className="flex min-w-0 flex-wrap items-start gap-5">
+                    <Avatar className="h-20 w-20 shrink-0 border-2 border-background sm:h-24 sm:w-24">
+                      <AvatarImage src={visibleProfile.image || undefined} alt="" />
+                      <AvatarFallback>{visibleProfile.name?.slice(0, 2).toUpperCase() || 'M'}</AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <h1 className="min-w-0 break-words text-[clamp(1.65rem,1.1rem+2vw,2.35rem)] font-semibold leading-tight tracking-tight [overflow-wrap:anywhere]">{visibleProfile.name || 'Unbenanntes Mitglied'}</h1>
+                        <Badge variant="secondary">{roleLabels[visibleProfile.role]}</Badge>
                       </div>
-                      <div className="mt-4 sm:mt-0 sm:pt-1 sm:max-w-xl">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h1 className="text-2xl font-bold text-foreground sm:text-3xl break-words">
-                            {profile.name}
-                          </h1>
-                          <Badge variant="outline" className="ml-3">
-                            {profile.role}
-                          </Badge>
-                        </div>
-                        {profile.title && (
-                          <p className="text-sm font-medium text-muted-foreground mt-1">
-                            {profile.title}
-                          </p>
-                        )}
-                        <div className="mt-2 flex flex-wrap gap-4">
-                          {profile.contact && (
-                            <span className="flex min-w-0 items-center text-sm text-muted-foreground break-all">
-                              <Mail className="h-4 w-4 mr-1" />
-                              {profile.contact}
-                            </span>
-                          )}
-                          <span className="flex min-w-0 items-center text-sm text-muted-foreground break-all">
-                            <Calendar className="h-4 w-4 mr-1" />
-                            Mitglied seit {format(new Date(profile.createdAt), 'MMMM yyyy', { locale: de })}
-                          </span>
-                          {profile.lastLogin && (
-                            <span className="flex min-w-0 items-center text-sm text-muted-foreground break-all">
-                              <User className="h-4 w-4 mr-1" />
-                              Zuletzt aktiv {format(new Date(profile.lastLogin), 'dd.MM.yyyy HH:mm', { locale: de })}
-                            </span>
-                          )}
-                        </div>
+                      {visibleProfile.title && <p className="mt-2 break-words text-base text-muted-foreground [overflow-wrap:anywhere]">{visibleProfile.title}</p>}
+                      <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
+                        <span className="inline-flex items-center gap-2"><Calendar className="h-4 w-4 shrink-0" aria-hidden="true" />Mitglied seit {format(new Date(visibleProfile.createdAt), 'MMMM yyyy', { locale: de })}</span>
+                        {visibleProfile.contact && <span className="inline-flex min-w-0 items-center gap-2 break-all"><Mail className="h-4 w-4 shrink-0" aria-hidden="true" />{visibleProfile.contact}</span>}
+                        {visibleProfile.isCurrentUser && visibleProfile.lastLogin && <span>Zuletzt angemeldet: {format(new Date(visibleProfile.lastLogin), 'dd.MM.yyyy HH:mm', { locale: de })}</span>}
                       </div>
                     </div>
-
-                    <div className="mt-5 sm:mt-0 flex flex-col sm:flex-row sm:space-x-3 space-y-3 sm:space-y-0">
-                      {!profile.isCurrentUser && (
-                        <FollowButton
-                          userId={profile.id}
-                          initialIsFollowing={!!profile.isFollowing}
-                          userName={profile.name || ''}
-                          onFollowChange={(isFollowing) => {
-                            setProfile(prev => prev ? {
-                              ...prev,
-                              isFollowing,
-                              stats: {
-                                ...prev.stats,
-                                followers: prev.stats.followers + (isFollowing ? 1 : -1),
-                              },
-                            } : null);
-                          }}
-                        />
-                      )}
-                      {profile.isCurrentUser ? (
-                        <Button
-                          variant="outline"
-                          onClick={() => setIsEditing(true)}
-                          className="flex-1 sm:flex-none"
-                        >
-                          <Settings className="mr-2 h-4 w-4" />
-                          Einstellungen
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="outline"
-                          onClick={() => router.push('/chat')}
-                          className="flex-1 sm:flex-none"
-                        >
-                          <MessageSquare className="mr-2 h-4 w-4" />
-                          Chat öffnen
-                        </Button>
-                      )}
-                    </div>
                   </div>
-
-                  {/* Stats Grid */}
-                  <div className="grid grid-cols-1 min-[400px]:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
-                    <div className="bg-card dark:bg-muted/50 p-4 rounded-lg">
-                      <FollowersList
-                        userId={profile.id}
-                        count={profile.stats.followers}
-                        type="followers"
-                      />
-                    </div>
-                    <div className="bg-card dark:bg-muted/50 p-4 rounded-lg">
-                      <FollowersList
-                        userId={profile.id}
-                        count={profile.stats.following}
-                        type="following"
-                      />
-                    </div>
-                    <div className="bg-card dark:bg-muted/50 p-4 rounded-lg text-center">
-                      <div className="text-2xl font-bold">{profile.endorsements}</div>
-                      <p className="text-xs text-muted-foreground">Empfehlungen</p>
-                      {!profile.isCurrentUser && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="mt-2"
-                          onClick={handleEndorseProfile}
-                          disabled={isEndorsing || hasEndorsed}
-                        >
-                          <Star className="mr-1 h-4 w-4" />
-                          {hasEndorsed ? 'Bereits empfohlen' : isEndorsing ? 'Wird empfohlen…' : 'Empfehlen'}
-                        </Button>
-                      )}
-                    </div>
-                    <div className="bg-card dark:bg-muted/50 p-4 rounded-lg text-center">
-                      <div className="text-2xl font-bold">{profile.stats.projects}</div>
-                      <p className="text-xs text-muted-foreground">Projekte</p>
-                    </div>
-                  </div>
-
-                  {/* Social Links */}
-                  {renderSocialLinks()}
-                </CardContent>
-              </Card>
-
-              {/* Profile Editor */}
-              {profile.isCurrentUser && isEditing && (
-                <ProfileEditor
-                  profile={profile}
-                  onUpdate={handleProfileUpdate}
-                />
-              )}
-
-              {/* Main Content Tabs */}
-              <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-                <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 bg-card p-1 rounded-lg shadow-sm">
-                  {Object.entries(tabStats).map(([key, { label, count, icon }]) => (
-                    <TabsTrigger
-                      key={key}
-                      value={key}
-                      className="flex items-center space-x-2"
-                    >
-                      {icon}
-                      <span>{label}</span>
-                      {count > 0 && (
-                        <Badge variant="secondary" className="ml-2">
-                          {count}
-                        </Badge>
-                      )}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-
-                <TabsContent value="overview">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Bio Section */}
-                    <Card>
-                      <CardHeader>
-                        <CardTitle>Über mich</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        {profile.bio ? (
-                          <p className="text-muted-foreground whitespace-pre-wrap break-words">{profile.bio}</p>
-                        ) : (
-                          <p className="text-muted-foreground italic">
-                            {profile.isCurrentUser
-                              ? 'Fügen Sie eine Biografie hinzu, um anderen von sich zu erzählen.'
-                              : 'Keine Biografie vorhanden'}
-                          </p>
-                        )}
-                      </CardContent>
-                    </Card>
-
-                    {/* Skills Section */}
-                    <Card>
-                      <CardHeader>
-                        <CardTitle>Skills</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-4">
-                          {profile.skills.length > 0 ? (
-                            profile.skills.map((skill) => (
-                              <div key={skill.id} className="space-y-2">
-                                <div className="flex justify-between items-center">
-                                  <span className="font-medium">{skill.name}</span>
-                                  <div className="flex items-center space-x-2">
-                                    <span className="text-sm text-muted-foreground">
-                                      {skill.endorsements} Empfehlungen
-                                    </span>
-                                  </div>
-                                </div>
-                                <Progress value={skill.level} className="h-2" />
-                              </div>
-                            ))
-                          ) : (
-                            <p className="text-muted-foreground italic">
-                              {profile.isCurrentUser
-                                ? 'Fügen Sie Skills hinzu, um Ihre Fähigkeiten zu präsentieren.'
-                                : 'Keine Skills vorhanden'}
-                            </p>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    {/* Teaching Info für Instructors */}
-                    {profile.role === 'INSTRUCTOR' && (
-                      <Card className="md:col-span-2">
-                        <CardHeader>
-                          <CardTitle>Expertise</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div>
-                              <h4 className="font-medium mb-2">Unterrichtssprachen</h4>
-                              <div className="flex flex-wrap gap-2">
-                                {profile.teachingLanguages?.map((lang) => (
-                                  <Badge key={lang} variant="secondary">
-                                    {lang}
-                                  </Badge>
-                                )) || (
-                                    <p className="text-muted-foreground italic">
-                                      Keine Unterrichtssprachen angegeben
-                                    </p>
-                                  )}
-                              </div>
-                            </div>
-                            <div>
-                              <h4 className="font-medium mb-2">Fachgebiete</h4>
-                              <div className="flex flex-wrap gap-2">
-                                {profile.expertise?.map((exp) => (
-                                  <Badge key={exp} variant="secondary">
-                                    {exp}
-                                  </Badge>
-                                )) || (
-                                    <p className="text-muted-foreground italic">
-                                      Keine Fachgebiete angegeben
-                                    </p>
-                                  )}
-                              </div>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
+                  <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+                    {visibleProfile.isCurrentUser ? (
+                      <Button type="button" variant="outline" onClick={() => setIsEditing(value => !value)}><Settings className="h-4 w-4" aria-hidden="true" />{isEditing ? 'Bearbeitung schließen' : 'Profil bearbeiten'}</Button>
+                    ) : (
+                      <>
+                        <FollowButton key={visibleProfile.id} userId={visibleProfile.id} initialIsFollowing={!!visibleProfile.isFollowing} userName={visibleProfile.name || 'diesem Mitglied'} onFollowChange={isFollowing => setProfile(previous => previous ? { ...previous, isFollowing, stats: { ...previous.stats, followers: previous.stats.followers + (isFollowing ? 1 : -1) } } : null)} />
+                        <Button asChild variant="outline"><Link href="/chat"><MessageSquare className="h-4 w-4" aria-hidden="true" />Chat öffnen</Link></Button>
+                      </>
                     )}
                   </div>
-                </TabsContent>
+                </header>
 
-                <TabsContent value="activity">
-                  <ActivityFeed userId={profile.id} />
-                </TabsContent>
+                {actionError && <p role="alert" className="mt-5 rounded-[10px] border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">{actionError} {!session && <Link href="/login" className="font-semibold underline underline-offset-2">Zur Anmeldung</Link>}</p>}
 
-                <TabsContent value="projects">
-                  <ProjectsList
-                    userId={profile.id}
-                    isOwner={!!profile.isCurrentUser}
-                  />
-                </TabsContent>
-              </Tabs>
-            </div>
-          </div>
+                <section aria-label="Profilzahlen" className="grid grid-cols-2 border-b py-5 sm:grid-cols-4">
+                  <div className="min-w-0 border-r p-2 sm:p-3"><FollowersList userId={visibleProfile.id} count={visibleProfile.stats.followers} type="followers" /></div>
+                  <div className="min-w-0 p-2 sm:border-r sm:p-3"><FollowersList userId={visibleProfile.id} count={visibleProfile.stats.following} type="following" /></div>
+                  <div className="min-w-0 border-r border-t p-3 sm:border-t-0"><p className="text-2xl font-semibold tabular-nums">{visibleProfile.endorsements}</p><p className="text-sm text-muted-foreground">Empfehlungen</p>{!visibleProfile.isCurrentUser && <Button type="button" variant="ghost" size="sm" className="mt-1" onClick={() => void handleEndorseProfile()} disabled={isEndorsing || hasEndorsed}><Star className="h-4 w-4" aria-hidden="true" />{hasEndorsed ? 'Bereits empfohlen' : isEndorsing ? 'Wird empfohlen…' : 'Empfehlen'}</Button>}</div>
+                  <div className="min-w-0 border-t p-3 sm:border-t-0"><p className="text-2xl font-semibold tabular-nums">{visibleProfile.stats.projects}</p><p className="text-sm text-muted-foreground">Projekte</p></div>
+                </section>
 
-          {/* Floating Action Button für Mobile */}
-          {profile.isCurrentUser && !isEditing && (
-            <div className="fixed bottom-6 right-6 md:hidden">
-              <Button
-                size="lg"
-                className="rounded-full shadow-sm"
-                aria-label="Profil bearbeiten"
-                onClick={() => setIsEditing(true)}
-              >
-                <Settings className="h-5 w-5" />
-              </Button>
-            </div>
-          )}
+                {availableSocialLinks.length > 0 && <section aria-label="Externe Profile" className="flex flex-wrap gap-2 border-b py-5">{availableSocialLinks.map(({ key, label, Icon, href }) => <Button key={key} asChild variant="outline" size="sm"><a href={href} target="_blank" rel="noopener noreferrer"><Icon className="h-4 w-4" aria-hidden="true" />{label}<span className="sr-only">(öffnet in neuem Tab)</span></a></Button>)}</section>}
 
-          {/* Loading Overlay */}
-          <AnimatePresence>
-            {isLoading && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black/20 dark:bg-black/40 flex items-center justify-center z-50"
-              >
-                <Card className="w-[300px]">
-                  <CardContent className="py-6">
-                    <div className="flex flex-col items-center space-y-4">
-                      <motion.div
-                        animate={{ rotate: 360 }}
-                        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                      >
-                        <Loader2 className="h-8 w-8 text-blue-500" />
-                      </motion.div>
-                      <p className="text-sm text-center">
-                        Lade Profildaten...
-                      </p>
+                {visibleProfile.isCurrentUser && isEditing && <ProfileEditor profile={visibleProfile} onUpdate={handleProfileUpdate} />}
+
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-8">
+                  <TabsList aria-label="Profilbereiche" className="flex h-auto w-full flex-wrap justify-start gap-1 rounded-none border-b bg-transparent p-0">
+                    <TabsTrigger value="overview" className="min-h-11">Übersicht</TabsTrigger>
+                    <TabsTrigger value="activity" className="min-h-11">Aktivität {visibleProfile.stats.posts > 0 && <span className="tabular-nums text-muted-foreground">{visibleProfile.stats.posts}</span>}</TabsTrigger>
+                    <TabsTrigger value="projects" className="min-h-11">Projekte {visibleProfile.stats.projects > 0 && <span className="tabular-nums text-muted-foreground">{visibleProfile.stats.projects}</span>}</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="overview" className="pt-6">
+                    <div className="grid min-w-0 gap-x-10 gap-y-8 md:grid-cols-2">
+                      <section aria-labelledby="profile-bio-title" className="min-w-0 border-t pt-5">
+                        <h2 id="profile-bio-title" className="text-xl font-semibold tracking-tight">Über mich</h2>
+                        <p className="mt-4 whitespace-pre-wrap break-words text-base leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">{visibleProfile.bio || (visibleProfile.isCurrentUser ? 'Ergänze eine Biografie, damit andere mehr über dich erfahren.' : 'Noch keine Biografie vorhanden.')}</p>
+                      </section>
+                      <section aria-labelledby="profile-skills-title" className="min-w-0 border-t pt-5">
+                        <h2 id="profile-skills-title" className="text-xl font-semibold tracking-tight">Skills</h2>
+                        {visibleProfile.skills.length === 0 ? <p className="mt-4 text-base text-muted-foreground">{visibleProfile.isCurrentUser ? 'Ergänze deine Fähigkeiten im Profil.' : 'Noch keine Skills vorhanden.'}</p> : <ul className="mt-4 divide-y">{visibleProfile.skills.map(skill => <li key={skill.id} className="py-3 first:pt-0"><div className="flex flex-wrap items-baseline justify-between gap-2"><span className="min-w-0 break-words font-medium">{skill.name}</span><span className="text-sm text-muted-foreground">{skill.endorsements} Empfehlungen</span></div><Progress value={skill.level} className="mt-2 h-2" aria-label={`${skill.name}: ${skill.level} Prozent`} /></li>)}</ul>}
+                      </section>
+                      {visibleProfile.role === 'INSTRUCTOR' && hasExpertise && <section aria-labelledby="profile-expertise-title" className="border-t pt-5 md:col-span-2"><h2 id="profile-expertise-title" className="text-xl font-semibold tracking-tight">Expertise</h2><div className="mt-4 grid gap-5 sm:grid-cols-2"><div><h3 className="font-medium">Unterrichtssprachen</h3><div className="mt-2 flex flex-wrap gap-2">{visibleProfile.teachingLanguages?.length ? visibleProfile.teachingLanguages.map(language => <Badge key={language} variant="secondary">{language}</Badge>) : <p className="text-sm text-muted-foreground">Keine angegeben</p>}</div></div><div><h3 className="font-medium">Fachgebiete</h3><div className="mt-2 flex flex-wrap gap-2">{visibleProfile.expertise?.length ? visibleProfile.expertise.map(subject => <Badge key={subject} variant="secondary">{subject}</Badge>) : <p className="text-sm text-muted-foreground">Keine angegeben</p>}</div></div></div></section>}
                     </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
+                  </TabsContent>
+                  <TabsContent value="activity" className="pt-6"><ActivityFeed userId={visibleProfile.id} /></TabsContent>
+                  <TabsContent value="projects" className="pt-6"><ProjectsList userId={visibleProfile.id} isOwner={!!visibleProfile.isCurrentUser} /></TabsContent>
+                </Tabs>
+              </>
             )}
-          </AnimatePresence>
-
-          {/* Error Toast Container */}
-          <div className="fixed bottom-4 right-4 z-50">
-            <AnimatePresence>
-              {/* Toasts werden hier automatisch eingefügt */}
-            </AnimatePresence>
           </div>
-
-          {/* Back to Top Button */}
-          <AnimatePresence>
-            {showBackToTop && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 20 }}
-                className="fixed bottom-6 right-6 z-40"
-              >
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="rounded-full shadow-sm"
-                  aria-label="Zurück nach oben"
-                  onClick={() => mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
-                >
-                  <motion.div
-                    animate={{ y: [0, -4, 0] }}
-                    transition={{ duration: 1.5, repeat: Infinity }}
-                  >
-                    ↑
-                  </motion.div>
-                </Button>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {showBackToTop && <Button type="button" variant="outline" size="icon" className="fixed bottom-4 right-4 z-40 bg-background shadow-sm" aria-label="Zurück nach oben" onClick={() => mainRef.current?.scrollTo({ top: 0, behavior: 'auto' })}><ArrowUp className="h-4 w-4" aria-hidden="true" /></Button>}
         </main>
       </div>
     </AppShell>

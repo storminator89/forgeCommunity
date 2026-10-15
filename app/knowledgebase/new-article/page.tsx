@@ -1,6 +1,10 @@
 'use client';
 
+/* Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V5 */
+/* Hallmark · genre: editorial · macrostructure: article composer · design-system: design.md · designed-as-app */
+
 import { AppShell, AppHeader } from '@/components/app-shell';
+import { PageState } from '@/components/page-state';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
@@ -10,16 +14,14 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { BookOpen, ArrowLeft, Upload, Loader2, Bookmark, Send, Trash2, Book, Tag } from 'lucide-react';
+import { ArrowLeft, Upload, Loader2, Bookmark, Send, Trash2 } from 'lucide-react';
 import Image from 'next/image';
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { CategorySelect } from "@/components/CategorySelect";
 import { TagSelect } from "@/components/TagSelect";
 import { toast } from 'sonner';
 import { Editor } from "@/components/Editor";
+import Link from 'next/link';
 
 export default function NewArticle() {
   const { data: session, status } = useSession();
@@ -49,6 +51,8 @@ export default function NewArticle() {
   }, [session, status, router]);
 
   useEffect(() => {
+    if (status === 'loading') return;
+    if (!session) return;
     const fetchCategoriesAndTags = async () => {
       setIsLoading(true);
       try {
@@ -72,7 +76,7 @@ export default function NewArticle() {
     };
 
     fetchCategoriesAndTags();
-  }, []);
+  }, [session, status]);
 
   const handleAddTag = (tag: string) => {
     if (!tags.includes(tag) && tags.length < 5) {
@@ -113,6 +117,7 @@ export default function NewArticle() {
   };
 
   const submitArticle = async (asDraft: boolean) => {
+    setIsDraft(asDraft);
     setIsSubmitting(true);
 
     if (!title || !content || !category) {
@@ -161,33 +166,9 @@ export default function NewArticle() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    await submitArticle(false);
-  };
-
-  const handleSaveDraft = async () => {
-    await submitArticle(true);
-  };
-
-  const quillModules = {
-    toolbar: [
-      [{ 'header': [1, 2, 3, false] }],
-      ['bold', 'italic', 'underline', 'strike'],
-      [{ 'list': 'ordered' }, { 'list': 'bullet' }],
-      ['link', 'image'],
-      ['clean']
-    ],
-    clipboard: {
-      matchVisual: false // Prevents the deprecated mutation events
-    }
-  };
-
-  if (isLoading) {
+  if (status === 'loading' || (session && isLoading)) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
+      <AppShell><Sidebar /><div className="flex min-h-0 min-w-0 flex-1 flex-col"><AppHeader><div><h1>Neuer Artikel</h1></div></AppHeader><main id="page-content" tabIndex={-1} className="flex min-h-0 flex-1 items-center justify-center p-4"><PageState kind="loading" title="Editor wird geladen" /></main></div></AppShell>
     );
   }
 
@@ -196,41 +177,28 @@ export default function NewArticle() {
       <Sidebar />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <AppHeader>
-          <div className="container mx-auto px-6 py-5">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="flex items-center">
-                <Button
-                  variant="ghost"
-                  aria-label="Zurück zur Wissensbasis"
-                  onClick={() => router.push('/knowledgebase')}
-                  className="mr-4 hover:bg-background/60"
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                </Button>
-                <div>
-                  <h1 className="text-2xl font-semibold text-foreground tracking-tight">Neuer Artikel</h1>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <ThemeToggle />
-                <UserNav />
-              </div>
-            </div>
-          </div>
+          <div className="flex min-w-0 items-center justify-between gap-3"><h1>Neuer Artikel</h1><div className="flex shrink-0 items-center gap-2"><ThemeToggle /><UserNav /></div></div>
         </AppHeader>
 
-        <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto">
-          <ScrollArea className="h-full">
-            <div className="container mx-auto py-8 px-6">
+        <main id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto">
+            <div className="mx-auto w-full max-w-[1440px] px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
 
-              <div className="max-w-7xl mx-auto">
-                <div className="grid lg:grid-cols-[1fr,300px] gap-6">
-                  {/* Hauptbereich - Editor */}
-                  <div className="space-y-6">
-                    <div className="bg-card rounded-xl shadow-sm border border-border/40 overflow-hidden">
-                      <div className="p-6 space-y-6">
+              {!session ? <PageState kind="error" title="Anmeldung erforderlich" description="Melde dich an, um einen Artikel zu schreiben." action={<Button asChild variant="outline"><Link href="/login">Zur Anmeldung</Link></Button>} /> : <>
+
+              <div>
+                <div className="mb-8 border-b pb-6">
+                  <Button type="button" variant="ghost" size="sm" onClick={() => router.push('/knowledgebase')}><ArrowLeft className="h-4 w-4" aria-hidden="true" />Zur Übersicht</Button>
+                  <p className="mt-4 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Wissen / Schreiben</p>
+                  <p className="mt-2 max-w-[55ch] text-base leading-relaxed text-muted-foreground">Halte Erfahrungen und Anleitungen für die Community fest.</p>
+                </div>
+                {alert && <Alert variant={alert.type === 'error' ? 'destructive' : 'default'} className="mb-6" role={alert.type === 'error' ? 'alert' : 'status'}><AlertDescription>{alert.message}</AlertDescription></Alert>}
+                <div className="grid min-w-0 items-start gap-10 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-12">
+                  <section aria-labelledby="new-article-content-title" className="min-w-0 border-t pt-5">
+                    <h2 id="new-article-content-title" className="text-lg font-semibold tracking-tight">Artikelinhalt</h2>
+                    <div className="mt-6">
+                      <div className="space-y-8">
                         {/* Titel */}
-                        <div>
+                        <div className="border-b pb-7">
                           <div className="flex justify-between items-center mb-2">
                             <Label htmlFor="title" className="text-sm font-medium text-foreground">
                               Titel <span className="text-destructive">*</span>
@@ -250,7 +218,7 @@ export default function NewArticle() {
                         </div>
 
                         {/* Beitragsbild */}
-                        <div>
+                        <div className="border-b pb-7">
                           <Label className="text-sm font-medium text-foreground mb-2 block">Beitragsbild</Label>
                           <div className="flex flex-wrap items-center gap-4">
                             <Button
@@ -297,8 +265,8 @@ export default function NewArticle() {
 
                         {/* Editor */}
                         <div>
-                          <Label className="text-sm font-medium text-foreground mb-2 block">Inhalt</Label>
-                          <div className="border rounded-lg overflow-hidden">
+                          <p className="mb-2 text-sm font-medium text-foreground">Inhalt</p>
+                          <div className="overflow-hidden rounded-[10px] focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
                             <Editor
                               content={content}
                               onChange={setContent}
@@ -308,19 +276,12 @@ export default function NewArticle() {
                         </div>
                       </div>
                     </div>
-                  </div>
+                  </section>
 
-                  {/* Seitenleiste - Metadaten */}
-                  <div className="space-y-6">
-                    {/* Aktionen */}
-                    <div className="bg-card rounded-xl shadow-sm border border-border/40 overflow-hidden">
-                      <div className="p-4 border-b border-border/40">
-                        <h2 className="font-semibold text-lg flex items-center">
-                          <BookOpen className="mr-2 h-5 w-5 text-primary" />
-                          Aktionen
-                        </h2>
-                      </div>
-                      <div className="p-4 space-y-3">
+                  <aside aria-label="Artikeloptionen" className="min-w-0 space-y-7">
+                    <section className="border-t pt-5">
+                      <h2 className="text-base font-semibold tracking-tight">Aktionen</h2>
+                      <div className="mt-4 space-y-3">
                         <Button
                           variant="outline"
                           onClick={() => submitArticle(true)}
@@ -343,7 +304,7 @@ export default function NewArticle() {
                         <Button
                           onClick={() => submitArticle(false)}
                           disabled={isSubmitting}
-                          type="submit"
+                          type="button"
                           className="w-full justify-start"
                         >
                           {isSubmitting && !isDraft ? (
@@ -359,17 +320,11 @@ export default function NewArticle() {
                           )}
                         </Button>
                       </div>
-                    </div>
+                    </section>
 
-                    {/* Kategorien */}
-                    <div className="bg-card rounded-xl shadow-sm border border-border/40 overflow-hidden">
-                      <div className="p-4 border-b border-border/40">
-                        <h2 className="font-semibold text-lg flex items-center">
-                          <Book className="mr-2 h-5 w-5 text-primary" />
-                          Kategorie
-                        </h2>
-                      </div>
-                      <div className="p-4">
+                    <section className="border-t pt-5">
+                      <h2 className="text-base font-semibold tracking-tight">Kategorie</h2>
+                      <div className="mt-4">
                         <CategorySelect
                           categories={existingCategories}
                           selectedCategory={category}
@@ -377,17 +332,11 @@ export default function NewArticle() {
                           onAddCategory={handleAddNewCategory}
                         />
                       </div>
-                    </div>
+                    </section>
 
-                    {/* Tags */}
-                    <div className="bg-card rounded-xl shadow-sm border border-border/40 overflow-hidden">
-                      <div className="p-4 border-b border-border/40">
-                        <h2 className="font-semibold text-lg flex items-center">
-                          <Tag className="mr-2 h-5 w-5 text-primary" />
-                          Tags
-                        </h2>
-                      </div>
-                      <div className="p-4">
+                    <section className="border-t pt-5">
+                      <h2 className="text-base font-semibold tracking-tight">Tags</h2>
+                      <div className="mt-4">
                         <TagSelect
                           availableTags={existingTags}
                           selectedTags={tags}
@@ -396,12 +345,12 @@ export default function NewArticle() {
                           onAddTag={handleAddNewTag}
                         />
                       </div>
-                    </div>
-                  </div>
+                    </section>
+                  </aside>
                 </div>
               </div>
+              </>}
             </div>
-          </ScrollArea>
         </main>
       </div>
     </AppShell>

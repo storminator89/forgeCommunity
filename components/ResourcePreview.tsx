@@ -179,7 +179,7 @@ export function ResourcePreview({ url, type }: ResourcePreviewProps) {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-80 bg-card/50">
+      <div role="status" aria-label="Vorschau wird geladen" className="flex h-80 items-center justify-center bg-card/50">
         <div className="space-y-4 w-full px-6">
           <div className="animate-pulse flex space-x-4">
             <div className="flex-1 space-y-4 py-1">
@@ -197,7 +197,7 @@ export function ResourcePreview({ url, type }: ResourcePreviewProps) {
 
   if (error) {
     return (
-      <div className="h-80 flex flex-col items-center justify-center text-muted-foreground bg-card/50">
+      <div role="status" className="flex h-80 flex-col items-center justify-center bg-card/50 p-4 text-muted-foreground">
         <svg
           className="h-12 w-12 text-muted-foreground mb-3"
           fill="none"
@@ -212,12 +212,11 @@ export function ResourcePreview({ url, type }: ResourcePreviewProps) {
           />
         </svg>
         <p className="text-center">{error}</p>
-        {safeUrl && <button
-          onClick={() => window.open(safeUrl, '_blank', 'noopener,noreferrer')}
-          className="mt-4 text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 underline"
+        {safeUrl && <a href={safeUrl} target="_blank" rel="noopener noreferrer"
+          className="mt-4 inline-flex min-h-11 items-center text-primary underline hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           Direkt zur Quelle
-        </button>}
+        </a>}
       </div>
     );
   }
@@ -237,7 +236,7 @@ export function ResourcePreview({ url, type }: ResourcePreviewProps) {
           className="w-full h-full"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
           allowFullScreen
-          title="Video Preview"
+          title="Video-Vorschau"
         />
       </div>
     );
@@ -297,15 +296,15 @@ export function ResourcePreview({ url, type }: ResourcePreviewProps) {
             fill
             onError={() => setImageError(true)}
           />
-          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/95 via-black/70 to-transparent p-6">
+          <div className="absolute bottom-0 left-0 right-0 border-t bg-card/95 p-4 sm:p-6">
             <div className="relative z-10">
               {previewData.title && (
                 <div className="space-y-2">
-                  <p className="text-white text-lg font-semibold leading-tight">
+                  <p className="text-lg font-semibold leading-tight text-foreground">
                     {previewData.title}
                   </p>
                   {previewData.description && (
-                    <p className="text-white text-sm leading-relaxed line-clamp-2">
+                    <p className="line-clamp-2 text-sm leading-relaxed text-muted-foreground">
                       {previewData.description}
                     </p>
                   )}

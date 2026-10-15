@@ -37,10 +37,14 @@ it('allows keyboard channel selection and blocks duplicate sends while the messa
   const channel = { id: 'channel', name: 'Allgemein', _count: { members: 2 } };
   mockChat.mockReturnValue({ channels: [channel], currentChannel: channel, messages: [], setCurrentChannel, sendMessage, loading: false });
   render(<ChatPage />);
+  const channelToggle = screen.getByRole('button', { name: 'Channels öffnen' });
+  await user.click(channelToggle);
+  expect(channelToggle).toHaveAttribute('aria-expanded', 'true');
   const channelButton = screen.getByRole('button', { name: 'Allgemein' });
   channelButton.focus();
   await user.keyboard('{Enter}');
   expect(setCurrentChannel).toHaveBeenCalledWith(channel);
+  expect(channelToggle).toHaveAttribute('aria-expanded', 'false');
   expect(screen.getByRole('navigation', { name: 'Chat-Channels' })).toBeVisible();
   await user.type(screen.getByRole('textbox', { name: 'Nachricht' }), 'Hallo');
   await user.click(screen.getByRole('button', { name: 'Nachricht senden' }));

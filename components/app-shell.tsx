@@ -31,8 +31,8 @@ export function AppHeader({ children, className, ...props }: HTMLAttributes<HTML
   const navigation = useAppNavigation();
   return (
     <header className={cn('app-header', className)} {...props}>
-      <Button variant="ghost" size="icon" className="app-menu lg:hidden"
-        aria-label="Navigation öffnen" aria-controls="app-navigation"
+      <Button type="button" variant="ghost" size="icon" className="app-menu lg:hidden"
+        aria-label="Navigation öffnen" aria-controls={navigation?.open ? 'app-navigation' : undefined}
         aria-expanded={navigation?.open ?? false} onClick={() => navigation?.setOpen(true)}>
         <Menu className="h-5 w-5" />
       </Button>

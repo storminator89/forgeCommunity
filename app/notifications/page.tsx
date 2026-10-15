@@ -1,16 +1,16 @@
 "use client";
 
+/* Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V5 */
+/* Hallmark · genre: editorial · macrostructure: activity ledger · design-system: design.md · designed-as-app */
+
 import { AppShell, AppHeader } from '@/components/app-shell';
 import { useState } from 'react';
 import { Sidebar } from "@/components/Sidebar";
 import { UserNav } from "@/components/user-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Bell, MessageSquare, Hash, CheckCircle, Trash2, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Badge } from "@/components/ui/badge";
 import { useNotifications } from '@/contexts/NotificationContext';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
@@ -38,69 +38,69 @@ export default function NotificationsPage() {
   };
 
   return (
-    <TooltipProvider>
-      <AppShell>
-        <Sidebar />
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <AppHeader>
-            <div className="flex min-w-0 items-center justify-between gap-2">
-              <h1 className="min-w-0 truncate">Benachrichtigungen</h1>
-              <div className="flex shrink-0 items-center gap-2"><ThemeToggle /><UserNav /></div>
-            </div>
-          </AppHeader>
+    <AppShell>
+      <Sidebar />
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <AppHeader>
+          <div className="flex min-w-0 items-center justify-between gap-2">
+            <h1 className="min-w-0 truncate">Benachrichtigungen</h1>
+            <div className="flex shrink-0 items-center gap-2"><ThemeToggle /><UserNav /></div>
+          </div>
+        </AppHeader>
 
-          <main id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-hidden">
-            <ScrollArea className="h-full p-4 lg:p-8">
-              <div className="mx-auto max-w-3xl space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex flex-wrap gap-2" role="group" aria-label="Benachrichtigungen filtern">
-                    <Button size="sm" variant={filter === 'all' ? 'default' : 'outline'} aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>Alle <span className="ml-2 opacity-70">{notifications.length}</span></Button>
-                    <Button size="sm" variant={filter === 'unread' ? 'default' : 'outline'} aria-pressed={filter === 'unread'} onClick={() => setFilter('unread')}>Ungelesen <span className="ml-2 opacity-70">{unreadCount}</span></Button>
-                  </div>
-                  <Button variant="outline" size="sm" disabled={unreadCount === 0} onClick={() => markAllAsRead()} className="gap-2">
-                    <CheckCircle2 className="h-4 w-4" aria-hidden="true" /><span>Alle als gelesen markieren</span>
-                  </Button>
-                </div>
-                <p className="text-sm text-muted-foreground" role="status">{unreadCount === 0 ? 'Du bist auf dem aktuellen Stand.' : `${unreadCount} ungelesene ${unreadCount === 1 ? 'Benachrichtigung' : 'Benachrichtigungen'}`}</p>
-                <AnimatePresence initial={false}>
-                  {filteredNotifications.map(notification => (
-                    <motion.article key={notification.id}
-                      initial={{ opacity: 0, y: reduceMotion ? 0 : 12 }} animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: reduceMotion ? 0 : -12 }} transition={{ duration: reduceMotion ? 0 : 0.2 }}
-                      className={`flex gap-3 rounded-xl border bg-card p-4 ${!notification.isRead ? 'border-primary/40' : 'border-border'}`}>
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">{getIcon(notification.type)}</div>
-                      <div className="min-w-0 flex-1">
-                        <div className="mb-2 flex flex-wrap items-center gap-2">
-                          <Badge variant="secondary">{notificationLabels[notification.type] ?? 'Mitteilung'}</Badge>
-                          {!notification.isRead && <span className="text-xs font-medium text-primary">Neu</span>}
-                        </div>
-                        <p className={`break-words text-sm [overflow-wrap:anywhere] ${notification.isRead ? 'text-muted-foreground' : 'font-medium text-foreground'}`}>{notification.content}</p>
-                        <time dateTime={new Date(notification.createdAt).toISOString()} className="mt-2 block text-xs text-muted-foreground">{format(new Date(notification.createdAt), 'PPp', { locale: de })}</time>
-                        <div className="mt-2 flex flex-wrap gap-1 sm:hidden">
-                          {!notification.isRead && <Button variant="ghost" size="sm" className="gap-2" onClick={() => markAsRead(notification.id)}><CheckCircle className="h-4 w-4" aria-hidden="true" />Als gelesen markieren</Button>}
-                          <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground" onClick={() => deleteNotification(notification.id)}><Trash2 className="h-4 w-4" aria-hidden="true" />Löschen</Button>
-                        </div>
-                      </div>
-                      <div className="hidden shrink-0 items-start gap-1 sm:flex">
-                        {!notification.isRead && <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" aria-label="Als gelesen markieren" onClick={() => markAsRead(notification.id)}><CheckCircle className="h-4 w-4 text-primary" /></Button></TooltipTrigger><TooltipContent>Als gelesen markieren</TooltipContent></Tooltip>}
-                        <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" aria-label="Benachrichtigung löschen" onClick={() => deleteNotification(notification.id)}><Trash2 className="h-4 w-4 text-muted-foreground" /></Button></TooltipTrigger><TooltipContent>Löschen</TooltipContent></Tooltip>
-                      </div>
-                    </motion.article>
-                  ))}
-                </AnimatePresence>
-                {filteredNotifications.length === 0 && (
-                  <div className="rounded-xl border bg-card px-4 py-12 text-center">
-                    <Bell className="mx-auto mb-4 h-10 w-10 text-muted-foreground" aria-hidden="true" />
-                    <h2 className="font-semibold">{filter === 'unread' ? 'Alles gelesen' : 'Noch keine Benachrichtigungen'}</h2>
-                    <p className="mt-2 text-sm text-muted-foreground">{filter === 'unread' ? 'Hier erscheinen deine neuen Benachrichtigungen.' : 'Sobald es Neuigkeiten in deiner Community gibt, findest du sie hier.'}</p>
-                    {filter === 'unread' && notifications.length > 0 && <Button variant="outline" size="sm" className="mt-4" onClick={() => setFilter('all')}>Alle Benachrichtigungen anzeigen</Button>}
-                  </div>
-                )}
+        <main id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto">
+          <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
+            <div className="flex flex-wrap items-end justify-between gap-4 border-b pb-6">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Deine Aktivität</p>
+                <p className="mt-2 text-sm text-muted-foreground" role="status">{unreadCount === 0 ? 'Du bist auf dem aktuellen Stand.' : `${unreadCount} ungelesene ${unreadCount === 1 ? 'Benachrichtigung' : 'Benachrichtigungen'}`}</p>
               </div>
-            </ScrollArea>
-          </main>
-        </div>
-      </AppShell>
-    </TooltipProvider>
+              <Button type="button" variant="outline" size="sm" disabled={unreadCount === 0} onClick={() => markAllAsRead()}>
+                <CheckCircle2 className="h-4 w-4" aria-hidden="true" />Alle als gelesen markieren
+              </Button>
+            </div>
+
+            <div className="flex gap-2 border-b py-3" role="group" aria-label="Benachrichtigungen filtern">
+              <Button type="button" size="sm" variant={filter === 'all' ? 'secondary' : 'ghost'} aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>Alle <span className="text-muted-foreground">{notifications.length}</span></Button>
+              <Button type="button" size="sm" variant={filter === 'unread' ? 'secondary' : 'ghost'} aria-pressed={filter === 'unread'} onClick={() => setFilter('unread')}>Ungelesen <span className="text-muted-foreground">{unreadCount}</span></Button>
+            </div>
+
+            <div aria-live="polite">
+              <AnimatePresence initial={false}>
+                {filteredNotifications.map(notification => (
+                  <motion.article key={notification.id}
+                    initial={{ opacity: 0, y: reduceMotion ? 0 : 8 }} animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: reduceMotion ? 0 : -8 }} transition={{ duration: reduceMotion ? 0 : 0.15 }}
+                    className={`relative grid min-w-0 grid-cols-[2.75rem_minmax(0,1fr)] gap-3 border-b py-6 sm:gap-5 ${!notification.isRead ? 'before:absolute before:inset-y-5 before:left-0 before:w-0.5 before:rounded-full before:bg-primary' : ''}`}>
+                    <div className={`ml-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] ${notification.isRead ? 'bg-muted text-muted-foreground' : 'bg-accent text-primary'}`}>{getIcon(notification.type)}</div>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">{notificationLabels[notification.type] ?? 'Mitteilung'}</span>
+                        {!notification.isRead && <span className="text-xs font-semibold text-primary">Neu</span>}
+                      </div>
+                      <p className={`mt-2 break-words text-sm leading-relaxed [overflow-wrap:anywhere] ${notification.isRead ? 'text-muted-foreground' : 'font-medium text-foreground'}`}>{notification.content}</p>
+                      <time dateTime={new Date(notification.createdAt).toISOString()} className="mt-2 block text-xs text-muted-foreground">{format(new Date(notification.createdAt), 'PPp', { locale: de })}</time>
+                      <div className="mt-3 flex flex-wrap items-center gap-x-1 gap-y-2">
+                        {!notification.isRead && <Button type="button" variant="ghost" size="sm" onClick={() => markAsRead(notification.id)}><CheckCircle className="h-4 w-4" aria-hidden="true" />Als gelesen markieren</Button>}
+                        <Button type="button" variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive" onClick={() => deleteNotification(notification.id)}><Trash2 className="h-4 w-4" aria-hidden="true" />Löschen</Button>
+                      </div>
+                    </div>
+                  </motion.article>
+                ))}
+              </AnimatePresence>
+            </div>
+
+            {filteredNotifications.length === 0 && (
+              <div className="py-16 text-center" role="status">
+                <Bell className="mx-auto mb-4 h-9 w-9 text-muted-foreground" aria-hidden="true" />
+                <h2 className="text-xl font-semibold">{filter === 'unread' ? 'Alles gelesen' : 'Noch keine Benachrichtigungen'}</h2>
+                <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">{filter === 'unread' ? 'Hier erscheinen deine neuen Benachrichtigungen.' : 'Sobald es Neuigkeiten in deiner Community gibt, findest du sie hier.'}</p>
+                {filter === 'unread' && notifications.length > 0 && <Button type="button" variant="outline" size="sm" className="mt-5" onClick={() => setFilter('all')}>Alle Benachrichtigungen anzeigen</Button>}
+              </div>
+            )}
+          </div>
+        </main>
+      </div>
+    </AppShell>
   );
 }

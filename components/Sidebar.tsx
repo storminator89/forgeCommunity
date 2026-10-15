@@ -45,32 +45,32 @@ export function Sidebar({ className, isOpen: externalOpen = false, onClose }: Si
       ...(['ADMIN', 'MODERATOR'].includes(session?.user?.role ?? '') ? [{ title: 'Moderation', items: moderationNavigation }] : []),
       ...(session?.user?.role === 'ADMIN' ? [{ title: 'Administration', items: adminNavigation }] : [])];
     return <div className="flex h-full flex-col">
-      <div className={cn("flex h-20 shrink-0 gap-2 px-4", compact ? "flex-col items-center justify-center gap-1" : "items-center")}>
+      <div className={cn("flex h-20 shrink-0 gap-2 px-4", compact ? "h-24 flex-col items-center justify-center gap-1" : "items-center")}>
         <Link href="/community" aria-label="ForgeCommunity Start" className="flex min-w-0 items-center gap-2.5" onClick={() => setOpen(false)}>
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground"><Flame className="h-5 w-5" /></span>
           {!compact && <span className="text-[15px] font-bold tracking-tight">Forge<span className="font-normal text-muted-foreground">Community</span></span>}
         </Link>
-        <button className={cn("hidden rounded-lg p-1.5 text-muted-foreground hover:bg-accent lg:block", !compact && "ml-auto")} onClick={toggleCollapse}
+        <button type="button" className={cn("hidden h-11 w-11 items-center justify-center rounded-[10px] text-muted-foreground hover:bg-muted hover:text-foreground lg:flex", !compact && "ml-auto")} onClick={toggleCollapse}
           aria-label={compact ? 'Navigation erweitern' : 'Navigation einklappen'} aria-expanded={!compact}>
           {compact ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
         </button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
         <NavigationSearch collapsed={compact} keyboardShortcut={!mobile} onNavigate={() => setOpen(false)} />
-        <nav aria-label="Hauptnavigation" className="space-y-5">
+        <nav aria-label="Hauptnavigation" className="space-y-4">
           {groups.map(group => <div key={group.title}>
-            {!compact && <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{group.title}</p>}
+            {!compact && <p className="mb-1 px-3 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">{group.title}</p>}
             <ul className="space-y-1">
               {group.items.map(item => {
                 const aliases = 'aliases' in item && Array.isArray(item.aliases) ? item.aliases as string[] : [];
                 const active = isNavigationActive(pathname, item.href, aliases);
                 const count = item.href === '/notifications' ? unreadCount : 0;
                 const link = <Link href={item.href} aria-current={active ? 'page' : undefined} aria-label={compact ? item.name : undefined}
-                  onClick={() => setOpen(false)} className={cn('relative flex min-h-10 items-center gap-3 rounded-xl px-3 text-[13px] transition-colors',
-                    compact && 'justify-center px-2', active ? 'bg-accent font-semibold text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')}>
-                  <item.icon className="h-[18px] w-[18px] shrink-0" />
+                  onClick={() => setOpen(false)} className={cn('relative flex min-h-11 items-center gap-3 rounded-[10px] px-3 text-sm transition-colors',
+                    compact && 'justify-center px-2', active ? 'bg-accent/70 font-semibold text-foreground before:absolute before:bottom-2 before:left-0 before:top-2 before:w-0.5 before:rounded-full before:bg-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')}>
+                  <item.icon className={cn('h-[18px] w-[18px] shrink-0', active && 'text-primary')} aria-hidden="true" />
                   {!compact && <span className="truncate">{item.name}</span>}
-                  {count > 0 && <span aria-label={`${count} ungelesene Benachrichtigungen`} className={cn('flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground', compact ? 'absolute right-0 top-0' : 'ml-auto')}>
+                  {count > 0 && <span aria-label={`${count} ungelesene Benachrichtigungen`} className={cn('flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[11px] font-semibold text-primary-foreground', compact ? 'absolute right-0 top-0' : 'ml-auto')}>
                     {count > 99 ? '99+' : count}
                   </span>}
                 </Link>;
@@ -82,22 +82,22 @@ export function Sidebar({ className, isOpen: externalOpen = false, onClose }: Si
       </div>
       <div className="shrink-0 border-t px-3 py-3">
         {!compact && <p className="mb-2 truncate px-3 text-xs font-medium">{session?.user?.name || 'Deine Community'}</p>}
-        <button onClick={() => signOut({ callbackUrl: '/login' })} aria-label="Abmelden" className={cn('flex h-10 w-full items-center gap-3 rounded-xl px-3 text-[13px] text-muted-foreground hover:bg-accent hover:text-foreground', compact && 'justify-center')}>
+        <button type="button" onClick={() => signOut({ callbackUrl: '/login' })} aria-label="Abmelden" className={cn('flex h-11 w-full items-center gap-3 rounded-[10px] px-3 text-sm text-muted-foreground hover:bg-muted hover:text-foreground', compact && 'justify-center')}>
           <LogOut className="h-[18px] w-[18px]" />{!compact && 'Abmelden'}
         </button>
       </div>
     </div>;
   };
 
-  return <TooltipProvider delayDuration={150}>
-    <aside id="app-navigation" className={cn('app-sidebar hidden shrink-0 border-r bg-card lg:block', collapsed ? 'w-[88px]' : 'w-[252px]', className)}>
+  return <TooltipProvider delayDuration={700}>
+    <aside id="app-navigation-rail" className={cn('app-sidebar hidden shrink-0 border-r bg-card lg:block', collapsed ? 'w-[88px]' : 'w-[252px]', className)}>
       {renderNavigation(collapsed)}
     </aside>
     <Sheet open={open} onOpenChange={setOpen}>
-      <SheetContent side="left" className="w-[min(300px,90vw)] p-0 [&>button]:hidden">
+      <SheetContent id="app-navigation" side="left" className="w-[min(300px,90vw)] p-0 [&>button:last-child]:hidden">
         <SheetTitle className="sr-only">Navigation</SheetTitle>
         <SheetDescription className="sr-only">Bereiche von ForgeCommunity</SheetDescription>
-        <button onClick={() => setOpen(false)} className="absolute right-3 top-6 rounded-lg p-2 text-muted-foreground" aria-label="Navigation schließen"><X className="h-4 w-4" /></button>
+        <button type="button" onClick={() => setOpen(false)} className="absolute right-2 top-[18px] flex h-11 w-11 items-center justify-center rounded-[10px] text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Navigation schließen"><X className="h-5 w-5" /></button>
         {open && renderNavigation(false, true)}
       </SheetContent>
     </Sheet>

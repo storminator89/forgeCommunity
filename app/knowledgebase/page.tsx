@@ -1,20 +1,19 @@
 'use client';
 
+/* Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V5 */
+/* Hallmark · genre: editorial · macrostructure: knowledge directory · design-system: design.md · designed-as-app */
+
 import { PageState, RetryButton } from '@/components/page-state';
 import { AppShell, AppHeader } from '@/components/app-shell';
 import { useState, useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
 import { Sidebar } from "@/components/Sidebar";
 import { UserNav } from "@/components/user-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Search, Book, Plus, ChevronRight, Calendar, User, Tag, Filter } from 'lucide-react';
+import { Search, Plus, ArrowUpRight } from 'lucide-react';
 import Link from 'next/link';
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { motion, AnimatePresence } from 'framer-motion';
 
 import Image from 'next/image';
 import { sanitizeTextPreview } from '@/lib/sanitize-html';
@@ -51,7 +50,6 @@ export default function KnowledgeBase() {
   const [articles, setArticles] = useState<Article[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const router = useRouter();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -100,274 +98,107 @@ export default function KnowledgeBase() {
     [articles, selectedCategory, selectedTag, searchTerm]
   );
 
+  const hasFilters = Boolean(searchTerm || selectedCategory !== 'All' || selectedTag !== 'All');
+  const clearFilters = () => { setSearchTerm(''); setSelectedCategory('All'); setSelectedTag('All'); };
+
 
   return (
     <AppShell>
       <Sidebar />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <AppHeader>
-          <div className="container mx-auto px-6 py-5">
-            <div className="flex flex-row items-center justify-between gap-3">
-              <div className="flex items-center">
-                <div className="bg-primary/10 p-2.5 rounded-xl mr-4">
-                  <Book className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <h1 className="text-2xl font-semibold text-foreground tracking-tight">Wissensdatenbank</h1>
-                  <p className="text-sm text-muted-foreground mt-0.5">Entdecke und teile Wissen</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-3">
-                  <ThemeToggle />
-                  <UserNav />
-                </div>
-              </div>
-            </div>
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <h1 className="min-w-0 truncate">Wissensdatenbank</h1>
+            <div className="flex shrink-0 items-center gap-2"><ThemeToggle /><UserNav /></div>
           </div>
         </AppHeader>
 
-        <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto bg-accent/5">
-          <div className="container mx-auto py-8 px-6">
-
-            <div className="max-w-7xl mx-auto space-y-8">
-              {/* Filter und Aktionen */}
-              <div className="grid lg:grid-cols-[300px,1fr] gap-6">
-                {/* Linke Seite: Filter */}
-                <div className="space-y-6">
-                  {/* Aktionen */}
-                  <div className="bg-card rounded-xl shadow-sm overflow-hidden border border-border/40">
-                    <div className="p-4">
-                      <Link href="/knowledgebase/new-article">
-                        <Button className="w-full shadow-sm hover:shadow group bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg transition-all duration-200">
-                          <Plus className="mr-2 h-4 w-4" />
-                          Neuer Artikel
-                        </Button>
-                      </Link>
-                    </div>
-                  </div>
-
-                  {/* Filter */}
-                  <div className="bg-card rounded-xl shadow-sm overflow-hidden border border-border/40">
-                    <div className="p-4 border-b border-border/40">
-                      <h2 className="font-semibold text-lg flex items-center">
-                        <Filter className="mr-2 h-5 w-5 text-primary" />
-                        Filter
-                      </h2>
-                    </div>
-
-                    {/* Kategorien */}
-                    <div className="p-4 border-b border-border/40">
-                      <h3 className="text-sm font-medium text-muted-foreground mb-3 flex items-center">
-                        <Book className="mr-2 h-4 w-4" />
-                        Kategorien
-                      </h3>
-                      <div className="space-y-1">
-                        {categories.map((category) => (
-                          <button
-                            key={category}
-                            onClick={() => setSelectedCategory(category)}
-                            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all duration-200 ${selectedCategory === category
-                              ? 'bg-primary text-primary-foreground'
-                              : 'hover:bg-muted/50 text-foreground'
-                              }`}
-                          >
-                            <span className="flex items-center">
-                              {category === 'All' ? 'Alle Kategorien' : category}
-                            </span>
-                            <Badge
-                              variant={selectedCategory === category ? "outline" : "secondary"}
-                              className={`ml-auto ${selectedCategory === category ? 'border-primary-foreground/30 text-primary-foreground' : ''}`}
-                            >
-                              {category === 'All'
-                                ? articles.length
-                                : articles.filter(a => a.category === category).length
-                              }
-                            </Badge>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Tags */}
-                    <div className="p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-sm font-medium text-muted-foreground flex items-center">
-                          <Tag className="mr-2 h-4 w-4" />
-                          Tags
-                        </h3>
-                        {selectedTag !== 'All' && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setSelectedTag('All')}
-                            className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
-                          >
-                            Zurücksetzen
-                          </Button>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {Array.from(new Set(articles.flatMap(article => article.tags.map(tag => tag.name)))).map((tag) => (
-                          <button
-                            type="button"
-                            aria-pressed={selectedTag === tag}
-                            key={tag}
-                            className={`inline-flex items-center rounded-full px-2.5 py-1 font-medium cursor-pointer transition-all duration-200 text-xs ${selectedTag === tag
-                              ? 'bg-primary hover:bg-primary/90 text-primary-foreground'
-                              : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
-                              }`}
-                            onClick={() => setSelectedTag(tag === selectedTag ? 'All' : tag)}
-                          >
-                            {tag}
-                            <span className="ml-1.5 px-1 py-0.5 rounded-sm bg-background/10 text-[10px]">
-                              {articles.filter(article =>
-                                article.tags.some(t => t.name === tag)
-                              ).length}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Rechte Seite: Artikel Liste */}
-                <div className="space-y-6">
-                  {/* Suchleiste */}
-                  <div className="bg-card rounded-xl shadow-sm overflow-hidden border border-border/40">
-                    <div className="p-4">
-                      <div className="relative">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          type="text"
-                          placeholder="Artikel durchsuchen..."
-                          value={searchTerm}
-                          onChange={(e) => setSearchTerm(e.target.value)}
-                          className="pl-10 pr-4 w-full bg-background/50 focus:bg-background transition-all border-muted-foreground/20 focus:border-primary rounded-lg"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Artikel Grid */}
-                  <div className="grid gap-6">
-                    <AnimatePresence>
-                      <motion.div
-                        className="grid gap-8"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                      >
-                        {isLoading ? <PageState kind="loading" title="Artikel werden geladen" /> : error ? <PageState kind="error" title="Artikel konnten nicht geladen werden" description="Prüfe deine Verbindung und versuche es erneut." action={<RetryButton onClick={() => window.location.reload()} />} /> : filteredArticles.length === 0 ? (
-                          <div className="bg-card p-12 rounded-xl shadow-sm text-center border border-border/40">
-                            <div className="flex flex-col items-center gap-5">
-                              <div className="bg-primary/10 p-5 rounded-full">
-                                <Search className="h-8 w-8 text-primary" />
-                              </div>
-                              <div>
-                                <h3 className="text-lg font-medium mb-2">Keine Artikel gefunden</h3>
-                                <p className="text-muted-foreground">
-                                  Versuche es mit anderen Suchbegriffen oder Filtern
-                                </p>
-                              </div>
-                              {(searchTerm || selectedCategory !== 'All' || selectedTag !== 'All') && (
-                                <Button
-                                  variant="outline"
-                                  onClick={() => {
-                                    setSelectedCategory('All');
-                                    setSelectedTag('All');
-                                    setSearchTerm('');
-                                  }}
-                                  className="mt-2"
-                                >
-                                  Filter zurücksetzen
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        ) : (
-                          filteredArticles.map((article) => (
-                            <motion.article
-                              key={article.id}
-                              initial={{ opacity: 0, y: 20 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              exit={{ opacity: 0, y: -20 }}
-                              transition={{ duration: 0.3 }}
-                              className="group bg-card rounded-xl shadow-sm hover:shadow-md transition-all duration-300 border border-border/40 hover:border-border"
-                            >
-                              <Link href={`/knowledgebase/${article.id}`} className="block p-8">
-                                <div className="flex flex-col md:flex-row gap-8">
-                                  {article.featuredImage && (
-                                    <div className="md:w-1/3">
-                                      <div className="relative aspect-video rounded-xl overflow-hidden bg-muted">
-                                        <Image
-                                          src={article.featuredImage}
-                                          alt={article.title}
-                                          fill
-                                          className="object-cover"
-                                        />
-
-                                      </div>
-                                    </div>
-                                  )}
-                                  <div className={`${article.featuredImage ? 'md:w-2/3' : 'w-full'}`}>
-                                    <div className="flex items-center gap-2 mb-3">
-                                      <Badge variant="outline" className="text-xs px-2 py-0.5">
-                                        {article.category}
-                                      </Badge>
-                                      <span className="text-sm text-muted-foreground">
-                                        {new Date(article.createdAt).toLocaleDateString()}
-                                      </span>
-                                    </div>
-
-                                    <h3 className="text-xl font-semibold text-foreground mb-2 group-hover:text-primary transition-colors">
-                                      {article.title}
-                                    </h3>
-
-                                    <div className="flex items-center gap-2 mb-4">
-                                      <div className="flex items-center">
-                                        <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center">
-                                          <User className="h-3 w-3 text-primary" />
-                                        </div>
-                                        <span className="ml-2 text-sm text-muted-foreground">
-                                          {article.author.name || article.author.email}
-                                        </span>
-                                      </div>
-                                    </div>
-
-                                    <p className="text-muted-foreground mb-4 line-clamp-2">
-                                      {sanitizeTextPreview(article.content, 150)}
-                                    </p>
-
-                                    <div className="flex flex-wrap gap-2 mb-4">
-                                      {article.tags.map((tag) => (
-                                        <Badge
-                                          key={tag.id}
-                                          variant="secondary"
-                                          className="text-xs px-2 py-0.5 hover:bg-secondary/80 transition-colors"
-                                        >
-                                          <Tag className="mr-1 h-2.5 w-2.5" />
-                                          {tag.name}
-                                        </Badge>
-                                      ))}
-                                    </div>
-
-                                    <span className="inline-flex items-center text-sm font-semibold text-primary">
-                                      Weiterlesen
-                                      <ChevronRight className="ml-1 h-4 w-4 group-hover/btn:translate-x-0.5 transition-transform" />
-                                    </span>
-                                  </div>
-                                </div>
-                              </Link>
-                            </motion.article>
-                          ))
-                        )}
-                      </motion.div>
-                    </AnimatePresence>
-                  </div>
-                </div>
+        <main id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto">
+          <div className="mx-auto w-full max-w-[1440px] px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
+            <div className="flex flex-wrap items-end justify-between gap-5 border-b pb-7">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Wissen / Entdecken</p>
+                <p className="mt-2 max-w-[55ch] text-base leading-relaxed text-muted-foreground">Entdecke Anleitungen und Antworten aus der Community.</p>
               </div>
+              <Button asChild><Link href="/knowledgebase/new-article"><Plus className="h-4 w-4" aria-hidden="true" />Neuer Artikel</Link></Button>
+            </div>
+
+            <div className="grid min-w-0 gap-8 pt-8 lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-10">
+              <aside aria-labelledby="kb-filter-title" className="min-w-0 border-b pb-7 lg:border-b-0 lg:border-r lg:pr-8">
+                <h2 id="kb-filter-title" className="text-base font-semibold tracking-tight">Filter</h2>
+                <div className="mt-5">
+                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Kategorien</h3>
+                  <div role="group" aria-label="Kategorie wählen" className="flex max-w-full gap-1 overflow-x-auto pb-2 lg:block lg:space-y-1 lg:overflow-visible">
+                    {categories.map(category => (
+                      <button type="button" key={category} aria-pressed={selectedCategory === category} onClick={() => setSelectedCategory(category)}
+                        className={'flex min-h-11 shrink-0 items-center justify-between gap-3 whitespace-nowrap rounded-[10px] px-3 text-left text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:w-full lg:min-w-0 lg:whitespace-normal ' + (selectedCategory === category ? 'bg-accent/70 font-semibold text-foreground' : 'text-muted-foreground')}>
+                        <span className="min-w-0 break-words [overflow-wrap:anywhere]">{category === 'All' ? 'Alle Kategorien' : category}</span>
+                        <span className="tabular-nums text-xs text-muted-foreground">{category === 'All' ? articles.length : articles.filter(article => article.category === category).length}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mt-6 border-t pt-5">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Tags</h3>
+                    {selectedTag !== 'All' && <button type="button" onClick={() => setSelectedTag('All')} className="min-h-11 text-xs font-medium text-primary hover:underline">Zurücksetzen</button>}
+                  </div>
+                  <div role="group" aria-label="Tag wählen" className="mt-2 flex flex-wrap gap-2">
+                    {tags.slice(1).map(tag => (
+                      <button type="button" key={tag} aria-pressed={selectedTag === tag} onClick={() => setSelectedTag(selectedTag === tag ? 'All' : tag)}
+                        className={'inline-flex min-h-9 max-w-full items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ' + (selectedTag === tag ? 'border-primary bg-accent text-foreground' : 'border-border text-muted-foreground hover:bg-muted')}>
+                        <span className="truncate">{tag}</span><span className="tabular-nums">{articles.filter(article => article.tags.some(item => item.name === tag)).length}</span>
+                      </button>
+                    ))}
+                    {tags.length === 1 && <p className="text-sm text-muted-foreground">Noch keine Tags.</p>}
+                  </div>
+                </div>
+              </aside>
+
+              <section aria-labelledby="kb-results-title" className="min-w-0">
+                <label htmlFor="kb-search" className="mb-2 block text-sm font-medium">Artikel suchen</label>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                  <Input id="kb-search" type="search" placeholder="Titel, Inhalt oder Tag" value={searchTerm} onChange={event => setSearchTerm(event.target.value)} className="pl-10" />
+                </div>
+
+                <div className="mt-9 flex flex-wrap items-baseline justify-between gap-2 border-b pb-4">
+                  <h2 id="kb-results-title" className="text-xl font-semibold tracking-tight">Artikel entdecken</h2>
+                  <p role="status" className="text-sm tabular-nums text-muted-foreground">{filteredArticles.length} Artikel</p>
+                </div>
+
+                {isLoading ? (
+                  <div className="mt-5"><PageState kind="loading" title="Artikel werden geladen" /></div>
+                ) : error ? (
+                  <div className="mt-5"><PageState kind="error" title="Artikel konnten nicht geladen werden" description="Prüfe deine Verbindung und versuche es erneut." action={<RetryButton onClick={() => window.location.reload()} />} /></div>
+                ) : filteredArticles.length === 0 ? (
+                  <div className="mt-5"><PageState title={hasFilters ? 'Keine Artikel gefunden' : 'Noch keine Artikel'} description={hasFilters ? 'Versuche es mit anderen Suchbegriffen oder Filtern.' : 'Sobald Artikel veröffentlicht werden, findest du sie hier.'} action={hasFilters ? <Button type="button" variant="outline" onClick={clearFilters}>Filter zurücksetzen</Button> : undefined} /></div>
+                ) : (
+                  <ul className="divide-y">
+                    {filteredArticles.map(article => (
+                      <li key={article.id} className="min-w-0">
+                        <Link href={'/knowledgebase/' + article.id} className={'group grid min-w-0 gap-5 py-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ' + (article.featuredImage ? 'sm:grid-cols-[minmax(0,1fr)_11rem]' : '')}>
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                              <span className="font-semibold uppercase tracking-[0.08em]">{article.category}</span>
+                              <time dateTime={article.createdAt}>{new Date(article.createdAt).toLocaleDateString('de-DE')}</time>
+                              <span>{article.author.name || article.author.email}</span>
+                            </div>
+                            <h3 className="mt-2 min-w-0 break-words text-lg font-semibold tracking-tight group-hover:text-primary [overflow-wrap:anywhere]">{article.title}</h3>
+                            <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-muted-foreground">{sanitizeTextPreview(article.content, 150)}</p>
+                            {article.tags.length > 0 && <div className="mt-3 flex flex-wrap gap-1.5">
+                              {article.tags.map(tag => <Badge key={tag.id} variant="secondary" className="max-w-full truncate">{tag.name}</Badge>)}
+                            </div>}
+                            <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-primary">Weiterlesen <ArrowUpRight className="h-4 w-4" aria-hidden="true" /></span>
+                          </div>
+                          {article.featuredImage && <div className="relative -order-1 aspect-video min-w-0 overflow-hidden rounded-[10px] bg-muted sm:order-last"><Image src={article.featuredImage} alt="" fill className="object-cover" /></div>}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
             </div>
           </div>
         </main>

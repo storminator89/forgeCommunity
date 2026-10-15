@@ -25,4 +25,15 @@ it('encodes the certificate path and renders localized certificate details', asy
   await waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/verify-certificate/id%2Fwith%3Fseparator', expect.objectContaining({ signal: expect.any(AbortSignal) })))
   expect(screen.getByText('Ada')).toBeInTheDocument()
   expect(screen.getByText('2. Oktober 2026')).toBeInTheDocument()
+  expect(screen.getByRole('main')).toHaveAttribute('id', 'page-content')
+  expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
+  expect(screen.getByRole('link', { name: 'Zum Inhalt springen' })).toHaveAttribute('href', '#page-content')
+})
+
+it('does not confirm malformed or mismatched certificate records', async () => {
+  jest.mocked(fetch).mockResolvedValue({ ok: true, status: 200, json: async () => ({ valid: true, certificate: { id: 'different-id', userName: 'Ada', courseName: 'Sicherheit', issuedAt: '2026-10-02T10:00:00Z' } }) } as Response)
+  render(<VerifyCertificate />)
+  expect(await screen.findByRole('heading', { name: 'Prüfung nicht abgeschlossen' })).toBeInTheDocument()
+  expect(screen.queryByText('Gültiges Zertifikat')).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Erneut prüfen' })).toBeInTheDocument()
 })
