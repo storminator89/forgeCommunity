@@ -461,6 +461,21 @@ export default function CommunityPage() {
   const { data, status } = useSession()
   const session = status === 'authenticated' ? data : null
 
+  // The session can resolve after the page first hydrates. Do not expose an
+  // interactive anonymous composer that will be remounted (and lose edits)
+  // when its account-scoped key changes to the signed-in viewer.
+  if (status === 'loading') return (
+    <AppShell>
+      <Sidebar />
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <AppHeader><h1>Community</h1></AppHeader>
+        <main id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto px-4 py-8 sm:px-6 lg:px-8">
+          <PageState kind="loading" title="Community wird geladen" />
+        </main>
+      </div>
+    </AppShell>
+  )
+
   // The posts response can include this viewer's unpublished posts and likes.
   // Reset the whole feed before a different account can see cached rows.
   return <Community key={`${session?.user?.id ?? 'anonymous'}:${session?.user?.role ?? 'USER'}`} session={session} />

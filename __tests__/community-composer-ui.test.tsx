@@ -1,14 +1,47 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { useSession } from 'next-auth/react'
 import Community from '@/app/community/page'
 
 jest.mock('@/components/Sidebar', () => ({ Sidebar: () => null }))
 jest.mock('@/components/user-nav', () => ({ UserNav: () => null }))
 jest.mock('@/components/theme-toggle', () => ({ ThemeToggle: () => null }))
 jest.mock('@/components/Editor', () => ({ Editor: () => <div role="textbox" aria-label="Text bearbeiten" /> }))
-jest.mock('next-auth/react', () => ({ useSession: () => ({ data: { user: { id: 'member', name: 'Ada Lovelace' } }, status: 'authenticated' }) }))
+jest.mock('next-auth/react', () => ({ useSession: jest.fn() }))
 
 beforeEach(() => {
+  jest.mocked(useSession).mockReturnValue({
+    data: { user: { id: 'member', name: 'Ada Lovelace' }, expires: '2099-01-01' },
+    status: 'authenticated', update: jest.fn(),
+  } as ReturnType<typeof useSession>)
   global.fetch = jest.fn().mockImplementation(async (url: string) => ({ ok: true, json: async () => url.startsWith('/api/posts?') ? { posts: [], nextCursor: null } : [] }))
+})
+
+it('does not let a composer open and disappear while the signed-in session resolves', async () => {
+  jest.mocked(useSession).mockReturnValue({ data: null, status: 'loading', update: jest.fn() } as ReturnType<typeof useSession>)
+  const view = render(<Community />)
+  expect(screen.getByRole('heading', { name: 'Community' })).toBeVisible()
+  expect(screen.getByRole('status')).toHaveTextContent('Community wird geladen')
+  expect(screen.getByRole('link', { name: 'Zum Inhalt springen' })).toHaveAttribute('href', '#page-content')
+  expect(screen.getByRole('main')).toHaveAttribute('id', 'page-content')
+  expect(screen.queryByRole('button', { name: 'Neuen Beitrag erstellen' })).not.toBeInTheDocument()
+
+  jest.mocked(useSession).mockReturnValue({
+    data: { user: { id: 'member', name: 'Ada Lovelace' }, expires: '2099-01-01' },
+    status: 'authenticated', update: jest.fn(),
+  } as ReturnType<typeof useSession>)
+  view.rerender(<Community />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Neuen Beitrag erstellen' }))
+  expect(await screen.findByRole('textbox', { name: 'Titel' })).toBeVisible()
+  expect(screen.getByRole('button', { name: 'Abbrechen' })).toBeVisible()
+})
+
+it('shows the public community after session resolution without leaving the loading state behind', async () => {
+  jest.mocked(useSession).mockReturnValue({ data: null, status: 'loading', update: jest.fn() } as ReturnType<typeof useSession>)
+  const view = render(<Community />)
+  jest.mocked(useSession).mockReturnValue({ data: null, status: 'unauthenticated', update: jest.fn() } as ReturnType<typeof useSession>)
+  view.rerender(<Community />)
+  expect(await screen.findByRole('button', { name: 'Neuen Beitrag erstellen' })).toBeVisible()
+  expect(screen.queryByText('Community wird geladen')).not.toBeInTheDocument()
 })
 
 it('opens and cancels the community composer with one native button', async () => {

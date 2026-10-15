@@ -169,7 +169,7 @@ test('landing, account, community, members, chat, and notifications work on desk
     await page.getByRole('button', { name: channelName, exact: true }).click();
     await expect(page.getByRole('navigation', { name: 'Chat-Channels' })).toBeHidden();
   }
-  await expect(page.getByRole('heading', { name: `# ${channelName}` })).toBeVisible();
+  await expect(page.getByRole('heading', { name: `# ${channelName}`, exact: true })).toBeVisible();
   const composer = page.getByRole('textbox', { name: 'Nachricht', exact: true });
   await composer.fill(message);
   const sentMessage = page.waitForResponse(response => response.url().endsWith('/api/chat/messages') && response.request().method() === 'POST');
