@@ -273,6 +273,44 @@ it('keeps the own-skills tab addressable across reload-style mounting and real t
   expect(jest.mocked(fetch).mock.calls.every(([, init]) => !init?.method)).toBe(true);
 });
 
+it('switches Skills panels immediately by keyboard even before router search params refresh', async () => {
+  jest.mocked(fetch).mockImplementation(async url => ({ ok: true, json: async () =>
+    String(url) === '/api/user/skills' ? [] : directory } as Response));
+  render(<SearchParamsContext.Provider value={new URLSearchParams()}><SkillDirectoryPage /></SearchParamsContext.Provider>);
+  await screen.findByRole('link', { name: 'Ada' });
+  const community = screen.getByRole('tab', { name: 'Community' });
+  const own = screen.getByRole('tab', { name: 'Meine Fähigkeiten' });
+  act(() => community.focus());
+  await userEvent.keyboard('{ArrowRight}');
+  expect(window.location.search).toBe('?view=mine');
+  expect(own).toHaveAttribute('aria-selected', 'true');
+  expect(await screen.findByText('Womit kennst du dich aus?')).toBeVisible();
+});
+
+it('keeps the actual Skills URL through an account remount and same-route navigation while router params lag', async () => {
+  jest.mocked(fetch).mockImplementation(async url => ({ ok: true, json: async () =>
+    String(url) === '/api/user/skills' ? [] : directory } as Response));
+  mockViewerId = 'alice';
+  const staticRouter = () => <SearchParamsContext.Provider value={new URLSearchParams()}><SkillDirectoryPage /></SearchParamsContext.Provider>;
+  const view = render(staticRouter());
+  await screen.findByRole('link', { name: 'Ada' });
+  act(() => screen.getByRole('tab', { name: 'Community' }).focus());
+  await userEvent.keyboard('{ArrowRight}');
+  expect(window.location.search).toBe('?view=mine');
+  expect(await screen.findByText('Womit kennst du dich aus?')).toBeVisible();
+
+  mockViewerId = 'bob';
+  view.rerender(staticRouter());
+  expect(screen.getByRole('tab', { name: 'Meine Fähigkeiten' })).toHaveAttribute('aria-selected', 'true');
+  expect(await screen.findByText('Womit kennst du dich aus?')).toBeVisible();
+
+  act(() => window.history.pushState({}, '', '/skills'));
+  view.rerender(staticRouter());
+  expect(screen.getByRole('tab', { name: 'Community' })).toHaveAttribute('aria-selected', 'true');
+  expect(await screen.findByRole('link', { name: 'Ada' })).toBeVisible();
+  expect(screen.queryByText('Womit kennst du dich aus?')).not.toBeInTheDocument();
+});
+
 it('keeps owned skills usable when the directory fails and retries the catalog from the workbench', async () => {
   window.history.replaceState({}, '', '/skills?view=mine');
   const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});

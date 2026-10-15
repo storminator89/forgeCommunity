@@ -37,6 +37,10 @@ interface Member {
 }
 interface DirectoryResponse { skills: Skill[]; members: Member[] }
 
+function browserSkillsView(): 'own' | 'community' {
+  return new URLSearchParams(window.location.search).get('view') === 'mine' ? 'own' : 'community';
+}
+
 // The directory response includes viewer-specific endorsement flags. Remounting at
 // the account boundary discards those flags, open details and in-flight UI state.
 export default function SkillDirectory() {
@@ -53,6 +57,7 @@ function SkillDirectoryWithUrl() {
 }
 
 function SkillDirectoryForViewer({ viewerId, sessionLoading, queryFromUrl, viewFromUrl }: { viewerId: string | null; sessionLoading: boolean; queryFromUrl: string; viewFromUrl: 'own' | 'community' }) {
+  const [activeView, setActiveView] = useState<'own' | 'community'>(() => typeof window === 'undefined' ? viewFromUrl : browserSkillsView());
   const [skillsData, setSkillsData] = useState<Skill[]>([]);
   const [membersData, setMembersData] = useState<Member[]>([]);
   const [searchState, setSearchState] = useState({ query: queryFromUrl, urlQuery: queryFromUrl });
@@ -70,6 +75,12 @@ function SkillDirectoryForViewer({ viewerId, sessionLoading, queryFromUrl, viewF
   const lifetime = useRef<AbortController | null>(null);
   const [showAllSkills, setShowAllSkills] = useState(false);
 
+  // The browser URL is authoritative even when Next search params lag behind
+  // native history or a same-route navigation returns identical router props.
+  if (typeof window !== 'undefined' && activeView !== browserSkillsView()) {
+    setActiveView(browserSkillsView());
+  }
+
   useEffect(() => {
     const controller = new AbortController();
     lifetime.current = controller;
@@ -86,12 +97,13 @@ function SkillDirectoryForViewer({ viewerId, sessionLoading, queryFromUrl, viewF
   const searchTerm = searchState.query;
 
   useEffect(() => {
-    const restoreQuery = () => {
+    const restoreNavigation = () => {
       const query = (new URLSearchParams(window.location.search).get('query') ?? '').slice(0, 120);
       setSearchState({ query, urlQuery: query });
+      setActiveView(browserSkillsView());
     };
-    window.addEventListener('popstate', restoreQuery);
-    return () => window.removeEventListener('popstate', restoreQuery);
+    window.addEventListener('popstate', restoreNavigation);
+    return () => window.removeEventListener('popstate', restoreNavigation);
   }, []);
 
   const updateQuery = (value: string) => {
@@ -189,7 +201,8 @@ function SkillDirectoryForViewer({ viewerId, sessionLoading, queryFromUrl, viewF
         <ToastContainer position="top-right" />
         <div className="mx-auto w-full max-w-[1440px] px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
           <div className="flex flex-wrap items-end justify-between gap-4 pb-7"><div><p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Community / Fähigkeiten</p><p className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Wissen verbindet.</p><p className="mt-2 max-w-[55ch] text-base leading-relaxed text-muted-foreground">Finde Erfahrung in der Community. Zeig, was du kannst.</p></div>{viewerId && <Button asChild variant="outline"><Link href="/settings?tab=skills">Eigene Fähigkeiten ergänzen<SkillIcon name="arrow" className="h-4 w-4" /></Link></Button>}</div>
-          <Tabs value={viewerId ? viewFromUrl : 'community'} onValueChange={value => {
+          <Tabs value={viewerId ? activeView : 'community'} onValueChange={value => {
+            setActiveView(value as 'own' | 'community');
             const url = new URL(window.location.href);
             if (value === 'own') url.searchParams.set('view', 'mine');
             else url.searchParams.delete('view');

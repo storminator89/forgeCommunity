@@ -36,6 +36,7 @@ test('Skills workbench persists real own CRUD, discovers people and preserves pr
   await page.keyboard.press('ArrowRight');
   await expect(ownTab).toBeFocused();
   await expect(page).toHaveURL(/view=mine/);
+  await expect(ownTab).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByText('Womit kennst du dich aus?', { exact: true })).toBeVisible();
 
   await page.getByRole('button', { name: 'Fähigkeit hinzufügen', exact: true }).click();
