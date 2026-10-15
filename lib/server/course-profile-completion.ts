@@ -139,7 +139,8 @@ export async function projectEffectiveCourseLeaves(db: ProjectionDb, courses: Pr
     }
 
     // Latest current-revision submission and its latest decision are proof;
-    // an assignment progress row is only a UI mirror and may be stale.
+    // an assignment progress row is only a UI mirror and may be stale. Date
+    // the current passing interval from its first pass, not a later correction.
     for (let index = 0; index < assignmentLeaves.length; index += ASSIGNMENT_BATCH_SIZE) {
       const assignments = assignmentLeaves.slice(index, index + ASSIGNMENT_BATCH_SIZE);
       const values = assignments.map(leaf => Prisma.sql`(${leaf.courseId}, ${leaf.id}, ${revisionByLeaf.get(leaf.id)!})`);
@@ -154,7 +155,17 @@ export async function projectEffectiveCourseLeaves(db: ProjectionDb, courses: Pr
             JOIN "Enrollment" e ON e."courseId" = s."courseId" AND e."userId" = s."userId"
             WHERE s."userId" IN (${Prisma.join(userIds)})
           )
-          SELECT s."courseId", s."userId", s."contentId", g."createdAt" AS "completedAt"
+          SELECT s."courseId", s."userId", s."contentId", (
+            SELECT first_pass."createdAt" FROM "AssignmentGradeDecision" first_pass
+            WHERE first_pass."submissionId" = s."id"
+              AND first_pass."sequence" > COALESCE((
+                SELECT MAX(invalidated."sequence") FROM "AssignmentGradeDecision" invalidated
+                WHERE invalidated."submissionId" = s."id"
+                  AND (invalidated."action" <> 'GRADED' OR invalidated."score" IS NULL OR invalidated."score" < s."passingScore")
+              ), 0)
+              AND first_pass."action" = 'GRADED' AND first_pass."score" >= s."passingScore"
+            ORDER BY first_pass."sequence" ASC LIMIT 1
+          ) AS "completedAt"
           FROM ranked_submissions s
           JOIN "AssignmentGradeDecision" g ON g."id" = (
             SELECT newest."id" FROM "AssignmentGradeDecision" newest

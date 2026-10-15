@@ -333,11 +333,31 @@ async function main() {
   } })).json();
   assert.equal(graded.decision.passed, true);
   assert.equal((await (await learner(`${assignmentRoute}/progress`)).json()).complete, true);
+  const goalRoute = '/api/learning-goals/me';
+  const startedGoal = await (await learner(goalRoute, { method: 'POST', status: 201,
+    body: { targetLeaves: 1, durationDays: 7, timezone: 'UTC' },
+  })).json();
+  assert.equal(startedGoal.goal.completedLeaves, 0, 'A pass before goal opt-in must not count.');
+  const stillPassing = await (await author(gradeRoute, { method: 'POST', body: {
+    requestId: randomUUID(), expectedDecisionId: graded.decision.id, action: 'GRADED', score: 90,
+    feedback: 'Synthetic corrected feedback',
+  } })).json();
+  assert.equal(stillPassing.decision.passed, true);
+  assert.equal((await (await learner(goalRoute)).json()).goal.completedLeaves, 0,
+    'A passing correction must retain the pre-goal completion time.');
   const corrected = await (await author(gradeRoute, { method: 'POST', body: {
-    requestId: randomUUID(), expectedDecisionId: graded.decision.id, action: 'GRADED', score: 40,
+    requestId: randomUUID(), expectedDecisionId: stillPassing.decision.id, action: 'GRADED', score: 40,
   } })).json();
   assert.equal(corrected.decision.passed, false);
   assert.equal((await (await learner(`${assignmentRoute}/progress`)).json()).complete, false);
+  assert.equal((await (await learner(goalRoute)).json()).goal.completedLeaves, 0);
+  const repassed = await (await author(gradeRoute, { method: 'POST', body: {
+    requestId: randomUUID(), expectedDecisionId: corrected.decision.id, action: 'GRADED', score: 85,
+  } })).json();
+  assert.equal(repassed.decision.passed, true);
+  assert.equal((await (await learner(goalRoute)).json()).goal.completedLeaves, 1,
+    'A new pass after failure must begin a new goal-counting interval.');
+  assert.equal((await (await learner(`${assignmentRoute}/progress`)).json()).complete, true);
 
   // Exercise the actual PostgreSQL adapter with a published dependency, not
   // just schema parity. An author token must not bypass the learner's lock.

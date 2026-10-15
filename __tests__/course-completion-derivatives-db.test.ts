@@ -125,3 +125,73 @@ test('profile and private goal follow published locks and latest assignment grad
   await prisma.courseContentProgress.delete({ where: { userId_contentId: { userId, contentId: 'derivative-assignment' } } });
   expect(await actual()).toEqual({ profile: { completionRate: 100, everCompletionRate: 100 }, leaves: 4 });
 });
+
+test('passing corrections retain the first valid completion across goal boundaries; withdrawal starts a new interval', async () => {
+  const intervalCourseId = 'derivative-interval-course';
+  const intervalContentId = 'derivative-interval-assignment';
+  const intervalPublicationId = 'derivative-interval-publication';
+  const beforeGoal = new Date('2026-10-13T18:00:00.000Z');
+  const duringGoal = new Date('2026-10-14T18:00:00.000Z');
+  const afterGoal = new Date('2026-10-15T18:00:00.000Z');
+  const checkedAt = new Date('2026-10-16T12:00:00.000Z');
+  const intervalNode = { id: intervalContentId, parentId: null, title: 'Timed assignment',
+    type: 'ASSIGNMENT', content: assignment, order: 1 };
+  await prisma.course.create({ data: { id: intervalCourseId, title: 'Timed course', description: '', instructorId: 'derivative-teacher' } });
+  await prisma.courseContent.create({ data: { ...intervalNode, courseId: intervalCourseId, type: 'ASSIGNMENT' } });
+  await prisma.coursePublication.create({ data: { id: intervalPublicationId, courseId: intervalCourseId,
+    sequence: 1, source: 'AUTHOR', payload: payload([intervalNode]), digest: 'timed', contentCount: 1 } });
+  await prisma.course.update({ where: { id: intervalCourseId }, data: { activePublicationId: intervalPublicationId } });
+
+  const learners = [
+    { id: 'derivative-before-goal', firstPass: beforeGoal, correction: duringGoal, expected: 0 },
+    { id: 'derivative-after-goal', firstPass: duringGoal, correction: afterGoal, expected: 1 },
+  ];
+  for (const learner of learners) {
+    await prisma.user.create({ data: { id: learner.id, email: `${learner.id}@example.invalid`, role: 'USER' } });
+    await prisma.enrollment.create({ data: { userId: learner.id, courseId: intervalCourseId } });
+    await prisma.learningGoal.create({ data: { userId: learner.id, targetLeaves: 1, durationDays: 7,
+      timezone: 'UTC', startedAt: new Date('2026-10-14T00:00:00.000Z'), endsAt: new Date('2026-10-15T00:00:00.000Z') } });
+    await prisma.assignmentSubmission.create({ data: { id: `${learner.id}-submission`, userId: learner.id,
+      courseId: intervalCourseId, contentId: intervalContentId, publicationId: intervalPublicationId,
+      revision: courseContentRevision(intervalNode), passingScore: 70, requestId: `${learner.id}-submit`,
+      response: 'Private solution.', responseDigest: 'private-digest', attemptNumber: 1 } });
+    await prisma.assignmentGradeDecision.createMany({ data: [
+      { id: `${learner.id}-first`, submissionId: `${learner.id}-submission`, requestId: `${learner.id}-grade-1`,
+        graderId: 'derivative-teacher', action: 'GRADED', score: 80, sequence: 1, createdAt: learner.firstPass },
+      { id: `${learner.id}-correction`, submissionId: `${learner.id}-submission`, requestId: `${learner.id}-grade-2`,
+        graderId: 'derivative-teacher', action: 'GRADED', score: 90, sequence: 2, createdAt: learner.correction,
+        feedback: 'Corrected feedback.' },
+    ] });
+    // Even an incorrectly dated mirror must not shift the grade-derived projection.
+    await prisma.courseContentProgress.create({ data: { userId: learner.id, courseId: intervalCourseId,
+      contentId: intervalContentId, revision: courseContentRevision(intervalNode), completedAt: learner.correction } });
+  }
+
+  async function state(learnerId: string) {
+    const course = await prisma.course.findUniqueOrThrow({ where: { id: intervalCourseId }, select: {
+      id: true, activePublicationId: true, enrollments: { where: { userId: learnerId }, select: { userId: true, completedAt: true } },
+    } });
+    const goal = await prisma.learningGoal.findUniqueOrThrow({ where: { userId: learnerId } });
+    const profile = await profileCourseCompletionStats(prisma, [course]);
+    return { profile: profile.get(intervalCourseId)?.completionRate,
+      leaves: await countVerifiedGoalLeaves(prisma, goal, checkedAt) };
+  }
+  for (const learner of learners) {
+    expect(await state(learner.id)).toEqual({ profile: 100, leaves: learner.expected });
+  }
+
+  for (const learner of learners) {
+    const withdrawnAt = new Date(learner.correction.getTime() + 60 * 60 * 1000);
+    const repassedAt = new Date(learner.correction.getTime() + 2 * 60 * 60 * 1000);
+    await prisma.assignmentGradeDecision.create({ data: { id: `${learner.id}-withdrawn`,
+      submissionId: `${learner.id}-submission`, requestId: `${learner.id}-grade-3`,
+      graderId: 'derivative-teacher', action: 'WITHDRAWN', sequence: 3, createdAt: withdrawnAt } });
+    expect(await state(learner.id)).toEqual({ profile: 0, leaves: 0 });
+    await prisma.assignmentGradeDecision.create({ data: { id: `${learner.id}-repassed`,
+      submissionId: `${learner.id}-submission`, requestId: `${learner.id}-grade-4`,
+      graderId: 'derivative-teacher', action: 'GRADED', score: 85, sequence: 4,
+      createdAt: repassedAt } });
+    expect(await state(learner.id)).toEqual({ profile: 100,
+      leaves: learner.id === learners[0].id ? 1 : 0 });
+  }
+});

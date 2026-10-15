@@ -72,7 +72,7 @@ function decisionDto(decision: Awaited<ReturnType<typeof latestDecision>>, thres
     createdAt: decision.createdAt, sequence: decision.sequence }
 }
 
-/** The progress row mirrors the decision; completionState independently verifies it. */
+/** The progress row mirrors the current passing interval; completionState independently verifies it. */
 async function syncAssignmentProgress(tx: Tx, userId: string, courseId: string, contentId: string,
   content: { type: string | null; content: string }, threshold: number) {
   const revision = courseContentRevision(content)
@@ -80,8 +80,22 @@ async function syncAssignmentProgress(tx: Tx, userId: string, courseId: string, 
   const decision = submission ? await latestDecision(tx, submission.id) : null
   const passed = decision?.action === 'GRADED' && decision.score !== null && decision.score >= threshold
   if (passed) {
+    // Feedback/score corrections that remain passing must not move a learner's
+    // original completion into a different learning-goal window. A failed or
+    // withdrawn decision ends that interval, so a later pass starts a new one.
+    const invalidation = await tx.assignmentGradeDecision.findFirst({
+      where: { submissionId: submission!.id, OR: [{ action: 'WITHDRAWN' }, { score: { lt: threshold } }] },
+      orderBy: { sequence: 'desc' }, select: { sequence: true },
+    })
+    const firstPass = await tx.assignmentGradeDecision.findFirst({
+      where: { submissionId: submission!.id, sequence: { gt: invalidation?.sequence ?? 0 },
+        action: 'GRADED', score: { gte: threshold } },
+      orderBy: { sequence: 'asc' }, select: { createdAt: true },
+    })
+    if (!firstPass) throw new AssignmentError('Passing grade history is unavailable.', 409)
     await tx.courseContentProgress.upsert({ where: { userId_contentId: { userId, contentId } },
-      create: { userId, courseId, contentId, revision }, update: { revision, completedAt: decision!.createdAt } })
+      create: { userId, courseId, contentId, revision, completedAt: firstPass.createdAt },
+      update: { revision, completedAt: firstPass.createdAt } })
   } else {
     await tx.courseContentProgress.deleteMany({ where: { userId, courseId, contentId } })
   }

@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { CourseAnalytics } from '@/app/courses/[courseId]/analytics/page';
+import { CourseAnalytics } from '@/app/courses/[courseId]/analytics/CourseAnalytics';
 
 jest.mock('@/components/app-shell', () => ({ AppShell: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   AppHeader: ({ children }: { children: React.ReactNode }) => <header>{children}</header> }));

@@ -5,6 +5,8 @@ import { DatabaseSync } from 'node:sqlite'
 import prisma from '@/lib/prisma'
 import { assignmentSubmittedUserIds, completionState, contentVersionToken, courseContentRevision } from '@/lib/server/course-progress'
 import { decideAssignmentGrade, readAssignmentQueue, readOwnAssignment, submitAssignment } from '@/lib/server/course-assignments'
+import { courseAnalytics } from '@/lib/server/course-analytics'
+import { countVerifiedGoalLeaves } from '@/lib/server/learning-goals'
 
 jest.mock('@/lib/prisma', () => {
   const { mkdtempSync, readFileSync, readdirSync } = require('node:fs')
@@ -106,6 +108,54 @@ test('learner submission, correction and withdrawal are private, idempotent, and
     publicationId, revision: courseContentRevision({ type: 'ASSIGNMENT', content: prompt }), passingScore: 70, requestId: 'self-request', response: 'Eigene Antwort',
     responseDigest: 'self-digest', attemptNumber: 1 } })
   await failure(() => decideAssignmentGrade(courseId, self.id, teacher, { requestId: 'self-grade', action: 'GRADED', score: 100, expectedDecisionId: null }), 403)
+})
+
+test('grading API mirrors the first pass until withdrawal and preserves historical course completion', async () => {
+  const learnerId = 'assignment-interval-learner'
+  const initialPassAt = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000)
+  const goalStart = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000)
+  const goalEnd = new Date(Date.now() + 24 * 60 * 60 * 1000)
+  await prisma.user.create({ data: { id: learnerId, email: 'assignment-interval@example.invalid', role: 'USER' } })
+  const enrollment = await prisma.enrollment.create({ data: { userId: learnerId, courseId } })
+  await prisma.learningGoal.create({ data: { userId: learnerId, targetLeaves: 1, durationDays: 7,
+    timezone: 'UTC', startedAt: goalStart, endsAt: goalEnd } })
+  const content = await prisma.courseContent.findUniqueOrThrow({ where: { id: contentId } })
+  const submitted = await submitAssignment(courseId, contentId, learnerId, { requestId: 'interval-submission',
+    response: 'A timed solution.', publicationId, contentVersionToken: contentVersionToken(publicationId, content) })
+  const first = await prisma.assignmentGradeDecision.create({ data: { id: 'assignment-interval-first-pass',
+    submissionId: submitted.id, requestId: 'interval-first-grade', graderId: teacher.id,
+    action: 'GRADED', score: 80, sequence: 1, createdAt: initialPassAt } })
+  const goal = await prisma.learningGoal.findUniqueOrThrow({ where: { userId: learnerId } })
+  const analyticsStatus = async () => {
+    const result = await courseAnalytics(courseId, teacher, { page: 1, pageSize: 25, status: 'all', search: '' })
+    return result.learners.find(row => row.enrollmentId === enrollment.id)?.currentStatus
+  }
+  const correction = await decideAssignmentGrade(courseId, submitted.id, teacher, { requestId: 'interval-pass-correction',
+    action: 'GRADED', score: 90, feedback: 'Revised feedback.', expectedDecisionId: first.id })
+  const laterCorrection = await decideAssignmentGrade(courseId, submitted.id, teacher, { requestId: 'interval-later-pass-correction',
+    action: 'GRADED', score: 95, feedback: 'Further feedback.', expectedDecisionId: correction.decision?.id })
+  expect((await prisma.courseContentProgress.findUniqueOrThrow({ where: { userId_contentId: { userId: learnerId, contentId } } })).completedAt)
+    .toEqual(initialPassAt)
+  expect(await countVerifiedGoalLeaves(prisma, goal, new Date())).toBe(0)
+  expect(await analyticsStatus()).toBe('current-complete')
+  const historicalCompletion = (await prisma.enrollment.findUniqueOrThrow({ where: { userId_courseId: { userId: learnerId, courseId } } })).completedAt
+  expect(historicalCompletion).not.toBeNull()
+
+  const withdrawal = await decideAssignmentGrade(courseId, submitted.id, teacher, { requestId: 'interval-withdrawal',
+    action: 'WITHDRAWN', expectedDecisionId: laterCorrection.decision?.id })
+  expect(await prisma.courseContentProgress.count({ where: { userId: learnerId, contentId } })).toBe(0)
+  expect(await countVerifiedGoalLeaves(prisma, goal, new Date())).toBe(0)
+  expect(await analyticsStatus()).toBe('in-progress')
+  const repass = await decideAssignmentGrade(courseId, submitted.id, teacher, { requestId: 'interval-repass',
+    action: 'GRADED', score: 75, expectedDecisionId: withdrawal.decision?.id })
+  expect((await prisma.courseContentProgress.findUniqueOrThrow({ where: { userId_contentId: { userId: learnerId, contentId } } })).completedAt)
+    .toEqual(repass.decision?.createdAt)
+  expect(await countVerifiedGoalLeaves(prisma, goal, new Date())).toBe(1)
+  expect(await analyticsStatus()).toBe('current-complete')
+  expect((await prisma.enrollment.findUniqueOrThrow({ where: { userId_courseId: { userId: learnerId, courseId } } })).completedAt)
+    .toEqual(historicalCompletion)
+  expect((await prisma.courseCompletionRecord.findUniqueOrThrow({ where: { userId_courseId: { userId: learnerId, courseId } } })).completedAt)
+    .toEqual(historicalCompletion)
 })
 
 test('pending review remains reachable beyond fifty recent graded submissions', async () => {
