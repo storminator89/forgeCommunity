@@ -36,6 +36,7 @@ import { de } from 'date-fns/locale'
 import { ChatMessage } from '@/types/chat'
 import Image from 'next/image'
 import { cn } from '@/lib/utils'
+import { getPreferredScrollBehavior } from '@/lib/scroll-behavior'
 
 export default function ChatPage() {
   return <Suspense fallback={<div role="status" className="p-6">Chat wird geladen …</div>}><ChatPageContent /></Suspense>
@@ -114,7 +115,7 @@ function ChatPageContent() {
 
   useEffect(() => {
     if (linkedTarget && currentChannel?.id === linkedTarget.channelId) return
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+    messagesEndRef.current?.scrollIntoView({ behavior: getPreferredScrollBehavior() })
   }, [messages, linkedTarget, currentChannel?.id])
 
   useEffect(() => {

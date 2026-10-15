@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
+import { getPreferredScrollBehavior } from '@/lib/scroll-behavior';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -177,7 +178,7 @@ export default function Members() {
   const hasActiveFilters = Boolean(searchTerm || selectedSkills.length || selectedRoles.length);
   const clearFilters = () => { setSearchTerm(''); setSelectedSkills([]); setSelectedRoles([]); };
   const retryLoad = () => { setIsLoading(true); setLoadError(false); setRetryKey(value => value + 1); };
-  const scrollToTop = () => { mainRef.current?.scrollTo?.({ top: 0, behavior: 'smooth' }); };
+  const scrollToTop = () => { mainRef.current?.scrollTo?.({ top: 0, behavior: getPreferredScrollBehavior() }); };
 
   return (
     <AppShell>
