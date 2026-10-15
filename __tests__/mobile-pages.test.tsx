@@ -78,7 +78,7 @@ it('disables mark-all when there are no unread notifications', () => {
 it('includes events at the start of today and exposes calendar days as keyboard accessible buttons', async () => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const event = { id: 'today', title: 'Heute dabei', date: today.toISOString(), description: 'Details', location: 'Community', timezone: 'Europe/Berlin' };
+  const event = { id: 'today', title: 'Heute dabei', date: today.toISOString(), description: 'Details', location: 'Community', timezone: 'Europe/Berlin', maxAttendees: null, attendeeCount: 0, isAttending: false, canCancelRsvp: false };
   global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => [event] });
   render(<Events />);
   const dayButton = await screen.findByRole('button', { name: /1 Event$/ });
@@ -88,4 +88,22 @@ it('includes events at the start of today and exposes calendar days as keyboard 
   fireEvent.click(screen.getByRole('button', { name: 'Woche' }));
   expect(screen.getByRole('region', { name: 'Wochenkalender' })).toBeVisible();
   expect(screen.getAllByRole('button', { name: /\d+ Events?$/ })).toHaveLength(7);
+});
+
+it('lets a signed-in member RSVP and cancel from the event list', async () => {
+  const user = userEvent.setup();
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const event = { id: 'workshop', title: 'Workshop', date: tomorrow.toISOString(), description: 'Details', location: 'Community', timezone: 'Europe/Berlin', maxAttendees: 1, attendeeCount: 0, isAttending: false, canCancelRsvp: false };
+  global.fetch = jest.fn().mockImplementation(async (_url: string, init?: RequestInit) => {
+    if (init?.method === 'POST') return { ok: true, json: async () => ({ isAttending: true, canCancelRsvp: true, attendeeCount: 1 }) };
+    if (init?.method === 'DELETE') return { ok: true, json: async () => ({ isAttending: false, canCancelRsvp: false, attendeeCount: 0 }) };
+    return { ok: true, json: async () => [event] };
+  });
+  render(<Events />);
+  await user.click(await screen.findByRole('button', { name: 'Liste' }));
+  await user.click(screen.getByRole('button', { name: 'Teilnehmen' }));
+  expect(global.fetch).toHaveBeenCalledWith('/api/events/workshop/rsvp', { method: 'POST' });
+  await user.click(await screen.findByRole('button', { name: 'Zusage zurücknehmen' }));
+  expect(global.fetch).toHaveBeenCalledWith('/api/events/workshop/rsvp', { method: 'DELETE' });
 });

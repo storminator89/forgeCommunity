@@ -23,6 +23,7 @@ interface EventFormProps {
     endTime?: string;
     category?: string;
     timezone: string; // Zeitzone in den Initialdaten
+    maxAttendees?: number | null;
   };
   onSuccess: () => void;
   onClose: () => void;
@@ -53,6 +54,7 @@ function EventFormFields({ initialData, onSuccess, onClose }: EventFormProps) {
   const [endTime, setEndTime] = useState(() => initialData?.endTime || '');
   const [category, setCategory] = useState(() => initialData?.category || '');
   const [timezone, setTimezone] = useState(() => initialData?.timezone || 'Europe/Berlin');
+  const [maxAttendees, setMaxAttendees] = useState(() => initialData?.maxAttendees?.toString() || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
@@ -90,6 +92,7 @@ function EventFormFields({ initialData, onSuccess, onClose }: EventFormProps) {
         endTime: eventEndDateTime.toFormat('HH:mm'),
         category,
         timezone, // Zeitzone einschließen
+        maxAttendees: maxAttendees === '' ? null : Number(maxAttendees),
       };
 
       let res;
@@ -200,6 +203,13 @@ function EventFormFields({ initialData, onSuccess, onClose }: EventFormProps) {
             </SelectGroup>
           </SelectContent>
         </Select>
+      </div>
+
+      {/* Maximale Teilnehmerzahl */}
+      <div className="space-y-2">
+        <Label htmlFor="maxAttendees">Maximale Teilnehmerzahl (optional)</Label>
+        <Input id="maxAttendees" type="number" min="1" step="1" value={maxAttendees}
+          onChange={(e) => setMaxAttendees(e.target.value)} placeholder="Unbegrenzt" />
       </div>
 
       {/* Ort */}

@@ -7,6 +7,7 @@ import { authOptions } from '@/lib/auth';
 import { DateTime } from 'luxon';
 import { sanitizeRichHtmlServer, sanitizeTextServer } from '@/lib/server/sanitize-html';
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
+import { parseEventCapacity, ParticipationError } from '@/lib/server/participation';
 
 // Unterstützte Zeitzonen
 const TIMEZONES = [
@@ -21,9 +22,14 @@ const TIMEZONES = [
 // GET-Handler zum Abrufen von Events
 export async function GET() {
   try {
+    const session = await getServerSession(authOptions);
     const events = await prisma.event.findMany({
       orderBy: {
         date: 'asc',
+      },
+      include: {
+        _count: { select: { attendees: { where: { status: { not: 'CANCELLED' } } } } },
+        attendees: { where: { userId: session?.user?.id ?? '' }, select: { status: true } },
       },
     });
 
@@ -40,10 +46,14 @@ export async function GET() {
         endTime: event.endTime || '',
         category: event.category || '',
         timezone: event.timezone, // Zeitzone einschließen
+        maxAttendees: event.maxAttendees,
+        attendeeCount: event._count.attendees,
+        isAttending: event.attendees.some(attendee => attendee.status !== 'CANCELLED'),
+        canCancelRsvp: event.attendees.some(attendee => attendee.status === 'REGISTERED' || attendee.status === 'CONFIRMED'),
       };
     });
 
-    return NextResponse.json(formattedEvents);
+    return NextResponse.json(formattedEvents, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     console.error('Error fetching events:', error);
     return NextResponse.json({ error: 'Error fetching events' }, { status: 500 });
@@ -65,6 +75,7 @@ export async function POST(request: Request) {
     const location = sanitizeTextServer(typeof data.location === 'string' ? data.location : '');
     const category = sanitizeTextServer(typeof data.category === 'string' ? data.category : '') || 'Allgemein';
     const { date, startTime, endTime, timezone } = data;
+    const maxAttendees = parseEventCapacity(data.maxAttendees);
 
     // Überprüfen der erforderlichen Felder
     if (!title || typeof date !== 'string' || !date || !description || !location || typeof timezone !== 'string' || !timezone || typeof startTime !== 'string' || !startTime || typeof endTime !== 'string' || !endTime) {
@@ -102,6 +113,7 @@ export async function POST(request: Request) {
         endTime: eventEndDateTime.toFormat('HH:mm'),
         category,
         timezone,
+        maxAttendees,
       },
     });
 
@@ -117,8 +129,12 @@ export async function POST(request: Request) {
       endTime: newEvent.endTime || '',
       category: newEvent.category || '',
       timezone: newEvent.timezone,
+      maxAttendees: newEvent.maxAttendees,
+      attendeeCount: 0,
+      isAttending: false,
     }, { status: 201 });
   } catch (error) {
+    if (error instanceof ParticipationError) return NextResponse.json({ error: error.message }, { status: error.status });
     const clientError = requestErrorResponse(error);
     if (clientError) return clientError;
     console.error('Error creating event:', error);

@@ -43,6 +43,7 @@ import { Badge } from "@/components/ui/badge";
 import EventForm from '@/components/EventForm';
 import { useToast } from '@/hooks/use-toast';
 import { sanitizeRichHtml } from '@/lib/sanitize-html';
+import { useSession } from 'next-auth/react';
 
 
 interface Event {
@@ -55,6 +56,10 @@ interface Event {
   endTime?: string;
   category?: string;
   timezone: string;
+  maxAttendees: number | null;
+  attendeeCount: number;
+  isAttending: boolean;
+  canCancelRsvp: boolean;
 }
 
 
@@ -70,7 +75,10 @@ export default function Events() {
   const [error, setError] = useState<string | null>(null);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [pendingEventId, setPendingEventId] = useState<string | null>(null);
   const { toast } = useToast();
+  const { data: session, status: sessionStatus } = useSession();
+  const isAdmin = session?.user?.role === 'ADMIN';
   const [view, setView] = useState<ViewType>('month');
   const eventsRequestRef = useRef<AbortController | null>(null);
 
@@ -146,6 +154,7 @@ export default function Events() {
   }, [loadEvents]);
 
   useEffect(() => {
+    if (sessionStatus === 'loading') return;
     const controller = new AbortController();
     eventsRequestRef.current = controller;
     void loadEvents(controller)
@@ -170,7 +179,7 @@ export default function Events() {
       controller.abort();
       if (eventsRequestRef.current === controller) eventsRequestRef.current = null;
     };
-  }, [loadEvents]);
+  }, [loadEvents, sessionStatus]);
 
   const filteredEvents = eventsData.filter(event =>
     event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -243,6 +252,44 @@ export default function Events() {
         variant: 'destructive',
       });
     }
+  };
+
+  const handleRsvp = async (event: Event) => {
+    if (!session?.user?.id) {
+      toast({ title: 'Bitte melde dich an', description: 'Für eine Zusage benötigst du ein Konto.', variant: 'destructive' });
+      return;
+    }
+    setPendingEventId(event.id);
+    try {
+      const response = await fetch(`/api/events/${event.id}/rsvp`, { method: event.isAttending ? 'DELETE' : 'POST' });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Die Zusage konnte nicht geändert werden.');
+      setEventsData(current => current.map(item => item.id === event.id
+        ? { ...item, isAttending: result.isAttending, canCancelRsvp: result.canCancelRsvp, attendeeCount: result.attendeeCount }
+        : item));
+      toast({ title: result.isAttending ? 'Du bist dabei' : 'Zusage zurückgenommen' });
+    } catch (error) {
+      toast({ title: 'Fehler', description: error instanceof Error ? error.message : 'Bitte erneut versuchen.', variant: 'destructive' });
+    } finally {
+      setPendingEventId(null);
+    }
+  };
+
+  const renderRsvp = (event: Event) => {
+    const full = event.maxAttendees !== null && event.attendeeCount >= event.maxAttendees;
+    const past = new Date(event.date) <= new Date();
+    return (
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <span className="text-xs text-muted-foreground">
+          {event.attendeeCount} {event.maxAttendees !== null ? `/ ${event.maxAttendees}` : ''} Zusagen
+        </span>
+        <Button size="sm" variant={event.isAttending ? 'outline' : 'default'}
+          disabled={pendingEventId === event.id || (event.isAttending && !event.canCancelRsvp) || (!event.isAttending && (full || past))}
+          onClick={() => void handleRsvp(event)}>
+          {pendingEventId === event.id ? 'Wird verarbeitet …' : event.isAttending ? event.canCancelRsvp ? 'Zusage zurücknehmen' : 'Teilgenommen' : past ? 'Anmeldung geschlossen' : full ? 'Ausgebucht' : 'Teilnehmen'}
+        </Button>
+      </div>
+    );
   };
 
   if (loading || error) {
@@ -356,15 +403,18 @@ export default function Events() {
                       </div>
                       <div dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(event.description) }} />
                       {event.category && <Badge variant="secondary">{event.category}</Badge>}
+                      {renderRsvp(event)}
                     </div>
                   </div>
                   <div className="flex shrink-0 gap-1">
+                    {isAdmin && <>
                     <Button variant="ghost" size="icon" aria-label={`Event ${event.title} bearbeiten`} onClick={() => handleOpenEditDialog(event)}>
                       <Edit className="h-4 w-4" />
                     </Button>
                     <Button variant="ghost" size="icon" aria-label={`Event ${event.title} löschen`} onClick={() => handleDeleteEvent(event.id)}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
+                    </>}
                     <Button variant="ghost" size="icon" aria-label={`Event ${event.title} als Kalenderdatei herunterladen`} onClick={() => handleDownloadICS(event)}>
                       <Download className="h-4 w-4" />
                     </Button>
@@ -397,7 +447,7 @@ export default function Events() {
               <Button variant={view === 'week' ? 'default' : 'ghost'} size="sm" aria-pressed={view === 'week'} onClick={() => setView('week')}><CalendarIcon className="mr-1 h-4 w-4" aria-hidden="true" />Woche</Button>
               <Button variant={view === 'list' ? 'default' : 'ghost'} size="sm" aria-pressed={view === 'list'} onClick={() => setView('list')}><List className="mr-1 h-4 w-4" aria-hidden="true" />Liste</Button>
             </div>
-            <Button size="sm" onClick={handleOpenAddDialog} className="gap-2"><Plus className="h-4 w-4" aria-hidden="true" />Event erstellen</Button>
+            {isAdmin && <Button size="sm" onClick={handleOpenAddDialog} className="gap-2"><Plus className="h-4 w-4" aria-hidden="true" />Event erstellen</Button>}
             <div className="relative w-full">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
               <Input type="search" aria-label="Events durchsuchen" placeholder="Titel, Beschreibung oder Kategorie suchen …" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9" />
@@ -477,15 +527,18 @@ export default function Events() {
                       </div>
                       <div dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(event.description) }} />
                       {event.category && <Badge variant="secondary">{event.category}</Badge>}
+                      {renderRsvp(event)}
                     </div>
                   </div>
                   <div className="flex shrink-0 gap-1">
+                    {isAdmin && <>
                     <Button variant="ghost" size="icon" aria-label={`Event ${event.title} bearbeiten`} onClick={() => handleOpenEditDialog(event)}>
                       <Edit className="h-4 w-4" />
                     </Button>
                     <Button variant="ghost" size="icon" aria-label={`Event ${event.title} löschen`} onClick={() => handleDeleteEvent(event.id)}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
+                    </>}
                     <Button variant="ghost" size="icon" aria-label={`Event ${event.title} als Kalenderdatei herunterladen`} onClick={() => handleDownloadICS(event)}>
                       <Download className="h-4 w-4" />
                     </Button>

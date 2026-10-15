@@ -18,6 +18,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { useToast } from '@/hooks/use-toast';
 
 interface Course {
   id: string;
@@ -28,6 +29,12 @@ interface Course {
   endDate: string | null;
   category: string;
   participants: number;
+  maxStudents: number | null;
+  price: number | null;
+  currency: string | null;
+  isEnrolled: boolean;
+  completed: boolean;
+  canDelete: boolean;
   imageUrl: string | null;
 }
 
@@ -38,8 +45,10 @@ export default function CourseClient() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [loadError, setLoadError] = useState(false);
   const [categories, setCategories] = useState<string[]>([]);
+  const [pendingCourseId, setPendingCourseId] = useState<string | null>(null);
   const { data: session, status } = useSession();
   const router = useRouter();
+  const { toast } = useToast();
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -48,6 +57,7 @@ export default function CourseClient() {
   }, [status, router]);
 
   useEffect(() => {
+    if (status !== 'authenticated') return;
     const fetchCourses = async () => {
       try {
         const response = await fetch('/api/courses');
@@ -68,7 +78,25 @@ export default function CourseClient() {
     };
 
     fetchCourses();
-  }, []);
+  }, [status]);
+
+  const changeEnrollment = async (course: Course, leaving = false) => {
+    setPendingCourseId(course.id);
+    try {
+      const response = await fetch(`/api/courses/${course.id}/enrollment`, { method: leaving ? 'DELETE' : 'POST' });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Die Anmeldung konnte nicht geändert werden.');
+      setCourses(current => current.map(item => item.id === course.id
+        ? { ...item, isEnrolled: result.isEnrolled, participants: result.participants }
+        : item));
+      toast({ title: leaving ? 'Kurs verlassen' : 'Zum Kurs angemeldet' });
+      if (!leaving) router.push(`/courses/${course.id}/contents`);
+    } catch (error) {
+      toast({ title: 'Fehler', description: error instanceof Error ? error.message : 'Bitte erneut versuchen.', variant: 'destructive' });
+    } finally {
+      setPendingCourseId(null);
+    }
+  };
 
   const filteredCourses = courses.filter(course =>
     (course.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -156,7 +184,9 @@ export default function CourseClient() {
                 exit={{ opacity: 0 }}
               >
                 {!isLoading && !loadError && filteredCourses.map((course) => (
-                  <CourseCard key={course.id} course={course} onDelete={handleDeleteCourse} />
+                  <CourseCard key={course.id} course={course} onDelete={handleDeleteCourse}
+                    onJoin={() => void changeEnrollment(course)} onLeave={() => void changeEnrollment(course, true)}
+                    pending={pendingCourseId === course.id} />
                 ))}
               </motion.div>
             </AnimatePresence>
@@ -183,14 +213,15 @@ export default function CourseClient() {
 interface CourseCardProps {
   course: Course;
   onDelete: (courseId: string) => void;
+  onJoin: () => void;
+  onLeave: () => void;
+  pending: boolean;
 }
 
-function CourseCard({ course, onDelete }: CourseCardProps) {
+function CourseCard({ course, onDelete, onJoin, onLeave, pending }: CourseCardProps) {
   const router = useRouter();
-
-  const handleCourseAction = () => {
-    router.push(`/courses/${course.id}/contents`);
-  };
+  const isPaid = course.price !== null && course.price > 0;
+  const isFull = course.maxStudents !== null && course.participants >= course.maxStudents;
 
   return (
     <motion.div
@@ -215,7 +246,7 @@ function CourseCard({ course, onDelete }: CourseCardProps) {
       <div className="p-6 flex-grow flex flex-col">
         <div className="flex justify-between items-start mb-2">
           <h3 className="text-xl font-semibold text-foreground">{course.title}</h3>
-          <AlertDialog>
+          {course.canDelete && <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button aria-label="Löschen" variant="ghost" size="icon" className="text-muted-foreground hover:text-red-500">
                 <Trash2 className="h-4 w-4" />
@@ -233,7 +264,7 @@ function CourseCard({ course, onDelete }: CourseCardProps) {
                 <AlertDialogAction onClick={() => onDelete(course.id)}>Löschen</AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
-          </AlertDialog>
+          </AlertDialog>}
         </div>
         <p className="text-muted-foreground mb-4">{course.instructor}</p>
         <div className="flex items-center text-sm text-muted-foreground mb-2">
@@ -248,24 +279,29 @@ function CourseCard({ course, onDelete }: CourseCardProps) {
         )}
         <div className="flex items-center text-sm text-muted-foreground mb-4">
           <Users className="w-4 h-4 mr-2" />
-          <span>{course.participants} Teilnehmer</span>
+          <span>{course.participants}{course.maxStudents !== null ? ` / ${course.maxStudents}` : ''} Teilnehmer</span>
         </div>
+        {isPaid && <p className="mb-3 text-sm font-medium">{course.price?.toFixed(2)} {course.currency || 'EUR'}</p>}
         <div className="mt-auto">
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white transition-colors duration-300"
-                  onClick={handleCourseAction}
+                  onClick={course.canDelete || course.isEnrolled ? () => router.push(`/courses/${course.id}/contents`) : onJoin}
+                  disabled={pending || (!course.canDelete && !course.isEnrolled && (isPaid || isFull))}
                 >
-                  Kurs beitreten
+                  {pending ? 'Wird verarbeitet …' : course.canDelete ? 'Kurs verwalten' : course.isEnrolled ? 'Kurs öffnen' : isPaid ? 'Anmeldung derzeit nicht verfügbar' : isFull ? 'Kurs ausgebucht' : 'Kurs beitreten'}
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Klicken Sie hier, um sich für den Kurs anzumelden und die Inhalte anzuzeigen</p>
+                <p>{isPaid && !course.isEnrolled ? 'Für kostenpflichtige Kurse ist eine separate Buchung erforderlich.' : 'Kursinhalte anzeigen'}</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
+          {course.isEnrolled && !course.completed && !isPaid && !course.canDelete && (
+            <Button variant="outline" className="mt-2 w-full" onClick={onLeave} disabled={pending}>Kurs verlassen</Button>
+          )}
         </div>
       </div>
     </motion.div>

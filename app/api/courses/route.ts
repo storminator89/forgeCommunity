@@ -26,17 +26,25 @@ function optionalNumber(value: FormDataEntryValue | null, integer = false): numb
 
 export async function GET() {
   try {
+    const session = await getServerSession(authOptions);
+    const userId = session?.user?.id;
     const courses = await prisma.course.findMany({
-      include: {
-        instructor: {
-          select: {
-            name: true,
-          },
-        },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        instructorId: true,
+        instructor: { select: { name: true } },
+        startDate: true,
+        endDate: true,
+        price: true,
+        currency: true,
+        maxStudents: true,
+        imageUrl: true,
+        _count: { select: { enrollments: true } },
         enrollments: {
-          select: {
-            userId: true,
-          },
+          where: { userId: userId ?? '' },
+          select: { completedAt: true },
         },
       },
     });
@@ -51,11 +59,17 @@ export async function GET() {
       startDate: course.startDate ? course.startDate.toISOString().split('T')[0] : null,
       endDate: course.endDate ? course.endDate.toISOString().split('T')[0] : null,
       category: course.description,
-      participants: course.enrollments.length,
+      participants: course._count.enrollments,
+      maxStudents: course.maxStudents,
+      price: course.price,
+      currency: course.currency,
+      isEnrolled: course.enrollments.length > 0,
+      completed: !!course.enrollments[0]?.completedAt,
+      canDelete: !!userId && (course.instructorId === userId || session?.user?.role === 'ADMIN'),
       imageUrl: course.imageUrl,
     }));
 
-    return NextResponse.json(formattedCourses);
+    return NextResponse.json(formattedCourses, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     console.error('Failed to fetch courses:', error);
     return NextResponse.json({ error: 'Failed to fetch courses' }, { status: 500 });
