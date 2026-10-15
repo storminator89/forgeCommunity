@@ -75,7 +75,7 @@ test('SQLite keyset history crosses tied timestamps without duplicates and stays
   expect(channelList.status).toBe(200);
   expect(channelList.headers.get('Cache-Control')).toBe('private, no-store');
   expect(await channelList.json()).toEqual(expect.arrayContaining([
-    { id: 'private-room', name: 'Private', isPrivate: true, _count: { members: 1 } },
+    { id: 'private-room', name: 'Private', isPrivate: true, hasUnread: false, _count: { members: 1 } },
   ]));
   const ids: string[] = [];
   let cursor: { before: string; beforeId: string } | undefined;
@@ -143,6 +143,6 @@ test('SQLite history denies outsiders and revoked members before querying messag
   actor('chat-member');
   expect((await GET(request('private-room', { before: timestamp.toISOString(), beforeId: 'private-100' }))).status).toBe(403);
   expect(await (await getChannels()).json()).toEqual([
-    { id: 'public-room', name: 'Public', isPrivate: false, _count: { members: 0 } },
+    { id: 'public-room', name: 'Public', isPrivate: false, hasUnread: false, _count: { members: 0 } },
   ]);
 });

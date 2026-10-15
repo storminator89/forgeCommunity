@@ -12,7 +12,7 @@ import { assertCoursePublicationReady } from './assert-course-publication-ready.
 
 const sqliteNames = readdirSync(new URL('../prisma/sqlite-migrations/', import.meta.url))
   .filter(name => /^\d+_[\w-]+\.sql$/.test(name)).sort();
-assert.equal(sqliteNames.at(-1), '0017_chat_message_cursor_index.sql');
+assert.equal(sqliteNames.at(-1), '0018_chat_read_cursor.sql');
 const publicationIndex = sqliteNames.indexOf('0010_staged_course_publication.sql');
 assert.ok(publicationIndex >= 0);
 
@@ -138,8 +138,10 @@ test('SQLite migration still rolls back an injected DDL failure', () => {
   db.close();
 });
 
-test('SQLite readiness refuses missing, changed, gapped and divergent migration history through chat pagination', async () => {
+test('SQLite readiness refuses missing, changed, gapped and divergent migration history through chat read cursors', async () => {
   for (const mutate of [
+    db => db.prepare(`DELETE FROM _app_migrations WHERE name='0018_chat_read_cursor.sql'`).run(),
+    db => db.prepare(`UPDATE _app_migrations SET checksum='changed' WHERE name='0018_chat_read_cursor.sql'`).run(),
     db => db.prepare(`DELETE FROM _app_migrations WHERE name='0017_chat_message_cursor_index.sql'`).run(),
     db => db.prepare(`UPDATE _app_migrations SET checksum='changed' WHERE name='0017_chat_message_cursor_index.sql'`).run(),
     db => db.prepare(`DELETE FROM _app_migrations WHERE name='0016_formative_practice_learner.sql'`).run(),
@@ -178,6 +180,14 @@ test('SQLite deploy refuses chat index tail already applied after a missing lear
   assert.throws(() => initializeSqlite(f.url, f.migrations), /gap before 0017_chat_message_cursor_index\.sql/);
 });
 
+test('SQLite deploy refuses chat read cursor tail after a missing chat index predecessor', () => {
+  const f = fixture(); f.upgrade();
+  const db = f.db();
+  db.prepare(`DELETE FROM _app_migrations WHERE name='0017_chat_message_cursor_index.sql'`).run();
+  db.close();
+  assert.throws(() => initializeSqlite(f.url, f.migrations), /gap before 0018_chat_read_cursor\.sql/);
+});
+
 const pgUrl = process.env.DATABASE_URL;
 const pgParsed = pgUrl && /^postgres(?:ql)?:\/\//.test(pgUrl) ? new URL(pgUrl) : null;
 if (process.env.POSTGRESQL_RELEASE_GATE_DISPOSABLE === '1' && pgParsed &&
@@ -196,6 +206,8 @@ if (process.env.POSTGRESQL_RELEASE_GATE_DISPOSABLE === '1' && pgParsed &&
       assert.equal(await assertCoursePublicationReady(freshUrl.toString(), 'postgresql'), true);
       await db.query(`SET search_path TO "${fresh}"`);
       for (const [name, sql, file] of [
+        ['missing chat read tail', `DELETE FROM "_app_schema_upgrades" WHERE name='0017_chat_read_cursor.sql'`, '0017_chat_read_cursor.sql'],
+        ['tampered chat read tail', `UPDATE "_app_schema_upgrades" SET checksum='changed' WHERE name='0017_chat_read_cursor.sql'`, '0017_chat_read_cursor.sql'],
         ['missing chat index tail', `DELETE FROM "_app_schema_upgrades" WHERE name='0016_chat_message_cursor_index.sql'`, '0016_chat_message_cursor_index.sql'],
         ['tampered chat index tail', `UPDATE "_app_schema_upgrades" SET checksum='changed' WHERE name='0016_chat_message_cursor_index.sql'`, '0016_chat_message_cursor_index.sql'],
         ['missing learner practice tail', `DELETE FROM "_app_schema_upgrades" WHERE name='0015_formative_practice_learner.sql'`, '0015_formative_practice_learner.sql'],
@@ -220,6 +232,13 @@ if (process.env.POSTGRESQL_RELEASE_GATE_DISPOSABLE === '1' && pgParsed &&
       await db.query(`INSERT INTO "_app_schema_upgrades" (name, checksum) VALUES ($1, $2)`, [
         '0015_formative_practice_learner.sql',
         createHash('sha256').update(readFileSync(new URL('../prisma/postgresql-upgrades/0015_formative_practice_learner.sql', import.meta.url))).digest('hex'),
+      ]);
+      assert.equal(await assertCoursePublicationReady(freshUrl.toString(), 'postgresql'), true);
+      await db.query(`DELETE FROM "_app_schema_upgrades" WHERE name='0016_chat_message_cursor_index.sql'`);
+      await assert.rejects(applyPostgresqlUpgrades(freshUrl.toString()), /gap before 0017_chat_read_cursor\.sql/);
+      await db.query(`INSERT INTO "_app_schema_upgrades" (name, checksum) VALUES ($1, $2)`, [
+        '0016_chat_message_cursor_index.sql',
+        createHash('sha256').update(readFileSync(new URL('../prisma/postgresql-upgrades/0016_chat_message_cursor_index.sql', import.meta.url))).digest('hex'),
       ]);
       assert.equal(await assertCoursePublicationReady(freshUrl.toString(), 'postgresql'), true);
       await db.query(`CREATE SCHEMA "${legacy}"`);

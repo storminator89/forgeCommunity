@@ -13,7 +13,10 @@ interface ChatContextType {
   messages: ChatMessage[];
   hasOlderMessages: boolean;
   loadingOlderMessages: boolean;
+  loadedChannelId: string | null;
+  hasNewerMessages: boolean;
   loadOlderMessages: () => Promise<void>;
+  markRead: (channelId: string, messageId: string | null) => Promise<void>;
   setCurrentChannel: (channel: ChatChannel) => void;
   sendMessage: (content: string, imageFile?: File) => Promise<boolean>;
   editMessage: (input: EditMessageInput) => Promise<void>;
@@ -40,11 +43,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
 function AccountChatProvider({ children, session }: { children: ReactNode; session: Session | null }) {
   const sessionUserId = session?.user?.id;
+  const isAdmin = session?.user?.role === 'ADMIN';
   const [channels, setChannels] = useState<ChatChannel[]>([]);
   const [currentChannel, setCurrentChannelState] = useState<ChatChannel | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [hasOlderMessages, setHasOlderMessages] = useState(false);
   const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
+  const [loadedChannelId, setLoadedChannelId] = useState<string | null>(null);
+  const [hasNewerMessages, setHasNewerMessages] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastSync, setLastSync] = useState<Date>(new Date());
@@ -58,6 +64,11 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
   const olderRequestRef = useRef<string | null>(null);
   const syncingRef = useRef<symbol | null>(null);
   const initialLoadedChannelRef = useRef<string | null>(null);
+  const readMarksInFlightRef = useRef(new Set<string>());
+  const lastSuccessfulReadRef = useRef(new Map<string, string>());
+  const readMarkGenerationRef = useRef(new Map<string, number>());
+  const channelListEpochRef = useRef(0);
+  const channelListRequestSequenceRef = useRef(0);
 
   useLayoutEffect(() => {
     // This provider is keyed by account. Cancel both upload and message requests
@@ -142,6 +153,8 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
     setMessages([]);
     setHasOlderMessages(false);
     setLoadingOlderMessages(false);
+    setLoadedChannelId(null);
+    setHasNewerMessages(false);
     olderRequestRef.current = null;
     syncingRef.current = null;
     initialLoadedChannelRef.current = null;
@@ -158,32 +171,64 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
     activeSessionIdRef.current = session?.user?.id ?? null;
   }, [session?.user?.id]);
 
-  const fetchChannels = useCallback(async (signal?: AbortSignal, sessionUserId?: string) => {
+  const fetchChannels = useCallback(async (signal?: AbortSignal, sessionUserId?: string, background = false): Promise<boolean> => {
+    const listEpochAtStart = channelListEpochRef.current;
+    const requestSequence = ++channelListRequestSequenceRef.current;
     try {
-      setLoading(true);
-      const response = await fetch('/api/chat/channels', { signal });
+      if (!background) setLoading(true);
+      const response = await fetch('/api/chat/channels', { signal, cache: 'no-store' });
       if (!response.ok) throw new Error('Failed to fetch channels');
       const data = await response.json();
-      if (signal?.aborted || (sessionUserId && activeSessionIdRef.current !== sessionUserId)) return;
+      if (signal?.aborted || (sessionUserId && activeSessionIdRef.current !== sessionUserId)) return false;
+      // A local read, channel deletion, or permission rejection can supersede
+      // this response. The sequence also rejects an older GET if scheduling
+      // changes later, even though the current scheduler is single-flight.
+      if (requestSequence !== channelListRequestSequenceRef.current ||
+          listEpochAtStart !== channelListEpochRef.current) return true;
+      channelListEpochRef.current++;
       setChannels(data);
-      if (data.length > 0) {
-        setCurrentChannelState(previousChannel => previousChannel ?? data[0]);
+      const selectedId = activeChannelIdRef.current;
+      if (selectedId && !data.some((channel: ChatChannel) => channel.id === selectedId)) {
+        // The current permission-filtered list no longer includes this room.
+        // Drop its contents now rather than waiting for a later message 403.
+        activeChannelIdRef.current = null;
+        initialLoadedChannelRef.current = null;
+        setMessages([]);
+        setLoadedChannelId(null);
+        setHasOlderMessages(false);
+        setLoadingOlderMessages(false);
+        setHasNewerMessages(false);
+        setLastSync(new Date(0));
+        setLastSyncId(null);
+        setCurrentChannelState(null);
+      } else if (!background && data.length > 0) {
+        // Admins can list private rooms they have not joined. An initial
+        // auto-selection must choose a readable public room; later refreshes
+        // never re-open a room already rejected by the messages endpoint.
+        const initialRoom = isAdmin
+          ? data.find((channel: ChatChannel) => !channel.isPrivate)
+          : data[0];
+        if (initialRoom) setCurrentChannelState(previousChannel => previousChannel ?? initialRoom);
       }
+      return true;
     } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') return;
+      if (err instanceof DOMException && err.name === 'AbortError') return false;
       const errorMessage = err instanceof Error ? err.message : 'Error fetching channels';
-      setError(errorMessage);
+      if (!background) setError(errorMessage);
       console.error(errorMessage);
+      return false;
     } finally {
-      if (!sessionUserId || activeSessionIdRef.current === sessionUserId) {
+      if (!background && (!sessionUserId || activeSessionIdRef.current === sessionUserId)) {
         setLoading(false);
       }
     }
-  }, []);
+  }, [isAdmin]);
 
   const fetchMessages = useCallback(async (channelId: string, signal?: AbortSignal) => {
     try {
       initialLoadedChannelRef.current = null;
+      setLoadedChannelId(null);
+      setHasNewerMessages(false);
       setLoading(true);
       const response = await fetch(
         `/api/chat/messages?channelId=${encodeURIComponent(channelId)}&latest=true&limit=50`,
@@ -192,6 +237,8 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
       if (response.status === 403 && activeChannelIdRef.current === channelId) {
         activeChannelIdRef.current = null;
         initialLoadedChannelRef.current = null;
+        channelListEpochRef.current++;
+        setLoadedChannelId(null);
         setMessages([]);
         setHasOlderMessages(false);
         setLoadingOlderMessages(false);
@@ -211,7 +258,7 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
 
       const sortedMessages = data.items.sort(
         (a: ChatMessage, b: ChatMessage) =>
-          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime() || a.id.localeCompare(b.id)
       );
 
       // Füge alle initial geladenen Nachrichten zum Set hinzu
@@ -220,6 +267,7 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
       setMessages(sortedMessages);
       setHasOlderMessages(data.hasMore === true);
       initialLoadedChannelRef.current = channelId;
+      setLoadedChannelId(channelId);
       // The API limits the initial response. Advancing with the browser clock
       // can move the cursor past server timestamps (and skip messages), so
       // continue from the newest message actually received.
@@ -261,6 +309,8 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
       if (response.status === 403 && activeChannelIdRef.current === channelId) {
         activeChannelIdRef.current = null;
         initialLoadedChannelRef.current = null;
+        channelListEpochRef.current++;
+        setLoadedChannelId(null);
         setMessages([]);
         setHasOlderMessages(false);
         setLoadingOlderMessages(false);
@@ -293,8 +343,11 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
     const channelId = currentChannel.id;
     let cursor = lastSync;
     let cursorId = lastSyncId;
+    let morePending = false;
     const syncToken = Symbol('chat-sync');
     syncingRef.current = syncToken;
+    // While the cursor poll is in flight, the visible tail is not yet known.
+    setHasNewerMessages(true);
 
     try {
       // A burst may span several 50-message pages. Drain a bounded batch now
@@ -307,6 +360,7 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
         if (response.status === 403 && activeChannelIdRef.current === channelId) {
           activeChannelIdRef.current = null;
           initialLoadedChannelRef.current = null;
+          channelListEpochRef.current++;
           setMessages([]);
           setHasOlderMessages(false);
           setChannels(previous => previous.filter(channel => channel.id !== channelId));
@@ -315,6 +369,8 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
         if (!response.ok) throw new Error('Failed to sync messages');
         const data = await response.json();
         if (signal?.aborted || activeChannelIdRef.current !== channelId || activeSessionIdRef.current !== sessionUserId) return;
+        morePending = data.hasMore === true;
+        if (morePending) setHasNewerMessages(true);
 
         const newMessages = (data.items as ChatMessage[]).filter(newMsg => !processedMessageIds.has(newMsg.id));
         newMessages.forEach(newMsg => processedMessageIds.add(newMsg.id));
@@ -346,6 +402,7 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
       if (!signal?.aborted && activeChannelIdRef.current === channelId) {
         setLastSync(cursor);
         setLastSyncId(cursorId);
+        setHasNewerMessages(morePending);
       }
     } catch (err) {
       if (!(err instanceof DOMException && err.name === 'AbortError')) console.error('Error syncing messages:', err);
@@ -353,6 +410,46 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
       if (syncingRef.current === syncToken) syncingRef.current = null;
     }
   }, [currentChannel, isWindowFocused, lastSync, lastSyncId, processedMessageIds, sessionUserId, showDesktopNotification]);
+
+  const markRead = useCallback(async (channelId: string, messageId: string | null) => {
+    const controller = sendControllerRef.current;
+    if (!controller || controller.signal.aborted || !sessionUserId ||
+        activeSessionIdRef.current !== sessionUserId || activeChannelIdRef.current !== channelId ||
+        initialLoadedChannelRef.current !== channelId) return;
+
+    const markKey = messageId ?? '__empty__';
+    if (lastSuccessfulReadRef.current.get(channelId) === markKey || readMarksInFlightRef.current.has(`${channelId}:${markKey}`)) return;
+    const listEpochAtStart = channelListEpochRef.current;
+    readMarksInFlightRef.current.add(`${channelId}:${markKey}`);
+    const generation = (readMarkGenerationRef.current.get(channelId) ?? 0) + 1;
+    readMarkGenerationRef.current.set(channelId, generation);
+    try {
+      const response = await fetch(`/api/chat/channels/${encodeURIComponent(channelId)}/read`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messageId }),
+        signal: controller.signal,
+      });
+      if (!response.ok) throw new Error('Failed to mark chat as read');
+      const data: { hasUnread?: boolean } = await response.json();
+      if (controller.signal.aborted || activeSessionIdRef.current !== sessionUserId ||
+          readMarkGenerationRef.current.get(channelId) !== generation) return;
+      lastSuccessfulReadRef.current.set(channelId, markKey);
+      // Never let a delayed false POST overwrite a newer list GET that saw a
+      // fresh unread message. A stale true is conservative and can be kept.
+      if (data.hasUnread !== true && listEpochAtStart !== channelListEpochRef.current) return;
+      channelListEpochRef.current++;
+      // A second device or a concurrent message may leave the channel unread.
+      // Use the server's result rather than clearing a dot optimistically.
+      setChannels(previous => previous.map(channel => channel.id === channelId
+        ? { ...channel, hasUnread: data.hasUnread === true }
+        : channel));
+    } catch (error) {
+      if (!controller.signal.aborted) console.error('Error marking chat as read:', error);
+    } finally {
+      readMarksInFlightRef.current.delete(`${channelId}:${markKey}`);
+    }
+  }, [sessionUserId]);
 
 
   useEffect(() => {
@@ -369,34 +466,83 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
   }, []);
 
   useEffect(() => {
-    const controller = new AbortController();
-    let fetchTimer: ReturnType<typeof setTimeout> | undefined;
-    let resetTimer: ReturnType<typeof setTimeout> | undefined;
-
-    if (sessionUserId) {
-      fetchTimer = setTimeout(() => {
-        void fetchChannels(controller.signal, sessionUserId);
-      }, 0);
-    } else {
+    if (!sessionUserId) {
       // Do not retain private channel data after sign-out. This also resets the
       // polling cursor so a later session cannot query with the previous user's
       // timestamp.
-      resetTimer = setTimeout(() => {
+      const resetTimer = setTimeout(() => {
         setChannels([]);
         setCurrentChannelState(null);
         setMessages([]);
+        setLoadedChannelId(null);
+        setHasNewerMessages(false);
         setLastSync(new Date(0));
         setLastSyncId(null);
         setLoading(false);
         setError(null);
         processedMessageIds.clear();
       }, 0);
+      return () => clearTimeout(resetTimer);
     }
 
+    // A channel list is more expensive than one room's message cursor poll.
+    // Keep at most one request in flight, pause when hidden/offline, and let
+    // failures back off instead of adding another unconditional 10s poll.
+    const refreshMs = 30_000;
+    const maxRetryMs = 120_000;
+    let stopped = false;
+    let started = false;
+    let inFlight = false;
+    let failures = 0;
+    let nextAllowedAt = 0;
+    let requestController: AbortController | null = null;
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    const canRefresh = () => document.visibilityState === 'visible' && navigator.onLine !== false;
+    const clearRefreshTimer = () => {
+      if (refreshTimer !== null) clearTimeout(refreshTimer);
+      refreshTimer = null;
+    };
+    const scheduleRefresh = () => {
+      clearRefreshTimer();
+      if (stopped || !started || inFlight || !canRefresh()) return;
+      refreshTimer = setTimeout(() => { void refresh(true); }, Math.max(0, nextAllowedAt - Date.now()));
+    };
+    const refresh = async (background: boolean) => {
+      if (stopped || inFlight || (background && !canRefresh())) return;
+      started = true;
+      inFlight = true;
+      const controller = new AbortController();
+      requestController = controller;
+      try {
+        const success = await fetchChannels(controller.signal, sessionUserId, background);
+        if (stopped) return;
+        failures = success ? 0 : Math.min(failures + 1, 3);
+        const delay = success ? refreshMs : Math.min(refreshMs * 2 ** (failures - 1), maxRetryMs);
+        nextAllowedAt = Date.now() + delay;
+      } finally {
+        inFlight = false;
+        requestController = null;
+        scheduleRefresh();
+      }
+    };
+    const initialTimer = setTimeout(() => { void refresh(false); }, 0);
+    const onVisibilityChange = () => {
+      if (canRefresh()) scheduleRefresh();
+      else clearRefreshTimer();
+    };
+    const onOnline = () => { failures = 0; nextAllowedAt = 0; scheduleRefresh(); };
+    const onOffline = () => clearRefreshTimer();
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
     return () => {
-      controller.abort();
-      if (fetchTimer) clearTimeout(fetchTimer);
-      if (resetTimer) clearTimeout(resetTimer);
+      stopped = true;
+      clearTimeout(initialTimer);
+      clearRefreshTimer();
+      requestController?.abort();
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
     };
   }, [fetchChannels, processedMessageIds, sessionUserId]);
 
@@ -520,12 +666,15 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
       processedMessageIds.add(actualMessage.id);
 
       if (activeChannelIdRef.current === channelId) {
+        // An own post can land after unseen messages on another device. Drain
+        // the server cursor before considering that new local tail read.
+        setHasNewerMessages(true);
         setMessages(prev => {
           // Polling can deliver the committed row before POST returns. Replace
           // the optimistic item without rendering the server row twice.
           const updatedMessages = prev.filter(msg => msg.id !== tempId && msg.id !== actualMessage.id);
           return [...updatedMessages, actualMessage].sort(
-            (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+            (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime() || a.id.localeCompare(b.id)
           );
         });
       }
@@ -577,6 +726,7 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
       if (!response.ok) throw new Error('Failed to create channel');
 
       const newChannel = await response.json();
+      channelListEpochRef.current++;
       setChannels(prev => [...prev, newChannel]);
       setActiveChannel(newChannel);
 
@@ -595,6 +745,7 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
 
       if (!response.ok) throw new Error('Failed to delete channel');
 
+      channelListEpochRef.current++;
       setChannels(prev => prev.filter(channel => channel.id !== channelId));
 
       if (currentChannel?.id === channelId) {
@@ -604,6 +755,8 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
         } else {
           setCurrentChannelState(null);
           setMessages([]);
+          setLoadedChannelId(null);
+          setHasNewerMessages(false);
           setLastSync(new Date(0));
           setLastSyncId(null);
         }
@@ -626,7 +779,10 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
         messages: session?.user ? messages : [],
         hasOlderMessages: session?.user ? hasOlderMessages : false,
         loadingOlderMessages: session?.user ? loadingOlderMessages : false,
+        loadedChannelId: session?.user ? loadedChannelId : null,
+        hasNewerMessages: session?.user ? hasNewerMessages : false,
         loadOlderMessages,
+        markRead,
         setCurrentChannel: setActiveChannel,
         sendMessage,
         editMessage,
