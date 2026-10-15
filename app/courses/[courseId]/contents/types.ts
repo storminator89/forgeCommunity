@@ -45,7 +45,7 @@ export interface CourseContent {
   id: string;
   courseId: string;
   title: string;
-  type: 'TEXT' | 'VIDEO' | 'AUDIO' | 'H5P' | 'QUIZ';
+  type: 'TEXT' | 'VIDEO' | 'AUDIO' | 'H5P' | 'QUIZ' | 'ASSIGNMENT';
   content: string | QuizContent;
   order: number;
   parentId: string | null;
@@ -54,6 +54,9 @@ export interface CourseContent {
   updatedAt?: string;
   publicationId?: string | null;
   contentVersionToken?: string | null;
+  prerequisiteIds?: string[];
+  locked?: boolean;
+  missingPrerequisites?: Array<{ id: string; title: string }>;
 }
 
 export type LearnerQuizQuestion =

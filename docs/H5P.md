@@ -16,7 +16,7 @@ Der Player wird aus der festgelegten Version von `h5p-standalone` beim Build nac
 
 Pakete liegen privat unter `data/h5p`. Mit `H5P_STORAGE_PATH` kann ein anderer absoluter Speicherpfad gesetzt werden. Im Docker-Standardbetrieb bleibt dieser Ordner im vorhandenen SQLite-Datenvolume erhalten. Der PostgreSQL-Compose-Stack verwendet das zusätzliche Volume `h5p_data`. Bei einem Backup müssen Datenbank **und** Paketordner gesichert werden.
 
-Der Zugriff auf lokale Inhalte wird für Eigentümer, Administratoren und berechtigte Kursteilnehmer geprüft. Ressourcen verwenden kurzlebige, paketgebundene Tokens. Importierter Bibliothekscode läuft in einer iframe-Sandbox ohne Zugriff auf die App-Sitzung oder das übergeordnete Dokument.
+Der Zugriff auf lokale Inhalte wird für Eigentümer, Administratoren und berechtigte Kursteilnehmer geprüft. Ressourcen verwenden kurzlebige, paketgebundene v2-Tokens; bei jedem Abruf wird die aktuelle Berechtigung des verschlüsselt im Token benannten Kontos erneut geprüft. Ein kopierter Token bleibt während seiner maximal zweistündigen Laufzeit für Dritte nutzbar, solange dieses Konto weiterhin berechtigt ist. Alte v1-Tokens werden abgewiesen; ein offener Player muss dann neu geladen werden. Importierter Bibliothekscode läuft in einer iframe-Sandbox ohne Zugriff auf die App-Sitzung oder das übergeordnete Dokument. Details: [Kurs-Lernvoraussetzungen](COURSE-PREREQUISITES.md).
 
 Die Interaktion und das Feedback werden vom jeweiligen H5P-Inhalt ausgeführt. Diese Integration fügt keine zentrale xAPI-Ergebnisdatenbank und keinen integrierten H5P-Autoreneditor hinzu.
 

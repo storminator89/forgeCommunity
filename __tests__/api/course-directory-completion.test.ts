@@ -9,18 +9,22 @@ jest.mock('next/server', () => ({ NextResponse: class extends Response {
 } }));
 jest.mock('@/lib/prisma', () => ({ __esModule: true, default: {
   $transaction: jest.fn(),
+  $queryRaw: jest.fn(),
   course: { findMany: jest.fn() },
   courseContent: { findMany: jest.fn() },
   courseContentProgress: { findMany: jest.fn() },
+  coursePublication: { findMany: jest.fn() },
 } }));
 jest.mock('next-auth', () => ({ getServerSession: jest.fn() }));
 jest.mock('@/app/api/auth/[...nextauth]/options', () => ({ authOptions: {} }));
 
 const db = prisma as unknown as {
   $transaction: jest.Mock;
+  $queryRaw: jest.Mock;
   course: { findMany: jest.Mock };
   courseContent: { findMany: jest.Mock };
   courseContentProgress: { findMany: jest.Mock };
+  coursePublication: { findMany: jest.Mock };
 };
 const history = new Date('2026-09-01T12:00:00Z');
 const course = (id: string, enrolled = true) => ({
@@ -35,14 +39,24 @@ const leaf = (id: string, courseId = 'one', type = 'TEXT', content = '<p>Lesson<
 const marked = (item: ReturnType<typeof leaf>, revision = courseContentRevision(item)) => ({
   courseId: item.courseId, contentId: item.id, revision,
 });
+function mockContents(items: ReturnType<typeof leaf>[]) {
+  db.courseContent.findMany.mockResolvedValue(items);
+  db.coursePublication.findMany.mockResolvedValue([...new Set(items.map(item => item.courseId))].map(courseId => ({
+    id: `publication-${courseId}`, courseId, payload: JSON.stringify({ schemaVersion: 1,
+      contents: items.filter(item => item.courseId === courseId).map(item => ({ ...item, title: item.id })) }),
+  })));
+  if (!items.length) db.coursePublication.findMany.mockResolvedValue([{ id: 'publication-one', courseId: 'one',
+    payload: JSON.stringify({ schemaVersion: 1, contents: [] }) }]);
+}
 
 beforeEach(() => {
   jest.resetAllMocks();
   db.$transaction.mockImplementation((work: (tx: typeof db) => Promise<unknown>) => work(db));
+  db.$queryRaw.mockResolvedValue([]);
   jest.mocked(getServerSession).mockResolvedValue({ user: { id: 'alice', role: 'USER' } } as never);
   db.course.findMany.mockResolvedValue([course('one'), course('other', false)]);
   const lesson = leaf('lesson');
-  db.courseContent.findMany.mockResolvedValue([lesson]);
+  mockContents([lesson]);
   db.courseContentProgress.findMany.mockResolvedValue([marked(lesson)]);
 });
 
@@ -50,7 +64,7 @@ test.each(['TEXT', 'QUIZ'])('historical completion does not claim current %s com
   const item = leaf('lesson', 'one', type, type === 'QUIZ'
     ? JSON.stringify({ questions: [{ id: 'q', type: 'SINGLE_CHOICE', question: 'Changed?', options: ['A', 'B'], correctAnswers: [1] }] })
     : '<p>Revised lesson</p>');
-  db.courseContent.findMany.mockResolvedValue([item]);
+  mockContents([item]);
   db.courseContentProgress.findMany.mockResolvedValue([marked(item, 'old-revision')]);
   const response = await GET();
   const rows = await response.json();
@@ -62,12 +76,12 @@ test.each(['TEXT', 'QUIZ'])('historical completion does not claim current %s com
 test('added leaves reopen current completion; removing them restores it; zero leaves are incomplete', async () => {
   const first = leaf('first');
   const second = leaf('second');
-  db.courseContent.findMany.mockResolvedValue([first, second]);
+  mockContents([first, second]);
   db.courseContentProgress.findMany.mockResolvedValue([marked(first)]);
   expect((await (await GET()).json())[0]).toMatchObject({ everCompleted: true, completed: false });
-  db.courseContent.findMany.mockResolvedValue([first]);
+  mockContents([first]);
   expect((await (await GET()).json())[0]).toMatchObject({ everCompleted: true, completed: true });
-  db.courseContent.findMany.mockResolvedValue([]);
+  mockContents([]);
   expect((await (await GET()).json())[0]).toMatchObject({ everCompleted: true, completed: false });
 });
 
@@ -75,7 +89,7 @@ test('batches both revision queries only for the authenticated viewer’s enroll
   const first = leaf('first', 'one');
   const second = leaf('second', 'two');
   db.course.findMany.mockResolvedValue([course('one'), course('two'), course('other', false)]);
-  db.courseContent.findMany.mockResolvedValue([first, second]);
+  mockContents([first, second]);
   db.courseContentProgress.findMany.mockResolvedValue([marked(first), marked(second)]);
   const rows = await (await GET()).json();
   expect(rows.map((row: { completed: boolean }) => row.completed)).toEqual([true, true, false]);
@@ -93,4 +107,13 @@ test('batches both revision queries only for the authenticated viewer’s enroll
   expect(bobRows.every((row: { completed: boolean; everCompleted: boolean }) => !row.completed && !row.everCompleted)).toBe(true);
   expect(db.courseContent.findMany).not.toHaveBeenCalled();
   expect(db.courseContentProgress.findMany).not.toHaveBeenCalled();
+});
+
+test('assignment directory completion requires the current grade rather than a stale progress mirror', async () => {
+  const assignment = leaf('written-task', 'one', 'ASSIGNMENT', JSON.stringify({ prompt: 'Explain a concept.', passingScore: 70 }));
+  mockContents([assignment]);
+  db.courseContentProgress.findMany.mockResolvedValue([marked(assignment)]);
+  expect((await (await GET()).json())[0]).toMatchObject({ completed: false, everCompleted: true });
+  db.$queryRaw.mockResolvedValue([{ userId: 'alice', contentId: assignment.id }]);
+  expect((await (await GET()).json())[0]).toMatchObject({ completed: true, everCompleted: true });
 });

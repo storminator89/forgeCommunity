@@ -67,6 +67,17 @@ async function installSyntheticApi(page: Page) {
   await page.route('**/api/articles/categories-and-tags', route => route.fulfill({ status: 200, json: { categories: ['QA'], tags: [] } }));
   await page.route('**/api/courses/qa-route-course', route => route.fulfill({ status: 200, json: { id: 'qa-route-course', name: 'Route QA course', canEdit: false } }));
   await page.route('**/api/courses/qa-route-course/contents', route => route.fulfill({ status: 200, json: [] }));
+  await page.route(/\/api\/courses\/qa-route-course\/assignments(?:\?|$)/, route => route.fulfill({ status: 200, json: { submissions: [], nextCursor: null } }));
+  await page.route(/\/api\/courses\/qa-route-course\/analytics\?/, route => route.fulfill({ status: 200, json: {
+    course: { id: 'qa-route-course', title: 'Route QA course', activePublicationId: 'qa-publication' },
+    summary: { enrolled: 1, currentComplete: 0, notStarted: 0, inProgress: 1, unmeasurable: 0,
+      quizSignals: [{ contentId: 'qa-quiz', title: 'Safety quiz', attemptedLearners: 1, latestFailureLearners: 1 }] },
+    filters: { search: '', status: 'all' }, pagination: { page: 1, pageSize: 25, total: 1, pages: 1 },
+    learners: [{ enrollmentId: 'qa-enrollment', displayName: 'Route QA learner', enrolledAt: '2026-10-01T12:00:00.000Z',
+      currentStatus: 'in-progress', completedLeaves: 1, totalLeaves: 2, firstIncomplete: { id: 'qa-quiz', title: 'Safety quiz' },
+      quizAttempts: 1, quizNeedsReview: 1, latestQuiz: { title: 'Safety quiz', score: 50, passed: false, submittedAt: '2026-10-02T12:00:00.000Z' },
+      historicalCompletedAt: null, certificateIssuedAt: null }],
+  } }));
   await page.route('**/api/courses/qa-route-course/progress', route => route.fulfill({
     status: 200, json: { completedContentIds: [], complete: false, canTrack: false, hasCertificate: false, completedAt: null },
   }));
@@ -175,6 +186,9 @@ test.describe('every App Router page, one at a time', () => {
       if (item.url === '/courses') await expect(main.getByText(/^\d+ (?:Kurs|Kurse) verfügbar$/)).toBeVisible();
       if (item.url === '/events') await expect(page.getByRole('region', { name: 'Nächste Events' })).toBeVisible();
       if (item.url === '/settings') await expect(page.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Route QA Member');
+      if (item.url === '/courses/qa-route-course/analytics') {
+        await expect(main.getByRole('list', { name: 'Lernende im Kurs' })).toContainText('Route QA learner');
+      }
 
       const overflow = await page.evaluate(() => ({
         viewport: window.innerWidth,
@@ -192,6 +206,15 @@ test.describe('every App Router page, one at a time', () => {
       expect(await skip.evaluate(element => Number.parseFloat(getComputedStyle(element).outlineWidth))).toBeGreaterThanOrEqual(2);
       await page.keyboard.press('Enter');
       await expect(main).toBeFocused();
+
+      if (item.url === '/courses/qa-route-course/analytics') {
+        const search = main.getByRole('textbox', { name: 'Name suchen' });
+        await search.focus();
+        await expect(search).toBeFocused();
+        await search.fill('Route QA');
+        await search.press('Enter');
+        await expect(main.getByRole('list', { name: 'Lernende im Kurs' })).toContainText('Route QA learner');
+      }
 
       // These pages scroll inside <main>, so a document-level fullPage PNG
       // alone cannot show their lower content. Review the real lower action
@@ -215,6 +238,36 @@ test.describe('every App Router page, one at a time', () => {
       expect(errors).toEqual([]);
     });
   }
+
+  test('analytics page keeps controls readable from 320 to 768px with a keyboard path', async ({ page }, testInfo) => {
+    await usePersona(page, 'member');
+    await installSyntheticApi(page);
+    await page.goto('/courses/qa-route-course/analytics');
+    await expect(page.getByRole('list', { name: 'Lernende im Kurs' })).toContainText('Route QA learner');
+    for (const width of [320, 375, 414, 768]) {
+      await page.setViewportSize({ width, height: 850 });
+      const widths = await page.evaluate(() => ({ viewport: innerWidth, html: document.documentElement.scrollWidth, body: document.body.scrollWidth }));
+      expect(widths.html, `analytics ${width}px ${JSON.stringify(widths)}`).toBeLessThanOrEqual(width + 1);
+      expect(widths.body, `analytics ${width}px ${JSON.stringify(widths)}`).toBeLessThanOrEqual(width + 1);
+      for (const name of ['Anwenden', 'CSV exportieren', 'Vorherige Seite', 'Nächste Seite']) {
+        const button = page.getByRole('button', { name, exact: true });
+        await expect(button).toBeVisible();
+        const control = await button.evaluate(element => ({ whiteSpace: getComputedStyle(element).whiteSpace,
+          clientWidth: element.clientWidth, scrollWidth: element.scrollWidth }));
+        expect(control.whiteSpace, `${name} at ${width}px`).toBe('nowrap');
+        expect(control.scrollWidth, `${name} at ${width}px`).toBeLessThanOrEqual(control.clientWidth + 1);
+      }
+      if (width === 320) await page.screenshot({ path: testInfo.outputPath('course-analytics-320.png'), fullPage: true });
+    }
+    const search = page.getByRole('textbox', { name: 'Name suchen' });
+    await search.focus();
+    await page.keyboard.press('Tab');
+    await expect(page.getByRole('combobox', { name: 'Status' })).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(page.getByRole('button', { name: 'Anwenden' })).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(page.getByRole('button', { name: 'CSV exportieren' })).toBeFocused();
+  });
 
   test('server page boundaries redirect a member away from staff pages', async ({ page }) => {
     await usePersona(page, 'member');

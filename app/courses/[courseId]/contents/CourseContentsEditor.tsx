@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
-import { Check, ChevronLeft, ChevronRight, Edit, Eye, FileText, FolderInput, Plus, X } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Edit, Eye, FileText, FolderInput, LockKeyhole, Plus, X } from 'lucide-react'
 import { AppShell, AppHeader } from '@/components/app-shell'
 import { Sidebar } from '@/components/Sidebar'
 import { Button } from '@/components/ui/button'
@@ -31,7 +31,7 @@ import { appendContent, editableFields, editableSignature, findContent, parentId
 
 type CourseDetails = { id: string; name: string; canEdit: boolean }
 type Notice = { type: 'success' | 'error'; message: string }
-const typeNames: Record<CourseContent['type'], string> = { TEXT: 'Text', VIDEO: 'Video', AUDIO: 'Audio', H5P: 'H5P', QUIZ: 'Quiz' }
+const typeNames: Record<CourseContent['type'], string> = { TEXT: 'Text', VIDEO: 'Video', AUDIO: 'Audio', H5P: 'H5P', QUIZ: 'Quiz', ASSIGNMENT: 'Aufgabe' }
 
 // The quiz editor emits normalized object drafts, including on mount. Compare
 // logical quiz values so JSON storage/defaults do not create false dirty states.
@@ -48,6 +48,7 @@ async function responseData<T>(response: Response, fallback: string): Promise<T>
       404: 'Der Kurs oder Inhalt ist nicht mehr verfügbar.',
       409: 'Der Inhalt wurde gleichzeitig geändert. Bitte lade die Ansicht erneut.',
       412: 'Der Inhalt wurde geändert. Bitte lade die Ansicht erneut, bevor du ihn abschließt.',
+      423: 'Dieser Inhalt ist noch gesperrt. Schließe zuerst die angegebenen Voraussetzungen ab.',
     }
     throw new Error(messages[response.status] || fallback)
   }
@@ -96,13 +97,20 @@ export function CourseContentsEditor({ courseId, forceLearner = false, onReturnT
   const authorMode = canManage && mode === 'author'
   const completedIds = progress?.completedContentIds ?? []
   const selectedComplete = Boolean(selected && completedIds.includes(selected.id))
-  const selectedTrackable = Boolean(!authorMode && selected && progress?.canTrack && !selected.subContents?.length && selected.type !== 'QUIZ')
+  const selectedTrackable = Boolean(!authorMode && selected && !selected.locked && progress?.canTrack && !selected.subContents?.length && selected.type !== 'QUIZ' && selected.type !== 'ASSIGNMENT')
 
   const refreshProgress = useCallback(async () => {
     const response = await fetch(`/api/courses/${courseId}/progress`)
     const snapshot = await responseData<CourseProgressSnapshot>(response, 'Der Kursfortschritt konnte nicht geladen werden.')
     setProgress(snapshot)
     return snapshot
+  }, [courseId])
+
+  const refreshContents = useCallback(async () => {
+    const response = await fetch(`/api/courses/${courseId}/contents`, { cache: 'no-store' })
+    const tree = await responseData<CourseContent[]>(response, 'Der Lernpfad konnte nicht geladen werden.')
+    setContents(tree)
+    return tree
   }, [courseId])
 
   useEffect(() => {
@@ -223,6 +231,7 @@ export function CourseContentsEditor({ courseId, forceLearner = false, onReturnT
       })
       const changed = await responseData<Pick<CourseProgressSnapshot, 'completedContentIds' | 'complete'>>(response, 'Der Kursfortschritt konnte nicht gespeichert werden.')
       setProgress(previous => previous ? { ...previous, ...changed } : previous)
+      await refreshContents()
       setNotice({ type: 'success', message: completed ? 'Inhalt als abgeschlossen markiert.' : 'Abschlussmarkierung entfernt.' })
     } catch (error) { setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Der Kursfortschritt konnte nicht gespeichert werden.' }) }
     finally { progressLock.current = false; setProgressBusy(false) }
@@ -437,7 +446,7 @@ export function CourseContentsEditor({ courseId, forceLearner = false, onReturnT
                       onSubmit={updateContent} onContentChange={change => {
                         setDraft(previous => previous ? { ...previous, ...change } : { ...selected, ...change })
                       }} onCancel={cancelEdit} />
-                  </div> : <div className="space-y-6">{selected.type === 'TEXT' && typeof selected.content === 'string' && !selected.content.trim() ? <div className="space-y-3">{selected.subContents?.length ? <><h3 className="text-sm font-semibold">Themen in diesem Kapitel</h3>{selected.subContents.map(child => <button type="button" key={child.id} className="block min-h-11 w-full rounded-xl border bg-card p-4 text-left text-sm hover:border-input focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring" onClick={() => requestNavigation(() => selectContent(child.id, authorMode))}>{child.title}</button>)}</> : <p className="text-sm text-muted-foreground">Für dieses Thema wurde noch kein Inhalt hinterlegt.</p>}</div> : <ContentRenderer key={selected.id} content={selected} learnerQuiz={!authorMode && Boolean(progress?.canTrack)} onQuizPassed={authorMode ? undefined : () => { void refreshProgress().catch(() => setNotice({ type: 'error', message: 'Quiz bestanden. Bitte lade den Fortschritt erneut.' })) }} />}{selectedTrackable && <div className="border-t pt-5"><Button type="button" variant={selectedComplete ? 'outline' : 'default'} disabled={progressBusy || mutating || !selected.publicationId || !selected.contentVersionToken} onClick={() => void setCompletion(selected.id, !selectedComplete, selected.publicationId, selected.contentVersionToken)}>{progressBusy ? 'Wird gespeichert …' : selectedComplete ? 'Abschlussmarkierung entfernen' : 'Als abgeschlossen markieren'}</Button><p className="mt-2 text-sm text-muted-foreground">Bestätige selbst, wenn du diesen Inhalt abgeschlossen hast.</p></div>}</div>}
+                  </div> : selected.locked && !authorMode ? <div className="space-y-4 rounded-xl border bg-card p-5" role="status" aria-live="polite"><div className="flex items-center gap-2 text-base font-semibold"><LockKeyhole aria-hidden="true" className="h-5 w-5 text-muted-foreground" />Inhalt gesperrt</div><p className="text-sm leading-relaxed text-muted-foreground">Schließe zuerst diese Inhalte ab. Danach wird der Inhalt freigeschaltet.</p><ul className="space-y-2">{selected.missingPrerequisites?.map(item => <li key={item.id}><button type="button" className="min-h-11 w-full rounded-md border bg-background px-3 py-2 text-left text-sm hover:bg-accent/60 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring" onClick={() => selectContent(item.id)}>{item.title} öffnen</button></li>)}</ul></div> : <div className="space-y-6">{selected.type === 'TEXT'  && typeof selected.content === 'string' && !selected.content.trim() ? <div className="space-y-3">{selected.subContents?.length ? <><h3 className="text-sm font-semibold">Themen in diesem Kapitel</h3>{selected.subContents.map(child => <button type="button" key={child.id} className="block min-h-11 w-full rounded-xl border bg-card p-4 text-left text-sm hover:border-input focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring" onClick={() => requestNavigation(() => selectContent(child.id, authorMode))}>{child.title}</button>)}</> : <p className="text-sm text-muted-foreground">Für dieses Thema wurde noch kein Inhalt hinterlegt.</p>}</div> : <ContentRenderer key={selected.id} content={selected} learnerQuiz={!authorMode && Boolean(progress?.canTrack)} onQuizPassed={authorMode ? undefined : () => { void Promise.all([refreshProgress(), refreshContents()]).catch(() => setNotice({ type: 'error', message: 'Quiz bestanden. Bitte lade den Lernpfad erneut.' })) }} />}{selectedTrackable && <div className="border-t pt-5"><Button type="button" variant={selectedComplete ? 'outline' : 'default'} disabled={progressBusy || mutating || !selected.publicationId || !selected.contentVersionToken} onClick={() => void setCompletion(selected.id, !selectedComplete, selected.publicationId, selected.contentVersionToken)}>{progressBusy ? 'Wird gespeichert …' : selectedComplete ? 'Abschlussmarkierung entfernen' : 'Als abgeschlossen markieren'}</Button><p className="mt-2 text-sm text-muted-foreground">Bestätige selbst, wenn du diesen Inhalt abgeschlossen hast.</p></div>}</div>}
                 </div> : <div className="mx-auto flex max-w-md flex-col items-center gap-3 px-6 py-16 text-center"><FileText className="h-8 w-8 text-muted-foreground" /><h2 className="text-xl font-semibold">{contents.length ? 'Wähle ein Thema' : 'Noch keine Kursinhalte'}</h2><p className="text-sm text-muted-foreground">{contents.length ? authorMode ? 'Wähle in der Kursstruktur einen Inhalt zum Ausarbeiten.' : 'Die Inhalte findest du im Inhaltsverzeichnis.' : authorMode ? 'Lege in der Kursstruktur den ersten Inhalt an.' : 'Für diesen Kurs wurden noch keine Inhalte angelegt.'}</p>{authorMode && <Button type="button" disabled={mutating} onClick={() => requestNavigation(() => openCreate(null))}><Plus aria-hidden="true" className="mr-2 h-4 w-4" />Inhalt hinzufügen</Button>}</div>}
               </section>
               </div>

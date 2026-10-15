@@ -15,6 +15,7 @@ import { POST as createCourse, GET as listCourses } from '@/app/api/courses/rout
 import { GET as readCourse } from '@/app/api/courses/[courseId]/route';
 import { POST as enroll } from '@/app/api/courses/[courseId]/enrollment/route';
 import { contentVersionToken } from '@/lib/server/course-progress';
+import { courseApprovalFingerprint } from '@/lib/server/rewards';
 import prisma from '@/lib/prisma';
 import { getServerSession } from 'next-auth/next';
 
@@ -320,4 +321,87 @@ test('archived quiz is neither returned nor counted, while its prior attempt and
   expect((await readProgress(request('/progress'), context).then(row => row.json())).complete).toBe(true);
   expect(await prisma.quizAttempt.count({ where: { userId: 'learner-123', contentId: quizId } })).toBe(1);
   expect(await prisma.certificate.count({ where: { userId: 'learner-123', courseId } })).toBe(1);
+});
+
+test('published prerequisite chain gates reads and writes, reuses valid history, and revokes current rewards on upstream revision', async () => {
+  const id = 'path-course-123';
+  const a = 'path-first-123', b = 'path-quiz-123', c = 'path-last-123';
+  const ctx = { params: Promise.resolve({ courseId: id }) };
+  const quizCtx = { params: Promise.resolve({ courseId: id, contentId: b }) };
+  const req = (suffix: string, method = 'GET', body?: object) => {
+    const url = new URL(`http://localhost/api/courses/${id}${suffix}`);
+    return Object.assign(new Request(url, { method, ...(body && { body: JSON.stringify(body) }) }), { nextUrl: url }) as never;
+  };
+  const nodes = [
+    { id: a, parentId: null, title: 'Start', type: 'TEXT', content: '<p>Start</p>', order: 1 },
+    { id: b, parentId: null, title: 'Prüfung', type: 'TEXT', content: quizBody, order: 2 },
+    { id: c, parentId: null, title: 'Vertiefung', type: 'TEXT', content: '<p>Geheimtext</p>', order: 3 },
+  ];
+  const initialPayload = { schemaVersion: 1 as const, title: 'Lernpfad', description: 'Drei Schritte', startDate: null, endDate: null, imageUrl: null, contents: nodes };
+  await prisma.course.create({ data: { id, instructorId: 'teacher-123', title: 'Lernpfad', description: 'Drei Schritte' } });
+  await prisma.courseContent.createMany({ data: nodes.map(node => ({ id: node.id, courseId: id, title: node.title, type: 'TEXT', content: node.content, order: node.order })) });
+  await prisma.coursePublication.create({ data: { id: 'path-publication-1', courseId: id, sequence: 1, source: 'AUTHOR', payload: JSON.stringify(initialPayload), digest: digest(initialPayload), contentCount: 3 } });
+  await prisma.course.update({ where: { id }, data: { activePublicationId: 'path-publication-1' } });
+  await prisma.courseDraft.create({ data: { courseId: id, basePublicationId: 'path-publication-1', payload: JSON.stringify(initialPayload), digest: digest(initialPayload) } });
+  await prisma.enrollment.create({ data: { userId: 'learner-123', courseId: id } });
+
+  setActor('learner-123', 'USER');
+  const firstQuiz = await submitQuiz(req(`/contents/${b}/attempts`, 'POST', { submissionId: 'path-submission-1', publicationId: 'path-publication-1', contentVersionToken: contentVersionToken('path-publication-1', nodes[1]), answers: { q1: [1] } }), quizCtx);
+  expect(firstQuiz.status).toBe(200);
+  expect((await markProgress(req('/progress', 'PATCH', { contentId: c, completed: true, publicationId: 'path-publication-1', contentVersionToken: contentVersionToken('path-publication-1', nodes[2]) }), ctx)).status).toBe(200);
+
+  setActor('teacher-123');
+  const save = async (revision: number, operation: object) => mutateDraft(req('/authoring', 'PATCH', { expectedRevision: revision, operation }), ctx);
+  expect((await save(0, { kind: 'setPrerequisites', id: a, prerequisiteIds: [c] })).status).toBe(409);
+  expect((await save(0, { kind: 'setPrerequisites', id: b, prerequisiteIds: ['foreign-leaf-123'] })).status).toBe(409);
+  expect((await save(0, { kind: 'setPrerequisites', id: b, prerequisiteIds: [a] })).status).toBe(200);
+  expect((await save(1, { kind: 'setPrerequisites', id: c, prerequisiteIds: [b] })).status).toBe(200);
+  const forbiddenDelete = await save(2, { kind: 'deleteNode', id: a });
+  expect(forbiddenDelete.status).toBe(409);
+  expect((await forbiddenDelete.json()).error).toMatch(/Entferne zuerst/);
+  expect((await save(2, { kind: 'moveNode', id: b, parentId: null, afterId: null })).status).toBe(409);
+  const review = await reviewDraft(req('/authoring/review?expectedRevision=2&expectedActivePublicationId=path-publication-1'), ctx);
+  expect(review.status).toBe(200);
+  expect((await review.json()).impact.prerequisitesChanged).toEqual([b, c]);
+  const publication = await publishDraft(req('/authoring/publish', 'POST', { expectedRevision: 2, expectedActivePublicationId: 'path-publication-1', requestId: 'path-publish-2' }), ctx);
+  expect(publication.status).toBe(200);
+  const publicationId = (await publication.json()).publication.id as string;
+
+  setActor('learner-123', 'USER');
+  const locked = await readContents(req('/contents'), ctx);
+  expect(locked.status).toBe(200);
+  const outline = await locked.json();
+  expect(outline[1]).toMatchObject({ id: b, locked: true, content: '', contentVersionToken: null });
+  expect(outline[2]).toMatchObject({ id: c, locked: true, content: '', contentVersionToken: null });
+  expect(JSON.stringify(outline)).not.toMatch(/Geheimtext|correctAnswers|Secret/);
+  expect((await readProgress(req('/progress'), ctx).then(row => row.json())).completedContentIds).toEqual([]);
+  expect((await markProgress(req('/progress', 'PATCH', { contentId: c, completed: true, publicationId, contentVersionToken: contentVersionToken(publicationId, nodes[2]) }), ctx)).status).toBe(423);
+  expect((await submitQuiz(req(`/contents/${b}/attempts`, 'POST', { submissionId: 'path-submission-2', publicationId, contentVersionToken: contentVersionToken(publicationId, nodes[1]), answers: { q1: [1] } }), quizCtx)).status).toBe(423);
+  const first = await prisma.courseContent.findUniqueOrThrow({ where: { id: a } });
+  expect((await markProgress(req('/progress', 'PATCH', { contentId: a, completed: true, publicationId, contentVersionToken: contentVersionToken(publicationId, first) }), ctx)).status).toBe(200);
+  const completed = await readProgress(req('/progress'), ctx).then(row => row.json());
+  expect(completed.completedContentIds).toEqual(expect.arrayContaining([a, b, c]));
+  expect(completed.complete).toBe(true);
+  const approval = await prisma.$transaction(tx => courseApprovalFingerprint(tx, id));
+  await prisma.course.update({ where: { id }, data: { rewardEligible: true, rewardApprovalRevision: approval } });
+  await prisma.$transaction(tx => import('@/lib/server/rewards').then(({ reconcileLearnerCourseReward }) => reconcileLearnerCourseReward(tx, 'learner-123', id)));
+  expect((await prisma.rewardLedger.findFirstOrThrow({ where: { userId: 'learner-123', sourceId: id } })).revokedAt).toBeNull();
+  await prisma.certificate.create({ data: { id: 'path-certificate-123', userId: 'learner-123', courseId: id, courseName: 'Lernpfad', userName: 'Lernende', publicationId, issuedAt: new Date() } });
+
+  setActor('teacher-123');
+  expect((await save(2, { kind: 'updateNode', id: a, patch: { content: '<p>Neuer Start</p>' } })).status).toBe(200);
+  const changed = await publishDraft(req('/authoring/publish', 'POST', { expectedRevision: 3, expectedActivePublicationId: publicationId, requestId: 'path-publish-3' }), ctx);
+  expect(changed.status).toBe(200);
+  const latestId = (await changed.json()).publication.id as string;
+  expect((await prisma.rewardLedger.findFirstOrThrow({ where: { userId: 'learner-123', sourceId: id } })).revokedAt).not.toBeNull();
+  expect(await prisma.certificate.count({ where: { id: 'path-certificate-123' } })).toBe(1);
+  setActor('learner-123', 'USER');
+  const afterRevision = await readProgress(req('/progress'), ctx).then(row => row.json());
+  expect(afterRevision.complete).toBe(false);
+  expect(afterRevision.completedContentIds).toEqual([]);
+  expect((await readContents(req('/contents'), ctx).then(row => row.json()))[2].locked).toBe(true);
+  const updatedFirst = await prisma.courseContent.findUniqueOrThrow({ where: { id: a } });
+  expect((await markProgress(req('/progress', 'PATCH', { contentId: a, completed: true, publicationId: latestId, contentVersionToken: contentVersionToken(latestId, updatedFirst) }), ctx)).status).toBe(200);
+  expect((await readProgress(req('/progress'), ctx).then(row => row.json())).completedContentIds).toEqual(expect.arrayContaining([a, b, c]));
+  expect((await prisma.rewardLedger.findFirstOrThrow({ where: { userId: 'learner-123', sourceId: id } })).revokedAt).toBeNull();
 });

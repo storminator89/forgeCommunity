@@ -8,6 +8,7 @@ export interface AuthorNode {
   type: CourseContent['type'] | null
   content: string
   order: number
+  prerequisiteIds?: string[]
 }
 
 export interface AuthorPayload {
@@ -28,6 +29,7 @@ export interface PublicationImpact {
   removed: string[]
   changed: string[]
   renamedOrReordered: string[]
+  prerequisitesChanged: string[]
   enrolledLearners: number
   completionMayChange: boolean
   rewardsMayChange: boolean
@@ -47,6 +49,7 @@ export type AuthorOperation =
   | { kind: 'insertNode'; node: Pick<AuthorNode, 'id' | 'title' | 'type' | 'content'>; parentId: string | null; afterId: string | null }
   | { kind: 'updateNode'; id: string; patch: Partial<Pick<AuthorNode, 'title' | 'type' | 'content'>> }
   | { kind: 'moveNode'; id: string; parentId: string | null; afterId: string | null }
+  | { kind: 'setPrerequisites'; id: string; prerequisiteIds: string[] }
   | { kind: 'deleteNode'; id: string }
 
 export class AuthoringError extends Error {

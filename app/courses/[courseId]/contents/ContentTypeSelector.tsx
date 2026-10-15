@@ -1,7 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { FileText, Video, Music, Box, HelpCircle } from 'lucide-react';
+import { FileText, Video, Music, Box, HelpCircle, ClipboardPenLine } from 'lucide-react';
 import { ContentType } from './content-form-utils';
 
 interface ContentTypeSelectorProps {
@@ -17,11 +17,12 @@ const types = [
   { type: 'AUDIO', label: 'Audio', description: 'Audio einbetten', icon: Music },
   { type: 'H5P', label: 'H5P', description: 'Interaktiv üben', icon: Box },
   { type: 'QUIZ', label: 'Quiz', description: 'Wissen prüfen', icon: HelpCircle },
+  { type: 'ASSIGNMENT', label: 'Aufgabe', description: 'Text abgeben und bewerten', icon: ClipboardPenLine },
 ] as const;
 
 export function ContentTypeSelector({ onSelectType, selectedType, disabled = false, showDescriptions = false }: ContentTypeSelectorProps) {
   return (
-    <div role="group" aria-label="Inhaltstyp" className={`grid min-w-0 gap-2 ${showDescriptions ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5'}`}>
+    <div role="group" aria-label="Inhaltstyp" className={`grid min-w-0 gap-2 ${showDescriptions ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-6'}`}>
       {types.map(({ type, label, description, icon: Icon }) => (
         <Button key={type} type="button" variant="outline" disabled={disabled} aria-pressed={selectedType === type}
           aria-label={label} className={`min-w-0 justify-start gap-2 ${showDescriptions ? 'h-auto min-h-16 whitespace-normal px-3 py-3 text-left' : ''} ${selectedType === type ? 'border-primary bg-primary/5 text-primary' : ''}`} onClick={() => onSelectType(type)}>

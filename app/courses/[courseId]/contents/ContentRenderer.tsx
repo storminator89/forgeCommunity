@@ -16,6 +16,8 @@ import { getSafeEmbedUrl } from '@/lib/security';
 import { AlertTriangle } from 'lucide-react';
 import { sanitizeRichHtml } from '@/lib/sanitize-html';
 import { H5PEmbed } from '@/components/h5p/H5PEmbed';
+import { LearnerAssignmentRenderer } from './LearnerAssignmentRenderer';
+import { parseAssignmentContent } from './assignment-content';
 
 interface ContentRendererProps {
   content: CourseContent;
@@ -125,6 +127,12 @@ function ContentRendererState({ content, isEditing: externalIsEditing, onSave, o
   }
 
   if (learnerQuiz && content.type === 'QUIZ') return <LearnerQuizRenderer key={`${content.publicationId ?? ''}:${content.contentVersionToken ?? content.updatedAt ?? ''}:${JSON.stringify(content.content)}`} courseId={content.courseId} contentId={content.id} updatedAt={content.updatedAt} publicationId={content.publicationId} contentVersionToken={content.contentVersionToken} content={content.content} onPassed={() => onQuizPassed?.()} />;
+  if (content.type === 'ASSIGNMENT') {
+    const assignment = parseAssignmentContent(content.content);
+    if (!assignment) return <p role="alert">Die Aufgabe ist ungültig.</p>;
+    if (learnerQuiz) return <LearnerAssignmentRenderer key={`${content.publicationId ?? ''}:${content.contentVersionToken ?? ''}`} courseId={content.courseId} contentId={content.id} publicationId={content.publicationId} contentVersionToken={content.contentVersionToken} content={content.content} onChanged={onQuizPassed} />;
+    return <section className="max-w-[72ch] space-y-3"><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Manuell bewertete Aufgabe</p><p className="whitespace-pre-wrap break-words text-base leading-relaxed">{assignment.prompt || 'Der Aufgabentext fehlt noch.'}</p><p className="text-sm text-muted-foreground">Bestehensgrenze: {assignment.passingScore} von 100 Punkten · Textabgabe</p></section>;
+  }
   if (quizContent || content.type === 'QUIZ') return <QuizRenderer content={quizContent ?? content.content} />;
 
   const renderContent = () => {

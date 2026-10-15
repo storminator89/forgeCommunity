@@ -61,6 +61,12 @@ enum ContentType {
   VIDEO
   AUDIO
   H5P
+  ASSIGNMENT
+}
+
+enum AssignmentGradeAction {
+  GRADED
+  WITHDRAWN
 }
 
 enum PublicationSource {
@@ -137,6 +143,7 @@ model User {
   certificates       Certificate[]
   contentProgress    CourseContentProgress[]
   quizAttempts       QuizAttempt[]
+  assignmentSubmissions AssignmentSubmission[]
   rewardLedger       RewardLedger[]
   completionRecords  CourseCompletionRecord[]
   questionBankItems  QuestionBankItem[]
@@ -341,6 +348,7 @@ model Course {
   certificates Certificate[]
   contentProgress CourseContentProgress[]
   quizAttempts QuizAttempt[]
+  assignmentSubmissions AssignmentSubmission[]
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
 
@@ -435,6 +443,7 @@ model CoursePublication {
   requests PublicationRequest[] @relation("RequestPublication")
   quizAttempts QuizAttempt[] @relation("AttemptPublication")
   certificates Certificate[] @relation("CertificatePublication")
+  assignmentSubmissions AssignmentSubmission[] @relation("AssignmentPublication")
 
   @@unique([courseId, sequence])
   @@index([courseId, recordedAt])
@@ -508,6 +517,50 @@ model QuizAttempt {
   @@index([userId, contentId, revision, submittedAt])
   @@index([courseId])
   @@index([publicationId])
+}
+
+/** Learner text is private. A fresh submission never replaces an older answer. */
+model AssignmentSubmission {
+  id String @id @default(cuid())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  courseId String
+  contentId String
+  publication CoursePublication @relation("AssignmentPublication", fields: [publicationId], references: [id], onDelete: Cascade)
+  publicationId String
+  revision String
+  passingScore Int
+  requestId String
+  response String @db.Text
+  responseDigest String
+  attemptNumber Int
+  submittedAt DateTime @default(now())
+  decisions AssignmentGradeDecision[]
+
+  @@unique([userId, contentId, requestId])
+  @@unique([userId, contentId, attemptNumber])
+  @@index([courseId, contentId, revision, userId, attemptNumber])
+  @@index([courseId, contentId])
+  @@index([publicationId])
+}
+
+/** Every correction and withdrawal is an append-only staff decision. */
+model AssignmentGradeDecision {
+  id String @id @default(cuid())
+  submission AssignmentSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  submissionId String
+  requestId String
+  graderId String
+  action AssignmentGradeAction
+  score Int?
+  feedback String? @db.Text
+  sequence Int
+  createdAt DateTime @default(now())
+
+  @@unique([submissionId, requestId])
+  @@unique([submissionId, sequence])
+  @@index([createdAt])
 }
 
 model Enrollment {

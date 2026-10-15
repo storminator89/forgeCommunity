@@ -30,6 +30,7 @@ const reviewedUpgradeNames = [
   '0008_private_learning_goals.sql',
   '0009_staged_course_publication.sql',
   '0010_question_bank.sql',
+  '0011_manual_assignments.sql',
 ];
 // Stacked drafts add the final two reviewed migrations in order. Reject any
 // unknown migration rather than letting the release gate silently skip it.
@@ -677,5 +678,87 @@ test('accepted-solution release upgrade preserves existing rewards and decisions
     assert.deepEqual((await db.query(`SELECT id, action, "actorId", "postId", "commentId" FROM "AcceptedSolutionChange"
       WHERE id = 'account-revision'`)).rows, [{ id: 'account-revision', action: 'SELECTED', actorId: null, postId: null, commentId: null }]);
     assert.equal(await count(db, 'AcceptedSolutionChange'), audit.length + 1, 'erasure must not invent a decision');
+  });
+});
+
+test('assignment grade decisions are append-only while foreign-key cascades remain valid', async () => {
+  await withSchema({ mainBaseline: true }, async (db, url) => {
+    await applyPostgresqlUpgrades(url, { baselineCurrentSchema: true });
+    await db.query(`
+      INSERT INTO "User" ("id", "email", "updatedAt") VALUES
+        ('assignment-teacher', 'assignment-teacher@example.invalid', CURRENT_TIMESTAMP),
+        ('assignment-submission-user', 'assignment-submission-user@example.invalid', CURRENT_TIMESTAMP),
+        ('assignment-account-user', 'assignment-account-user@example.invalid', CURRENT_TIMESTAMP);
+      INSERT INTO "Course" ("id", "title", "description", "instructorId", "updatedAt")
+        VALUES ('assignment-course', 'Assignment course', '', 'assignment-teacher', CURRENT_TIMESTAMP);
+      INSERT INTO "CoursePublication" ("id", "courseId", "sequence", "source", "payload", "digest", "contentCount")
+        VALUES ('assignment-publication', 'assignment-course', 1, 'AUTHOR', '{}', 'digest', 1);
+      INSERT INTO "AssignmentSubmission" ("id", "userId", "courseId", "contentId", "publicationId", "revision",
+        "passingScore", "requestId", "response", "responseDigest", "attemptNumber") VALUES
+        ('assignment-submission', 'assignment-submission-user', 'assignment-course', 'assignment-content',
+          'assignment-publication', 'revision', 70, 'submit-one', 'Response', 'response-digest-one', 1),
+        ('assignment-account-submission', 'assignment-account-user', 'assignment-course', 'assignment-content',
+          'assignment-publication', 'revision', 70, 'submit-two', 'Response', 'response-digest-two', 1);
+      INSERT INTO "AssignmentGradeDecision" ("id", "submissionId", "requestId", "graderId", "action", "score", "sequence") VALUES
+        ('assignment-decision', 'assignment-submission', 'grade-one', 'assignment-teacher', 'GRADED', 85, 1),
+        ('assignment-account-decision', 'assignment-account-submission', 'grade-two', 'assignment-teacher', 'GRADED', 85, 1);
+    `);
+    // PrismaPg qualifies the target model but does not set the connection's
+    // search_path. The trigger must use the target table's schema even if a
+    // caller selects another search path or shadows CoursePublication in temp.
+    const schema = new URL(url).searchParams.get('schema');
+    assert.ok(schema);
+    await db.query(`INSERT INTO "Course" ("id", "title", "description", "instructorId", "updatedAt")
+      VALUES ('assignment-other-course', 'Other course', '', 'assignment-teacher', CURRENT_TIMESTAMP)`);
+    await db.query(`CREATE TEMP TABLE "CoursePublication" ("id" TEXT, "courseId" TEXT)`);
+    await db.query(`INSERT INTO pg_temp."CoursePublication" VALUES ('assignment-publication', 'assignment-other-course')`);
+    await db.query('SET search_path TO pg_catalog');
+    try {
+      const insert = (id, courseId, requestId) => db.query(`
+        INSERT INTO ${quoteIdent(schema)}."AssignmentSubmission" ("id", "userId", "courseId", "contentId", "publicationId",
+          "revision", "passingScore", "requestId", "response", "responseDigest", "attemptNumber")
+        VALUES ($1, 'assignment-submission-user', $2, 'assignment-shadow-content', 'assignment-publication',
+          'revision', 70, $3, 'Response', 'response-digest', 1)`, [id, courseId, requestId]);
+      await insert('assignment-shadow-valid', 'assignment-course', 'submit-shadow-valid');
+      await rejectsCode(insert('assignment-shadow-cross-course', 'assignment-other-course', 'submit-shadow-invalid'), '23514');
+      await rejectsCode(db.query(`UPDATE ${quoteIdent(schema)}."AssignmentSubmission"
+        SET "courseId" = 'assignment-other-course' WHERE "id" = 'assignment-shadow-valid'`), '23514');
+      assert.equal((await db.query(`SELECT "courseId" FROM ${quoteIdent(schema)}."AssignmentSubmission"
+        WHERE "id" = 'assignment-shadow-valid'`)).rows[0].courseId, 'assignment-course');
+    } finally {
+      await db.query(`SET search_path TO ${quoteIdent(schema)}`);
+      await db.query(`DROP TABLE pg_temp."CoursePublication"`);
+    }
+    await rejectsCode(db.query(`UPDATE "AssignmentGradeDecision" SET "feedback" = 'Illicit edit'
+      WHERE "id" = 'assignment-decision'`), '23514');
+    await rejectsCode(db.query(`UPDATE "AssignmentGradeDecision" SET "feedback" = "feedback"
+      WHERE "id" = 'assignment-decision'`), '23514');
+    await rejectsCode(db.query(`UPDATE "AssignmentGradeDecision" SET "submissionId" = 'assignment-account-submission'
+      WHERE "id" = 'assignment-decision'`), '23514');
+    await rejectsCode(db.query(`DELETE FROM "AssignmentGradeDecision" WHERE "id" = 'assignment-decision'`), '23514');
+    await rejectsCode(db.query(`INSERT INTO "AssignmentGradeDecision"
+      ("id", "submissionId", "requestId", "graderId", "action", "score", "sequence")
+      VALUES ('assignment-decision', 'assignment-submission', 'upsert-grade', 'assignment-teacher', 'GRADED', 10, 2)
+      ON CONFLICT ("id") DO UPDATE SET "score" = EXCLUDED."score"`), '23514');
+    await rejectsCode(db.query(`TRUNCATE "AssignmentGradeDecision"`), '23514');
+    // A caller-controlled search path must not make the guard inspect a shadow table.
+    await db.query(`CREATE TEMP TABLE "AssignmentSubmission" ("id" TEXT)`);
+    await rejectsCode(db.query(`DELETE FROM "AssignmentGradeDecision" WHERE "id" = 'assignment-decision'`), '23514');
+    await db.query(`DROP TABLE pg_temp."AssignmentSubmission"`);
+    assert.deepEqual((await db.query(`SELECT "submissionId", "score", "feedback" FROM "AssignmentGradeDecision"
+      WHERE "id" = 'assignment-decision'`)).rows, [{ submissionId: 'assignment-submission', score: 85, feedback: null }]);
+
+    await db.query(`UPDATE "AssignmentSubmission" SET "id" = 'assignment-submission-renamed'
+      WHERE "id" = 'assignment-submission'`);
+    assert.deepEqual((await db.query(`SELECT "submissionId" FROM "AssignmentGradeDecision"
+      WHERE "id" = 'assignment-decision'`)).rows, [{ submissionId: 'assignment-submission-renamed' }]);
+    await db.query(`DELETE FROM "AssignmentSubmission" WHERE "id" = 'assignment-submission-renamed'`);
+    assert.equal((await db.query(`SELECT COUNT(*)::int AS count FROM "AssignmentGradeDecision"
+      WHERE "id" = 'assignment-decision'`)).rows[0].count, 0);
+    await db.query(`DELETE FROM "User" WHERE "id" = 'assignment-account-user'`);
+    assert.equal((await db.query(`SELECT COUNT(*)::int AS count FROM "AssignmentSubmission"
+      WHERE "id" = 'assignment-account-submission'`)).rows[0].count, 0);
+    assert.equal((await db.query(`SELECT COUNT(*)::int AS count FROM "AssignmentGradeDecision"
+      WHERE "id" = 'assignment-account-decision'`)).rows[0].count, 0);
   });
 });

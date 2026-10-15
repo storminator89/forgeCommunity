@@ -16,7 +16,10 @@ jest.mock('@/lib/prisma', () => ({
     course: { findMany: jest.fn(), count: jest.fn() },
     enrollment: { findMany: jest.fn(), count: jest.fn() },
     courseContent: { findMany: jest.fn() },
+    coursePublication: { findMany: jest.fn() },
     courseContentProgress: { findMany: jest.fn() },
+    quizAttempt: { findMany: jest.fn() },
+    $queryRaw: jest.fn(),
     user: { findUnique: jest.fn() },
   },
 }));
@@ -34,6 +37,9 @@ beforeEach(() => {
   (prisma.$transaction as jest.Mock).mockImplementation(async (work: (db: typeof prisma) => Promise<unknown>) => work(prisma));
   (prisma.courseContent.findMany as jest.Mock).mockResolvedValue([]);
   (prisma.courseContentProgress.findMany as jest.Mock).mockResolvedValue([]);
+  (prisma.coursePublication.findMany as jest.Mock).mockResolvedValue([{
+    id: 'baseline-1', courseId: 'baseline', payload: JSON.stringify({ schemaVersion: 1, contents: [] }),
+  }]);
   jest.mocked(getServerSession).mockResolvedValue({ user: { id: 'owner', role: 'USER' } } as never);
   (prisma.course.findMany as jest.Mock).mockImplementation(async ({ where }: { where: { activePublicationId: { not: null } } }) =>
     [draft, published].filter(course => course.activePublicationId !== where.activePublicationId.not));
@@ -55,23 +61,70 @@ it('reports current completion after a revision separately from first historical
   (prisma.enrollment.findMany as jest.Mock).mockResolvedValue([{ course: { ...published, _count: { enrollments: 2, contents: 1 }, enrollments: enrolled },
     enrolledAt: new Date('2026-03-02'), completedAt }]);
   (prisma.courseContent.findMany as jest.Mock).mockResolvedValue([current]);
+  (prisma.coursePublication.findMany as jest.Mock).mockResolvedValue([{
+    id: 'baseline-1', courseId: 'baseline', payload: JSON.stringify({ schemaVersion: 1, contents: [
+      { id: current.id, parentId: null, title: 'Lesson', order: 1 },
+    ] }),
+  }]);
   (prisma.courseContentProgress.findMany as jest.Mock).mockResolvedValue([
-    { courseId: 'baseline', userId: 'owner', contentId: current.id, revision: 'prior-revision' },
-    { courseId: 'baseline', userId: 'friend', contentId: current.id, revision: courseContentRevision(current) },
+    { courseId: 'baseline', userId: 'owner', contentId: current.id, revision: 'prior-revision', completedAt },
+    { courseId: 'baseline', userId: 'friend', contentId: current.id, revision: courseContentRevision(current), completedAt },
   ]);
 
-  const instructor = await getInstructorCourses(new Request('http://localhost/api/users/owner/courses') as never, params);
-  const owned = (await instructor.json()).courses[0];
-  expect(owned.stats).toMatchObject({ completionRate: 50, everCompletionRate: 100, lessonsCount: 1 });
   const self = await getEnrollments(new Request('http://localhost/api/users/owner/enrollments') as never, params);
   const enrolledCourse = (await self.json()).courses[0];
   expect(enrolledCourse.stats).toMatchObject({ completionRate: 50, everCompletionRate: 100, lessonsCount: 1 });
   expect(enrolledCourse.completedAt).toEqual(completedAt.toISOString());
+  expect((prisma.courseContentProgress.findMany as jest.Mock).mock.calls[0][0].where.userId).toEqual({ in: ['owner', 'friend'] });
 
   (prisma.courseContent.findMany as jest.Mock).mockResolvedValue([]);
   (prisma.courseContentProgress.findMany as jest.Mock).mockResolvedValue([]);
-  const noLeaves = await getInstructorCourses(new Request('http://localhost/api/users/owner/courses') as never, params);
+  (prisma.coursePublication.findMany as jest.Mock).mockResolvedValue([{
+    id: 'baseline-1', courseId: 'baseline', payload: JSON.stringify({ schemaVersion: 1, contents: [] }),
+  }]);
+  const noLeaves = await getEnrollments(new Request('http://localhost/api/users/owner/enrollments') as never, params);
   expect((await noLeaves.json()).courses[0].stats).toMatchObject({ completionRate: 0, everCompletionRate: 100 });
+});
+
+it('keeps a single learner\'s private assignment result out of another member\'s public course response', async () => {
+  jest.mocked(getServerSession).mockResolvedValue({ user: { id: 'unrelated-viewer', role: 'USER' } } as never);
+  const completedAt = new Date('2026-03-10');
+  const course = { ...published, _count: { enrollments: 1, contents: 1 },
+    enrollments: [{ userId: 'learner', completedAt }] };
+  const assignment = { id: 'assignment', courseId: 'baseline', parentId: null,
+    type: 'ASSIGNMENT', content: JSON.stringify({ prompt: 'Explain your answer.', passingScore: 70 }), order: 1 };
+  (prisma.course.findMany as jest.Mock).mockResolvedValue([course]);
+  (prisma.courseContent.findMany as jest.Mock).mockResolvedValue([assignment]);
+  (prisma.coursePublication.findMany as jest.Mock).mockResolvedValue([{
+    id: 'baseline-1', courseId: 'baseline', payload: JSON.stringify({ schemaVersion: 1, contents: [
+      { id: assignment.id, parentId: null, title: 'Assignment', order: 1 },
+    ] }),
+  }]);
+  (prisma.$queryRaw as jest.Mock).mockResolvedValue([{
+    courseId: 'baseline', userId: 'learner', contentId: assignment.id, completedAt,
+  }]);
+
+  const passed = await getInstructorCourses(new Request('http://localhost/api/users/owner/courses') as never, params);
+  const passedBody = await passed.json();
+  expect(passed.status).toBe(200);
+  expect(passedBody.courses[0].stats).toEqual({
+    enrollments: 1, maxStudents: null, rating: 0, ratingCount: 0, lessonsCount: 1,
+  });
+
+  // A withdrawn pass or historical completion must not change this public DTO.
+  (prisma.course.findMany as jest.Mock).mockResolvedValue([{
+    ...course, enrollments: [{ userId: 'learner', completedAt: null }],
+  }]);
+  (prisma.$queryRaw as jest.Mock).mockResolvedValue([]);
+  const withdrawn = await getInstructorCourses(new Request('http://localhost/api/users/owner/courses') as never, params);
+  expect(await withdrawn.json()).toEqual(passedBody);
+  expect((prisma.course.findMany as jest.Mock).mock.calls[0][0].include).not.toHaveProperty('enrollments');
+  expect(prisma.enrollment.findMany).not.toHaveBeenCalled();
+  expect(prisma.coursePublication.findMany).not.toHaveBeenCalled();
+  expect(prisma.courseContent.findMany).not.toHaveBeenCalled();
+  expect(prisma.courseContentProgress.findMany).not.toHaveBeenCalled();
+  expect(prisma.quizAttempt.findMany).not.toHaveBeenCalled();
+  expect(prisma.$queryRaw).not.toHaveBeenCalled();
 });
 
 it('hides unpublished owned courses from the profile list and pagination, even for the owner', async () => {
@@ -83,6 +136,8 @@ it('hides unpublished owned courses from the profile list and pagination, even f
   expect((prisma.course.count as jest.Mock).mock.calls[0][0].where).toEqual({ instructorId: 'owner', activePublicationId: { not: null } });
   expect((prisma.course.findMany as jest.Mock).mock.calls[0][0].include._count.select.contents).toEqual({ where: { archivedAt: null } });
   expect(body.courses[0].stats.lessonsCount).toBe(2);
+  expect(body.courses[0].stats).not.toHaveProperty('completionRate');
+  expect(body.courses[0].stats).not.toHaveProperty('everCompletionRate');
   expect(response.headers.get('Cache-Control')).toBe('private, no-store');
 });
 

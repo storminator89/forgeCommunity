@@ -141,7 +141,9 @@ async function main() {
   const password = 'Postgresql-Smoke-Strong-2026!';
   const authorEmail = `lms-author-${suffix}@example.test`;
   const learnerEmail = `lms-learner-${suffix}@example.test`;
-  await anonymous('/api/register', { method: 'POST', status: 201, body: { name: 'PG Smoke Author', email: authorEmail, password } });
+  const authorRegistration = await (await anonymous('/api/register', {
+    method: 'POST', status: 201, body: { name: 'PG Smoke Author', email: authorEmail, password },
+  })).json();
   const learnerRegistration = await (await anonymous('/api/register', {
     method: 'POST', status: 201, body: { name: 'PG Smoke Learner', email: learnerEmail, password },
   })).json();
@@ -293,6 +295,131 @@ async function main() {
     [courseId, failureNodeId])).rows[0].count, 0, 'Failed publish left live content.');
   assert.equal((await (await author(`${route}/authoring`)).json()).draft.revision, 7,
     'A failed publish must leave the saved draft intact.');
+  // One private, bounded text-assignment journey through production PG HTTP.
+  // Use synthetic text only; no learner answer is printed to logs or artifacts.
+  const assignmentForm = new FormData();
+  assignmentForm.set('title', `Assignment smoke ${randomUUID()}`);
+  assignmentForm.set('description', 'Manual grading runtime check');
+  const assignmentCourse = await (await author('/api/courses', { method: 'POST', status: 201, body: assignmentForm })).json();
+  const assignmentRoute = `/api/courses/${assignmentCourse.id}`;
+  const assignmentNodeId = randomUUID();
+  const assignmentDraft = await (await author(`${assignmentRoute}/authoring`, { method: 'PATCH', body: {
+    expectedRevision: 0, operation: { kind: 'insertNode', node: { id: assignmentNodeId, title: 'Written task', type: 'ASSIGNMENT',
+      content: JSON.stringify({ prompt: 'Explain a simple idea.', passingScore: 70 }) }, parentId: null, afterId: null },
+  } })).json();
+  assert.equal(assignmentDraft.draft.revision, 1);
+  assert.equal((await (await author(`${assignmentRoute}/authoring/review?expectedRevision=1&expectedActivePublicationId=null`)).json()).ready, true);
+  const assignmentPublication = (await (await author(`${assignmentRoute}/authoring/publish`, { method: 'POST', body: {
+    expectedRevision: 1, expectedActivePublicationId: null, requestId: randomUUID(),
+  } })).json()).publication;
+  await learner(`${assignmentRoute}/enrollment`, { method: 'POST', status: 201 });
+  const assignmentContent = (await (await learner(`${assignmentRoute}/contents`)).json())[0];
+  assert.equal(assignmentContent.id, assignmentNodeId);
+  await learner(`${assignmentRoute}/progress`, { method: 'PATCH', status: 409, body: {
+    contentId: assignmentNodeId, completed: true, publicationId: assignmentPublication.id,
+    contentVersionToken: assignmentContent.contentVersionToken,
+  } });
+  const ownAssignmentRoute = `${assignmentRoute}/contents/${assignmentNodeId}/assignment`;
+  assert.equal((await (await learner(ownAssignmentRoute)).json()).maySubmit, true);
+  const submitted = await (await learner(ownAssignmentRoute, { method: 'POST', status: 201, body: {
+    requestId: randomUUID(), response: 'Synthetic PG smoke answer', publicationId: assignmentPublication.id,
+    contentVersionToken: assignmentContent.contentVersionToken,
+  } })).json();
+  assert.ok(submitted.id);
+  assert.equal((await (await learner(`${assignmentRoute}/progress`)).json()).complete, false);
+  const queue = await (await author(`${assignmentRoute}/assignments`)).json();
+  assert.deepEqual(queue.submissions.map(row => row.id), [submitted.id]);
+  const pendingAnalytics = await (await author(`${assignmentRoute}/analytics`)).json();
+  assert.equal(pendingAnalytics.learners[0].currentStatus, 'in-progress');
+  assert.ok(!JSON.stringify(pendingAnalytics).includes('Synthetic PG smoke answer'), 'Analytics exposed a private response.');
+  const gradeRoute = `${assignmentRoute}/assignments/${submitted.id}/grade`;
+  const graded = await (await author(gradeRoute, { method: 'POST', body: {
+    requestId: randomUUID(), expectedDecisionId: null, action: 'GRADED', score: 85, feedback: 'Synthetic review',
+  } })).json();
+  assert.equal(graded.decision.passed, true);
+  assert.equal((await (await learner(`${assignmentRoute}/progress`)).json()).complete, true);
+  const authorCourses = async () => (await (await author(`/api/users/${authorRegistration.userId}/courses`)).json()).courses;
+  const learnerEnrollments = async () => (await (await learner(`/api/users/${learnerRegistration.userId}/enrollments`)).json()).courses;
+  const assertNoPublicCompletionRates = async () => {
+    const course = (await authorCourses()).find(row => row.id === assignmentCourse.id);
+    assert.ok(course, 'Published assignment course must remain discoverable on the author profile.');
+    assert.equal(course.stats.enrollments, 1, 'Public enrollment count must remain available.');
+    assert.equal(Object.hasOwn(course.stats, 'completionRate'), false, 'Public profile exposed current completion.');
+    assert.equal(Object.hasOwn(course.stats, 'everCompletionRate'), false, 'Public profile exposed historical completion.');
+  };
+  const learnerCompletionRate = async () => (await learnerEnrollments())
+    .find(course => course.id === assignmentCourse.id)?.stats.completionRate;
+  assert.equal((await (await author(`${assignmentRoute}/analytics`)).json()).summary.currentComplete, 1);
+  await assertNoPublicCompletionRates();
+  assert.equal(await learnerCompletionRate(), 100, 'Private learner enrollments must project current assignment completion.');
+  const goalRoute = '/api/learning-goals/me';
+  const startedGoal = await (await learner(goalRoute, { method: 'POST', status: 201,
+    body: { targetLeaves: 1, durationDays: 7, timezone: 'UTC' },
+  })).json();
+  assert.equal(startedGoal.goal.completedLeaves, 0, 'A pass before goal opt-in must not count.');
+  const stillPassing = await (await author(gradeRoute, { method: 'POST', body: {
+    requestId: randomUUID(), expectedDecisionId: graded.decision.id, action: 'GRADED', score: 90,
+    feedback: 'Synthetic corrected feedback',
+  } })).json();
+  assert.equal(stillPassing.decision.passed, true);
+  assert.equal((await (await learner(goalRoute)).json()).goal.completedLeaves, 0,
+    'A passing correction must retain the pre-goal completion time.');
+  const corrected = await (await author(gradeRoute, { method: 'POST', body: {
+    requestId: randomUUID(), expectedDecisionId: stillPassing.decision.id, action: 'GRADED', score: 40,
+  } })).json();
+  assert.equal(corrected.decision.passed, false);
+  assert.equal((await (await learner(`${assignmentRoute}/progress`)).json()).complete, false);
+  assert.equal((await (await learner(goalRoute)).json()).goal.completedLeaves, 0);
+  assert.equal((await (await author(`${assignmentRoute}/analytics`)).json()).summary.currentComplete, 0);
+  await assertNoPublicCompletionRates();
+  assert.equal(await learnerCompletionRate(), 0, 'A failing correction must revoke private current completion.');
+  const repassed = await (await author(gradeRoute, { method: 'POST', body: {
+    requestId: randomUUID(), expectedDecisionId: corrected.decision.id, action: 'GRADED', score: 85,
+  } })).json();
+  assert.equal(repassed.decision.passed, true);
+  assert.equal((await (await learner(goalRoute)).json()).goal.completedLeaves, 1,
+    'A new pass after failure must begin a new goal-counting interval.');
+  assert.equal((await (await learner(`${assignmentRoute}/progress`)).json()).complete, true);
+  assert.equal((await (await author(`${assignmentRoute}/analytics`)).json()).summary.currentComplete, 1);
+  await assertNoPublicCompletionRates();
+  assert.equal(await learnerCompletionRate(), 100, 'Repassing must restore private current completion.');
+
+  // Exercise the actual PostgreSQL adapter with a published dependency, not
+  // just schema parity. An author token must not bypass the learner's lock.
+  const pathForm = new FormData();
+  pathForm.set('title', `PG path ${randomUUID()}`);
+  pathForm.set('description', 'Disposable prerequisite runtime check');
+  const pathCourse = (await (await author('/api/courses', { method: 'POST', status: 201, body: pathForm })).json()).id;
+  const pathRoute = `/api/courses/${pathCourse}`;
+  const pathFirst = randomUUID();
+  const pathLast = randomUUID();
+  for (const [revision, operation] of [
+    [0, { kind: 'insertNode', node: { id: pathFirst, title: 'First step', type: 'TEXT', content: '<p>Public first step</p>' }, parentId: null, afterId: null }],
+    [1, { kind: 'insertNode', node: { id: pathLast, title: 'Last step', type: 'TEXT', content: '<p>Protected last step</p>' }, parentId: null, afterId: pathFirst }],
+    [2, { kind: 'setPrerequisites', id: pathLast, prerequisiteIds: [pathFirst] }],
+  ]) await author(`${pathRoute}/authoring`, { method: 'PATCH', body: { expectedRevision: revision, operation } });
+  const pathReview = await (await author(`${pathRoute}/authoring/review?expectedRevision=3&expectedActivePublicationId=null`)).json();
+  assert.equal(pathReview.ready, true, `PG path review blocked: ${JSON.stringify(pathReview.blockers)}`);
+  const pathPublication = (await (await author(`${pathRoute}/authoring/publish`, {
+    method: 'POST', body: { expectedRevision: 3, expectedActivePublicationId: null, requestId: randomUUID() },
+  })).json()).publication.id;
+  await learner(`${pathRoute}/enrollment`, { method: 'POST', status: 201 });
+  const authorPath = await (await author(`${pathRoute}/contents`)).json();
+  let learnerPath = await (await learner(`${pathRoute}/contents`)).json();
+  assert.equal(learnerPath[1].locked, true);
+  assert.equal(learnerPath[1].content, '');
+  assert.equal(learnerPath[1].contentVersionToken, null);
+  assert.ok(!JSON.stringify(learnerPath).includes('<p>Protected last step</p>'));
+  const pathProgress = (contentId, contentVersionToken, status = 200) => learner(`${pathRoute}/progress`, {
+    method: 'PATCH', status, body: { contentId, completed: true, publicationId: pathPublication, contentVersionToken },
+  });
+  await pathProgress(pathLast, authorPath[1].contentVersionToken, 423);
+  await pathProgress(pathFirst, learnerPath[0].contentVersionToken);
+  learnerPath = await (await learner(`${pathRoute}/contents`)).json();
+  assert.equal(learnerPath[1].locked, false);
+  assert.equal(learnerPath[1].content, '<p>Protected last step</p>');
+  await pathProgress(pathLast, learnerPath[1].contentVersionToken);
+  assert.equal((await (await learner(`${pathRoute}/progress`)).json()).complete, true);
   console.log(`PostgreSQL publication runtime smoke: ${checks} HTTP checks passed in isolated schema ${schema}.`);
 }
 

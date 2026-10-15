@@ -10,7 +10,7 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 function expectedHistory(provider) {
   const directory = resolve(root, provider === 'sqlite' ? 'prisma/sqlite-migrations' : 'prisma/postgresql-upgrades');
   const names = readdirSync(directory).filter(name => /^\d+_[\w-]+\.sql$/.test(name)).sort();
-  const tail = provider === 'sqlite' ? '0011_question_bank.sql' : '0010_question_bank.sql';
+  const tail = provider === 'sqlite' ? '0012_manual_assignments.sql' : '0011_manual_assignments.sql';
   if (names.at(-1) !== tail) throw new Error('Publication migration tail is not the reviewed fresh-install version.');
   return names.map(name => ({
     name,

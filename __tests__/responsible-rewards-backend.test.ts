@@ -1,5 +1,6 @@
 import {
   COURSE_COMPLETION_POINTS,
+  courseAssignmentApprovalRevision,
   courseQuizApprovalRevision,
   courseHasRewardableQuiz,
   reconcileCourseRewards,
@@ -20,17 +21,28 @@ function content(id: string, value = validQuiz, parentId: string | null = null) 
   return { id, courseId, parentId, type: 'QUIZ', content: value, order: 1 }
 }
 
+function publicationPayload(contents: Array<{ id: string; parentId: string | null; order: number; title?: string; prerequisiteIds?: string[] }>) {
+  return JSON.stringify({ schemaVersion: 1, contents: contents.map(row => ({
+    id: row.id, parentId: row.parentId, order: row.order, title: row.title ?? row.id,
+    prerequisiteIds: row.prerequisiteIds ?? [],
+  })) })
+}
+
 type LedgerRow = { id: string; userId: string; eventType: string; sourceId: string; courseTitle: string; points: number; stateVersion: number; revokedAt: Date | null }
 type ChangeRow = { ledgerId: string; version: number; type: string; reason: string | null; pointsDelta: number }
 
 function fixture() {
   const state = {
     users: new Map([[userId, { role: 'USER', isTestAccount: false }]]),
-    course: { title: 'Reward course', rewardEligible: true, rewardApprovalRevision: '' as string | null, instructorId: 'teacher-1' },
+    course: { title: 'Reward course', rewardEligible: true, rewardApprovalRevision: '' as string | null,
+      instructorId: 'teacher-1', activePublicationId: 'publication-1' as string | null },
+    publication: { id: 'publication-1', courseId, payload: '' },
     enrollments: new Map([[userId, { id: 'enrollment-1', completedAt: new Date() }]]),
     contents: [content('quiz-1')],
     progress: new Map<string, string>(),
     attempts: [] as Array<{ userId: string; courseId: string; contentId: string; revision: string; passed: boolean }>,
+    assignmentSubmissions: [] as Array<{ id: string; userId: string; courseId: string; contentId: string; revision: string;
+      attemptNumber: number; passingScore: number; decisions: Array<{ sequence: number; action: 'GRADED' | 'WITHDRAWN'; score: number | null }> }>,
     ledger: [] as LedgerRow[],
     changes: [] as ChangeRow[],
     badges: new Map<string, { name: string }>(),
@@ -38,6 +50,7 @@ function fixture() {
   }
   state.progress.set('quiz-1', courseContentRevision(state.contents[0]))
   state.course.rewardApprovalRevision = courseQuizApprovalRevision(state.contents)
+  state.publication.payload = publicationPayload(state.contents)
   state.attempts.push({ userId, courseId, contentId: 'quiz-1', revision: courseContentRevision(state.contents[0]), passed: true })
   const tx = {
     user: { findUnique: jest.fn(async ({ where }: any) => state.users.get(where.id) ?? null) },
@@ -58,13 +71,28 @@ function fixture() {
       findUnique: jest.fn(async ({ where }: any) => where.id === courseId ? state.course : null),
       update: jest.fn(async ({ data }: any) => Object.assign(state.course, data)),
     },
+    coursePublication: { findUnique: jest.fn(async ({ where }: any) =>
+      where.id === state.publication.id ? state.publication : null) },
     enrollment: {
       findUnique: jest.fn(async ({ where }: any) => state.enrollments.get(where.userId_courseId.userId) ?? null),
       findMany: jest.fn(async ({ where }: any) => [...state.enrollments.entries()].filter(([id, value]) =>
         (!where.userId || where.userId === id) && (!where.completedAt || value.completedAt)).map(([id]) => ({ userId: id, courseId }))),
     },
-    courseContent: { findMany: jest.fn(async () => state.contents) },
+    courseContent: { findMany: jest.fn(async ({ where }: any) =>
+      where.courseId === courseId && state.course.activePublicationId &&
+      where.course?.activePublicationId?.not === null && where.archivedAt === null ? state.contents : []) },
     courseContentProgress: { findMany: jest.fn(async () => [...state.progress].map(([contentId, revision]) => ({ contentId, revision }))) },
+    $queryRaw: jest.fn(async () => state.assignmentSubmissions.filter(submission => {
+      const current = state.contents.find(row => row.id === submission.contentId && row.type === 'ASSIGNMENT')
+      if (!current || submission.userId !== userId || submission.courseId !== courseId ||
+          submission.revision !== courseContentRevision(current)) return false
+      const newestAttempt = Math.max(...state.assignmentSubmissions.filter(row =>
+        row.userId === submission.userId && row.contentId === submission.contentId &&
+        row.revision === submission.revision).map(row => row.attemptNumber))
+      const newestDecision = [...submission.decisions].sort((a, b) => b.sequence - a.sequence)[0]
+      return submission.attemptNumber === newestAttempt && newestDecision?.action === 'GRADED' &&
+        newestDecision.score !== null && newestDecision.score >= submission.passingScore
+    }).map(row => ({ userId: row.userId, contentId: row.contentId }))),
     quizAttempt: { findFirst: jest.fn(async ({ where }: any) => state.attempts.find(row =>
       row.userId === where.userId && row.courseId === where.courseId && row.passed === where.passed &&
       where.OR.some((candidate: any) => candidate.contentId === row.contentId && candidate.revision === row.revision)) ?? null) },
@@ -112,7 +140,7 @@ function fixture() {
       }),
     },
   }
-  return { state, tx }
+  return { state, tx, publishContents: () => { state.publication.payload = publicationPayload(state.contents) } }
 }
 
 describe('responsible course rewards', () => {
@@ -182,10 +210,42 @@ describe('responsible course rewards', () => {
     expect(state.userBadges).toEqual(new Set([`${userId}:${VERIFIED_COURSE_BADGE.id}`]))
   })
 
-  it('keeps approval for cosmetic title or order changes to a quiz', async () => {
+  it('binds approval to assignment scoring material and revokes when an assignment is added', async () => {
     const { state, tx } = fixture()
+    const quizOnlyApproval = state.course.rewardApprovalRevision
+    expect(await reconcileLearnerCourseReward(tx as never, userId, courseId)).toBe(true)
+    const assignment = { ...content('assignment-1', JSON.stringify({ prompt: 'Explain your solution.', passingScore: 70 })), type: 'ASSIGNMENT' }
+    state.contents.push(assignment)
+    const approvedWithAssignment = courseQuizApprovalRevision(state.contents)
+    expect(approvedWithAssignment).not.toBe(quizOnlyApproval)
+    expect(courseQuizApprovalRevision([state.contents[0], { ...assignment, order: 4 }])).toBe(approvedWithAssignment)
+    expect(courseQuizApprovalRevision([state.contents[0], { ...assignment, content: JSON.stringify({ prompt: 'Explain your solution.', passingScore: 80 }) }])).not.toBe(approvedWithAssignment)
+    expect(courseQuizApprovalRevision([state.contents[0], { ...assignment, content: JSON.stringify({ prompt: 'A new task.', passingScore: 70 }) }])).not.toBe(approvedWithAssignment)
+    expect(courseAssignmentApprovalRevision(state.contents)).not.toBe(courseAssignmentApprovalRevision([state.contents[0]]))
+    await reconcileCourseRewards(tx as never, courseId, 'LEARNING_CHANGED')
+    expect(state.course).toMatchObject({ rewardEligible: false, rewardApprovalRevision: null })
+    expect(state.ledger[0].revokedAt).toBeInstanceOf(Date)
+    expect(state.changes).toContainEqual({ ledgerId: 'ledger-1', version: 2, type: 'REVOKED', reason: 'LEARNING_CHANGED', pointsDelta: -50 })
+  })
+
+  it('invalidates approval when an assignment is removed or ceases to be a leaf', async () => {
+    const { state, tx } = fixture()
+    const assignment = { ...content('assignment-1', JSON.stringify({ prompt: 'Explain.', passingScore: 60 })), type: 'ASSIGNMENT' }
+    state.contents.push(assignment)
+    const approved = courseQuizApprovalRevision(state.contents)
+    expect(courseQuizApprovalRevision([state.contents[0]])).not.toBe(approved)
+    expect(courseQuizApprovalRevision([...state.contents, { ...content('child-1', 'Reading', assignment.id), type: 'TEXT' }])).not.toBe(approved)
+    state.course.rewardApprovalRevision = approved
+    state.contents.pop()
+    await reconcileCourseRewards(tx as never, courseId, 'LEARNING_CHANGED')
+    expect(state.course).toMatchObject({ rewardEligible: false, rewardApprovalRevision: null })
+  })
+
+  it('keeps approval for cosmetic title or order changes to a quiz', async () => {
+    const { state, tx, publishContents } = fixture()
     ;(state.contents[0] as typeof state.contents[0] & { title: string }).title = 'New title'
     state.contents[0].order = 7
+    publishContents()
     await reconcileCourseRewards(tx as never, courseId)
     expect(state.course.rewardEligible).toBe(true)
     expect(tx.course.update).not.toHaveBeenCalled()
@@ -234,14 +294,55 @@ describe('responsible course rewards', () => {
   })
 
   it('requires enrollment and every leaf to be complete', async () => {
-    const { state, tx } = fixture()
+    const { state, tx, publishContents } = fixture()
     state.enrollments.clear()
     expect(await reconcileLearnerCourseReward(tx as never, userId, courseId)).toBe(false)
     state.enrollments.set(userId, { id: 'enrollment-1', completedAt: new Date() })
     state.contents.push({ ...content('text-1', 'Reading'), type: 'TEXT' })
+    publishContents()
     expect(await reconcileLearnerCourseReward(tx as never, userId, courseId)).toBe(false)
     state.progress.set('text-1', courseContentRevision(state.contents[1]))
     expect(await reconcileLearnerCourseReward(tx as never, userId, courseId)).toBe(true)
+  })
+
+  it('requires a valid active publication and matching published outline', async () => {
+    const { state, tx } = fixture()
+    state.course.activePublicationId = null
+    expect(await reconcileLearnerCourseReward(tx as never, userId, courseId)).toBe(false)
+    expect(state.ledger).toHaveLength(0)
+    state.course.activePublicationId = state.publication.id
+    state.contents[0].order = 2
+    await expect(reconcileLearnerCourseReward(tx as never, userId, courseId)).rejects.toMatchObject({ status: 409 })
+    expect(state.ledger).toHaveLength(0)
+  })
+
+  it('requires the latest current assignment attempt to have a passing grade, not merely progress', async () => {
+    const { state, tx, publishContents } = fixture()
+    const assignment = { ...content('assignment-1', JSON.stringify({ prompt: 'Explain your solution.', passingScore: 70 })), type: 'ASSIGNMENT' }
+    state.contents.push(assignment)
+    publishContents()
+    state.course.rewardApprovalRevision = courseQuizApprovalRevision(state.contents)
+    state.progress.set(assignment.id, courseContentRevision(assignment))
+    expect(await reconcileLearnerCourseReward(tx as never, userId, courseId)).toBe(false)
+    expect(state.ledger).toHaveLength(0)
+
+    state.assignmentSubmissions.push({ id: 'submission-1', userId, courseId, contentId: assignment.id,
+      revision: courseContentRevision(assignment), attemptNumber: 1, passingScore: 70,
+      decisions: [{ sequence: 1, action: 'GRADED', score: 90 }] })
+    expect(await reconcileLearnerCourseReward(tx as never, userId, courseId)).toBe(true)
+    expect(state.ledger).toHaveLength(1)
+
+    state.assignmentSubmissions.push({ id: 'submission-2', userId, courseId, contentId: assignment.id,
+      revision: courseContentRevision(assignment), attemptNumber: 2, passingScore: 70, decisions: [] })
+    expect(await reconcileLearnerCourseReward(tx as never, userId, courseId)).toBe(false)
+    expect(state.ledger[0].revokedAt).toBeInstanceOf(Date)
+    state.assignmentSubmissions[1].decisions.push({ sequence: 1, action: 'GRADED', score: 80 })
+    expect(await reconcileLearnerCourseReward(tx as never, userId, courseId)).toBe(true)
+    state.assignmentSubmissions[1].decisions.push({ sequence: 2, action: 'WITHDRAWN', score: null })
+    expect(await reconcileLearnerCourseReward(tx as never, userId, courseId)).toBe(false)
+    expect(state.ledger).toHaveLength(1)
+    expect(state.ledger[0].revokedAt).toBeInstanceOf(Date)
+    expect(state.changes.map(change => change.type)).toEqual(['AWARDED', 'REVOKED', 'REINSTATED', 'REVOKED'])
   })
 
   it('does not count a valid parent quiz when its leaf is ordinary content', async () => {

@@ -19,13 +19,26 @@ function validQuizLeaves(contents: RewardContent[]) {
   });
 }
 
-/** Bind approval to scoring material, not cosmetic titles or ordering. */
+function assignmentApprovalMaterials(contents: RewardContent[]) {
+  const leaves = new Set(courseLeaves(contents).map(content => content.id));
+  return contents.filter(content => content.type === 'ASSIGNMENT').map(content => [
+    content.id, courseContentRevision(content), leaves.has(content.id),
+  ]).sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+}
+
+/** Keep quiz-only approval fingerprints stable; assignment scoring material also requires review. */
 export function courseQuizApprovalRevision(contents: RewardContent[]) {
   const leaves = new Set(courseLeaves(contents).map(content => content.id));
   const quizMaterials = contents.filter(isQuizLikeContent).map(content => [
     content.id, courseContentRevision(content), leaves.has(content.id),
   ]).sort((a, b) => String(a[0]).localeCompare(String(b[0])));
-  return createHash('sha256').update(JSON.stringify(quizMaterials)).digest('hex');
+  const assignmentMaterials = assignmentApprovalMaterials(contents);
+  const material = assignmentMaterials.length ? { quizMaterials, assignmentMaterials } : quizMaterials;
+  return createHash('sha256').update(JSON.stringify(material)).digest('hex');
+}
+
+export function courseAssignmentApprovalRevision(contents: RewardContent[]) {
+  return createHash('sha256').update(JSON.stringify(assignmentApprovalMaterials(contents))).digest('hex');
 }
 
 export async function courseApprovalFingerprint(tx: Prisma.TransactionClient, courseId: string) {
@@ -152,7 +165,8 @@ export async function reconcileLearnerCourseReward(tx: Prisma.TransactionClient,
   return true;
 }
 
-export async function reconcileCourseRewards(tx: Prisma.TransactionClient, courseId: string) {
+export async function reconcileCourseRewards(tx: Prisma.TransactionClient, courseId: string,
+  scoringChangeReason: 'QUIZ_REVISED' | 'LEARNING_CHANGED' = 'QUIZ_REVISED') {
   const course = await tx.course.findUnique({ where: { id: courseId }, select: { rewardEligible: true, rewardApprovalRevision: true } });
   const approvalChanged = Boolean(course?.rewardEligible && course.rewardApprovalRevision !== await courseApprovalFingerprint(tx, courseId));
   if (approvalChanged) {
@@ -160,7 +174,7 @@ export async function reconcileCourseRewards(tx: Prisma.TransactionClient, cours
     await tx.course.update({ where: { id: courseId }, data: { rewardEligible: false, rewardApprovalRevision: null } });
   }
   if (!course?.rewardEligible || approvalChanged) {
-    await revokeCourseRewards(tx, [courseId], approvalChanged ? 'QUIZ_REVISED' : 'APPROVAL_WITHDRAWN');
+    await revokeCourseRewards(tx, [courseId], approvalChanged ? scoringChangeReason : 'APPROVAL_WITHDRAWN');
     return;
   }
   const [enrollments, ledger] = await Promise.all([

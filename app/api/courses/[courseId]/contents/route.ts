@@ -9,7 +9,8 @@ import { groupCourseContents } from '@/lib/server/group-course-contents';
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
 import { assertCanAttachH5P } from '@/lib/server/h5p-access';
 import { H5PValidationError } from '@/lib/server/h5p-archive';
-import { contentVersionToken, publicCourseContent } from '@/lib/server/course-progress';
+import { completionState, contentVersionToken, publicCourseContent } from '@/lib/server/course-progress';
+import { CoursePathError, coursePathAccess, publicationPathNodes } from '@/lib/server/course-path';
 import { reconcileCourseRewards } from '@/lib/server/rewards';
 import { hasCurrentAdminReadAccess } from '@/lib/server/read-access';
 import { assertParent, canEdit, contentTransaction, ContentMutationError, normalizeOrder, presentContent, prepareContent, siblings, validateContentFields } from './content-mutations';
@@ -47,16 +48,34 @@ export async function GET(
       const rows = await tx.courseContent.findMany({
         where: { courseId, archivedAt: null }, orderBy: [{ order: 'asc' }, { id: 'asc' }],
       });
+      const publication = course.activePublicationId ? await tx.coursePublication.findUnique({
+        where: { id: course.activePublicationId }, select: { courseId: true, payload: true },
+      }) : null;
+      if (course.activePublicationId && (!publication || publication.courseId !== courseId)) {
+        throw new CoursePathError('Course publication is unavailable', 409);
+      }
+      const pathNodes = publication ? publicationPathNodes(publication.payload) : [];
+      const access = publication && !isEditor ? coursePathAccess(pathNodes,
+        (await completionState(tx, session.user.id, courseId)).completedContentIds) : null;
+      const pathById = new Map(pathNodes.map(node => [node.id, node]));
       // Only current editors receive persisted quiz keys.
       return groupCourseContents(rows.map(content => {
         const presented = { ...presentContent(content), publicationId: course.activePublicationId,
           contentVersionToken: course.activePublicationId ? contentVersionToken(course.activePublicationId, content) : null };
-        return isEditor ? presented : publicCourseContent(presented);
+        const path = pathById.get(content.id);
+        const gate = access?.get(content.id);
+        if (!isEditor && !path) throw new CoursePathError('Published course contents do not match the active publication', 409);
+        if (isEditor) return { ...presented, prerequisiteIds: path?.prerequisiteIds ?? [] };
+        if (gate?.locked) return { ...presented, content: '', contentVersionToken: null,
+          locked: true, prerequisiteIds: gate.prerequisiteIds, missingPrerequisites: gate.missingPrerequisites };
+        return { ...publicCourseContent(presented), locked: false,
+          prerequisiteIds: gate?.prerequisiteIds ?? [], missingPrerequisites: [] };
       }));
     });
     return NextResponse.json(contents, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     if (error instanceof ContentMutationError) return NextResponse.json({ error: error.message }, { status: error.status });
+    if (error instanceof CoursePathError) return NextResponse.json({ error: error.message }, { status: error.status });
     console.error('Failed to fetch course contents:', error);
     return NextResponse.json({ error: 'Failed to fetch course contents' }, { status: 500 });
   }

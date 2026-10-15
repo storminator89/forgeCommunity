@@ -7,6 +7,7 @@ import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
 import { contentQuiz, courseContentRevision, gradeQuiz, InvalidQuizAnswersError, matchesContentVersionToken, recordCourseCompletion } from '@/lib/server/course-progress';
 import { getQuizValidationError } from '@/app/courses/[courseId]/contents/types';
 import { contentTransaction } from '../../content-mutations';
+import { assertCurrentPrerequisites, CoursePathError } from '@/lib/server/course-prerequisites';
 
 type Params = { params: Promise<{ courseId: string; contentId: string }> };
 type AttemptOutcome = { status: number; score?: number; passed?: boolean; retryAfterSeconds?: number; error?: string };
@@ -50,6 +51,7 @@ export async function POST(request: NextRequest, props: Params) {
       const quiz = contentQuiz(content);
       if (!quiz || getQuizValidationError(quiz)) return { status: 409, error: 'Quiz is not ready' };
       if (!matchesContentVersionToken(body.contentVersionToken, course.activePublicationId, content)) return { status: 409, error: 'Quiz changed; reload before submitting' };
+      await assertCurrentPrerequisites(tx, userId, courseId, contentId, course.activePublicationId);
       const revision = courseContentRevision(content);
       const now = new Date();
       const windowStart = new Date(now.getTime() - 60 * 60 * 1000);
@@ -94,6 +96,7 @@ export async function POST(request: NextRequest, props: Params) {
     if (outcome.status === 429) return NextResponse.json({ error: outcome.error, retryAfterSeconds: outcome.retryAfterSeconds }, { status: 429, headers: { 'Retry-After': String(outcome.retryAfterSeconds) } });
     return NextResponse.json({ error: outcome.error }, { status: outcome.status });
   } catch (error) {
+    if (error instanceof CoursePathError) return NextResponse.json({ error: error.message }, { status: error.status });
     if (error instanceof InvalidQuizAnswersError) return NextResponse.json({ error: error.message }, { status: 400 });
     const inputError = requestErrorResponse(error);
     if (inputError) return inputError;

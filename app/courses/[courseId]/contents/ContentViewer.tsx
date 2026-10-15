@@ -1,6 +1,6 @@
 'use client';
 
-import { FileText, Video, Music, Box, HelpCircle } from 'lucide-react';
+import { FileText, Video, Music, Box, HelpCircle, ClipboardPenLine } from 'lucide-react';
 import { CourseContent } from './types';
 import { ContentRenderer } from './ContentRenderer';
 import { inferContentType } from './content-form-utils';
@@ -11,6 +11,7 @@ const typeDetails = {
   AUDIO: { label: 'Audio', icon: Music },
   H5P: { label: 'H5P', icon: Box },
   QUIZ: { label: 'Quiz', icon: HelpCircle },
+  ASSIGNMENT: { label: 'Aufgabe', icon: ClipboardPenLine },
 };
 
 export function ContentViewer({ content }: { content: CourseContent }) {

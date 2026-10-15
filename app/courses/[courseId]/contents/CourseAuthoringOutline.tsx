@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useRef, useState } from 'react'
-import { ArrowDown, ArrowUp, Box, ChevronRight, FileText, FolderInput, HelpCircle, MoreHorizontal, Music, Pencil, Plus, Trash2, Video } from 'lucide-react'
+import { ArrowDown, ArrowUp, Box, ChevronRight, ClipboardPenLine, FileText, FolderInput, HelpCircle, MoreHorizontal, Music, Pencil, Plus, Trash2, Video } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -26,7 +26,7 @@ export interface CourseAuthoringOutlineProps {
   staged?: boolean
 }
 
-const icons = { TEXT: FileText, VIDEO: Video, AUDIO: Music, H5P: Box, QUIZ: HelpCircle }
+const icons = { TEXT: FileText, VIDEO: Video, AUDIO: Music, H5P: Box, QUIZ: HelpCircle, ASSIGNMENT: ClipboardPenLine }
 
 /** Author-only structure tool. The shell owns permissions, writes and dirty decisions. */
 export function CourseAuthoringOutline({ contents, selectedContentId, onContentSelect, onAddContent, onRename, onMoveContent, onReorder, onDelete, disabled = false, requestAction, staged = false }: CourseAuthoringOutlineProps) {

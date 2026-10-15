@@ -26,3 +26,17 @@ export function getDatabaseUrl(): string {
   }
   return url;
 }
+
+/** The same explicit namespace is used by Prisma's PG adapter and raw SQL. */
+export function getPostgresqlSchema(): string | null {
+  const schema = new URL(getDatabaseUrl()).searchParams.get('schema');
+  // Without ?schema=, both PrismaPg and raw SQL retain the connection's
+  // search_path, which may be configured outside this URL.
+  if (schema === null) return null;
+  // PostgreSQL truncates longer identifiers; refusing them prevents raw SQL
+  // and Prisma from silently resolving different namespaces.
+  if (!schema || schema.includes('\0') || Buffer.byteLength(schema, 'utf8') > 63) {
+    throw new Error('PostgreSQL DATABASE_URL has an invalid schema name.');
+  }
+  return schema;
+}

@@ -3,7 +3,9 @@ import { getServerSession } from 'next-auth/next';
 import { Prisma } from '@prisma/client';
 import { authOptions } from '@/app/api/auth/[...nextauth]/options';
 import prisma from '@/lib/prisma';
-import { activeAssetReference, courseAssetUrl, readCourseAsset } from '@/lib/server/course-assets';
+import { activeAssetContentIds, activeAssetReference, courseAssetUrl, readCourseAsset } from '@/lib/server/course-assets';
+import { completionState } from '@/lib/server/course-progress';
+import { coursePathAccess, publicationPathNodes } from '@/lib/server/course-path';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -50,6 +52,10 @@ async function serve(props: { params: Promise<{ courseId: string; assetId: strin
             where: { userId_courseId: { userId: session.user.id, courseId } }, select: { id: true },
           });
           if (!enrollment) return null;
+          const nodes = publicationPathNodes(publication.payload);
+          const access = coursePathAccess(nodes, (await completionState(tx, session.user.id, courseId)).completedContentIds);
+          const referencedIds = activeAssetContentIds(JSON.parse(publication.payload), courseAssetUrl(courseId, assetId));
+          if (!referencedIds.some(id => access.get(id)?.locked === false)) return null;
         } else if (course.imageUrl !== courseAssetUrl(courseId, assetId)) {
           return null;
         }

@@ -334,7 +334,7 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
         <TabsContent value="edit">
           <section className="mb-6 space-y-3 border-b pb-5" aria-label="Quizprüfung">
             <div className="flex flex-wrap items-baseline justify-between gap-2"><h3 className="text-lg font-semibold">Quiz aufbauen</h3><p className="text-sm text-muted-foreground">{questions.length} {questions.length === 1 ? 'Frage' : 'Fragen'}</p></div>
-            <p className="text-sm leading-relaxed text-muted-foreground">Formuliere Fragen, markiere die Lösungen und prüfe deinen Entwurf in der Vorschau. Gespeicherte Änderungen sind im Kurs direkt sichtbar.</p>
+            <p className="text-sm leading-relaxed text-muted-foreground">Formuliere Fragen, markiere die Lösungen und prüfe deinen Entwurf in der Vorschau. Gespeicherte Änderungen bleiben privat, bis du den Kurs ausdrücklich veröffentlichst.</p>
             <p className="text-sm">Jede Frage zählt gleich viel. Eine mehrteilige Antwort zählt nur, wenn alle Teile richtig sind.</p>
             {readiness.requiredCorrectCount !== null && <p className="text-sm font-medium">Zum Bestehen nötig: {readiness.requiredCorrectCount} von {questions.length} Fragen richtig.</p>}
             {Number(passingScore) === 0 && passingScore.trim() && <p className="text-sm text-muted-foreground">Bei 0% Bestehensgrenze kann eine vollständige Abgabe auch ohne richtige Antwort bestehen.</p>}

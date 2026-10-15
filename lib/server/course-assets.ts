@@ -90,28 +90,32 @@ export function extractCourseAssetUrls(payload: unknown) {
   return [...found];
 }
 
+export function activeAssetContentIds(payload: unknown, url: string): string[] {
+  if (!payload || typeof payload !== 'object') return [];
+  const publication = payload as { contents?: unknown };
+  if (!Array.isArray(publication.contents)) return [];
+  const ids: string[] = [];
+  for (const node of publication.contents) {
+    if (!node || typeof node !== 'object') continue;
+    const item = node as { id?: unknown; type?: unknown; content?: unknown };
+    if (typeof item.id !== 'string' || (item.type !== 'TEXT' && item.type !== null)) continue;
+    // Quiz JSON can contain private answer text and must never grant access.
+    if (typeof item.content === 'string' && item.content.trimStart().startsWith('{')) {
+      try {
+        const parsed = JSON.parse(item.content) as unknown;
+        if (parsed && typeof parsed === 'object' && 'questions' in parsed) continue;
+      } catch { /* Malformed legacy text follows the existing text policy. */ }
+    }
+    if (textAssetUrls(item.content).some(value => value.trim() === url)) ids.push(item.id);
+  }
+  return ids;
+}
+
 export function activeAssetReference(payload: unknown, url: string): 'cover' | 'content' | null {
   if (!payload || typeof payload !== 'object') return null;
   const publication = payload as { imageUrl?: unknown; contents?: unknown };
   if (textAssetUrls(publication.imageUrl).some(value => value.trim() === url)) return 'cover';
-  if (Array.isArray(publication.contents)) {
-    for (const node of publication.contents) {
-      if (!node || typeof node !== 'object') continue;
-      const item = node as { type?: unknown; content?: unknown };
-      if (item.type !== 'TEXT' && item.type !== null) continue;
-      // Persisted quiz JSON includes answer keys. Only rich-text bodies can
-      // expose an image URL to a learner; never promote a URL found in a
-      // private quiz answer/explanation into a readable asset capability.
-      if (typeof item.content === 'string' && item.content.trimStart().startsWith('{')) {
-        try {
-          const parsed = JSON.parse(item.content) as unknown;
-          if (parsed && typeof parsed === 'object' && 'questions' in parsed) continue;
-        } catch { /* Treat malformed legacy content as ordinary text. */ }
-      }
-      if (textAssetUrls(item.content).some(value => value.trim() === url)) return 'content';
-    }
-  }
-  return null;
+  return activeAssetContentIds(payload, url).length ? 'content' : null;
 }
 
 type AssetReferenceDb = Pick<Prisma.TransactionClient, 'course' | 'courseAsset' | 'user'>;

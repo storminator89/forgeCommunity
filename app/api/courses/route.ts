@@ -3,7 +3,8 @@ import prisma from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../auth/[...nextauth]/options';
 import { requestWithBodyLimit, RequestBodyLimitError } from '@/lib/server/request-body';
-import { courseContentRevision, courseLeaves } from '@/lib/server/course-progress';
+import { assignmentPassedContentIds, courseContentRevision, courseLeaves } from '@/lib/server/course-progress';
+import { CoursePathError, prepareCoursePath, publicationPathNodes } from '@/lib/server/course-path';
 import { publishedCourseWhere, activeCourseContentWhere } from '@/lib/server/published-course';
 import { publicationDigest, type CoursePayload } from '@/lib/server/course-authoring';
 import { sanitizeTextServer } from '@/lib/server/sanitize-html';
@@ -47,6 +48,7 @@ export async function GET() {
         currency: true,
         maxStudents: true,
         rewardEligible: true,
+        activePublicationId: true,
         imageUrl: true,
         _count: { select: { enrollments: true } },
         enrollments: {
@@ -60,7 +62,7 @@ export async function GET() {
     // current leaf revisions are complete. Batch only this viewer's enrolled
     // courses; quiz answer keys never leave the server.
     const enrolledCourseIds = userId ? courses.filter(course => course.enrollments.length > 0).map(course => course.id) : [];
-    const [contents, progress] = enrolledCourseIds.length ? await Promise.all([
+    const [contents, progress, publications] = enrolledCourseIds.length ? await Promise.all([
       tx.courseContent.findMany({
         where: { courseId: { in: enrolledCourseIds }, ...activeCourseContentWhere },
         select: { id: true, courseId: true, parentId: true, type: true, content: true, order: true },
@@ -69,7 +71,10 @@ export async function GET() {
         where: { userId: userId!, courseId: { in: enrolledCourseIds } },
         select: { courseId: true, contentId: true, revision: true },
       }),
-    ]) : [[], []];
+      tx.coursePublication.findMany({ where: { id: { in: courses.filter(course => course.enrollments.length > 0)
+        .map(course => course.activePublicationId).filter((id): id is string => id !== null) } },
+        select: { id: true, courseId: true, payload: true } }),
+    ]) : [[], [], []];
     const contentsByCourse = new Map<string, typeof contents>();
     for (const content of contents) {
       const group = contentsByCourse.get(content.courseId) ?? [];
@@ -82,11 +87,28 @@ export async function GET() {
       revisions.set(row.contentId, row.revision);
       revisionsByCourse.set(row.courseId, revisions);
     }
-    const completedNow = new Map(enrolledCourseIds.map(courseId => {
-      const leaves = courseLeaves(contentsByCourse.get(courseId) ?? []);
+    const publicationById = new Map(publications.map(publication => [publication.id, publication]));
+    const completedNow = new Map<string, boolean>();
+    for (const course of courses.filter(row => row.enrollments.length > 0)) {
+      const courseId = course.id;
+      const publication = course.activePublicationId ? publicationById.get(course.activePublicationId) : null;
+      if (!publication || publication.courseId !== courseId) throw new CoursePathError('Course publication is unavailable', 409);
+      const nodes = publicationPathNodes(publication.payload);
+      const courseContents = contentsByCourse.get(courseId) ?? [];
+      const projected = new Map(courseContents.map(row => [row.id, row]));
+      if (projected.size !== nodes.length || nodes.some(node => {
+        const row = projected.get(node.id);
+        return !row || row.parentId !== node.parentId || row.order !== node.order;
+      })) throw new CoursePathError('Published course contents do not match the active publication', 409);
+      const leaves = courseLeaves(courseContents);
       const revisions = revisionsByCourse.get(courseId);
-      return [courseId, leaves.length > 0 && leaves.every(leaf => revisions?.get(leaf.id) === courseContentRevision(leaf))] as const;
-    }));
+      const assignmentPasses = new Set((await assignmentPassedContentIds(tx, courseId,
+        leaves.filter(leaf => leaf.type === 'ASSIGNMENT'), [userId!])).map(row => row.contentId));
+      const rawCompleted = leaves.filter(leaf => leaf.type === 'ASSIGNMENT' ? assignmentPasses.has(leaf.id)
+        : revisions?.get(leaf.id) === courseContentRevision(leaf)).map(leaf => leaf.id);
+      const access = prepareCoursePath(nodes)(rawCompleted);
+      completedNow.set(courseId, leaves.length > 0 && leaves.every(leaf => access.get(leaf.id)?.completed));
+    }
 
     return courses.map(course => ({
       id: course.id,

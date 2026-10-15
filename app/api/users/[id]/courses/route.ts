@@ -4,7 +4,6 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../../auth/[...nextauth]/options";
 import { activeCourseContentWhere, publishedCourseWhere } from '@/lib/server/published-course';
 import { contentTransaction } from '@/app/api/courses/[courseId]/contents/content-mutations';
-import { profileCourseCompletionStats } from '@/lib/server/course-profile-completion';
 
 export async function GET(
   request: NextRequest,
@@ -21,7 +20,7 @@ export async function GET(
     const { searchParams } = new URL(request.url);
     const { page, limit, skip } = readPagination(searchParams, 6);
 
-    const { courses, total, completion } = await contentTransaction(async tx => {
+    const { courses, total } = await contentTransaction(async tx => {
     const [courses, total] = await Promise.all([
       tx.course.findMany({
         where: {
@@ -42,7 +41,6 @@ export async function GET(
               contents: { where: activeCourseContentWhere },
             },
           },
-          enrollments: { select: { userId: true, completedAt: true } }
         },
         orderBy: {
           createdAt: 'desc'
@@ -57,7 +55,7 @@ export async function GET(
         }
       })
     ]);
-    return { courses, total, completion: await profileCourseCompletionStats(tx, courses) };
+    return { courses, total };
     });
 
     const formattedCourses = courses.map(course => {
@@ -79,8 +77,6 @@ export async function GET(
         stats: {
           enrollments: course._count.enrollments,
           maxStudents: course.maxStudents,
-          completionRate: completion.get(course.id)?.completionRate ?? 0,
-          everCompletionRate: completion.get(course.id)?.everCompletionRate ?? 0,
           rating: averageRating,
           ratingCount: ratingCount,
           lessonsCount: course._count.contents,

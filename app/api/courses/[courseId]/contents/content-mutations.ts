@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { sanitizeCourseTextContentServer, sanitizeTextServer } from '@/lib/server/sanitize-html';
 import { parseQuizContent } from '@/app/courses/[courseId]/contents/types';
+import { parseAssignmentContent } from '@/app/courses/[courseId]/contents/assignment-content';
 import { getH5PEmbedUrl } from '@/app/courses/[courseId]/contents/content-form-utils';
 import { getSafeEmbedUrl, getYouTubeEmbedUrl } from '@/lib/security';
 
@@ -37,7 +38,7 @@ export function validateContentFields(body: Record<string, unknown>, creating: b
   const { title, content, type, order, parentId } = body;
   if ((creating && typeof title !== 'string') || (title !== undefined && (typeof title !== 'string' || title.length > 300 || !sanitizeTextServer(title))) ||
     (content !== undefined && (typeof content !== 'string' || content.length > 100_000)) ||
-    (type !== undefined && type !== null && (typeof type !== 'string' || !['TEXT', 'VIDEO', 'AUDIO', 'H5P', 'QUIZ'].includes(type))) ||
+    (type !== undefined && type !== null && (typeof type !== 'string' || !['TEXT', 'VIDEO', 'AUDIO', 'H5P', 'QUIZ', 'ASSIGNMENT'].includes(type))) ||
     (order !== undefined && (!Number.isInteger(order) || Number(order) < 0 || Number(order) > 2_147_483_647)) ||
     (parentId !== undefined && parentId !== null && (typeof parentId !== 'string' || !parentId.trim()))) {
     throw new ContentMutationError('Invalid content fields');
@@ -45,6 +46,11 @@ export function validateContentFields(body: Record<string, unknown>, creating: b
 }
 
 export function prepareContent(content: string, type: string | null) {
+  if (type === 'ASSIGNMENT') {
+    const assignment = parseAssignmentContent(content);
+    if (!assignment) throw new ContentMutationError('Invalid assignment content');
+    return JSON.stringify(assignment);
+  }
   if (type === 'QUIZ') {
     // An empty newly selected quiz is a draft, never persisted as malformed JSON.
     const quiz = content === '' ? { questions: [] } : parseQuizContent(content);

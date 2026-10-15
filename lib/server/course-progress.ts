@@ -1,11 +1,14 @@
 import 'server-only';
 
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { getQuizValidationError, parseQuizContent, type QuizContent, type QuizQuestion } from '@/app/courses/[courseId]/contents/types';
+import { parseAssignmentContent } from '@/app/courses/[courseId]/contents/assignment-content';
 import { groupCourseContents } from '@/lib/server/group-course-contents';
 import { reconcileLearnerCourseReward } from '@/lib/server/rewards';
 import { activeCourseContentWhere, publishedCourseWhere } from '@/lib/server/published-course';
+import { CoursePathError, coursePathAccess, publicationPathNodes } from '@/lib/server/course-path';
+import { courseSqlTable } from '@/lib/server/course-sql-tables';
 
 export type ProgressContent = { id: string; courseId: string; parentId: string | null; type: string | null; content: string; order?: number };
 
@@ -133,14 +136,70 @@ export function gradeQuiz(quiz: QuizContent, submitted: unknown): { score: numbe
   return { score, passed: score >= (quiz.passingScore ?? 70) };
 }
 
+/** One bounded result set for analytics and progress, regardless of retry/history volume. */
+export async function assignmentPassedContentIds(tx: Prisma.TransactionClient, courseId: string,
+  activeAssignmentLeaves: ProgressContent[], userIds: string[]): Promise<Array<{ userId: string; contentId: string }>> {
+  const assignments = activeAssignmentLeaves.filter(content => content.type === 'ASSIGNMENT' && parseAssignmentContent(content.content)?.prompt.trim());
+  if (!assignments.length || !userIds.length) return [];
+  const currentRevisions = assignments.map(content => Prisma.sql`(s."contentId" = ${content.id} AND s."revision" = ${courseContentRevision(content)})`);
+  const submissions = courseSqlTable('AssignmentSubmission');
+  const decisions = courseSqlTable('AssignmentGradeDecision');
+  return tx.$queryRaw<Array<{ userId: string; contentId: string }>>(Prisma.sql`
+    WITH ranked_submissions AS (
+      SELECT s."id", s."userId", s."contentId", s."passingScore",
+        ROW_NUMBER() OVER (PARTITION BY s."userId", s."contentId" ORDER BY s."attemptNumber" DESC) AS attempt_rank
+      FROM ${submissions} s
+      WHERE s."courseId" = ${courseId} AND s."userId" IN (${Prisma.join(userIds)})
+        AND (${Prisma.join(currentRevisions, ' OR ')})
+    )
+    SELECT s."userId", s."contentId" FROM ranked_submissions s
+    JOIN ${decisions} g ON g."id" = (
+      SELECT newest."id" FROM ${decisions} newest
+      WHERE newest."submissionId" = s."id" ORDER BY newest."sequence" DESC LIMIT 1
+    )
+    WHERE s.attempt_rank = 1 AND g."action" = 'GRADED' AND g."score" >= s."passingScore"
+  `);
+}
+
+/** Batch activity projection for analytics; never loads private answer text or grade history. */
+export async function assignmentSubmittedUserIds(tx: Prisma.TransactionClient, courseId: string,
+  activeAssignmentLeaves: ProgressContent[], userIds: string[]): Promise<string[]> {
+  const assignments = activeAssignmentLeaves.filter(content => content.type === 'ASSIGNMENT' && parseAssignmentContent(content.content)?.prompt.trim());
+  if (!assignments.length || !userIds.length) return [];
+  const currentRevisions = assignments.map(content => Prisma.sql`(s."contentId" = ${content.id} AND s."revision" = ${courseContentRevision(content)})`);
+  const submissions = courseSqlTable('AssignmentSubmission');
+  const rows = await tx.$queryRaw<Array<{ userId: string }>>(Prisma.sql`
+    SELECT DISTINCT s."userId" FROM ${submissions} s
+    WHERE s."courseId" = ${courseId} AND s."userId" IN (${Prisma.join(userIds)})
+      AND (${Prisma.join(currentRevisions, ' OR ')})
+  `);
+  return rows.map(row => row.userId);
+}
+
 export async function completionState(tx: Prisma.TransactionClient, userId: string, courseId: string) {
-  const [contents, progress] = await Promise.all([
+  const [course, contents, progress] = await Promise.all([
+    tx.course.findUnique({ where: { id: courseId }, select: { activePublicationId: true } }),
     tx.courseContent.findMany({ where: { courseId, ...activeCourseContentWhere, course: publishedCourseWhere }, select: { id: true, courseId: true, parentId: true, type: true, content: true, order: true } }),
     tx.courseContentProgress.findMany({ where: { userId, courseId }, select: { contentId: true, revision: true } }),
   ]);
+  if (!course?.activePublicationId) return { completedContentIds: [], complete: false };
+  const publication = await tx.coursePublication.findUnique({ where: { id: course.activePublicationId }, select: { courseId: true, payload: true } });
+  if (!publication || publication.courseId !== courseId) throw new CoursePathError('Course publication is unavailable', 409);
+  const nodes = publicationPathNodes(publication.payload);
+  const projected = new Map(contents.map(row => [row.id, row]));
+  if (projected.size !== nodes.length || nodes.some(node => {
+    const row = projected.get(node.id);
+    return !row || row.parentId !== node.parentId || row.order !== node.order;
+  })) throw new CoursePathError('Published course contents do not match the active publication', 409);
   const revisions = new Map(progress.map(item => [item.contentId, item.revision]));
   const leaves = courseLeaves(contents);
-  const completedContentIds = leaves.filter(content => revisions.get(content.id) === courseContentRevision(content)).map(content => content.id);
+  // Assignment completion is grade-derived; progress mirror rows are not proof.
+  const assignmentPasses = new Set((await assignmentPassedContentIds(tx, courseId, leaves.filter(content => content.type === 'ASSIGNMENT'), [userId])).map(row => row.contentId));
+  const rawCompleted = leaves.filter(content => content.type === 'ASSIGNMENT'
+    ? assignmentPasses.has(content.id)
+    : revisions.get(content.id) === courseContentRevision(content)).map(content => content.id);
+  const access = coursePathAccess(nodes, rawCompleted);
+  const completedContentIds = leaves.filter(content => access.get(content.id)?.completed).map(content => content.id);
   return { completedContentIds, complete: leaves.length > 0 && completedContentIds.length === leaves.length };
 }
 

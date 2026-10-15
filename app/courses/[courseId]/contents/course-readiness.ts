@@ -1,6 +1,7 @@
 import type { CourseContent } from './types'
 import { getQuizValidationError, parseQuizContent } from './types'
 import { getContentValidationError } from './content-form-utils'
+import { getAssignmentValidationError } from './assignment-content'
 import { isSafeRichHtmlUrl } from '@/lib/html-sanitize-config'
 
 export interface CourseReadinessFinding {
@@ -87,7 +88,10 @@ export function getCourseReadiness(contents: CourseContent[]): CourseReadiness {
       return
     }
     result.leafCount++
-    if (quizLike) {
+    if (item.type === 'ASSIGNMENT') {
+      const issue = getAssignmentValidationError(item.content)
+      if (issue) add('invalid-source', issue)
+    } else if (quizLike) {
       const quiz = parseQuizContent(item.content)
       const issue = quiz ? getQuizValidationError(quiz) : 'Die Quizdaten sind ungültig.'
       if (issue) add('invalid-quiz', issue)

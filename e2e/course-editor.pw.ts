@@ -147,7 +147,7 @@ test('private course authoring, publication and latest learner content use real 
     await page.screenshot({ path: testInfo.outputPath('private-author-outline-editor-desktop-' + candidateSha + '.png'), animations: 'disabled' })
   }
 
-  await createNode(page, courseId, 'Wissenscheck', 'QUIZ')
+  const quizId = await createNode(page, courseId, 'Wissenscheck', 'QUIZ')
   form = page.getByRole('form', { name: 'Inhalt bearbeiten', exact: true })
   await expect(form.getByLabel('Neue Frage als')).toBeVisible()
   await form.getByLabel('Neue Frage als').selectOption('TEXT_INPUT')
@@ -174,8 +174,20 @@ test('private course authoring, publication and latest learner content use real 
   expect(courseEvidence(courseId)).toEqual(beforePreview)
 
   await saveNode(page, courseId)
+  const prerequisite = page.getByRole('checkbox', { name: /Erste Lektion/ })
+  await prerequisite.focus()
+  await expect(prerequisite).toBeFocused()
+  const prerequisiteSave = page.waitForResponse(entry => new URL(entry.url()).pathname === '/api/courses/' + courseId + '/authoring' && entry.request().method() === 'PATCH')
+  await page.keyboard.press('Space')
+  expect((await prerequisiteSave).status()).toBe(200)
+  await expect(prerequisite).toBeChecked()
+  await expect(page.getByText('1 Voraussetzung im Entwurf', { exact: true })).toBeVisible()
   await page.getByRole('navigation', { name: 'Kursstruktur bearbeiten' }).getByTitle('Erste Lektion', { exact: true }).click()
   await reviewAndPublish(page, courseId, 1, async () => {
+    const dialog = page.getByRole('dialog', { name: 'Veröffentlichung prüfen' })
+    await expect(dialog.getByText('Neu', { exact: true }).locator('..').getByText('2', { exact: true })).toBeVisible()
+    await expect(dialog).toContainText('Neue oder geänderte Lerninhalte können einen erneuten Abschluss in der aktuellen Fassung erfordern.')
+    await expect(dialog).toContainText('Änderungen am Lernpfad oder an Bewertungen können bisherige Freigaben und Belohnungen beeinflussen.')
     if (testInfo.project.name === 'desktop-chromium') {
       await page.evaluate(async () => { await document.fonts.ready })
       await page.screenshot({ path: testInfo.outputPath('publication-review-desktop-' + candidateSha + '.png'), animations: 'disabled' })
@@ -197,7 +209,6 @@ test('private course authoring, publication and latest learner content use real 
     const overflow = await page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - innerWidth)
     expect(overflow).toBeLessThanOrEqual(1)
     await page.screenshot({ path: testInfo.outputPath('published-author-workspace-320-' + candidateSha + '.png'), animations: 'disabled' })
-    return
   }
 
   // A real learner follows the newest publication and a changed lesson needs
@@ -214,10 +225,33 @@ test('private course authoring, publication and latest learner content use real 
     await login(learner, learnerEmail, learnerPassword)
     const enrollment = await learnerContext.request.post(origin + '/api/courses/' + courseId + '/enrollment', { headers: { origin } })
     expect(enrollment.status()).toBe(201)
-    await learner.goto('/courses/' + courseId + '/contents?content=' + textId)
+    await learner.goto('/courses/' + courseId + '/contents?content=' + quizId)
+    await expect(learner.getByText('Inhalt gesperrt', { exact: true })).toBeVisible()
+    await expect(learner.getByRole('button', { name: 'Erste Lektion öffnen' })).toBeVisible()
+    await expect(learner.getByText('Welches Testwort gehört zum Kurs?')).toHaveCount(0)
+    if (testInfo.project.name === 'mobile-320-chromium') {
+      const missingLink = learner.getByRole('button', { name: 'Erste Lektion öffnen' })
+      await missingLink.focus()
+      await expect(missingLink).toBeFocused()
+      await learner.evaluate(async () => { await document.fonts.ready })
+      const overflow = await learner.evaluate(() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - innerWidth)
+      expect(overflow).toBeLessThanOrEqual(1)
+      await learner.screenshot({ path: testInfo.outputPath('learner-locked-path-320-' + candidateSha + '.png'), animations: 'disabled' })
+      await learner.keyboard.press('Enter')
+    } else await keyboardActivate(learner, learner.getByRole('button', { name: 'Erste Lektion öffnen' }))
     await expect(learner.getByText(firstText, { exact: true })).toBeVisible()
     await keyboardActivate(learner, learner.getByRole('button', { name: 'Als abgeschlossen markieren', exact: true }))
     await expect(learner.getByRole('button', { name: 'Abschlussmarkierung entfernen', exact: true })).toBeVisible()
+    await learner.goto('/courses/' + courseId + '/contents?content=' + quizId)
+    await expect(learner.getByText('Inhalt gesperrt', { exact: true })).toHaveCount(0)
+    await expect(learner.getByText('Welches Testwort gehört zum Kurs?')).toBeVisible()
+    if (testInfo.project.name === 'mobile-320-chromium') {
+      await learner.evaluate(async () => { await document.fonts.ready })
+      await learner.screenshot({ path: testInfo.outputPath('learner-unlocked-path-320-' + candidateSha + '.png'), animations: 'disabled' })
+      return
+    }
+    await learner.goto('/courses/' + courseId + '/contents?content=' + textId)
+    await expect(learner.getByText(firstText, { exact: true })).toBeVisible()
 
     form = page.getByRole('form', { name: 'Inhalt bearbeiten', exact: true })
     await form.getByRole('switch', { name: 'HTML' }).focus()
