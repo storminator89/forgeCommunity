@@ -170,6 +170,9 @@ test('private course authoring, publication and latest learner content use real 
   await preview.getByRole('textbox', { name: 'Vorschauantwort zu Frage 1' }).fill('Probeantwort')
   await page.keyboard.press('Escape')
   await expect(preview).toHaveCount(0)
+  // Wait for dialog focus restoration before moving focus to the save button.
+  // Otherwise the restoration can race and steal focus after keyboardActivate().
+  await expect(page.getByRole('button', { name: 'Vorschau', exact: true })).toBeFocused()
   expect(learnerWrites).toEqual([])
   expect(courseEvidence(courseId)).toEqual(beforePreview)
 
