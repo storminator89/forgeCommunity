@@ -99,7 +99,7 @@ CREATE TABLE "LearningPathwayChange" (
   "reason" TEXT CHECK ("reason" IN ('REWARD_INVALIDATED', 'OPTED_OUT', 'ACCOUNT_INELIGIBLE')),
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "LearningPathwayChange_participation_fkey" FOREIGN KEY ("userId", "pathwayId") REFERENCES "LearningPathwayParticipation"("userId", "pathwayId") ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT "LearningPathwayChange_reason_check" CHECK (("type" = 'REVOKED' AND "reason" IS NOT NULL) OR ("type" <> 'REVOKED' AND "reason" IS NULL))
+  CONSTRAINT "LearningPathwayChange_type_reason_check" CHECK (("type" = 'REVOKED' AND "reason" IS NOT NULL) OR ("type" <> 'REVOKED' AND "reason" IS NULL))
 );
 CREATE UNIQUE INDEX "LearningPathwayChange_userId_pathwayId_version_key" ON "LearningPathwayChange"("userId", "pathwayId", "version");
 CREATE INDEX "LearningPathwayChange_createdAt_idx" ON "LearningPathwayChange"("createdAt");
