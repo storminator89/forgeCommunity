@@ -28,6 +28,7 @@ beforeEach(() => {
   global.fetch = jest.fn().mockImplementation(async (url: string) => {
     if (url === '/api/posts?feed=1') return { ok: true, json: async () => ({ posts: [{ id: 'post-1', title: 'Hallo', content: 'Test', authorId: 'me', author: { id: 'me', name: 'Me', image: null }, createdAt: '2026-01-01', votes: 0, isLiked: false, comments: [] }], nextCursor: null }) }
     if (url === '/api/posts/me/stats') return { ok: true, json: async () => ({ posts: 1, comments: 0, receivedLikes: 0 }) }
+    if (url === '/api/contributions/me') return { ok: true, json: async () => ({ eligible: true, selectedByAuthors: 0, saturated: false }) }
     if (url === '/api/rewards/me') return { ok: true, json: async () => ({ points: 50, completedCourses: 1, firstCourseCompleted: true }) }
     if (url === '/api/leaderboard') return { ok: true, json: async () => [] }
     if (url === '/api/posts/post-1/like') return { ok: true, json: async () => ({ message: 'Like hinzugefügt' }) }
@@ -59,6 +60,7 @@ it('removes Alice’s unpublished post before Bob’s failed load or logout', as
         : { ok: false, json: async () => ({ message: 'Unavailable' }) }
     }
     if (url === '/api/posts/me/stats') return { ok: true, json: async () => ({ posts: 1, comments: 0, receivedLikes: 0 }) }
+    if (url === '/api/contributions/me') return { ok: true, json: async () => ({ eligible: true, selectedByAuthors: 0, saturated: false }) }
     if (url === '/api/rewards/me') return { ok: true, json: async () => ({ points: 0, completedCourses: 0, firstCourseCompleted: false }) }
     if (url === '/api/leaderboard') return { ok: true, json: async () => [] }
     throw new Error(`Unexpected fetch: ${url}`)
@@ -93,6 +95,7 @@ it('ignores Alice’s late post response after Bob signs in', async () => {
         : Promise.resolve({ ok: true, json: async () => ({ posts: [post('bob-post', 'Bob post', 'bob')], nextCursor: null }) })
     }
     if (url === '/api/posts/me/stats') return Promise.resolve({ ok: true, json: async () => ({ posts: 1, comments: 0, receivedLikes: 0 }) })
+    if (url === '/api/contributions/me') return { ok: true, json: async () => ({ eligible: true, selectedByAuthors: 0, saturated: false }) }
     if (url === '/api/rewards/me') return Promise.resolve({ ok: true, json: async () => ({ points: 0, completedCourses: 0, firstCourseCompleted: false }) })
     if (url === '/api/leaderboard') return Promise.resolve({ ok: true, json: async () => [] })
     throw new Error(`Unexpected fetch: ${url}`)

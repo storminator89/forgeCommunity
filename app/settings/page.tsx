@@ -1,7 +1,8 @@
 "use client"
 
 import { AppShell, AppHeader } from '@/components/app-shell';
-import { useState, useEffect, useRef } from 'react'
+import { Suspense, useState, useEffect, useRef, type ReactNode } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { Sidebar } from "@/components/Sidebar"
 import { UserNav } from "@/components/user-nav"
@@ -64,6 +65,30 @@ const findNearestLevel = (value: number) => {
 const getLevelLabel = (value: number) => {
   return findNearestLevel(value).label;
 };
+
+const SETTINGS_TABS = ['account', 'notifications', 'privacy', 'skills', 'certificates'] as const
+type SettingsTab = typeof SETTINGS_TABS[number]
+
+function settingsTab(value: string | null): SettingsTab {
+  return SETTINGS_TABS.find(tab => tab === value) ?? 'account'
+}
+
+function SettingsTabs({ children }: { children: ReactNode }) {
+  const searchParams = useSearchParams()
+  const activeTab = settingsTab(searchParams?.get('tab') ?? null)
+
+  // Next synchronizes native history and Back/Forward with useSearchParams,
+  // without remounting the account's unsaved form fields.
+  const selectTab = (value: string) => {
+    const tab = settingsTab(value)
+    const url = new URL(window.location.href)
+    if (url.searchParams.get('tab') === tab) return
+    url.searchParams.set('tab', tab)
+    window.history.pushState(null, '', `${url.pathname}${url.search}${url.hash}`)
+  }
+
+  return <Tabs value={activeTab} onValueChange={selectTab} className="w-full">{children}</Tabs>
+}
 
 
 export default function SettingsPage() {
@@ -339,7 +364,8 @@ function AccountSettings({ userId }: { userId: string }) {
           <div className="mx-auto max-w-4xl space-y-6">
             <div className="border-b pb-6"><h2 className="text-xl font-semibold tracking-tight">Dein Konto verwalten</h2><p className="mt-2 max-w-[68ch] text-sm leading-relaxed text-muted-foreground">Profil, Benachrichtigungen, Privatsphäre und deine eigenen Nachweise an einem Ort.</p></div>
             {isLoading ? <PageState kind="loading" title="Einstellungen werden geladen" description="Deine gespeicherten Angaben werden vorbereitet." /> : loadError ? <PageState kind="error" title="Einstellungen konnten nicht geladen werden" description={loadError} action={<Button variant="outline" onClick={() => window.location.reload()}>Erneut laden</Button>} /> : (
-            <Tabs defaultValue="account" className="w-full">
+            <Suspense fallback={<PageState kind="loading" title="Einstellungen werden geladen" />}>
+            <SettingsTabs>
               <TabsList className="mb-6 grid h-auto w-full grid-cols-2 gap-1 p-1 sm:grid-cols-3 lg:grid-cols-5">
                 <TabsTrigger value="account" className="min-h-11 min-w-0 px-2">Konto</TabsTrigger>
                 <TabsTrigger value="notifications" className="min-h-11 min-w-0 px-2">Meldungen</TabsTrigger>
@@ -684,7 +710,8 @@ function AccountSettings({ userId }: { userId: string }) {
                   </CardContent>
                 </Card>
               </TabsContent>
-            </Tabs>
+            </SettingsTabs>
+            </Suspense>
             )}
           </div>
         </main>

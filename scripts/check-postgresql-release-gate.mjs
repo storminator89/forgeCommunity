@@ -25,6 +25,7 @@ assert.deepEqual(upgradeNames, [
   '0003_reports.sql',
   '0004_reward_ledger.sql',
   '0005_community_feed_indexes.sql',
+  '0006_accepted_solutions.sql',
 ]);
 const expectedChecksums = new Map(upgradeNames.map(name => [name, createHash('sha256')
   .update(readFileSync(new URL(`../prisma/postgresql-upgrades/${name}`, import.meta.url)))
@@ -134,13 +135,110 @@ async function history(db) {
   return rows;
 }
 
+async function assertAcceptedSolutionSchema(db) {
+  const expectedFks = [
+    ['AcceptedSolution_postId_fkey', 'AcceptedSolution', ['postId'], 'Post', ['id'], 'c'],
+    ['AcceptedSolution_postId_commentId_fkey', 'AcceptedSolution', ['postId', 'commentId'], 'Comment', ['postId', 'id'], 'c'],
+    ['AcceptedSolutionChange_actorId_fkey', 'AcceptedSolutionChange', ['actorId'], 'User', ['id'], 'n'],
+    ['AcceptedSolutionChange_postId_fkey', 'AcceptedSolutionChange', ['postId'], 'Post', ['id'], 'n'],
+    ['AcceptedSolutionChange_previousCommentId_fkey', 'AcceptedSolutionChange', ['previousCommentId'], 'Comment', ['id'], 'n'],
+    ['AcceptedSolutionChange_commentId_fkey', 'AcceptedSolutionChange', ['commentId'], 'Comment', ['id'], 'n'],
+  ];
+  const { rows: constraints } = await db.query(`
+    SELECT c.conname AS name, t.relname AS table_name, c.contype AS type,
+      c.convalidated AS validated, c.condeferrable AS deferrable,
+      c.confdeltype AS on_delete, c.confupdtype AS on_update, rt.relname AS referenced_table,
+      rt.relnamespace = t.relnamespace AS same_schema,
+      ARRAY(SELECT a.attname::text FROM unnest(c.conkey) WITH ORDINALITY AS k(attnum, n)
+        JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.attnum ORDER BY k.n) AS columns,
+      ARRAY(SELECT a.attname::text FROM unnest(c.confkey) WITH ORDINALITY AS k(attnum, n)
+        JOIN pg_attribute a ON a.attrelid = c.confrelid AND a.attnum = k.attnum ORDER BY k.n) AS referenced_columns
+    FROM pg_constraint c JOIN pg_class t ON t.oid = c.conrelid
+    JOIN pg_namespace n ON n.oid = t.relnamespace
+    LEFT JOIN pg_class rt ON rt.oid = c.confrelid
+    WHERE n.nspname = current_schema() AND t.relname IN ('AcceptedSolution', 'AcceptedSolutionChange')`);
+  const byName = new Map(constraints.map(constraint => [constraint.name, constraint]));
+  assert.equal(constraints.length, 9, 'accepted-solution tables must have two primary keys, six foreign keys and one action check');
+  const actionCheck = byName.get('AcceptedSolutionChange_action_check');
+  assert.ok(actionCheck, 'accepted-solution action check missing');
+  assert.equal(actionCheck.table_name, 'AcceptedSolutionChange');
+  assert.equal(actionCheck.type, 'c');
+  assert.equal(actionCheck.validated, true);
+  assert.equal(actionCheck.deferrable, false);
+  assert.deepEqual(actionCheck.columns, ['action']);
+  for (const [table, columns] of [['AcceptedSolution', ['postId']], ['AcceptedSolutionChange', ['id']]]) {
+    const primary = byName.get(`${table}_pkey`);
+    assert.ok(primary, `${table} primary key missing`);
+    assert.equal(primary.type, 'p');
+    assert.equal(primary.validated, true);
+    assert.equal(primary.deferrable, false);
+    assert.deepEqual(primary.columns, columns);
+  }
+  for (const [name, table, columns, referencedTable, referencedColumns, onDelete] of expectedFks) {
+    assert.deepEqual(byName.get(name), {
+      name, table_name: table, type: 'f', validated: true, deferrable: false,
+      on_delete: onDelete, on_update: 'c', referenced_table: referencedTable, same_schema: true,
+      columns, referenced_columns: referencedColumns,
+    }, `accepted-solution foreign key ${name}`);
+  }
+  const expectedIndexes = [
+    ['Comment_postId_id_key', ['postId', 'id'], true, false],
+    ['AcceptedSolution_pkey', ['postId'], true, true],
+    ['AcceptedSolution_commentId_key', ['commentId'], true, false],
+    ['AcceptedSolution_revision_key', ['revision'], true, false],
+    ['AcceptedSolutionChange_pkey', ['id'], true, true],
+    ['AcceptedSolutionChange_postId_createdAt_idx', ['postId', 'createdAt'], false, false],
+  ];
+  const { rows: indexes } = await db.query(`
+    SELECT idx.relname AS name, i.indisunique AS unique_index, i.indisprimary AS primary_index,
+      i.indisvalid AS valid, i.indisready AS ready, i.indpred IS NULL AS no_predicate,
+      i.indexprs IS NULL AS no_expression, i.indnkeyatts AS key_columns,
+      ARRAY(SELECT a.attname::text FROM unnest(i.indkey) WITH ORDINALITY AS k(attnum, n)
+        JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = k.attnum ORDER BY k.n) AS columns
+    FROM pg_index i JOIN pg_class idx ON idx.oid = i.indexrelid
+    JOIN pg_class t ON t.oid = i.indrelid JOIN pg_namespace n ON n.oid = t.relnamespace
+    WHERE n.nspname = current_schema() AND idx.relname = ANY($1::text[])`, [expectedIndexes.map(([name]) => name)]);
+  const byIndex = new Map(indexes.map(index => [index.name, index]));
+  for (const [name, columns, unique, primary] of expectedIndexes) {
+    assert.deepEqual(byIndex.get(name), {
+      name, unique_index: unique, primary_index: primary, valid: true, ready: true,
+      no_predicate: true, no_expression: true, key_columns: columns.length, columns,
+    }, `accepted-solution index ${name}`);
+  }
+  const { rows: columns } = await db.query(`
+    SELECT table_name, column_name, is_nullable, data_type, datetime_precision, column_default
+    FROM information_schema.columns WHERE table_schema = current_schema()
+      AND table_name IN ('AcceptedSolution', 'AcceptedSolutionChange') ORDER BY table_name, ordinal_position`);
+  for (const [table, names] of [
+    ['AcceptedSolution', ['postId', 'commentId', 'revision', 'createdAt']],
+    ['AcceptedSolutionChange', ['id', 'action', 'createdAt', 'actorId', 'postId', 'previousCommentId', 'commentId']],
+  ]) {
+    const fields = columns.filter(column => column.table_name === table);
+    assert.deepEqual(fields.map(column => column.column_name), names, `${table} must not retain content, points or recipient snapshots`);
+    for (const column of fields) {
+      const nullable = table === 'AcceptedSolutionChange' && ['actorId', 'postId', 'previousCommentId', 'commentId'].includes(column.column_name);
+      assert.equal(column.is_nullable, nullable ? 'YES' : 'NO');
+      if (column.column_name === 'createdAt') {
+        assert.equal(column.data_type, 'timestamp without time zone');
+        assert.equal(column.datetime_precision, 3);
+        assert.match(column.column_default ?? '', /^(CURRENT_TIMESTAMP|now\(\))$/i);
+      } else {
+        assert.equal(column.data_type, 'text');
+        assert.equal(column.column_default, null);
+      }
+    }
+  }
+}
+
 async function assertCurrentSchema(db) {
   for (const table of [
     'SkillEndorsement', 'CourseContentProgress', 'QuizAttempt', 'ContentReport',
     'RewardLedger', 'RewardLedgerChange', 'CourseCompletionRecord',
+    'AcceptedSolution', 'AcceptedSolutionChange',
   ]) {
     assert.ok((await db.query('SELECT to_regclass($1) AS relation', [`"${table}"`])).rows[0].relation, `${table} missing`);
   }
+  await assertAcceptedSolutionSchema(db);
   const requiredFks = [
     'CourseContentProgress_userId_fkey', 'CourseContentProgress_courseId_fkey',
     'CourseContentProgress_contentId_fkey', 'QuizAttempt_userId_fkey',
@@ -229,6 +327,8 @@ test('PostgreSQL empty install and main baseline upgrades: replay, checksums and
     const catalog = await assertCurrentSchema(db);
     assert.equal(await count(db, 'CourseCompletionRecord'), 0);
     assert.equal(await count(db, 'RewardLedger'), 0);
+    assert.equal(await count(db, 'AcceptedSolution'), 0);
+    assert.equal(await count(db, 'AcceptedSolutionChange'), 0);
     deploy(url);
     assert.deepEqual(await history(db), firstHistory);
     await assert.rejects(applyPostgresqlUpgrades(url, { initializeEmptySchema: true }), /requires a schema with no existing/);
@@ -244,6 +344,8 @@ test('PostgreSQL empty install and main baseline upgrades: replay, checksums and
     const catalog = await assertCurrentSchema(db);
     assert.equal(await count(db, 'CourseCompletionRecord'), 0);
     assert.equal(await count(db, 'RewardLedger'), 0);
+    assert.equal(await count(db, 'AcceptedSolution'), 0);
+    assert.equal(await count(db, 'AcceptedSolutionChange'), 0);
     await applyPostgresqlUpgrades(url);
     assert.deepEqual(await history(db), firstHistory);
     await assert.rejects(applyPostgresqlUpgrades(url, { baselineCurrentSchema: true }), /requires an untracked/);
@@ -272,6 +374,8 @@ test('PostgreSQL empty install and main baseline upgrades: replay, checksums and
     }]);
     assert.equal(await count(db, 'RewardLedger'), 0);
     assert.equal(await count(db, 'ContentReport'), 0);
+    assert.equal(await count(db, 'AcceptedSolution'), 0, 'historical likes are not solution selections');
+    assert.equal(await count(db, 'AcceptedSolutionChange'), 0, 'upgrades must not invent decisions');
     assert.deepEqual((await db.query('SELECT id, title, published FROM "Post" ORDER BY id')).rows, [
       { id: 'legacy-draft', title: 'Preserved private title', published: false },
       { id: 'legacy-post', title: 'Preserved community title', published: true },
@@ -332,4 +436,110 @@ test('PostgreSQL empty install and main baseline upgrades: replay, checksums and
 
   assert.deepEqual(freshMainCatalog, emptyCatalog, 'empty install and main-baseline upgrade must reach the same table columns');
   assert.deepEqual(populatedCatalog, emptyCatalog, 'populated upgrade must reach the same table columns as empty install');
+});
+
+test('accepted-solution release upgrade preserves existing rewards and decisions on redeploy and anonymizes erasures', async () => {
+  await withSchema({ mainBaseline: true, populated: true }, async (db, url) => {
+    // Model an already deployed 0005 database, not a baseline with a new signal inferred from likes.
+    await db.query(`CREATE TABLE "_app_schema_upgrades" (
+      name TEXT PRIMARY KEY, checksum TEXT NOT NULL, applied_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
+    for (const name of upgradeNames.filter(name => name < '0006_accepted_solutions.sql')) {
+      if (name !== '0001_skill_endorsements.sql') await db.query(readFileSync(new URL(`../prisma/postgresql-upgrades/${name}`, import.meta.url), 'utf8'));
+      await db.query('INSERT INTO "_app_schema_upgrades" (name, checksum) VALUES ($1, $2)', [name, expectedChecksums.get(name)]);
+    }
+    await db.query(`
+      INSERT INTO "RewardLedger" (id, "userId", "eventType", "sourceId", "courseTitle", points)
+        VALUES ('preserved-reward', 'completed', 'COURSE_COMPLETED', 'legacy-course', 'Legacy course', 50);
+      INSERT INTO "RewardLedgerChange" (id, "ledgerId", version, type, "pointsDelta")
+        VALUES ('preserved-reward-change', 'preserved-reward', 1, 'AWARDED', 50);
+      INSERT INTO "Post" (id, title, content, published, "authorId", "updatedAt")
+        VALUES ('other-post', 'Other title', 'Other post', true, 'teacher', CURRENT_TIMESTAMP);
+      INSERT INTO "Comment" (id, content, "postId", "authorId", "updatedAt") VALUES
+        ('replacement', 'Replacement reply', 'legacy-post', 'completed', CURRENT_TIMESTAMP),
+        ('other-reply', 'Other reply', 'other-post', 'completed', CURRENT_TIMESTAMP);`);
+    const read = async table => (await db.query(`SELECT * FROM ${quoteIdent(table)} ORDER BY 1`)).rows;
+    const oldTables = ['User', 'Post', 'Comment', 'LikePost', 'LikeComment', 'SkillEndorsement', 'RewardLedger', 'RewardLedgerChange', 'CourseCompletionRecord'];
+    const before = new Map();
+    for (const table of oldTables) before.set(table, await read(table));
+    const oldHistory = (await db.query('SELECT name, checksum, applied_at::text AS applied_at FROM "_app_schema_upgrades" ORDER BY name')).rows;
+    deploy(url);
+    await assertCurrentSchema(db);
+    const upgradedHistory = await history(db);
+    assert.deepEqual(upgradedHistory.slice(0, oldHistory.length), oldHistory, 'upgrade altered old history');
+    for (const [table, rows] of before) assert.deepEqual(await read(table), rows, `${table} changed during additive upgrade`);
+    assert.equal(await count(db, 'AcceptedSolution'), 0);
+    assert.equal(await count(db, 'AcceptedSolutionChange'), 0);
+    const select = (postId, commentId, revision) => db.query(
+      'INSERT INTO "AcceptedSolution" ("postId", "commentId", revision) VALUES ($1, $2, $3)', [postId, commentId, revision]);
+    await select('legacy-post', 'legacy-comment', 'selected-revision');
+    for (const values of [
+      ['legacy-post', 'replacement', 'duplicate-post'],
+      ['other-post', 'legacy-comment', 'duplicate-comment'],
+      ['other-post', 'other-reply', 'selected-revision'],
+    ]) await rejectsCode(select(...values), '23505');
+    for (const values of [
+      ['other-post', 'replacement', 'cross-discussion'],
+      ['missing-post', 'replacement', 'missing-post'],
+      ['other-post', 'missing-comment', 'missing-comment'],
+    ]) await rejectsCode(select(...values), '23503');
+    await rejectsCode(db.query(`INSERT INTO "AcceptedSolution" ("postId", "commentId")
+      VALUES ('other-post', 'other-reply')`), '23502');
+    await db.query(`INSERT INTO "AcceptedSolutionChange" (id, action, "actorId", "postId", "previousCommentId", "commentId") VALUES
+      ('selected-revision', 'SELECTED', 'incomplete', 'legacy-post', NULL, 'legacy-comment'),
+      ('changed-revision', 'CHANGED', 'incomplete', 'legacy-post', 'legacy-comment', 'replacement'),
+      ('cleared-revision', 'CLEARED', 'incomplete', 'legacy-post', 'replacement', NULL)`);
+    await rejectsCode(db.query(`INSERT INTO "AcceptedSolutionChange" (id, action)
+      VALUES ('selected-revision', 'SELECTED')`), '23505');
+    for (const action of ['DELETED', 'selected', '']) {
+      await rejectsCode(db.query('INSERT INTO "AcceptedSolutionChange" (id, action) VALUES ($1, $2)',
+        [`invalid-action-${action}`, action]), '23514');
+    }
+    await rejectsCode(db.query(`UPDATE "AcceptedSolutionChange" SET action = 'DELETED' WHERE id = 'selected-revision'`), '23514');
+    for (const column of ['actorId', 'postId', 'previousCommentId', 'commentId']) {
+      await rejectsCode(db.query(`INSERT INTO "AcceptedSolutionChange" (id, action, ${quoteIdent(column)})
+        VALUES ($1, 'SELECTED', 'missing')`, [`missing-${column}`]), '23503');
+    }
+    const current = await read('AcceptedSolution');
+    const audit = await read('AcceptedSolutionChange');
+    deploy(url);
+    assert.deepEqual(await history(db), upgradedHistory);
+    assert.deepEqual(await read('AcceptedSolution'), current, 'redeploy altered selection revision or date');
+    assert.deepEqual(await read('AcceptedSolutionChange'), audit, 'redeploy altered decision history');
+    for (const [table, rows] of before) assert.deepEqual(await read(table), rows, `${table} changed on redeploy`);
+    await db.query(`UPDATE "_app_schema_upgrades" SET checksum = 'tampered' WHERE name = '0006_accepted_solutions.sql'`);
+    await assert.rejects(applyPostgresqlUpgrades(url), /history mismatch for 0006_accepted_solutions.sql/);
+    assert.deepEqual(await read('AcceptedSolution'), current, 'rejected checksum replay changed the live signal');
+    assert.deepEqual(await read('AcceptedSolutionChange'), audit, 'rejected checksum replay changed decision history');
+    for (const [table, rows] of before) assert.deepEqual(await read(table), rows, `${table} changed after rejected replay`);
+    await db.query('UPDATE "_app_schema_upgrades" SET checksum = $1 WHERE name = $2',
+      [expectedChecksums.get('0006_accepted_solutions.sql'), '0006_accepted_solutions.sql']);
+    assert.deepEqual(await history(db), upgradedHistory);
+
+    await db.query(`DELETE FROM "User" WHERE id = 'incomplete'`);
+    assert.deepEqual(await read('AcceptedSolution'), current, 'deleting only the decision actor must retain the live reply');
+    assert.deepEqual((await read('AcceptedSolutionChange')).map(row => row.actorId), [null, null, null]);
+    await db.query(`DELETE FROM "Comment" WHERE id = 'legacy-comment'`);
+    assert.equal(await count(db, 'AcceptedSolution'), 0, 'deleting an accepted reply must erase its current signal');
+    assert.deepEqual((await db.query(`SELECT "previousCommentId", "commentId" FROM "AcceptedSolutionChange"
+      WHERE id = 'changed-revision'`)).rows, [{ previousCommentId: null, commentId: 'replacement' }]);
+    await select('legacy-post', 'replacement', 'reselected-revision');
+    await db.query(`DELETE FROM "Post" WHERE id = 'legacy-post'`);
+    assert.equal(await count(db, 'AcceptedSolution'), 0, 'deleting a discussion must cascade the live signal');
+    assert.deepEqual((await read('AcceptedSolutionChange')).map(row => [row.id, row.action, row.actorId, row.postId, row.previousCommentId, row.commentId]),
+      audit.map(row => [row.id, row.action, null, null, null, null]), 'retained audits must anonymize erased identities and targets');
+    assert.deepEqual(await read('RewardLedger'), before.get('RewardLedger'), 'solution deletions must not alter learning points');
+    assert.deepEqual(await read('RewardLedgerChange'), before.get('RewardLedgerChange'));
+
+    await select('other-post', 'other-reply', 'account-revision');
+    await db.query(`INSERT INTO "AcceptedSolutionChange" (id, action, "actorId", "postId", "commentId")
+      VALUES ('account-revision', 'SELECTED', 'teacher', 'other-post', 'other-reply')`);
+    await db.query(`DELETE FROM "User" WHERE id = 'completed'`);
+    assert.equal(await count(db, 'AcceptedSolution'), 0, 'deleting a reply author must remove their live signal');
+    assert.deepEqual((await db.query(`SELECT "actorId", "postId", "commentId" FROM "AcceptedSolutionChange"
+      WHERE id = 'account-revision'`)).rows, [{ actorId: 'teacher', postId: 'other-post', commentId: null }]);
+    await db.query(`DELETE FROM "User" WHERE id = 'teacher'`);
+    assert.deepEqual((await db.query(`SELECT id, action, "actorId", "postId", "commentId" FROM "AcceptedSolutionChange"
+      WHERE id = 'account-revision'`)).rows, [{ id: 'account-revision', action: 'SELECTED', actorId: null, postId: null, commentId: null }]);
+    assert.equal(await count(db, 'AcceptedSolutionChange'), audit.length + 1, 'erasure must not invent a decision');
+  });
 });

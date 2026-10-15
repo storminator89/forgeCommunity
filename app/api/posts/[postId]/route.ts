@@ -29,7 +29,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ post
       return NextResponse.json({ error: 'Beitrag nicht gefunden' }, { status: 404 })
     }
 
-    return NextResponse.json(normalizeCommunityPost(post), { headers: { 'Cache-Control': 'private, no-store' } })
+    return NextResponse.json(normalizeCommunityPost(post, userId), { headers: { 'Cache-Control': 'private, no-store' } })
   } catch (error) {
     console.error('Fehler beim Abrufen des Beitrags:', error)
     return NextResponse.json({ error: 'Fehler beim Abrufen des Beitrags' }, { status: 500 })
@@ -82,7 +82,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ post
       include: communityPostInclude(userId),
     })
 
-    return NextResponse.json(normalizeCommunityPost(updatedPost), { status: 200 })
+    return NextResponse.json(normalizeCommunityPost(updatedPost, userId), { status: 200 })
   } catch (error: any) {
     console.error('Fehler beim Bearbeiten des Beitrags:', error)
     const inputError = requestErrorResponse(error)

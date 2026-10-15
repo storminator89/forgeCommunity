@@ -51,6 +51,26 @@ it('renders a readable profile with safe social links and working activity tabs'
   expect(await screen.findByText('Projektliste')).toBeInTheDocument();
 });
 
+it('gives only the empty-profile owner a keyboard-accessible skill settings link', async () => {
+  mockSession = { user: { id: 'author' } };
+  jest.mocked(global.fetch).mockImplementation(async () => ({ ok: true, json: async () => ({ ...profile, skills: [] }) } as Response));
+  const view = render(<ProfilePage />);
+  const link = await screen.findByRole('link', { name: 'Fähigkeiten ergänzen' });
+  expect(link).toHaveAttribute('href', '/settings?tab=skills');
+  expect(screen.getByText('Du kannst deine Fähigkeiten in den Einstellungen ergänzen.')).toBeInTheDocument();
+  expect(screen.queryByText('Ergänze deine Fähigkeiten im Profil.')).not.toBeInTheDocument();
+  const activate = jest.fn((event: Event) => event.preventDefault());
+  link.addEventListener('click', activate);
+  link.focus();
+  await userEvent.keyboard('{Enter}');
+  expect(activate).toHaveBeenCalledTimes(1);
+
+  mockSession = { user: { id: 'viewer' } };
+  view.rerender(<ProfilePage />);
+  expect(screen.queryByRole('link', { name: 'Fähigkeiten ergänzen' })).not.toBeInTheDocument();
+  expect(await screen.findByText('Noch keine Skills vorhanden.')).toBeInTheDocument();
+});
+
 it('shows only API-permitted achievements and explains the owner’s learning-badge visibility', async () => {
   const learningBadge = { ...VERIFIED_COURSE_BADGE, id: 'award-1', badgeId: VERIFIED_COURSE_BADGE.id, awardedAt: '2026-10-14T10:00:00.000Z' };
   mockSession = { user: { id: 'author' } };

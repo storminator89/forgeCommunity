@@ -22,7 +22,9 @@ import { PostForm } from '@/components/community/PostForm'
 import { PostCard } from '@/components/community/PostCard'
 import { LeaderboardCard } from '@/components/community/LeaderboardCard'
 import { StatsCard } from '@/components/community/StatsCard'
+import { ContributionMilestonesCard } from '@/components/community/ContributionMilestonesCard'
 import { useCommunityFeed } from '@/hooks/useCommunityFeed'
+import { usePrivateContributions } from '@/hooks/usePrivateContributions'
 import { CommunityPost as Post, CommunityStats, fetchCommunityJson as fetchWithErrorHandling, isAbortError, mergeCommunityRows } from '@/lib/community-feed'
 
 interface LeaderboardUser {
@@ -45,6 +47,7 @@ interface RewardSummary {
 }
 
 function Community({ session }: { session: Session | null }) {
+  const contributions = usePrivateContributions(session?.user?.id)
   const mainRef = useRef<HTMLElement>(null)
   const feedStatusRef = useRef<HTMLParagraphElement>(null)
   const focusEndOfFeedRef = useRef(false)
@@ -58,6 +61,8 @@ function Community({ session }: { session: Session | null }) {
     }
   }, [isLoadingMore, initialLoaded, nextCursor])
   const [isMutating, setIsMutating] = useState(false)
+  const [solutionSaving, setSolutionSaving] = useState<string | null>(null)
+  const [solutionErrors, setSolutionErrors] = useState<Record<string, string>>({})
   const [activity, setActivity] = useState<CommunityStats | null>(null)
   const [activityLoading, setActivityLoading] = useState(!!session?.user?.id)
   const [activityError, setActivityError] = useState(false)
@@ -174,6 +179,7 @@ function Community({ session }: { session: Session | null }) {
       }
       setIsEditing(false)
       setEditingPost(null)
+      contributions.refresh()
       setNotification({ type: 'success', message: editingPost ? 'Beitrag aktualisiert!' : 'Beitrag erstellt!' })
     } catch (error) {
       if (!controller.signal.aborted && !isAbortError(error)) setNotification({ type: 'error', message: 'Fehler beim Erstellen/Aktualisieren des Beitrags.' })
@@ -211,6 +217,7 @@ function Community({ session }: { session: Session | null }) {
       if (controller.signal.aborted) return
       removePost(postId)
       refreshActivity()
+      contributions.refresh()
       setNotification({ type: 'success', message: 'Beitrag wurde gelöscht!' })
     } catch (error) {
       if (!controller.signal.aborted && !isAbortError(error)) setNotification({ type: 'error', message: 'Fehler beim Löschen des Beitrags.' })
@@ -234,6 +241,7 @@ function Community({ session }: { session: Session | null }) {
       } : post))
       refreshActivity()
       setNotification({ type: 'success', message: 'Kommentar wurde hinzugefügt!' })
+      contributions.refresh()
     } catch (error) {
       if (!controller.signal.aborted && !isAbortError(error)) setNotification({ type: 'error', message: 'Fehler beim Hinzufügen des Kommentars.' })
       throw error
@@ -256,6 +264,38 @@ function Community({ session }: { session: Session | null }) {
     } catch (error) {
       if (!controller.signal.aborted && !isAbortError(error)) setNotification({ type: 'error', message: 'Fehler beim Liken des Kommentars.' })
     } finally { finishMutation(controller) }
+  }
+
+  const handleSelectSolution = async (postId: string, commentId: string | null) => {
+    const post = localPosts.find(row => row.id === postId)
+    if (!session?.user?.id || post?.authorId !== session.user.id) return
+    const controller = beginMutation()
+    if (!controller) return
+    setSolutionSaving(postId)
+    setSolutionErrors(previous => ({ ...previous, [postId]: '' }))
+    const applyState = (current: Post) => setLocalPosts(previous => previous.map(row => row.id === postId ? {
+      ...row, solutionRevision: current.solutionRevision, acceptedSolution: current.acceptedSolution,
+      acceptedSolutionCount: current.acceptedSolutionCount, published: current.published,
+    } : row))
+    try {
+      const response = await fetch(`/api/posts/${encodeURIComponent(postId)}/solution`, {
+        method: 'PUT', signal: controller.signal, headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ commentId, expectedRevision: post.solutionRevision ?? null }),
+      })
+      const result = await response.json()
+      if (controller.signal.aborted) return
+      if (result.post?.id === postId) applyState(result.post)
+      if (!response.ok) throw new Error(result.error || 'Lösung konnte nicht gespeichert werden.')
+      if (result.post?.id !== postId) throw new Error('Ungültiger Lösungsstand. Bitte erneut versuchen.')
+      contributions.refresh()
+    } catch (error) {
+      if (!controller.signal.aborted && !isAbortError(error)) setSolutionErrors(previous => ({
+        ...previous, [postId]: error instanceof Error ? error.message : 'Lösung konnte nicht gespeichert werden.',
+      }))
+    } finally {
+      if (!controller.signal.aborted) setSolutionSaving(null)
+      finishMutation(controller)
+    }
   }
 
   const feedCount = isLoading ? 'Wird geladen…' : postsLoadError && localPosts.length === 0 ? 'Nicht verfügbar' : `${localPosts.length} ${localPosts.length === 1 ? 'Beitrag geladen' : 'Beiträge geladen'}`
@@ -364,6 +404,9 @@ function Community({ session }: { session: Session | null }) {
                           }}
                           onAddComment={handleAddComment}
                           onLikeComment={handleLikeComment}
+                          onSelectSolution={handleSelectSolution}
+                          solutionSaving={solutionSaving === post.id}
+                          solutionError={solutionErrors[post.id]}
                           onLoadComments={loadComments}
                           commentsLoading={!!commentsLoading[post.id]}
                           commentsError={!!commentsError[post.id]}
@@ -396,6 +439,7 @@ function Community({ session }: { session: Session | null }) {
 
 <aside aria-label="Deine Community im Überblick" className="min-w-0 space-y-9 lg:sticky lg:top-8">
                 <StatsCard stats={activity} activityLoading={activityLoading} activityError={activityError} onRetryActivity={refreshActivity} rewards={rewards} rewardsLoading={rewardsLoading} rewardsError={rewardsError} isSignedIn={!!session} />
+                <ContributionMilestonesCard summary={contributions.summary} loading={contributions.loading} error={contributions.error} isSignedIn={!!session?.user?.id} onRefresh={contributions.refresh} />
                 <LeaderboardCard
                   users={leaderboardUsers}
                   isLoading={isLeaderboardLoading}

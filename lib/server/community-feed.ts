@@ -57,7 +57,7 @@ export function communityVisibility(userId?: string, isAdmin = false): Prisma.Po
 
 export function communityCommentInclude(userId?: string) {
   return {
-    author,
+    author: { select: { id: true, name: true, image: true, isTestAccount: true } },
     _count: { select: { likeComments: true } },
     // Unique (userId, commentId) makes this at most one row. Anonymous reads
     // never materialize any likes, even when the aggregate count is large.
@@ -70,6 +70,8 @@ export function communityPostInclude(userId?: string) {
     author,
     _count: { select: { likePosts: true, comments: true } },
     likePosts: { ...(userId ? { where: { userId } } : {}), take: userId ? 1 : 0, select: { id: true } },
+    // Independent bounded include: never expand or shift the comment preview.
+    acceptedSolution: { include: { comment: { include: communityCommentInclude(userId) } } },
     comments: {
       take: COMMUNITY_COMMENT_PREVIEW_SIZE,
       orderBy: COMMUNITY_ORDER,
@@ -81,18 +83,30 @@ export function communityPostInclude(userId?: string) {
 type CommentRecord = Prisma.CommentGetPayload<{ include: ReturnType<typeof communityCommentInclude> }>;
 type PostRecord = Prisma.PostGetPayload<{ include: ReturnType<typeof communityPostInclude> }>;
 
-export function normalizeCommunityComment(comment: CommentRecord) {
-  const { _count, likeComments, ...fields } = comment;
-  return { ...fields, votes: _count.likeComments, isLiked: likeComments.length > 0 };
+export function normalizeCommunityComment(comment: CommentRecord, canSelectSolution = false) {
+  const { _count, likeComments, author: replyAuthor, ...fields } = comment;
+  return { ...fields,
+    author: { id: replyAuthor.id, name: replyAuthor.name, image: replyAuthor.image },
+    ...(canSelectSolution ? { solutionEligible: !replyAuthor.isTestAccount } : {}),
+    votes: _count.likeComments, isLiked: likeComments.length > 0 };
 }
 
-export function normalizeCommunityPost(post: PostRecord) {
-  const { _count, likePosts, comments, ...fields } = post;
+export function normalizeCommunityPost(post: PostRecord, viewerId?: string) {
+  const { _count, likePosts, comments, acceptedSolution, ...fields } = post;
+  const visibleSolution = post.published && acceptedSolution &&
+    acceptedSolution.comment.authorId !== post.authorId && !acceptedSolution.comment.author.isTestAccount
+    ? acceptedSolution : null;
+
   return {
     ...fields,
+    solutionRevision: visibleSolution || post.authorId === viewerId ? acceptedSolution?.revision ?? null : null,
+    acceptedSolution: visibleSolution ? {
+      revision: visibleSolution.revision, comment: normalizeCommunityComment(visibleSolution.comment, post.published && post.authorId === viewerId),
+    } : null,
+    acceptedSolutionCount: visibleSolution ? 1 : 0,
     votes: _count.likePosts,
     isLiked: likePosts.length > 0,
-    comments: comments.map(normalizeCommunityComment),
+    comments: comments.map(comment => normalizeCommunityComment(comment, post.published && post.authorId === viewerId)),
     commentCount: _count.comments,
     commentsNextCursor: comments.length > 0 && _count.comments > comments.length
       ? encodeCommunityCursor(comments[comments.length - 1], 'comments', post.id)

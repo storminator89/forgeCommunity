@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { ThumbsUp, Send, Loader2 } from 'lucide-react'
+import { ThumbsUp, Send, Loader2, CheckCircle2 } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import { ReportControl } from './ReportControl'
@@ -22,6 +22,7 @@ interface Comment {
   createdAt: string
   votes: number
   isLiked: boolean
+  solutionEligible?: boolean
 }
 
 interface CommentSectionProps {
@@ -29,6 +30,9 @@ interface CommentSectionProps {
   comments: Comment[]
   currentUserId?: string
   canReport?: boolean
+  canSelectSolution?: boolean
+  acceptedCommentId?: string
+  onSelectSolution?: (postId: string, commentId: string | null) => Promise<void>
   isLoading?: boolean
   hasMore?: boolean
   commentCount?: number
@@ -44,6 +48,9 @@ export function CommentSection({
   comments,
   currentUserId,
   canReport = true,
+  canSelectSolution = false,
+  acceptedCommentId,
+  onSelectSolution,
   isLoading = false,
   hasMore = false,
   commentCount,
@@ -154,10 +161,13 @@ export function CommentSection({
                 })}
               </span>
             </div>
+            {acceptedCommentId === comment.id && <p className="mb-2 pl-9 text-sm font-medium text-primary">
+              <CheckCircle2 className="mr-1 inline h-4 w-4" aria-hidden="true" /> Vom Beitragsautor als Lösung ausgewählt
+            </p>}
             <p className="text-sm text-foreground/90 leading-relaxed pl-9">
               {comment.content}
             </p>
-            <div className="flex items-center mt-2 pl-9">
+            <div className="flex flex-wrap items-center gap-2 mt-2 pl-9">
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -179,6 +189,14 @@ export function CommentSection({
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
+              {canSelectSolution && currentUserId !== comment.authorId && comment.solutionEligible !== false && onSelectSolution &&
+                <Button type="button" size="sm" variant="outline" disabled={isLoading}
+                  aria-pressed={acceptedCommentId === comment.id}
+                  aria-label={acceptedCommentId === comment.id ? 'Lösungsauswahl für diese Antwort entfernen' : 'Diese Antwort als Lösung auswählen'}
+                  onClick={() => void onSelectSolution(postId, acceptedCommentId === comment.id ? null : comment.id)}>
+                  <CheckCircle2 className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                  {acceptedCommentId === comment.id ? 'Auswahl entfernen' : 'Als Lösung auswählen'}
+                </Button>}
               {canReport && currentUserId && currentUserId !== comment.authorId &&
                 <ReportControl targetType="COMMENT" targetId={comment.id} />}
             </div>

@@ -135,6 +135,7 @@ model User {
   quizAttempts       QuizAttempt[]
   rewardLedger       RewardLedger[]
   completionRecords  CourseCompletionRecord[]
+  solutionDecisions  AcceptedSolutionChange[] @relation("SolutionActor")
 }
 
 model UserSettings {
@@ -190,6 +191,8 @@ model Post {
   comments  Comment[]
   likePosts LikePost[]
   tags      Tag[]      @relation("PostTags")
+  acceptedSolution AcceptedSolution?
+  solutionChanges AcceptedSolutionChange[]
 
   @@index([createdAt, id])
   @@index([published, createdAt, id])
@@ -209,9 +212,42 @@ model Comment {
   authorId     String
 
   likeComments LikeComment[]
+  acceptedSolutions AcceptedSolution[]
+  solutionSelections AcceptedSolutionChange[] @relation("SelectedSolution")
+  previousSolutions AcceptedSolutionChange[] @relation("PreviousSolution")
 
+  @@unique([postId, id])
   @@index([postId, createdAt, id])
   @@index([authorId, postId])
+}
+
+// A single live author-selected reply; deletion removes the current signal.
+model AcceptedSolution {
+  postId    String @id
+  commentId String @unique
+  revision  String @unique
+  createdAt DateTime @default(now())
+  post      Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  // The composite FK prevents a reply from another discussion being selected.
+  comment   Comment @relation(fields: [postId, commentId], references: [postId, id], onDelete: Cascade)
+}
+
+// Server-created decision history, without content snapshots. Erasure removes
+// identities and target references without destroying the transition history.
+model AcceptedSolutionChange {
+  id                String @id
+  action            String
+  createdAt         DateTime @default(now())
+  actorId           String?
+  postId            String?
+  previousCommentId String?
+  commentId         String?
+  actor             User? @relation("SolutionActor", fields: [actorId], references: [id], onDelete: SetNull)
+  post              Post? @relation(fields: [postId], references: [id], onDelete: SetNull)
+  previousComment   Comment? @relation("PreviousSolution", fields: [previousCommentId], references: [id], onDelete: SetNull)
+  comment           Comment? @relation("SelectedSolution", fields: [commentId], references: [id], onDelete: SetNull)
+
+  @@index([postId, createdAt])
 }
 
 // Polymorphic IDs intentionally keep the moderation audit after a target or

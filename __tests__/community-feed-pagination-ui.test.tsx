@@ -51,6 +51,7 @@ function session(id: string, role = 'USER') {
   jest.mocked(useSession).mockReturnValue({ data: { user: { id, name: id, role }, expires: '2099-01-01' }, status: 'authenticated', update: jest.fn() } as ReturnType<typeof useSession>)
 }
 function fallback(url: string) {
+  if (url === '/api/contributions/me') return response({ eligible: true, selectedByAuthors: 0, saturated: false })
   if (url === '/api/leaderboard') return response([])
   if (url === '/api/rewards/me') return response({ points: 0, completedCourses: 0, firstCourseCompleted: false })
   if (url === '/api/posts/me/stats') return response({ posts: 81, receivedLikes: 102, comments: 203 })

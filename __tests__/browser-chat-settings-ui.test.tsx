@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import axios from 'axios'
 import { useSession } from 'next-auth/react'
 import SettingsPage from '@/app/settings/page'
+import { SettingsUrlContext } from '../test-utils/settings-url-context'
 import { BROWSER_CHAT_ALERT_PREFERENCE_EVENT } from '@/lib/browser-chat-alerts'
 
 jest.mock('axios')
@@ -48,6 +49,7 @@ async function openNotificationSettings() {
 
 beforeEach(() => {
   jest.clearAllMocks()
+  window.history.replaceState(null, '', '/settings')
   setViewer('alice')
   mockProfile(true)
   installBrowserNotifications('default')
@@ -60,7 +62,7 @@ afterEach(() => {
 
 it('does not ask for permission until the user clicks, then reflects a grant', async () => {
   const user = userEvent.setup()
-  render(<SettingsPage />)
+  render(<SettingsUrlContext><SettingsPage /></SettingsUrlContext>)
   await openNotificationSettings()
   expect(requestPermission).not.toHaveBeenCalled()
   await user.click(screen.getByRole('button', { name: 'Browser-Hinweise erlauben' }))
@@ -70,7 +72,7 @@ it('does not ask for permission until the user clicks, then reflects a grant', a
 
 it('explains a permission denial after an explicit click without prompting again', async () => {
   requestPermission.mockImplementationOnce(async () => { permission = 'denied'; return permission })
-  render(<SettingsPage />)
+  render(<SettingsUrlContext><SettingsPage /></SettingsUrlContext>)
   await openNotificationSettings()
   fireEvent.click(screen.getByRole('button', { name: 'Browser-Hinweise erlauben' }))
   expect(requestPermission).toHaveBeenCalledTimes(1)
@@ -80,7 +82,7 @@ it('explains a permission denial after an explicit click without prompting again
 
 it.each(['denied', 'granted'] as const)('shows the existing %s permission without prompting', async (value) => {
   installBrowserNotifications(value)
-  render(<SettingsPage />)
+  render(<SettingsUrlContext><SettingsPage /></SettingsUrlContext>)
   await openNotificationSettings()
   expect(requestPermission).not.toHaveBeenCalled()
   expect(screen.queryByRole('button', { name: 'Browser-Hinweise erlauben' })).not.toBeInTheDocument()
@@ -89,7 +91,7 @@ it.each(['denied', 'granted'] as const)('shows the existing %s permission withou
 
 it('explains when browser desktop notifications are unsupported', async () => {
   Reflect.deleteProperty(window, 'Notification')
-  render(<SettingsPage />)
+  render(<SettingsUrlContext><SettingsPage /></SettingsUrlContext>)
   await openNotificationSettings()
   expect(screen.getByText('Dieser Browser unterstützt keine Desktop-Hinweise.')).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Browser-Hinweise erlauben' })).not.toBeInTheDocument()
@@ -101,7 +103,7 @@ it('broadcasts only a saved preference and keeps in-app notices independent', as
   window.addEventListener(BROWSER_CHAT_ALERT_PREFERENCE_EVENT, onPreference)
   jest.mocked(axios.put).mockResolvedValue({ data: { id: 'alice', userSettings: { pushNotifications: false } } })
 
-  render(<SettingsPage />)
+  render(<SettingsUrlContext><SettingsPage /></SettingsUrlContext>)
   await openNotificationSettings()
   onPreference.mockClear()
   expect(screen.getByText(/Meldungen in der App sind von diesen Schaltern unabhängig/)).toBeInTheDocument()
@@ -119,7 +121,7 @@ it('does not broadcast a failed save', async () => {
   window.addEventListener(BROWSER_CHAT_ALERT_PREFERENCE_EVENT, onPreference)
   jest.mocked(axios.put).mockRejectedValue(new Error('offline'))
 
-  render(<SettingsPage />)
+  render(<SettingsUrlContext><SettingsPage /></SettingsUrlContext>)
   await openNotificationSettings()
   onPreference.mockClear()
   fireEvent.click(screen.getByRole('switch', { name: 'Desktop-Hinweise für Chatnachrichten' }))
@@ -139,7 +141,7 @@ it('does not hydrate or broadcast a profile returned for another account', async
   const onPreference = jest.fn()
   window.addEventListener(BROWSER_CHAT_ALERT_PREFERENCE_EVENT, onPreference)
 
-  render(<SettingsPage />)
+  render(<SettingsUrlContext><SettingsPage /></SettingsUrlContext>)
   expect(await screen.findByRole('alert')).toHaveTextContent('Einstellungen konnten nicht geladen werden')
   expect(screen.queryByDisplayValue('bob@example.test')).not.toBeInTheDocument()
   expect(onPreference).not.toHaveBeenCalled()
@@ -154,7 +156,7 @@ it('does not broadcast a save response returned for another account', async () =
   window.addEventListener(BROWSER_CHAT_ALERT_PREFERENCE_EVENT, onPreference)
   jest.mocked(axios.put).mockResolvedValue({ data: { id: 'bob', userSettings: { pushNotifications: false } } })
 
-  render(<SettingsPage />)
+  render(<SettingsUrlContext><SettingsPage /></SettingsUrlContext>)
   await openNotificationSettings()
   onPreference.mockClear()
   await user.click(screen.getByRole('switch', { name: 'Desktop-Hinweise für Chatnachrichten' }))

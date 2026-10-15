@@ -35,7 +35,8 @@ import {
   Trash2,
   Download,
   CalendarDays,
-  List
+  List,
+  X
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -93,6 +94,10 @@ function ScopedEvents({ session, sessionStatus }: {
   const [view, setView] = useState<ViewType>('month');
   const eventsRequestRef = useRef<AbortController | null>(null);
   const activeRef = useRef(true);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const upcomingTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const listHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  const focusListHeadingRef = useRef(false);
 
   const handlePreviousMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
   const handleNextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
@@ -105,8 +110,29 @@ function ScopedEvents({ session, sessionStatus }: {
   const days = eachDayOfInterval({ start: firstDayOfMonth, end: lastDayOfMonth });
 
   const handleSelectDate = (date: Date) => {
+    upcomingTriggerRef.current = null;
     setSelectedDate(date);
     setSelectedEvent(null);
+  };
+
+  const handleOpenUpcomingEvent = (event: Event, trigger: HTMLButtonElement) => {
+    const date = new Date(event.date);
+    upcomingTriggerRef.current = trigger;
+    setCurrentMonth(date);
+    setSelectedDate(date);
+    setSelectedEvent(null);
+    setFocusedEventId(event.id);
+    setIsEditDialogOpen(false);
+  };
+
+  const handleClearSearch = () => {
+    setSearchTerm('');
+    searchInputRef.current?.focus();
+  };
+
+  const handleShowUpcomingList = () => {
+    focusListHeadingRef.current = true;
+    setView('list');
   };
 
   const handleCloseDialog = () => {
@@ -217,6 +243,7 @@ function ScopedEvents({ session, sessionStatus }: {
       if (!event) return;
       const date = new Date(event.date);
       if (Number.isNaN(date.getTime())) return;
+      upcomingTriggerRef.current = null;
       setSearchTerm('');
       setCurrentMonth(date);
       setSelectedDate(date);
@@ -232,13 +259,27 @@ function ScopedEvents({ session, sessionStatus }: {
     if (!selectedDate || !focusedEventId) return;
     const timeout = window.setTimeout(() => document.getElementById(`event-${encodeURIComponent(focusedEventId)}`)?.focus(), 0);
     return () => window.clearTimeout(timeout);
-  }, [selectedDate, focusedEventId, eventsData]);
+  }, [selectedDate, focusedEventId]);
+
+  useEffect(() => {
+    if (view === 'list' && focusListHeadingRef.current) {
+      listHeadingRef.current?.focus();
+      focusListHeadingRef.current = false;
+    }
+  }, [view]);
 
   const filteredEvents = eventsData.filter(event =>
     event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
     event.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (event.category && event.category.toLowerCase().includes(searchTerm.toLowerCase()))
   );
+
+  // Match the list's existing date boundary, regardless of the displayed
+  // calendar month. Events earlier today remain visible with their RSVP closed.
+  const today = startOfToday();
+  const upcomingEvents = filteredEvents
+    .filter(event => new Date(event.date) >= today)
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
   const getEventsForDate = (date: Date) => {
     return filteredEvents.filter(event => isSameDay(new Date(event.date), date));
@@ -432,14 +473,10 @@ function ScopedEvents({ session, sessionStatus }: {
   };
 
   const renderListView = () => {
-    const today = startOfToday();
-    const futureEvents = filteredEvents.filter(event => new Date(event.date) >= today);
-    const sortedEvents = [...futureEvents].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
     return (
       <section aria-labelledby="event-list-heading" className="mx-auto max-w-6xl border-y">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4 lg:p-6">
-          <h2 id="event-list-heading" className="text-lg font-semibold text-foreground lg:text-2xl">
+          <h2 ref={listHeadingRef} tabIndex={-1} id="event-list-heading" className="text-lg font-semibold text-foreground lg:text-2xl">
             Listenansicht
           </h2>
           <Button variant="outline" size="sm" onClick={() => setView('month')} className="flex items-center">
@@ -448,8 +485,8 @@ function ScopedEvents({ session, sessionStatus }: {
           </Button>
         </div>
         <div className="divide-y divide-border px-4 lg:px-6">
-          {sortedEvents.length > 0 ? (
-            sortedEvents.map(event => (
+          {upcomingEvents.length > 0 ? (
+            upcomingEvents.map(event => (
               <article key={event.id} id={selectedDate ? undefined : `event-${encodeURIComponent(event.id)}`} tabIndex={-1} className="py-5">
                 <div className="flex min-w-0 flex-col items-start justify-between gap-3 sm:flex-row">
                   <div className="min-w-0 flex-1 break-words [overflow-wrap:anywhere]">
@@ -512,10 +549,44 @@ function ScopedEvents({ session, sessionStatus }: {
             {isAdmin && <Button size="sm" onClick={handleOpenAddDialog} className="gap-2"><Plus className="h-4 w-4" aria-hidden="true" />Event erstellen</Button>}
             <div className="relative w-full">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-              <Input type="search" aria-label="Events durchsuchen" placeholder="Titel, Beschreibung oder Kategorie suchen …" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9" />
+              <Input ref={searchInputRef} type="search" aria-label="Events durchsuchen" placeholder="Titel, Beschreibung oder Kategorie suchen …" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9 pr-12 [&::-webkit-search-cancel-button]:appearance-none" />
+              {searchTerm && <Button type="button" variant="ghost" size="icon" aria-label="Eventsuche löschen" onClick={handleClearSearch} className="absolute right-0 top-1/2 -translate-y-1/2"><X className="h-4 w-4" aria-hidden="true" /></Button>}
             </div>
             {searchTerm && <p className="w-full text-sm text-muted-foreground" role="status">{filteredEvents.length} {filteredEvents.length === 1 ? 'Event gefunden' : 'Events gefunden'}</p>}
           </div>
+
+          {view !== 'list' && (
+            <section aria-labelledby="upcoming-events-heading" className="mx-auto mb-5 max-w-6xl rounded-xl border bg-card p-4 sm:p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 id="upcoming-events-heading" className="text-lg font-semibold">Nächste Events</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">Termine ab heute, auch in späteren Monaten. Deine Suche gilt auch hier.</p>
+                </div>
+                {upcomingEvents.length > 0 && <Button type="button" variant="outline" size="sm" onClick={handleShowUpcomingList}>Alle in der Liste ansehen</Button>}
+              </div>
+              {upcomingEvents.length > 0 ? (
+                <>
+                  <p className="mt-3 text-xs text-muted-foreground">{Math.min(upcomingEvents.length, 3)} von {upcomingEvents.length} {upcomingEvents.length === 1 ? 'Event' : 'Events'} ab heute</p>
+                  <ul className="mt-2 grid gap-2 sm:grid-cols-3">
+                    {upcomingEvents.slice(0, 3).map(event => (
+                      <li key={event.id} className="min-w-0">
+                        <button type="button" aria-label={`Details öffnen: ${event.title}, ${format(new Date(event.date), 'dd. MMMM yyyy', { locale: de })}`}
+                          onClick={e => handleOpenUpcomingEvent(event, e.currentTarget)}
+                          className="h-full w-full min-w-0 rounded-lg border p-3 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                          <time dateTime={event.date} className="block text-xs text-muted-foreground">{format(new Date(event.date), 'dd. MMM yyyy', { locale: de })}{event.startTime ? ` · ${event.startTime}` : ''}</time>
+                          <span className="mt-1 block break-words font-semibold [overflow-wrap:anywhere]">{event.title}</span>
+                          <span className="mt-1 block break-words text-sm text-muted-foreground [overflow-wrap:anywhere]">{event.location}</span>
+                          <span className="mt-2 block text-sm font-medium text-primary">Details öffnen</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : (
+                <p className="mt-4 text-sm text-muted-foreground" role="status">{searchTerm ? 'Keine passenden Events ab heute gefunden.' : 'Keine Events ab heute geplant.'}</p>
+              )}
+            </section>
+          )}
 
           {view === 'month' && renderMonthView()}
           {view === 'week' && renderWeekView()}
@@ -566,7 +637,14 @@ function ScopedEvents({ session, sessionStatus }: {
 
       {/* Detailansicht Dialog */}
       <Dialog open={!!selectedDate} onOpenChange={handleCloseDialog}>
-        <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-[600px]">
+        <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-[600px]" onCloseAutoFocus={event => {
+          const trigger = upcomingTriggerRef.current;
+          upcomingTriggerRef.current = null;
+          if (trigger?.isConnected && !isEditDialogOpen) {
+            event.preventDefault();
+            trigger.focus();
+          }
+        }}>
           <DialogHeader>
             <DialogTitle>
               {selectedDate && format(selectedDate, 'dd. MMMM yyyy', { locale: de })}

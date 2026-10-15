@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { isSameOriginRequest } from '@/lib/server/auth-security';
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
 import { sanitizeTextServer } from '@/lib/server/sanitize-html';
+import { ReportReviewError, reviewContentReport } from '@/lib/server/report-review';
 
 export async function PATCH(
   request: NextRequest,
@@ -32,23 +33,13 @@ export async function PATCH(
       return NextResponse.json({ error: 'Status und Begründung (5–500 Zeichen) sind erforderlich' }, { status: 400 });
     }
 
-    // Conditional update makes a review one-way and preserves the first
-    // moderator's identity, decision, and timestamp on repeated requests.
-    const reviewedAt = new Date();
-    const updated = await prisma.contentReport.updateMany({
-      where: { id: reportId, status: 'OPEN' },
-      data: { status, resolutionNote: note, reviewedAt, reviewedById: userId },
-    });
-    if (updated.count === 0) {
-      const existing = await prisma.contentReport.findUnique({ where: { id: reportId }, select: { id: true } });
-      return NextResponse.json(
-        { error: existing ? 'Meldung wurde bereits bearbeitet' : 'Meldung nicht gefunden' },
-        { status: existing ? 409 : 404 },
-      );
-    }
-    return NextResponse.json({ id: reportId, status, reviewedAt, reviewedById: userId },
+    // The early role check above avoids parsing unauthorized input. The helper
+    // rereads permission together with the conditional decision write.
+    const result = await reviewContentReport(userId, reportId, status, note);
+    return NextResponse.json(result,
       { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
+    if (error instanceof ReportReviewError) return NextResponse.json({ error: error.message }, { status: error.status });
     const inputError = requestErrorResponse(error);
     if (inputError) return inputError;
     console.error('Report review failed:', error);

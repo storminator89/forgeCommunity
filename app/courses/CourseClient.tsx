@@ -64,6 +64,10 @@ function ScopedCourseClient({ session }: { session: NonNullable<ReturnType<typeo
   const router = useRouter();
   const { toast } = useToast();
   const activeRef = useRef(true);
+  const searchRef = useRef<HTMLInputElement>(null);
+  // All authenticated accounts can create courses. The role only changes
+  // the suggested next step; it is not an additional authorization rule.
+  const creatorPerspective = session.user.role === 'ADMIN' || session.user.role === 'INSTRUCTOR';
 
   useEffect(() => {
     activeRef.current = true;
@@ -117,7 +121,13 @@ function ScopedCourseClient({ session }: { session: NonNullable<ReturnType<typeo
     (categoryFilter === 'Alle' || course.category === categoryFilter)
   );
   const hasFilters = Boolean(searchTerm) || categoryFilter !== 'Alle';
-  const resetFilters = () => { setSearchTerm(''); setCategoryFilter('Alle'); };
+  const resetFilters = () => {
+    setSearchTerm('');
+    setCategoryFilter('Alle');
+    // The reset button can disappear with the empty state. Keep keyboard
+    // focus on the search control instead of leaving it on the document body.
+    searchRef.current?.focus();
+  };
 
   const handleDeleteCourse = async (courseId: string) => {
     if (!activeRef.current) return;
@@ -179,7 +189,7 @@ function ScopedCourseClient({ session }: { session: NonNullable<ReturnType<typeo
                 <h2 className="text-[clamp(1.65rem,1.2rem+2vw,2.4rem)] font-semibold leading-tight tracking-tight">Wissen teilen. Gemeinsam weiterkommen.</h2>
                 <p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:text-base">Entdecke Kurse aus der Community, lerne in deinem Tempo und teile selbst, was du kannst.</p>
               </div>
-              <Button asChild className="w-full shrink-0 sm:w-auto"><Link href="/courses/new"><Plus className="h-4 w-4" />Neuer Kurs</Link></Button>
+              <Button asChild variant={creatorPerspective ? 'default' : 'outline'} className="w-full shrink-0 sm:w-auto"><Link href="/courses/new"><Plus aria-hidden="true" className="h-4 w-4" />Neuer Kurs</Link></Button>
             </div>
             <section aria-labelledby="course-directory-title" className="pt-7 sm:pt-9">
               <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
@@ -194,7 +204,7 @@ function ScopedCourseClient({ session }: { session: NonNullable<ReturnType<typeo
                   <label htmlFor="course-search" className="mb-1.5 block text-sm font-medium">Kurse suchen</label>
                   <div className="relative">
                     <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input id="course-search" aria-label="Suche nach Kursen oder Dozenten" type="search" placeholder="Titel oder Lehrkraft" value={searchTerm} onChange={event => setSearchTerm(event.target.value)} className="pl-10" />
+                    <Input ref={searchRef} id="course-search" aria-label="Suche nach Kursen oder Dozenten" type="search" placeholder="Titel oder Lehrkraft" value={searchTerm} onChange={event => setSearchTerm(event.target.value)} className="pl-10" />
                   </div>
                 </div>
                 <div className="min-w-0">
@@ -208,7 +218,23 @@ function ScopedCourseClient({ session }: { session: NonNullable<ReturnType<typeo
               <div className="mt-5">
                 {isLoading && <PageState kind="loading" title="Kurse werden geladen" />}
                 {loadError && <PageState kind="error" title="Kurse konnten nicht geladen werden" description="Prüfe deine Verbindung und versuche es erneut." action={<RetryButton onClick={() => window.location.reload()} />} />}
-                {!isLoading && !loadError && filteredCourses.length === 0 && <PageState title={courses.length === 0 ? 'Noch keine Kurse' : 'Keine Kurse gefunden'} description={courses.length === 0 ? 'Erstelle den ersten Kurs und teile dein Wissen mit der Community.' : 'Versuche andere Suchbegriffe oder setze die Filter zurück.'} action={hasFilters ? <Button variant="outline" onClick={resetFilters}>Filter zurücksetzen</Button> : <Button asChild><Link href="/courses/new">Kurs erstellen</Link></Button>} />}
+                {!isLoading && !loadError && filteredCourses.length === 0 && <PageState
+                  title={courses.length === 0 ? 'Noch keine Kurse' : 'Keine Kurse gefunden'}
+                  description={courses.length === 0
+                    ? creatorPerspective
+                      ? 'Erstelle den ersten Kurs und teile dein Wissen mit der Community.'
+                      : 'Hier sind aktuell keine Kurse verfügbar. Tausche dich in der Community aus oder sieh in der Veranstaltungsübersicht nach.'
+                    : 'Versuche andere Suchbegriffe oder setze die Filter zurück.'}
+                  action={<div className="flex w-full flex-col items-center justify-center gap-3 sm:flex-row sm:flex-wrap">
+                    {courses.length === 0 && (creatorPerspective
+                      ? <Button asChild><Link href="/courses/new">Kurs erstellen</Link></Button>
+                      : <>
+                        <Button asChild><Link href="/community">Zur Community</Link></Button>
+                        <Button asChild variant="outline"><Link href="/events">Veranstaltungen ansehen</Link></Button>
+                      </>)}
+                    {hasFilters && <Button type="button" variant="outline" onClick={resetFilters}>Filter zurücksetzen</Button>}
+                  </div>}
+                />}
                 {!isLoading && !loadError && filteredCourses.length > 0 && <div className="divide-y border-y" role="list" aria-label="Kurse">
                   {filteredCourses.map(course => <CourseRow key={course.id} course={course}
                     onDelete={() => void handleDeleteCourse(course.id)} deleting={deletingCourseId === course.id}

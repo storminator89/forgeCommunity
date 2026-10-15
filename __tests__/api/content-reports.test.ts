@@ -15,6 +15,7 @@ jest.mock('@/lib/prisma', () => ({
     post: { findUnique: jest.fn(), findMany: jest.fn() },
     comment: { findUnique: jest.fn(), findMany: jest.fn() },
     user: { findUnique: jest.fn() },
+    $transaction: jest.fn(),
   },
 }));
 
@@ -37,6 +38,7 @@ const validComment = { targetType: 'COMMENT', targetId: 'comment-1', reason: 'HA
 
 beforeEach(() => {
   jest.clearAllMocks();
+  (prisma.$transaction as jest.Mock).mockImplementation(async work => work(prisma));
   (getServerSession as jest.Mock).mockResolvedValue({ user: { id: 'reporter-1', role: 'USER' } });
   (reports.findUnique as jest.Mock).mockResolvedValue(null);
   (reports.count as jest.Mock).mockResolvedValue(0);

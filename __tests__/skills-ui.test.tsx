@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import SkillDirectory from '@/app/skills/page';
 
 jest.mock('@/components/Sidebar', () => ({ Sidebar: () => null }));
@@ -82,6 +83,23 @@ it('filters the skill directory and links to member profiles', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Filter zurücksetzen' }));
   expect(screen.getByRole('link', { name: 'Bea' })).toBeInTheDocument();
   expect(screen.getByText('2 Ergebnisse')).toBeInTheDocument();
+});
+
+it('offers a keyboard-accessible own-skills link and removes it at logout', async () => {
+  const view = render(<SkillDirectory />);
+  await screen.findByRole('link', { name: 'Ada' });
+  const link = screen.getByRole('link', { name: 'Eigene Fähigkeiten ergänzen' });
+  expect(link).toHaveAttribute('href', '/settings?tab=skills');
+  const activate = jest.fn((event: Event) => event.preventDefault());
+  link.addEventListener('click', activate);
+  link.focus();
+  await userEvent.keyboard('{Enter}');
+  expect(activate).toHaveBeenCalledTimes(1);
+  expect(jest.mocked(global.fetch).mock.calls.every(([, options]) => !options?.method || options.method === 'GET')).toBe(true);
+
+  mockViewerId = null;
+  view.rerender(<SkillDirectory />);
+  expect(screen.queryByRole('link', { name: 'Eigene Fähigkeiten ergänzen' })).not.toBeInTheDocument();
 });
 
 it('shows member details and updates endorsement state after success', async () => {

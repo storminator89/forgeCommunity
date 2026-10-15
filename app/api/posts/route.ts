@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    return NextResponse.json({ ...newPost, comments: [], commentCount: 0, commentsNextCursor: null, votes: 0, isLiked: false }, { status: 201 })
+    return NextResponse.json({ ...newPost, comments: [], commentCount: 0, commentsNextCursor: null, solutionRevision: null, acceptedSolution: null, acceptedSolutionCount: 0, votes: 0, isLiked: false }, { status: 201 })
   } catch (error: any) {
     console.error(error)
     const inputError = requestErrorResponse(error)
@@ -65,9 +65,9 @@ export async function GET(req: NextRequest) {
       include: communityPostInclude(userId),
       orderBy: COMMUNITY_ORDER,
     })
-    if (!feed) return NextResponse.json(posts.map(normalizeCommunityPost), { headers: { 'Cache-Control': 'private, no-store' } })
+    if (!feed) return NextResponse.json(posts.map(post => normalizeCommunityPost(post, userId)), { headers: { 'Cache-Control': 'private, no-store' } })
     const result = communityPage(posts, 'posts')
-    return NextResponse.json({ posts: result.items.map(normalizeCommunityPost), nextCursor: result.nextCursor }, { headers: { 'Cache-Control': 'private, no-store' } })
+    return NextResponse.json({ posts: result.items.map(post => normalizeCommunityPost(post, userId)), nextCursor: result.nextCursor }, { headers: { 'Cache-Control': 'private, no-store' } })
   } catch (error) {
     console.error(error)
     const inputError = requestErrorResponse(error)

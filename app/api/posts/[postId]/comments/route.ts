@@ -41,19 +41,11 @@ export async function POST(req: NextRequest, props: { params: Promise<{ postId: 
         postId,
         authorId: session.user.id,
       },
-      include: {
-        author: {
-          select: { id: true, name: true, image: true },
-        },
-      },
+      include: communityCommentInclude(session.user.id),
     })
 
     // Format comment for response
-    const formattedComment = {
-      ...newComment,
-      votes: 0,
-      isLiked: false
-    }
+    const formattedComment = normalizeCommunityComment(newComment, post.published && post.authorId === session.user.id)
 
     return NextResponse.json(formattedComment)
   } catch (error) {
@@ -82,9 +74,9 @@ export async function GET(req: NextRequest, props: { params: Promise<{ postId: s
       include: communityCommentInclude(userId),
       orderBy: COMMUNITY_ORDER,
     })
-    if (!feed) return NextResponse.json(comments.map(normalizeCommunityComment), { headers: { 'Cache-Control': 'private, no-store' } })
+    if (!feed) return NextResponse.json(comments.map(comment => normalizeCommunityComment(comment, post.published && post.authorId === userId)), { headers: { 'Cache-Control': 'private, no-store' } })
     const result = communityPage(comments, 'comments', postId)
-    return NextResponse.json({ comments: result.items.map(normalizeCommunityComment), nextCursor: result.nextCursor }, { headers: { 'Cache-Control': 'private, no-store' } })
+    return NextResponse.json({ comments: result.items.map(comment => normalizeCommunityComment(comment, post.published && post.authorId === userId)), nextCursor: result.nextCursor }, { headers: { 'Cache-Control': 'private, no-store' } })
   } catch (error) {
     console.error('Fehler beim Abrufen der Kommentare:', error)
     const inputError = requestErrorResponse(error)

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
-import { Heart, MessageSquare, Edit, Trash2, MoreHorizontal } from 'lucide-react'
+import { Heart, MessageSquare, Edit, Trash2, MoreHorizontal, CheckCircle2 } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { motion, AnimatePresence } from 'framer-motion'
@@ -14,39 +14,9 @@ import { sanitizeRichHtml } from '@/lib/sanitize-html'
 import { formatDistanceToNow } from 'date-fns'
 import { de } from 'date-fns/locale'
 
+import type { CommunityPost as Post } from '@/lib/community-feed'
+
 const DEFAULT_AVATAR_URL = ''
-
-interface Post {
-  id: string
-  title: string
-  content: string
-  published?: boolean
-  authorId: string
-  author: {
-    id: string
-    name: string
-    image: string | null
-  } | null
-  createdAt: string
-  votes: number
-  isLiked: boolean
-  comments: Comment[]
-  commentCount?: number
-  commentsNextCursor?: string | null
-}
-
-interface Comment {
-  id: string
-  authorId: string
-  author: {
-    name: string
-    image: string | null
-  } | null
-  content: string
-  createdAt: string
-  votes: number
-  isLiked: boolean
-}
 
 interface PostCardProps {
   post: Post
@@ -56,6 +26,9 @@ interface PostCardProps {
   onEdit?: (post: Post) => void
   onAddComment?: (postId: string, content: string) => Promise<void>
   onLikeComment?: (commentId: string, postId: string) => Promise<void>
+  onSelectSolution?: (postId: string, commentId: string | null) => Promise<void>
+  solutionSaving?: boolean
+  solutionError?: string
   isLoading?: boolean
   onLoadComments?: (postId: string) => Promise<void>
   commentsLoading?: boolean
@@ -70,6 +43,9 @@ export function PostCard({
   onEdit,
   onAddComment,
   onLikeComment,
+  onSelectSolution,
+  solutionSaving = false,
+  solutionError,
   isLoading = false,
   onLoadComments,
   commentsLoading = false,
@@ -78,6 +54,8 @@ export function PostCard({
   const [expandedComments, setExpandedComments] = useState(false)
   const cardRef = useRef<HTMLDivElement>(null)
   const isAuthor = currentUserId === post.authorId;
+  const commentCount = post.commentCount ?? (post.comments || []).length;
+  const commentLabel = commentCount === 1 ? 'Kommentar' : 'Kommentare';
 
   const toggleComments = () => setExpandedComments(!expandedComments)
 
@@ -153,6 +131,16 @@ export function PostCard({
               />
             </div>
           </div>
+          {post.published !== false && post.acceptedSolution && <section aria-label="Ausgewählte Lösung" className="mt-5 rounded-lg border border-primary/30 bg-primary/5 p-4">
+            <h3 className="flex items-center gap-2 text-sm font-semibold"><CheckCircle2 className="h-4 w-4 text-primary" aria-hidden="true" /> Vom Beitragsautor als Lösung ausgewählt</h3>
+            {(!expandedComments || !post.comments.some(comment => comment.id === post.acceptedSolution?.comment.id)) &&
+              <p className="mt-2 whitespace-pre-wrap text-sm">{post.acceptedSolution.comment.content}</p>}
+            <p className="mt-2 text-xs text-muted-foreground">Antwort von {post.acceptedSolution.comment.author?.name || 'Anonym'}. Diese Auswahl vergibt keine Punkte.</p>
+          </section>}
+          {isAuthor && onSelectSolution && post.solutionRevision && <Button type="button" variant="ghost" size="sm" className="mt-3" disabled={isLoading}
+            onClick={() => void onSelectSolution(post.id, null)}>Lösungsauswahl entfernen</Button>}
+          {solutionSaving && <p role="status" className="mt-3 text-sm text-muted-foreground">Lösungsauswahl wird gespeichert…</p>}
+          {solutionError && <p role="alert" className="mt-3 text-sm text-destructive">{solutionError}</p>}
         </div>
 
         {/* Footer */}
@@ -178,15 +166,15 @@ export function PostCard({
               onClick={toggleComments}
               aria-expanded={expandedComments}
               aria-controls={`comments-${post.id}`}
-              aria-label={`${post.commentCount ?? (post.comments || []).length} Kommentare ${expandedComments ? 'ausblenden' : 'anzeigen'}`}
+              aria-label={`${commentCount} ${commentLabel} ${expandedComments ? 'ausblenden' : 'anzeigen'}`}
               className={cn(
                 "rounded-full px-4 h-9 transition-all hover:bg-primary/10 active:scale-95",
                 expandedComments ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-primary"
               )}
             >
               <MessageSquare className="mr-2 h-4 w-4" />
-              <span className="font-medium">{post.commentCount ?? (post.comments || []).length}</span>
-              <span className="ml-1 hidden sm:inline">Kommentare</span>
+              <span className="font-medium">{commentCount}</span>
+              <span className="ml-1 hidden sm:inline">{commentLabel}</span>
             </Button>
           </div>
           {currentUserId && !isAuthor && post.published !== false &&
@@ -209,6 +197,9 @@ export function PostCard({
                   comments={post.comments}
                   currentUserId={currentUserId}
                   canReport={post.published !== false}
+                  canSelectSolution={isAuthor && post.published === true}
+                  acceptedCommentId={post.published !== false ? post.acceptedSolution?.comment.id : undefined}
+                  onSelectSolution={onSelectSolution}
                   isLoading={isLoading}
                   onAddComment={onAddComment}
                   onLikeComment={onLikeComment}

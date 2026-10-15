@@ -128,7 +128,7 @@ function SkillDirectoryForViewer({ viewerId, sessionLoading }: { viewerId: strin
       <main id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto">
         <ToastContainer position="top-right" />
         <div className="mx-auto w-full max-w-[1440px] px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
-          <div className="border-b pb-7"><p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Community / Fähigkeiten</p><p className="mt-2 max-w-[55ch] text-base leading-relaxed text-muted-foreground">Finde Menschen mit Erfahrung und entdecke ihre Fähigkeiten.</p></div>
+          <div className="flex flex-wrap items-end justify-between gap-4 border-b pb-7"><div><p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Community / Fähigkeiten</p><p className="mt-2 max-w-[55ch] text-base leading-relaxed text-muted-foreground">Finde Menschen mit Erfahrung und entdecke ihre Fähigkeiten.</p></div>{viewerId && <Button asChild variant="outline"><Link href="/settings?tab=skills">Eigene Fähigkeiten ergänzen</Link></Button>}</div>
 
           <section aria-label="Mitglieder filtern" className="grid min-w-0 gap-4 border-b py-7 sm:grid-cols-[minmax(0,1fr)_12rem_auto] sm:items-end">
             <div className="min-w-0"><Label htmlFor="skill-search" className="mb-2 block">Name oder Fähigkeit suchen</Label><div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" /><Input id="skill-search" type="search" value={searchTerm} onChange={event => setSearchTerm(event.target.value)} placeholder="Name oder Fähigkeit" className="pl-10" /></div></div>

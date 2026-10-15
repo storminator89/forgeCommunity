@@ -6,6 +6,12 @@ export interface CommunityComment {
   createdAt: string
   votes: number
   isLiked: boolean
+  solutionEligible?: boolean
+}
+
+export interface AcceptedCommunitySolution {
+  revision: string
+  comment: CommunityComment
 }
 
 export interface CommunityPost {
@@ -21,6 +27,9 @@ export interface CommunityPost {
   comments: CommunityComment[]
   commentCount?: number
   commentsNextCursor?: string | null
+  solutionRevision?: string | null
+  acceptedSolution?: AcceptedCommunitySolution | null
+  acceptedSolutionCount?: number
 }
 
 export interface CommunityStats {

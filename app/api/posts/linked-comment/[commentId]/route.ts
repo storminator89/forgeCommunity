@@ -26,10 +26,10 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       include: communityPostInclude(userId),
     });
     if (!post) return NextResponse.json({ error: 'Beitrag nicht gefunden' }, { status: 404 });
-    const normalized = normalizeCommunityPost(post);
+    const normalized = normalizeCommunityPost(post, userId);
     if (!normalized.comments.some(comment => comment.id === commentId)) {
       const { post: _parent, ...comment } = linkedComment;
-      normalized.comments.push(normalizeCommunityComment(comment));
+      normalized.comments.push(normalizeCommunityComment(comment, post.published && post.authorId === userId));
       normalized.comments.sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime() ||
         (left.id === right.id ? 0 : left.id < right.id ? 1 : -1));
     }
