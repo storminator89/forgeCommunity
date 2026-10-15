@@ -27,8 +27,11 @@ function seedChat(path: string, authorId: string, nonce: string) {
     db.exec('PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000; BEGIN')
     db.prepare(`INSERT INTO "ChatChannel" ("id", "name", "isPrivate", "createdAt", "updatedAt")
       VALUES (?, ?, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`).run(channelId, channelName)
+    // Match the Prisma SQLite adapter's DateTime encoding. A raw `Z` suffix
+    // compares differently from the adapter's `+00:00` cursor in SQLite text
+    // ordering, making history disappear and a later live poll look newer.
     const insert = db.prepare(`INSERT INTO "ChatMessage" ("id", "channelId", "authorId", "content", "createdAt", "updatedAt")
-      VALUES (?, ?, ?, ?, '2020-01-01T12:00:00.000Z', '2020-01-01T12:00:00.000Z')`)
+      VALUES (?, ?, ?, ?, '2020-01-01T12:00:00.000+00:00', '2020-01-01T12:00:00.000+00:00')`)
     for (let index = 0; index < 120; index++) {
       const order = String(index).padStart(3, '0')
       insert.run(`m-${nonce}-${order}`, channelId, authorId, `History QA message ${order} ${nonce}`)
@@ -70,10 +73,28 @@ test('chat history stays bounded and loads both older pages before a new message
   await expect(log.getByText(`History QA message 069 ${nonce}`, { exact: true })).toHaveCount(0)
 
   const older = log.getByRole('button', { name: 'Ältere Nachrichten laden' })
+  const olderResponse = (beforeId: string) => page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return response.request().method() === 'GET' && url.pathname === '/api/chat/messages' &&
+      url.searchParams.get('channelId') === channelId && url.searchParams.get('beforeId') === beforeId
+  })
+  const firstOlderResponse = olderResponse(`m-${nonce}-070`)
   await older.click()
+  const firstOlder = await (await firstOlderResponse).json()
+  expect(firstOlder.items).toHaveLength(50)
+  expect(firstOlder.items[0].id).toBe(`m-${nonce}-020`)
+  expect(firstOlder.items[49].id).toBe(`m-${nonce}-069`)
+  expect(firstOlder.hasMore).toBe(true)
   await expect(log.locator('article')).toHaveCount(100)
   await expect(log.getByText(`History QA message 020 ${nonce}`, { exact: true })).toBeVisible()
+  await expect(log.getByText(`History QA message 019 ${nonce}`, { exact: true })).toHaveCount(0)
+  const secondOlderResponse = olderResponse(`m-${nonce}-020`)
   await older.click()
+  const secondOlder = await (await secondOlderResponse).json()
+  expect(secondOlder.items).toHaveLength(20)
+  expect(secondOlder.items[0].id).toBe(`m-${nonce}-000`)
+  expect(secondOlder.items[19].id).toBe(`m-${nonce}-019`)
+  expect(secondOlder.hasMore).toBe(false)
   await expect(log.locator('article')).toHaveCount(120)
   await expect(log.getByText(`History QA message 000 ${nonce}`, { exact: true })).toBeVisible()
   await expect(older).toHaveCount(0)

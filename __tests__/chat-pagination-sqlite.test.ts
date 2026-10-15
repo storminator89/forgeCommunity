@@ -1,6 +1,8 @@
 /** @jest-environment node */
 
 import { rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { GET } from '@/app/api/chat/messages/route';
 import { GET as getChannels } from '@/app/api/chat/channels/route';
 import prisma from '@/lib/prisma';
@@ -88,6 +90,50 @@ test('SQLite keyset history crosses tied timestamps without duplicates and stays
   expect(cursor).toBeUndefined();
   const publicResponse = await GET(request('public-room', { before: timestamp.toISOString(), beforeId: 'private-100' }));
   expect((await publicResponse.json()).items).toEqual([]);
+});
+
+test('raw SQLite browser fixture returns real 50/50/20 history pages without a false live update', async () => {
+  const channelId = 'raw-fixture-room';
+  await prisma.chatChannel.create({ data: {
+    id: channelId, name: 'Raw fixture', isPrivate: true,
+    members: { create: { userId: 'chat-member' } },
+  } });
+  const db = new DatabaseSync(join(jest.requireMock('@/lib/prisma').__tempDirectory, 'chat.db'));
+  try {
+    db.exec('PRAGMA foreign_keys = ON; BEGIN');
+    const insert = db.prepare(`INSERT INTO "ChatMessage" ("id", "channelId", "authorId", "content", "createdAt", "updatedAt")
+      VALUES (?, ?, 'chat-member', ?, '2020-01-01T12:00:00.000+00:00', '2020-01-01T12:00:00.000+00:00')`);
+    for (let index = 0; index < 120; index++) {
+      const order = String(index).padStart(3, '0');
+      insert.run(`raw-${order}`, channelId, `message ${order}`);
+    }
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  } finally { db.close(); }
+
+  actor('chat-member');
+  const expectedIds = Array.from({ length: 120 }, (_, index) => `raw-${String(index).padStart(3, '0')}`);
+  let cursor: { before: string; beforeId: string } | undefined;
+  const expectedPages: Array<[number, number, boolean]> = [
+    [70, 120, true], [20, 70, true], [0, 20, false],
+  ];
+  for (const [start, end, hasMore] of expectedPages) {
+    const response = await GET(request(channelId, cursor));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.items.map((item: { id: string }) => item.id)).toEqual(expectedIds.slice(start, end));
+    expect(body.hasMore).toBe(hasMore);
+    expect(body.previousCursor?.beforeId).toBe(expectedIds[start]);
+    cursor = body.previousCursor;
+  }
+  const newer = await GET(new Request(`http://localhost/api/chat/messages?${new URLSearchParams({
+    channelId, after: '2020-01-01T12:00:00.000Z', afterId: 'raw-119',
+  })}`));
+  expect(newer.status).toBe(200);
+  expect((await newer.json()).items).toEqual([]);
+  await prisma.chatChannel.delete({ where: { id: channelId } });
 });
 
 test('SQLite history denies outsiders and revoked members before querying message content', async () => {
