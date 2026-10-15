@@ -267,3 +267,27 @@ it('mounts the current nested path only in author review and guards its selectio
   expect(screen.queryByRole('region', { name: 'Lernpfad im Kurs' })).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Kurs prüfen' })).not.toBeInTheDocument()
 })
+
+
+it('explains retained credit while blocking access and first-certificate issuance during a date lock', async () => {
+  mockCanEdit = false
+  mockTree = [lesson('lesson', { title: 'Lektion', locked: true, releaseLocked: true, releaseOn: '2099-11-01', content: '', contentVersionToken: null })]
+  mockProgress = { completedContentIds: ['lesson'], complete: true, canIssueCertificate: false, canTrack: true, hasCertificate: false, completedAt: '2026-10-15T08:00:00Z' }
+  render(<CourseContentsEditor courseId="course" />)
+  expect(await screen.findByText('Bereits abgeschlossen. Dein Abschluss zählt weiter; der Zugriff wartet auf die Kapitelfreigabe.')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Zertifikat herunterladen' })).toBeDisabled()
+  expect(screen.getByText('Dein Abschluss zählt weiter. Ein neues Zertifikat ist nach der Kapitelfreigabe verfügbar.')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /Lektion Abgeschlossen · Zugriff ab 01.11.2099/ })).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Als abgeschlossen markieren' })).not.toBeInTheDocument()
+  expect(mockWrite).not.toHaveBeenCalled()
+})
+
+it('keeps an existing certificate available while its completed lesson is date-locked', async () => {
+  mockCanEdit = false
+  mockTree = [lesson('lesson', { title: 'Lektion', locked: true, releaseLocked: true, releaseOn: '2099-11-01', content: '', contentVersionToken: null })]
+  mockProgress = { completedContentIds: ['lesson'], complete: true, canIssueCertificate: false, canTrack: true, hasCertificate: true, completedAt: '2026-10-15T08:00:00Z' }
+  render(<CourseContentsEditor courseId="course" />)
+  await screen.findByText('Bereits abgeschlossen. Dein Abschluss zählt weiter; der Zugriff wartet auf die Kapitelfreigabe.')
+  expect(screen.getByRole('button', { name: 'Zertifikat herunterladen' })).toBeEnabled()
+  expect(mockWrite).not.toHaveBeenCalled()
+})

@@ -187,13 +187,13 @@ export async function assignmentSubmittedUserIds(tx: Prisma.TransactionClient, c
   return rows.map(row => row.userId);
 }
 
-export async function completionState(tx: Prisma.TransactionClient, userId: string, courseId: string) {
+export async function completionState(tx: Prisma.TransactionClient, userId: string, courseId: string, now = Date.now()) {
   const [course, contents, progress] = await Promise.all([
     tx.course.findUnique({ where: { id: courseId }, select: { activePublicationId: true } }),
     tx.courseContent.findMany({ where: { courseId, ...activeCourseContentWhere, course: publishedCourseWhere }, select: { id: true, courseId: true, parentId: true, type: true, content: true, order: true } }),
     tx.courseContentProgress.findMany({ where: { userId, courseId }, select: { contentId: true, revision: true } }),
   ]);
-  if (!course?.activePublicationId) return { completedContentIds: [], complete: false };
+  if (!course?.activePublicationId) return { completedContentIds: [], complete: false, canIssueCertificate: false };
   const publication = await tx.coursePublication.findUnique({ where: { id: course.activePublicationId }, select: { courseId: true, payload: true } });
   if (!publication || publication.courseId !== courseId) throw new CoursePathError('Course publication is unavailable', 409);
   const nodes = publicationPathNodes(publication.payload);
@@ -209,9 +209,13 @@ export async function completionState(tx: Prisma.TransactionClient, userId: stri
   const rawCompleted = leaves.filter(content => content.type === 'ASSIGNMENT'
     ? assignmentPasses.has(content.id)
     : revisions.get(content.id) === courseContentRevision(content)).map(content => content.id);
-  const access = coursePathAccess(nodes, rawCompleted);
+  const access = coursePathAccess(nodes, rawCompleted, now);
   const completedContentIds = leaves.filter(content => access.get(content.id)?.completed).map(content => content.id);
-  return { completedContentIds, complete: leaves.length > 0 && completedContentIds.length === leaves.length };
+  const complete = leaves.length > 0 && completedContentIds.length === leaves.length;
+  // New credential issuance remains a gated course action even when an earned
+  // completion survives rescheduling. Existing credentials are historical.
+  const canIssueCertificate = complete && [...access.values()].every(gate => !gate.releaseLocked);
+  return { completedContentIds, complete, canIssueCertificate };
 }
 
 export async function recordCourseCompletion(tx: Prisma.TransactionClient, userId: string, courseId: string) {

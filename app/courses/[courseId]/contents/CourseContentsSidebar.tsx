@@ -49,7 +49,7 @@ export function CourseContentsSidebar(props: CourseContentsSidebarProps) {
   const [subParentId, setSubParentId] = useState<string | null>(null);
   const [isGeneratingCertificate, setIsGeneratingCertificate] = useState(false);
   const [certificateError, setCertificateError] = useState<string | null>(null);
-  const canDownloadCertificate = Boolean(progress?.hasCertificate || (progress?.canTrack && progress.complete));
+  const canDownloadCertificate = Boolean(progress?.hasCertificate || (progress?.canTrack && progress.complete && progress.canIssueCertificate !== false));
 
   const generateCertificate = useCallback(async () => {
     if (isGeneratingCertificate) return;
@@ -57,7 +57,7 @@ export function CourseContentsSidebar(props: CourseContentsSidebarProps) {
     setCertificateError(null);
     try {
       const response = await fetch(`/api/courses/${courseId}/certificate`, { method: 'POST' });
-      if (!response.ok) throw new Error(response.status === 403 ? 'Der Kursabschluss ist noch nicht bestätigt.' : 'Das Zertifikat konnte nicht erstellt werden. Bitte versuche es erneut.');
+      if (!response.ok) throw new Error(response.status === 403 ? 'Für ein neues Zertifikat müssen der Kurs abgeschlossen und alle Kapitel freigegeben sein.' : 'Das Zertifikat konnte nicht erstellt werden. Bitte versuche es erneut.');
       const url = window.URL.createObjectURL(await response.blob());
       const link = document.createElement('a');
       link.href = url;
@@ -91,7 +91,7 @@ export function CourseContentsSidebar(props: CourseContentsSidebarProps) {
     </div>
     {(contents.length > 0 || progress?.hasCertificate) && (progress?.canTrack || progress?.hasCertificate) && <div className="shrink-0 space-y-2 border-t p-3">
       <Button variant="outline" className="w-full gap-2" disabled={isGeneratingCertificate || isProgressMutating || !canDownloadCertificate} onClick={() => void generateCertificate()} aria-describedby={!canDownloadCertificate ? 'certificate-progress-hint' : undefined}><Award className="h-4 w-4" />{isGeneratingCertificate ? 'Wird erstellt …' : 'Zertifikat herunterladen'}</Button>
-      {!canDownloadCertificate && <p id="certificate-progress-hint" className="text-xs text-muted-foreground">Schließe alle Inhalte ab und bestehe alle Quizfragen, um dein Zertifikat herunterzuladen.</p>}
+      {!canDownloadCertificate && <p id="certificate-progress-hint" className="text-xs text-muted-foreground">{progress?.complete && progress.canIssueCertificate === false ? 'Dein Abschluss zählt weiter. Ein neues Zertifikat ist nach der Kapitelfreigabe verfügbar.' : 'Schließe alle Inhalte ab und bestehe alle Quizfragen, um dein Zertifikat herunterzuladen.'}</p>}
       {certificateError && <p role="alert" className="text-xs text-destructive">{certificateError}</p>}
     </div>}
     {canManage && onMainContentSubmit && <NewMainTopicDialog isOpen={mainDialogOpen} onOpenChange={setMainDialogOpen} title={mainTitle} onTitleChange={setMainTitle} onSubmit={onMainContentSubmit} />}

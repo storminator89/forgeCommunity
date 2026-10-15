@@ -1,6 +1,7 @@
 'use client';
 
 /* Hallmark · pre-emit critique: P5 H4 E4 S5 R5 V4 */
+import { chapterReleaseLabel } from '@/lib/course-release';
 import { Button } from '@/components/ui/button';
 import { getQuizAuthoringReadiness } from './quiz-authoring';
 import { parseQuizContent, type CourseContent } from './types';
@@ -82,7 +83,7 @@ export function CoursePathOverview({ contents, disabled = false, onContentSelect
             <div className="min-w-0 flex-1 basis-40 space-y-1">
               <p className="text-sm text-muted-foreground">{entry.path} · {entry.isLeaf ? entry.isQuiz ? 'Quiz' : typeNames[entry.content.type] : 'Kapitel'}</p>
               <h3 className="break-words text-base font-medium [overflow-wrap:anywhere]">{entry.content.title}</h3>
-              {!!entry.content.prerequisiteIds?.length && <p className="break-words text-sm text-muted-foreground">Erst nach: {entry.content.prerequisiteIds.map(id => titles.get(id) ?? 'Entfernter Inhalt').join(', ')}</p>}
+              {entry.content.releaseOn && <p className="text-sm text-muted-foreground">Freigabe ab {chapterReleaseLabel(entry.content.releaseOn)} · mit allen Unterthemen</p>}{!!entry.content.prerequisiteIds?.length && <p className="break-words text-sm text-muted-foreground">Erst nach: {entry.content.prerequisiteIds.map(id => titles.get(id) ?? 'Entfernter Inhalt').join(', ')}</p>}
               {!entry.isLeaf && <p className="text-sm text-muted-foreground">Bündelt {entry.content.subContents?.length ?? 0} Unterthemen</p>}
             </div>
             <div className="flex shrink-0 flex-wrap gap-1">

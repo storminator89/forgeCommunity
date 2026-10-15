@@ -45,3 +45,12 @@ Diese Bilder zeigen den früheren Kurseditor, **nicht** den privaten Entwurfs- u
 ![Früherer Kurseditor und Quiz, Desktop](ui/course-editor-desktop.png)
 
 ![Früherer Kurseditor und Quiz, Mobil](ui/course-editor-mobile.png)
+
+
+## Kapitel nach Datum freigeben
+
+Ein Kapitel der obersten Ebene kann unter **Kapitelfreigabe** ein Freigabedatum erhalten. **Freigabe speichern** speichert nur den privaten Entwurf. Die Veröffentlichung zeigt geänderte Freigaben mit bisherigem und neuem Datum; erst **Änderungen veröffentlichen** übernimmt sie für alle eingeschriebenen Lernenden.
+
+Die Freigabe beginnt am gewählten Tag um **00:00 UTC**. Alle Unterthemen erben sie. Ein leeres Datum bedeutet sofortigen Zugriff. In einem Unterthema führt die Freigabeanzeige zum zuständigen Kapitel. Verschobene Inhalte folgen dem Zielkapitel; beim Verschieben auf die oberste Ebene beginnen sie ohne eigenes Freigabedatum. Start- und Enddatum des Kurses bleiben reine Metadaten.
+
+Bis zur Freigabe sehen Lernende Titel und Termin, aber keine Inhaltskörper oder Abschlussaktionen. **Zugriff neu prüfen** oder erneutes Laden holt den aktuellen Serverstand. Weitere Lernvoraussetzungen gelten zusätzlich. Ein späteres veröffentlichtes Datum kann auch bereits bearbeitete Inhalte vorübergehend sperren. Bereits erworbene Abschlüsse und Belohnungen zählen bei unveränderter Inhaltsrevision und gültigen Voraussetzungen weiter. Eine zuvor abgegebene Aufgabe darf die Kursleitung auch während der Sperre bewerten; ein gültiges Bestehen zählt als bereits geleistete Lernarbeit. Neue Lernaktionen bleiben gesperrt. Ein neues Zertifikat erfordert zusätzlich die Freigabe aller Kapitel; bereits ausgestellte Zertifikate bleiben gültig. Einzelheiten und Prüfgrenzen: [Kapitelfreigaben](CHAPTER-RELEASES.md).

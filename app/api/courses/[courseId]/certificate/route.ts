@@ -37,7 +37,7 @@ export async function POST(
             where: { userId_courseId: { userId: session.user.id, courseId } },
             select: { id: true },
           });
-          if (!enrollment || !(await recordCourseCompletion(tx, session.user.id, courseId)).complete) return false;
+          if (!enrollment || !(await recordCourseCompletion(tx, session.user.id, courseId)).canIssueCertificate) return false;
           return tx.certificate.create({
             data: {
               id: uuidv4(), userId: session.user.id, courseId,
@@ -52,7 +52,7 @@ export async function POST(
       }
     }
     if (certificate === null) return new NextResponse('Course or user not found', { status: 404 });
-    if (certificate === false) return new NextResponse('Course has not been completed', { status: 403 });
+    if (certificate === false) return new NextResponse('Course completion and released chapters are required for a new certificate', { status: 403 });
     if (!certificate || typeof certificate !== 'object') throw new Error('Certificate issuance failed');
     return certificatePdfResponse(certificate);
   } catch (error) {
