@@ -1,360 +1,353 @@
 # ForgeCommunity
 
-<div align="center">
+[![CI](https://github.com/storminator89/forgeCommunity/actions/workflows/ci.yml/badge.svg)](https://github.com/storminator89/forgeCommunity/actions/workflows/ci.yml)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Next.js](https://img.shields.io/badge/Next.js-16-black)](https://nextjs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5-blue)](https://www.typescriptlang.org/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3-38B2AC)](https://tailwindcss.com/)
-[![Prisma](https://img.shields.io/badge/Prisma-7-2D3748)](https://www.prisma.io/)
-[![Contributions Welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg)](CONTRIBUTING.md)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/storminator89/forgeCommunity/pulls)
-[![Code Style](https://img.shields.io/badge/code_style-prettier-ff69b4.svg)](https://prettier.io/)
+A self-hosted community learning app for sharing knowledge, taking courses,
+discussing questions, and showing work. The interface is primarily German.
 
-<h3 align="center">🚀 Building the Future of Community Learning</h3>
+Built with Next.js 16, React 19, TypeScript, Tailwind CSS 4, Radix/shadcn UI,
+NextAuth.js 4, and Prisma 7. SQLite is the default single-container deployment;
+PostgreSQL is an explicit alternative.
 
-[Report Bug](https://github.com/storminator89/forgeCommunity/issues) · [Request Feature](https://github.com/storminator89/forgeCommunity/issues)
+[Get started](#local-development) · [Features and routes](#features-and-routes) ·
+[Deployment](#deployment) · [Testing](#testing-and-evidence) ·
+[Report a bug](https://github.com/storminator89/forgeCommunity/issues)
 
-</div>
+## Screenshots
 
-## 📋 Table of Contents
-- [About](#about)
-  - [Why ForgeCommunity?](#why-forgecommunity)
-  - [Built With](#built-with)
-- [Features](#features)
-- [Getting Started](#getting-started)
-  - [Prerequisites](#prerequisites)
-  - [Installation](#installation)
-- [Usage](#usage)
-- [Development](#development)
-- [Deployment](#deployment)
-- [Contributing](#contributing)
-- [Testing](#testing)
-- [Project Structure](#project-structure)
-- [Roadmap](#roadmap)
-- [License](#license)
-- [Contact](#contact)
-- [Acknowledgments](#acknowledgments)
+Four actual app captures from the verified merged-main Chromium run on
+`1025767`. The public landing pages contain no member data. The quiz authoring
+and preview images use a disposable synthetic account/course, not production
+activity. See [screenshot provenance](docs/ui/README.md) for the exact commit,
+artifact paths, dimensions, hashes, and reviewed limits.
 
-H5P-Pakete im Kurs verwenden: [Import, Player und Docker-Speicherung](docs/H5P.md).
+![ForgeCommunity public landing page, desktop light mode](docs/ui/readme/landing-desktop-light.png)
 
-## 🎯 About
+Quiz authoring after save, 1280px light mode. The independently scrollable editor
+panel is positioned at the question and save controls; not every field is shown.
+Synthetic example content.
 
-ForgeCommunity is a comprehensive platform designed to foster learning, collaboration, and community engagement. It provides a space for users to access courses, participate in events, and connect with other community members.
+![Current course quiz authoring with nested outline and saved-state controls](docs/ui/readme/course-quiz-authoring-desktop-light.png)
 
-### Why ForgeCommunity?
+<details>
+<summary>Course preview, 1280px light mode, synthetic unsaved draft</summary>
 
-- 🤝 **Community-Driven**: Built by the community, for the community
-- 📚 **Comprehensive Learning**: Structured courses and knowledge sharing
-- 🔄 **Real-time Collaboration**: Interactive features for immediate engagement
-- 🎯 **Goal-Oriented**: Focus on practical skills and measurable outcomes
-- 🛡️ **Secure & Scalable**: Built with modern, secure technologies
+The course preview displays a local unsaved quiz draft. Rehearsal answers stay
+inside the preview and do not record a learner attempt or completion.
 
-![Start Screen](screens/usermanaagement.png)
-![Wissensdatenbank](screens/knowlegdebase.png)
+![Current course preview showing an isolated synthetic quiz draft](docs/ui/readme/course-quiz-preview-desktop-light.png)
 
-### Built With
+</details>
 
-Our tech stack combines modern technologies for optimal performance and developer experience:
+<details>
+<summary>Public landing page, 390px mobile light mode</summary>
 
-#### Frontend
-- 🔷 Next.js 16 (App Router)
-- 📘 TypeScript
-- 🎨 Tailwind CSS
-- 🧩 Shadcn UI Components
+<img src="docs/ui/readme/landing-mobile-light.png" alt="ForgeCommunity public landing page on a 390px mobile viewport" width="390" />
 
-#### Backend & Database
-- 🗄️ Prisma ORM
-- 🔐 NextAuth.js
-- 📦 PostgreSQL
+</details>
 
-#### Tools & Utilities
-- 📝 Tiptap Editor
-- 🎯 DND Kit
-- 📅 date-fns
-- 🔄 Axios
-- 🎨 Lucide React Icons
+## Features and routes
 
-## ✨ Features
+| Area | Available in the app | Routes |
+| --- | --- | --- |
+| Community | Posts and replies, topic filters, likes, bounded feed/comment pagination, author-selected solutions, and reporting | `/community` |
+| Members | Search/filter, grid/list views, profiles, following, and skill endorsements | `/members`, `/profile/[id]` |
+| Courses | Course creation, free self-enrollment with capacity checks, nested content, text/video/audio/H5P/quiz lessons, saved progress, and completion-gated certificate downloads | `/courses`, `/courses/new`, `/courses/[courseId]/contents` |
+| Personal learning | Optional private learning goals, completion milestones, and course-reward history; administrator-approved quiz learning can qualify for a verified-learning badge and opt-in ranking | `/courses/goals`, community reward panels, profiles |
+| Knowledge base | Published articles, category/tag search, rich-text authoring, and private drafts | `/knowledgebase`, `/knowledgebase/[id]`, `/knowledgebase/new-article`, `/knowledgebase/drafts` |
+| Resources and projects | Resource browsing/details, project submission/details, likes and project comments | `/resources`, `/resources/[id]`, `/projects/new`, `/projects/[projectId]`, `/showcases` |
+| Events | Calendar/list discovery, upcoming events, creation, and RSVP with capacity checks | `/events` |
+| Skills and search | Skill directory, personal skills, and cross-content discovery with URL-backed search filters | `/skills`, `/search` |
+| Chat and notifications | Channel conversations, message editing, private attachments, and a recipient-scoped in-app inbox with links to available targets | `/chat`, `/notifications` |
+| Account and staff | Registration/login, profile/settings, administrator dashboard/user management, and role-limited moderation | `/register`, `/login`, `/settings`, `/admin/dashboard`, `/admin/users`, `/moderation` |
+| Public pages | Product introduction, about page, and certificate verification | `/`, `/about`, `/verify-certificate/[certificateId]` |
 
-### Core Functionality
-- **🏠 Home Dashboard**
-  - Activity feed
-  - Quick access to recent content
+`/courses/[courseId]` hands off to the course-content route. Existing article-edit
+URLs remain supported. The [route inventory](e2e/route-sweep-manifest.ts) tracks
+every App Router page, including redirects.
 
-- **👥 Community Features**
-  - Member profiles and networking
-  - Discussion forums
-  - Collaboration spaces
+### Product boundaries
 
-- **📚 Learning Resources**
-  - Structured courses
-  - Interactive tutorials
-  - Progress tracking
-  - Certificate generation
+- Paid courses can show a price, but there is no integrated checkout or paid
+  access-grant workflow. Free self-enrollment is the supported join flow.
+- Progress is server-owned and content-revision aware. Non-quiz lessons use an
+  explicit completion action; quizzes are graded on the server. An issued
+  certificate remains a historical credential after later course edits.
+- H5P packages can be imported, reused, and played in an isolated iframe. There
+  is no built-in H5P authoring tool or centralized xAPI result store. External
+  media providers must permit embedding. See [H5P](docs/H5P.md).
+- Chat and the in-app inbox poll the server. No server-push/SSE delivery, email
+  sender, digest, or external push service is configured. Browser chat alerts
+  depend on local permission and settings. See [notifications](docs/ACTIONABLE-NOTIFICATION-INBOX.md).
+- Public course-reward ranking is opt-in. Private goals and contribution
+  milestones do not award posting points or streaks. See [reward rules](docs/RESPONSIBLE-REWARDS.md).
+- The member directory is not server-paginated. Unicode/collation and freshness
+  semantics need an explicit decision before changing that contract.
 
-- **📅 Event Management**
-  - Event creation and registration
-  - Calendar integration
+### Course authoring
 
-### Additional Features
-- **🔍 Advanced Search**: Search across all content
-- **💬 Real-time Chat**: Direct messaging and group chats
-- **🔔 Smart Notifications**: Customizable notification preferences
-- **📚 Knowledge Base**: Searchable documentation and resources
-- **🛠️ Project Management**: Tools for collaborative projects
-- **🎯 Skills Tracking**: Competency management system
-- **🎓 Certificate Verification**: Digital credential validation
+Course owners work in **Bearbeiten**: select a lesson in the nested outline,
+choose a content type when adding a topic, and edit it directly. The outline
+keeps keyboard-accessible structure actions alongside the editor. **Kurs prüfen**
+collects actionable content checks and a course-path overview.
 
-## 🚀 Getting Started
+**Vorschau** opens an isolated course preview, including an unsaved draft when
+present. Reading and quiz rehearsal there do not save learner attempts or
+completion. **Lernen** shows the saved course content; actual progress actions
+remain subject to the normal enrollment and learner rules. Learners do not get
+authoring controls.
+
+Saving in the editor updates the live course immediately. Preview and readiness
+checks do not add a separate publication/release step. Unsaved-change prompts
+protect local edits, and explicit save/error states distinguish those edits from
+persisted content. See the [course editor guide](docs/COURSE-EDITOR.md).
+
+## Local development
 
 ### Prerequisites
 
-Ensure you have installed:
-- Node.js 24 LTS (use the version declared in `.nvmrc`)
-- npm 11 or later; use the committed `package-lock.json`
-- Git (v2.0.0 or higher)
-- Docker uses SQLite by default; PostgreSQL (v14 or higher) is available as an explicit deployment option
+- Node.js 24 (`.nvmrc`) and npm 11; install with the committed lockfile
+- Git
+- A local writable filesystem for SQLite, or a separately configured PostgreSQL
+  database; CI exercises PostgreSQL 16
 
-### Installation
+### Start with SQLite
 
-1. Clone the repository:
 ```bash
 git clone https://github.com/storminator89/forgeCommunity.git
 cd forgeCommunity
-```
-
-2. **Install dependencies**
-   ```bash
-   npm ci
-   ```
-
-3. **Environment Setup**
-   ```bash
-   cp .env.example .env
-   ```
-   Configure your `.env` file:
-   ```env
-   DATABASE_PROVIDER="sqlite"
-   DATABASE_URL="file:$PWD/data/forge.db"
-   NEXTAUTH_SECRET="<generate with: openssl rand -base64 32>"
-   NEXTAUTH_URL="http://localhost:3013"
-   ```
-
-4. **Database Setup**
-   ```bash
-   npm run db:generate
-   npm run db:deploy
-   ALLOW_DEMO_SEED=true npm run db:seed  # Optional; disposable development DB only
-   ```
-
-## 💻 Development
-
-```bash
-# Start development server
-npm run dev
-
-```
-
-## 🚀 Deployment
-
-SQLite ist der Standard für Docker: ein einzelner App-Container, eine persistente
-SQLite-Datei und benannte Upload-Volumes. PostgreSQL bleibt als explizite Option
-für bestehende oder skalierte Installationen verfügbar.
-
-```bash
 cp .env.example .env
-# In .env mindestens einen starken NEXTAUTH_SECRET setzen.
-docker compose up --build -d --wait
-docker compose ps
 ```
 
-Die Standarddatei `docker-compose.yml` baut das SQLite-Image und verwendet
-`file:/app/data/forge.db`. Die Datenbank liegt im Volume `sqlite_data` und bleibt
-bei einer normalen Neuerstellung des Containers erhalten. `docker compose down
---volumes` **löscht** die Volumes und damit die Daten. Für Backups Schreibzugriffe
-stoppen und die SQLite-Datei inklusive Journal sichern oder die SQLite-Online-
-Backup-API verwenden.
-
-Der SQLite-Container wendet die versionierten Migrationen vor dem Serverstart
-transaktional und idempotent an. Er legt keine Demo-Konten an. Die Compose-Datei
-`docker-compose.sqlite.yml` bleibt als kompatibler Alias erhalten.
-
-Für PostgreSQL die separate Datei verwenden:
+Set `NEXTAUTH_SECRET` in `.env` to an independently generated value:
 
 ```bash
-cp .env.example .env
-# In .env POSTGRES_PASSWORD sowie NEXTAUTH_SECRET setzen.
-docker compose -f docker-compose.postgresql.yml up --build -d
+openssl rand -base64 32
 ```
 
-Das PostgreSQL-Compose-Setup verändert das Schema beim Start nicht. Für eine
-bestehende Installation zuerst die geprüfte Migration ausführen:
+Keep `NEXTAUTH_URL` and `NEXT_PUBLIC_APP_URL` at `http://localhost:3013` for this
+local setup. Do not commit `.env` or reuse example/CI secrets. Optional Google
+OAuth is disabled when its two environment values are blank.
 
-```bash
-DATABASE_PROVIDER=postgresql \
-DATABASE_URL="postgresql://forge:<passwort>@localhost:5432/forge?schema=public" \
-npm run db:deploy
-```
-
-Für eine neue PostgreSQL-Installation mit einem **leeren, ausdrücklich im URL
-genannten Schema** die gesonderte Initialisierung ausführen. Sie verweigert
-bereits vorhandene Schemaobjekte und führt die festgelegte Basis sowie alle
-Upgrades in einer Transaktion aus:
-
-```bash
-DATABASE_PROVIDER=postgresql \
-DATABASE_URL="postgresql://forge:<passwort>@localhost:5432/forge?schema=public" \
-npm run db:deploy -- --initialize-empty-schema
-```
-
-Für eine bestehende Datenbank, die bereits die `SkillEndorsement`-Tabelle des
-früheren Schemas, aber noch keinen Upgrade-Verlauf hat, ist nach Prüfung dieser
-Struktur `npm run db:deploy -- --baseline-current-schema` vorgesehen. Ein
-`prisma db push` mit dem **aktuellen** Schema vor diesen Befehlen ist kein
-unterstützter Installationspfad: Es würde neue Tabellen ohne die SQL-only
-Prüfbedingungen anlegen. Bei einem bereits befüllten aktuellen Schema ohne
-Upgrade-Verlauf nicht automatisch eine Baseline setzen.
-
-Der PostgreSQL-Runner prüft Tabellen, Schlüssel, Prüfsummen und das URL-Schema;
-unbekannte oder manipulierte Strukturen werden abgelehnt. Im Container kann der
-Runner mit `docker compose -f docker-compose.postgresql.yml run --rm app node
-scripts/db-deploy.mjs` ausgeführt werden. PostgreSQL und Upload-Volumes vor
-Upgrades sichern und das Upgrade zunächst in einer Staging-Kopie testen.
-
-Für lokale SQLite-Entwicklung ohne Docker den Provider **vor der Installation**
-setzen, damit Prisma den passenden Client erzeugt:
+Select SQLite **before installation**, so the postinstall step generates the
+correct Prisma client. Use an absolute database path:
 
 ```bash
 export DATABASE_PROVIDER=sqlite
 export DATABASE_URL="file:$PWD/data/forge.db"
-cp .env.example .env  # Set a local NEXTAUTH_SECRET; shell DB vars take precedence.
+mkdir -p data
 npm ci
-npm run db:generate
 npm run db:deploy
 npm run dev
 ```
 
-Nach Änderungen an `prisma/schema.prisma` `npm run db:generate` ausführen. Der
-Befehl regeneriert `prisma/schema.sqlite.prisma` und den ausgewählten Prisma
-Client. SQLite-Schemaänderungen benötigen zusätzlich eine geprüfte, nummerierte
-SQL-Datei in `prisma/sqlite-migrations/`. Der SQLite-Runner wendet diese Dateien
-transaktional an und verweigert veränderte Prüfsummen oder eine bestehende
-Datenbank ohne Migrationshistorie. Bereits angewendete Migrationen nicht ändern.
-PostgreSQL verwendet die separat versionierten `prisma/postgresql-upgrades/`-
-Dateien und den beschriebenen Deployment-Befehl.
+Open [localhost:3013](http://localhost:3013) and create an account through the
+registration page. The exported database values take precedence over the
+placeholder in `.env`; replace that placeholder if you prefer to configure the
+same absolute path entirely in `.env`.
 
-SQLite eignet sich für eine einzelne Anwendung auf einem lokalen persistenten Dateisystem.
-Keine Netzwerkfreigaben als Datenbankpfad und keine mehreren Container mit derselben
-Datei verwenden. Case-insensitive Matching in SQLite ist bei Nicht-ASCII weiterhin
-begrenzt. Für einen lokalen Produktionsbuild `DATABASE_PROVIDER=sqlite` sowohl
-für `npm run build` als auch zur Laufzeit setzen, anschließend `npm run db:deploy`
-und `npm run start` ausführen.
-
-## 🤝 Contributing
-
-We welcome contributions! See our [Contributing Guide](CONTRIBUTING.md) for details.
-
-1. Fork the repository
-2. Create your feature branch
-   ```bash
-   git checkout -b feature/AmazingFeature
-   ```
-3. Commit your changes
-   ```bash
-   git commit -m 'Add some AmazingFeature'
-   ```
-4. Push to the branch
-   ```bash
-   git push origin feature/AmazingFeature
-   ```
-5. Open a Pull Request
-
-## 🧪 Testing
+An optional seed is restricted to a disposable, non-production database:
 
 ```bash
-# Run unit tests
-npm run test
+ALLOW_DEMO_SEED=true npm run db:seed
+```
 
-# Check application types
+It creates example content and independent random account passwords that are
+not printed. Those accounts are not a documented login mechanism. The seed is
+not an idempotent production migration.
+
+### Everyday commands
+
+```bash
+npm run dev                  # Development server on port 3013
+npm run db:generate          # Regenerate SQLite schema and selected Prisma client
+npm run db:deploy            # Apply the selected provider's tracked SQL history
+npm run build                # Webpack production build + standalone preparation
+npm run start                # Run the prepared standalone build on port 3013
+```
+
+Keep the same provider and database settings for generation, build, and runtime.
+After switching providers or editing `prisma/schema.prisma`, rerun
+`npm run db:generate`. Edit the canonical PostgreSQL schema, not the generated
+`prisma/schema.sqlite.prisma`.
+
+## Deployment
+
+### Default Docker stack: SQLite
+
+```bash
+cp .env.example .env
+# Set an independent strong NEXTAUTH_SECRET and the canonical app URLs in .env.
+docker compose up --build -d --wait
+docker compose ps
+```
+
+The default Compose file sets `DATABASE_PROVIDER=sqlite` and
+`DATABASE_URL=file:/app/data/forge.db`. The app is exposed on port 3013.
+`docker-compose.sqlite.yml` is a compatibility alias. Startup applies ordered,
+checksummed SQLite migrations transactionally and does not seed demo accounts.
+
+Persistent volumes hold:
+
+- `sqlite_data`: the database and private H5P packages
+- `uploads`: article/course/project and other public image uploads
+- `private_uploads`: private chat attachments
+
+`docker compose down --volumes` deletes these volumes and their data. Back up
+the database **and all upload/package storage**. For SQLite, use a consistent
+online backup or stop writes and copy the database with its journal/WAL state.
+Use a local persistent filesystem and one application instance per SQLite file;
+do not share that file over a network filesystem or between app containers.
+SQLite's case-insensitive matching remains limited for non-ASCII text.
+
+Configure canonical HTTPS `NEXTAUTH_URL` and `NEXT_PUBLIC_APP_URL` in production.
+Set `TRUST_PROXY=true` only behind a trusted proxy that overwrites forwarded
+client headers. Rehearse upgrades against a backed-up staging copy. Authentication
+security upgrades may require rotating `NEXTAUTH_SECRET`, which signs everyone
+out; see the [security upgrade notes](docs/SECURITY-MODERNIZATION.md).
+
+### PostgreSQL option
+
+Use `docker-compose.postgresql.yml` with an independent `POSTGRES_PASSWORD` and
+a `DATABASE_URL` that uses the Compose service hostname `db`. Back up
+`postgres_data`, `h5p_data`, `uploads`, and `private_uploads` together.
+
+The PostgreSQL stack **does not migrate its schema on startup**. Select
+`DATABASE_PROVIDER=postgresql`, provide the connection URL, and generate the
+matching client before running the deployment runner. The supported paths are:
+
+- **Verified empty schema:** `npm run db:deploy -- --initialize-empty-schema`
+  installs the fixed baseline and upgrades in one transaction; it refuses
+  pre-existing schema objects.
+- **Tracked existing installation:** `npm run db:deploy` checks history and
+  applies the remaining ordered upgrades.
+- **Legacy schema with `SkillEndorsement` but no upgrade history:** after verifying
+  that exact expected structure, use
+  `npm run db:deploy -- --baseline-current-schema`. Do not use this option to
+  bless an arbitrary current or populated schema.
+
+For the Compose deployment, run the appropriate command in a one-off app
+container before starting the application, for example for a verified empty schema:
+
+```bash
+docker compose -f docker-compose.postgresql.yml build app
+docker compose -f docker-compose.postgresql.yml up -d db
+docker compose -f docker-compose.postgresql.yml run --rm app \
+  node scripts/db-deploy.mjs --initialize-empty-schema
+docker compose -f docker-compose.postgresql.yml up -d
+```
+
+The runner checks schema structure, keys, checksums, and the URL schema. Do not
+run `prisma db push` with the current schema before initialization or baselining:
+it bypasses SQL-only constraints. Both providers require a reviewed, numbered
+migration for schema changes; never edit already-applied SQL files. See
+[deployment implementation](scripts/db-deploy.mjs),
+[SQLite migrations](prisma/sqlite-migrations), and
+[PostgreSQL upgrades](prisma/postgresql-upgrades).
+
+## Testing and evidence
+
+```bash
 npm run typecheck
-
-# Check lint and production build
-npm run lint
-npm run build
-
-# Check known package vulnerabilities
-npm audit
+npm run lint -- --max-warnings 0
+npm test -- --runInBand
+npm run test:styles
+npm run test:next-eslint-fork
 ```
 
-CI runs application checks (typecheck, lint, Jest, migration checks, build and
-standalone smoke) in the independent `quality` job. The `security-audit` job runs
-the unchanged strict `npm audit --audit-level=high` check and fails on high or
-critical advisories; it has no exceptions or `continue-on-error`. Its dependency
-install skips lifecycle scripts because auditing does not need generated clients
-or native builds.
+The database-backed Jest suites need a SQLite-generated client and disposable
+SQLite settings. After testing, regenerate the client for the intended build
+provider. The [CI workflow](.github/workflows/ci.yml) is the complete reference
+for ordered generation, migration checks, build, and runtime smokes.
 
-The existing `validate` check remains the aggregate gate: it always evaluates
-both jobs and fails unless both succeed, including when either fails, is skipped
-or is cancelled. It keeps the existing `validate` check context, so an audit
-failure cannot turn that check green. GitHub branch-protection settings are not
-inspected or changed by this change. An audit failure leaves the application
-results visible and CI failing. PostgreSQL release, browser QA and Docker jobs
-remain independent of this gate.
+CI separates application `quality` from the unchanged strict
+`npm audit --audit-level=high` job. The `validate` aggregate succeeds only when
+both succeed. Independent jobs exercise PostgreSQL upgrades, Docker/SQLite/H5P,
+and real Chromium journeys with disposable data. Browser screenshots are retained
+as workflow artifacts for seven days; selected documentation images are kept in
+`docs/ui` with provenance.
 
-## 📁 Project Structure
+Browser QA requires a production build, official Playwright Chromium,
+`BROWSER_QA_DISPOSABLE_DB=1`, `DATABASE_PROVIDER=sqlite`, a loopback base URL, and
+an absolute database path named `forge-browser-qa.db`. It starts its own standalone
+server; never aim it at a production or personal database. Run
+`npm run test:browser` only in that prepared environment. The route sweep tests
+1280px and 320px; the journey suites also run at 390px. Some dynamic route-sweep
+responses are synthetic API fixtures, as documented in [route-sweep coverage](docs/ROUTE-SWEEP-QA.md).
 
+The verified merged-main baseline is
+[run 38717775096](https://github.com/storminator89/forgeCommunity/actions/runs/38717775096)
+on `102576735dd3b7cb23c8657e3a74098228582bc6`, checked on 15 October 2026.
+All six jobs passed: application quality, strict security audit, PostgreSQL
+release gate, Docker smokes, Chromium browser QA, and aggregate validation.
+The screenshot gallery comes from that run's actual app captures. These dated
+results apply to that commit; they are not a perpetual security guarantee or
+proof that later code has passed. See the [course editor guide](docs/COURSE-EDITOR.md)
+for its current workflow/acceptance scope and the
+[release handoff](docs/RELEASE-HANDOFF-2026-10-15.md) for earlier integration history.
+
+This is repository integration evidence. Production deployment still requires
+operational review and a backed-up migration rehearsal. Chromium viewport tests
+and source-calculated contrast checks do not establish WCAG conformance,
+assistive-technology compatibility, or Safari/Firefox behavior.
+
+### Styling and dependency maintenance
+
+Tailwind CSS 4 sets a minimum browser floor of Safari 16.4, Chrome 111, and
+Firefox 128, as described in the [official upgrade guide](https://tailwindcss.com/docs/upgrade-guide).
+The current browser suite uses Chromium; the other engines have not been
+validated by that suite. Keep `npm run test:styles` and route-level visual QA
+when changing tokens or CSS utilities.
+
+The project temporarily owns a pinned fork of `@next/eslint-plugin-next@16.3.8`
+that replaces its vulnerable glob dependency while retaining Next rule behavior.
+The checked-in source/archive, parity tests, and retirement procedure are in
+[Next ESLint fork maintenance](docs/NEXT-ESLINT-FORK.md). Do not replace it with
+the original same-version archive, remove framework rules, or weaken the audit
+gate during dependency updates. The scoped Istanbul/YAML override also needs
+compatibility review; see [dependency history](docs/DEPENDENCY-SECURITY-2026-10-15.md).
+
+## Design and documentation
+
+The shared [design contract](design.md) defines warm paper/charcoal surfaces,
+sparing blue accents, Inter typography, and task-specific workbench layouts.
+The redesign follows the inspected [Hallmark source](https://github.com/Nutlope/hallmark)
+within the existing routes and product boundaries. Screenshots show real app
+rendering; no generated mock interfaces or added browser/phone chrome are used.
+
+- [Course editor](docs/COURSE-EDITOR.md)
+- [H5P import, storage, and player](docs/H5P.md)
+- [Responsible rewards and private learning goals](docs/RESPONSIBLE-REWARDS.md)
+- [Accepted solutions](docs/ACCEPTED-SOLUTIONS.md)
+- [Actionable notifications](docs/ACTIONABLE-NOTIFICATION-INBOX.md)
+- [Current release handoff and historical evidence](docs/RELEASE-HANDOFF-2026-10-15.md)
+- [Security modernization](docs/SECURITY-MODERNIZATION.md)
+- [Product roadmap](docs/REDESIGN-ROADMAP-2026-10-14.md)
+
+Older audit and modernization reports are historical snapshots, not current
+feature/support promises. The separate earlier course proposal in PR #6 is not
+part of the merged learning implementation.
+
+## Project structure
+
+```text
+app/          App Router pages and API handlers
+components/   Shared UI and feature components
+lib/          Client helpers and server-owned business rules
+e2e/          Disposable Playwright journeys and route inventory
+__tests__/    Jest API, UI, migration, and source regressions
+prisma/       Canonical/generated schemas and provider-specific SQL history
+scripts/      Deployment, dependency guards, and runtime smokes
+vendor/       Pinned Next ESLint plugin source and package archive
+docs/         Feature guides, design/QA evidence, and screenshots
+public/       Static assets; generated H5P runtime is prepared at build time
 ```
-forgeCommunity/
-├── app/                # Next.js app directory
-├── components/         # Reusable components
-├── lib/               # Utility functions
-├── prisma/            # Database schema and migrations
-├── public/            # Static assets
-└── tests/             # Test files
-```
 
-## 🗺️ Roadmap
+## Contributing and license
 
-- [ ] Mobile application
-- [ ] AI-powered learning recommendations
-- [ ] Advanced analytics dashboard
+Open an [issue](https://github.com/storminator89/forgeCommunity/issues) for a
+bug or proposal, or submit a focused pull request with relevant regressions.
+Run the applicable checks above and disclose any that were not run.
 
-## 📄 License
-
-This project is licensed under the Apache License, Version 2.0.
-
-## 🙏 Acknowledgments
-
-- [Next.js Documentation](https://nextjs.org/docs)
-- [Tailwind CSS](https://tailwindcss.com)
-- [Prisma](https://www.prisma.io)
-- [Shadcn UI](https://ui.shadcn.com)
-- [TypeScript](https://www.typescriptlang.org)
-
-## Security modernization and upgrade notes
-
-See [the audit and validation report](docs/SECURITY-MODERNIZATION.md) for the
-baseline findings, migration details, test results, and remaining limitations.
-
-For an existing installation:
-
-1. Back up PostgreSQL and uploaded files; rehearse the upgrade against a staging copy.
-2. Rotate `NEXTAUTH_SECRET` on deployment. This invalidates all old sessions,
-   including any claims forged before the session update fix. Users must log in again.
-3. Configure the canonical HTTPS `NEXTAUTH_URL` and `NEXT_PUBLIC_APP_URL`.
-4. Use a strong database password. Never use the example connection string unchanged.
-5. Only run `prisma db push` on a disposable development database. Plan and review
-   PostgreSQL production schema migrations separately; no PostgreSQL production
-   migration runs automatically on startup. SQLite startup applies its tracked
-   SQL migrations.
-
-Demo seeding requires `ALLOW_DEMO_SEED=true`, is refused in production, and creates
-independent random passwords that are not printed. Demo accounts cannot be used
-as a production login mechanism. Uploaded files require persistent storage in a
-container deployment and a backup policy. Legacy public chat image paths are blocked
-until their files and database references have been migrated to private storage.
-
-## Repository audit (26 September 2026)
-
-See [the repository audit](docs/REPOSITORY-AUDIT-2026-09-26.md) for confirmed findings, fixes, remaining functional gaps, and validation. Upgrading invalidates old authentication tokens; users must sign in again.
+Licensed under the [Apache License 2.0](LICENSE).
