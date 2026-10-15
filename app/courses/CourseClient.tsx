@@ -50,7 +50,7 @@ export default function CourseClient() {
   if (status !== 'authenticated' || !session?.user?.id) return null;
   // Account-specific enrollment, progress and editor rights never cross this
   // keyed boundary, even before a new fetch or effect can run.
-  return <ScopedCourseClient key={session.user.id} session={session} />;
+  return <ScopedCourseClient key={JSON.stringify([session.user.id, session.user.role])} session={session} />;
 }
 
 function ScopedCourseClient({ session }: { session: NonNullable<ReturnType<typeof useSession>['data']> }) {
@@ -190,7 +190,8 @@ function ScopedCourseClient({ session }: { session: NonNullable<ReturnType<typeo
                 <h2 className="text-[clamp(1.65rem,1.2rem+2vw,2.4rem)] font-semibold leading-tight tracking-tight">Wissen teilen. Gemeinsam weiterkommen.</h2>
                 <p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:text-base">Entdecke Kurse aus der Community, lerne in deinem Tempo und teile selbst, was du kannst.</p>
               </div>
-              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
+                {session.user.role === 'USER' && <Button asChild variant="outline" className="w-full shrink-0 sm:w-auto"><Link href="/courses/journey">Mein Lernweg</Link></Button>}
                 {canSeeLearnerPathways(session.user.role) && <Button asChild variant="outline" className="w-full shrink-0 sm:w-auto"><Link href="/courses/pathways">Lernpfade</Link></Button>}
                 <Button asChild variant="outline" className="w-full shrink-0 sm:w-auto"><Link href="/courses/goals">Mein Lernziel</Link></Button>
                 <Button asChild variant="outline" className="w-full shrink-0 sm:w-auto"><Link href="/courses/authoring">Meine Kursentwürfe</Link></Button>
