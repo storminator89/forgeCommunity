@@ -149,6 +149,9 @@
     "@prisma/config": {
       "deepmerge-ts": "8.0.2"
     },
+    "@istanbuljs/load-nyc-config": {
+      "js-yaml": "4.3.2"
+    },
     "source-map-js": "1.2.2"
   }
 }
