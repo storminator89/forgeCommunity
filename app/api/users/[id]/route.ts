@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '../../auth/[...nextauth]/options'
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input'
+import { canShowBadgeToViewer } from '@/lib/course-achievement-badge'
 
 export async function GET(
   request: NextRequest,
@@ -19,33 +20,65 @@ export async function GET(
       )
     }
 
-    // Hole den Benutzer mit allen relevanten Beziehungen
+    const isOwnAccount = session.user.id === params.id
+    const canViewDrafts = isOwnAccount || session.user.role === 'ADMIN'
+    // Read only the fields needed for a profile. In particular, never load
+    // password or recovery tokens into this public-facing response path.
     const user = await prisma.user.findUnique({
       where: { id: params.id },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        email: isOwnAccount,
+        image: true,
+        coverImage: true,
+        bio: true,
+        title: true,
+        contact: true,
+        role: true,
+        isTestAccount: true,
+        userSettings: { select: { publicRankingOptIn: true } },
+        endorsements: true,
+        createdAt: true,
+        lastLogin: isOwnAccount,
+        socialLinks: true,
         skills: {
-          include: {
-            skill: true,
+          select: {
+            id: true,
+            skillId: true,
+            level: true,
+            endorsements: true,
+            skill: { select: { name: true } },
           },
         },
         badges: {
-          include: {
-            badge: true,
+          select: {
+            id: true,
+            badgeId: true,
+            awardedAt: true,
+            badge: { select: { name: true, description: true, image: true } },
           },
         },
         followers: {
           where: {
             followerId: session.user.id,
           },
+          select: { followerId: true },
+          take: 1,
+        },
+        endorsementsReceived: {
+          where: { endorserId: session.user.id },
+          select: { id: true },
+          take: 1,
         },
         _count: {
           select: {
             followers: true,
             following: true,
-            posts: true,
+            posts: canViewDrafts ? true : { where: { published: true } },
             courses: true,
             projects: true,
-            articles: true,
+            articles: canViewDrafts ? true : { where: { isPublished: true } },
           },
         },
       },
@@ -63,21 +96,23 @@ export async function GET(
       : {}
     const socialLink = (key: string) => typeof savedSocialLinks[key] === 'string' ? savedSocialLinks[key] as string : null
 
-    // Formatiere die Daten für die Frontend-Anzeige
+    const isCurrentUser = user.id === session.user.id
+    // Email and last-login timestamps belong only to the account owner.
     const formattedUser = {
       id: user.id,
       name: user.name,
-      email: user.email,
       image: user.image,
+      coverImage: user.coverImage,
       bio: user.bio,
       title: user.title,
       contact: user.contact,
       role: user.role,
       endorsements: user.endorsements,
       createdAt: user.createdAt,
-      lastLogin: user.lastLogin,
+      ...(isCurrentUser ? { email: user.email, lastLogin: user.lastLogin } : {}),
       isFollowing: user.followers.length > 0,
-      isCurrentUser: user.id === session.user.id,
+      isCurrentUser,
+      hasEndorsed: user.endorsementsReceived.length > 0,
       skills: user.skills.map(userSkill => ({
         id: userSkill.id,
         skillId: userSkill.skillId,
@@ -85,8 +120,9 @@ export async function GET(
         level: userSkill.level,
         endorsements: userSkill.endorsements,
       })),
-      badges: user.badges.map(userBadge => ({
+      badges: user.badges.filter(userBadge => canShowBadgeToViewer(userBadge.badgeId, user, session.user.id)).map(userBadge => ({
         id: userBadge.id,
+        badgeId: userBadge.badgeId,
         name: userBadge.badge.name,
         description: userBadge.badge.description,
         image: userBadge.badge.image,
@@ -109,7 +145,7 @@ export async function GET(
       },
     }
 
-    return NextResponse.json(formattedUser)
+    return NextResponse.json(formattedUser, { headers: { 'Cache-Control': 'private, no-store' } })
   } catch (error) {
     console.error('Error fetching user profile:', error)
     return NextResponse.json(

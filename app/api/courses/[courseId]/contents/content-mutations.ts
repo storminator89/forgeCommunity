@@ -20,8 +20,14 @@ export async function contentTransaction<T>(work: (tx: Prisma.TransactionClient)
   }
 }
 
-export function canEdit(instructorId: string, user: { id: string; role?: string | null }) {
-  if (instructorId !== user.id && user.role !== 'ADMIN') throw new ContentMutationError('Unauthorized', 403);
+export async function canEdit(tx: Prisma.TransactionClient, instructorId: string, user: { id: string; role?: string | null }) {
+  // Course ownership was read in this transaction. Administrator authority
+  // must share that snapshot too, including every serialization retry: session
+  // validation can precede a committed demotion or account deletion.
+  if (instructorId === user.id) return;
+  if (user.role !== 'ADMIN') throw new ContentMutationError('Unauthorized', 403);
+  const actor = await tx.user.findUnique({ where: { id: user.id }, select: { role: true } });
+  if (actor?.role !== 'ADMIN') throw new ContentMutationError('Unauthorized', 403);
 }
 
 export function validateContentFields(body: Record<string, unknown>, creating: boolean) {

@@ -11,25 +11,13 @@ export async function GET(
 
     const certificate = await prisma.certificate.findUnique({
       where: { id: certificateId },
-      include: {
-        user: {
-          select: {
-            name: true,
-            email: true,
-          },
-        },
-        course: {
-          select: {
-            title: true,
-          },
-        },
-      },
+      select: { id: true, userName: true, courseName: true, issuedAt: true },
     });
 
     if (!certificate) {
       return NextResponse.json(
         { valid: false, message: 'Certificate not found' },
-        { status: 404 }
+        { status: 404, headers: { 'Cache-Control': 'no-store' } }
       );
     }
 
@@ -41,12 +29,12 @@ export async function GET(
         courseName: certificate.courseName,
         issuedAt: certificate.issuedAt,
       },
-    });
+    }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     console.error('Error verifying certificate:', error);
     return NextResponse.json(
       { valid: false, message: 'Error verifying certificate' },
-      { status: 500 }
+      { status: 500, headers: { 'Cache-Control': 'no-store' } }
     );
   }
 }

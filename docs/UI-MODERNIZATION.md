@@ -1,5 +1,7 @@
 # ForgeCommunity: UI-Modernisierung
 
+> **Historischer Stand (bis 2. Oktober 2026).** Dieses Dokument beschreibt die frühere UI-Modernisierung und deren damalige Prüfungen. Die Aussagen zur Verfügbarkeit von Hallmark, zu Screenshots und zu erfolgreichen Browserprüfungen gelten ausschließlich für diesen früheren Stand. Für das neue, am 14. Oktober begonnene seitenweite Redesign gilt der Hallmark-basierte Vertrag in [`design.md`](../design.md); dessen aktuelle lokale Prüfungen und noch offene Browser-/PostgreSQL-Prüfungen stehen in [`LOCAL-INTEGRATION-VERIFICATION.md`](LOCAL-INTEGRATION-VERIFICATION.md).
+
 ## Designrichtung
 
 ForgeCommunity soll wie ein zusammenhängendes Produkt wirken: klar, ruhig und freundlich. Cobalt ist der primäre Akzent; helle Flächen und dunkle Typografie geben Inhalten Raum. Der Dark Mode verwendet dieselben semantischen Tokens mit abgestimmten Farben. Keine erfundenen Kennzahlen, Aktivitätsmeldungen oder Funktionen.
@@ -42,7 +44,7 @@ Der gewünschte Hallmark-Skill war in dieser Arbeitsumgebung weder im Skill-Kata
 | Ressourcendetails `/resources/[id]` | Gemeinsamer Rahmen, konsistente Metadaten und Vorschau. |
 | Projekte `/showcases` | Responsive Karten/Listen, Like-/Löschaktionen von der Navigation getrennt; korrekt positionierte Bildvorschau. |
 | Projekt `/projects/[projectId]` | Bearbeiten/Löschen für Eigentümer erreichbar; Like/Unlike synchronisiert; vollständige geladene Kommentare und erreichbarer Kommentarabschnitt. |
-| Experimenteller Projektpfad `/projects/[id]test` | Weiterleitung zur regulären Detailseite statt abweichender Ansicht mit funktionslosen Aktionen. |
+| Experimenteller Projektpfad `/projects/[id]test` | Entfernt: Die generierte Next-Routentabelle registrierte diesen Pfad nicht als dynamische Route; `/projects/[projectId]` fing solche URLs bereits ab. Keine bestehende Navigation verweist darauf. |
 | Neues Projekt `/projects/new` | Vollständiger App-Rahmen, sichere Links/Vorschau, Textvalidierung statt HTML-Länge, klare Fehler und Abbrechen. |
 | Skills `/skills` | Responsive Filter/Tabs, korrekte Sortierung nach Bestätigungen, Sperre mehrfacher Bestätigung und synchronisierte Detailansicht. |
 | Chat `/chat` | Channelwahl auf dem Handy, zugängliche Channelbuttons, robuste Nachrichtenbreiten, beschriftete Aktionen und Sperre gegen Doppelsenden; erneute Channelwahl erhält den Verlauf. |

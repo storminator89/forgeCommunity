@@ -4,8 +4,6 @@ import { useState } from 'react';
 import { ProfileEditForm } from './ProfileEditForm';
 import { ImageUpload } from './ImageUpload';
 import { SocialLinksForm } from './SocialLinksForm';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -13,9 +11,6 @@ import {
   User,
   Image as ImageIcon,
   Share2,
-  Settings,
-  CheckCircle,
-  AlertCircle,
   Trash2,
   Github,
   Linkedin,
@@ -24,7 +19,6 @@ import {
   Upload,
   Camera
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-toastify';
 import Image from 'next/image';
 import { getSafeHttpUrl } from '@/lib/security';
@@ -64,13 +58,6 @@ const socialLabels = {
   website: 'Website'
 };
 
-const socialColors = {
-  github: 'hover:text-foreground dark:hover:text-white',
-  linkedin: 'hover:text-blue-600',
-  twitter: 'hover:text-blue-400',
-  website: 'hover:text-green-500'
-};
-
 export function ProfileEditor({ profile, onUpdate }: ProfileEditorProps) {
   const [activeTab, setActiveTab] = useState('basic');
   const [isLoading, setIsLoading] = useState(false);
@@ -104,7 +91,6 @@ export function ProfileEditor({ profile, onUpdate }: ProfileEditorProps) {
     setIsLoading(true);
     try {
       await onUpdate(data);
-      toast.success('Profil erfolgreich aktualisiert');
     } catch (error) {
       console.error('Error updating profile:', error);
       toast.error('Fehler beim Aktualisieren des Profils');
@@ -113,30 +99,26 @@ export function ProfileEditor({ profile, onUpdate }: ProfileEditorProps) {
     }
   };
 
-  const handleImageUpdate = (type: 'avatar' | 'cover') => async (imageUrl: string | null) => {
-    const imageType = type === 'avatar' ? 'Profilbild' : 'Titelbild';
-    setIsLoading(true);
-    try {
-      await onUpdate({
-        [type === 'avatar' ? 'image' : 'coverImage']: imageUrl
-      });
-      if (imageUrl) {
-        toast.success(`${imageType} erfolgreich aktualisiert`);
-      } else {
-        toast.success(`${imageType} erfolgreich entfernt`);
-      }
-    } catch (error) {
-      console.error('Error updating image:', error);
-      toast.error(`Fehler beim ${imageUrl ? 'Aktualisieren' : 'Entfernen'} des ${imageType}s`);
-    } finally {
-      setIsLoading(false);
-    }
+  const handleImageUpdate = (type: 'avatar' | 'cover') => (imageUrl: string) => {
+    onUpdate({ [type === 'avatar' ? 'image' : 'coverImage']: imageUrl });
   };
 
   const handleDeleteImage = async (type: 'avatar' | 'cover') => {
     const imageType = type === 'avatar' ? 'Profilbild' : 'Titelbild';
-    if (window.confirm(`${imageType} entfernen?`)) {
-      await handleImageUpdate(type)(null);
+    if (!window.confirm(`${imageType} aus dem Profil entfernen?`)) return;
+    setIsLoading(true);
+    try {
+      const response = await fetch(`/api/users/${encodeURIComponent(profile.id)}/upload?type=${type}`, {
+        method: 'DELETE', credentials: 'include',
+      });
+      if (!response.ok) throw new Error('Bild konnte nicht entfernt werden.');
+      onUpdate({ [type === 'avatar' ? 'image' : 'coverImage']: null });
+      toast.success(`${imageType} aus dem Profil entfernt`);
+    } catch (error) {
+      console.error('Error removing profile image:', error);
+      toast.error(`${imageType} konnte nicht entfernt werden.`);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -157,7 +139,7 @@ export function ProfileEditor({ profile, onUpdate }: ProfileEditorProps) {
               href={value}
               target="_blank"
               rel="noopener noreferrer"
-              className={`flex items-center gap-2 p-2 rounded-lg hover:bg-accent transition-colors ${socialColors[key]}`}
+              className="inline-flex min-h-11 items-center gap-2 rounded-[10px] px-3 text-sm font-medium hover:bg-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               {socialIcons[key]}
               <span className="text-sm font-medium">{socialLabels[key]}</span>
@@ -187,7 +169,7 @@ export function ProfileEditor({ profile, onUpdate }: ProfileEditorProps) {
               variant="outline"
               size="sm"
               onClick={() => handleDeleteImage(type)}
-              className="flex items-center gap-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/10"
+              className="flex items-center gap-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
             >
               <Trash2 className="h-4 w-4" />
               <span>{imageType} entfernen</span>
@@ -195,10 +177,10 @@ export function ProfileEditor({ profile, onUpdate }: ProfileEditorProps) {
           )}
         </div>
 
-        <div className="relative group">
+        <div className="relative">
           {currentImage ? (
-            <div className="relative rounded-lg overflow-hidden">
-              <div className={`w-full ${type === 'avatar' ? 'aspect-square' : 'aspect-video'} relative`}>
+            <div className="space-y-3">
+              <div className={`relative w-full overflow-hidden rounded-[10px] bg-muted ${type === 'avatar' ? 'aspect-square max-w-48' : 'aspect-video'}`}>
                 <Image
                   src={currentImage}
                   alt={imageType}
@@ -206,21 +188,7 @@ export function ProfileEditor({ profile, onUpdate }: ProfileEditorProps) {
                   className="object-cover"
                 />
               </div>
-              <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 group-focus-within:bg-opacity-40 transition-all duration-300 flex items-center justify-center">
-                <div className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity duration-300">
-                  <ImageUpload
-                    userId={profile.id}
-                    type={type}
-                    currentImage={currentImage}
-                    onUpdate={handleImageUpdate(type)}
-                  >
-                    <Button variant="secondary" size="sm" className="flex items-center gap-2">
-                      <Camera className="h-4 w-4" />
-                      {imageType} ändern
-                    </Button>
-                  </ImageUpload>
-                </div>
-              </div>
+              <ImageUpload userId={profile.id} type={type} currentImage={currentImage} onUpdate={handleImageUpdate(type)}><Button type="button" variant="outline" size="sm"><Camera className="h-4 w-4" aria-hidden="true" />{imageType} ändern</Button></ImageUpload>
             </div>
           ) : (
             <div className="border-2 border-dashed border-border rounded-lg p-8">
@@ -248,143 +216,43 @@ export function ProfileEditor({ profile, onUpdate }: ProfileEditorProps) {
     );
   };
   return (
-    <AnimatePresence mode="wait">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -20 }}
-        transition={{ duration: 0.2 }}
-      >
-        <Card className="mt-6">
-          <CardHeader>
-            <div className="flex justify-between items-start">
-              <div>
-                <CardTitle>Profil bearbeiten</CardTitle>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="p-6">
-            <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="flex h-auto w-full flex-wrap gap-1 mb-8">
-                <TabsTrigger value="basic" className="flex items-center gap-2">
-                  <User className="h-4 w-4" />
-                  Basis-Informationen
-                </TabsTrigger>
-                <TabsTrigger value="media" className="flex items-center gap-2">
-                  <ImageIcon className="h-4 w-4" />
-                  Medien
-                </TabsTrigger>
-                <TabsTrigger value="social" className="flex items-center gap-2">
-                  <Share2 className="h-4 w-4" />
-                  Soziale Medien
-                </TabsTrigger>
-              </TabsList>
-
-              <div className="space-y-6">
-                <TabsContent value="basic">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Persönliche Informationen</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <ProfileEditForm
-                        userId={profile.id}
-                        initialData={{
-                          name: profile.name || '',
-                          title: profile.title,
-                          bio: profile.bio,
-                          contact: profile.contact,
-                        }}
-                        onUpdate={handleProfileUpdate}
-                      />
-                    </CardContent>
-                  </Card>
-                </TabsContent>
-
-                <TabsContent value="media">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Medien verwalten</CardTitle>
-                      <CardDescription>
-                        Profil- und Titelbild auswählen.
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-8">
-                      {renderMediaSection({ type: 'avatar', title: 'Profilbild' })}
-                      <Separator />
-                      {renderMediaSection({ type: 'cover', title: 'Titelbild' })}
-                    </CardContent>
-                  </Card>
-                </TabsContent>
-
-                <TabsContent value="social">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Soziale Medien</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      {renderSocialLinks()}
-                      <SocialLinksForm
-                        userId={profile.id}
-                        initialData={profile.socialLinks || {}}
-                        onUpdate={(data) => handleProfileUpdate({ socialLinks: data })}
-                      />
-                    </CardContent>
-                  </Card>
-                </TabsContent>
-              </div>
-            </Tabs>
-
-            <div className="mt-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium">
-                  Profilvollständigkeit
-                </span>
-                <span className="text-sm text-muted-foreground">
-                  {calculateCompletionScore()}%
-                </span>
-              </div>
-              <Progress
-                value={calculateCompletionScore()}
-                className="h-2"
-              />
-              <p className="text-sm text-muted-foreground mt-2">
-                {calculateCompletionScore() === 100 ? (
-                  <span className="text-green-500 flex items-center gap-1">
-                    <CheckCircle className="h-4 w-4" />
-                    Profil vollständig
-                  </span>
-                ) : (
-                  <span className="text-muted-foreground flex items-center gap-1">
-                    <AlertCircle className="h-4 w-4" />
-                    Noch nicht vollständig.
-                  </span>
-                )}
-              </p>
-            </div>
-
-            {isLoading && (
-              <div className="fixed inset-0 bg-black/20 dark:bg-black/40 flex items-center justify-center z-50">
-                <Card className="w-[300px]">
-                  <CardContent className="py-6">
-                    <div className="flex flex-col items-center space-y-4">
-                      <motion.div
-                        animate={{ rotate: 360 }}
-                        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                      >
-                        <Settings className="h-8 w-8 text-blue-500" />
-                      </motion.div>
-                      <p className="text-sm text-center">
-                        Änderungen werden gespeichert...
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </motion.div>
-    </AnimatePresence>
+    <section aria-labelledby="profile-manage-title" className="mt-8 border-y py-6">
+      <div className="mb-6">
+        <h2 id="profile-manage-title" className="text-xl font-semibold tracking-tight">Profil verwalten</h2>
+        <p className="mt-1 text-sm text-muted-foreground">Stammdaten, Bilder und externe Profile bearbeiten.</p>
+      </div>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList aria-label="Profil bearbeiten" className="flex h-auto w-full flex-wrap justify-start gap-1 rounded-none border-b bg-transparent p-0">
+          <TabsTrigger value="basic" className="min-h-11 gap-2"><User className="h-4 w-4" aria-hidden="true" />Stammdaten</TabsTrigger>
+          <TabsTrigger value="media" className="min-h-11 gap-2"><ImageIcon className="h-4 w-4" aria-hidden="true" />Medien</TabsTrigger>
+          <TabsTrigger value="social" className="min-h-11 gap-2"><Share2 className="h-4 w-4" aria-hidden="true" />Soziale Links</TabsTrigger>
+        </TabsList>
+        <TabsContent value="basic" className="pt-6">
+          <h3 className="text-lg font-semibold">Persönliche Informationen</h3>
+          <p className="mt-1 text-sm text-muted-foreground">Name, Kontakt und Kurzbeschreibung.</p>
+          <div className="mt-4"><ProfileEditForm userId={profile.id} initialData={{ name: profile.name || '', title: profile.title, bio: profile.bio, contact: profile.contact }} onUpdate={handleProfileUpdate} /></div>
+        </TabsContent>
+        <TabsContent value="media" className="pt-6">
+          <h3 className="text-lg font-semibold">Medien verwalten</h3>
+          <p className="mt-1 text-sm text-muted-foreground">Profil- und Titelbild auswählen oder entfernen.</p>
+          <div className="mt-5 grid min-w-0 gap-8 md:grid-cols-2">
+            <div className="min-w-0 border-t pt-4">{renderMediaSection({ type: 'avatar', title: 'Profilbild' })}</div>
+            <div className="min-w-0 border-t pt-4">{renderMediaSection({ type: 'cover', title: 'Titelbild' })}</div>
+          </div>
+        </TabsContent>
+        <TabsContent value="social" className="pt-6">
+          <h3 className="text-lg font-semibold">Soziale Medien</h3>
+          <p className="mt-1 text-sm text-muted-foreground">Diese Links erscheinen auf deinem Profil.</p>
+          {renderSocialLinks()}
+          <div className="mt-4"><SocialLinksForm userId={profile.id} initialData={profile.socialLinks || {}} onUpdate={(data) => handleProfileUpdate({ socialLinks: data })} /></div>
+        </TabsContent>
+      </Tabs>
+      <div className="mt-7 border-t pt-5">
+        <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2 text-sm"><span className="font-medium">Profilvollständigkeit</span><span className="tabular-nums text-muted-foreground">{calculateCompletionScore()}%</span></div>
+        <Progress value={calculateCompletionScore()} className="h-2" aria-label={`Profilvollständigkeit: ${calculateCompletionScore()} Prozent`} />
+        <p className="mt-2 text-sm text-muted-foreground">{calculateCompletionScore() === 100 ? 'Profil vollständig' : 'Du kannst weitere Informationen ergänzen.'}</p>
+      </div>
+      {isLoading && <p role="status" className="mt-4 text-sm text-muted-foreground">Änderungen werden gespeichert…</p>}
+    </section>
   );
 }

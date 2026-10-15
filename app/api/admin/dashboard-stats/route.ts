@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
+import { readAsAdmin } from '@/lib/server/admin-read';
 import { startOfYear, endOfYear, eachMonthOfInterval, format } from 'date-fns';
 import { de } from 'date-fns/locale';
 
@@ -20,38 +20,48 @@ export async function GET() {
     const startOfCurrentYear = startOfYear(now);
     const endOfCurrentYear = endOfYear(now);
 
-    // Fetch stats counts
-    const [totalUsers, totalCourses, totalEvents, totalPosts] = await Promise.all([
-      prisma.user.count(),
-      prisma.course.count(),
-      prisma.event.count(),
-      prisma.post.count(),
-    ]);
+    const result = await readAsAdmin(session.user.id, async tx => {
+      // Counts and recent activity share the current administrator's snapshot.
+      const [totalUsers, totalCourses, totalEvents, totalPosts] = await Promise.all([
+        tx.user.count(),
+        tx.course.count(),
+        tx.event.count(),
+        tx.post.count(),
+      ]);
 
-    // Fetch Recent Activity
-    // We'll combine latest users, posts, courses, and events
-    const [recentUsers, recentPosts, recentCourses, recentEvents] = await Promise.all([
-      prisma.user.findMany({
-        take: 3,
-        orderBy: { createdAt: 'desc' },
-        select: { name: true, email: true, image: true, createdAt: true },
-      }),
-      prisma.post.findMany({
-        take: 3,
-        orderBy: { createdAt: 'desc' },
-        include: { author: { select: { name: true, email: true, image: true } } },
-      }),
-      prisma.course.findMany({
-        take: 3,
-        orderBy: { createdAt: 'desc' },
-        include: { instructor: { select: { name: true, email: true, image: true } } },
-      }),
-      prisma.event.findMany({
-        take: 3,
-        orderBy: { createdAt: 'desc' },
-        include: { attendees: { take: 1, include: { user: true } } } // Just grabbing an attendee if needed, effectively simpler to just show created event
-      }),
-    ]);
+      // Fetch Recent Activity
+      // We'll combine latest users, posts, courses, and events
+      const [recentUsers, recentPosts, recentCourses, recentEvents] = await Promise.all([
+        tx.user.findMany({
+          take: 3,
+          orderBy: { createdAt: 'desc' },
+          select: { name: true, email: true, image: true, createdAt: true },
+        }),
+        tx.post.findMany({
+          take: 3,
+          orderBy: { createdAt: 'desc' },
+          include: { author: { select: { name: true, email: true, image: true } } },
+        }),
+        tx.course.findMany({
+          take: 3,
+          orderBy: { createdAt: 'desc' },
+          include: { instructor: { select: { name: true, email: true, image: true } } },
+        }),
+        tx.event.findMany({
+          take: 3,
+          orderBy: { createdAt: 'desc' },
+          include: { attendees: { take: 1, include: { user: true } } } // Just grabbing an attendee if needed, effectively simpler to just show created event
+        }),
+      ]);
+      return { totalUsers, totalCourses, totalEvents, totalPosts, recentUsers, recentPosts, recentCourses };
+    });
+    if (!result.authorized) {
+      return new NextResponse(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    const { totalUsers, totalCourses, totalEvents, totalPosts, recentUsers, recentPosts, recentCourses } = result.data;
 
     // Normalize activities
     const activities = [

@@ -6,6 +6,8 @@ import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth' 
 import { sanitizeRichHtmlServer, sanitizeTextServer } from '@/lib/server/sanitize-html'
 import { readJsonObject, readPage, requestErrorResponse } from '@/lib/server/api-input'
+import { afterCommunityCursor, COMMUNITY_ORDER, COMMUNITY_PAGE_SIZE, communityPage, communityPostInclude, communityVisibility, isCurrentCommunityAdmin, normalizeCommunityPost, readCommunityCursor } from '@/lib/server/community-feed'
+import { InvalidTopicError, parsePostTopics, readTopicFilter } from '@/lib/community-topics'
 
 export async function POST(req: NextRequest) {
   try {
@@ -14,7 +16,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Nicht authentifiziert' }, { status: 401 })
     }
 
-    const { title, content } = await readJsonObject(req)
+    const { title, content, tags } = await readJsonObject(req)
 
     if (typeof title !== 'string' || typeof content !== 'string') {
       return NextResponse.json({ error: 'Titel und Inhalt sind erforderlich' }, { status: 400 })
@@ -24,6 +26,8 @@ export async function POST(req: NextRequest) {
     if (!safeTitle || !sanitizeTextServer(safeContent)) {
       return NextResponse.json({ error: 'Titel und Inhalt sind erforderlich' }, { status: 400 })
     }
+    const topicNames = parsePostTopics(tags)
+    if (!topicNames) return NextResponse.json({ error: 'Bis zu drei gültige Themen sind erlaubt' }, { status: 400 })
 
     const newPost = await prisma.post.create({
       data: {
@@ -33,15 +37,12 @@ export async function POST(req: NextRequest) {
         // draft-capable clients, so read routes still enforce draft privacy.
         published: true,
         authorId: session.user.id,
+        tags: { connectOrCreate: topicNames.map(name => ({ where: { name }, create: { name } })) },
       },
-      include: {
-        author: {
-          select: { id: true, name: true, image: true },
-        },
-      },
+      include: communityPostInclude(session.user.id),
     })
 
-    return NextResponse.json(newPost, { status: 201 })
+    return NextResponse.json(normalizeCommunityPost(newPost, session.user.id), { status: 201 })
   } catch (error: any) {
     console.error(error)
     const inputError = requestErrorResponse(error)
@@ -52,52 +53,27 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   try {
-    const page = readPage(req)
+    const feed = new URL(req.url).searchParams.get('feed') === '1'
+    const tag = readTopicFilter(req)
+    const cursor = feed ? readCommunityCursor(req, 'posts', undefined, tag) : null
+    const page = feed ? { take: COMMUNITY_PAGE_SIZE + 1 } : readPage(req)
     const session = await getServerSession(authOptions)
     const userId = session?.user?.id
-    const where = session?.user?.role === 'ADMIN'
-      ? undefined
-      : userId
-        ? { OR: [{ published: true }, { published: false, authorId: userId }] }
-        : { published: true }
-
+    const isAdmin = await isCurrentCommunityAdmin(userId, session?.user?.role)
     const posts = await prisma.post.findMany({
-      where,
+      where: { AND: [communityVisibility(userId, isAdmin), afterCommunityCursor(cursor), ...(tag ? [{ tags: { some: { name: tag } } }] : [])] },
       ...page,
-      include: {
-        author: {
-          select: { id: true, name: true, image: true },
-        },
-        likePosts: true,
-        comments: {
-          include: {
-            author: {
-              select: { id: true, name: true, image: true },
-            },
-            likeComments: true,
-          },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
+      include: communityPostInclude(userId),
+      orderBy: COMMUNITY_ORDER,
     })
-
-    // Füge die Like-Informationen hinzu
-    const mappedPosts = posts.map(post => ({
-      ...post,
-      votes: post.likePosts.length,
-      isLiked: userId ? post.likePosts.some(like => like.userId === userId) : false,
-      comments: post.comments.map(comment => ({
-        ...comment,
-        votes: comment.likeComments.length,
-        isLiked: userId ? comment.likeComments.some(like => like.userId === userId) : false,
-      })),
-    }))
-
-    return NextResponse.json(mappedPosts)
+    if (!feed) return NextResponse.json(posts.map(post => normalizeCommunityPost(post, userId)), { headers: { 'Cache-Control': 'private, no-store' } })
+    const result = communityPage(posts, 'posts', undefined, tag)
+    return NextResponse.json({ posts: result.items.map(post => normalizeCommunityPost(post, userId)), nextCursor: result.nextCursor }, { headers: { 'Cache-Control': 'private, no-store' } })
   } catch (error) {
     console.error(error)
     const inputError = requestErrorResponse(error)
     if (inputError) return inputError
+    if (error instanceof InvalidTopicError) return NextResponse.json({ error: error.message }, { status: 400 })
     return NextResponse.json({ error: 'Fehler beim Abrufen der Beiträge' }, { status: 500 })
   }
 }

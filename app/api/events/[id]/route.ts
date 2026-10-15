@@ -8,6 +8,7 @@ import { DateTime } from 'luxon';
 import { sanitizeRichHtmlServer, sanitizeTextServer } from '@/lib/server/sanitize-html';
 import { generateICS } from '@/lib/icsGenerator';
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
+import { parseEventCapacity, ParticipationError, participationTransaction } from '@/lib/server/participation';
 
 // Unterstützte Zeitzonen
 const TIMEZONES = [
@@ -58,20 +59,13 @@ export async function PUT(
   }
 
   try {
-    const event = await prisma.event.findUnique({
-      where: { id: params.id },
-    });
-
-    if (!event) {
-      return NextResponse.json({ error: 'Event not found' }, { status: 404 });
-    }
-
     const data = await readJsonObject(request);
     const title = sanitizeTextServer(typeof data.title === 'string' ? data.title : '');
     const description = sanitizeRichHtmlServer(typeof data.description === 'string' ? data.description : '');
     const location = sanitizeTextServer(typeof data.location === 'string' ? data.location : '');
     const category = sanitizeTextServer(typeof data.category === 'string' ? data.category : '') || 'Allgemein';
     const { date, startTime, endTime, timezone } = data;
+    const maxAttendees = data.maxAttendees === undefined ? undefined : parseEventCapacity(data.maxAttendees);
 
     // Überprüfen der erforderlichen Felder
     if (!title || typeof date !== 'string' || !date || !description || !location || typeof timezone !== 'string' || !timezone || typeof startTime !== 'string' || !startTime || typeof endTime !== 'string' || !endTime) {
@@ -99,18 +93,28 @@ export async function PUT(
     const utcStartDateTime = eventStartDateTime.toUTC();
     const utcEndDateTime = eventEndDateTime.toUTC();
 
-    const updatedEvent = await prisma.event.update({
-      where: { id: params.id },
-      data: {
-        title,
-        date: utcStartDateTime.toJSDate(),
-        description,
-        location,
-        startTime: eventStartDateTime.toFormat('HH:mm'),
-        endTime: eventEndDateTime.toFormat('HH:mm'),
-        category,
-        timezone,
-      },
+    const updatedEvent = await participationTransaction(async tx => {
+      const event = await tx.event.findUnique({ where: { id: params.id }, select: { maxAttendees: true } });
+      if (!event) throw new ParticipationError('Event not found', 404);
+      const capacity = maxAttendees === undefined ? event.maxAttendees : maxAttendees;
+      if (capacity !== null) {
+        const registeredCount = await tx.eventAttendee.count({ where: { eventId: params.id, status: { not: 'CANCELLED' } } });
+        if (registeredCount > capacity) throw new ParticipationError('Capacity is below current registrations', 409);
+      }
+      return tx.event.update({
+        where: { id: params.id },
+        data: {
+          title,
+          date: utcStartDateTime.toJSDate(),
+          description,
+          location,
+          startTime: eventStartDateTime.toFormat('HH:mm'),
+          endTime: eventEndDateTime.toFormat('HH:mm'),
+          category,
+          timezone,
+          ...(maxAttendees === undefined ? {} : { maxAttendees }),
+        },
+      });
     });
 
     const formattedZonedStartDate = DateTime.fromJSDate(updatedEvent.date, { zone: 'utc' }).setZone(updatedEvent.timezone);
@@ -125,8 +129,10 @@ export async function PUT(
       endTime: updatedEvent.endTime || '',
       category: updatedEvent.category || '',
       timezone: updatedEvent.timezone,
+      maxAttendees: updatedEvent.maxAttendees,
     }, { status: 200 });
   } catch (error) {
+    if (error instanceof ParticipationError) return NextResponse.json({ error: error.message }, { status: error.status });
     const clientError = requestErrorResponse(error);
     if (clientError) return clientError;
     console.error('Error updating event:', error);

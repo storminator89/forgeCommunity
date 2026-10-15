@@ -27,6 +27,7 @@ export interface Skill {
 
 export interface Badge {
   id: string;
+  badgeId?: string;
   name: string;
   description: string;
   image: string;

@@ -7,6 +7,7 @@ ENV DATABASE_PROVIDER=${DATABASE_PROVIDER}
 # Only a provider selector is supplied at build time; no deployment credentials.
 RUN case "$DATABASE_PROVIDER" in postgresql|sqlite) printf '%s' "$DATABASE_PROVIDER" > .image-db-provider ;; *) echo 'DATABASE_PROVIDER must be postgresql or sqlite' >&2; exit 1 ;; esac
 COPY package*.json ./
+COPY vendor/next-eslint-plugin-next-16.3.8.tgz ./vendor/
 COPY prisma ./prisma/
 COPY prisma.config.ts ./
 COPY scripts/generate-sqlite-schema.mjs ./scripts/
@@ -30,6 +31,7 @@ COPY --from=builder --chown=node:node /app/scripts/sqlite-init.mjs ./scripts/sql
 COPY --from=builder --chown=node:node /app/prisma/sqlite-migrations ./prisma/sqlite-migrations
 COPY --from=builder --chown=node:node /app/scripts/db-deploy.mjs /app/scripts/postgresql-upgrades.mjs ./scripts/
 COPY --from=builder --chown=node:node /app/prisma/postgresql-upgrades ./prisma/postgresql-upgrades
+COPY --from=builder --chown=node:node /app/prisma/postgresql-baselines ./prisma/postgresql-baselines
 COPY --chown=node:node docker/entrypoint.sh docker/healthcheck.mjs ./docker/
 RUN mkdir -p /app/data/h5p /app/public/images/uploads /app/private/chat-uploads && \
     chown -R node:node /app/data /app/public/images/uploads /app/private/chat-uploads && \

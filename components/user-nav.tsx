@@ -71,7 +71,7 @@ export function UserNav() {
         <Button
           variant="ghost"
           aria-label="Benutzermenü öffnen"
-          className="relative h-8 w-8 rounded-full hover:bg-accent"
+          className="relative h-11 w-11 rounded-full p-0 hover:bg-accent"
         >
           <Avatar className="h-8 w-8">
             <AvatarImage

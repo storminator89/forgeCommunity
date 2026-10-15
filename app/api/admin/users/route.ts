@@ -6,6 +6,7 @@ import { authOptions } from '../../auth/[...nextauth]/options'
 import bcrypt from 'bcrypt'
 import { adminUserInput } from '@/lib/server/account-security'
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input'
+import { readAsAdmin } from '@/lib/server/admin-read'
 
 class AdminRoleLostError extends Error {}
 
@@ -21,13 +22,14 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const users = await prisma.user.findMany({
+    const result = await readAsAdmin(session.user.id, tx => tx.user.findMany({
       select: {
         id: true,
         name: true,
         email: true,
         image: true,
         role: true,
+        isTestAccount: true,
         title: true,
         contact: true,
         createdAt: true,
@@ -44,7 +46,11 @@ export async function GET(request: NextRequest) {
           }
         }
       }
-    });
+    }));
+    if (!result.authorized) {
+      return NextResponse.json({ error: 'Keine Administratorrechte' }, { status: 403 })
+    }
+    const users = result.data;
 
     const transformedUsers = users.map(user => ({
       id: user.id,
@@ -52,6 +58,7 @@ export async function GET(request: NextRequest) {
       email: user.email,
       image: user.image,
       role: user.role,
+      isTestAccount: user.isTestAccount,
       title: user.title,
       contact: user.contact,
       createdAt: user.createdAt,

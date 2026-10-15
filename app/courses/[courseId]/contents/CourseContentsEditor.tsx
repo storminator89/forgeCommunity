@@ -17,9 +17,8 @@ import { cn } from '@/lib/utils'
 import { CourseContentsSidebar } from './CourseContentsSidebar'
 import { EditContentForm } from './EditContentForm'
 import { ContentRenderer } from './ContentRenderer'
-import type { CourseContent } from './types'
+import type { CourseContent, CourseProgressSnapshot } from './types'
 import { appendContent, editableFields, editableSignature, findContent, parentIds, removeContent, replaceContent } from './content-tree'
-import { isPageVisited, markPageAsVisited, unmarkPageAsVisited } from './utils/visitedPages'
 
 type CourseDetails = { id: string; name: string; canEdit: boolean }
 type Notice = { type: 'success' | 'error'; message: string }
@@ -32,6 +31,7 @@ async function responseData<T>(response: Response, fallback: string): Promise<T>
       403: 'Du hast keinen Zugriff auf diesen Kurs.',
       404: 'Der Kurs oder Inhalt ist nicht mehr verfügbar.',
       409: 'Der Inhalt wurde gleichzeitig geändert. Bitte lade die Ansicht erneut.',
+      412: 'Der Inhalt wurde geändert. Bitte lade die Ansicht erneut, bevor du ihn abschließt.',
     }
     throw new Error(messages[response.status] || fallback)
   }
@@ -43,6 +43,9 @@ export function CourseContentsEditor({ courseId }: { courseId: string }) {
   const { data: session, status } = useSession()
   const [course, setCourse] = useState<CourseDetails | null>(null)
   const [contents, setContents] = useState<CourseContent[]>([])
+  const [progress, setProgress] = useState<CourseProgressSnapshot | null>(null)
+  const [progressBusy, setProgressBusy] = useState(false)
+  const progressLock = useRef(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [draft, setDraft] = useState<CourseContent | null>(null)
@@ -59,7 +62,6 @@ export function CourseContentsEditor({ courseId }: { courseId: string }) {
   const [parentId, setParentId] = useState<string | null>(null)
   const [inlineEditingId, setInlineEditingId] = useState<string | null>(null)
   const [inlineTitle, setInlineTitle] = useState('')
-  const [visitedVersion, setVisitedVersion] = useState(0)
   const [moveOpen, setMoveOpen] = useState(false)
   const [moveParent, setMoveParent] = useState('root')
   const [moveError, setMoveError] = useState<string | null>(null)
@@ -69,6 +71,16 @@ export function CourseContentsEditor({ courseId }: { courseId: string }) {
   const savedDraft = editingId ? findContent(contents, editingId) : null
   const dirty = Boolean(draft && savedDraft && editableSignature(draft) !== editableSignature(savedDraft))
   const canManage = Boolean(course?.canEdit && session?.user?.id)
+  const completedIds = progress?.completedContentIds ?? []
+  const selectedComplete = Boolean(selected && completedIds.includes(selected.id))
+  const selectedTrackable = Boolean(selected && progress?.canTrack && !selected.subContents?.length && selected.type !== 'QUIZ')
+
+  const refreshProgress = useCallback(async () => {
+    const response = await fetch(`/api/courses/${courseId}/progress`)
+    const snapshot = await responseData<CourseProgressSnapshot>(response, 'Der Kursfortschritt konnte nicht geladen werden.')
+    setProgress(snapshot)
+    return snapshot
+  }, [courseId])
 
   useEffect(() => {
     if (status === 'unauthenticated') router.replace(`/login?callbackUrl=${encodeURIComponent(`/courses/${courseId}/contents`)}`)
@@ -80,10 +92,12 @@ export function CourseContentsEditor({ courseId }: { courseId: string }) {
     void Promise.all([
       fetch(`/api/courses/${courseId}`, { signal: controller.signal }).then(r => responseData<CourseDetails>(r, 'Kursinformationen konnten nicht geladen werden.')),
       fetch(`/api/courses/${courseId}/contents`, { signal: controller.signal }).then(r => responseData<CourseContent[]>(r, 'Kursinhalte konnten nicht geladen werden.')),
-    ]).then(([details, tree]) => {
+      fetch(`/api/courses/${courseId}/progress`, { signal: controller.signal }).then(r => responseData<CourseProgressSnapshot>(r, 'Der Kursfortschritt konnte nicht geladen werden.')),
+    ]).then(([details, tree, snapshot]) => {
       if (controller.signal.aborted) return
       setCourse(details)
       setContents(tree)
+      setProgress(snapshot)
       const requested = new URLSearchParams(location.search).get('content')
       if (requested && findContent(tree, requested)) setSelectedId(requested)
       setLoading(false)
@@ -161,7 +175,21 @@ export function CourseContentsEditor({ courseId }: { courseId: string }) {
     setSelectedId(id)
     setEditingId(edit && canManage ? id : null)
     setDraft(edit && canManage ? { ...content } : null)
-    if (!edit) markPageAsVisited(courseId, id)
+  }
+
+  const setCompletion = async (contentId: string, completed: boolean, contentUpdatedAt?: string) => {
+    if (progressLock.current || !progress?.canTrack) return
+    progressLock.current = true
+    setProgressBusy(true)
+    try {
+      const response = await fetch(`/api/courses/${courseId}/progress`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contentId, completed, contentUpdatedAt }),
+      })
+      const changed = await responseData<Pick<CourseProgressSnapshot, 'completedContentIds' | 'complete'>>(response, 'Der Kursfortschritt konnte nicht gespeichert werden.')
+      setProgress(previous => previous ? { ...previous, ...changed } : previous)
+      setNotice({ type: 'success', message: completed ? 'Inhalt als abgeschlossen markiert.' : 'Abschlussmarkierung entfernt.' })
+    } catch (error) { setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Der Kursfortschritt konnte nicht gespeichert werden.' }) }
+    finally { progressLock.current = false; setProgressBusy(false) }
   }
 
   const createContent = async (title: string, contentParentId: string | null) => {
@@ -172,6 +200,7 @@ export function CourseContentsEditor({ courseId }: { courseId: string }) {
         body: JSON.stringify({ title: title.trim(), type: 'TEXT', content: '', parentId: contentParentId }),
       }), 'Der Inhalt konnte nicht angelegt werden. Bitte versuche es erneut.')
       setContents(previous => appendContent(previous, created))
+      void refreshProgress().catch(() => {})
       if (!dirty) {
         setSelectedId(created.id)
         setEditingId(created.id)
@@ -187,6 +216,7 @@ export function CourseContentsEditor({ courseId }: { courseId: string }) {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editableFields(updated)),
     }), 'Der Inhalt konnte nicht gespeichert werden. Dein Entwurf bleibt erhalten.')
     setContents(previous => replaceContent(previous, data))
+    void refreshProgress().catch(() => {})
     setEditingId(null)
     setDraft(null)
     setNotice({ type: 'success', message: 'Inhalt gespeichert.' })
@@ -196,6 +226,7 @@ export function CourseContentsEditor({ courseId }: { courseId: string }) {
     await responseData(await fetch(`/api/courses/${courseId}/contents/${content.id}`, { method: 'DELETE' }), 'Der Inhalt konnte nicht gelöscht werden.')
     const deletesSelected = selectedId && Boolean(findContent([content], selectedId))
     setContents(previous => removeContent(previous, content.id))
+    void refreshProgress().catch(() => {})
     if (deletesSelected) { setSelectedId(null); setEditingId(null); setDraft(null) }
     setNotice({ type: 'success', message: 'Inhalt gelöscht.' })
   })
@@ -207,6 +238,7 @@ export function CourseContentsEditor({ courseId }: { courseId: string }) {
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: title.trim() }),
       }), 'Der Titel konnte nicht gespeichert werden.')
       setContents(previous => replaceContent(previous, updated))
+      void refreshProgress().catch(() => {})
       setInlineEditingId(null)
       setInlineTitle('')
       setNotice({ type: 'success', message: 'Titel gespeichert.' })
@@ -221,6 +253,7 @@ export function CourseContentsEditor({ courseId }: { courseId: string }) {
         }), 'Die Reihenfolge konnte nicht gespeichert werden.')
         const tree = result.contents || await responseData<CourseContent[]>(await fetch(`/api/courses/${courseId}/contents`), 'Die Reihenfolge wurde gespeichert. Bitte lade die Ansicht erneut.')
         setContents(tree)
+        void refreshProgress().catch(() => {})
         setNotice({ type: 'success', message: 'Reihenfolge gespeichert.' })
       })
     } catch (error) {
@@ -250,6 +283,7 @@ export function CourseContentsEditor({ courseId }: { courseId: string }) {
           body: JSON.stringify({ targetId, position: moveParent === 'root' ? 'after' : 'inside' }),
         }), 'Der Inhalt konnte nicht verschoben werden.')
         setContents(tree)
+        void refreshProgress().catch(() => {})
         setMoveOpen(false)
         setNotice({ type: 'success', message: 'Inhalt verschoben.' })
       })
@@ -272,22 +306,22 @@ export function CourseContentsEditor({ courseId }: { courseId: string }) {
       <Sidebar />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <AppHeader>
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex min-w-0 flex-1 items-center gap-2">
+          <div className="flex items-center justify-between gap-1 sm:gap-2">
+            <div className="flex min-w-0 flex-1 items-center gap-1 sm:gap-2">
               <Button variant="outline" size="icon" aria-label={topicsOpen ? 'Inhaltsverzeichnis schließen' : 'Inhaltsverzeichnis öffnen'} aria-expanded={topicsOpen} aria-controls="course-contents-navigation" onClick={() => setTopicsOpen(value => !value)}>
                 {topicsOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
               </Button>
-              <h2 className="truncate">{course?.name || 'Kursinhalt'}</h2>
+              <h1 className="min-w-0 line-clamp-2 break-words [overflow-wrap:anywhere] max-sm:text-base" title={course?.name || 'Kursinhalt'}>{course?.name || 'Kursinhalt'}</h1>
             </div>
-            <div className="flex shrink-0 items-center gap-2"><ThemeToggle /><UserNav /></div>
+            <div className="flex shrink-0 items-center gap-1 sm:gap-2"><ThemeToggle /><UserNav /></div>
           </div>
         </AppHeader>
-        {notice && <div role={notice.type === 'error' ? 'alert' : 'status'} className={cn('mx-4 my-2 flex items-center justify-between gap-3 rounded-xl border px-4 py-2 text-sm', notice.type === 'error' ? 'border-destructive/30 text-destructive' : 'bg-card')}><span>{notice.message}</span><Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" aria-label="Meldung schließen" onClick={() => setNotice(null)}><X className="h-4 w-4" /></Button></div>}
-        <main id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto">
+        {notice && <div role={notice.type === 'error' ? 'alert' : 'status'} className={cn('mx-4 my-2 flex items-center justify-between gap-3 rounded-xl border px-4 py-2 text-sm', notice.type === 'error' ? 'border-destructive/30 text-destructive' : 'bg-card')}><span>{notice.message}</span><Button variant="ghost" size="icon" className="shrink-0" aria-label="Meldung schließen" onClick={() => setNotice(null)}><X className="h-4 w-4" /></Button></div>}
+        <main id="page-content" tabIndex={-1} aria-busy={isLoading} className="min-h-0 flex-1 overflow-y-auto">
           {isLoading ? <PageState kind="loading" title="Kurs wird geladen" /> : loadError ? <PageState kind="error" title="Kurs konnte nicht geladen werden" description={loadError} action={<RetryButton onClick={() => { setLoading(true); setLoadError(null); setRetry(value => value + 1) }} />} /> : status === 'authenticated' ? (
             <div className="flex min-h-full flex-col md:h-full md:min-h-0 md:flex-row">
               <div id="course-contents-navigation" className={cn('relative shrink-0 border-b bg-card md:border-b-0 md:border-r', topicsOpen ? 'w-full md:w-[var(--course-sidebar-width)]' : 'hidden')} style={{ '--course-sidebar-width': `${sidebarWidth}px` } as CSSProperties}>
-                <div className="max-h-80 overflow-hidden md:h-full md:max-h-none">
+                <div className="h-72 min-h-0 overflow-hidden md:h-full">
                   <CourseContentsSidebar contents={contents} selectedContentId={selectedId}
                     onContentSelect={id => { if (id !== selectedId) requestNavigation(() => selectContent(id)) }}
                     onEditClick={id => requestNavigation(() => selectContent(id, true))}
@@ -295,24 +329,23 @@ export function CourseContentsEditor({ courseId }: { courseId: string }) {
                     onInlineEditSubmit={renameContent} setIsInlineEditing={id => { if (id && editingId === id) requestNavigation(() => { setEditingId(null); setDraft(null); setInlineEditingId(id) }); else setInlineEditingId(id) }} setInlineEditTitle={setInlineTitle}
                     onMoveUp={(parent, id) => reorderContent(id, 'up', parent)} onMoveDown={(parent, id) => reorderContent(id, 'down', parent)}
                     onMoveMainUp={id => reorderContent(id, 'up', null)} onMoveMainDown={id => reorderContent(id, 'down', null)}
-                    canManage={canManage} isMutating={mutating} mainContentId={parentId} mainTopicIndex={0}
+                    canManage={canManage} isMutating={mutating} isProgressMutating={progressBusy} mainContentId={parentId} mainTopicIndex={0}
                     courseId={courseId} courseName={course?.name || ''} isLoading={false}
                     onMainContentSubmit={title => createContent(title, null)}
                     onSubContentSubmit={(title, explicitParent) => createContent(title, explicitParent || parentId)}
-                    onMainContentSelect={setParentId} forceUpdate={Boolean(visitedVersion % 2)}
-                    onVisitedToggle={id => { if (isPageVisited(courseId, id)) unmarkPageAsVisited(courseId, id); else markPageAsVisited(courseId, id); setVisitedVersion(value => value + 1) }} />
+                    onMainContentSelect={setParentId} progress={progress} onCertificateIssued={() => { void refreshProgress().catch(() => {}) }} />
                 </div>
-                <div role="separator" aria-label="Breite des Inhaltsverzeichnisses" aria-orientation="vertical" aria-valuemin={220} aria-valuemax={440} aria-valuenow={sidebarWidth} tabIndex={0} className="absolute right-0 top-0 hidden h-full w-1.5 cursor-col-resize focus-visible:bg-primary/30 md:block" onMouseDown={event => { resizeStart.current = { x: event.pageX, width: sidebarWidth }; setResizing(true) }} onKeyDown={event => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); setSidebarWidth(width => Math.max(220, Math.min(440, width + (event.key === 'ArrowLeft' ? -20 : 20)))) } }} />
+                <div role="separator" aria-label="Breite des Inhaltsverzeichnisses" aria-orientation="vertical" aria-valuemin={220} aria-valuemax={440} aria-valuenow={sidebarWidth} tabIndex={0} className="absolute right-0 top-0 hidden h-full w-4 cursor-col-resize border-r border-border focus-visible:bg-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring md:block" onMouseDown={event => { resizeStart.current = { x: event.pageX, width: sidebarWidth }; setResizing(true) }} onKeyDown={event => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); setSidebarWidth(width => Math.max(220, Math.min(440, width + (event.key === 'ArrowLeft' ? -20 : 20)))) } }} />
               </div>
               <section className="min-w-0 flex-1 md:overflow-y-auto" aria-label="Ausgewählter Kursinhalt">
                 {selected ? <div className="mx-auto w-full max-w-4xl p-4 sm:p-6 lg:p-8">
                   <div className="mb-6 flex flex-wrap items-start justify-between gap-3 border-b pb-5">
-                    <div className="min-w-0"><p className="mb-2 text-xs text-muted-foreground">{parentIds(contents, selected.id).reverse().map(id => findContent(contents, id)?.title).filter(Boolean).join(' / ') || typeNames[selected.type]}</p><h1 className="break-words text-2xl font-semibold tracking-tight">{selected.title}</h1></div>
+                    <div className="min-w-0"><p className="mb-2 text-sm text-muted-foreground">{parentIds(contents, selected.id).reverse().map(id => findContent(contents, id)?.title).filter(Boolean).join(' / ') || typeNames[selected.type]}</p><h2 className="break-words text-2xl font-semibold tracking-tight [overflow-wrap:anywhere]">{selected.title}</h2></div>
                     {canManage && !editingId && <div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" disabled={mutating} onClick={() => selectContent(selected.id, true)}><Edit className="mr-2 h-4 w-4" />Inhalt bearbeiten</Button><Button variant="ghost" size="sm" disabled={mutating} onClick={() => { setMoveParent(selected.parentId || 'root'); setMoveError(null); setMoveOpen(true) }}><FolderInput className="mr-2 h-4 w-4" />Verschieben</Button></div>}
                     {editingId && <span className="text-xs text-muted-foreground" role="status">{dirty ? 'Ungespeicherte Änderungen' : 'Bearbeiten'}</span>}
                   </div>
-                  {editingId === selected.id && canManage ? <div className="rounded-xl border bg-card p-4 sm:p-6"><EditContentForm key={selected.id} content={selected} onSubmit={updateContent} onContentChange={change => setDraft(previous => previous ? { ...previous, ...change } : { ...selected, ...change })} onCancel={cancelEdit} /></div> : selected.type === 'TEXT' && typeof selected.content === 'string' && !selected.content.trim() ? <div className="space-y-3">{selected.subContents?.length ? <><h2 className="text-sm font-medium">Themen in diesem Kapitel</h2>{selected.subContents.map(child => <button type="button" key={child.id} className="block w-full rounded-xl border bg-card p-4 text-left text-sm hover:border-primary/40" onClick={() => requestNavigation(() => selectContent(child.id))}>{child.title}</button>)}</> : <p className="text-sm text-muted-foreground">Für dieses Thema wurde noch kein Inhalt hinterlegt.</p>}</div> : <ContentRenderer key={selected.id} content={selected} />}
-                </div> : <div className="mx-auto flex max-w-md flex-col items-center gap-3 px-6 py-16 text-center"><FileText className="h-8 w-8 text-muted-foreground" /><h1 className="text-xl font-semibold">{contents.length ? 'Wähle ein Thema' : 'Noch keine Kursinhalte'}</h1><p className="text-sm text-muted-foreground">{contents.length ? 'Die Inhalte findest du im Inhaltsverzeichnis.' : canManage ? 'Lege im Inhaltsverzeichnis das erste Kapitel an.' : 'Für diesen Kurs wurden noch keine Inhalte angelegt.'}</p></div>}
+                  {editingId === selected.id && canManage ? <div className="rounded-xl border bg-card p-4 sm:p-6"><EditContentForm key={selected.id} content={selected} onSubmit={updateContent} onContentChange={change => setDraft(previous => previous ? { ...previous, ...change } : { ...selected, ...change })} onCancel={cancelEdit} /></div> : <div className="space-y-6">{selected.type === 'TEXT' && typeof selected.content === 'string' && !selected.content.trim() ? <div className="space-y-3">{selected.subContents?.length ? <><h3 className="text-sm font-semibold">Themen in diesem Kapitel</h3>{selected.subContents.map(child => <button type="button" key={child.id} className="block min-h-11 w-full rounded-xl border bg-card p-4 text-left text-sm hover:border-input focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring" onClick={() => requestNavigation(() => selectContent(child.id))}>{child.title}</button>)}</> : <p className="text-sm text-muted-foreground">Für dieses Thema wurde noch kein Inhalt hinterlegt.</p>}</div> : <ContentRenderer key={selected.id} content={selected} learnerQuiz={Boolean(progress?.canTrack)} onQuizPassed={() => { void refreshProgress().catch(() => setNotice({ type: 'error', message: 'Quiz bestanden. Bitte lade den Fortschritt erneut.' })) }} />}{selectedTrackable && <div className="border-t pt-5"><Button type="button" variant={selectedComplete ? 'outline' : 'default'} disabled={progressBusy || mutating || (!selectedComplete && !selected.updatedAt)} onClick={() => void setCompletion(selected.id, !selectedComplete, selected.updatedAt)}>{progressBusy ? 'Wird gespeichert …' : selectedComplete ? 'Abschlussmarkierung entfernen' : 'Als abgeschlossen markieren'}</Button><p className="mt-2 text-sm text-muted-foreground">Bestätige selbst, wenn du diesen Inhalt abgeschlossen hast.</p></div>}</div>}
+                </div> : <div className="mx-auto flex max-w-md flex-col items-center gap-3 px-6 py-16 text-center"><FileText className="h-8 w-8 text-muted-foreground" /><h2 className="text-xl font-semibold">{contents.length ? 'Wähle ein Thema' : 'Noch keine Kursinhalte'}</h2><p className="text-sm text-muted-foreground">{contents.length ? 'Die Inhalte findest du im Inhaltsverzeichnis.' : canManage ? 'Lege im Inhaltsverzeichnis das erste Kapitel an.' : 'Für diesen Kurs wurden noch keine Inhalte angelegt.'}</p></div>}
               </section>
             </div>
           ) : <PageState kind="loading" title="Weiterleitung zur Anmeldung" />}

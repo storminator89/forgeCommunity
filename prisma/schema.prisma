@@ -13,6 +13,24 @@ enum Role {
   INSTRUCTOR
 }
 
+enum RewardEventType {
+  COURSE_COMPLETED
+}
+
+enum RewardChangeType {
+  AWARDED
+  REVOKED
+  REINSTATED
+}
+
+enum RewardChangeReason {
+  QUIZ_REVISED
+  APPROVAL_WITHDRAWN
+  LEARNING_CHANGED
+  ACCOUNT_INELIGIBLE
+  COURSE_REMOVED
+}
+
 enum Theme {
   LIGHT
   DARK
@@ -77,6 +95,7 @@ model User {
   contact            String?         
   endorsements       Int             @default(0)
   role               Role            @default(USER)
+  isTestAccount      Boolean         @default(false)
   verificationToken  String?
   resetPasswordToken String?
   lastLogin          DateTime?
@@ -111,6 +130,12 @@ model User {
   skillEndorsementsGiven SkillEndorsement[]
   h5pContents        H5PContent[]
   certificates       Certificate[]
+  contentProgress    CourseContentProgress[]
+  quizAttempts       QuizAttempt[]
+  rewardLedger       RewardLedger[]
+  completionRecords  CourseCompletionRecord[]
+  learningGoal       LearningGoal?
+  solutionDecisions  AcceptedSolutionChange[] @relation("SolutionActor")
 }
 
 model UserSettings {
@@ -119,6 +144,7 @@ model UserSettings {
   userId               String  @unique
   emailNotifications   Boolean @default(true)
   pushNotifications    Boolean @default(true)
+  publicRankingOptIn    Boolean @default(false)
   twoFactorAuthEnabled Boolean @default(false)
   theme                Theme   @default(LIGHT)
   language             String  @default("en")
@@ -165,6 +191,12 @@ model Post {
   comments  Comment[]
   likePosts LikePost[]
   tags      Tag[]      @relation("PostTags")
+  acceptedSolution AcceptedSolution?
+  solutionChanges AcceptedSolutionChange[]
+
+  @@index([createdAt, id])
+  @@index([published, createdAt, id])
+  @@index([authorId, createdAt, id])
 }
 
 model Comment {
@@ -180,6 +212,64 @@ model Comment {
   authorId     String
 
   likeComments LikeComment[]
+  acceptedSolutions AcceptedSolution[]
+  solutionSelections AcceptedSolutionChange[] @relation("SelectedSolution")
+  previousSolutions AcceptedSolutionChange[] @relation("PreviousSolution")
+
+  @@unique([postId, id])
+  @@index([postId, createdAt, id])
+  @@index([authorId, postId])
+}
+
+// A single live author-selected reply; deletion removes the current signal.
+model AcceptedSolution {
+  postId    String @id
+  commentId String @unique
+  revision  String @unique
+  createdAt DateTime @default(now())
+  post      Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  // The composite FK prevents a reply from another discussion being selected.
+  comment   Comment @relation(fields: [postId, commentId], references: [postId, id], onDelete: Cascade)
+}
+
+// Server-created decision history, without content snapshots. Erasure removes
+// identities and target references without destroying the transition history.
+model AcceptedSolutionChange {
+  id                String @id
+  action            String
+  createdAt         DateTime @default(now())
+  actorId           String?
+  postId            String?
+  previousCommentId String?
+  commentId         String?
+  actor             User? @relation("SolutionActor", fields: [actorId], references: [id], onDelete: SetNull)
+  post              Post? @relation(fields: [postId], references: [id], onDelete: SetNull)
+  previousComment   Comment? @relation("PreviousSolution", fields: [previousCommentId], references: [id], onDelete: SetNull)
+  comment           Comment? @relation("SelectedSolution", fields: [commentId], references: [id], onDelete: SetNull)
+
+  @@index([postId, createdAt])
+}
+
+// Polymorphic IDs intentionally keep the moderation audit after a target or
+// account is deleted. Route handlers validate public target visibility and
+// derive reporter/reviewer IDs from the authenticated session.
+model ContentReport {
+  id             String    @id @default(cuid())
+  reporterId     String
+  targetType     String
+  targetId       String
+  reason         String
+  details        String?   @db.Text
+  status         String    @default("OPEN")
+  createdAt      DateTime  @default(now())
+  reviewedAt     DateTime?
+  reviewedById   String?
+  resolutionNote String?   @db.Text
+
+  @@unique([reporterId, targetType, targetId])
+  @@index([reporterId, createdAt])
+  @@index([status, createdAt])
+  @@index([targetType, targetId])
 }
 
 model LikePost {
@@ -193,6 +283,7 @@ model LikePost {
   postId    String
 
   @@unique([userId, postId], name: "user_post_unique")
+  @@index([postId])
 }
 
 model LikeComment {
@@ -206,6 +297,7 @@ model LikeComment {
   commentId String
 
   @@unique([userId, commentId], name: "user_comment_unique")
+  @@index([commentId])
 }
 
 model Tag {
@@ -227,11 +319,15 @@ model Course {
   price        Float?
   currency     String?
   maxStudents  Int?
+  rewardEligible Boolean @default(false)
+  rewardApprovalRevision String?
   imageUrl     String?
   enrollments  Enrollment[]
   lessons      Lesson[]
   contents     CourseContent[]
   certificates Certificate[]
+  contentProgress CourseContentProgress[]
+  quizAttempts QuizAttempt[]
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
 }
@@ -260,6 +356,44 @@ model CourseContent {
   children  CourseContent[] @relation("ParentChild")
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
+  progress  CourseContentProgress[]
+}
+
+model CourseContentProgress {
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  course      Course        @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  courseId    String
+  content     CourseContent @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  contentId   String
+  revision    String
+  completedAt DateTime      @default(now())
+
+  @@id([userId, contentId])
+  @@index([userId, courseId])
+  @@index([courseId])
+  @@index([contentId])
+}
+
+// Attempts retain their content ID and scored revision even if an instructor
+// removes that content; only active CourseContentProgress drives eligibility.
+model QuizAttempt {
+  id           String   @id @default(cuid())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId       String
+  course       Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  courseId     String
+  contentId    String
+  submissionId String
+  answerDigest String
+  revision     String
+  score        Float
+  passed       Boolean
+  submittedAt  DateTime @default(now())
+
+  @@unique([userId, contentId, submissionId])
+  @@index([userId, contentId, revision, submittedAt])
+  @@index([courseId])
 }
 
 model Enrollment {
@@ -272,6 +406,64 @@ model Enrollment {
   completedAt DateTime?
   
   @@unique([userId, courseId])
+}
+
+model RewardLedger {
+  id        String          @id @default(cuid())
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  eventType RewardEventType
+  sourceId  String
+  courseTitle String
+  points    Int
+  stateVersion Int     @default(1)
+  awardedAt DateTime        @default(now())
+  revokedAt DateTime?
+  changes   RewardLedgerChange[]
+
+  @@unique([userId, eventType, sourceId])
+  @@index([userId, revokedAt])
+  @@index([eventType, sourceId])
+}
+
+model RewardLedgerChange {
+  id          String             @id @default(cuid())
+  ledger      RewardLedger       @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  ledgerId    String
+  version     Int
+  type        RewardChangeType
+  reason      RewardChangeReason?
+  pointsDelta Int
+  createdAt   DateTime           @default(now())
+
+  @@unique([ledgerId, version])
+  @@index([createdAt])
+}
+
+/** Private first-completion evidence survives a course's later deletion. */
+model CourseCompletionRecord {
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  courseId    String
+  courseTitle String
+  completedAt DateTime
+
+  @@id([userId, courseId])
+  @@index([userId, completedAt])
+}
+
+/** A private, opt-in calendar-day challenge; progress is always derived from current verified course records. */
+model LearningGoal {
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String    @id
+  targetLeaves Int
+  durationDays Int
+  timezone    String
+  startedAt   DateTime
+  endsAt      DateTime
+  pausedAt    DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model Event {
@@ -341,8 +533,13 @@ model Notification {
   userId    String
   type      NotificationType
   content   String
+  // Only server-side domain events set these. Never persist a client URL.
+  targetType String?
+  targetId   String?
   isRead    Boolean          @default(false)
   createdAt DateTime         @default(now())
+
+  @@index([userId, targetType, targetId])
 }
 
 model Badge {

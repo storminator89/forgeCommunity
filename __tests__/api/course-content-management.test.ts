@@ -9,6 +9,7 @@ import { getServerSession } from 'next-auth/next';
 
 jest.mock('next/server', () => ({ NextResponse: { json: (body: unknown, init?: ResponseInit) => new Response(JSON.stringify(body), init) } }));
 jest.mock('next-auth/next', () => ({ getServerSession: jest.fn() }));
+jest.mock('@/lib/server/rewards', () => ({ reconcileCourseRewards: jest.fn() }));
 jest.mock('@/app/api/auth/[...nextauth]/options', () => ({ authOptions: {} }));
 jest.mock('@/lib/server/request-body', () => ({ requestWithBodyLimit: async (request: Request) => request, RequestBodyLimitError: class extends Error {} }));
 jest.mock('@/lib/prisma', () => ({ __esModule: true, default: {

@@ -1,10 +1,13 @@
 'use client';
 
+/* Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V5 */
+/* Hallmark · genre: editorial · macrostructure: draft editor · design-system: design.md · designed-as-app */
+
 import { AppShell, AppHeader } from '@/components/app-shell';
+import { PageState } from '@/components/page-state';
 import { useState, useEffect, useRef, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import { Sidebar } from "@/components/Sidebar";
 import { UserNav } from "@/components/user-nav";
@@ -12,17 +15,21 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import { Card } from "@/components/ui/card";
-import { BookOpen, ArrowLeft, Upload, Loader2, Bookmark, Send } from 'lucide-react';
+import { ArrowLeft, Upload, Loader2, Bookmark, Send, Trash2 } from 'lucide-react';
 import { CategorySelect } from "@/components/CategorySelect";
 import { TagSelect } from "@/components/TagSelect";
 import { toast } from 'sonner';
 import { Editor } from "@/components/Editor";
+import Link from 'next/link';
 
 export default function EditArticle({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { data: session, status } = useSession();
+  const accountId = status === 'authenticated' ? session?.user?.id ?? null : null;
+  return <AccountDraftEditor key={`${id}:${accountId ?? 'anonymous'}`} id={id} accountId={accountId} status={status} />;
+}
+
+function AccountDraftEditor({ id, accountId, status }: { id: string; accountId: string | null; status: 'loading' | 'authenticated' | 'unauthenticated' }) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -32,27 +39,37 @@ export default function EditArticle({ params }: { params: Promise<{ id: string }
   const [tags, setTags] = useState<string[]>([]);
   const [featuredImage, setFeaturedImage] = useState<File | null>(null);
   const [featuredImagePreview, setFeaturedImagePreview] = useState<string>('');
+  const [isImageDeleted, setIsImageDeleted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submittingAsDraft, setSubmittingAsDraft] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
   const [existingCategories, setExistingCategories] = useState<string[]>([]);
   const [existingTags, setExistingTags] = useState<string[]>([]);
   const maxTitleLength = 100;
 
   useEffect(() => {
     if (status === 'loading') return;
-    if (!session) {
+    if (!accountId) {
       router.push('/login');
-      return;
     }
+  }, [accountId, status, router]);
+
+  useEffect(() => {
+    if (!id || !accountId || status !== 'authenticated') return;
+    const controller = new AbortController();
 
     const fetchArticle = async () => {
       setIsLoading(true);
       try {
 
         const [articleResponse, categoriesResponse] = await Promise.all([
-          fetch(`/api/articles/${id}`),
-          fetch('/api/articles/categories-and-tags')
+          fetch(`/api/articles/${encodeURIComponent(id)}`, { signal: controller.signal }),
+          fetch('/api/articles/categories-and-tags', { signal: controller.signal })
         ]);
+
+        if (controller.signal.aborted) return;
 
         if (!articleResponse.ok) {
           throw new Error(`Article fetch failed: ${articleResponse.statusText}`);
@@ -60,12 +77,11 @@ export default function EditArticle({ params }: { params: Promise<{ id: string }
 
         const article = await articleResponse.json();
 
-        if (!article) {
-          toast.error('Artikel nicht gefunden');
-          router.push('/knowledgebase/drafts');
-          return;
-        }
+        if (controller.signal.aborted) return;
+        if (!article) throw new Error('Artikel nicht gefunden');
+        if (article.author?.id !== accountId) throw new Error('Du bist nicht berechtigt, diesen Entwurf zu bearbeiten.');
 
+        setLoadError(false);
         setTitle(article.title);
         setContent(article.content);
         setCategory(article.category);
@@ -77,22 +93,26 @@ export default function EditArticle({ params }: { params: Promise<{ id: string }
         // Kategorien und Tags setzen
         if (categoriesResponse.ok) {
           const { categories, tags } = await categoriesResponse.json();
+          if (controller.signal.aborted) return;
           setExistingCategories(categories);
           setExistingTags(tags);
         }
       } catch (error) {
+        if (controller.signal.aborted) return;
         console.error('Error fetching article:', error);
+        setLoadError(true);
         toast.error('Fehler beim Laden des Artikels');
-        router.push('/knowledgebase/drafts');
       } finally {
-        setIsLoading(false);
+        if (!controller.signal.aborted) setIsLoading(false);
       }
     };
 
-    fetchArticle();
-  }, [id, session, status, router]);
+    void fetchArticle();
+    return () => controller.abort();
+  }, [id, accountId, status, retryKey]);
 
   const handleSubmit = async (asDraft: boolean) => {
+    setSubmittingAsDraft(asDraft);
     setIsSubmitting(true);
 
     if (!title || !content || !category) {
@@ -106,6 +126,7 @@ export default function EditArticle({ params }: { params: Promise<{ id: string }
     formData.append('content', content);
     formData.append('category', category);
     formData.append('isPublished', (!asDraft).toString());
+    formData.append('deleteImage', isImageDeleted.toString());
     tags.forEach(tag => formData.append('tags', tag));
     if (featuredImage) {
       formData.append('featuredImage', featuredImage);
@@ -135,206 +156,89 @@ export default function EditArticle({ params }: { params: Promise<{ id: string }
     }
   };
 
-  // Rest der Komponentenlogik (handleImageUpload, handleAddTag, etc.) wie in new-article/page.tsx
-
-  if (isLoading) {
+  if (status === 'loading' || (accountId && isLoading)) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
+      <AppShell><Sidebar /><div className="flex min-h-0 min-w-0 flex-1 flex-col"><AppHeader><div><h1>Entwurf bearbeiten</h1></div></AppHeader><main id="page-content" tabIndex={-1} className="flex min-h-0 flex-1 items-center justify-center p-4"><PageState kind="loading" title="Entwurf wird geladen" /></main></div></AppShell>
     );
   }
-
-  // Der Rest des JSX ist sehr ähnlich wie in new-article/page.tsx
-  // Nur der Titel und die Buttons sollten angepasst werden
 
   return (
     <AppShell>
       <Sidebar />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <AppHeader>
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-wrap gap-3 items-center justify-between">
-            <h2 className="text-xl sm:text-3xl font-bold text-foreground flex items-center">
-              <BookOpen className="mr-2 h-6 w-6" />
-              Artikel bearbeiten
-            </h2>
-            <div className="flex items-center space-x-4">
-              <ThemeToggle />
-              <UserNav />
-            </div>
-          </div>
+          <div className="flex min-w-0 items-center justify-between gap-3"><h1>Entwurf bearbeiten</h1><div className="flex shrink-0 items-center gap-2"><ThemeToggle /><UserNav /></div></div>
         </AppHeader>
 
-        <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto p-4 lg:p-8">
-          <Card className="max-w-5xl mx-auto bg-card rounded-lg shadow-none">
-            <div className="p-6">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
-                <Button
-                  variant="outline"
-                  onClick={() => router.push('/knowledgebase/drafts')}
-                  className="bg-transparent border-border text-foreground dark:text-muted-foreground hover:bg-accent"
-                >
-                  <ArrowLeft className="mr-2 h-4 w-4" /> Zurück
-                </Button>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => handleSubmit(true)}
-                    disabled={isSubmitting}
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Speichere Entwurf...
-                      </>
-                    ) : (
-                      <>
-                        <Bookmark className="mr-2 h-4 w-4" />
-                        Als Entwurf speichern
-                      </>
-                    )}
-                  </Button>
-                  <Button
-                    onClick={() => handleSubmit(false)}
-                    disabled={isSubmitting}
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Veröffentliche...
-                      </>
-                    ) : (
-                      <>
-                        <Send className="mr-2 h-4 w-4" />
-                        Veröffentlichen
-                      </>
-                    )}
-                  </Button>
-                </div>
+        <main id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto">
+          <div className="mx-auto w-full max-w-[1440px] px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
+            <div className="flex flex-wrap items-end justify-between gap-4 border-b pb-6">
+              <div>
+                <Button type="button" variant="ghost" size="sm" onClick={() => router.push('/knowledgebase/drafts')}><ArrowLeft className="h-4 w-4" aria-hidden="true" />Zu den Entwürfen</Button>
+                <p className="mt-4 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Wissen / Entwurf</p>
+                <p className="mt-2 max-w-[55ch] text-base leading-relaxed text-muted-foreground">Arbeite weiter und entscheide, wann dein Artikel bereit ist.</p>
               </div>
-
-              <div className="space-y-6">
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <Label htmlFor="title" className="text-lg font-semibold">
-                      Titel <span className="text-red-500">*</span>
-                    </Label>
-                    <span className="text-sm text-muted-foreground">
-                      {title.length}/{maxTitleLength}
-                    </span>
-                  </div>
-                  <Input
-                    id="title"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value.slice(0, maxTitleLength))}
-                    className="text-lg py-2"
-                    placeholder="Geben Sie einen aussagekräftigen Titel ein"
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="featuredImage" className="text-lg font-semibold">
-                    Beitragsbild
-                  </Label>
-                  <div className="flex items-center gap-4">
-                    <Button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      variant="outline"
-                    >
-                      <Upload className="mr-2 h-4 w-4" />
-                      Bild auswählen
-                    </Button>
-                    {featuredImagePreview && (
-                      <div className="relative group">
-                        <div className="w-20 h-20 border rounded-md overflow-hidden">
-                          <Image
-                            src={featuredImagePreview}
-                            alt="Vorschau"
-                            fill
-                            className="object-cover"
-                          />
-                        </div>
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          size="sm"
-                          className="absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                          onClick={() => {
-                            setFeaturedImage(null);
-                            setFeaturedImagePreview('');
-                          }}
-                        >
-                          ×
-                        </Button>
-                      </div>
-                    )}
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          setFeaturedImage(file);
-                          const reader = new FileReader();
-                          reader.onloadend = () => {
-                            setFeaturedImagePreview(reader.result as string);
-                          };
-                          reader.readAsDataURL(file);
-                        }
-                      }}
-                      accept="image/*"
-                      className="hidden"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="content" className="text-lg font-semibold">
-                    Inhalt <span className="text-red-500">*</span>
-                  </Label>
-                  <div className="min-h-[400px] border rounded-md">
-                    <Editor
-                      content={content}
-                      onChange={setContent}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <CategorySelect
-                    categories={existingCategories}
-                    selectedCategory={category}
-                    setSelectedCategory={setCategory}
-                    onAddCategory={(newCategory) => {
-                      setExistingCategories([...existingCategories, newCategory]);
-                      setCategory(newCategory);
-                    }}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <TagSelect
-                    availableTags={existingTags}
-                    selectedTags={tags}
-                    onTagSelect={(tag) => {
-                      if (!tags.includes(tag)) {
-                        setTags([...tags, tag]);
-                      }
-                    }}
-                    onTagRemove={(tag) => {
-                      setTags(tags.filter((t) => t !== tag));
-                    }}
-                    onAddTag={(newTag) => {
-                      setExistingTags([...existingTags, newTag]);
-                      setTags([...tags, newTag]);
-                    }}
-                  />
-                </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button type="button" variant="outline" onClick={() => handleSubmit(true)} disabled={isSubmitting}>
+                  {isSubmitting && submittingAsDraft ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Bookmark className="h-4 w-4" aria-hidden="true" />}{isSubmitting && submittingAsDraft ? 'Speichere Entwurf…' : 'Als Entwurf speichern'}
+                </Button>
+                <Button type="button" onClick={() => handleSubmit(false)} disabled={isSubmitting}>
+                  {isSubmitting && !submittingAsDraft ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Send className="h-4 w-4" aria-hidden="true" />}{isSubmitting && !submittingAsDraft ? 'Veröffentliche…' : 'Veröffentlichen'}
+                </Button>
               </div>
             </div>
-          </Card>
+
+            {!accountId ? <div className="pt-8"><PageState kind="error" title="Anmeldung erforderlich" description="Melde dich an, um deinen Entwurf zu bearbeiten." action={<Button asChild variant="outline"><Link href="/login">Zur Anmeldung</Link></Button>} /></div> : loadError ? <div className="pt-8"><PageState kind="error" title="Entwurf konnte nicht geladen werden" description="Bitte versuche es erneut." action={<Button type="button" variant="outline" onClick={() => { setIsLoading(true); setRetryKey(value => value + 1); }}>Erneut versuchen</Button>} /></div> : <div className="grid min-w-0 items-start gap-10 pt-8 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-12">
+              <section aria-labelledby="draft-editor-content-title" className="min-w-0 border-t pt-5">
+                <h2 id="draft-editor-content-title" className="text-lg font-semibold tracking-tight">Artikelinhalt</h2>
+                <div className="mt-6 space-y-8">
+                  <div className="border-b pb-7">
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                      <Label htmlFor="title">Titel <span className="text-destructive">*</span></Label>
+                      <span className="text-xs tabular-nums text-muted-foreground">{title.length}/{maxTitleLength}</span>
+                    </div>
+                    <Input id="title" value={title} onChange={event => setTitle(event.target.value.slice(0, maxTitleLength))} placeholder="Gib einen aussagekräftigen Titel ein" maxLength={maxTitleLength} required className="text-base" />
+                  </div>
+
+                  <div className="border-b pb-7">
+                    <p className="mb-2 text-sm font-medium">Beitragsbild <span className="font-normal text-muted-foreground">(optional)</span></p>
+                    <div className="flex flex-wrap items-start gap-4">
+                      <input type="file" ref={fileInputRef} accept="image/*" className="hidden" onChange={event => {
+                        const file = event.target.files?.[0];
+                        if (!file) return;
+                        setFeaturedImage(file);
+                        setIsImageDeleted(false);
+                        const reader = new FileReader();
+                        reader.onloadend = () => setFeaturedImagePreview(reader.result as string);
+                        reader.readAsDataURL(file);
+                      }} />
+                      <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}><Upload className="h-4 w-4" aria-hidden="true" />Bild auswählen</Button>
+                      {featuredImagePreview && <div className="relative aspect-video w-full max-w-sm overflow-hidden rounded-[10px] border bg-muted">
+                        <Image src={featuredImagePreview} alt="Beitragsbildvorschau" fill className="object-cover" />
+                        <Button type="button" variant="destructive" size="sm" className="absolute right-2 top-2" aria-label="Beitragsbild entfernen" onClick={() => { setFeaturedImage(null); setFeaturedImagePreview(''); setIsImageDeleted(true); }}><Trash2 className="h-4 w-4" aria-hidden="true" />Entfernen</Button>
+                      </div>}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="mb-2 text-sm font-medium">Inhalt <span className="text-destructive">*</span></p>
+                    <div className="overflow-hidden rounded-[10px] focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"><Editor content={content} onChange={setContent} className="min-h-[400px]" /></div>
+                  </div>
+                </div>
+              </section>
+
+              <aside aria-label="Artikeloptionen" className="min-w-0 space-y-7">
+                <section className="border-t pt-5">
+                  <h2 className="text-base font-semibold tracking-tight">Kategorie <span className="text-xs font-normal text-muted-foreground">(erforderlich)</span></h2>
+                  <div className="mt-4"><CategorySelect categories={existingCategories} selectedCategory={category} setSelectedCategory={setCategory} onAddCategory={newCategory => { setExistingCategories([...existingCategories, newCategory]); setCategory(newCategory); }} /></div>
+                </section>
+                <section className="border-t pt-5">
+                  <h2 className="text-base font-semibold tracking-tight">Tags</h2>
+                  <div className="mt-4"><TagSelect availableTags={existingTags} selectedTags={tags} onTagSelect={tag => { if (!tags.includes(tag)) setTags([...tags, tag]); }} onTagRemove={tag => setTags(tags.filter(value => value !== tag))} onAddTag={newTag => { setExistingTags([...existingTags, newTag]); setTags([...tags, newTag]); }} /></div>
+                </section>
+              </aside>
+            </div>}
+          </div>
         </main>
       </div>
     </AppShell>

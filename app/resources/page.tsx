@@ -1,28 +1,30 @@
 'use client';
 
+/* Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V5 */
+/* Hallmark · genre: editorial · macrostructure: resource directory · design-system: design.md · designed-as-app */
+
 import { AppShell, AppHeader } from '@/components/app-shell';
+import { PageState } from '@/components/page-state';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Sidebar } from "@/components/Sidebar";
 import { UserNav } from "@/components/user-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { Badge } from "@/components/ui/badge";
-import { Book, File, Video, Link as LinkIcon, Search, Plus, MoreVertical, Edit, Trash2, Share2, Copy, Check, ExternalLink, Filter, Menu } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Book, File, Video, Link as LinkIcon, Search, Plus, MoreVertical, Edit, Trash2, Copy, Check, ArrowUpRight } from 'lucide-react';
 import axios from 'axios';
 import { useSession } from 'next-auth/react';
+import type { Session } from 'next-auth';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useInView } from 'react-intersection-observer';
-import { ResourcePreview } from "@/components/ResourcePreview";
-import { cn } from "@/lib/utils";
 import { getSafeNavigationUrl } from '@/lib/security';
+import Link from 'next/link';
 
 enum ResourceType {
   ARTICLE = 'ARTICLE',
@@ -52,11 +54,18 @@ interface Resource {
 const categories = ["Web Development", "Data Science", "Design", "Mobile Development", "DevOps"];
 const types = ["ARTICLE", "VIDEO", "EBOOK", "PODCAST", "COURSE"];
 const ITEMS_PER_PAGE = 9;
+const typeLabels: Record<ResourceType, string> = {
+  ARTICLE: 'Artikel', VIDEO: 'Video', EBOOK: 'E-Book', PODCAST: 'Podcast', COURSE: 'Kurs',
+};
 
 export default function ResourceLibrary() {
-  const { data: session } = useSession();
+  const { data, status } = useSession();
+  const session = status === 'authenticated' ? data : null;
+  return <ResourceLibraryForViewer key={session?.user?.id ?? 'anonymous'} session={session} />;
+}
+
+function ResourceLibraryForViewer({ session }: { session: Session | null }) {
   const [isAdmin, setIsAdmin] = useState(false);
-  const [resources, setResources] = useState<Resource[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [newResource, setNewResource] = useState({
     title: '',
@@ -64,15 +73,14 @@ export default function ResourceLibrary() {
     category: 'Web Development',
     url: '',
   });
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editResource, setEditResource] = useState<Resource | null>(null);
-  const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [displayedResources, setDisplayedResources] = useState<Resource[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedType, setSelectedType] = useState<string>('all');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'title'>('newest');
@@ -130,6 +138,7 @@ export default function ResourceLibrary() {
         applyResourcePage(1, result);
         setLoadedSearchTerm(searchTerm);
         setIsAdmin(admin);
+        setLoadError(false);
       })
       .catch(error => {
         if (controller.signal.aborted || generation !== generationRef.current) return;
@@ -138,6 +147,7 @@ export default function ResourceLibrary() {
         setLoadedSearchTerm(searchTerm);
         setDisplayedResources([]);
         setHasMore(false);
+        setLoadError(true);
       })
       .finally(() => {
         if (generation === generationRef.current) {
@@ -157,7 +167,7 @@ export default function ResourceLibrary() {
       activeRequestRef.current = null;
       generationRef.current += 1;
     };
-  }, [applyResourcePage, checkAdminStatus, fetchResources, searchTerm]);
+  }, [applyResourcePage, checkAdminStatus, fetchResources, searchTerm, retryKey]);
 
   const loadMore = useCallback(() => {
     if (loadingRef.current || !hasMore || activeRequestRef.current) return;
@@ -301,383 +311,150 @@ export default function ResourceLibrary() {
   }, [displayedResources, loadedSearchTerm, searchTerm, selectedCategory, selectedType, sortBy]);
 
   const isLoadingResults = loading || loadedSearchTerm !== searchTerm;
+  const isFirstPageLoading = isLoadingResults && (loadedSearchTerm !== searchTerm || displayedResources.length === 0);
+  const hasFilters = Boolean(searchTerm || selectedCategory !== 'all' || selectedType !== 'all');
+  const clearFilters = () => { setSearchTerm(''); setSelectedCategory('all'); setSelectedType('all'); };
+  const retryLoad = () => { setLoading(true); setLoadError(false); setRetryKey(value => value + 1); };
 
   return (
     <AppShell>
-      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+      <Sidebar />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <AppHeader>
-          <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-3">
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center">
-
-                <h1 className="text-xl font-semibold text-foreground tracking-tight">Ressourcen</h1>
-              </div>
-              <div className="flex items-center gap-2">
-                <ThemeToggle />
-                <UserNav />
-              </div>
-            </div>
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <h1 className="min-w-0 truncate">Ressourcen</h1>
+            <div className="flex shrink-0 items-center gap-2"><ThemeToggle /><UserNav /></div>
           </div>
         </AppHeader>
 
-        <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto">
-          <ToastContainer position="top-right" theme="colored" />
-          <div className="max-w-[1600px] mx-auto p-4 sm:px-6 lg:px-8 py-8 space-y-6">
-
-
-            {/* Toolbar */}
-            <div className="flex flex-col xl:flex-row gap-4 justify-between items-start xl:items-center bg-card p-4 rounded-lg border border-border shadow-sm">
-              <div className="flex-1 w-full xl:max-w-md relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                <Input aria-label="Ressourcen durchsuchen..."
-                  type="text"
-                  placeholder="Ressourcen durchsuchen..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9 w-full bg-background"
-                />
+        <main id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto">
+          <ToastContainer position="top-right" />
+          <div className="mx-auto w-full max-w-[1440px] px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
+            <div className="flex flex-wrap items-end justify-between gap-5 border-b pb-7">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Entdecken / Ressourcen</p>
+                <p className="mt-2 max-w-[55ch] text-base leading-relaxed text-muted-foreground">Nützliche Links, Videos und Lesestoff aus der Community.</p>
               </div>
-
-              <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
-                <div className="flex items-center gap-2 flex-1 sm:flex-none">
-                  <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                    <SelectTrigger aria-label="Kategorie" className="w-full sm:w-[160px] bg-background">
-                      <SelectValue placeholder="Kategorie" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Alle Kategorien</SelectItem>
-                      {categories.map((c) => (
-                        <SelectItem key={c} value={c}>{c}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="flex items-center gap-2 flex-1 sm:flex-none">
-                  <Select value={selectedType} onValueChange={setSelectedType}>
-                    <SelectTrigger aria-label="Typ" className="w-full sm:w-[160px] bg-background">
-                      <SelectValue placeholder="Typ" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Alle Typen</SelectItem>
-                      {types.map((t) => (
-                        <SelectItem key={t} value={t}>{t}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="flex items-center gap-2 flex-1 sm:flex-none">
-                  <Select value={sortBy} onValueChange={(v: any) => setSortBy(v)}>
-                    <SelectTrigger aria-label="Sortierung" className="w-full sm:w-[160px] bg-background">
-                      <SelectValue placeholder="Sortierung" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="newest">Neueste</SelectItem>
-                      <SelectItem value="oldest">Älteste</SelectItem>
-                      <SelectItem value="title">Titel (A-Z)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {session && (
-                  <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button className="ml-auto flex-shrink-0">
-                        <Plus className="mr-2 h-4 w-4" />
-                        Neu
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-[500px]">
-                      <DialogHeader>
-                        <DialogTitle>Neue Ressource hinzufügen</DialogTitle>
-                        <DialogDescription>
-                          Fügen Sie eine neue Ressource zur Bibliothek hinzu.
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="grid gap-4 py-4">
-                        <div className="grid gap-2">
-                          <Label htmlFor="title">Titel</Label>
-                          <Input
-                            id="title"
-                            value={newResource.title}
-                            onChange={(e) => setNewResource({ ...newResource, title: e.target.value })}
-                            placeholder="z.B. Advanced React Patterns"
-                          />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="grid gap-2">
-                            <Label htmlFor="type">Typ</Label>
-                            <Select
-                              value={newResource.type}
-                              onValueChange={(value) => setNewResource({ ...newResource, type: value })}
-                            >
-                              <SelectTrigger aria-label="Wählen" id="type">
-                                <SelectValue placeholder="Wählen" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {types.map((type) => (
-                                  <SelectItem key={type} value={type}>{type}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="grid gap-2">
-                            <Label htmlFor="category">Kategorie</Label>
-                            <Select
-                              value={newResource.category}
-                              onValueChange={(value) => setNewResource({ ...newResource, category: value })}
-                            >
-                              <SelectTrigger aria-label="Wählen" id="category">
-                                <SelectValue placeholder="Wählen" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {categories.map((category) => (
-                                  <SelectItem key={category} value={category}>{category}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-                        <div className="grid gap-2">
-                          <Label htmlFor="url">URL</Label>
-                          <Input
-                            id="url"
-                            value={newResource.url}
-                            onChange={(e) => setNewResource({ ...newResource, url: e.target.value })}
-                            placeholder="https://..."
-                          />
-                        </div>
-                      </div>
-                      <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Abbrechen</Button>
-                        <Button onClick={handleAddResource}>Hinzufügen</Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                )}
-              </div>
+              {session && <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <DialogTrigger asChild><Button type="button"><Plus className="h-4 w-4" aria-hidden="true" />Ressource hinzufügen</Button></DialogTrigger>
+                <DialogContent>
+                  <DialogHeader><DialogTitle>Neue Ressource hinzufügen</DialogTitle><DialogDescription>Teile einen Link mit der Community.</DialogDescription></DialogHeader>
+                  <form onSubmit={event => { event.preventDefault(); void handleAddResource(); }} className="space-y-5">
+                    <div className="space-y-2"><Label htmlFor="resource-title">Titel</Label><Input id="resource-title" value={newResource.title} onChange={event => setNewResource(previous => ({ ...previous, title: event.target.value }))} placeholder="Titel der Ressource" required /></div>
+                    <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+                      <div className="min-w-0 space-y-2"><Label htmlFor="resource-type">Typ</Label><Select value={newResource.type} onValueChange={value => setNewResource(previous => ({ ...previous, type: value }))}><SelectTrigger id="resource-type"><SelectValue /></SelectTrigger><SelectContent>{types.map(type => <SelectItem key={type} value={type}>{typeLabels[type as ResourceType]}</SelectItem>)}</SelectContent></Select></div>
+                      <div className="min-w-0 space-y-2"><Label htmlFor="resource-category">Kategorie</Label><Select value={newResource.category} onValueChange={value => setNewResource(previous => ({ ...previous, category: value }))}><SelectTrigger id="resource-category"><SelectValue /></SelectTrigger><SelectContent>{categories.map(category => <SelectItem key={category} value={category}>{category}</SelectItem>)}</SelectContent></Select></div>
+                    </div>
+                    <div className="space-y-2"><Label htmlFor="resource-url">URL</Label><Input id="resource-url" type="url" value={newResource.url} onChange={event => setNewResource(previous => ({ ...previous, url: event.target.value }))} placeholder="https://…" required /></div>
+                    <DialogFooter><Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Abbrechen</Button><Button type="submit">Hinzufügen</Button></DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>}
             </div>
 
-            {hasMore && (selectedCategory !== 'all' || selectedType !== 'all' || sortBy !== 'newest') && (
-              <p className="text-sm text-muted-foreground">Filter und Sortierung beziehen sich auf die bisher geladenen Ressourcen. Lade weitere Ressourcen, um zusätzliche Treffer zu sehen.</p>
-            )}
+            <section aria-label="Ressourcen filtern" className="grid min-w-0 gap-4 border-b py-7 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_12rem_10rem_10rem] lg:items-end">
+              <div className="min-w-0 sm:col-span-2 lg:col-span-1"><Label htmlFor="resource-search" className="mb-2 block">Ressourcen suchen</Label><div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" /><Input id="resource-search" type="search" value={searchTerm} onChange={event => setSearchTerm(event.target.value)} placeholder="Titel, Kategorie oder Autor" className="pl-10" /></div></div>
+              <div className="min-w-0"><Label htmlFor="resource-filter-category" className="mb-2 block">Kategorie</Label><Select value={selectedCategory} onValueChange={setSelectedCategory}><SelectTrigger id="resource-filter-category"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Alle Kategorien</SelectItem>{categories.map(category => <SelectItem key={category} value={category}>{category}</SelectItem>)}</SelectContent></Select></div>
+              <div className="min-w-0"><Label htmlFor="resource-filter-type" className="mb-2 block">Typ</Label><Select value={selectedType} onValueChange={setSelectedType}><SelectTrigger id="resource-filter-type"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Alle Typen</SelectItem>{types.map(type => <SelectItem key={type} value={type}>{typeLabels[type as ResourceType]}</SelectItem>)}</SelectContent></Select></div>
+              <div className="min-w-0"><Label htmlFor="resource-sort" className="mb-2 block">Sortieren</Label><Select value={sortBy} onValueChange={value => setSortBy(value as 'newest' | 'oldest' | 'title')}><SelectTrigger id="resource-sort"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="newest">Neueste</SelectItem><SelectItem value="oldest">Älteste</SelectItem><SelectItem value="title">Titel A–Z</SelectItem></SelectContent></Select></div>
+            </section>
 
-            {/* Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <AnimatePresence mode="popLayout">
-                {filteredAndSortedResources.map((resource) => (
-                  <ResourceItem
-                    key={resource.id}
-                    resource={resource}
-                    isAdmin={isAdmin}
-                    currentUserId={session?.user?.id}
-                    onDelete={handleDeleteResource}
-                    onEdit={handleEditResource}
-                  />
-                ))}
-              </AnimatePresence>
-            </div>
+            <section aria-labelledby="resource-results-title" className="pt-7">
+              <div className="flex flex-wrap items-baseline justify-between gap-2 border-b pb-4"><h2 id="resource-results-title" className="text-xl font-semibold tracking-tight">Ressourcen entdecken</h2><p role="status" className="text-sm tabular-nums text-muted-foreground">{filteredAndSortedResources.length} angezeigt</p></div>
+              {hasMore && (selectedCategory !== 'all' || selectedType !== 'all' || sortBy !== 'newest') && <p className="mt-4 text-sm leading-relaxed text-muted-foreground">Filter und Sortierung gelten für die bisher geladenen Ressourcen. Lade weitere Ressourcen, um zusätzliche Treffer zu sehen.</p>}
 
-            {/* States */}
-            {!isLoadingResults && filteredAndSortedResources.length === 0 && (
-              <div className="flex flex-col items-center justify-center p-12 text-center border rounded-lg border-dashed border-border bg-muted/10">
-                <Search className="h-10 w-10 text-muted-foreground mb-4" />
-                <h3 className="text-lg font-medium text-foreground">{hasMore ? "Keine passenden Ressourcen geladen" : "Keine Ressourcen gefunden"}</h3>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Versuchen Sie, Ihre Suchbegriffe oder Filter anzupassen.
-                </p>
-                <Button
-                  variant="link"
-                  onClick={() => {
-                    setSearchTerm('');
-                    setSelectedCategory('all');
-                    setSelectedType('all');
-                  }}
-                  className="mt-2"
-                >
-                  Filter zurücksetzen
-                </Button>
-              </div>
-            )}
+              {isFirstPageLoading ? <div className="mt-6"><PageState kind="loading" title="Ressourcen werden geladen" /></div>
+                : loadError ? <div className="mt-6"><PageState kind="error" title="Ressourcen konnten nicht geladen werden" description="Prüfe deine Verbindung und versuche es erneut." action={<Button type="button" variant="outline" onClick={retryLoad}>Erneut versuchen</Button>} /></div>
+                : filteredAndSortedResources.length === 0 ? <div className="mt-6"><PageState title={hasMore ? 'Noch keine passenden Ressourcen geladen' : hasFilters ? 'Keine Ressourcen gefunden' : 'Noch keine Ressourcen'} description={hasMore ? 'Lade weitere Ressourcen, um nach passenden Einträgen zu suchen.' : hasFilters ? 'Versuche es mit anderen Suchbegriffen oder Filtern.' : 'Sobald Links geteilt werden, findest du sie hier.'} action={hasMore ? <Button type="button" variant="outline" onClick={loadMore} disabled={loading}>Weitere Ressourcen laden</Button> : hasFilters ? <Button type="button" variant="outline" onClick={clearFilters}>Filter zurücksetzen</Button> : session ? <Button type="button" onClick={() => setIsDialogOpen(true)}>Erste Ressource hinzufügen</Button> : undefined} /></div>
+                : <ul className="divide-y">{filteredAndSortedResources.map(resource => <ResourceItem key={resource.id} resource={resource} isAdmin={isAdmin} currentUserId={session?.user?.id} onDelete={handleDeleteResource} onEdit={handleEditResource} />)}</ul>}
 
-            {hasMore && !isLoadingResults && (
-              <div ref={ref} className="flex justify-center py-4"><Button variant="outline" onClick={loadMore}>Weitere Ressourcen laden</Button></div>
-            )}
-
-            {isLoadingResults && (
-              <div role="status" className="flex justify-center p-8">
-                <span className="sr-only">Ressourcen werden geladen</span>
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-              </div>
-            )}
+              {hasMore && filteredAndSortedResources.length > 0 && <div ref={ref} className="flex justify-center py-7"><Button type="button" variant="outline" onClick={loadMore} disabled={loading}>{loading ? 'Weitere Ressourcen werden geladen…' : 'Weitere Ressourcen laden'}</Button></div>}
+              {loading && !isFirstPageLoading && <p role="status" className="pb-6 text-center text-sm text-muted-foreground">Weitere Ressourcen werden geladen…</p>}
+            </section>
           </div>
         </main>
-      </div>
 
-      {/* Edit Dialog */}
-      {editResource && (
-        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent className="sm:max-w-[500px]">
-            <DialogHeader>
-              <DialogTitle>Ressource bearbeiten</DialogTitle>
-              <DialogDescription>Aktualisieren Sie die Details der Ressource.</DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="edit-title">Titel</Label>
-                <Input
-                  id="edit-title"
-                  value={editResource.title}
-                  onChange={(e) => setEditResource({ ...editResource, title: e.target.value })}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-url">URL</Label>
-                <Input
-                  id="edit-url"
-                  value={editResource.url}
-                  onChange={(e) => setEditResource({ ...editResource, url: e.target.value })}
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>Abbrechen</Button>
-              <Button onClick={handleUpdateResource}>Aktualisieren</Button>
-            </DialogFooter>
+        {editResource && <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Ressource bearbeiten</DialogTitle><DialogDescription>Aktualisiere Titel und Zieladresse.</DialogDescription></DialogHeader>
+            <form onSubmit={event => { event.preventDefault(); void handleUpdateResource(); }} className="space-y-5">
+              <div className="space-y-2"><Label htmlFor="edit-resource-title">Titel</Label><Input id="edit-resource-title" value={editResource.title} onChange={event => setEditResource(previous => previous ? { ...previous, title: event.target.value } : previous)} required /></div>
+              <div className="space-y-2"><Label htmlFor="edit-resource-url">URL</Label><Input id="edit-resource-url" type="url" value={editResource.url} onChange={event => setEditResource(previous => previous ? { ...previous, url: event.target.value } : previous)} required /></div>
+              <DialogFooter><Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>Abbrechen</Button><Button type="submit">Aktualisieren</Button></DialogFooter>
+            </form>
           </DialogContent>
-        </Dialog>
-      )}
+        </Dialog>}
+      </div>
     </AppShell>
   );
 }
 
 function ResourceItem({ resource, isAdmin, currentUserId, onDelete, onEdit }: {
-  resource: Resource,
-  isAdmin: boolean,
-  currentUserId?: string,
-  onDelete: (id: string) => void,
-  onEdit: (r: Resource) => void
+  resource: Resource;
+  isAdmin: boolean;
+  currentUserId?: string;
+  onDelete: (id: string) => void;
+  onEdit: (resource: Resource) => void;
 }) {
   const [copied, setCopied] = useState(false);
-
-  const canModify = Boolean(isAdmin) || resource.author.id === currentUserId;
-
-  const handleCopyLink = async () => {
-    const shareUrl = `${window.location.origin}/resources/${resource.id}`;
-    await navigator.clipboard.writeText(shareUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-    toast.success("Link kopiert", { autoClose: 2000 });
-  };
-
-  const shareResource = (platform: string) => {
-    const shareUrl = encodeURIComponent(`${window.location.origin}/resources/${resource.id}`);
-    const shareTitle = encodeURIComponent(resource.title);
-
-    const urls: Record<string, string> = {
-      twitter: `https://twitter.com/intent/tweet?text=${shareTitle}&url=${shareUrl}`,
-      linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${shareUrl}`,
-      facebook: `https://www.facebook.com/sharer/sharer.php?u=${shareUrl}`,
-    };
-
-    if (urls[platform]) window.open(urls[platform], '_blank', 'noopener,noreferrer');
-  };
-
-  const Icon = getIcon(resource.type);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const canModify = isAdmin || resource.author.id === currentUserId;
   const safeResourceUrl = getSafeNavigationUrl(resource.url);
 
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.95 }}
-      layout
-    >
-      <Card className="h-full flex flex-col group overflow-hidden border-border hover:border-primary/50 transition-all duration-300">
-        <CardHeader className="p-4 pb-2 flex flex-row items-start justify-between gap-2 space-y-0">
-          <div className="flex-1 min-w-0">
-            <div className="flex flex-wrap items-center gap-2 mb-2">
-              <Badge variant="secondary" className="text-xs font-normal">
-                {resource.category}
-              </Badge>
-              <Badge variant="outline" className="text-xs font-normal text-muted-foreground border-border">
-                {resource.type}
-              </Badge>
-            </div>
-            <CardTitle className="text-lg font-semibold leading-tight line-clamp-2 group-hover:text-primary transition-colors">
-              {safeResourceUrl ? (
-                <a href={safeResourceUrl} target="_blank" rel="noopener noreferrer" className="hover:underline decoration-primary/30 underline-offset-4">
-                  {resource.title}
-                </a>
-              ) : resource.title}
-            </CardTitle>
-          </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-9 w-9 -mr-2 text-muted-foreground">
-                <MoreVertical className="h-4 w-4" />
-                <span className="sr-only">Menü öffnen</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem onClick={handleCopyLink}>
-                {copied ? <Check className="mr-2 h-4 w-4 text-green-500" /> : <Copy className="mr-2 h-4 w-4" />}
-                Link kopieren
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => shareResource('twitter')}>Twitter</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => shareResource('linkedin')}>LinkedIn</DropdownMenuItem>
-              <DropdownMenuSeparator />
-              {canModify && (
-                <>
-                  <DropdownMenuItem onClick={() => onEdit(resource)}>
-                    <Edit className="mr-2 h-4 w-4" />
-                    Bearbeiten
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onDelete(resource.id)} className="text-destructive focus:text-destructive">
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    Löschen
-                  </DropdownMenuItem>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </CardHeader>
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/resources/${resource.id}`);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      toast.success('Link kopiert');
+    } catch {
+      toast.error('Der Link konnte nicht kopiert werden.');
+    }
+  };
 
-        <CardContent className="p-0 flex-1 relative bg-muted/20">
-          <div className="aspect-video w-full overflow-hidden relative">
-            <ResourcePreview url={resource.url} type={resource.type} />
-          </div>
-        </CardContent>
+  const shareResource = (platform: 'twitter' | 'linkedin') => {
+    const url = encodeURIComponent(`${window.location.origin}/resources/${resource.id}`);
+    const title = encodeURIComponent(resource.title);
+    const destinations = {
+      twitter: `https://twitter.com/intent/tweet?text=${title}&url=${url}`,
+      linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${url}`,
+    };
+    window.open(destinations[platform], '_blank', 'noopener,noreferrer');
+  };
 
-        <CardFooter className="p-4 pt-3 flex items-center justify-between border-t border-border bg-card">
-          <div className="flex items-center text-sm text-muted-foreground">
-            <span className="truncate max-w-[150px]">
-              {resource.author.name || "Unbekannt"}
-            </span>
-          </div>
-          {safeResourceUrl && <Button size="sm" variant="outline" className="gap-2 h-8" asChild>
-            <a href={safeResourceUrl} target="_blank" rel="noopener noreferrer">
-              <ExternalLink className="h-3 w-3" />
-              Öffnen
-            </a>
-          </Button>}
-        </CardFooter>
-      </Card>
-    </motion.div>
-  );
+  return <li className="min-w-0">
+    <div className="flex min-w-0 items-start gap-3 py-6 sm:gap-5">
+      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] border bg-muted text-muted-foreground" aria-hidden="true">{getIcon(resource.type)}</div>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground"><span className="font-semibold uppercase tracking-[0.08em] text-foreground">{typeLabels[resource.type]}</span><span className="min-w-0 break-words [overflow-wrap:anywhere]">{resource.category}</span><time dateTime={resource.createdAt}>{new Date(resource.createdAt).toLocaleDateString('de-DE')}</time></div>
+        <h3 className="mt-2 min-w-0 break-words text-lg font-semibold tracking-tight [overflow-wrap:anywhere]"><Link href={`/resources/${resource.id}`} className="hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">{resource.title}</Link></h3>
+        <p className="mt-2 text-sm text-muted-foreground">Von {resource.author.name || resource.author.email || 'Unbekannt'}</p>
+        {safeResourceUrl ? <a href={safeResourceUrl} target="_blank" rel="noopener noreferrer" className="mt-4 inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-primary hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">Quelle öffnen <ArrowUpRight className="h-4 w-4" aria-hidden="true" /></a> : <p className="mt-4 text-sm text-muted-foreground">Keine sichere Zieladresse verfügbar.</p>}
+      </div>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild><Button type="button" variant="ghost" size="icon" aria-label={`Aktionen für ${resource.title}`} className="shrink-0"><MoreVertical className="h-4 w-4" aria-hidden="true" /></Button></DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onSelect={() => void handleCopyLink()}>{copied ? <Check className="mr-2 h-4 w-4" aria-hidden="true" /> : <Copy className="mr-2 h-4 w-4" aria-hidden="true" />}Link kopieren</DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => shareResource('twitter')}>Auf X teilen</DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => shareResource('linkedin')}>Auf LinkedIn teilen</DropdownMenuItem>
+          {canModify && <><DropdownMenuSeparator /><DropdownMenuItem onSelect={() => onEdit(resource)}><Edit className="mr-2 h-4 w-4" aria-hidden="true" />Bearbeiten</DropdownMenuItem><DropdownMenuItem onSelect={() => setDeleteOpen(true)} className="text-destructive focus:text-destructive"><Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />Löschen</DropdownMenuItem></>}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+    <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+      <AlertDialogContent className="w-[calc(100%_-_2rem)] rounded-[14px]"><AlertDialogHeader><AlertDialogTitle>Ressource löschen?</AlertDialogTitle><AlertDialogDescription>„{resource.title}“ wird dauerhaft aus der Ressourcenbibliothek entfernt.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Abbrechen</AlertDialogCancel><AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => onDelete(resource.id)}>Ressource löschen</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
+    </AlertDialog>
+  </li>;
 }
 
 function getIcon(type: ResourceType) {
-  const props = { className: "h-4 w-4" };
+  const className = 'h-5 w-5';
   switch (type) {
-    case ResourceType.ARTICLE: return <File {...props} />;
-    case ResourceType.VIDEO: return <Video {...props} />;
-    case ResourceType.EBOOK: return <Book {...props} />;
-    case ResourceType.PODCAST: return <LinkIcon {...props} />;
-    case ResourceType.COURSE: return <Book {...props} />;
-    default: return <LinkIcon {...props} />;
+    case ResourceType.ARTICLE: return <File className={className} />;
+    case ResourceType.VIDEO: return <Video className={className} />;
+    case ResourceType.EBOOK: return <Book className={className} />;
+    case ResourceType.PODCAST: return <LinkIcon className={className} />;
+    case ResourceType.COURSE: return <Book className={className} />;
+    default: return <LinkIcon className={className} />;
   }
 }

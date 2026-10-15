@@ -75,8 +75,10 @@ const profile = await (await request('/api/user/profile')).json();
 assert.equal(profile.email, storedEmail);
 let expectedCertificates = [];
 if (process.env.SMOKE_SQLITE_FILE) {
-  const courseA = randomUUID();
-  const courseB = randomUUID();
+  // Opposite lexical course order to the expected issuance order catches
+  // grouping by courseId before sorting the certificate list.
+  const courseA = `ffffffff-${randomUUID().slice(9)}`;
+  const courseB = `00000000-${randomUUID().slice(9)}`;
   const oldId = randomUUID();
   const latestId = randomUUID();
   const otherId = randomUUID();

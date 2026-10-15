@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '../auth/[...nextauth]/options';
 import { ImageUploadValidationError, saveImageUpload } from '@/lib/server/image-upload';
 import { requestWithBodyLimit, RequestBodyLimitError } from '@/lib/server/request-body';
+import { courseContentRevision, courseLeaves } from '@/lib/server/course-progress';
 
 const MAX_MULTIPART_REQUEST_BYTES = 5 * 1024 * 1024 + 256 * 1024;
 
@@ -26,20 +27,61 @@ function optionalNumber(value: FormDataEntryValue | null, integer = false): numb
 
 export async function GET() {
   try {
+    const session = await getServerSession(authOptions);
+    const userId = session?.user?.id;
     const courses = await prisma.course.findMany({
-      include: {
-        instructor: {
-          select: {
-            name: true,
-          },
-        },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        instructorId: true,
+        instructor: { select: { name: true } },
+        startDate: true,
+        endDate: true,
+        price: true,
+        currency: true,
+        maxStudents: true,
+        rewardEligible: true,
+        imageUrl: true,
+        _count: { select: { enrollments: true } },
         enrollments: {
-          select: {
-            userId: true,
-          },
+          where: { userId: userId ?? '' },
+          select: { completedAt: true },
         },
       },
     });
+
+    // completedAt is the first historical completion, not proof that the
+    // current leaf revisions are complete. Batch only this viewer's enrolled
+    // courses; quiz answer keys never leave the server.
+    const enrolledCourseIds = userId ? courses.filter(course => course.enrollments.length > 0).map(course => course.id) : [];
+    const [contents, progress] = enrolledCourseIds.length ? await Promise.all([
+      prisma.courseContent.findMany({
+        where: { courseId: { in: enrolledCourseIds } },
+        select: { id: true, courseId: true, parentId: true, type: true, content: true, order: true },
+      }),
+      prisma.courseContentProgress.findMany({
+        where: { userId: userId!, courseId: { in: enrolledCourseIds } },
+        select: { courseId: true, contentId: true, revision: true },
+      }),
+    ]) : [[], []];
+    const contentsByCourse = new Map<string, typeof contents>();
+    for (const content of contents) {
+      const group = contentsByCourse.get(content.courseId) ?? [];
+      group.push(content);
+      contentsByCourse.set(content.courseId, group);
+    }
+    const revisionsByCourse = new Map<string, Map<string, string>>();
+    for (const row of progress) {
+      const revisions = revisionsByCourse.get(row.courseId) ?? new Map<string, string>();
+      revisions.set(row.contentId, row.revision);
+      revisionsByCourse.set(row.courseId, revisions);
+    }
+    const completedNow = new Map(enrolledCourseIds.map(courseId => {
+      const leaves = courseLeaves(contentsByCourse.get(courseId) ?? []);
+      const revisions = revisionsByCourse.get(courseId);
+      return [courseId, leaves.length > 0 && leaves.every(leaf => revisions?.get(leaf.id) === courseContentRevision(leaf))] as const;
+    }));
 
     const formattedCourses = courses.map(course => ({
       id: course.id,
@@ -51,11 +93,20 @@ export async function GET() {
       startDate: course.startDate ? course.startDate.toISOString().split('T')[0] : null,
       endDate: course.endDate ? course.endDate.toISOString().split('T')[0] : null,
       category: course.description,
-      participants: course.enrollments.length,
+      participants: course._count.enrollments,
+      maxStudents: course.maxStudents,
+      rewardEligible: course.rewardEligible,
+      canApproveRewards: session?.user?.role === 'ADMIN',
+      price: course.price,
+      currency: course.currency,
+      isEnrolled: course.enrollments.length > 0,
+      completed: completedNow.get(course.id) ?? false,
+      everCompleted: Boolean(course.enrollments[0]?.completedAt),
+      canDelete: !!userId && (course.instructorId === userId || session?.user?.role === 'ADMIN'),
       imageUrl: course.imageUrl,
     }));
 
-    return NextResponse.json(formattedCourses);
+    return NextResponse.json(formattedCourses, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     console.error('Failed to fetch courses:', error);
     return NextResponse.json({ error: 'Failed to fetch courses' }, { status: 500 });

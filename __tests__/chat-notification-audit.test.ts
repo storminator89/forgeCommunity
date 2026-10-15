@@ -23,19 +23,25 @@ jest.mock('@/lib/server/image-upload', () => ({ getChatUploadOwnerId: jest.fn(()
 jest.mock('@/lib/prisma', () => ({ __esModule: true, default: {
   chatChannel: { findFirst: jest.fn() },
   chatMessage: { findUnique: jest.fn(), update: jest.fn(), create: jest.fn() },
-  notification: { findFirst: jest.fn(), findMany: jest.fn(), count: jest.fn(), updateMany: jest.fn() },
+  chatMember: { findMany: jest.fn() },
+  notification: { findFirst: jest.fn(), findMany: jest.fn(), count: jest.fn(), updateMany: jest.fn(), createMany: jest.fn() },
+  $transaction: jest.fn(),
 } }));
 
 const db = prisma as unknown as {
   chatChannel: { findFirst: jest.Mock };
   chatMessage: { findUnique: jest.Mock; update: jest.Mock; create: jest.Mock };
-  notification: { findFirst: jest.Mock; findMany: jest.Mock; count: jest.Mock; updateMany: jest.Mock };
+  chatMember: { findMany: jest.Mock };
+  notification: { findFirst: jest.Mock; findMany: jest.Mock; count: jest.Mock; updateMany: jest.Mock; createMany: jest.Mock };
+  $transaction: jest.Mock;
 };
 const req = (body: unknown) => ({ json: async () => body }) as Request;
 
 beforeEach(() => {
   jest.clearAllMocks();
   jest.mocked(getServerSession).mockResolvedValue({ user: { id: 'member', role: 'USER' } } as never);
+  db.$transaction.mockImplementation((callback: (tx: typeof db) => Promise<unknown>) => callback(db));
+  db.chatMember.findMany.mockResolvedValue([]);
 });
 
 it('blocks a removed author from editing an old private message', async () => {
@@ -57,6 +63,19 @@ it('stores image-only messages with a string content and rejects malformed messa
   expect(db.chatMessage.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ content: '' }) }));
   expect((await sendMessage(req({ channelId: { id: 'public' }, content: 'hi' }))).status).toBe(400);
   expect((await sendMessage(req({ channelId: 'public', content: 'hi', messageType: 'admin' }))).status).toBe(400);
+});
+
+it('notifies only explicit other channel members with a real message target', async () => {
+  db.chatChannel.findFirst.mockResolvedValue({ id: 'private', name: 'room', isPrivate: true });
+  db.chatMessage.create.mockResolvedValue({ id: 'message1', author: { name: 'Member' } });
+  db.chatMember.findMany.mockResolvedValue([{ userId: 'recipient' }]);
+  const result = await sendMessage(req({ channelId: 'private', content: 'Hello' }));
+  expect(result.status).toBe(200);
+  expect(db.chatMember.findMany).toHaveBeenCalledWith({ where: { channelId: 'private', userId: { not: 'member' } }, select: { userId: true } });
+  expect(db.notification.createMany).toHaveBeenCalledWith({ data: [{
+    userId: 'recipient', type: 'CHAT_MESSAGE', content: 'Member hat in #room geschrieben.',
+    targetType: 'CHAT_MESSAGE', targetId: 'message1',
+  }] });
 });
 
 it('pages notifications by an owned cursor and reports unread count across pages', async () => {

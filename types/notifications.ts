@@ -1,5 +1,10 @@
 // types/notifications.ts
 export type NotificationType =
+  | 'FOLLOW'
+  | 'COMMENT'
+  | 'LIKE'
+  | 'EVENT'
+  | 'COURSE'
   | 'CHAT_MESSAGE'
   | 'CHANNEL_CREATED'
   | 'CHANNEL_DELETED'

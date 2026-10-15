@@ -40,6 +40,7 @@ jest.mock('@/lib/prisma', () => ({
     user: { findMany: jest.fn(), findFirst: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
     course: { findUnique: jest.fn() },
     courseContent: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn() },
+    courseContentProgress: { findMany: jest.fn() },
     enrollment: { findUnique: jest.fn() },
     certificate: { create: jest.fn(), findFirst: jest.fn() },
     $transaction: jest.fn(),
@@ -47,6 +48,7 @@ jest.mock('@/lib/prisma', () => ({
 }))
 
 jest.mock('next-auth/next', () => ({ getServerSession: jest.fn() }))
+jest.mock('@/lib/server/rewards', () => ({ reconcileCourseRewards: jest.fn(), reconcileLearnerCourseReward: jest.fn() }))
 jest.mock('next-auth', () => ({ getServerSession: jest.fn() }))
 jest.mock('@/lib/auth', () => ({ authOptions: {} }))
 jest.mock('@/app/api/auth/[...nextauth]/options', () => ({ authOptions: {} }))
@@ -67,6 +69,7 @@ const mockedPrisma = prisma as unknown as {
   user: { findMany: jest.Mock; findFirst: jest.Mock; findUnique: jest.Mock; update: jest.Mock }
   course: { findUnique: jest.Mock }
   courseContent: { findUnique: jest.Mock; findMany: jest.Mock; create: jest.Mock }
+  courseContentProgress: { findMany: jest.Mock }
   enrollment: { findUnique: jest.Mock }
   certificate: { create: jest.Mock; findFirst: jest.Mock }
   $transaction: jest.Mock
@@ -286,6 +289,8 @@ describe('API authorization regressions', () => {
     mockedPrisma.course.findUnique.mockResolvedValue({ id: 'course-1', title: 'Course', contents: [] })
     mockedPrisma.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'user@example.com', name: 'User' })
     mockedPrisma.enrollment.findUnique.mockResolvedValue({ completedAt: null })
+    mockedPrisma.courseContent.findMany.mockResolvedValue([])
+    mockedPrisma.courseContentProgress.findMany.mockResolvedValue([])
 
     const response = await issueCertificate(
       jsonRequest('http://localhost/api/courses/course-1/certificate', { method: 'POST' }),

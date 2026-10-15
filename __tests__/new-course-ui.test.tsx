@@ -51,3 +51,38 @@ it('prevents repeat submits and exposes failed creation inline', async () => {
   expect(screen.getByRole('button', { name: 'Kurs erstellen' })).toBeEnabled()
   expect(mockRouter.push).not.toHaveBeenCalled()
 })
+
+it('keeps the existing multipart course creation contract and returns to the directory', async () => {
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ id: 'new-course' }) })
+  render(<NewCoursePage />)
+  completeRequiredFields()
+  fireEvent.click(screen.getByRole('button', { name: 'Kurs erstellen' }))
+
+  await waitFor(() => expect(mockRouter.push).toHaveBeenCalledWith('/courses'))
+  expect(fetch).toHaveBeenCalledWith('/api/courses', expect.objectContaining({ method: 'POST' }))
+  const request = jest.mocked(fetch).mock.calls[0][1]
+  const body = request?.body as FormData
+  expect(body.get('title')).toBe('Sicherheit')
+  expect(body.get('description')).toBe('Security')
+  expect(body.get('price')).toBe('0')
+  expect(body.get('currency')).toBe('EUR')
+  expect(body.get('maxStudents')).toBe('20')
+  expect(body.get('startDate')).toBeUndefined()
+  expect(body.get('endDate')).toBeUndefined()
+})
+
+it('clears an unfinished course before another account sees the composer', () => {
+  const view = render(<NewCoursePage />)
+  fireEvent.change(screen.getByLabelText('Kurstitel'), { target: { value: 'Alice private course' } })
+  fireEvent.change(screen.getByLabelText('Kurskategorie'), { target: { value: 'Alice private category' } })
+
+  jest.mocked(useSession).mockReturnValue({ data: { user: { id: 'user-2' }, expires: '2099-01-01' }, status: 'authenticated', update: jest.fn() } as ReturnType<typeof useSession>)
+  view.rerender(<NewCoursePage />)
+  expect(screen.getByLabelText('Kurstitel')).toHaveValue('')
+  expect(screen.getByLabelText('Kurskategorie')).toHaveValue('')
+  expect(screen.queryByDisplayValue('Alice private course')).not.toBeInTheDocument()
+
+  jest.mocked(useSession).mockReturnValue({ data: null, status: 'unauthenticated', update: jest.fn() } as ReturnType<typeof useSession>)
+  view.rerender(<NewCoursePage />)
+  expect(screen.getByLabelText('Kurstitel')).toHaveValue('')
+})

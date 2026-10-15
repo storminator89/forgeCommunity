@@ -197,12 +197,24 @@ DATABASE_URL="postgresql://forge:<passwort>@localhost:5432/forge?schema=public" 
 npm run db:deploy
 ```
 
-Für eine frische Entwicklungsdatenbank nach `prisma db push` muss einmalig die
-verifizierte Baseline gesetzt werden:
+Für eine neue PostgreSQL-Installation mit einem **leeren, ausdrücklich im URL
+genannten Schema** die gesonderte Initialisierung ausführen. Sie verweigert
+bereits vorhandene Schemaobjekte und führt die festgelegte Basis sowie alle
+Upgrades in einer Transaktion aus:
 
 ```bash
-npm run db:deploy -- --baseline-current-schema
+DATABASE_PROVIDER=postgresql \
+DATABASE_URL="postgresql://forge:<passwort>@localhost:5432/forge?schema=public" \
+npm run db:deploy -- --initialize-empty-schema
 ```
+
+Für eine bestehende Datenbank, die bereits die `SkillEndorsement`-Tabelle des
+früheren Schemas, aber noch keinen Upgrade-Verlauf hat, ist nach Prüfung dieser
+Struktur `npm run db:deploy -- --baseline-current-schema` vorgesehen. Ein
+`prisma db push` mit dem **aktuellen** Schema vor diesen Befehlen ist kein
+unterstützter Installationspfad: Es würde neue Tabellen ohne die SQL-only
+Prüfbedingungen anlegen. Bei einem bereits befüllten aktuellen Schema ohne
+Upgrade-Verlauf nicht automatisch eine Baseline setzen.
 
 Der PostgreSQL-Runner prüft Tabellen, Schlüssel, Prüfsummen und das URL-Schema;
 unbekannte oder manipulierte Strukturen werden abgelehnt. Im Container kann der
@@ -274,6 +286,21 @@ npm run build
 # Check known package vulnerabilities
 npm audit
 ```
+
+CI runs application checks (typecheck, lint, Jest, migration checks, build and
+standalone smoke) in the independent `quality` job. The `security-audit` job runs
+the unchanged strict `npm audit --audit-level=high` check and fails on high or
+critical advisories; it has no exceptions or `continue-on-error`. Its dependency
+install skips lifecycle scripts because auditing does not need generated clients
+or native builds.
+
+The existing `validate` check remains the aggregate gate: it always evaluates
+both jobs and fails unless both succeed, including when either fails, is skipped
+or is cancelled. It keeps the existing `validate` check context, so an audit
+failure cannot turn that check green. GitHub branch-protection settings are not
+inspected or changed by this change. An audit failure leaves the application
+results visible and CI failing. PostgreSQL release, browser QA and Docker jobs
+remain independent of this gate.
 
 ## 📁 Project Structure
 

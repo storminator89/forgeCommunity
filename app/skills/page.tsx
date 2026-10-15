@@ -1,529 +1,202 @@
-"use client";
+'use client';
+
+/* Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V5 */
+/* Hallmark · genre: editorial · macrostructure: skills directory · design-system: design.md · designed-as-app */
 
 import { AppShell, AppHeader } from '@/components/app-shell';
-import { useState, useEffect, useMemo, Suspense, useCallback, useRef } from 'react';
-import { Sidebar } from "@/components/Sidebar";
-import { UserNav } from "@/components/user-nav";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Search, Award, Star, Mail, ExternalLink, Filter, ChevronUp, ChevronDown } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Progress } from "@/components/ui/progress";
+import { PageState } from '@/components/page-state';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { useSession } from 'next-auth/react';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { toast } from 'react-toastify';
-import { Skeleton } from "@/components/ui/skeleton";
+import { toast, ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+import { ArrowUpRight, ChevronDown, ChevronUp, Search, Star } from 'lucide-react';
+import { Sidebar } from '@/components/Sidebar';
+import { UserNav } from '@/components/user-nav';
+import { ThemeToggle } from '@/components/theme-toggle';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Progress } from '@/components/ui/progress';
 
-interface Skill {
-  id: string;
-  name: string;
-  category: string;
-}
-
-interface MemberSkill {
-  skillName: string;
-  level: number;
-}
-
+interface Skill { id: string; name: string; category: string }
+interface MemberSkill { skillName: string; level: number }
 interface Member {
   id: string;
   name: string;
   avatar: string;
   title: string;
-  bio: string;
-  contact: string;
   endorsements: number;
+  hasEndorsed: boolean;
   skills: MemberSkill[];
-  hasEndorsed?: boolean;
+}
+interface DirectoryResponse { skills: Skill[]; members: Member[] }
+
+// The directory response includes viewer-specific endorsement flags. Remounting at
+// the account boundary discards those flags, open details and in-flight UI state.
+export default function SkillDirectory() {
+  return <Suspense fallback={<PageState kind="loading" title="Skill-Verzeichnis wird geladen" />}><SkillDirectoryWithUrl /></Suspense>;
 }
 
-const MemberCardSkeleton = () => (
-  <Card className="h-full">
-    <CardHeader className="flex flex-row items-center gap-3 space-y-0 pb-2">
-      <Skeleton className="h-16 w-16 rounded-full" />
-      <div className="space-y-2">
-        <Skeleton className="h-4 w-32" />
-        <Skeleton className="h-3 w-24" />
-      </div>
-    </CardHeader>
-    <CardContent>
-      <div className="space-y-4">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="space-y-2">
-            <Skeleton className="h-3 w-24" />
-            <Skeleton className="h-2 w-full" />
-          </div>
-        ))}
-      </div>
-    </CardContent>
-  </Card>
-);
+function SkillDirectoryWithUrl() {
+  const searchParams = useSearchParams();
+  const queryFromUrl = (searchParams.get('query') ?? '').slice(0, 120);
+  const { data: session, status } = useSession();
+  const viewerId = status === 'authenticated' ? session?.user?.id ?? null : null;
+  return <SkillDirectoryForViewer key={viewerId ?? status} viewerId={viewerId} sessionLoading={status === 'loading'} queryFromUrl={queryFromUrl} />;
+}
 
-export default function SkillDirectory() {
-  const { data: session } = useSession();
+function SkillDirectoryForViewer({ viewerId, sessionLoading, queryFromUrl }: { viewerId: string | null; sessionLoading: boolean; queryFromUrl: string }) {
   const [skillsData, setSkillsData] = useState<Skill[]>([]);
   const [membersData, setMembersData] = useState<Member[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchState, setSearchState] = useState({ query: queryFromUrl, urlQuery: queryFromUrl });
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
-  const [sortBy, setSortBy] = useState('endorsements');
+  const [sortBy, setSortBy] = useState<'endorsements' | 'name'>('endorsements');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-  const [expandedSkills, setExpandedSkills] = useState<{ [key: string]: boolean }>({});
-  const [isRetrying, setIsRetrying] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
+  const [expandedSkills, setExpandedSkills] = useState<Record<string, boolean>>({});
   const endorsementRequests = useRef(new Set<string>());
   const [endorsingMembers, setEndorsingMembers] = useState<string[]>([]);
-  const dataRequestRef = useRef<AbortController | null>(null);
 
-  const getSkillByName = useCallback((name: string): Skill | undefined => {
-    return skillsData.find(skill => skill.name === name);
-  }, [skillsData]);
-
-  const loadData = useCallback(async (signal: AbortSignal) => {
-    const [skillsResponse, membersResponse] = await Promise.all([
-      fetch('/api/skills', { signal }),
-      fetch('/api/members', { signal })
-    ]);
-
-    if (!skillsResponse.ok || !membersResponse.ok) {
-      throw new Error('Failed to fetch data');
-    }
-
-    const [skills, members] = await Promise.all([
-      skillsResponse.json() as Promise<Skill[]>,
-      membersResponse.json() as Promise<Member[]>
-    ]);
-
-    return { skills, members };
-  }, []);
-
-  const fetchData = useCallback(async () => {
-    dataRequestRef.current?.abort();
-    const controller = new AbortController();
-    dataRequestRef.current = controller;
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const data = await loadData(controller.signal);
-      if (dataRequestRef.current !== controller) return;
-      setSkillsData(data.skills);
-      setMembersData(data.members);
-    } catch (err) {
-      if (controller.signal.aborted || dataRequestRef.current !== controller) return;
-      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
-    } finally {
-      if (dataRequestRef.current === controller) {
-        dataRequestRef.current = null;
-        setIsLoading(false);
-      }
-    }
-  }, [loadData]);
+  // Adjust URL-derived state during this render, before children see it.
+  // A delayed router render from an older keystroke must not replace the draft.
+  if (searchState.urlQuery !== queryFromUrl) {
+    const currentQuery = (new URLSearchParams(window.location.search).get('query') ?? '').slice(0, 120);
+    setSearchState({ query: currentQuery === queryFromUrl ? queryFromUrl : searchState.query, urlQuery: queryFromUrl });
+  }
+  const searchTerm = searchState.query;
 
   useEffect(() => {
-    const controller = new AbortController();
-    dataRequestRef.current = controller;
+    const restoreQuery = () => {
+      const query = (new URLSearchParams(window.location.search).get('query') ?? '').slice(0, 120);
+      setSearchState({ query, urlQuery: query });
+    };
+    window.addEventListener('popstate', restoreQuery);
+    return () => window.removeEventListener('popstate', restoreQuery);
+  }, []);
 
-    void loadData(controller.signal)
-      .then((data) => {
-        if (dataRequestRef.current !== controller) return;
+  const updateQuery = (value: string) => {
+    const query = value.slice(0, 120);
+    setSearchState(previous => ({ ...previous, query }));
+    const url = new URL(window.location.href);
+    if (query) url.searchParams.set('query', query);
+    else url.searchParams.delete('query');
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+  };
+
+  useEffect(() => {
+    if (!viewerId) return;
+    const controller = new AbortController();
+    void fetch('/api/skills/directory', { signal: controller.signal })
+      .then(async response => {
+        if (!response.ok) throw new Error('Verzeichnis konnte nicht geladen werden.');
+        return response.json() as Promise<DirectoryResponse>;
+      })
+      .then(data => {
+        if (controller.signal.aborted) return;
         setSkillsData(data.skills);
         setMembersData(data.members);
-        setError(null);
+        setLoadError(false);
       })
-      .catch((err: unknown) => {
-        if (controller.signal.aborted || dataRequestRef.current !== controller) return;
-        setError(err instanceof Error ? err.message : 'An unexpected error occurred');
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        console.error('Fehler beim Laden des Skill-Verzeichnisses:', error);
+        setLoadError(true);
       })
-      .finally(() => {
-        if (dataRequestRef.current === controller) {
-          dataRequestRef.current = null;
-          setIsLoading(false);
-        }
-      });
+      .finally(() => { if (!controller.signal.aborted) setIsLoading(false); });
+    return () => controller.abort();
+  }, [retryKey, viewerId]);
 
-    return () => {
-      controller.abort();
-      if (dataRequestRef.current === controller) dataRequestRef.current = null;
-    };
-  }, [loadData]);
-
-  const categories = useMemo(() => ['All', ...Array.from(new Set(skillsData.map(skill => skill.category)))], [skillsData]);
-
+  const skillByName = useMemo(() => new Map(skillsData.map(skill => [skill.name, skill])), [skillsData]);
+  const categories = useMemo(() => ['All', ...new Set(skillsData.map(skill => skill.category))], [skillsData]);
   const filteredMembers = useMemo(() => {
-    return membersData
-      .filter(member => {
-        const matchesCategory = selectedCategory === 'All' ||
-          member.skills.some(s => {
-            const skill = getSkillByName(s.skillName);
-            return skill?.category === selectedCategory;
-          });
-
-        const searchTermLower = searchTerm.toLowerCase();
-        const matchesSearch =
-          member.name.toLowerCase().includes(searchTermLower) ||
-          member.skills.some(s => s.skillName.toLowerCase().includes(searchTermLower));
-
-        return matchesCategory && matchesSearch;
-      })
-      .sort((a, b) => {
-        const comparison = sortBy === 'endorsements'
-          ? a.endorsements - b.endorsements
-          : a.name.localeCompare(b.name);
-        return sortOrder === 'asc' ? comparison : -comparison;
-      });
-  }, [membersData, selectedCategory, searchTerm, sortBy, sortOrder, getSkillByName]);
-
-  const toggleSortOrder = () => {
-    setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
-  };
-
-  const toggleExpandSkills = (memberId: string) => {
-    setExpandedSkills(prev => ({
-      ...prev,
-      [memberId]: !prev[memberId]
-    }));
-  };
+    const query = searchTerm.trim().toLocaleLowerCase('de-DE');
+    return membersData.filter(member => {
+      const matchesCategory = selectedCategory === 'All' || member.skills.some(item => skillByName.get(item.skillName)?.category === selectedCategory);
+      const matchesSearch = !query || member.name.toLocaleLowerCase('de-DE').includes(query) || member.skills.some(item => item.skillName.toLocaleLowerCase('de-DE').includes(query));
+      return matchesCategory && matchesSearch;
+    }).sort((a, b) => {
+      const comparison = sortBy === 'endorsements' ? a.endorsements - b.endorsements : a.name.localeCompare(b.name, 'de');
+      return sortOrder === 'asc' ? comparison : -comparison;
+    });
+  }, [membersData, searchTerm, selectedCategory, skillByName, sortBy, sortOrder]);
+  const hasFilters = Boolean(searchTerm || selectedCategory !== 'All');
+  const clearFilters = () => { updateQuery(''); setSelectedCategory('All'); searchInputRef.current?.focus(); };
 
   const endorseMember = async (memberId: string) => {
-    if (!session?.user?.id) {
-      toast.info('Bitte melde dich an, um ein Mitglied zu empfehlen.');
-      return;
-    }
-    if (memberId === session.user.id || endorsementRequests.current.has(memberId)) return;
+    if (!viewerId) { toast.info('Bitte melde dich an, um ein Mitglied zu empfehlen.'); return; }
+    if (memberId === viewerId || endorsementRequests.current.has(memberId)) return;
     endorsementRequests.current.add(memberId);
-    setEndorsingMembers(prev => [...prev, memberId]);
+    setEndorsingMembers(previous => [...previous, memberId]);
     try {
-      const response = await fetch(`/api/members/${memberId}/endorse`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
+      const response = await fetch(`/api/members/${memberId}/endorse`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
       const data = await response.json();
-      if (response.ok) {
-        setMembersData(prev => prev.map(member => {
-          if (member.id === memberId) {
-            return { ...member, endorsements: member.endorsements + 1, hasEndorsed: true };
-          }
-          return member;
-        }));
-        setSelectedMember(prev => prev?.id === memberId
-          ? { ...prev, endorsements: prev.endorsements + 1, hasEndorsed: true }
-          : prev);
-      } else {
-        toast.error(data.error || 'Fehler beim Empfehlen des Mitglieds.');
-      }
+      if (!response.ok) throw new Error(data.error || 'Empfehlung konnte nicht gespeichert werden.');
+      const update = (member: Member) => member.id === memberId ? { ...member, endorsements: member.endorsements + 1, hasEndorsed: true } : member;
+      setMembersData(previous => previous.map(update));
+      setSelectedMember(previous => previous ? update(previous) : previous);
     } catch (error) {
-      console.error("Fehler beim Empfehlen des Mitglieds:", error);
-      toast.error('Ein unerwarteter Fehler ist aufgetreten.');
+      console.error('Fehler beim Empfehlen des Mitglieds:', error);
+      toast.error(error instanceof Error ? error.message : 'Ein unerwarteter Fehler ist aufgetreten.');
     } finally {
       endorsementRequests.current.delete(memberId);
-      setEndorsingMembers(prev => prev.filter(id => id !== memberId));
+      setEndorsingMembers(previous => previous.filter(id => id !== memberId));
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-          className="w-16 h-16 border-t-4 border-blue-500 rounded-full"
-        />
-      </div>
-    );
-  }
+  const canEndorse = (member: Member) => Boolean(viewerId && member.id !== viewerId && !member.hasEndorsed && !endorsingMembers.includes(member.id));
+  const endorsementLabel = (member: Member) => member.hasEndorsed ? 'Bereits empfohlen' : member.id === viewerId ? 'Eigenes Profil' : endorsingMembers.includes(member.id) ? 'Wird empfohlen…' : 'Empfehlen';
 
-  if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4">
-        <p className="text-lg text-red-500 mb-4">{error}</p>
-        <Button
-          onClick={() => {
-            setIsRetrying(true);
-            fetchData().finally(() => setIsRetrying(false));
-          }}
-          disabled={isRetrying}
-        >
-          {isRetrying ? 'Retrying...' : 'Retry'}
-        </Button>
-      </div>
-    );
-  }
+  return <AppShell>
+    <Sidebar />
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <AppHeader><div className="flex min-w-0 items-center justify-between gap-3"><h1 className="min-w-0 truncate">Skill-Verzeichnis</h1><div className="flex shrink-0 items-center gap-2"><ThemeToggle /><UserNav /></div></div></AppHeader>
+      <main id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto">
+        <ToastContainer position="top-right" />
+        <div className="mx-auto w-full max-w-[1440px] px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
+          <div className="flex flex-wrap items-end justify-between gap-4 border-b pb-7"><div><p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Community / Fähigkeiten</p><p className="mt-2 max-w-[55ch] text-base leading-relaxed text-muted-foreground">Finde Menschen mit Erfahrung und entdecke ihre Fähigkeiten.</p></div>{viewerId && <Button asChild variant="outline"><Link href="/settings?tab=skills">Eigene Fähigkeiten ergänzen</Link></Button>}</div>
 
-  return (
-    <AppShell>
-      <Sidebar />
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <AppHeader>
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row items-center justify-between">
-            <h2 className="text-2xl font-bold text-foreground flex items-center mb-4 sm:mb-0">
-              <Award className="mr-2 h-6 w-6" />
-              Skill-Verzeichnis
-            </h2>
-            <div className="flex items-center space-x-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  type="text"
-                  placeholder="Name oder Fähigkeit suchen…"
-                  aria-label="Mitglieder nach Name oder Fähigkeit suchen"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 pr-4 py-2 w-full sm:w-64 rounded-full"
-                />
-              </div>
-              <ThemeToggle />
-              <UserNav />
-            </div>
-          </div>
-        </AppHeader>
-        <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto p-4 lg:p-8">
-          <div className="flex flex-col space-y-4 mb-6">
-            <div className="flex items-center justify-end space-x-2">
-              <Filter className="h-5 w-5 text-muted-foreground" />
-              <Select value={sortBy} onValueChange={setSortBy}>
-                <SelectTrigger className="w-[180px]" aria-label="Mitglieder sortieren nach">
-                  <SelectValue placeholder="Sortieren nach" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="endorsements">Empfehlungen</SelectItem>
-                  <SelectItem value="name">Name</SelectItem>
-                </SelectContent>
-              </Select>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="outline" size="icon" onClick={toggleSortOrder} aria-label={sortOrder === 'asc' ? 'Absteigend sortieren' : 'Aufsteigend sortieren'}>
-                      {sortOrder === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    {sortOrder === 'asc' ? 'Aufsteigend' : 'Absteigend'}
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
+          <section aria-label="Mitglieder filtern" className="grid min-w-0 gap-4 border-b py-7 sm:grid-cols-[minmax(0,1fr)_12rem_auto] sm:items-end">
+            <div className="min-w-0"><Label htmlFor="skill-search" className="mb-2 block">Name oder Fähigkeit suchen</Label><div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" /><Input ref={searchInputRef} id="skill-search" type="search" maxLength={120} value={searchTerm} onChange={event => updateQuery(event.target.value)} placeholder="Name oder Fähigkeit" className="pl-10" /></div></div>
+            <div className="min-w-0"><Label htmlFor="skill-sort" className="mb-2 block">Sortieren nach</Label><Select value={sortBy} onValueChange={value => setSortBy(value as 'endorsements' | 'name')}><SelectTrigger id="skill-sort"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="endorsements">Empfehlungen</SelectItem><SelectItem value="name">Name</SelectItem></SelectContent></Select></div>
+            <Button type="button" variant="outline" size="icon" aria-label={sortOrder === 'asc' ? 'Absteigend sortieren' : 'Aufsteigend sortieren'} onClick={() => setSortOrder(value => value === 'asc' ? 'desc' : 'asc')}>{sortOrder === 'asc' ? <ChevronUp className="h-4 w-4" aria-hidden="true" /> : <ChevronDown className="h-4 w-4" aria-hidden="true" />}</Button>
+          </section>
 
-            <Tabs
-              value={selectedCategory}
-              onValueChange={(value) => setSelectedCategory(value)}
-              className="w-full"
-            >
-              <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 rounded-md bg-muted p-1 text-muted-foreground">
-                {categories.map((category) => (
-                  <TabsTrigger
-                    key={category}
-                    value={category}
-                    className="inline-flex items-center justify-center whitespace-nowrap px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
-                  >
-                    {category === 'All' ? 'Alle' : category}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
-          </div>
+          <div role="group" aria-label="Skill-Kategorie wählen" className="flex flex-wrap gap-2 border-b py-5">{categories.map(category => <button key={category} type="button" onClick={() => setSelectedCategory(category)} aria-pressed={selectedCategory === category} className={'min-h-11 max-w-full rounded-[10px] border px-3 py-2 text-sm font-medium focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 [overflow-wrap:anywhere] ' + (selectedCategory === category ? 'border-primary bg-accent text-foreground' : 'border-border text-muted-foreground hover:bg-muted')}>{category === 'All' ? 'Alle Kategorien' : category}</button>)}</div>
 
-          <Suspense fallback={
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {[1, 2, 3, 4].map((i) => (
-                <MemberCardSkeleton key={i} />
-              ))}
-            </div>
-          }>
-            <motion.div
-              layout
-              className="grid grid-cols-1 lg:grid-cols-2 gap-6"
-            >
-              {filteredMembers.length === 0 && (
-                <Card className="col-span-full">
-                  <CardContent className="py-12 text-center">
-                    <Search className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
-                    <h3 className="text-lg font-semibold">Keine passenden Mitglieder</h3>
-                    <p className="mt-2 text-muted-foreground">Versuche einen anderen Suchbegriff oder zeige alle Kategorien.</p>
-                    <Button variant="outline" className="mt-4" onClick={() => { setSearchTerm(''); setSelectedCategory('All'); }}>Filter zurücksetzen</Button>
-                  </CardContent>
-                </Card>
-              )}
-              {filteredMembers.map((member) => (
-                <motion.div
-                  key={member.id}
-                  layout
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <Card className="h-full transition-colors hover:border-primary/40">
-                    <CardHeader className="flex flex-row items-center gap-3 space-y-0 pb-2">
-                      <Avatar className="h-16 w-16">
-                        <AvatarImage src={member.avatar} alt={member.name} />
-                        <AvatarFallback>{member.name[0]}</AvatarFallback>
-                      </Avatar>
-                      <div className="min-w-0 flex-1">
-                        <CardTitle className="text-xl break-words">{member.name}</CardTitle>
-                        <p className="text-sm text-muted-foreground">{member.title}</p>
-                      </div>
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button
-                              onClick={() => endorseMember(member.id)}
-                              disabled={!session || member.id === session.user.id || member.hasEndorsed || endorsingMembers.includes(member.id)}
-                              className={`ml-auto shrink-0 p-2 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ${member.hasEndorsed ? 'bg-secondary' : 'bg-amber-100 hover:bg-amber-200 dark:bg-amber-950 dark:hover:bg-amber-900'}`}
-                              aria-label="Mitglied empfehlen"
-                            >
-                              <Star className={`h-6 w-6 ${member.hasEndorsed ? 'text-yellow-500' : 'text-amber-700 dark:text-amber-300'}`} />
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            {member.hasEndorsed ? 'Bereits empfohlen' : 'Mitglied empfehlen'}
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    </CardHeader>
-                    <CardContent className="flex-grow">
-                      <div className="space-y-4 mb-4">
-                        {member.skills.slice(0, expandedSkills[member.id] ? undefined : 3).map(({ skillName, level }) => {
-                          const skill = getSkillByName(skillName);
-                          if (!skill) return null;
-                          return (
-                            <TooltipProvider key={skill.id}>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <div className="space-y-1">
-                                    <div className="flex justify-between">
-                                      <Badge
-                                        variant="outline"
-                                        className="cursor-help transition-colors hover:bg-secondary"
-                                      >
-                                        {skill.name}
-                                      </Badge>
-                                      <span className="text-sm text-muted-foreground">{level}%</span>
-                                    </div>
-                                    <Progress value={level} className="w-full" />
-                                  </div>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p className="text-sm">{skill.category}</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          );
-                        })}
-                      </div>
-                      {member.skills.length > 3 && (
-                        <Button
-                          variant="link"
-                          onClick={() => toggleExpandSkills(member.id)}
-                          className="mt-2"
-                        >
-                          {expandedSkills[member.id] ? 'Weniger anzeigen' : 'Mehr anzeigen'}
-                        </Button>
-                      )}
-                      <div className="flex flex-wrap items-center justify-between gap-3 mt-4">
-                        <span className="flex items-center text-sm text-muted-foreground">
-                          <Star className="h-4 w-4 mr-1 text-yellow-500" />
-                          {member.endorsements} Empfehlungen
-                        </span>
-                        <Button onClick={() => setSelectedMember(member)}>
-                          Details zum Profil
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              ))}
-            </motion.div>
-          </Suspense>
-        </main>
-      </div>
-      <Dialog open={!!selectedMember} onOpenChange={() => setSelectedMember(null)}>
-        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-2xl">{selectedMember?.name}</DialogTitle>
-          </DialogHeader>
-          {selectedMember && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="grid gap-6 py-4"
-            >
-              <div className="flex items-center space-x-4">
-                <Avatar className="h-20 w-20">
-                  <AvatarImage src={selectedMember.avatar} alt={selectedMember.name} />
-                  <AvatarFallback>{selectedMember.name[0]}</AvatarFallback>
-                </Avatar>
-                <div className="space-y-1">
-                  <h4 className="text-xl font-semibold">{selectedMember.name}</h4>
-                  <p className="text-sm text-muted-foreground">{selectedMember.title}</p>
-                  <div className="flex items-center text-sm text-muted-foreground">
-                    <Star className="h-4 w-4 mr-1 text-yellow-500" />
-                    {selectedMember.endorsements} Empfehlungen
-                  </div>
-                </div>
-              </div>
+          <section aria-labelledby="skill-results-title" className="pt-7"><div className="flex flex-wrap items-baseline justify-between gap-2 border-b pb-4"><h2 id="skill-results-title" className="text-xl font-semibold tracking-tight">Mitglieder entdecken</h2><p role="status" className="text-sm tabular-nums text-muted-foreground">{filteredMembers.length} {filteredMembers.length === 1 ? 'Ergebnis' : 'Ergebnisse'}</p></div>
+            {sessionLoading ? <div className="mt-6"><PageState kind="loading" title="Anmeldung wird geprüft" /></div>
+              : !viewerId ? <div className="mt-6"><PageState kind="error" title="Anmeldung erforderlich" description="Melde dich an, um das Skill-Verzeichnis zu sehen." /></div>
+              : isLoading ? <div className="mt-6"><PageState kind="loading" title="Skill-Verzeichnis wird geladen" /></div>
+              : loadError ? <div className="mt-6"><PageState kind="error" title="Skill-Verzeichnis konnte nicht geladen werden" description="Prüfe deine Verbindung und versuche es erneut." action={<Button type="button" variant="outline" onClick={() => { setIsLoading(true); setLoadError(false); setRetryKey(value => value + 1); }}>Erneut versuchen</Button>} /></div>
+              : filteredMembers.length === 0 ? <div className="mt-6"><PageState title={hasFilters ? 'Keine passenden Mitglieder' : 'Noch keine Mitglieder'} description={hasFilters ? 'Versuche es mit einem anderen Suchbegriff oder einer anderen Kategorie.' : 'Sobald Mitglieder Fähigkeiten eintragen, findest du sie hier.'} action={hasFilters ? <Button type="button" variant="outline" onClick={clearFilters}>Filter zurücksetzen</Button> : undefined} /></div>
+              : <ul className="divide-y">{filteredMembers.map(member => {
+                const visibleSkills = member.skills.slice(0, expandedSkills[member.id] ? undefined : 3);
+                return <li key={member.id} className="min-w-0 py-6"><div className="flex min-w-0 items-start gap-4"><Avatar className="h-12 w-12 shrink-0"><AvatarImage src={member.avatar} alt="" /><AvatarFallback>{member.name[0]}</AvatarFallback></Avatar><div className="min-w-0 flex-1"><h3 className="min-w-0 break-words text-lg font-semibold tracking-tight [overflow-wrap:anywhere]"><Link href={`/profile/${member.id}`} className="hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">{member.name}</Link></h3>{member.title && <p className="mt-1 text-sm text-muted-foreground">{member.title}</p>}<p className="mt-2 text-xs tabular-nums text-muted-foreground">{member.endorsements} {member.endorsements === 1 ? 'Empfehlung' : 'Empfehlungen'}</p></div></div>
+                  <div id={`member-skills-${member.id}`} className="mt-4 grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-3">{visibleSkills.map(({ skillName, level }) => <div key={skillName} className="min-w-0 border-t pt-3"><div className="flex min-w-0 items-baseline justify-between gap-2 text-sm"><span className="min-w-0 break-words font-medium [overflow-wrap:anywhere]">{skillName}</span><span className="shrink-0 tabular-nums text-muted-foreground">{level}%</span></div>{skillByName.get(skillName)?.category && <p className="mt-1 text-xs text-muted-foreground">{skillByName.get(skillName)?.category}</p>}<Progress value={Math.max(0, Math.min(100, level))} aria-label={`${skillName}: ${level}%`} className="mt-2 h-2" /></div>)}{visibleSkills.length === 0 && <p className="text-sm text-muted-foreground">Noch keine Fähigkeiten eingetragen.</p>}</div>
+                  <div className="mt-5 flex flex-wrap items-center gap-2">{member.skills.length > 3 && <Button type="button" variant="ghost" size="sm" aria-expanded={Boolean(expandedSkills[member.id])} aria-controls={`member-skills-${member.id}`} onClick={() => setExpandedSkills(previous => ({ ...previous, [member.id]: !previous[member.id] }))}>{expandedSkills[member.id] ? 'Weniger anzeigen' : `Alle ${member.skills.length} Fähigkeiten`}</Button>}<Button type="button" variant="outline" size="sm" onClick={() => setSelectedMember(member)}>Details anzeigen</Button><Button type="button" variant="ghost" size="sm" disabled={!canEndorse(member)} onClick={() => void endorseMember(member.id)}><Star className="h-4 w-4" aria-hidden="true" />{endorsementLabel(member)}</Button></div>
+                </li>;
+              })}</ul>}
+          </section>
+        </div>
+      </main>
 
-              <div className="space-y-2">
-                <h5 className="font-semibold text-lg">Über mich</h5>
-                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{selectedMember.bio}</p>
-              </div>
-
-              <div className="space-y-4">
-                <h5 className="font-semibold text-lg">Skills & Expertise</h5>
-                <div className="grid gap-3">
-                  {selectedMember.skills.map(({ skillName, level }) => {
-                    const skill = getSkillByName(skillName);
-                    if (!skill) return null;
-                    return (
-                      <div key={skillName} className="space-y-1">
-                        <div className="flex justify-between">
-                          <Badge variant="outline" className="px-2 py-0.5">
-                            {skillName}
-                          </Badge>
-                          <span className="text-sm text-muted-foreground">{level}%</span>
-                        </div>
-                        <Progress value={level} className="h-2" />
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t">
-                <Button
-                  variant="outline"
-                  disabled={!selectedMember.contact}
-                  onClick={() => window.location.href = `mailto:${selectedMember.contact}`}
-                  className="flex items-center gap-2"
-                >
-                  <Mail className="h-4 w-4" />
-                  Kontakt aufnehmen
-                </Button>
-                <Button
-                  variant="default"
-                  onClick={() => endorseMember(selectedMember.id)}
-                  disabled={!session || selectedMember.id === session.user.id || selectedMember.hasEndorsed || endorsingMembers.includes(selectedMember.id)}
-                  className="flex items-center gap-2"
-                >
-                  <Star className="h-4 w-4" />
-                  {selectedMember.hasEndorsed ? 'Bereits empfohlen' : 'Empfehlen'}
-                </Button>
-              </div>
-            </motion.div>
-          )}
+      <Dialog open={!!selectedMember} onOpenChange={open => { if (!open) setSelectedMember(null); }}>
+        <DialogContent className="sm:max-w-[600px]"><DialogHeader><DialogTitle className="break-words [overflow-wrap:anywhere]">{selectedMember?.name}</DialogTitle><DialogDescription>Fähigkeiten und Empfehlungen</DialogDescription></DialogHeader>
+          {selectedMember && <div className="min-w-0 space-y-6 py-2"><div className="flex min-w-0 items-center gap-4"><Avatar className="h-14 w-14 shrink-0"><AvatarImage src={selectedMember.avatar} alt="" /><AvatarFallback>{selectedMember.name[0]}</AvatarFallback></Avatar><div className="min-w-0"><p className="break-words font-semibold [overflow-wrap:anywhere]">{selectedMember.name}</p>{selectedMember.title && <p className="text-sm text-muted-foreground">{selectedMember.title}</p>}<p className="text-sm tabular-nums text-muted-foreground">{selectedMember.endorsements} Empfehlungen</p></div></div>
+            <section aria-label="Fähigkeiten" className="space-y-3">{selectedMember.skills.length ? selectedMember.skills.map(({ skillName, level }) => <div key={skillName} className="border-t pt-3"><div className="flex items-baseline justify-between gap-2 text-sm"><span className="min-w-0 break-words font-medium [overflow-wrap:anywhere]">{skillName}</span><span className="shrink-0 tabular-nums text-muted-foreground">{level}%</span></div><Progress value={Math.max(0, Math.min(100, level))} aria-label={`${skillName}: ${level}%`} className="mt-2 h-2" /></div>) : <p className="text-sm text-muted-foreground">Noch keine Fähigkeiten eingetragen.</p>}</section>
+            <div className="flex flex-wrap gap-2 border-t pt-5"><Button asChild variant="outline"><Link href={`/profile/${selectedMember.id}`}>Profil öffnen<ArrowUpRight className="h-4 w-4" aria-hidden="true" /></Link></Button><Button type="button" disabled={!canEndorse(selectedMember)} onClick={() => void endorseMember(selectedMember.id)}><Star className="h-4 w-4" aria-hidden="true" />{endorsementLabel(selectedMember)}</Button></div>
+          </div>}
         </DialogContent>
       </Dialog>
-    </AppShell>
-  );
+    </div>
+  </AppShell>;
 }

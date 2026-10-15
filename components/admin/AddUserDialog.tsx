@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -75,18 +75,21 @@ export default function AddUserDialog({ isOpen, onClose, onAddUser }: AddUserDia
     try {
       // Validierung
       if (!formData.name || !formData.email || !formData.password) {
+        setActiveTab('basic')
         toast.error('Bitte füllen Sie alle Pflichtfelder aus')
         return
       }
 
       const invalidPassword = passwordError(formData.password)
       if (invalidPassword) {
+        setActiveTab('basic')
         toast.error(invalidPassword)
         return
       }
 
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
       if (!emailRegex.test(formData.email)) {
+        setActiveTab('basic')
         toast.error('Bitte geben Sie eine gültige E-Mail-Adresse ein')
         return
       }
@@ -140,22 +143,23 @@ export default function AddUserDialog({ isOpen, onClose, onAddUser }: AddUserDia
     }))
   }
   return (
-    <Dialog open={isOpen} onOpenChange={handleClose}>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) handleClose() }}>
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle>Neuen Benutzer erstellen</DialogTitle>
+          <DialogDescription>Pflichtfelder sind mit einem Stern markiert. Weitere Angaben können später ergänzt werden.</DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} noValidate>
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="flex w-full justify-start overflow-x-auto">
               <TabsTrigger value="basic">Basisdaten</TabsTrigger>
               <TabsTrigger value="profile">Profil</TabsTrigger>
               <TabsTrigger value="settings">Einstellungen</TabsTrigger>
             </TabsList>
 
             <TabsContent value="basic" className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="name">Name *</Label>
                   <Input
@@ -180,7 +184,7 @@ export default function AddUserDialog({ isOpen, onClose, onAddUser }: AddUserDia
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="password">Passwort *</Label>
                   <Input
@@ -190,9 +194,10 @@ export default function AddUserDialog({ isOpen, onClose, onAddUser }: AddUserDia
                     onChange={(e) => handleInputChange('password', e.target.value)}
                     placeholder="••••••••"
                     minLength={MIN_PASSWORD_LENGTH}
+                    aria-describedby="new-user-password-help"
                     required
                   />
-                  <p className="text-xs text-muted-foreground">
+                  <p id="new-user-password-help" className="text-xs text-muted-foreground">
                     {PASSWORD_HELP}
                   </p>
                 </div>
@@ -205,7 +210,7 @@ export default function AddUserDialog({ isOpen, onClose, onAddUser }: AddUserDia
                       handleInputChange('role', value)
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="role" aria-label="Rolle">
                       <SelectValue placeholder="Rolle auswählen" />
                     </SelectTrigger>
                     <SelectContent>
@@ -257,14 +262,15 @@ export default function AddUserDialog({ isOpen, onClose, onAddUser }: AddUserDia
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label htmlFor="emailNotifications">
-                      E-Mail Benachrichtigungen
+                      E-Mail-Wunsch für später
                     </Label>
-                    <p className="text-sm text-muted-foreground">
-                      Erhält Benachrichtigungen per E-Mail
+                    <p id="add-user-email-notices-description" className="text-sm text-muted-foreground">
+                      Für dieses Konto wird eine Präferenz gespeichert; E-Mails werden derzeit nicht versendet.
                     </p>
                   </div>
                   <Switch
                     id="emailNotifications"
+                    aria-describedby="add-user-email-notices-description"
                     checked={formData.emailNotifications}
                     onCheckedChange={(checked) =>
                       handleInputChange('emailNotifications', checked)
@@ -275,14 +281,15 @@ export default function AddUserDialog({ isOpen, onClose, onAddUser }: AddUserDia
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label htmlFor="pushNotifications">
-                      Push Benachrichtigungen
+                      Desktop-Hinweise für Chatnachrichten
                     </Label>
-                    <p className="text-sm text-muted-foreground">
-                      Erhält Push Benachrichtigungen im Browser
+                    <p id="add-user-desktop-notices-description" className="text-sm text-muted-foreground">
+                      Voreinstellung für dieses Konto. Nur bei geöffneter App, inaktivem Tab und erteilter Browserberechtigung; kein Hintergrund-Push.
                     </p>
                   </div>
                   <Switch
                     id="pushNotifications"
+                    aria-describedby="add-user-desktop-notices-description"
                     checked={formData.pushNotifications}
                     onCheckedChange={(checked) =>
                       handleInputChange('pushNotifications', checked)
@@ -298,7 +305,7 @@ export default function AddUserDialog({ isOpen, onClose, onAddUser }: AddUserDia
                       handleInputChange('theme', value)
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="theme" aria-label="Theme">
                       <SelectValue placeholder="Theme auswählen" />
                     </SelectTrigger>
                     <SelectContent>
@@ -316,7 +323,7 @@ export default function AddUserDialog({ isOpen, onClose, onAddUser }: AddUserDia
                       handleInputChange('language', value)
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="language" aria-label="Sprache">
                       <SelectValue placeholder="Sprache auswählen" />
                     </SelectTrigger>
                     <SelectContent>
