@@ -33,6 +33,7 @@ const reviewedUpgradeNames = [
   '0011_manual_assignments.sql',
   '0012_verified_learning_pathways.sql',
   '0013_quiz_confidence_evidence.sql',
+  '0014_formative_practice_authoring.sql',
 ];
 // A release image must carry the exact reviewed sequence, including the tail.
 assert.deepEqual(upgradeNames, reviewedUpgradeNames);

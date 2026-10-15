@@ -30,10 +30,11 @@ test('pins exact owner revisions, previews from owner API, and publishes only af
   global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
     const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {}
-    if (init?.method && init.method !== 'GET') writes.push({ url, body })
+    if (init?.method && init.method !== 'GET' && !url.endsWith('/preview')) writes.push({ url, body })
     if (url.endsWith('/practice/objectives')) return response({ objectives: [objective] })
     if (url.endsWith('/objective-1/items')) return response({ items: [item] })
     if (url.endsWith('/item-1/revisions/1')) return response({ itemId: item.id, revision: 1, choice })
+    if (url.endsWith('/practice/authoring/preview')) return response({ items: [{ ...ref, objectiveTitle: objective.title, objectiveDescription: objective.description, ...choice }] })
     if (url.endsWith('/practice/authoring/publish')) return response({ snapshot: { id: 'practice-snapshot-1', coursePublicationId: 'course-publication-1', sequence: 1, digest: 'digest-1', itemCount: 1 }, unchanged: false, replay: false })
     if (url.endsWith('/practice/authoring')) {
       if (init?.method === 'PATCH') {
@@ -74,6 +75,7 @@ test('retains local item text on 412 and explicitly rebases onto the current rev
     const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {}
     if (url.endsWith('/practice/objectives')) return response({ objectives: [objective] })
     if (url.endsWith('/objective-1/items')) return response({ items: [{ ...item, latestRevision: latest }] })
+    if (url.endsWith('/items/item-1') && !init?.method) return response({ ...item, latestRevision: latest, prompt: latest === 2 ? 'Änderung anderer Autor' : item.prompt })
     if (url.endsWith('/item-1/revisions/1')) return response({ itemId: item.id, revision: 1, choice })
     if (url.endsWith('/item-1/revisions/2')) return response({ itemId: item.id, revision: 2, choice: { ...choice, prompt: 'Änderung anderer Autor' } })
     if (url.endsWith('/practice/authoring')) return response(state)
@@ -166,4 +168,114 @@ test('shows both pinned sets on draft 412 and rebases only when explicitly chose
   await waitFor(() => expect(patches).toHaveLength(2))
   expect(patches[1]).toEqual({ expectedRevision: 2, items: [ref] })
   expect(screen.queryByRole('region', { name: 'Versionskonflikt' })).not.toBeInTheDocument()
+})
+
+test('older pool entries survive reload, preview/publish, and long preview tokens wrap on a narrow viewport', async () => {
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: 320 })
+  const longTitle = 'L'.repeat(300)
+  const longOption = 'O'.repeat(1000)
+  const olderObjective = { id: 'objective-oldest', title: longTitle, description: '', revision: 1 }
+  const olderItem = { id: 'item-oldest', objectiveId: olderObjective.id, latestRevision: 1, prompt: 'Archived question?' }
+  const olderChoice = { schemaVersion: 1, type: 'SINGLE_CHOICE', prompt: olderItem.prompt,
+    options: [longOption, 'Another answer'], correctIndex: 0, explanation: '' }
+  const olderRef = { objectiveId: olderObjective.id, objectiveRevision: 1, itemId: olderItem.id, itemRevision: 1 }
+  const firstObjectives = Array.from({ length: 100 }, (_, index) => ({ id: `objective-${index}`, title: `Objective ${index}`, description: '', revision: 1 }))
+  const firstItems = Array.from({ length: 100 }, (_, index) => ({ id: `item-${index}`, objectiveId: olderObjective.id, latestRevision: 1, prompt: `Question ${index}` }))
+  let current: unknown = state
+  global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input)
+    if (url.includes('/practice/objectives?cursor=')) return response({ objectives: [olderObjective], nextCursor: null })
+    if (url.endsWith('/practice/objectives')) return response({ objectives: firstObjectives, nextCursor: 'older-objectives' })
+    if (url.includes('/objective-oldest/items?cursor=')) return response({ items: [olderItem], nextCursor: null })
+    if (url.endsWith('/objective-oldest/items')) return response({ items: firstItems, nextCursor: 'older-items' })
+    if (url.includes('/items?cursor=')) return response({ items: [], nextCursor: null })
+    if (url.endsWith('/items')) return response({ items: [], nextCursor: null })
+    if (url.endsWith('/item-oldest/revisions/1')) return response({ itemId: olderItem.id, revision: 1, choice: olderChoice })
+    if (url.endsWith('/practice/authoring/preview')) return response({ items: [{ ...olderRef, objectiveTitle: longTitle, objectiveDescription: '', ...olderChoice }] })
+    if (url.endsWith('/practice/authoring/publish')) return response({ snapshot: { id: 'paged-snapshot', coursePublicationId: 'course-publication-1', sequence: 1, digest: 'digest', itemCount: 1 }, unchanged: false, replay: false })
+    if (url.includes('/practice/authoring/history?cursor=')) return response({ activeCoursePublicationId: 'course-publication-1', snapshots: [{ id: 'snap-1', coursePublicationId: 'course-publication-1', sequence: 1, digest: 'digest', itemCount: 1 }], nextCursor: null })
+    if (url.endsWith('/practice/authoring/history')) return response({ activeCoursePublicationId: 'course-publication-1', snapshots: Array.from({ length: 100 }, (_, index) => ({ id: `snap-${index + 2}`, coursePublicationId: 'course-publication-1', sequence: index + 2, digest: 'digest', itemCount: 1 })), nextCursor: '2' })
+    if (url.endsWith('/practice/authoring')) {
+      if (init?.method === 'PATCH') {
+        current = { ...state, draft: { ...state.draft, revision: 1, payload: { schemaVersion: 1 as const, items: [olderRef] } } }
+      }
+      return response(current)
+    }
+    return response({ error: 'Unexpected URL' }, 404)
+  })
+  const user = userEvent.setup()
+  const view = render(<PracticeAuthorWorkspace courseId="course-1" sessionStatus="authenticated" />)
+  await user.click(await screen.findByRole('button', { name: 'Ältere Lernziele laden' }))
+  await user.click(await screen.findByRole('button', { name: new RegExp(longTitle) }))
+  await user.click(await screen.findByRole('button', { name: 'Ältere Fragen laden' }))
+  await user.click(await screen.findByRole('button', { name: /Archived question/ }))
+  expect(await screen.findByLabelText('Fragetext')).toHaveValue(olderItem.prompt)
+  await user.click(screen.getByRole('button', { name: 'Version anheften' }))
+  await user.click(screen.getByRole('button', { name: 'Zusammenstellung speichern' }))
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Veröffentlichung prüfen' })).toBeEnabled())
+  view.unmount()
+  render(<PracticeAuthorWorkspace courseId="course-1" sessionStatus="authenticated" />)
+  await user.click(await screen.findByRole('button', { name: 'Veröffentlichung prüfen' }))
+  const review = await screen.findByRole('region', { name: 'Veröffentlichung prüfen' })
+  expect(within(review).getByText(/Archived question/)).toBeVisible()
+  expect(review.querySelector('p.text-xs')).toHaveClass('break-words', '[overflow-wrap:anywhere]')
+  expect(within(review).getByText(/Another answer/)).toHaveClass('break-words', '[overflow-wrap:anywhere]')
+  expect(review.textContent).toContain(longOption)
+  expect(review.querySelector('ol li')).toHaveClass('break-words', '[overflow-wrap:anywhere]')
+  await user.click(within(review).getByRole('button', { name: 'Diese Übungsfassung veröffentlichen' }))
+  expect(await screen.findByText(/Veröffentlichungsbeleg · Version 1/)).toBeVisible()
+  await user.click(screen.getByRole('button', { name: 'Verlauf' }))
+  await user.click(await screen.findByRole('button', { name: 'Ältere Versionen laden' }))
+  expect(await screen.findByText('Version 1', { selector: 'strong' })).toBeVisible()
+})
+
+test('out-of-order preview cannot replace the reviewed saved draft before publish', async () => {
+  const secondItem = { id: 'item-2', objectiveId: objective.id, latestRevision: 1, prompt: 'Another practice question?' }
+  const secondChoice = { ...choice, prompt: secondItem.prompt }
+  const secondRef = { objectiveId: objective.id, objectiveRevision: 1, itemId: secondItem.id, itemRevision: 1 }
+  const firstState = { ...state, draft: { ...state.draft, revision: 1, payload: { schemaVersion: 1 as const, items: [ref] } } }
+  const secondState = { ...state, draft: { ...state.draft, revision: 2, payload: { schemaVersion: 1 as const, items: [ref, secondRef] } } }
+  let current = firstState
+  let finishFirstPreview!: (value: Response) => void
+  const firstPreview = new Promise<Response>(resolve => { finishFirstPreview = resolve })
+  const published: Record<string, unknown>[] = []
+  global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input)
+    const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {}
+    if (url.endsWith('/practice/objectives')) return response({ objectives: [objective], nextCursor: null })
+    if (url.endsWith('/objective-1/items')) return response({ items: [item, secondItem], nextCursor: null })
+    if (url.endsWith('/item-2/revisions/1')) return response({ itemId: secondItem.id, revision: 1, choice: secondChoice })
+    if (url.endsWith('/practice/authoring/preview')) {
+      const refs = body.items as typeof ref[]
+      return refs.length === 1 ? firstPreview : response({ items: [
+        { ...ref, objectiveTitle: objective.title, objectiveDescription: objective.description, ...choice },
+        { ...secondRef, objectiveTitle: objective.title, objectiveDescription: objective.description, ...secondChoice },
+      ] })
+    }
+    if (url.endsWith('/practice/authoring/publish')) {
+      published.push(body)
+      return response({ snapshot: { id: 'second-snapshot', coursePublicationId: 'course-publication-1', sequence: 2, digest: 'digest', itemCount: 2 }, unchanged: false, replay: false })
+    }
+    if (url.endsWith('/practice/authoring')) {
+      if (init?.method === 'PATCH') current = secondState
+      return response(current)
+    }
+    return response({ error: 'Unexpected URL' }, 404)
+  })
+  const user = userEvent.setup()
+  render(<PracticeAuthorWorkspace courseId="course-1" sessionStatus="authenticated" />)
+  await user.click(await screen.findByRole('button', { name: 'Veröffentlichung prüfen' }))
+  await user.click(await screen.findByRole('button', { name: /Another practice question/ }))
+  await screen.findByLabelText('Fragetext')
+  await user.click(screen.getByRole('button', { name: 'Version anheften' }))
+  await user.click(screen.getByRole('button', { name: 'Zusammenstellung speichern' }))
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Veröffentlichung prüfen' })).toBeEnabled())
+  await user.click(screen.getByRole('button', { name: 'Veröffentlichung prüfen' }))
+  const review = await screen.findByRole('region', { name: 'Veröffentlichung prüfen' })
+  expect(within(review).getByText(/Another practice question/)).toBeVisible()
+  finishFirstPreview(response({ items: [{ ...ref, objectiveTitle: objective.title, objectiveDescription: objective.description, ...choice }] }))
+  await waitFor(() => expect(within(review).getByText(/Another practice question/)).toBeVisible())
+  expect(within(review).getAllByRole('heading', { level: 4 })).toHaveLength(2)
+  await user.click(within(review).getByRole('button', { name: 'Diese Übungsfassung veröffentlichen' }))
+  expect(published).toEqual([{ expectedRevision: 2, expectedActivePublicationId: 'course-publication-1', requestId: expect.any(String) }])
 })

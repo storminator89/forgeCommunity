@@ -15,13 +15,13 @@ import { ThemeToggle } from '@/components/theme-toggle'
 import { UserNav } from '@/components/user-nav'
 import {
   PracticeApiError, createItem, createObjective, getItemRevision, getItems, getObjectives,
+  getPracticePreview, getObjective, getItem,
   getPracticeHistory, getPracticeState, publishPractice, reviseItem, reviseObjective,
   savePracticeState, type PracticeChoice, type PracticeHistory, type PracticeItem,
-  type PracticeObjective, type PracticeRef, type PracticeSnapshot, type PracticeState,
+  type PracticeObjective, type PracticePreviewItem, type PracticeRef, type PracticeSnapshot, type PracticeState,
 } from './practice-api'
 
 type ObjectiveInput = Pick<PracticeObjective, 'title' | 'description'>
-type PreviewRow = { ref: PracticeRef; objective: PracticeObjective; choice: PracticeChoice }
 type Conflict =
   | { scope: 'objective'; remote: PracticeObjective }
   | { scope: 'item'; remote: PracticeItem; choice: PracticeChoice }
@@ -37,22 +37,28 @@ export function PracticeAuthorWorkspace({ courseId, sessionStatus }: { courseId:
   const router = useRouter()
   const [state, setState] = useState<PracticeState | null>(null)
   const [objectives, setObjectives] = useState<PracticeObjective[]>([])
+  const [objectiveCursor, setObjectiveCursor] = useState<string | null>(null)
+  const [objectivesPaging, setObjectivesPaging] = useState(false)
   const [objectiveId, setObjectiveId] = useState('')
   const [objectiveNew, setObjectiveNew] = useState(false)
   const [objectiveInput, setObjectiveInput] = useState<ObjectiveInput>({ title: '', description: '' })
   const [items, setItems] = useState<PracticeItem[]>([])
+  const [itemCursor, setItemCursor] = useState<string | null>(null)
+  const [itemsPaging, setItemsPaging] = useState(false)
   const [itemId, setItemId] = useState('')
   const [itemNew, setItemNew] = useState(false)
   const [itemRevision, setItemRevision] = useState(1)
   const [choice, setChoice] = useState<PracticeChoice | null>(null)
   const [choiceBaseline, setChoiceBaseline] = useState<PracticeChoice | null>(null)
   const [refs, setRefs] = useState<PracticeRef[]>([])
-  const [previewRows, setPreviewRows] = useState<PreviewRow[] | null>(null)
+  const [previewRows, setPreviewRows] = useState<PracticePreviewItem[] | null>(null)
   const [previewBusy, setPreviewBusy] = useState(false)
   const [reviewOpen, setReviewOpen] = useState(false)
+  const [reviewSignature, setReviewSignature] = useState<string | null>(null)
   const [history, setHistory] = useState<PracticeHistory | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [historyBusy, setHistoryBusy] = useState(false)
+  const [historyPaging, setHistoryPaging] = useState(false)
   const [receipt, setReceipt] = useState<PracticeSnapshot | null>(null)
   const [publishRequestId, setPublishRequestId] = useState<string | null>(null)
   const [notice, setNotice] = useState<{ kind: 'error' | 'success'; text: string } | null>(null)
@@ -65,7 +71,9 @@ export function PracticeAuthorWorkspace({ courseId, sessionStatus }: { courseId:
   const [itemsLoading, setItemsLoading] = useState(false)
   const [itemLoading, setItemLoading] = useState(false)
   const itemsRequest = useRef(0)
+  const objectivesRequest = useRef(0)
   const choiceRequest = useRef(0)
+  const previewRequest = useRef(0)
 
   const selectedObjective = objectives.find(row => row.id === objectiveId) ?? null
   const selectedItem = items.find(row => row.id === itemId) ?? null
@@ -74,22 +82,53 @@ export function PracticeAuthorWorkspace({ courseId, sessionStatus }: { courseId:
   const itemDirty = itemNew ? Boolean(choice && (choice.prompt.trim() || choice.options.some(Boolean) || choice.explanation.trim()))
     : Boolean(choice && choiceBaseline && !same(choice, choiceBaseline))
   const refsDirty = Boolean(state && !same(refs, state.draft.payload.items))
+  const currentReviewSignature = state && !refsDirty
+    ? JSON.stringify([courseId, state.draft.revision, state.draft.payload.items, state.activeCoursePublicationId]) : null
   const hasLocalChanges = objectiveDirty || itemDirty || refsDirty
   const isCurrentItemRevision = Boolean(selectedItem && itemRevision === selectedItem.latestRevision)
 
   const loadItemsForObjective = useCallback(async (selectedId: string) => {
     const request = ++itemsRequest.current
     choiceRequest.current += 1
-    setItemsLoading(true); setItems([]); setItemId(''); setItemNew(false); setChoice(null); setChoiceBaseline(null); setItemLoading(false)
+    setItemsLoading(true); setItems([]); setItemCursor(null); setItemsPaging(false); setItemId(''); setItemNew(false); setChoice(null); setChoiceBaseline(null); setItemLoading(false)
     try {
       const result = await getItems(selectedId)
-      if (request === itemsRequest.current) setItems(result.items)
+      if (request === itemsRequest.current) { setItems(result.items); setItemCursor(result.nextCursor ?? null) }
     } catch (error) {
       if (request === itemsRequest.current) setNotice({ kind: 'error', text: message(error, 'Übungsfragen konnten nicht geladen werden.') })
     } finally {
       if (request === itemsRequest.current) setItemsLoading(false)
     }
   }, [])
+  const loadOlderObjectives = async () => {
+    if (!objectiveCursor || objectivesPaging) return
+    const request = objectivesRequest.current
+    setObjectivesPaging(true)
+    try {
+      const result = await getObjectives(undefined, objectiveCursor)
+      if (request === objectivesRequest.current) {
+        setObjectives(previous => [...previous, ...result.objectives.filter(row => !previous.some(current => current.id === row.id))])
+        setObjectiveCursor(result.nextCursor ?? null)
+      }
+    } catch (error) {
+      if (request === objectivesRequest.current) setNotice({ kind: 'error', text: message(error, 'Ältere Lernziele konnten nicht geladen werden.') })
+    } finally { if (request === objectivesRequest.current) setObjectivesPaging(false) }
+  }
+  const loadOlderItems = async () => {
+    if (!itemCursor || itemsPaging || !objectiveId) return
+    const request = itemsRequest.current
+    const selectedId = objectiveId
+    setItemsPaging(true)
+    try {
+      const result = await getItems(selectedId, undefined, itemCursor)
+      if (request === itemsRequest.current) {
+        setItems(previous => [...previous, ...result.items.filter(row => !previous.some(current => current.id === row.id))])
+        setItemCursor(result.nextCursor ?? null)
+      }
+    } catch (error) {
+      if (request === itemsRequest.current) setNotice({ kind: 'error', text: message(error, 'Ältere Fragen konnten nicht geladen werden.') })
+    } finally { if (request === itemsRequest.current) setItemsPaging(false) }
+  }
   const loadChoiceVersion = async (selectedId: string, revision: number) => {
     const request = ++choiceRequest.current
     setItemLoading(true); setChoice(null); setChoiceBaseline(null)
@@ -105,10 +144,11 @@ export function PracticeAuthorWorkspace({ courseId, sessionStatus }: { courseId:
 
   useEffect(() => {
     if (sessionStatus !== 'authenticated') return
+    objectivesRequest.current += 1
     const controller = new AbortController()
     void Promise.all([getPracticeState(courseId, controller.signal), getObjectives(controller.signal)]).then(([next, result]) => {
       if (controller.signal.aborted) return
-      setState(next); setRefs(next.draft.payload.items); setObjectives(result.objectives)
+      setState(next); setRefs(next.draft.payload.items); setObjectives(result.objectives); setObjectiveCursor(result.nextCursor ?? null)
       setObjectiveId(result.objectives[0]?.id ?? '')
       setObjectiveNew(result.objectives.length === 0)
       setObjectiveInput(result.objectives[0] ? { title: result.objectives[0].title, description: result.objectives[0].description } : { title: '', description: '' })
@@ -119,7 +159,7 @@ export function PracticeAuthorWorkspace({ courseId, sessionStatus }: { courseId:
       setLoadError({ text: message(error, 'Die Übungsdaten konnten nicht geladen werden.'), status: error instanceof PracticeApiError ? error.status : undefined })
       setLoading(false)
     })
-    return () => { controller.abort(); itemsRequest.current += 1; choiceRequest.current += 1 }
+    return () => { controller.abort(); objectivesRequest.current += 1; itemsRequest.current += 1; choiceRequest.current += 1 }
   }, [courseId, retry, sessionStatus, loadItemsForObjective])
 
   useEffect(() => {
@@ -146,8 +186,13 @@ export function PracticeAuthorWorkspace({ courseId, sessionStatus }: { courseId:
     return () => { window.removeEventListener('beforeunload', beforeUnload); window.removeEventListener('popstate', popState); document.removeEventListener('click', interceptLink, true) }
   }, [hasLocalChanges, router])
 
+  useEffect(() => {
+    previewRequest.current += 1
+    return () => { previewRequest.current += 1 }
+  }, [refs, state?.draft.revision, state?.activeCoursePublicationId, courseId])
+
   const askDiscard = (dirty: boolean) => !dirty || window.confirm('Ungespeicherte Änderungen verwerfen?')
-  const closeReview = () => { setReviewOpen(false); setPublishRequestId(null) }
+  const closeReview = () => { previewRequest.current += 1; setPreviewBusy(false); setPreviewRows(null); setReviewOpen(false); setReviewSignature(null); setPublishRequestId(null) }
   const editObjective = (row: PracticeObjective) => {
     if (!askDiscard(objectiveDirty || itemDirty)) return
     setObjectiveNew(false); setObjectiveId(row.id)
@@ -158,7 +203,7 @@ export function PracticeAuthorWorkspace({ courseId, sessionStatus }: { courseId:
   const beginObjective = () => {
     if (!askDiscard(objectiveDirty || itemDirty)) return
     setObjectiveNew(true); setObjectiveId('')
-    setObjectiveInput({ title: '', description: '' }); setItems([]); setItemId(''); setItemNew(false); setConflict(null); closeReview()
+    setObjectiveInput({ title: '', description: '' }); setItems([]); setItemCursor(null); setItemId(''); setItemNew(false); setConflict(null); closeReview()
     itemsRequest.current += 1; choiceRequest.current += 1
   }
   const editItem = (row: PracticeItem, revision = row.latestRevision) => {
@@ -180,9 +225,9 @@ export function PracticeAuthorWorkspace({ courseId, sessionStatus }: { courseId:
     finally { busyRef.current = false; setBusy(false) }
   }
   const refreshObjectives = async (preferredId: string) => {
-    const result = await getObjectives()
-    setObjectives(result.objectives)
-    return result.objectives.find(row => row.id === preferredId)
+    const remote = await getObjective(preferredId)
+    setObjectives(previous => previous.map(row => row.id === remote.id ? remote : row))
+    return remote
   }
   const objectiveConflict = async (id: string) => {
     const remote = await refreshObjectives(id)
@@ -190,9 +235,8 @@ export function PracticeAuthorWorkspace({ courseId, sessionStatus }: { courseId:
   }
   const itemConflict = async (id: string) => {
     if (!objectiveId) return
-    const result = await getItems(objectiveId)
-    setItems(result.items)
-    const remote = result.items.find(row => row.id === id)
+    const remote = await getItem(id)
+    setItems(previous => previous.map(row => row.id === remote.id ? remote : row))
     if (remote) {
       const detail = await getItemRevision(id, remote.latestRevision)
       setConflict({ scope: 'item', remote, choice: detail.choice })
@@ -254,16 +298,16 @@ export function PracticeAuthorWorkspace({ courseId, sessionStatus }: { courseId:
       if (index < 0) return previous.length >= 100 ? previous : [...previous, next]
       return previous.map((ref, position) => position === index ? next : ref)
     })
-    setReviewOpen(false); setPreviewRows(null); setReceipt(null)
+    closeReview(); setReceipt(null)
     setNotice({ kind: 'success', text: 'Version für den Übungsentwurf vorgemerkt. Speichere die Zusammenstellung ausdrücklich.' })
   }
   const moveRef = (index: number, direction: -1 | 1) => {
     setRefs(previous => { const next = [...previous]; [next[index], next[index + direction]] = [next[index + direction], next[index]]; return next })
-    setPreviewRows(null); closeReview()
+    closeReview()
   }
   const removeRef = (itemId: string) => {
     setRefs(previous => previous.filter(entry => entry.itemId !== itemId))
-    setPreviewRows(null); closeReview()
+    closeReview()
   }
   const saveRefs = (revision = state?.draft.revision) => void run(async () => {
     if (!state || revision === undefined) return
@@ -277,30 +321,28 @@ export function PracticeAuthorWorkspace({ courseId, sessionStatus }: { courseId:
     }
   }, 'Der Übungsentwurf konnte nicht gespeichert werden.')
 
-  const preview = useCallback(async (source: PracticeRef[]) => {
+  const preview = async (source: PracticeRef[], signature: string | null = null) => {
+    const request = ++previewRequest.current
     setPreviewBusy(true); setPreviewRows(null)
     try {
-      const rows = await Promise.all(source.map(async ref => {
-        const objective = objectives.find(row => row.id === ref.objectiveId)
-        if (!objective || objective.revision !== ref.objectiveRevision) throw new Error('Eine angeheftete Lernzielrevision ist veraltet. Wähle die aktuelle Version erneut und speichere den Entwurf.')
-        const detail = await getItemRevision(ref.itemId, ref.itemRevision)
-        return { ref, objective, choice: detail.choice }
-      }))
-      setPreviewRows(rows)
-      return rows
+      const result = await getPracticePreview(courseId, source)
+      if (request !== previewRequest.current) return null
+      setPreviewRows(result.items); setReviewSignature(signature)
+      return result.items
     } catch (error) {
-      setNotice({ kind: 'error', text: message(error, 'Die Vorschau konnte nicht geladen werden.') })
+      if (request === previewRequest.current) setNotice({ kind: 'error', text: message(error, 'Die Vorschau konnte nicht geladen werden.') })
       return null
-    } finally { setPreviewBusy(false) }
-  }, [objectives])
+    } finally { if (request === previewRequest.current) setPreviewBusy(false) }
+  }
 
   const startReview = () => {
     if (!state || refsDirty || !state.activeCoursePublicationId || !refs.length) return
     setReviewOpen(true); setPublishRequestId(crypto.randomUUID()); setReceipt(null)
-    void preview(state.draft.payload.items)
+    void preview(state.draft.payload.items, currentReviewSignature)
   }
   const publish = () => void run(async () => {
-    if (!state || !state.activeCoursePublicationId || !publishRequestId || !reviewOpen || !previewRows || refsDirty) return
+    if (!state || !state.activeCoursePublicationId || !publishRequestId || !reviewOpen || !previewRows ||
+        !reviewSignature || reviewSignature !== currentReviewSignature || refsDirty) return
     try {
       const result = await publishPractice(courseId, state.draft.revision, state.activeCoursePublicationId, publishRequestId)
       setReceipt(result.snapshot)
@@ -314,6 +356,15 @@ export function PracticeAuthorWorkspace({ courseId, sessionStatus }: { courseId:
     }
   }, 'Die Übungsfassung konnte nicht veröffentlicht werden.')
 
+  const loadOlderHistory = async () => {
+    if (!history?.nextCursor || historyPaging) return
+    setHistoryPaging(true)
+    try {
+      const next = await getPracticeHistory(courseId, history.nextCursor)
+      setHistory(previous => previous && ({ ...next, snapshots: [...previous.snapshots, ...next.snapshots.filter(row => !previous.snapshots.some(current => current.id === row.id))] }))
+    } catch (error) { setNotice({ kind: 'error', text: message(error, 'Ältere Veröffentlichungen konnten nicht geladen werden.') }) }
+    finally { setHistoryPaging(false) }
+  }
   const showHistory = async () => {
     if (historyOpen) { setHistoryOpen(false); return }
     setHistoryOpen(true); setHistoryBusy(true)
@@ -326,7 +377,7 @@ export function PracticeAuthorWorkspace({ courseId, sessionStatus }: { courseId:
     if (conflict.scope === 'objective') {
       setObjectives(previous => previous.map(row => row.id === conflict.remote.id ? conflict.remote : row))
       setObjectiveInput({ title: conflict.remote.title, description: conflict.remote.description })
-      setPreviewRows(null); closeReview()
+      closeReview()
     } else if (conflict.scope === 'item') {
       setItems(previous => previous.map(row => row.id === conflict.remote.id ? conflict.remote : row))
       setItemRevision(conflict.remote.latestRevision); setChoice(conflict.choice); setChoiceBaseline(conflict.choice)
@@ -353,7 +404,7 @@ export function PracticeAuthorWorkspace({ courseId, sessionStatus }: { courseId:
           setItems(rows => rows.map(row => row.id === result.id ? { ...row, latestRevision: result.latestRevision, prompt: clean.prompt } : row))
           setItemRevision(result.latestRevision); setChoice(clean); setChoiceBaseline(clean)
         }
-        setConflict(null); closeReview(); setPreviewRows(null)
+        setConflict(null); closeReview()
         setNotice({ kind: 'success', text: 'Deine Eingaben wurden als neue Revision gespeichert.' })
       } catch (error) {
         if (error instanceof PracticeApiError && error.status === 412) {
@@ -392,7 +443,8 @@ export function PracticeAuthorWorkspace({ courseId, sessionStatus }: { courseId:
             <div className="grid min-w-0 gap-8 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
               <section aria-labelledby="objective-heading" className="min-w-0 space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-sm text-muted-foreground">1 / Eigener Pool</p><h2 id="objective-heading" className="text-xl font-semibold">Lernziele</h2></div><Button variant="outline" className="min-h-11" disabled={busy} onClick={beginObjective}><Plus className="mr-2 h-4 w-4" />Neues Lernziel</Button></div>
-                {objectives.length ? <div className="space-y-1 border-y py-2" role="group" aria-label="Eigene Lernziele">{objectives.map(row => <button key={row.id} type="button" aria-current={!objectiveNew && objectiveId === row.id ? 'true' : undefined} onClick={() => editObjective(row)} className={`flex min-h-11 w-full min-w-0 items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${!objectiveNew && objectiveId === row.id ? 'bg-accent font-medium text-accent-foreground' : ''}`}><span className="min-w-0 break-words [overflow-wrap:anywhere]">{row.title}</span><span className="shrink-0 text-xs">R{row.revision}</span></button>)}</div> : <p className="border-y py-4 text-sm text-muted-foreground">Noch keine Lernziele. Lege das erste Lernziel an.</p>}
+                {objectives.length ? <div className="space-y-1 border-y py-2" role="group" aria-label="Eigene Lernziele">{objectives.map(row => <button key={row.id} type="button" aria-current={!objectiveNew && objectiveId === row.id ? 'true' : undefined} onClick={() => editObjective(row)} className={`flex min-h-11 w-full min-w-0 items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${!objectiveNew && objectiveId === row.id ? 'bg-accent font-medium text-accent-foreground' : ''}`}><span className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">{row.title}</span><span className="shrink-0 text-xs">R{row.revision}</span></button>)}</div> : <p className="border-y py-4 text-sm text-muted-foreground">Noch keine Lernziele. Lege das erste Lernziel an.</p>}
+                {objectiveCursor && <Button variant="outline" className="min-h-11" disabled={objectivesPaging} onClick={() => void loadOlderObjectives()}>{objectivesPaging ? 'Ältere Lernziele werden geladen …' : 'Ältere Lernziele laden'}</Button>}
                 {(objectiveNew || selectedObjective) && <form onSubmit={event => { event.preventDefault(); saveObjective() }} className="space-y-3 rounded-xl border bg-card p-4" aria-label={objectiveNew ? 'Neues Lernziel' : 'Lernziel bearbeiten'} aria-busy={busy}>
                   <div className="space-y-1"><Label htmlFor="practice-objective-title">Titel</Label><Input id="practice-objective-title" className={classInput} maxLength={300} required value={objectiveInput.title} disabled={busy} onChange={event => setObjectiveInput(value => ({ ...value, title: event.target.value }))} /></div>
                   <div className="space-y-1"><Label htmlFor="practice-objective-description">Beschreibung</Label><Textarea id="practice-objective-description" maxLength={3000} rows={3} value={objectiveInput.description} disabled={busy} onChange={event => setObjectiveInput(value => ({ ...value, description: event.target.value }))} /></div>
@@ -401,7 +453,8 @@ export function PracticeAuthorWorkspace({ courseId, sessionStatus }: { courseId:
               </section>
               <section aria-labelledby="item-heading" className="min-w-0 space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-sm text-muted-foreground">2 / Ausgewähltes Lernziel</p><h2 id="item-heading" className="text-xl font-semibold">Übungsfragen</h2></div>{selectedObjective && <Button variant="outline" className="min-h-11" disabled={busy || objectiveDirty} onClick={beginItem}><Plus className="mr-2 h-4 w-4" />Neue Frage</Button>}</div>
-                {!selectedObjective ? <p className="border-y py-4 text-sm text-muted-foreground">Wähle oder speichere zuerst ein Lernziel.</p> : itemsLoading ? <p role="status" className="border-y py-4 text-sm">Fragen werden geladen …</p> : items.length ? <div className="space-y-1 border-y py-2" role="group" aria-label="Eigene Übungsfragen">{items.map(row => <button key={row.id} type="button" aria-current={!itemNew && itemId === row.id ? 'true' : undefined} onClick={() => editItem(row)} className={`flex min-h-11 w-full min-w-0 items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${!itemNew && itemId === row.id ? 'bg-accent font-medium text-accent-foreground' : ''}`}><span className="min-w-0 break-words [overflow-wrap:anywhere]">{row.prompt}</span><span className="shrink-0 text-xs">V{row.latestRevision}</span></button>)}</div> : <p className="border-y py-4 text-sm text-muted-foreground">Noch keine Fragen zu diesem Lernziel.</p>}
+                {!selectedObjective ? <p className="border-y py-4 text-sm text-muted-foreground">Wähle oder speichere zuerst ein Lernziel.</p> : itemsLoading ? <p role="status" className="border-y py-4 text-sm">Fragen werden geladen …</p> : items.length ? <div className="space-y-1 border-y py-2" role="group" aria-label="Eigene Übungsfragen">{items.map(row => <button key={row.id} type="button" aria-current={!itemNew && itemId === row.id ? 'true' : undefined} onClick={() => editItem(row)} className={`flex min-h-11 w-full min-w-0 items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${!itemNew && itemId === row.id ? 'bg-accent font-medium text-accent-foreground' : ''}`}><span className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">{row.prompt}</span><span className="shrink-0 text-xs">V{row.latestRevision}</span></button>)}</div> : <p className="border-y py-4 text-sm text-muted-foreground">Noch keine Fragen zu diesem Lernziel.</p>}
+                {selectedObjective && itemCursor && <Button variant="outline" className="min-h-11" disabled={itemsPaging} onClick={() => void loadOlderItems()}>{itemsPaging ? 'Ältere Fragen werden geladen …' : 'Ältere Fragen laden'}</Button>}
                 {selectedObjective && (itemNew || selectedItem) && <div className="space-y-4 rounded-xl border bg-card p-4" aria-busy={busy || itemLoading}>
                   {selectedItem && <div className="space-y-1"><Label htmlFor="practice-version">Fragenversion ansehen</Label><select id="practice-version" className={classSelect} value={itemRevision} disabled={busy} onChange={event => { if (askDiscard(itemDirty)) { const revision = Number(event.target.value); setItemRevision(revision); void loadChoiceVersion(selectedItem.id, revision) } }}>{Array.from({ length: selectedItem.latestRevision }, (_, index) => index + 1).reverse().map(revision => <option key={revision} value={revision}>Version {revision}{revision === selectedItem.latestRevision ? ' · aktuell' : ''}</option>)}</select>{!isCurrentItemRevision && <p className="text-sm text-muted-foreground">Ältere Versionen sind schreibgeschützt, können aber ausdrücklich angeheftet werden.</p>}</div>}
                   {itemLoading ? <p role="status" className="text-sm">Fragenversion wird geladen …</p> : choice && <form onSubmit={event => { event.preventDefault(); saveItem() }} className="space-y-4" aria-label={itemNew ? 'Neue Übungsfrage' : 'Übungsfrage bearbeiten'}>
@@ -416,14 +469,14 @@ export function PracticeAuthorWorkspace({ courseId, sessionStatus }: { courseId:
             </div>
             <section aria-labelledby="draft-heading" className="space-y-4 border-t pt-7">
               <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-sm text-muted-foreground">3 / Kurszusammenstellung</p><h2 id="draft-heading" className="text-xl font-semibold">Angeheftete Versionen</h2><p className="mt-1 text-sm text-muted-foreground">Nur diese ausdrücklich ausgewählten Fragen und Revisionen gehören zum Übungsentwurf.</p></div><span role="status" className="text-sm text-muted-foreground">{refsDirty ? 'Ungespeicherte Zusammenstellung' : `Entwurf gespeichert · Revision ${state.draft.revision}`}</span></div>
-              {refs.length ? <ol className="divide-y border-y">{refs.map((ref, index) => { const objective = objectives.find(row => row.id === ref.objectiveId); const item = items.find(row => row.id === ref.itemId); return <li key={ref.itemId} className="flex min-w-0 flex-wrap items-center justify-between gap-2 py-3"><div className="min-w-0 break-words text-sm [overflow-wrap:anywhere]"><span className="font-semibold">{index + 1}. {objective?.title ?? 'Lernziel nicht mehr im Pool'}</span><span className="ml-2 text-muted-foreground">R{ref.objectiveRevision} / Frage {item?.prompt ?? ref.itemId} · V{ref.itemRevision}</span>{objective && objective.revision !== ref.objectiveRevision && <span className="ml-2 text-destructive">Lernzielrevision veraltet</span>}</div><div className="flex shrink-0 gap-1"><Button variant="ghost" size="sm" className="min-h-11" disabled={busy || index === 0} onClick={() => moveRef(index, -1)}>Hoch</Button><Button variant="ghost" size="sm" className="min-h-11" disabled={busy || index === refs.length - 1} onClick={() => moveRef(index, 1)}>Runter</Button><Button variant="ghost" size="sm" className="min-h-11" disabled={busy} onClick={() => removeRef(ref.itemId)}>Entfernen</Button></div></li> })}</ol> : <p className="border-y py-5 text-sm text-muted-foreground">Noch keine Frage angeheftet. Wähle oben eine gespeicherte Fragenversion.</p>}
-              <div className="flex flex-wrap gap-2"><Button className="min-h-11" disabled={busy || !refsDirty} onClick={() => saveRefs()}>{busy ? 'Wird gespeichert …' : 'Zusammenstellung speichern'}</Button><Button variant="outline" className="min-h-11" disabled={busy || !refs.length || previewBusy} onClick={() => void preview(refs)}><Eye className="mr-2 h-4 w-4" />Vorschau</Button><Button variant="outline" className="min-h-11" disabled={busy || refsDirty || !refs.length || !state.activeCoursePublicationId} onClick={startReview}><Check className="mr-2 h-4 w-4" />Veröffentlichung prüfen</Button><Button variant="ghost" className="min-h-11" disabled={busy} onClick={() => void showHistory()}><History className="mr-2 h-4 w-4" />Verlauf</Button></div>
+              {refs.length ? <ol className="divide-y border-y">{refs.map((ref, index) => { const objective = objectives.find(row => row.id === ref.objectiveId); const item = items.find(row => row.id === ref.itemId); return <li key={ref.itemId} className="flex min-w-0 flex-wrap items-center justify-between gap-2 py-3"><div className="min-w-0 break-words text-sm [overflow-wrap:anywhere]"><span className="font-semibold">{index + 1}. {objective?.title ?? previewRows?.find(row => row.objectiveId === ref.objectiveId)?.objectiveTitle ?? `Lernziel ${ref.objectiveId}`}</span><span className="ml-2 text-muted-foreground">R{ref.objectiveRevision} / Frage {item?.prompt ?? ref.itemId} · V{ref.itemRevision}</span>{objective && objective.revision !== ref.objectiveRevision && <span className="ml-2 text-destructive">Lernzielrevision veraltet</span>}</div><div className="flex shrink-0 gap-1"><Button variant="ghost" size="sm" className="min-h-11" disabled={busy || index === 0} onClick={() => moveRef(index, -1)}>Hoch</Button><Button variant="ghost" size="sm" className="min-h-11" disabled={busy || index === refs.length - 1} onClick={() => moveRef(index, 1)}>Runter</Button><Button variant="ghost" size="sm" className="min-h-11" disabled={busy} onClick={() => removeRef(ref.itemId)}>Entfernen</Button></div></li> })}</ol> : <p className="border-y py-5 text-sm text-muted-foreground">Noch keine Frage angeheftet. Wähle oben eine gespeicherte Fragenversion.</p>}
+              <div className="flex flex-wrap gap-2"><Button className="min-h-11" disabled={busy || !refsDirty} onClick={() => saveRefs()}>{busy ? 'Wird gespeichert …' : 'Zusammenstellung speichern'}</Button><Button variant="outline" className="min-h-11" disabled={busy || !refs.length || previewBusy} onClick={() => { closeReview(); void preview(refs) }}><Eye className="mr-2 h-4 w-4" />Vorschau</Button><Button variant="outline" className="min-h-11" disabled={busy || refsDirty || !refs.length || !state.activeCoursePublicationId} onClick={startReview}><Check className="mr-2 h-4 w-4" />Veröffentlichung prüfen</Button><Button variant="ghost" className="min-h-11" disabled={busy} onClick={() => void showHistory()}><History className="mr-2 h-4 w-4" />Verlauf</Button></div>
               {!state.activeCoursePublicationId && <p className="text-sm text-muted-foreground">Veröffentliche zuerst eine Kursfassung, bevor du eine Übungsfassung veröffentlichen kannst.</p>}
               {previewBusy && <p role="status" className="text-sm">Private Fragenversionen werden geladen …</p>}
-              {previewRows && <section aria-label={reviewOpen ? 'Veröffentlichung prüfen' : 'Autorenvorschau'} className="space-y-4 rounded-xl border bg-card p-4 sm:p-5"><div><h3 className="text-lg font-semibold">{reviewOpen ? 'Gespeicherte Fassung prüfen' : 'Autorenvorschau'}</h3><p className="text-sm text-muted-foreground">{reviewOpen ? 'Die Veröffentlichung verwendet nur den gespeicherten Entwurf und die unten genannten festen Versionen.' : refsDirty ? 'Vorschau deiner noch ungespeicherten Zusammenstellung, aus eigenen gespeicherten Fragenversionen.' : 'Vorschau des gespeicherten Übungsentwurfs aus eigenen Fragenversionen.'}</p></div>{previewRows.map((row, index) => <div key={row.ref.itemId} className="space-y-2 border-t pt-4"><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{row.objective.title} · R{row.ref.objectiveRevision} / V{row.ref.itemRevision}</p><h4 className="break-words font-medium [overflow-wrap:anywhere]">{index + 1}. {row.choice.prompt}</h4><ol className="space-y-1 text-sm">{row.choice.options.map((option, position) => <li key={position} className={position === row.choice.correctIndex ? 'font-semibold text-foreground' : 'text-muted-foreground'}>{labelFor(position)}. {option}{position === row.choice.correctIndex && ' · Richtig'}</li>)}</ol>{row.choice.explanation && <p className="text-sm text-muted-foreground">Erklärung: {row.choice.explanation}</p>}</div>)}{reviewOpen && <div className="space-y-3 border-t pt-4"><p className="text-sm">Kursveröffentlichung: {state.activeCoursePublicationId}. Entwurfsrevision: {state.draft.revision}. Fragen: {previewRows.length}. Veröffentlichung kann bei einer geänderten Kursfassung oder doppelten bewerteten Quizfrage abgelehnt werden.</p><div className="flex flex-wrap gap-2"><Button variant="outline" className="min-h-11" disabled={busy} onClick={closeReview}>Weiter bearbeiten</Button><Button className="min-h-11" disabled={busy || refsDirty || !publishRequestId} onClick={publish}>{busy ? 'Wird veröffentlicht …' : 'Diese Übungsfassung veröffentlichen'}</Button></div></div>}</section>}
+              {previewRows && <section aria-label={reviewOpen ? 'Veröffentlichung prüfen' : 'Autorenvorschau'} className="space-y-4 rounded-xl border bg-card p-4 sm:p-5"><div><h3 className="text-lg font-semibold">{reviewOpen ? 'Gespeicherte Fassung prüfen' : 'Autorenvorschau'}</h3><p className="text-sm text-muted-foreground">{reviewOpen ? 'Die Veröffentlichung verwendet nur den gespeicherten Entwurf und die unten genannten festen Versionen.' : refsDirty ? 'Vorschau deiner noch ungespeicherten Zusammenstellung, aus eigenen gespeicherten Fragenversionen.' : 'Vorschau des gespeicherten Übungsentwurfs aus eigenen Fragenversionen.'}</p></div>{previewRows.map((row, index) => <div key={row.itemId} className="space-y-2 border-t pt-4"><p className="break-words text-xs font-semibold uppercase tracking-wide text-muted-foreground [overflow-wrap:anywhere]">{row.objectiveTitle} · R{row.objectiveRevision} / V{row.itemRevision}</p><h4 className="break-words font-medium [overflow-wrap:anywhere]">{index + 1}. {row.prompt}</h4><ol className="space-y-1 text-sm">{row.options.map((option, position) => <li key={position} className={`break-words [overflow-wrap:anywhere] ${position === row.correctIndex ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>{labelFor(position)}. {option}{position === row.correctIndex && ' · Richtig'}</li>)}</ol>{row.explanation && <p className="break-words text-sm text-muted-foreground [overflow-wrap:anywhere]">Erklärung: {row.explanation}</p>}</div>)}{reviewOpen && <div className="space-y-3 border-t pt-4"><p className="text-sm">Kursveröffentlichung: {state.activeCoursePublicationId}. Entwurfsrevision: {state.draft.revision}. Fragen: {previewRows.length}. Veröffentlichung kann bei einer geänderten Kursfassung oder doppelten bewerteten Quizfrage abgelehnt werden.</p>{reviewSignature !== currentReviewSignature && <p role="status" className="text-sm text-destructive">Der Entwurf hat sich seit dieser Prüfung geändert. Prüfe die Veröffentlichung erneut.</p>}<div className="flex flex-wrap gap-2"><Button variant="outline" className="min-h-11" disabled={busy} onClick={closeReview}>Weiter bearbeiten</Button><Button className="min-h-11" disabled={busy || refsDirty || !publishRequestId || !reviewSignature || reviewSignature !== currentReviewSignature} onClick={publish}>{busy ? 'Wird veröffentlicht …' : 'Diese Übungsfassung veröffentlichen'}</Button></div></div>}</section>}
               {receipt && <div role="status" className="rounded-xl border bg-card p-4 text-sm"><p className="font-semibold">Veröffentlichungsbeleg · Version {receipt.sequence}</p><p>Beleg-ID: {receipt.id}. Kursfassung: {receipt.coursePublicationId}. {receipt.itemCount} Fragen.</p><p className="mt-2 text-muted-foreground">Der Lernmodus für Mitglieder ist noch nicht verfügbar.</p></div>}
               {state.activeSnapshot && !receipt && <p className="text-sm text-muted-foreground">Letzter aktiver Übungs-Snapshot zu dieser Kursfassung: Version {state.activeSnapshot.sequence}, {state.activeSnapshot.itemCount} Fragen.</p>}
-              {historyOpen && <section aria-labelledby="history-heading" className="space-y-2 border-t pt-4"><h3 id="history-heading" className="text-lg font-semibold">Veröffentlichungsverlauf</h3>{historyBusy ? <p role="status" className="text-sm">Verlauf wird geladen …</p> : history?.snapshots.length ? <ol className="divide-y border-y">{history.snapshots.map(row => <li key={row.id} className="break-words py-3 text-sm [overflow-wrap:anywhere]"><strong>Version {row.sequence}</strong> · {row.itemCount} Fragen · {formatDate(row.recordedAt)}<br /><span className="text-muted-foreground">Kursfassung: {row.coursePublicationId} · Beleg: {row.id}</span></li>)}</ol> : <p className="text-sm text-muted-foreground">Noch keine Übungsfassung veröffentlicht.</p>}</section>}
+              {historyOpen && <section aria-labelledby="history-heading" className="space-y-2 border-t pt-4"><h3 id="history-heading" className="text-lg font-semibold">Veröffentlichungsverlauf</h3>{historyBusy ? <p role="status" className="text-sm">Verlauf wird geladen …</p> : history?.snapshots.length ? <ol className="divide-y border-y">{history.snapshots.map(row => <li key={row.id} className="break-words py-3 text-sm [overflow-wrap:anywhere]"><strong>Version {row.sequence}</strong> · {row.itemCount} Fragen · {formatDate(row.recordedAt)}<br /><span className="text-muted-foreground">Kursfassung: {row.coursePublicationId} · Beleg: {row.id}</span></li>)}</ol> : <p className="text-sm text-muted-foreground">Noch keine Übungsfassung veröffentlicht.</p>}{history?.nextCursor && <Button variant="outline" className="min-h-11" disabled={historyPaging} onClick={() => void loadOlderHistory()}>{historyPaging ? 'Ältere Versionen werden geladen …' : 'Ältere Versionen laden'}</Button>}</section>}
             </section>
           </>}
       </div>

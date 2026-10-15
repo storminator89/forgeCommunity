@@ -21,6 +21,29 @@ const revision = (value: unknown, allowZero = false): value is number => typeof 
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 const emptyDraft: PracticeDraftPayload = { schemaVersion: 1, items: [] };
 const MAX_ITEMS = 100;
+const POOL_PAGE_SIZE = 100;
+type PoolCursor = { updatedAt: Date; id: string };
+
+function decodePoolCursor(value: string | null): PoolCursor | null {
+  if (value === null) return null;
+  if (value.length > 256 || !/^[A-Za-z0-9_-]+$/.test(value)) throw new PracticeError('Ungültiger Seitencursor.');
+  let parsed: unknown;
+  try { parsed = JSON.parse(Buffer.from(value, 'base64url').toString('utf8')); }
+  catch { throw new PracticeError('Ungültiger Seitencursor.'); }
+  if (!Array.isArray(parsed) || parsed.length !== 2 || typeof parsed[0] !== 'string' ||
+      !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(parsed[0]) ||
+      !Number.isFinite(Date.parse(parsed[0])) || !privateId(parsed[1])) throw new PracticeError('Ungültiger Seitencursor.');
+  return { updatedAt: new Date(parsed[0]), id: parsed[1] };
+}
+
+function encodePoolCursor(row: PoolCursor) {
+  return Buffer.from(JSON.stringify([row.updatedAt.toISOString(), row.id])).toString('base64url');
+}
+
+function olderThan(cursor: PoolCursor | null) {
+  return cursor ? { OR: [{ updatedAt: { lt: cursor.updatedAt } },
+    { updatedAt: cursor.updatedAt, id: { lt: cursor.id } }] } : {};
+}
 
 function boundedText(value: unknown, max: number, field: string, required = true): string {
   if (typeof value !== 'string' || value.length > max) throw new PracticeError(`${field} ist ungültig.`);
@@ -116,12 +139,14 @@ async function activeSnapshot(tx: Prisma.TransactionClient, courseId: string, pu
     select: { id: true, coursePublicationId: true, sequence: true, digest: true, recordedAt: true, itemCount: true } });
 }
 
-export async function listPracticeObjectives(actor: PracticeActor) {
+export async function listPracticeObjectives(actor: PracticeActor, cursorValue: string | null = null) {
+  const cursor = decodePoolCursor(cursorValue);
   return transaction(async tx => {
     await assertAuthor(tx, actor);
-    const objectives = await tx.practiceObjective.findMany({ where: { ownerId: actor.id }, orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }], take: 100,
+    const rows = await tx.practiceObjective.findMany({ where: { ownerId: actor.id, ...olderThan(cursor) }, orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }], take: POOL_PAGE_SIZE + 1,
       select: { id: true, title: true, description: true, revision: true, updatedAt: true } });
-    return { objectives };
+    const objectives = rows.slice(0, POOL_PAGE_SIZE);
+    return { objectives, nextCursor: rows.length > POOL_PAGE_SIZE ? encodePoolCursor(objectives[objectives.length - 1]) : null };
   });
 }
 
@@ -134,6 +159,17 @@ export async function createPracticeObjective(actor: PracticeActor, input: unkno
   return transaction(async tx => {
     await assertAuthor(tx, actor);
     return tx.practiceObjective.create({ data: { ownerId: actor.id, title, description }, select: { id: true, title: true, description: true, revision: true } });
+  });
+}
+
+export async function getPracticeObjective(actor: PracticeActor, objectiveId: string) {
+  if (!privateId(objectiveId)) throw new PracticeError('Lernziel nicht gefunden.', 404);
+  return transaction(async tx => {
+    await assertAuthor(tx, actor);
+    const row = await tx.practiceObjective.findFirst({ where: { id: objectiveId, ownerId: actor.id },
+      select: { id: true, title: true, description: true, revision: true, updatedAt: true } });
+    if (!row) throw new PracticeError('Lernziel nicht gefunden.', 404);
+    return row;
   });
 }
 
@@ -157,17 +193,20 @@ export async function revisePracticeObjective(actor: PracticeActor, objectiveId:
   });
 }
 
-export async function listPracticeItems(actor: PracticeActor, objectiveId: string) {
+export async function listPracticeItems(actor: PracticeActor, objectiveId: string, cursorValue: string | null = null) {
   if (!privateId(objectiveId)) throw new PracticeError('Lernziel nicht gefunden.', 404);
+  const cursor = decodePoolCursor(cursorValue);
   return transaction(async tx => {
     await assertAuthor(tx, actor);
     const objective = await tx.practiceObjective.findFirst({ where: { id: objectiveId, ownerId: actor.id }, select: { id: true } });
     if (!objective) throw new PracticeError('Lernziel nicht gefunden.', 404);
-    const items = await tx.practiceItem.findMany({ where: { ownerId: actor.id, objectiveId }, orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }], take: 100,
+    const rows = await tx.practiceItem.findMany({ where: { ownerId: actor.id, objectiveId, ...olderThan(cursor) }, orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }], take: POOL_PAGE_SIZE + 1,
       select: { id: true, objectiveId: true, latestRevision: true, updatedAt: true,
         revisions: { orderBy: { revision: 'desc' }, take: 1, select: { payload: true } } } });
+    const items = rows.slice(0, POOL_PAGE_SIZE);
     return { items: items.map(item => ({ id: item.id, objectiveId: item.objectiveId, latestRevision: item.latestRevision,
-      updatedAt: item.updatedAt, prompt: parseChoice(item.revisions[0].payload).prompt })) };
+      updatedAt: item.updatedAt, prompt: parseChoice(item.revisions[0].payload).prompt })),
+      nextCursor: rows.length > POOL_PAGE_SIZE ? encodePoolCursor(items[items.length - 1]) : null };
   });
 }
 
@@ -181,6 +220,20 @@ export async function createPracticeItem(actor: PracticeActor, objectiveId: stri
     return tx.practiceItem.create({ data: { ownerId: actor.id, objectiveId, latestRevision: 1,
       revisions: { create: { revision: 1, payload: JSON.stringify(choice) } } },
     select: { id: true, objectiveId: true, latestRevision: true } });
+  });
+}
+
+export async function getPracticeItem(actor: PracticeActor, itemId: string) {
+  if (!privateId(itemId)) throw new PracticeError('Übungsfrage nicht gefunden.', 404);
+  return transaction(async tx => {
+    await assertAuthor(tx, actor);
+    const row = await tx.practiceItem.findFirst({ where: { id: itemId, ownerId: actor.id }, select: {
+      id: true, objectiveId: true, latestRevision: true, updatedAt: true,
+      revisions: { orderBy: { revision: 'desc' }, take: 1, select: { payload: true } },
+    } });
+    if (!row) throw new PracticeError('Übungsfrage nicht gefunden.', 404);
+    return { id: row.id, objectiveId: row.objectiveId, latestRevision: row.latestRevision,
+      updatedAt: row.updatedAt, prompt: parseChoice(row.revisions[0].payload).prompt };
   });
 }
 
@@ -242,17 +295,30 @@ export async function savePracticeDraft(courseId: string, actor: PracticeActor, 
 }
 
 async function resolveRefs(tx: Prisma.TransactionClient, ownerId: string, refs: PracticeRef[]): Promise<PracticeSnapshotItem[]> {
-  const items: PracticeSnapshotItem[] = [];
-  for (const ref of refs) {
-    const row = await tx.practiceItemRevision.findFirst({ where: { itemId: ref.itemId, revision: ref.itemRevision,
-      item: { ownerId, objectiveId: ref.objectiveId, objective: { ownerId } } }, select: { payload: true,
-      item: { select: { objective: { select: { title: true, description: true, revision: true } } } } } });
-    if (!row) throw new PracticeError('Eine Übungsreferenz fehlt oder gehört einem anderen Autor.', 409);
+  if (!refs.length) return [];
+  const rows = await tx.practiceItemRevision.findMany({ where: {
+    OR: refs.map(ref => ({ itemId: ref.itemId, revision: ref.itemRevision })),
+    item: { ownerId, objective: { ownerId } },
+  }, select: { itemId: true, revision: true, payload: true,
+    item: { select: { objectiveId: true, objective: { select: { title: true, description: true, revision: true } } } } } });
+  const byItem = new Map(rows.map(row => [row.itemId, row]));
+  return refs.map(ref => {
+    const row = byItem.get(ref.itemId);
+    if (!row || row.revision !== ref.itemRevision || row.item.objectiveId !== ref.objectiveId)
+      throw new PracticeError('Eine Übungsreferenz fehlt oder gehört einem anderen Autor.', 409);
     if (row.item.objective.revision !== ref.objectiveRevision) throw new PracticeError('Lernziel wurde geändert. Übungsentwurf bitte neu speichern.', 412);
-    items.push({ ...ref, objectiveTitle: row.item.objective.title, objectiveDescription: row.item.objective.description,
-      ...parseChoice(row.payload) });
-  }
-  return items;
+    return { ...ref, objectiveTitle: row.item.objective.title, objectiveDescription: row.item.objective.description,
+      ...parseChoice(row.payload) };
+  });
+}
+
+/** Resolve unsaved or saved pins without relying on the visible pool pages. */
+export async function previewPracticeRefs(courseId: string, actor: PracticeActor, input: unknown) {
+  const refs = practiceRefs(input);
+  return transaction(async tx => {
+    await assertCourseAuthor(tx, courseId, actor);
+    return { items: await resolveRefs(tx, actor.id, refs) };
+  });
 }
 
 /** NFKC, Unicode whitespace folding and lowercasing of stem plus sorted options only.
@@ -335,11 +401,17 @@ export async function publishPracticeDraft(courseId: string, actor: PracticeActo
   }
 }
 
-export async function listPracticeHistory(courseId: string, actor: PracticeActor) {
+export async function listPracticeHistory(courseId: string, actor: PracticeActor, cursorValue: string | null = null) {
+  const cursor = cursorValue === null ? null : Number(cursorValue);
+  if (cursorValue !== null && (!/^[1-9]\d*$/.test(cursorValue) || !Number.isSafeInteger(cursor)))
+    throw new PracticeError('Ungültiger Verlaufscursor.');
   return transaction(async tx => {
     const course = await assertCourseAuthor(tx, courseId, actor);
-    const snapshots = await tx.practiceSnapshot.findMany({ where: { courseId }, orderBy: { sequence: 'desc' }, take: 100,
+    const rows = await tx.practiceSnapshot.findMany({ where: { courseId, ...(cursor !== null && { sequence: { lt: cursor } }) },
+      orderBy: { sequence: 'desc' }, take: POOL_PAGE_SIZE + 1,
       select: { id: true, coursePublicationId: true, sequence: true, digest: true, itemCount: true, recordedAt: true } });
-    return { activeCoursePublicationId: course.activePublicationId, snapshots };
+    const snapshots = rows.slice(0, POOL_PAGE_SIZE);
+    return { activeCoursePublicationId: course.activePublicationId, snapshots,
+      nextCursor: rows.length > POOL_PAGE_SIZE ? String(snapshots[snapshots.length - 1].sequence) : null };
   });
 }

@@ -6,12 +6,12 @@ import { createPracticeItem, listPracticeItems } from '@/lib/server/formative-pr
 import { practiceFailure, practicePrivateHeaders, practiceUnauthorized } from '../../../errors';
 
 type Context = { params: Promise<{ objectiveId: string }> };
-export async function GET(_request: NextRequest, context: Context) {
+export async function GET(request: NextRequest, context: Context) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return practiceUnauthorized();
   try {
     const { objectiveId } = await context.params;
-    return NextResponse.json(await listPracticeItems(session.user, objectiveId), { headers: practicePrivateHeaders });
+    return NextResponse.json(await listPracticeItems(session.user, objectiveId, request.nextUrl.searchParams.get('cursor')), { headers: practicePrivateHeaders });
   } catch (error) { return practiceFailure(error); }
 }
 export async function POST(request: NextRequest, context: Context) {

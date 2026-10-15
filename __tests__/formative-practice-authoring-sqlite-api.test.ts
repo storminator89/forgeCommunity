@@ -2,13 +2,14 @@
 import { rmSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { GET as listObjectives, POST as createObjective } from '@/app/api/courses/practice/objectives/route';
-import { PATCH as updateObjective } from '@/app/api/courses/practice/objectives/[objectiveId]/route';
+import { GET as readObjective, PATCH as updateObjective } from '@/app/api/courses/practice/objectives/[objectiveId]/route';
 import { GET as listItems, POST as createItem } from '@/app/api/courses/practice/objectives/[objectiveId]/items/route';
-import { PATCH as updateItem } from '@/app/api/courses/practice/items/[itemId]/route';
+import { GET as readItem, PATCH as updateItem } from '@/app/api/courses/practice/items/[itemId]/route';
 import { GET as readRevision } from '@/app/api/courses/practice/items/[itemId]/revisions/[revision]/route';
 import { GET as readDraft, PATCH as saveDraft } from '@/app/api/courses/[courseId]/practice/authoring/route';
 import { POST as publish } from '@/app/api/courses/[courseId]/practice/authoring/publish/route';
 import { GET as history } from '@/app/api/courses/[courseId]/practice/authoring/history/route';
+import { POST as previewPins } from '@/app/api/courses/[courseId]/practice/authoring/preview/route';
 import { credentialOverlapKey, normalizeOverlapText } from '@/lib/server/formative-practice';
 import prisma from '@/lib/prisma';
 import { getServerSession } from 'next-auth/next';
@@ -86,7 +87,7 @@ afterAll(async () => {
 
 test('objective and item authoring is private, revisioned and immutable', async () => {
   anonymous();
-  expect((await listObjectives()).status).toBe(401);
+  expect((await listObjectives(request('/practice/objectives'))).status).toBe(401);
   actor(learnerId, 'USER');
   expect((await createObjective(request('/practice/objectives', 'POST', { title: 'Fundamentals' }))).status).toBe(403);
   actor(teacherId, 'INSTRUCTOR');
@@ -368,6 +369,94 @@ test('normal User and Course UPSERTs remain supported with existing practice his
   expect(await prisma.practiceItemRevision.count()).toBe(before.revisions);
   expect(await prisma.practiceSnapshot.count()).toBe(before.snapshots);
   expect(await prisma.practicePublicationRequest.count()).toBe(before.receipts);
+});
+
+test('101 objectives, 101 items and 101 snapshots remain owner-reachable after paging and pin reload', async () => {
+  const pagingCourseId = 'practice-paged-course-123';
+  const pagingOutsiderId = 'practice-paged-outsider-123';
+  await prisma.user.create({ data: { id: pagingOutsiderId, email: 'practice-paged-outsider@example.invalid', role: 'INSTRUCTOR' } });
+  const pagingContext = { params: Promise.resolve({ courseId: pagingCourseId }) };
+  const pagingRequest = (path: string, method = 'GET', body?: object) => {
+    const url = new URL(`http://localhost/api/courses/${pagingCourseId}${path}`);
+    return Object.assign(new Request(url, { method, ...(body && { body: JSON.stringify(body) }) }), { nextUrl: url }) as never;
+  };
+  const stamp = new Date('2025-01-01T00:00:00.000Z');
+  const objectives = Array.from({ length: 101 }, (_, index) => ({
+    id: `practice-paged-objective-${String(index).padStart(3, '0')}`, ownerId: teacherId,
+    title: `Learning objective ${index}`, description: '', updatedAt: stamp,
+  }));
+  const oldestObjective = objectives[0];
+  const items = Array.from({ length: 101 }, (_, index) => ({
+    id: `practice-paged-item-${String(index).padStart(3, '0')}`, ownerId: teacherId,
+    objectiveId: oldestObjective.id, latestRevision: 1, updatedAt: stamp,
+  }));
+  const oldestItem = items[0];
+  const publicationId = 'practice-paged-publication-123';
+  const payload = coursePayload();
+  await prisma.course.create({ data: { id: pagingCourseId, instructorId: teacherId, title: 'Paged course', description: '' } });
+  await prisma.coursePublication.create({ data: { id: publicationId, courseId: pagingCourseId, sequence: 1,
+    source: 'AUTHOR', payload: JSON.stringify(payload), digest: digest(payload), contentCount: 1 } });
+  await prisma.course.update({ where: { id: pagingCourseId }, data: { activePublicationId: publicationId } });
+  await prisma.practiceObjective.createMany({ data: objectives });
+  await prisma.practiceItem.createMany({ data: items });
+  await prisma.practiceItemRevision.createMany({ data: items.map((row, index) => ({ itemId: row.id, revision: 1,
+    payload: JSON.stringify({ schemaVersion: 1, ...choice(`Archived practice question ${index}?`) }) })) });
+
+  actor(teacherId, 'INSTRUCTOR');
+  const firstObjectivesResponse = await listObjectives(pagingRequest('/practice/objectives'));
+  expect(firstObjectivesResponse.status).toBe(200);
+  const firstObjectives = await firstObjectivesResponse.json();
+  expect(firstObjectives.objectives).toHaveLength(100);
+  expect(firstObjectives.objectives.some((row: { id: string }) => row.id === oldestObjective.id)).toBe(false);
+  expect(firstObjectives.nextCursor).toEqual(expect.any(String));
+  const secondObjectives = await (await listObjectives(pagingRequest(`/practice/objectives?cursor=${firstObjectives.nextCursor}`))).json();
+  expect(secondObjectives.objectives.map((row: { id: string }) => row.id)).toContain(oldestObjective.id);
+  expect(secondObjectives.nextCursor).toBeNull();
+  expect((await listObjectives(pagingRequest('/practice/objectives?cursor=broken!'))).status).toBe(400);
+  const itemContext = { params: Promise.resolve({ objectiveId: oldestObjective.id }) };
+  const firstItems = await (await listItems(pagingRequest(`/practice/objectives/${oldestObjective.id}/items`), itemContext)).json();
+  expect(firstItems.items).toHaveLength(100);
+  expect(firstItems.items.some((row: { id: string }) => row.id === oldestItem.id)).toBe(false);
+  const secondItems = await (await listItems(pagingRequest(`/practice/objectives/${oldestObjective.id}/items?cursor=${firstItems.nextCursor}`), itemContext)).json();
+  expect(secondItems.items.map((row: { id: string }) => row.id)).toEqual([oldestItem.id]);
+  expect(secondItems.nextCursor).toBeNull();
+  expect((await readObjective(pagingRequest(`/practice/objectives/${oldestObjective.id}`), itemContext)).status).toBe(200);
+  expect((await readItem(pagingRequest(`/practice/items/${oldestItem.id}`), { params: Promise.resolve({ itemId: oldestItem.id }) })).status).toBe(200);
+
+  const oldRef = [{ objectiveId: oldestObjective.id, objectiveRevision: 1, itemId: oldestItem.id, itemRevision: 1 }];
+  const saved = await saveDraft(pagingRequest('/practice/authoring', 'PATCH', { expectedRevision: 0, items: oldRef }), pagingContext);
+  expect(saved.status).toBe(200);
+  const reloaded = await (await readDraft(pagingRequest('/practice/authoring'), pagingContext)).json();
+  expect(reloaded.draft.payload.items).toEqual(oldRef);
+  const preview = await previewPins(pagingRequest('/practice/authoring/preview', 'POST', { items: reloaded.draft.payload.items }), pagingContext);
+  expect(preview.status).toBe(200);
+  expect((await preview.json()).items[0]).toMatchObject({ objectiveTitle: oldestObjective.title, prompt: 'Archived practice question 0?' });
+  const published = await publish(pagingRequest('/practice/authoring/publish', 'POST', {
+    expectedRevision: 1, expectedActivePublicationId: publicationId, requestId: 'practice-paged-publish-123',
+  }), pagingContext);
+  expect(published.status).toBe(200);
+  const publishedSnapshot = await prisma.practiceSnapshot.findFirstOrThrow({ where: { courseId: pagingCourseId } });
+  const snapshots = Array.from({ length: 100 }, (_, index) => ({
+    id: `practice-paged-snapshot-${String(index + 2).padStart(3, '0')}`, courseId: pagingCourseId,
+    coursePublicationId: publicationId, sequence: index + 2, draftRevision: 1,
+    payload: publishedSnapshot.payload, digest: publishedSnapshot.digest, itemCount: 1, actorId: teacherId,
+  }));
+  await prisma.practiceSnapshot.createMany({ data: snapshots });
+  const firstHistory = await (await history(pagingRequest('/practice/authoring/history'), pagingContext)).json();
+  expect(firstHistory.snapshots).toHaveLength(100);
+  expect(firstHistory.snapshots[0].sequence).toBe(101);
+  expect(firstHistory.nextCursor).toBe('2');
+  const secondHistory = await (await history(pagingRequest(`/practice/authoring/history?cursor=${firstHistory.nextCursor}`), pagingContext)).json();
+  expect(secondHistory.snapshots.map((row: { sequence: number }) => row.sequence)).toEqual([1]);
+  expect(secondHistory.nextCursor).toBeNull();
+  expect((await history(pagingRequest('/practice/authoring/history?cursor=invalid'), pagingContext)).status).toBe(400);
+  actor(pagingOutsiderId, 'INSTRUCTOR');
+  expect((await listObjectives(pagingRequest('/practice/objectives'))).status).toBe(200);
+  expect((await listItems(pagingRequest(`/practice/objectives/${oldestObjective.id}/items`), itemContext)).status).toBe(404);
+  expect((await readObjective(pagingRequest(`/practice/objectives/${oldestObjective.id}`), itemContext)).status).toBe(404);
+  expect((await readItem(pagingRequest(`/practice/items/${oldestItem.id}`), { params: Promise.resolve({ itemId: oldestItem.id }) })).status).toBe(404);
+  expect((await previewPins(pagingRequest('/practice/authoring/preview', 'POST', { items: oldRef }), pagingContext)).status).toBe(403);
+  expect((await history(pagingRequest('/practice/authoring/history'), pagingContext)).status).toBe(403);
 });
 
 test('course and account deletion may cascade private authoring without leaving FK damage', async () => {

@@ -5,10 +5,10 @@ import { listPracticeHistory } from '@/lib/server/formative-practice';
 import { practiceFailure, practicePrivateHeaders, practiceUnauthorized } from '@/app/api/courses/practice/errors';
 
 type Context = { params: Promise<{ courseId: string }> };
-export async function GET(_request: NextRequest, context: Context) {
+export async function GET(request: NextRequest, context: Context) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return practiceUnauthorized();
   try { const { courseId } = await context.params;
-    return NextResponse.json(await listPracticeHistory(courseId, session.user), { headers: practicePrivateHeaders }); }
+    return NextResponse.json(await listPracticeHistory(courseId, session.user, request.nextUrl.searchParams.get('cursor')), { headers: practicePrivateHeaders }); }
   catch (error) { return practiceFailure(error); }
 }
