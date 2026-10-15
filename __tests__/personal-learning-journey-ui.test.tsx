@@ -1,0 +1,78 @@
+import { render, screen, waitFor } from '@testing-library/react';
+import { useSession } from 'next-auth/react';
+import JourneyClient from '@/app/courses/journey/JourneyClient';
+
+jest.mock('next-auth/react', () => ({ useSession: jest.fn() }));
+jest.mock('@/components/app-shell', () => ({
+  AppShell: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  AppHeader: ({ children }: { children: React.ReactNode }) => <header>{children}</header>,
+}));
+jest.mock('@/components/Sidebar', () => ({ Sidebar: () => null }));
+jest.mock('@/components/user-nav', () => ({ UserNav: () => null }));
+jest.mock('@/components/theme-toggle', () => ({ ThemeToggle: () => null }));
+jest.mock('@/app/courses/journey/JourneyMascot', () => ({ JourneyMascot: () => null }));
+
+function session(role: string, id = 'viewer') {
+  jest.mocked(useSession).mockReturnValue({
+    data: { user: { id, role }, expires: '2099-01-01' }, status: 'authenticated', update: jest.fn(),
+  } as ReturnType<typeof useSession>);
+}
+
+function response(json: unknown) {
+  return Promise.resolve({ ok: true, json: async () => json } as Response);
+}
+
+beforeAll(() => {
+  Object.defineProperty(window, 'matchMedia', { configurable: true, value: () => ({
+    matches: false, addEventListener: jest.fn(), removeEventListener: jest.fn(),
+  }) });
+});
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  window.localStorage.clear();
+  session('USER');
+});
+
+it.each(['ADMIN', 'INSTRUCTOR'])('does not request learner data for a direct %s visit', role => {
+  session(role);
+  global.fetch = jest.fn();
+  render(<JourneyClient />);
+  expect(screen.getByRole('heading', { name: 'Lernweg für Lernende' })).toBeVisible();
+  expect(global.fetch).not.toHaveBeenCalled();
+  expect(screen.queryByRole('link', { name: 'Lernschritt öffnen' })).not.toBeInTheDocument();
+});
+
+it('keeps an enrolled own course out of the journey', async () => {
+  global.fetch = jest.fn().mockImplementation(() => response([
+    { id: 'own', title: 'Eigener Kurs', isEnrolled: true, completed: false, canDelete: true },
+  ]));
+  render(<JourneyClient />);
+  expect(await screen.findByRole('heading', { name: 'Dein Lernweg beginnt mit einem Kurs' })).toBeVisible();
+  expect(global.fetch).toHaveBeenCalledTimes(1);
+  expect(screen.queryByRole('link', { name: 'Lernschritt öffnen' })).not.toBeInTheDocument();
+});
+
+it('recommends only a server-open step, then purges it on a role refresh', async () => {
+  global.fetch = jest.fn().mockImplementation((url: string) => {
+    if (url === '/api/courses') return response([
+      { id: 'other', title: 'Anderer Kurs', isEnrolled: true, completed: false, canDelete: false },
+    ]);
+    if (url === '/api/courses/other/contents') return response([
+      { id: 'locked', title: 'Gesperrt', type: 'TEXT', order: 1, locked: true, publicationId: 'pub-1', subContents: [] },
+      { id: 'open', title: 'Freier Schritt', type: 'TEXT', order: 2, locked: false, publicationId: 'pub-1', subContents: [] },
+    ]);
+    if (url === '/api/courses/other/progress') return response({
+      completedContentIds: [], complete: false, canTrack: true, publicationId: 'pub-1',
+    });
+    throw new Error(`Unexpected request ${url}`);
+  });
+  const view = render(<JourneyClient />);
+  expect(await screen.findByRole('link', { name: 'Lernschritt öffnen' }))
+    .toHaveAttribute('href', '/courses/other/contents?content=open');
+  session('ADMIN');
+  view.rerender(<JourneyClient />);
+  expect(screen.getByRole('heading', { name: 'Lernweg für Lernende' })).toBeVisible();
+  expect(screen.queryByRole('link', { name: 'Lernschritt öffnen' })).not.toBeInTheDocument();
+  await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(3));
+});

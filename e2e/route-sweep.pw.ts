@@ -109,6 +109,22 @@ async function installSyntheticApi(page: Page, item?: RouteSweepCase) {
   await page.route('**/api/courses/qa-route-course/progress', route => route.fulfill({
     status: 200, json: { completedContentIds: [], complete: false, canTrack: false, hasCertificate: false, completedAt: null },
   }));
+  if (item?.url === '/courses/journey') {
+    // The new page is exercised with a bounded, explicitly synthetic enrolled
+    // course. The locked first leaf must never become the recommended link.
+    await page.route('**/api/courses', route => route.fulfill({ status: 200, json: [
+      { id: 'qa-route-course', title: 'Route QA Lernkurs', isEnrolled: true, completed: false, canDelete: false },
+    ] }));
+    await page.route('**/api/courses/qa-route-course/contents', route => route.fulfill({ status: 200, json: [
+      { id: 'qa-locked', title: 'Route QA gesperrter Schritt', type: 'TEXT', order: 1, locked: true,
+        releaseLocked: true, publicationId: 'qa-publication', subContents: [] },
+      { id: 'qa-open', title: 'Route QA offener Lernschritt', type: 'TEXT', order: 2, locked: false,
+        releaseLocked: false, publicationId: 'qa-publication', subContents: [] },
+    ] }));
+    await page.route('**/api/courses/qa-route-course/progress', route => route.fulfill({ status: 200, json: {
+      completedContentIds: [], complete: false, canTrack: true, publicationId: 'qa-publication',
+    } }));
+  }
   await page.route('**/api/projects/qa-route-project', route => route.fulfill({ status: 200, json: {
     id: 'qa-route-project', title: 'Route QA project', description: '<p>Synthetic project fixture.</p>',
     category: 'QA', link: 'https://example.test/project', gradientFrom: '#ddd', gradientTo: '#eee',
@@ -212,6 +228,20 @@ test.describe('every App Router page, one at a time', () => {
       if (item.url === '/chat') await expect(page.getByRole('log', { name: 'Nachrichten' })).toBeVisible();
       if (item.url === '/community') await expect(main.getByRole('status').filter({ hasText: /^\d+ (?:Beitrag|Beiträge) geladen$/ })).toBeVisible();
       if (item.url === '/courses') await expect(main.getByText(/^\d+ (?:Kurs|Kurse) verfügbar$/)).toBeVisible();
+      if (item.url === '/courses/journey') {
+        await expect(page.getByRole('link', { name: 'Lernschritt öffnen' })).toHaveAttribute('href', '/courses/qa-route-course/contents?content=qa-open');
+        await expect(main.getByText('Route QA gesperrter Schritt')).toBeVisible();
+        const motion = main.getByRole('button', { name: 'Figurenanimationen an' });
+        await expect(motion).toHaveAttribute('aria-pressed', 'true');
+        await motion.click();
+        await expect(main.getByRole('button', { name: 'Figurenanimationen aus' })).toHaveAttribute('aria-pressed', 'false');
+        await page.reload();
+        await expect(page.getByRole('link', { name: 'Lernschritt öffnen' })).toHaveAttribute('href', '/courses/qa-route-course/contents?content=qa-open');
+        await expect(main.getByRole('button', { name: 'Figurenanimationen aus' })).toHaveAttribute('aria-pressed', 'false');
+        await page.emulateMedia({ reducedMotion: 'reduce' });
+        await expect(main.getByRole('button', { name: 'Figurenanimationen aus' })).toBeDisabled();
+        await expect(main.getByText('Weniger Bewegung ist am Gerät eingestellt.')).toBeVisible();
+      }
       if (item.url === '/events') await expect(page.getByRole('region', { name: 'Nächste Events' })).toBeVisible();
       if (item.url === '/settings') await expect(page.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Route QA Member');
       if (item.url === '/courses/qa-route-course/analytics') {

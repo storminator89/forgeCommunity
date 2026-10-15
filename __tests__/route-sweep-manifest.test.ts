@@ -13,7 +13,7 @@ function pages(root: string): string[] {
 describe('route-by-route browser review inventory', () => {
   it('accounts for every page.tsx independently', () => {
     const sources = routeSweepCases.map(item => item.source);
-    expect(sources).toHaveLength(43);
+    expect(sources).toHaveLength(44);
     expect(sources).not.toContain('app/projects/[id]test/page.tsx');
     expect(new Set(sources).size).toBe(sources.length);
     expect(sources.sort()).toEqual(pages(join(process.cwd(), 'app')).sort());
@@ -49,6 +49,14 @@ describe('route-by-route browser review inventory', () => {
       source: 'app/courses/authoring/page.tsx', persona: 'member', outcome: 'render',
       heading: 'Meine Kursentwürfe', evidence: 'account-empty-disposable-db',
       settledText: 'Noch keine Kursentwürfe',
+    });
+  });
+
+  it('checks the personal journey with a synthetic enrolled course', () => {
+    expect(routeSweepCases.find(item => item.url === '/courses/journey')).toMatchObject({
+      source: 'app/courses/journey/page.tsx', persona: 'member', outcome: 'render',
+      heading: 'Mein Lernweg', evidence: 'synthetic-api',
+      settledApi: '/api/courses/qa-route-course/progress', settledText: 'Route QA offener Lernschritt',
     });
   });
 

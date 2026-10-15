@@ -50,6 +50,19 @@ it('suggests private pathways to a member', () => {
   expect(screen.getByRole('link', { name: 'Lernpfade' })).toHaveAttribute('href', '/courses/pathways');
 });
 
+it.each(['ADMIN', 'INSTRUCTOR', 'MODERATOR', null, undefined])('hides the learner journey entry from %s', async role => {
+  setRole(role);
+  render(<CourseClient />);
+  await screen.findByRole('heading', { name: 'Noch keine Kurse' });
+  expect(screen.queryByRole('link', { name: 'Mein Lernweg' })).not.toBeInTheDocument();
+});
+
+it('links a USER to the private learner journey', async () => {
+  render(<CourseClient />);
+  await screen.findByRole('heading', { name: 'Noch keine Kurse' });
+  expect(screen.getByRole('link', { name: 'Mein Lernweg' })).toHaveAttribute('href', '/courses/journey');
+});
+
 it.each(['USER', 'MODERATOR', null, undefined, 'UNKNOWN'])('gives %s a truthful learner next step for an empty catalog', async role => {
   setRole(role);
   render(<CourseClient />);
@@ -221,8 +234,8 @@ it('changes the empty-catalog suggestion immediately when the same account role 
   setRole('USER');
   view.rerender(<CourseClient />);
   expect(screen.queryByRole('link', { name: 'Kurs erstellen' })).not.toBeInTheDocument();
-  expect(screen.getByRole('link', { name: 'Zur Community' })).toBeVisible();
-  expect(global.fetch).toHaveBeenCalledTimes(1);
+  expect(await screen.findByRole('link', { name: 'Zur Community' })).toBeVisible();
+  expect(global.fetch).toHaveBeenCalledTimes(2);
 });
 
 it.each(['loading', 'unauthenticated'] as const)('does not expose an empty catalog before authentication is %s', status => {

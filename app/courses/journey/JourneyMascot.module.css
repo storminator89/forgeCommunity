@@ -1,0 +1,24 @@
+.celebrate {
+  animation: journey-hop 900ms cubic-bezier(.2,.65,.3,1) 2;
+  transform-origin: center bottom;
+}
+
+.blink {
+  opacity: 0;
+  animation: journey-blink 9s steps(1, end) infinite;
+}
+
+@keyframes journey-hop {
+  0%, 100% { transform: translateY(0) rotate(0); }
+  32% { transform: translateY(-8px) rotate(-3deg); }
+  64% { transform: translateY(-4px) rotate(3deg); }
+}
+
+@keyframes journey-blink {
+  0%, 92%, 96%, 100% { opacity: 0; }
+  93%, 95% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .celebrate, .blink { animation: none; }
+}
