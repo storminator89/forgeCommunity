@@ -377,7 +377,7 @@ export function CourseContentsEditor({ courseId }: { courseId: string }) {
         <AppHeader>
           <div className="flex items-center justify-between gap-1 sm:gap-2">
             <div className="flex min-w-0 flex-1 items-center gap-1 sm:gap-2">
-              <Button variant="outline" size="icon" aria-label={topicsOpen ? 'Inhaltsverzeichnis schließen' : 'Inhaltsverzeichnis öffnen'} aria-expanded={topicsOpen} aria-controls="course-contents-navigation" onClick={() => setTopicsOpen(value => !value)}>
+              <Button variant="outline" size="icon" className="shrink-0" aria-label={topicsOpen ? 'Inhaltsverzeichnis schließen' : 'Inhaltsverzeichnis öffnen'} aria-expanded={topicsOpen} aria-controls="course-contents-navigation" onClick={() => setTopicsOpen(value => !value)}>
                 {topicsOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
               </Button>
               <h1 className="min-w-0 line-clamp-2 break-words [overflow-wrap:anywhere] max-sm:text-base" title={course?.name || 'Kursinhalt'}>{course?.name || 'Kursinhalt'}</h1>

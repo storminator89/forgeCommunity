@@ -119,6 +119,11 @@ test('course author creates nested typed content, rehearses an unsaved quiz and 
   const { id: courseId } = await createdCourse.json() as { id: string };
   await page.goto(`/courses/${courseId}/contents`);
   await expect(page.getByRole('heading', { level: 1, name: courseTitle, exact: true })).toBeVisible();
+  const outlineToggle = page.getByRole('button', { name: 'Inhaltsverzeichnis schließen', exact: true });
+  const outlineToggleBox = await outlineToggle.boundingBox();
+  expect(outlineToggleBox).not.toBeNull();
+  expect(outlineToggleBox!.width).toBeGreaterThanOrEqual(44);
+  expect(outlineToggleBox!.height).toBeGreaterThanOrEqual(44);
   const modes = page.getByRole('group', { name: 'Kursansicht', exact: true });
   await expect(modes.getByRole('button', { name: 'Bearbeiten', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect(modes.getByRole('button', { name: 'Lernen', exact: true })).toHaveAttribute('aria-pressed', 'false');
