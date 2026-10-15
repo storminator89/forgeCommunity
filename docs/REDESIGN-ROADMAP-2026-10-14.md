@@ -37,7 +37,7 @@ Target operational metrics after instrumenting a representative deployment: p75 
 | `/knowledgebase`, `/knowledgebase/[id]` | Find and read answers with strong reading hierarchy and accessible search. |
 | `/knowledgebase/new-article`, `/knowledgebase/drafts` | Draft, resume and publish with clear save/error feedback. |
 | `/knowledgebase/[id]/edit`, `/knowledgebase/edit/[id]` | Bring both existing edit URLs to an accessible, consistent editor while preserving routing. |
-| `/projects/new`, `/projects/[projectId]`, `/projects/[id]test` | Create and review projects; verify the legacy-looking test route before changing it. |
+| `/projects/new`, `/projects/[projectId]` | Create and review projects. The experimental `[id]test` source was removed after the generated Next routes manifest showed it was shadowed by `[projectId]`. |
 | `/showcases` | Browse work with useful metadata and readable project previews. |
 | `/resources`, `/resources/[id]` | Find and inspect resources with meaningful source/action labels. |
 | `/skills` | Explain skills and endorsement meaning; give the page one visible primary heading. |
