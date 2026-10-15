@@ -15,9 +15,10 @@ export async function GET(request: Request) {
 
   try {
     const skills = await prisma.skill.findMany({
+      select: { id: true, name: true, category: true },
       orderBy: { name: "asc" },
     });
-    return NextResponse.json(skills, { status: 200 });
+    return NextResponse.json(skills, { status: 200, headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     console.error("Fehler beim Abrufen der Fähigkeiten:", error);
     return NextResponse.json({ error: "Fehler beim Abrufen der Fähigkeiten." }, { status: 500 });

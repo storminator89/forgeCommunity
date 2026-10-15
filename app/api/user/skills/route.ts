@@ -17,9 +17,13 @@ export async function GET(request: Request) {
   try {
     const userSkills = await prisma.userSkill.findMany({
       where: { userId },
-      include: { skill: true }, // Stellen Sie sicher, dass das Skill-Objekt eingeschlossen ist
+      select: {
+        id: true, userId: true, skillId: true, level: true, endorsements: true,
+        skill: { select: { id: true, name: true, category: true } },
+      },
+      orderBy: [{ skill: { name: 'asc' } }, { id: 'asc' }],
     });
-    return NextResponse.json(userSkills, { status: 200 });
+    return NextResponse.json(userSkills, { status: 200, headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     console.error("Fehler beim Abrufen der Fähigkeiten:", error);
     return NextResponse.json({ error: "Fehler beim Abrufen der Fähigkeiten." }, { status: 500 });
@@ -35,7 +39,7 @@ export async function POST(request: Request) {
   const userId = session.user.id;
   try {
     const { skillId, level } = await readJsonObject(request);
-    if (typeof skillId !== "string" || !skillId.trim() || typeof level !== "number" || !Number.isInteger(level) || level < 0 || level > 100) {
+    if (typeof skillId !== "string" || !skillId.trim() || skillId.length > 200 || typeof level !== "number" || !Number.isInteger(level) || level < 0 || level > 100) {
       return NextResponse.json({ error: "Ungültige Daten." }, { status: 400 });
     }
     // Überprüfen, ob die Fähigkeit existiert
@@ -76,6 +80,9 @@ export async function POST(request: Request) {
     if (invalidRequest) return invalidRequest;
     if (typeof error === "object" && error !== null && "code" in error && error.code === "P2002") {
       return NextResponse.json({ error: "Fähigkeit bereits hinzugefügt." }, { status: 409 });
+    }
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "P2003") {
+      return NextResponse.json({ error: "Fähigkeit oder Konto nicht mehr verfügbar. Lade die Liste erneut." }, { status: 404 });
     }
     console.error("Fehler beim Hinzufügen der Fähigkeit:", error);
     return NextResponse.json({ error: "Fehler beim Hinzufügen der Fähigkeit." }, { status: 500 });
