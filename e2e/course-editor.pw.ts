@@ -139,13 +139,21 @@ test('course author creates nested typed content, rehearses an unsaved quiz and 
   await expect(form.getByRole('status').filter({ hasText: /^Lokal ungespeichert$/ })).toBeVisible();
   await saveContent(page, courseId, rootId);
   // Saving remounts the form with the canonical server response and leaves
-  // focus on the sticky save button. Verify that the rich-text canvas itself
-  // has the persisted text, then scroll it into the screenshot viewport.
+  // focus on the sticky save button. Verify the persisted rich-text canvas,
+  // then scroll its paragraph above that button's panel for the screenshot.
   const savedRichText = form.getByRole('textbox', { name: 'Text bearbeiten', exact: true });
   await expect(savedRichText).toHaveText('Dieser Lerntext ist gespeichert und sofort sichtbar.');
   expect(courseEvidence(courseId).contents.find(entry => entry.id === rootId)?.content).toBe('<p>Dieser Lerntext ist gespeichert und sofort sichtbar.</p>');
-  await savedRichText.scrollIntoViewIfNeeded();
-  await expect(savedRichText).toBeInViewport({ ratio: 0.9 });
+  const savedParagraph = savedRichText.locator('p');
+  await expect(savedParagraph).toHaveText('Dieser Lerntext ist gespeichert und sofort sichtbar.');
+  await savedParagraph.evaluate(element => element.scrollIntoView({ block: 'center', inline: 'nearest' }));
+  await expect.poll(async () => {
+    const paragraph = await savedParagraph.boundingBox();
+    const stickySavePanel = await form.locator('div.sticky.bottom-0').boundingBox();
+    const viewportHeight = page.viewportSize()?.height ?? 0;
+    return Boolean(paragraph && stickySavePanel && paragraph.y >= 8 &&
+      paragraph.y + paragraph.height + 8 <= Math.min(stickySavePanel.y, viewportHeight));
+  }).toBe(true);
   await capturePopulatedEditor(page, testInfo, 'course-editor-saved-text.png');
 
   await keyboardActivate(page, page.getByRole('button', { name: `Aktionen für ${rootTitle}`, exact: true }));
