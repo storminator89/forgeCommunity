@@ -290,7 +290,7 @@ it('keeps owned skills usable when the directory fails and retries the catalog f
     render(<SkillDirectory />);
     await screen.findByText('Womit kennst du dich aus?');
     await waitFor(() => expect(directoryReads).toBe(1));
-    fireEvent.click(screen.getByRole('button', { name: 'Fähigkeit hinzufügen', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Fähigkeit hinzufügen' }));
     fireEvent.click(screen.getByRole('button', { name: 'Aus Verzeichnis' }));
     expect(screen.getByRole('alert')).toHaveTextContent('Verzeichnis nicht verfügbar.');
     expect(screen.getByLabelText('Fähigkeit', { exact: true })).toBeDisabled();
