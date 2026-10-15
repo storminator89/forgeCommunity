@@ -38,8 +38,19 @@ The version-1 snapshot payload is
 `{schemaVersion:1,title,description,startDate,endDate,imageUrl,contents:[{id,parentId,title,type,content,order}]}`.
 SQL foreign keys and triggers prevent cross-course publication references;
 the migration runners also reject changed or gapped history. Drafts and history
-are private. Current public course reads use only the active publication.
+are private. Course-catalogue reads require member login and use only the
+active publication; the course-asset handler separately decides whether a
+published cover is accessible without login.
 Already-issued certificates stay valid; a changed lesson body requires fresh
 completion against the current publication for all learners.
 
 Storage changes here do not alter paid-access semantics.
+
+## Storage-retention follow-up
+
+Deleting a course removes its `CourseAsset` database rows, but the uploaded
+private image files remain in persistent course-asset storage. The asset route
+cannot serve an orphan once its metadata row is gone; this is a storage and
+retention gap, not evidence of a public-read path. Define the desired retention
+period and a transaction-safe cleanup workflow before enabling physical file
+deletion. No startup migration, sweeper, or implicit data purge is performed.

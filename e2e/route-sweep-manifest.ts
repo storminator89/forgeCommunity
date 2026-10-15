@@ -30,7 +30,7 @@ export const routeSweepCases: readonly RouteSweepCase[] = [
   { source: 'app/courses/[courseId]/page.tsx', url: '/courses/qa-route-course', persona: 'member', outcome: 'redirect', redirectTo: '/courses/qa-route-course/contents', evidence: 'redirect-only' },
   { source: 'app/courses/authoring/page.tsx', url: '/courses/authoring', persona: 'member', outcome: 'render', heading: 'Meine Kursentwürfe', evidence: 'account-empty-disposable-db', settledText: 'Noch keine Kursentwürfe' },
   { source: 'app/courses/goals/page.tsx', url: '/courses/goals', persona: 'member', outcome: 'render', heading: 'Mein Lernziel', evidence: 'account-empty-disposable-db', settledText: 'Privates Lernziel starten' },
-  { source: 'app/courses/new/page.tsx', url: '/courses/new', persona: 'member', outcome: 'render', heading: 'Neuen Kurs erstellen', evidence: 'static' },
+  { source: 'app/courses/new/page.tsx', url: '/courses/new', persona: 'member', outcome: 'render', heading: 'Neuen Kursentwurf anlegen', evidence: 'static' },
   { source: 'app/courses/page.tsx', url: '/courses', persona: 'member', outcome: 'render', heading: 'Kurse', evidence: 'shared-disposable-db', settledApi: '/api/courses', loadingText: 'Kurse werden geladen' },
   { source: 'app/events/page.tsx', url: '/events', persona: 'member', outcome: 'render', heading: 'Events', evidence: 'shared-disposable-db', settledApi: '/api/events', loadingText: 'Events werden geladen' },
   { source: 'app/knowledgebase/[id]/edit/page.tsx', url: '/knowledgebase/qa-route-article/edit', persona: 'member', outcome: 'render', heading: 'Artikel bearbeiten', evidence: 'synthetic-api', settledText: 'Artikelinhalt' },

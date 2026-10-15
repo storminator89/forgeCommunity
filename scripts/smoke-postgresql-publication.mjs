@@ -134,8 +134,9 @@ async function main() {
   const anonymous = httpClient(origin);
   const author = httpClient(origin);
   const learner = httpClient(origin);
-  assert.deepEqual(await (await anonymous('/api/courses')).json(), [],
-    'Fresh isolated schema unexpectedly contains public courses.');
+  // The catalogue is available to signed-in community members only. Keep an
+  // anonymous negative check and inspect its publication filter as a learner.
+  await anonymous('/api/courses', { status: 401 });
   const suffix = randomUUID();
   const password = 'Postgresql-Smoke-Strong-2026!';
   const authorEmail = `lms-author-${suffix}@example.test`;
@@ -146,6 +147,8 @@ async function main() {
   })).json();
   await login(author, origin, authorEmail, password);
   await login(learner, origin, learnerEmail, password);
+  assert.deepEqual(await (await learner('/api/courses')).json(), [],
+    'Fresh isolated schema unexpectedly contains visible courses.');
 
   const privateTitle = `Private unpublished ${randomUUID()}`;
   const createForm = new FormData();
@@ -155,9 +158,9 @@ async function main() {
   assert.ok(created.id && created.activePublicationId === null, 'Course creation must leave an unpublished draft.');
   const courseId = created.id;
   const route = `/api/courses/${courseId}`;
-  const privateDirectory = await (await anonymous('/api/courses')).json();
+  const privateDirectory = await (await learner('/api/courses')).json();
   assert.ok(!privateDirectory.some(course => course.id === courseId || course.title === privateTitle),
-    'Unpublished course leaked through the public directory.');
+    'Unpublished course leaked through the member directory.');
   await anonymous(route, { status: 401 });
   await learner(route, { status: 404 });
   await learner(`${route}/enrollment`, { method: 'POST', status: 404 });
@@ -196,8 +199,8 @@ async function main() {
   assert.ok(first.id);
   const publishedCover = await anonymous(asset.url);
   assert.deepEqual(Buffer.from(await publishedCover.arrayBuffer()), servedPng);
-  assert.ok((await (await anonymous('/api/courses')).json()).some(course => course.id === courseId),
-    'Published course is missing from the public directory.');
+  assert.ok((await (await learner('/api/courses')).json()).some(course => course.id === courseId),
+    'Published course is missing from the member directory.');
   await learner(`${route}/enrollment`, { method: 'POST', status: 201 });
   let contents = await (await learner(`${route}/contents`)).json();
   assert.equal(contents.length, 1);

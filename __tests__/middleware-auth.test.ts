@@ -56,6 +56,13 @@ describe('auth middleware public and API boundaries', () => {
     await expect(proxy(request('/api/rewards/me'))).resolves.toEqual(expect.objectContaining({ kind: 'json', status: 401 }));
   });
 
+  it('keeps the course catalogue member-only while leaving cover visibility to the asset handler', async () => {
+    await expect(proxy(request('/api/courses'))).resolves.toEqual(expect.objectContaining({ kind: 'json', status: 401 }));
+    await expect(proxy(request('/api/courses/course-a/assets/asset-1'))).resolves.toEqual({ kind: 'next' });
+    mockGetToken.mockResolvedValue({ id: 'member-1' });
+    await expect(proxy(request('/api/courses'))).resolves.toEqual({ kind: 'next' });
+  });
+
   it('lets the opaque H5P player reach runtime and token-checked assets while keeping metadata private', async () => {
     await expect(proxy(request('/h5p-runtime/main.bundle.js'))).resolves.toEqual({ kind: 'next' });
     await expect(proxy(request('/api/h5p/assets/package/token/h5p.json'))).resolves.toEqual({ kind: 'next' });

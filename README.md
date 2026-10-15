@@ -16,15 +16,27 @@ PostgreSQL is an explicit alternative.
 
 ## Screenshots
 
-These four actual app captures are **historical, pre-phase-2** evidence from the
-merged-main Chromium run on `1025767`. The public landing pages contain no
-member data. The quiz authoring and preview images use a disposable synthetic
-account/course, not production activity. The two course images show the earlier
-immediate-save editor, not the staged-publication workspace described below.
-New phase-2 screenshots will be added only after an actual Playwright CI run of
-the intended source has produced and validated them. See [screenshot
-provenance](docs/ui/README.md) for the exact older commit, artifact paths,
-dimensions, hashes, and reviewed limits.
+These are unedited screenshots of the app running in CI with disposable,
+synthetic accounts and courses. The new authoring captures show a saved private
+draft and the explicit publication review. They come from PR #39's Playwright
+journey on the [reviewed source tree](https://github.com/storminator89/forgeCommunity/commit/326f4798fc59ccb8c15420d95eaf79cb91bec191).
+The [screenshot provenance](docs/ui/README.md) records the exact CI merge
+commit, artifact, dimensions, hashes, and limits. That first CI run's new
+authoring browser journey passed; its overall checks had separate outdated
+fixture expectations, so these images alone are not a release validation.
+
+![Current private course draft authoring workspace, synthetic lesson](docs/ui/readme/course-draft-authoring-desktop.png)
+
+![Current course publication review with synthetic impact counts](docs/ui/readme/course-publication-review-desktop.png)
+
+<details>
+<summary>Earlier landing and immediate-save editor captures</summary>
+
+The four captures below are historical, pre-phase-2 evidence from merged-main
+Chromium run `38717775096` on `1025767`. The landing pages contain no member
+data. The earlier quiz authoring and preview used a disposable synthetic
+account and course, not production activity. They do not depict the new
+private-draft workflow.
 
 ![ForgeCommunity public landing page, desktop light mode](docs/ui/readme/landing-desktop-light.png)
 
@@ -48,6 +60,8 @@ inside the preview and do not record a learner attempt or completion.
 <summary>Public landing page, 390px mobile light mode</summary>
 
 <img src="docs/ui/readme/landing-mobile-light.png" alt="ForgeCommunity public landing page on a 390px mobile viewport" width="390" />
+
+</details>
 
 </details>
 
@@ -78,10 +92,11 @@ every App Router page, including redirects.
 - Progress is server-owned and content-revision aware. Non-quiz lessons use an
   explicit completion action; quizzes are graded on the server. An issued
   certificate remains a historical credential after later course edits.
-- A saved course draft is private. Learners and public discovery see the latest
-  published version only; a new course is not discoverable or enrollable before
-  its first publication. Changed lesson bodies must be completed again in the
-  current version, while earlier activity and issued certificates remain.
+- A saved course draft is private. The member-only course catalogue and enrolled
+  learners see the latest published version only; a new course is not
+  discoverable or enrollable before its first publication. Changed lesson bodies
+  must be completed again in the current version, while earlier activity and
+  issued certificates remain.
 - H5P packages can be imported, reused, and played in an isolated iframe. There
   is no built-in H5P authoring tool or centralized xAPI result store. External
   media providers must permit embedding. See [H5P](docs/H5P.md).

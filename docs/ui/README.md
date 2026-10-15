@@ -1,15 +1,49 @@
 # App screenshot provenance
 
-These are **historical pre-phase-2** images. They show actual ForgeCommunity
-rendering with no image generation, API-response substitution, compositing,
-hidden/rewritten UI, or added browser or phone chrome. All four PNGs were
-copied byte-for-byte from the same approved merged-main GitHub Actions
-artifact and inspected at their original dimensions.
+All checked-in PNGs show actual ForgeCommunity rendering with no image
+generation, API-response substitution, compositing, hidden/rewritten UI, or
+added browser or phone chrome. The two **current staged-publication** captures
+and four **historical pre-phase-2** captures were copied byte-for-byte from
+their respective GitHub Actions artifacts and inspected at original dimensions.
+
+## Current staged-publication captures
+
+- Capture date: 15 October 2026
+- PR head: [`326f4798fc59ccb8c15420d95eaf79cb91bec191`](https://github.com/storminator89/forgeCommunity/commit/326f4798fc59ccb8c15420d95eaf79cb91bec191)
+- Checked-out CI merge commit: [`bc805124afb0c5b3f72df0d45e6d1e911e993499`](https://github.com/storminator89/forgeCommunity/commit/bc805124afb0c5b3f72df0d45e6d1e911e993499). Its Git tree `9b58c8986012c95d8f80f9db7ae7bfa96fee3692` is identical to that PR head's tree.
+- Workflow: [PR run 38729421653](https://github.com/storminator89/forgeCommunity/actions/runs/38729421653), **overall failed** because the PostgreSQL smoke and course-page route manifest had outdated authentication/heading fixture expectations. The staged editor's actual desktop and 320px Chromium journeys passed; the security, quality, Docker, PostgreSQL migration, and four Firefox/WebKit critical-journey jobs passed. A later green run must be checked separately.
+- Artifact: [`browser-qa-38729421653-1`, ID 11968724406](https://github.com/storminator89/forgeCommunity/actions/runs/38729421653/artifacts/11968724406)
+
+| Repository image | Artifact path | Viewport / PNG dimensions | State |
+| --- | --- | --- | --- |
+| `readme/course-draft-authoring-desktop.png` | `course-editor.pw.ts-privat-efd54-nt-use-real-disposable-data-desktop-chromium/private-author-outline-editor-desktop-bc805124afb0c5b3f72df0d45e6d1e911e993499.png` | 1280×800 / 1280×800 | Saved private draft, synthetic text lesson selected, real outline/editor |
+| `readme/course-publication-review-desktop.png` | `course-editor.pw.ts-privat-efd54-nt-use-real-disposable-data-desktop-chromium/publication-review-desktop-bc805124afb0c5b3f72df0d45e6d1e911e993499.png` | 1280×800 / 1280×800 | Real review dialog over synthetic draft, ready state and impact counts before first publish |
+
+SHA-256 of current committed PNGs:
+
+```text
+4e21ffa1b8d9e4ce5826e190e8e57417e6ecdf3ba0cc60427def7b378906d970  readme/course-draft-authoring-desktop.png
+5eb6772fe641427da2e46f2c77209f0122369e8ba6388314cbdd7996aa149a45  readme/course-publication-review-desktop.png
+```
+
+The new frames show only `Publication Author Fixture` and a generated
+`Private publication …` title from the disposable browser database. No email,
+password, token, real member record, or production data is visible. The draft
+frame labels the private saved state and shows the selected lesson and editor
+controls; the rich-text body is below that panel's visible scroll position.
+The review frame visibly shows the saved-only publication boundary, two added
+lessons, no enrolled learners, and certificate/completion guidance. The same
+journey also captured a 320px published author workspace and passed an overflow
+assertion, but that viewport frame was not selected for README because its
+lower editor panel is cut at the fold. These pixels are a focused visual check,
+not proof of assistive-technology, dark-mode, all-lesson, all-engine, or full
+mobile UX coverage.
+
+## Historical pre-phase-2 gallery
 
 The two course captures document the earlier immediate-save authoring flow.
 They are not evidence that the new private-draft, review, publish, version
-history, or restore flow has passed browser QA. This document reserves no
-replacement image names until a real capture has been reviewed.
+history, or restore flow has passed browser QA.
 
 ## Source and reviewed gallery
 
@@ -73,33 +107,33 @@ browser journey and API/database evidence have their own scope in the
 
 ## Refresh instructions
 
-For phase 2, capture the actual private author worklist, saved-draft indicator,
-review dialog with real synthetic impact data, published learner view, and
-version-restore-as-draft state. Include a narrow viewport; inspect scrolled
-panels and distinguish a local unsaved change from a saved private draft.
-These are capture targets, not claims that screenshots already exist or tests
-have passed. Do not replace the historical files until the new source commit,
-successful run and pixels have been verified.
+The saved-draft indicator and first-publication review now have reviewed
+captures above. Further capture targets are the private author worklist,
+published learner view, and version-restore-as-draft state. Include a narrow
+viewport with the relevant editor controls in view; inspect scrolled panels
+and distinguish a local unsaved change from a saved private draft. Existing
+historical files remain labeled and are not overwritten.
 
 1. Use the existing approved GitHub Actions browser job on the intended app
    commit. It builds the production app and uses official Chromium with a
    loopback origin and explicitly disposable synthetic SQLite data. Do not aim
    these tests at a deployed app or personal database.
 2. The historical gallery came from `e2e/browser-qa.pw.ts` and the earlier
-   `e2e/course-editor.pw.ts` flow. Use the staged-publication Playwright journey
-   on the intended phase-2 commit for new course captures, then inspect that
-   run's real artifacts before selecting any. This documentation change adds
-   no browser test, runtime change, or temporary capture flag.
+   `e2e/course-editor.pw.ts` flow. The staged-publication Playwright journey
+   in that same test file generated the current two course captures on the
+   reviewed phase-2 tree. Inspect a new run's real artifacts before selecting
+   any further images.
 3. Retrieve the exact run's artifact and inspect actual pixels before copying.
    Reject blank/loading, error, credential-bearing, UUID-heavy, or stale-editor
    frames. Do not replace the app's state or composite a prettier interface.
 4. Copy selected files without pixel editing. Record the real capture SHA/tree,
    run/artifact link, path, viewport/theme/state, dimensions, and SHA-256 here.
-   A later docs-only commit necessarily has a different Git SHA; do not relabel
-   images as captured at that later SHA. For a current-state gallery, verify
-   app/rendering/dependency files are unchanged between the capture source and
-   documentation head. The older images here remain explicitly historical
-   because phase-2 source differs from their capture commit.
+   A later docs-only or test-fixture commit necessarily has a different Git
+   SHA; do not relabel images as captured at that later SHA. For a
+   current-state gallery, verify app/rendering/dependency files are unchanged
+   between the capture source and documentation head. The older images here
+   remain explicitly historical because phase-2 source differs from their
+   capture commit.
 5. Check every Markdown image link and retain the synthetic-data captions.
    The CI uploader retains PNG artifacts for seven days, so the checked-in files
    preserve the reviewed evidence after the temporary artifact expires.
@@ -113,4 +147,4 @@ including `skills/hallmark/SKILL.md`, the redesign guidance, and output contract
 The applicable guidance is honest content, an existing shared system, real
 screenshots without redrawn chrome, and preserving implementation boundaries.
 This does not claim an installed Hallmark runtime/tool or a fresh app-wide design
-audit. The gallery's pixel review is limited to the four selected captures.
+audit. The current pixel review is limited to the two selected authoring captures.
