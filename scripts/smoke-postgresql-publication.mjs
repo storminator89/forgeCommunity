@@ -340,10 +340,18 @@ async function main() {
   assert.equal((await (await learner(`${assignmentRoute}/progress`)).json()).complete, true);
   const authorCourses = async () => (await (await author(`/api/users/${authorRegistration.userId}/courses`)).json()).courses;
   const learnerEnrollments = async () => (await (await learner(`/api/users/${learnerRegistration.userId}/enrollments`)).json()).courses;
-  const profileRate = (courses) => courses.find(course => course.id === assignmentCourse.id)?.stats.completionRate;
+  const assertNoPublicCompletionRates = async () => {
+    const course = (await authorCourses()).find(row => row.id === assignmentCourse.id);
+    assert.ok(course, 'Published assignment course must remain discoverable on the author profile.');
+    assert.equal(course.stats.enrollments, 1, 'Public enrollment count must remain available.');
+    assert.equal(Object.hasOwn(course.stats, 'completionRate'), false, 'Public profile exposed current completion.');
+    assert.equal(Object.hasOwn(course.stats, 'everCompletionRate'), false, 'Public profile exposed historical completion.');
+  };
+  const learnerCompletionRate = async () => (await learnerEnrollments())
+    .find(course => course.id === assignmentCourse.id)?.stats.completionRate;
   assert.equal((await (await author(`${assignmentRoute}/analytics`)).json()).summary.currentComplete, 1);
-  assert.equal(profileRate(await authorCourses()), 100, 'Author profile must project current assignment completion in the isolated schema.');
-  assert.equal(profileRate(await learnerEnrollments()), 100, 'Learner profile must project current assignment completion in the isolated schema.');
+  await assertNoPublicCompletionRates();
+  assert.equal(await learnerCompletionRate(), 100, 'Private learner enrollments must project current assignment completion.');
   const goalRoute = '/api/learning-goals/me';
   const startedGoal = await (await learner(goalRoute, { method: 'POST', status: 201,
     body: { targetLeaves: 1, durationDays: 7, timezone: 'UTC' },
@@ -363,7 +371,8 @@ async function main() {
   assert.equal((await (await learner(`${assignmentRoute}/progress`)).json()).complete, false);
   assert.equal((await (await learner(goalRoute)).json()).goal.completedLeaves, 0);
   assert.equal((await (await author(`${assignmentRoute}/analytics`)).json()).summary.currentComplete, 0);
-  assert.equal(profileRate(await authorCourses()), 0, 'A failing correction must revoke current profile completion.');
+  await assertNoPublicCompletionRates();
+  assert.equal(await learnerCompletionRate(), 0, 'A failing correction must revoke private current completion.');
   const repassed = await (await author(gradeRoute, { method: 'POST', body: {
     requestId: randomUUID(), expectedDecisionId: corrected.decision.id, action: 'GRADED', score: 85,
   } })).json();
@@ -371,7 +380,9 @@ async function main() {
   assert.equal((await (await learner(goalRoute)).json()).goal.completedLeaves, 1,
     'A new pass after failure must begin a new goal-counting interval.');
   assert.equal((await (await learner(`${assignmentRoute}/progress`)).json()).complete, true);
-  assert.equal(profileRate(await learnerEnrollments()), 100, 'Repassing must restore current profile completion.');
+  assert.equal((await (await author(`${assignmentRoute}/analytics`)).json()).summary.currentComplete, 1);
+  await assertNoPublicCompletionRates();
+  assert.equal(await learnerCompletionRate(), 100, 'Repassing must restore private current completion.');
 
   // Exercise the actual PostgreSQL adapter with a published dependency, not
   // just schema parity. An author token must not bypass the learner's lock.
