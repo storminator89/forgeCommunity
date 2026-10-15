@@ -12,15 +12,18 @@ import { QuizEditor } from './QuizEditor';
 import { Editor } from '@/components/Editor';
 import { ContentTypeSelector } from './ContentTypeSelector';
 import { ContentType, EMPTY_QUIZ, draftString, getContentValidationError, inferContentType, serialiseContent, quizEditorDraft } from './content-form-utils';
+import { editableSignature } from './content-tree';
 
 interface EditContentFormProps {
   content: CourseContent;
   onContentChange: (content: Partial<CourseContent>) => void;
   onSubmit: (content: CourseContent) => Promise<void>;
   onCancel: () => void;
+  saveState?: 'saved' | 'dirty';
+  saveMessage?: string;
 }
 
-export function EditContentForm({ content: initialContent, onSubmit, onContentChange, onCancel }: EditContentFormProps) {
+export function EditContentForm({ content: initialContent, onSubmit, onContentChange, onCancel, saveState, saveMessage }: EditContentFormProps) {
   const fieldId = useId();
   const initialType = inferContentType(initialContent);
   const [title, setTitle] = useState(initialContent.title);
@@ -70,13 +73,19 @@ export function EditContentForm({ content: initialContent, onSubmit, onContentCh
   };
 
   const quiz = type === 'QUIZ' ? quizEditorDraft(content) : null;
+  const dirty = saveState ? saveState === 'dirty' : editableSignature({ ...initialContent, title, type, content }) !== editableSignature(initialContent);
+  const stateLabel = isSubmitting ? 'Änderungen werden gespeichert …' : error ? 'Speichern nicht abgeschlossen' : dirty ? 'Lokal ungespeichert' : 'Gespeicherter Inhalt';
   return (
     <form onSubmit={handleSubmit} className="space-y-5" aria-label="Inhalt bearbeiten" aria-busy={isSubmitting || isH5PBusy}>
+      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b pb-3">
+        <p className="text-sm font-medium">Inhalt ausarbeiten</p>
+        <p role="status" aria-live="polite" className="text-xs text-muted-foreground">{stateLabel}</p>
+      </div>
       {error && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{error}</p>}
       <fieldset disabled={isSubmitting || isH5PBusy} className="space-y-5 min-w-0">
         <div className="space-y-2">
           <Label htmlFor={`${fieldId}-title`}>Titel</Label>
-          <Input id={`${fieldId}-title`} value={title} required onChange={event => { setTitle(event.target.value); onContentChange({ title: event.target.value }); setError(null); }} />
+          <Input id={`${fieldId}-title`} value={title} required maxLength={300} onChange={event => { setTitle(event.target.value); onContentChange({ title: event.target.value }); setError(null); }} />
         </div>
         <div className="space-y-2">
           <Label>Inhaltstyp</Label>
@@ -103,13 +112,15 @@ export function EditContentForm({ content: initialContent, onSubmit, onContentCh
         ) : (
           <div className="space-y-2">
             <Label htmlFor={`${fieldId}-source`}>{type === 'VIDEO' ? 'Video-URL' : 'Audio-URL'}</Label>
-            <Input id={`${fieldId}-source`} inputMode="url" value={draftString(content)} onChange={event => updateContent(event.target.value)} placeholder={type === 'VIDEO' ? 'https://www.youtube.com/watch?v=…' : '/uploads/audio.mp3'} />
+            <Input id={`${fieldId}-source`} inputMode="url" aria-describedby={`${fieldId}-source-hint`} value={draftString(content)} onChange={event => updateContent(event.target.value)} placeholder={type === 'VIDEO' ? 'https://www.youtube.com/watch?v=…' : '/uploads/audio.mp3'} />
+            <p id={`${fieldId}-source-hint`} className="text-sm text-muted-foreground">{type === 'VIDEO' ? 'YouTube, Vimeo, Dailymotion oder ein lokaler Videopfad. Verwende die Quelle statt eines HTML-Einbettungscodes.' : 'Spotify, SoundCloud oder ein lokaler Audiopfad. Die Wiedergabe prüfst du in der Vorschau.'}</p>
           </div>
         )}
       </fieldset>
-      <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
-        <Button type="button" variant="outline" disabled={isSubmitting || isH5PBusy} onClick={onCancel}>Abbrechen</Button>
-        <Button type="submit" disabled={isSubmitting || isH5PBusy || !title.trim()}>{isSubmitting ? 'Wird gespeichert…' : 'Speichern'}</Button>
+      <div className="sticky bottom-0 z-10 space-y-3 border-t bg-card py-4">
+        <p className="text-xs text-muted-foreground">{saveMessage || 'Änderungen werden nach dem Speichern für eingeschriebene Lernende sichtbar.'}</p>
+        <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="outline" disabled={isSubmitting || isH5PBusy} onClick={onCancel}>Abbrechen</Button>
+        <Button type="submit" disabled={isSubmitting || isH5PBusy || !title.trim()}>{isSubmitting ? 'Wird gespeichert…' : 'Speichern'}</Button></div>
       </div>
     </form>
   );

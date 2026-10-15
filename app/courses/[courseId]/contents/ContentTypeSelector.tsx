@@ -8,23 +8,24 @@ interface ContentTypeSelectorProps {
   onSelectType: (type: ContentType) => void;
   selectedType?: ContentType;
   disabled?: boolean;
+  showDescriptions?: boolean;
 }
 
 const types = [
-  { type: 'TEXT', label: 'Text', icon: FileText },
-  { type: 'VIDEO', label: 'Video', icon: Video },
-  { type: 'AUDIO', label: 'Audio', icon: Music },
-  { type: 'H5P', label: 'H5P', icon: Box },
-  { type: 'QUIZ', label: 'Quiz', icon: HelpCircle },
+  { type: 'TEXT', label: 'Text', description: 'Lesen und erklären', icon: FileText },
+  { type: 'VIDEO', label: 'Video', description: 'Video einbetten', icon: Video },
+  { type: 'AUDIO', label: 'Audio', description: 'Audio einbetten', icon: Music },
+  { type: 'H5P', label: 'H5P', description: 'Interaktiv üben', icon: Box },
+  { type: 'QUIZ', label: 'Quiz', description: 'Wissen prüfen', icon: HelpCircle },
 ] as const;
 
-export function ContentTypeSelector({ onSelectType, selectedType, disabled = false }: ContentTypeSelectorProps) {
+export function ContentTypeSelector({ onSelectType, selectedType, disabled = false, showDescriptions = false }: ContentTypeSelectorProps) {
   return (
-    <div role="group" aria-label="Inhaltstyp" className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-      {types.map(({ type, label, icon: Icon }) => (
+    <div role="group" aria-label="Inhaltstyp" className={`grid min-w-0 gap-2 ${showDescriptions ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5'}`}>
+      {types.map(({ type, label, description, icon: Icon }) => (
         <Button key={type} type="button" variant="outline" disabled={disabled} aria-pressed={selectedType === type}
-          className={`justify-start gap-2 ${selectedType === type ? 'border-primary bg-primary/5 text-primary' : ''}`} onClick={() => onSelectType(type)}>
-          <Icon className="h-4 w-4" aria-hidden="true" />{label}
+          aria-label={label} className={`min-w-0 justify-start gap-2 ${showDescriptions ? 'h-auto min-h-16 whitespace-normal px-3 py-3 text-left' : ''} ${selectedType === type ? 'border-primary bg-primary/5 text-primary' : ''}`} onClick={() => onSelectType(type)}>
+          <Icon className="h-4 w-4 shrink-0" aria-hidden="true" /><span className="min-w-0"><span className="block whitespace-nowrap">{label}</span>{showDescriptions && <span className="mt-1 block text-xs font-normal text-muted-foreground">{description}</span>}</span>
         </Button>
       ))}
     </div>

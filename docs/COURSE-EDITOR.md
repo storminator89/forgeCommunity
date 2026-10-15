@@ -1,6 +1,14 @@
-# Kurseditor: Inhaltspflege und Datenzuverlässigkeit
+# Kurseditor: Lernpfad und Inhaltspflege
 
 Der Kurseditor trennt gespeicherte Inhalte von lokalen Entwürfen. Kapitel, Themen und Unterthemen werden in einem rekursiven Inhaltsverzeichnis gepflegt. Die Bearbeitungsrechte stammen aus der Kurs-API; Lernende erhalten eine Leseansicht.
+
+## Autorenarbeitsplatz
+
+- Kursverantwortliche öffnen standardmäßig **Bearbeiten**. Die nummerierte Kursstruktur bündelt Kapitel und verschachtelte Inhalte. Hinzufügen fragt zuerst nach Titel und Inhaltstyp und führt danach direkt zum neuen Inhalt.
+- Der Bereich **Lernpfad im Kurs** zeigt die aktuelle Reihenfolge, die Inhalte ohne Unterthemen und konkrete Pflegehinweise. **Kurs prüfen** bewertet den gespeicherten Stand und verlinkt zu betroffenen Inhalten. Beides ist Orientierung, kein Veröffentlichungs- oder Abschluss-Gate.
+- **Vorschau** durchläuft den Kurs einschließlich lokaler ungespeicherter Änderungen. Antworten in der interaktiven Quizvorschau erzeugen weder Versuche noch Fortschritt oder Zertifikate. **Lernen** zeigt den gespeicherten Kursinhalt und muss ausdrücklich gewählt werden.
+- Der Quizeditor führt Fragen nach Typ durch die passenden Felder und prüft sie vor dem Speichern. Unterstützt sind Einfach- und Mehrfachauswahl, Wahr/Falsch, Kurzantwort, Lückentext und Zuordnung. Die lokale Quizvorschau ermöglicht das Ausprobieren ohne Bewertung oder Schreibaktion.
+- **Anlegen** und **Speichern** machen Inhalte sofort für eingeschriebene Lernende sichtbar. Es gibt in dieser Ausbaustufe keinen Entwurfsstatus, Freigabeknopf oder versionierten Veröffentlichungsvorgang. Ungespeicherte Änderungen bleiben nur lokal und werden beim Verlassen geschützt.
 
 ## Behobene Fehler
 
@@ -27,15 +35,15 @@ Der Kurseditor trennt gespeicherte Inhalte von lokalen Entwürfen. Kapitel, Them
 - Quiz-Inhalte bleiben kompatibel mit der bestehenden Datenbank: Darstellung `QUIZ`, Speicherung weiterhin als `TEXT` mit JSON. Es ist keine Schemaänderung oder Datenmigration nötig.
 - Auch verwaiste oder zyklische Altbestände bleiben in der Leseansicht sichtbar; neue ungültige Hierarchien werden verhindert.
 
-## Prüfung
+## Prüfung und Grenzen
 
-48 Testsuiten mit 282 Tests bestanden, darunter 59 neue Regressionstests für APIs, Formulare, Baum, Quiz und Editorzustände. ESLint ohne Warnungen, Typprüfung und Produktionsbuild bestanden. Der Standalone-Server bestand 11 HTTP-Prüfungen.
+Die lokale Komponenten-, API- und Integrationsprüfung des integrierten LMS-Editors bestand vor dem ergänzten Browserfall mit 148 Testsuiten und 1.229 Tests. ESLint, Typprüfung und Stilprüfungen bestanden. Der neue Browserfall ist für eine isolierte synthetische SQLite-Datenbank und einen Loopback-Server abgesichert; er prüft die echte Autorenreise am Desktop und bei 320 px, wurde für diesen Stand aber noch nicht in CI ausgeführt. Produktionsbuild, PostgreSQL und die endgültige Browserprüfung sind bis zum PR-Lauf offen. Die Ergebnisse werden hier erst nach dem Lauf auf einen konkreten Commit bezogen ergänzt.
 
-Die Produktions-Browserprüfung prüft 25 funktionale Fälle und 12 Layout-/Laufzeitfälle bei 390 und 1440 px, darunter alle fünf Inhaltstypen mit Anlegen, Speichern und Neuladen. Gezielte 500-Antworten prüfen den Erhalt von Entwürfen, Reihenfolge und Löschdialogen sowie erfolgreiche Wiederholung. Zusätzlich werden ein verschachtelter Unterbaum und die Berechtigungen eines eingeschriebenen Lernenden geprüft.
+Die Vorschau prüft keine tatsächliche Wiedergabe externer Video-, Audio- oder H5P-Quellen; diese benötigen erreichbare Quellen. Die unveränderte Lern- und Zertifikatslogik wird nicht durch die Autoren-Vorschau ersetzt.
 
-Die Prüfung verwendet isolierte synthetische SQLite-Daten. Externe Player werden im Browser-Test blockiert; ihre Verfügbarkeit und tatsächliche Medienwiedergabe sind nicht Teil dieser Prüfung. H5P benötigt eine erreichbare H5P-Quelle. Es wurden keine Produktionsdaten verändert.
+## Frühere Ansichten
 
-## Ansichten
+Diese Bilder zeigen den bereits geprüften früheren Kurseditor. Neue Screenshots des Autorenarbeitsplatzes werden erst aus einer erfolgreich ausgeführten Browserprüfung des veröffentlichten Stands übernommen.
 
 ![Kurseditor und Quiz, Desktop](ui/course-editor-desktop.png)
 

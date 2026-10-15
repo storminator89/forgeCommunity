@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useRef, useEffect, useEffectEvent, useId } from 'react';
+/* Hallmark · pre-emit critique: P5 H4 E4 S5 R5 V4 */
+import { useState, useRef, useEffect, useEffectEvent, useId, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,7 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { PlusCircle, Trash2, GripVertical, Eye, ArrowUpDown, ArrowUp, ArrowDown, CheckSquare, Square } from 'lucide-react';
+import { PlusCircle, Trash2, GripVertical, Eye, ArrowUpDown, ArrowUp, ArrowDown, CheckSquare, Square, Copy } from 'lucide-react';
 import {
   QuizContent,
   QuizQuestion,
@@ -23,8 +24,9 @@ import {
 } from './types';
 import { cn } from '@/lib/utils';
 import { quizEditorDraft } from './content-form-utils';
-import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { createQuizQuestion as createEmptyQuestion, duplicateQuizQuestion, getQuizAuthoringReadiness, QUIZ_QUESTION_TYPES as QUESTION_TYPES, quizQuestionTypeLabel } from './quiz-authoring';
+import { QuizAuthorPreview } from './QuizAuthorPreview';
 
 interface QuizEditorProps {
   initialContent?: QuizContent | string;
@@ -33,73 +35,6 @@ interface QuizEditorProps {
   showSaveButton?: boolean;
   disabled?: boolean;
 }
-
-// Local interfaces removed as they are now imported from ./types
-
-const QUESTION_TYPES: { value: QuestionType; label: string }[] = [
-  { value: 'SINGLE_CHOICE', label: 'Einfachauswahl' },
-  { value: 'MULTIPLE_CHOICE', label: 'Mehrfachauswahl' },
-  { value: 'TRUE_FALSE', label: 'Wahr/Falsch' },
-  { value: 'TEXT_INPUT', label: 'Freitext' },
-  { value: 'MATCHING', label: 'Zuordnung' },
-  { value: 'FILL_BLANKS', label: 'Lückentext' },
-];
-
-const createEmptyQuestion = (type: QuestionType = 'SINGLE_CHOICE'): QuizQuestion => {
-  const baseQuestion = {
-    id: globalThis.crypto?.randomUUID?.() ?? `question-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`,
-    question: '',
-    type,
-  };
-
-  switch (type) {
-    case 'SINGLE_CHOICE':
-    case 'MULTIPLE_CHOICE':
-      return {
-        ...baseQuestion,
-        type,
-        options: ['', ''],
-        correctAnswers: [],
-      };
-    case 'TRUE_FALSE':
-      return {
-        ...baseQuestion,
-        type,
-        options: ['Wahr', 'Falsch'],
-        correctAnswers: [0],
-      };
-    case 'TEXT_INPUT':
-      return {
-        ...baseQuestion,
-        type,
-        correctAnswer: '',
-        caseSensitive: false,
-      };
-    case 'MATCHING':
-      return {
-        ...baseQuestion,
-        type,
-        pairs: [
-          { left: '', right: '' },
-          { left: '', right: '' }
-        ],
-      };
-    case 'FILL_BLANKS':
-      return {
-        ...baseQuestion,
-        type,
-        text: '',
-        answers: [''],
-      };
-    default:
-      return {
-        ...baseQuestion,
-        type: 'SINGLE_CHOICE',
-        options: ['', ''],
-        correctAnswers: [],
-      };
-  }
-};
 
 const isMatchingQuestion = (q: QuizQuestion): q is MatchingQuizQuestion => q.type === 'MATCHING';
 const isTextInputQuestion = (q: QuizQuestion): q is TextInputQuizQuestion => q.type === 'TEXT_INPUT';
@@ -117,19 +52,50 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
   const questionTypesRef = useRef(new Map<string, QuizQuestion>());
   const formId = useId();
   const draft = (): QuizContent => ({ ...initialQuiz, questions, shuffleQuestions, passingScore: passingScore.trim() ? Number(passingScore) : NaN });
-  const notifyChange = useEffectEvent(() => { if (initialQuiz) onChange?.(draft()); });
+  const lastNotifiedDraft = useRef(JSON.stringify(draft()));
+  const notifyChange = useEffectEvent(() => {
+    const value = draft(), signature = JSON.stringify(value);
+    if (initialQuiz && signature !== lastNotifiedDraft.current) {
+      lastNotifiedDraft.current = signature;
+      onChange?.(value);
+    }
+  });
   useEffect(() => { notifyChange(); }, [questions, shuffleQuestions, passingScore]);
   const [draggedQuestionIndex, setDraggedQuestionIndex] = useState<number | null>(null);
   const [dragOverQuestionIndex, setDragOverQuestionIndex] = useState<number | null>(null);
+  const [newQuestionType, setNewQuestionType] = useState<QuestionType>('SINGLE_CHOICE');
+  const [activeQuestionId, setActiveQuestionId] = useState<string | null>(questions[0]?.id ?? null);
+  const [statusMessage, setStatusMessage] = useState('');
+  const [removedQuestion, setRemovedQuestion] = useState<{ question: QuizQuestion; index: number } | null>(null);
+  const pendingFocus = useRef<string | null>(null);
+  const readiness = getQuizAuthoringReadiness(draft());
+
+  const focusQuestion = useCallback((id: string) => {
+    setActiveQuestionId(id);
+    const field = document.getElementById(`${formId}-question-${id}`);
+    field?.focus();
+    field?.scrollIntoView?.({ block: 'nearest' });
+  }, [formId]);
+  useEffect(() => {
+    const id = pendingFocus.current;
+    if (!id) return;
+    pendingFocus.current = null;
+    if (id === '__add-question__') document.getElementById(`${formId}-add-question`)?.focus();
+    else focusQuestion(id);
+  }, [questions, formId, focusQuestion]);
 
   const moveQuestion = (fromIndex: number, toIndex: number) => {
+    if (disabled || isSaving) return;
+    if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= questions.length || toIndex >= questions.length) return;
     const newQuestions = [...questions];
     const [movedQuestion] = newQuestions.splice(fromIndex, 1);
     newQuestions.splice(toIndex, 0, movedQuestion);
     setQuestions(newQuestions);
+    setStatusMessage(`Frage ${fromIndex + 1} auf Position ${toIndex + 1} verschoben.`);
   };
 
   const handleDragStart = (e: React.DragEvent, index: number) => {
+    if (disabled || isSaving) { e.preventDefault(); return; }
     e.dataTransfer.effectAllowed = 'move';
     setDraggedQuestionIndex(index);
   };
@@ -151,14 +117,36 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
   };
 
   const addQuestion = () => {
-    setQuestions([
-      ...questions,
-      createEmptyQuestion(),
-    ]);
+    const question = createEmptyQuestion(newQuestionType);
+    pendingFocus.current = question.id;
+    setQuestions([...questions, question]);
+    setStatusMessage(`Frage ${questions.length + 1} angelegt: ${quizQuestionTypeLabel(newQuestionType)}.`);
   };
 
   const removeQuestion = (index: number) => {
+    setRemovedQuestion({ question: questions[index], index });
+    pendingFocus.current = questions[index + 1]?.id ?? questions[index - 1]?.id ?? '__add-question__';
     setQuestions(questions.filter((_, i) => i !== index));
+    setStatusMessage(`Frage ${index + 1} aus dem lokalen Entwurf entfernt.`);
+  };
+
+  const restoreQuestion = () => {
+    if (!removedQuestion) return;
+    const next = [...questions];
+    next.splice(Math.min(removedQuestion.index, next.length), 0, removedQuestion.question);
+    pendingFocus.current = removedQuestion.question.id;
+    setQuestions(next);
+    setRemovedQuestion(null);
+    setStatusMessage('Die entfernte Frage wurde im Entwurf wiederhergestellt.');
+  };
+
+  const duplicateQuestion = (index: number) => {
+    const copy = duplicateQuizQuestion(questions[index], questions.map(question => question.id));
+    const next = [...questions];
+    next.splice(index + 1, 0, copy);
+    pendingFocus.current = copy.id;
+    setQuestions(next);
+    setStatusMessage(`Frage ${index + 1} als Frage ${index + 2} dupliziert.`);
   };
 
   const updateQuestion = (questionIndex: number, field: string, value: any) => {
@@ -326,6 +314,7 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
 
   return (
     <fieldset disabled={disabled || isSaving} className="min-w-0 space-y-4">
+      <legend className="sr-only">Quiz bearbeiten</legend>
       <Tabs defaultValue="edit" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="edit">Bearbeiten</TabsTrigger>
@@ -333,14 +322,32 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
         </TabsList>
 
         <TabsContent value="edit">
-          <Card className="mb-8">
-            <CardHeader>
+          <section className="mb-6 space-y-3 border-b pb-5" aria-label="Quizprüfung">
+            <div className="flex flex-wrap items-baseline justify-between gap-2"><h3 className="text-lg font-semibold">Quiz aufbauen</h3><p className="text-sm text-muted-foreground">{questions.length} {questions.length === 1 ? 'Frage' : 'Fragen'}</p></div>
+            <p className="text-sm leading-relaxed text-muted-foreground">Formuliere Fragen, markiere die Lösungen und prüfe deinen Entwurf in der Vorschau. Gespeicherte Änderungen sind im Kurs direkt sichtbar.</p>
+            <p className="text-sm">Jede Frage zählt gleich viel. Eine mehrteilige Antwort zählt nur, wenn alle Teile richtig sind.</p>
+            {readiness.requiredCorrectCount !== null && <p className="text-sm font-medium">Zum Bestehen nötig: {readiness.requiredCorrectCount} von {questions.length} Fragen richtig.</p>}
+            {Number(passingScore) === 0 && passingScore.trim() && <p className="text-sm text-muted-foreground">Bei 0% Bestehensgrenze kann eine vollständige Abgabe auch ohne richtige Antwort bestehen.</p>}
+            {readiness.issues.length ? <div className="space-y-2 rounded-lg border border-input p-3">
+              <p className="text-sm font-medium">{readiness.issues.length} {readiness.issues.length === 1 ? 'Punkt' : 'Punkte'} prüfen</p>
+              <ul className="space-y-2 text-sm">{readiness.issues.map(issue => <li key={issue.id} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                <span className="min-w-0 flex-1 basis-40 break-words [overflow-wrap:anywhere]">{issue.message}</span>
+                {issue.questionId && <Button type="button" size="sm" variant="ghost" aria-label={issue.message} onClick={() => focusQuestion(issue.questionId!)}>Frage prüfen</Button>}
+              </li>)}</ul>
+            </div> : <p className="text-sm text-muted-foreground">Alle Fragen sind vollständig ausgefüllt.</p>}
+          </section>
+          {questions.length > 0 && <nav aria-label="Fragenübersicht" className="mb-6 space-y-2"><h3 className="text-sm font-semibold">Fragenübersicht</h3><ol className="max-h-64 divide-y overflow-y-auto rounded-lg border">{questions.map((question, index) => {
+            const hasIssue = readiness.issues.some(issue => issue.questionId === question.id);
+            return <li key={question.id}><button type="button" aria-label={`Zu Frage ${index + 1}: ${question.question || 'Fragetext fehlt'}`} aria-current={activeQuestionId === question.id ? 'true' : undefined} className={cn('flex min-h-11 w-full min-w-0 items-start gap-3 px-3 py-2 text-left text-sm hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:bg-accent', activeQuestionId === question.id && 'bg-muted')} onClick={() => focusQuestion(question.id)}><span className="shrink-0 tabular-nums">{index + 1}.</span><span className="min-w-0 flex-1"><span className="block truncate font-medium">{question.question || 'Fragetext fehlt'}</span><span className="block text-muted-foreground">{quizQuestionTypeLabel(question.type)} · {hasIssue ? 'Prüfen' : 'Vollständig'}</span></span></button></li>;
+          })}</ol></nav>}
+          <Card className="mb-6 rounded-none border-0 border-b bg-transparent shadow-none">
+            <CardHeader className="px-0 pt-0">
               <CardTitle className="flex items-center gap-2">
                 <ArrowUpDown className="h-5 w-5" />
                 Quiz Einstellungen
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent className="space-y-4 px-0">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <Label htmlFor={`${formId}-shuffle`} className="font-medium">Fragen mischen</Label>
                 <Switch
@@ -364,21 +371,28 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
             </CardContent>
           </Card>
 
-          <div className="space-y-8">
+          <div className="mb-6 flex min-w-0 flex-wrap items-end gap-3">
+            <div className="min-w-0 flex-1 basis-44 space-y-2"><Label htmlFor={`${formId}-new-type`}>Neue Frage als</Label><select id={`${formId}-new-type`} value={newQuestionType} onChange={event => setNewQuestionType(event.target.value as QuestionType)} className="h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">{QUESTION_TYPES.map(type => <option key={type.value} value={type.value}>{type.label}</option>)}</select></div>
+            <Button id={`${formId}-add-question`} type="button" onClick={addQuestion} variant="outline" className="min-h-11"><PlusCircle className="mr-2 h-4 w-4" />Neue Frage</Button>
+          </div>
+          <p role="status" className="sr-only">{statusMessage}</p>
+          {removedQuestion && <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg bg-muted p-3 text-sm"><span>Frage aus dem Entwurf entfernt.</span><Button type="button" variant="ghost" size="sm" onClick={restoreQuestion}>Rückgängig</Button></div>}
+          <div className="space-y-6">
             {questions.map((question, questionIndex) => (
               <Card
                 key={question.id}
                 className={cn(
-                  "transition-colors duration-200",
-                  draggedQuestionIndex === questionIndex && "opacity-50 scale-95",
-                  "relative border-2",
+                  "relative rounded-none border-0 border-t bg-transparent shadow-none",
+                  draggedQuestionIndex === questionIndex && "opacity-50",
                   draggedQuestionIndex !== null && dragOverQuestionIndex === questionIndex && "border-primary border-dashed"
                 )}
                 onDragOver={(e) => handleDragOver(e, questionIndex)}
                 onDrop={(e) => handleDrop(e, questionIndex)}
                 onDragEnd={handleDragEnd}
+                onFocusCapture={() => setActiveQuestionId(question.id)}
               >
-                <div className="flex flex-wrap justify-end gap-2 px-4 pt-4">
+                <div className="flex flex-wrap justify-end gap-1 pt-4">
+                  <Button type="button" variant="ghost" size="icon" aria-label={`Frage ${questionIndex + 1} duplizieren`} onClick={() => duplicateQuestion(questionIndex)}><Copy className="h-4 w-4" /></Button>
                   <Button
                     type="button"
                     variant="ghost"
@@ -413,7 +427,7 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
                   </Button>
                 </div>
 
-                <CardHeader className="cursor-move select-none" draggable={!disabled && !isSaving} onDragStart={(event) => handleDragStart(event, questionIndex)}>
+                <CardHeader className="cursor-move select-none px-0" draggable={!disabled && !isSaving} onDragStart={(event) => handleDragStart(event, questionIndex)}>
                   <div className="flex items-center gap-3">
                     <div className="flex items-center gap-2 bg-muted rounded-lg px-3 py-1">
                       <GripVertical className="h-5 w-5 text-muted-foreground" />
@@ -422,11 +436,11 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
                   </div>
                 </CardHeader>
 
-                <CardContent className="space-y-6">
+                <CardContent className="space-y-6 px-0">
                   <div className="space-y-2">
-                    <Label htmlFor={`question-${question.id}`} className="text-base font-medium">Frage</Label>
+                    <Label htmlFor={`${formId}-question-${question.id}`} className="text-base font-medium">Frage</Label>
                     <Textarea
-                      id={`question-${question.id}`}
+                      id={`${formId}-question-${question.id}`}
                       value={question.question}
                       onChange={(e) => updateQuestion(questionIndex, 'question', e.target.value)}
                       placeholder="Frage"
@@ -456,21 +470,22 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
                   {question.type === 'MATCHING' && isMatchingQuestion(question) && (
                     <div className="space-y-3">
                       <Label className="text-base font-medium">Paare</Label>
+                      <p className="text-sm text-muted-foreground">Die rechten Begriffe werden von Lernenden als Text eingegeben. Groß- und Kleinschreibung wird nicht beachtet.</p>
                       {question.pairs.map((pair, pairIndex) => (
-                        <div key={pairIndex} className="flex items-center gap-3">
+                        <div key={pairIndex} className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:gap-3">
                           <Input
                             aria-label={`Frage ${questionIndex + 1}, Paar ${pairIndex + 1}, linker Teil`}
                             value={pair.left}
                             onChange={(e) => updateMatchingPair(questionIndex, pairIndex, 'left', e.target.value)}
                             placeholder="Linker Teil"
-                            className="flex-1"
+                            className="min-w-0 flex-1"
                           />
                           <Input
                             aria-label={`Frage ${questionIndex + 1}, Paar ${pairIndex + 1}, rechter Teil`}
                             value={pair.right}
                             onChange={(e) => updateMatchingPair(questionIndex, pairIndex, 'right', e.target.value)}
                             placeholder="Rechter Teil"
-                            className="flex-1"
+                            className="min-w-0 flex-1"
                           />
                           {question.pairs.length > 2 && (
                             <Button
@@ -503,6 +518,7 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
 
                   {question.type === 'TEXT_INPUT' && isTextInputQuestion(question) && (
                     <div className="space-y-3">
+                      <p className="text-sm text-muted-foreground">Diese Kurzantwort wird automatisch mit dem hinterlegten Text verglichen. Leerzeichen am Anfang und Ende werden ignoriert.</p>
                       <Label className="text-base font-medium">Richtige Antwort</Label>
                       <Input
                         aria-label={`Richtige Antwort für Frage ${questionIndex + 1}`}
@@ -513,13 +529,13 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
                       />
                       <div className="flex items-center space-x-2">
                         <Checkbox
-                          id={`case-sensitive-${questionIndex}`}
+                          id={`${formId}-case-sensitive-${question.id}`}
                           checked={question.caseSensitive}
                           onCheckedChange={(checked) =>
                             updateQuestion(questionIndex, 'caseSensitive', checked)
                           }
                         />
-                        <Label htmlFor={`case-sensitive-${questionIndex}`}>
+                        <Label htmlFor={`${formId}-case-sensitive-${question.id}`}>
                           Groß-/Kleinschreibung beachten
                         </Label>
                       </div>
@@ -536,6 +552,7 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
                         placeholder="Text mit [Lücken] in eckigen Klammern"
                         className="min-h-[100px]"
                       />
+                      <p className="text-sm text-muted-foreground">Die Antworten werden in der Reihenfolge der Eingabefelder geprüft. Markierungen im Text werden unverändert angezeigt.</p>
                       <Label className="text-base font-medium">Antworten für Lücken</Label>
                       {question.answers.map((answer, answerIndex) => (
                         <div key={answerIndex} className="flex items-center gap-3">
@@ -547,7 +564,7 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
                             value={answer}
                             onChange={(e) => updateFillBlanksAnswer(questionIndex, answerIndex, e.target.value)}
                             placeholder={`Antwort für Lücke ${answerIndex + 1}`}
-                            className="flex-1"
+                            className="min-w-0 flex-1"
                           />
                           {question.answers.length > 1 && (
                             <Button
@@ -591,7 +608,7 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
                               onChange={(e) => updateOption(questionIndex, optionIndex, e.target.value)}
                               placeholder={`Option ${optionIndex + 1}`}
                               className={cn(
-                                "flex-1",
+                                "min-w-0 flex-1",
                                 isCorrectAnswer(questionIndex, optionIndex) && "border-primary ring-1 ring-primary"
                               )}
                             />
@@ -658,106 +675,14 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
             ))}
           </div>
 
-          <Button
-
-            type="button"
-            onClick={addQuestion}
-            className="mt-8 w-full"
-            variant="outline"
-          >
-            <PlusCircle className="h-4 w-4 mr-2" />
-            Neue Frage
-          </Button>
         </TabsContent>
 
         <TabsContent value="preview">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Eye className="h-5 w-5" />
-                Quiz Vorschau
-              </CardTitle>
+          <Card className="rounded-none border-0 bg-transparent shadow-none">
+            <CardHeader className="px-0">
+              <CardTitle className="flex items-center gap-2"><Eye className="h-5 w-5" />Quiz Vorschau</CardTitle>
             </CardHeader>
-            <CardContent>
-              {questions.map((question, index) => (
-                <div key={question.id} className="mb-8 last:mb-0">
-                  <div className="flex items-center gap-3 mb-2">
-                    <Badge variant="outline" className="font-normal">
-                      {QUESTION_TYPES.find(t => t.value === question.type)?.label}
-                    </Badge>
-                  </div>
-                  <h3 className="text-lg font-semibold mb-4 flex items-center gap-3">
-                    <span className="bg-primary text-primary-foreground rounded-full w-8 h-8 flex items-center justify-center text-sm">
-                      {index + 1}
-                    </span>
-                    {question.question}
-                  </h3>
-                  {question.type === 'TEXT_INPUT' && (
-                    <div className="p-4 rounded-lg border transition-colors flex items-center gap-3">
-                      <Input
-                        value={question.correctAnswer}
-                        readOnly
-                        className="w-full"
-                      />
-                    </div>
-                  )}
-                  {question.type === 'MATCHING' && (
-                    <div className="space-y-3">
-                      {question.pairs.map((pair, pairIndex) => (
-                        <div key={pairIndex} className="flex items-center gap-3">
-                          <div className="bg-muted rounded-full px-2 py-1 text-sm font-medium text-muted-foreground">
-                            {String.fromCharCode(65 + pairIndex)}
-                          </div>
-                          <div className="flex-1">{pair.left}</div>
-                          <div className="flex-1">{pair.right}</div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {question.type === 'FILL_BLANKS' && (
-                    <div className="space-y-3">
-                      <p className="text-lg font-normal">{question.text}</p>
-                      {question.answers.map((answer, answerIndex) => (
-                        <div key={answerIndex} className="flex items-center gap-3">
-                          <div className="bg-muted rounded-full px-2 py-1 text-sm font-medium text-muted-foreground">
-                            {String.fromCharCode(65 + answerIndex)}
-                          </div>
-                          <div className="flex-1">{answer}</div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {(question.type === 'SINGLE_CHOICE' || question.type === 'MULTIPLE_CHOICE' || question.type === 'TRUE_FALSE') && (
-                    <div className="space-y-3">
-                      {question.options.map((option, optIndex) => (
-                        <div
-                          key={optIndex}
-                          className={cn(
-                            "p-4 rounded-lg border transition-colors flex items-center gap-3",
-                            isCorrectAnswer(index, optIndex)
-                              ? "border-primary bg-primary/5"
-                              : "border-border hover:border-border"
-                          )}
-                        >
-                          <div className="bg-muted rounded-full px-2 py-1 text-sm font-medium text-muted-foreground">
-                            {String.fromCharCode(65 + optIndex)}
-                          </div>
-                          <div className="flex-1">{option}</div>
-                          {isCorrectAnswer(index, optIndex) && (
-                            <Badge variant="outline">Richtig</Badge>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {question.explanation && (
-                    <Alert className="mt-4">
-                      <AlertDescription>{question.explanation}</AlertDescription>
-                    </Alert>
-                  )}
-                </div>
-              ))}
-            </CardContent>
+            <CardContent className="px-0"><QuizAuthorPreview content={draft()} disabled={disabled || isSaving} /></CardContent>
           </Card>
         </TabsContent>
       </Tabs>
