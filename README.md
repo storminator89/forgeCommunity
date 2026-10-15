@@ -16,18 +16,38 @@ PostgreSQL is an explicit alternative.
 
 ## Screenshots
 
-These are unedited screenshots of the app running in CI with disposable,
-synthetic accounts and courses. The new authoring captures show a saved private
-draft and the explicit publication review. They come from PR #39's Playwright
-journey on the [reviewed source tree](https://github.com/storminator89/forgeCommunity/commit/326f4798fc59ccb8c15420d95eaf79cb91bec191).
-The [screenshot provenance](docs/ui/README.md) records the exact CI merge
-commit, artifact, dimensions, hashes, and limits. That first CI run's new
-authoring browser journey passed; its overall checks had separate outdated
-fixture expectations, so these images alone are not a release validation.
+These unedited Playwright captures show the real app with disposable synthetic
+accounts and content. The private practice question and feedback came from
+[PR #45's passing CI run](https://github.com/storminator89/forgeCommunity/actions/runs/38776781726)
+on [source head `a4cc101`](https://github.com/storminator89/forgeCommunity/commit/a4cc101a1b3a905dcc8645e37d093836d3d1e326),
+whose tree matches [merged main `edcd9cf`](https://github.com/storminator89/forgeCommunity/commit/edcd9cfb6611eefe27275d603bedcd108b7430ec).
+See [screenshot provenance](docs/ui/README.md) for artifact paths, hashes, and
+the visual QA limits.
 
-![Current private course draft authoring workspace, synthetic lesson](docs/ui/readme/course-draft-authoring-desktop.png)
+![Private learner practice question with optional confidence, synthetic content](docs/ui/readme/practice-question-desktop.png)
 
-![Current course publication review with synthetic impact counts](docs/ui/readme/course-publication-review-desktop.png)
+<details>
+<summary>320px answer feedback</summary>
+
+The mobile capture starts at the scrolled feedback section. A learner opens the
+next question explicitly.
+
+![Private practice corrective feedback at a 320px viewport, synthetic content](docs/ui/readme/practice-feedback-mobile-320.png)
+
+</details>
+
+<details>
+<summary>Course publication authoring</summary>
+
+These earlier [PR #39 captures](docs/ui/README.md#course-publication-captures)
+show the separate course-draft and publication-review flow, not practice-pool
+authoring.
+
+![Private course draft authoring workspace, synthetic lesson](docs/ui/readme/course-draft-authoring-desktop.png)
+
+![Course publication review with synthetic impact counts](docs/ui/readme/course-publication-review-desktop.png)
+
+</details>
 
 <details>
 <summary>Earlier landing and immediate-save editor captures</summary>
@@ -72,6 +92,9 @@ inside the preview and do not record a learner attempt or completion.
 | Community | Posts and replies, topic filters, likes, bounded feed/comment pagination, author-selected solutions, and reporting | `/community` |
 | Members | Search/filter, grid/list views, profiles, following, and skill endorsements | `/members`, `/profile/[id]` |
 | Courses | Private course drafts, review/publish/version restore, free self-enrollment with capacity checks, nested text/video/audio/H5P/quiz lessons, revision-aware progress, and completion-gated certificate downloads | `/courses`, `/courses/authoring`, `/courses/new`, `/courses/[courseId]/contents` |
+| Course tools | Private versioned quiz-question bank, assignments with instructor grading, and bounded course analytics/CSV export | `/courses/[courseId]/contents`, `/courses/[courseId]/grading`, `/courses/[courseId]/analytics` |
+| Formative practice | Private, versioned instructor-owned single-choice pool; separate course-bound publication; enrolled learner opt-in, recall sessions, corrective feedback, and private controls | `/courses/[courseId]/practice`, `/courses/[courseId]/practice/learn` |
+| Learning pathways | Administrator-curated course sequences with private, opt-in participation and current-credit badges | `/courses/pathways`, `/courses/pathways/[pathwayId]`, `/admin/learning-pathways` |
 | Personal learning | Optional private learning goals, completion milestones, and course-reward history; administrator-approved quiz learning can qualify for a verified-learning badge and opt-in ranking | `/courses/goals`, community reward panels, profiles |
 | Knowledge base | Published articles, category/tag search, rich-text authoring, and private drafts | `/knowledgebase`, `/knowledgebase/[id]`, `/knowledgebase/new-article`, `/knowledgebase/drafts` |
 | Resources and projects | Resource browsing/details, project submission/details, likes and project comments | `/resources`, `/resources/[id]`, `/projects/new`, `/projects/[projectId]`, `/showcases` |
@@ -97,6 +120,18 @@ every App Router page, including redirects.
   discoverable or enrollable before its first publication. Changed lesson bodies
   must be completed again in the current version, while earlier activity and
   issued certificates remain.
+- Formative practice starts off. An author must publish a separate pool for the
+  active course publication, and each enrolled learner must opt in before any
+  practice session starts. A new course publication needs its own matching
+  practice snapshot. Only plain-text single-choice items are supported; the
+  duplicate guard catches exact normalized matches against graded quiz choices,
+  not semantic overlap.
+- Practice answers, optional confidence, and review timing are private. They do
+  not change grades, course progress, prerequisites, rewards, certificates, or
+  public rankings. Sessions are capped at 10 answers; pause and opt-out retain
+  history, while reset requires a separate confirmation. Inactive practice
+  history becomes deletion-eligible after 12 calendar months, and technical
+  answer receipts after 90 days. See the [learner policy](docs/formative-practice-learner.md).
 - H5P packages can be imported, reused, and played in an isolated iframe. There
   is no built-in H5P authoring tool or centralized xAPI result store. External
   media providers must permit embedding. See [H5P](docs/H5P.md).
@@ -127,6 +162,13 @@ without deleting the course. Unsaved-change prompts protect local edits;
 revision conflicts ask authors to compare/reload rather than silently merge.
 Learners do not get authoring controls. See the [course editor guide](docs/COURSE-EDITOR.md).
 
+For a published course, its author or an administrator can open **Übungspool**
+from the author workspace to create private objectives and question revisions,
+pin specific versions in an ordered draft, preview them, and publish a separate
+practice snapshot. Saving that draft does not expose it to learners. Practice
+publication checks the active course version and exact credential-question
+duplicates. See [practice authoring](docs/formative-practice-authoring.md).
+
 ## Local development
 
 ### Prerequisites
@@ -156,7 +198,7 @@ OAuth is disabled when its two environment values are blank.
 
 Select SQLite **before installation**, so the postinstall step generates the
 correct Prisma client. Use a **new, empty** database at an absolute path for
-phase 2; do not reuse a development database containing older courses:
+this development version; do not reuse a database containing older courses:
 
 ```bash
 export DATABASE_PROVIDER=sqlite
@@ -172,6 +214,11 @@ Open [localhost:3013](http://localhost:3013) and create an account through the
 registration page. The exported database values take precedence over the
 placeholder in `.env`; replace that placeholder if you prefer to configure the
 same absolute path entirely in `.env`.
+
+`npm run dev` does not start the practice-retention scheduler. New learner
+practice writes fail closed without a recent scheduler heartbeat. To exercise
+that feature end to end, use the supported `npm start` production build or
+Docker startup path; see the [retention policy](docs/formative-practice-learner.md).
 
 The read-only readiness command checks the recorded migration names/checksums,
 saved drafts, and active-publication pointers. If it fails, stop and inspect
@@ -268,7 +315,9 @@ matching client before running the deployment runner. Phase 2 supports a
 installs the fixed baseline and upgrades in one transaction and refuses
 pre-existing schema objects. Then run `npm run db:publication:ready` with the
 same provider and URL. The Compose entrypoint runs this read-only guard again
-and refuses startup if it fails.
+and refuses startup if it fails. The guarded sequence includes the formative
+practice migrations; there is no automatic conversion of populated legacy
+course databases.
 
 The deployment runner also has these history-repair paths, but they are **not
 phase-2 upgrade support for a database with pre-publication courses**:
@@ -336,37 +385,37 @@ server; never aim it at a production or personal database. Run
 1280px and 320px; the journey suites also run at 390px. Some dynamic route-sweep
 responses are synthetic API fixtures, as documented in [route-sweep coverage](docs/ROUTE-SWEEP-QA.md).
 
-The **historical, pre-phase-2** verified merged-main baseline is
-[run 38717775096](https://github.com/storminator89/forgeCommunity/actions/runs/38717775096)
-on `102576735dd3b7cb23c8657e3a74098228582bc6`, checked on 15 October 2026.
-All six jobs passed: application quality, strict security audit, PostgreSQL
-release gate, Docker smokes, Chromium browser QA, and aggregate validation.
-The screenshot gallery comes from that run's actual app captures. These dated
-results apply to that commit; they are not a perpetual security guarantee or
-proof that later code has passed. See the [course editor guide](docs/COURSE-EDITOR.md)
-for its current workflow/acceptance scope and the
-[release handoff](docs/RELEASE-HANDOFF-2026-10-15.md) for earlier integration history.
+The [PR #45 exact-head run 38776781726](https://github.com/storminator89/forgeCommunity/actions/runs/38776781726)
+passed all seven jobs on `a4cc101a1b3a905dcc8645e37d093836d3d1e326`:
+quality, strict security audit, Docker application flows, PostgreSQL release
+gate, authenticated PostgreSQL publication/learner runtime, browser QA, and
+aggregate validation. Browser QA passed 124 Chromium cases and four
+Firefox/WebKit critical journeys; 59 configured variants were skipped. Its
+source tree `c7db611cb0dcb5a141aef5014296990b7ed97fcf` is identical to
+merged main `edcd9cfb6611eefe27275d603bedcd108b7430ec`. The two new
+practice images come from that run's actual disposable learner journey. This
+dated evidence applies to that source tree, not to future changes or a
+production deployment.
 
-No CI run on this phase-2 documentation/source head is claimed here. The
-current workflow defines quality, strict audit, browser QA, and fresh
-PostgreSQL publication-runtime checks; their results must be inspected on the
-exact commit before claiming the phase-2 release has passed. The checked-in
-course editor screenshots describe the earlier author journey and are not
-phase-2 publication-browser evidence; new captures remain pending real CI
-artifacts and provenance review.
+The older, pre-phase-2 [merged-main run 38717775096](https://github.com/storminator89/forgeCommunity/actions/runs/38717775096)
+on `102576735dd3b7cb23c8657e3a74098228582bc6` passed all six jobs. Its
+landing and earlier editor captures remain labeled as historical in the
+[gallery provenance](docs/ui/README.md). See the [course editor guide](docs/COURSE-EDITOR.md)
+and [release handoff](docs/RELEASE-HANDOFF-2026-10-15.md) for their scopes.
 
 This is repository integration evidence. Production deployment still requires
 operational review and a backed-up migration rehearsal. Chromium viewport tests
 and source-calculated contrast checks do not establish WCAG conformance,
-assistive-technology compatibility, or Safari/Firefox behavior.
+assistive-technology compatibility, or broad Safari/Firefox behavior.
 
 ### Styling and dependency maintenance
 
 Tailwind CSS 4 sets a minimum browser floor of Safari 16.4, Chrome 111, and
 Firefox 128, as described in the [official upgrade guide](https://tailwindcss.com/docs/upgrade-guide).
-The current browser suite uses Chromium; the other engines have not been
-validated by that suite. Keep `npm run test:styles` and route-level visual QA
-when changing tokens or CSS utilities.
+The primary browser suite uses Chromium; four critical journeys also run in
+Firefox/WebKit, without broad coverage of those engines. Keep
+`npm run test:styles` and route-level visual QA when changing tokens or CSS
+utilities.
 
 The project temporarily owns a pinned fork of `@next/eslint-plugin-next@16.3.8`
 that replaces its vulnerable glob dependency while retaining Next rule behavior.
@@ -386,6 +435,8 @@ rendering; no generated mock interfaces or added browser/phone chrome are used.
 
 - [Course editor](docs/COURSE-EDITOR.md)
 - [Staged publication storage and fresh-database boundary](docs/COURSE-PUBLICATION-STORAGE.md)
+- [Private formative-practice authoring](docs/formative-practice-authoring.md)
+- [Learner practice and retention](docs/formative-practice-learner.md)
 - [H5P import, storage, and player](docs/H5P.md)
 - [Responsible rewards and private learning goals](docs/RESPONSIBLE-REWARDS.md)
 - [Accepted solutions](docs/ACCEPTED-SOLUTIONS.md)
