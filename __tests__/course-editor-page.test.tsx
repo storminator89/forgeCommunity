@@ -132,6 +132,7 @@ it('lädt den in der URL ausgewählten Inhalt wieder', async () => {
 it('keeps one page title and a scrollable mobile contents pane as topics change', async () => {
   render(<CourseContentsEditor courseId="course" />)
   expect(await screen.findByRole('heading', { level: 1, name: 'Testkurs' })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { level: 1, name: 'Testkurs' })).toHaveClass('max-sm:text-base')
   const navigation = document.getElementById('course-contents-navigation')
   expect(navigation?.firstElementChild).toHaveClass('h-72')
 

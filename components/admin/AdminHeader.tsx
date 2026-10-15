@@ -3,8 +3,6 @@
 import { AppHeader } from '@/components/app-shell';
 import { UserNav } from "@/components/user-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { Button } from "@/components/ui/button";
-import { Menu } from "lucide-react";
 
 interface AdminHeaderProps {
     onMenuClick: () => void;
@@ -15,12 +13,11 @@ export function AdminHeader({ onMenuClick, title = "Administration" }: AdminHead
     return (
         <AppHeader>
             <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-3">
-                <div className="flex items-center justify-between gap-4">
-                    <div className="flex items-center">
-
-                        <h2 className="text-xl font-semibold text-foreground tracking-tight">{title}</h2>
+                <div className="flex min-w-0 items-center justify-between gap-2 sm:gap-4">
+                    <div className="min-w-0">
+                        <h2 className="truncate text-base font-semibold text-foreground tracking-tight sm:text-xl" title={title}>{title}</h2>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex shrink-0 items-center gap-1 sm:gap-2">
                         <ThemeToggle />
                         <UserNav />
                     </div>

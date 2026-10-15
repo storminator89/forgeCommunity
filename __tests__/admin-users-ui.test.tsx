@@ -42,6 +42,8 @@ test('keeps one heading and uses an explicit, keyboard-accessible detail control
   expect(container.querySelector('main')).toBeNull()
   const list = screen.getByRole('region', { name: 'Benutzerliste, horizontal verschiebbar' })
   expect(list).toHaveAttribute('tabindex', '0')
+  expect(list).toHaveAttribute('aria-describedby', 'users-table-scroll-hint')
+  expect(screen.getByText(/Weitere Spalten: Tabelle seitlich wischen/)).toBeVisible()
   expect(within(list).getByRole('button', { name: 'Aktionen für Ada Beispiel' })).toBeVisible()
   fireEvent.click(screen.getByText('ada@example.com'))
   expect(screen.queryByRole('complementary', { name: 'Details zu Ada Beispiel' })).not.toBeInTheDocument()
@@ -49,6 +51,19 @@ test('keeps one heading and uses an explicit, keyboard-accessible detail control
   expect(screen.getByRole('button', { name: 'Details von Ada Beispiel öffnen' })).toHaveAttribute('aria-pressed', 'true')
   expect(await screen.findByText('Arbeitet in der Community.')).toBeVisible()
   expect(global.fetch).toHaveBeenCalledWith('/api/admin/users/u1', expect.objectContaining({ credentials: 'include', signal: expect.any(AbortSignal) }))
+})
+
+test('keeps a long contact address intact in the horizontally scrollable table', async () => {
+  const longEmail = 'synthetic.contact.with.a.very.long.local.part@example-with-a-long-domain.test'
+  jest.mocked(global.fetch).mockImplementation(async (url: string | Request | URL) => {
+    if (url === '/api/admin/users') return ok([{ ...rows[0], email: longEmail }])
+    throw new Error(`Unexpected request ${url}`)
+  })
+  render(<UserManagement />)
+  const list = await screen.findByRole('region', { name: 'Benutzerliste, horizontal verschiebbar' })
+  expect(within(list).getByText(longEmail)).toBeInTheDocument()
+  expect(within(list).getByText(longEmail)).toHaveClass('break-all')
+  expect(list).toHaveClass('overflow-x-auto')
 })
 
 test('normalizes detailed settings, stats and skills from the existing account endpoint', async () => {

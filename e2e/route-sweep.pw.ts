@@ -139,8 +139,16 @@ test.describe('every App Router page, one at a time', () => {
 
       if (item.outcome === 'redirect') {
         await expect(page).toHaveURL(new RegExp(`${item.redirectTo!.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`));
-        // This is a screenshot of the destination, not a claim that the
-        // redirect-only page had a stable rendered state.
+        const destination = routeSweepCases.find(candidate =>
+          candidate.outcome === 'render' && candidate.url === item.redirectTo
+        );
+        if (!destination) throw new Error(`No rendered destination case for ${item.url}`);
+        await expect(page.getByRole('heading', { level: 1, name: destination.heading!, exact: true })).toBeVisible();
+        if (destination.settledText) {
+          await expect(page.getByText(destination.settledText, { exact: false }).first()).toBeVisible();
+        }
+        // Capture the settled destination. The redirect-only source does not
+        // claim a stable rendered state of its own.
         await page.screenshot({ path: testInfo.outputPath(screenshotName(item)), fullPage: true });
         expect(errors).toEqual([]);
         return;
@@ -184,6 +192,25 @@ test.describe('every App Router page, one at a time', () => {
       expect(await skip.evaluate(element => Number.parseFloat(getComputedStyle(element).outlineWidth))).toBeGreaterThanOrEqual(2);
       await page.keyboard.press('Enter');
       await expect(main).toBeFocused();
+
+      // These pages scroll inside <main>, so a document-level fullPage PNG
+      // alone cannot show their lower content. Review the real lower action
+      // without filling or submitting either form.
+      const lowerTarget = item.url === '/courses/new'
+        ? page.getByRole('button', { name: 'Kurs erstellen', exact: true })
+        : item.url === '/projects/new'
+          ? page.getByRole('button', { name: 'Projekt einreichen', exact: true })
+          : item.url === '/about'
+            ? page.getByRole('link', { name: 'E-Mail schreiben', exact: true })
+            : null;
+      if (lowerTarget) {
+        await lowerTarget.scrollIntoViewIfNeeded();
+        await expect(lowerTarget).toBeInViewport();
+        await expect(lowerTarget).toBeEnabled();
+        await lowerTarget.focus();
+        await expect(lowerTarget).toBeFocused();
+        await page.screenshot({ path: testInfo.outputPath(screenshotName(item).replace(/\.png$/, '-lower.png')) });
+      }
       expect(errors).toEqual([]);
     });
   }

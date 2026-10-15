@@ -306,14 +306,14 @@ export function CourseContentsEditor({ courseId }: { courseId: string }) {
       <Sidebar />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <AppHeader>
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex min-w-0 flex-1 items-center gap-2">
+          <div className="flex items-center justify-between gap-1 sm:gap-2">
+            <div className="flex min-w-0 flex-1 items-center gap-1 sm:gap-2">
               <Button variant="outline" size="icon" aria-label={topicsOpen ? 'Inhaltsverzeichnis schließen' : 'Inhaltsverzeichnis öffnen'} aria-expanded={topicsOpen} aria-controls="course-contents-navigation" onClick={() => setTopicsOpen(value => !value)}>
                 {topicsOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
               </Button>
-              <h1 className="min-w-0 line-clamp-2 break-words [overflow-wrap:anywhere]">{course?.name || 'Kursinhalt'}</h1>
+              <h1 className="min-w-0 line-clamp-2 break-words [overflow-wrap:anywhere] max-sm:text-base" title={course?.name || 'Kursinhalt'}>{course?.name || 'Kursinhalt'}</h1>
             </div>
-            <div className="flex shrink-0 items-center gap-2"><ThemeToggle /><UserNav /></div>
+            <div className="flex shrink-0 items-center gap-1 sm:gap-2"><ThemeToggle /><UserNav /></div>
           </div>
         </AppHeader>
         {notice && <div role={notice.type === 'error' ? 'alert' : 'status'} className={cn('mx-4 my-2 flex items-center justify-between gap-3 rounded-xl border px-4 py-2 text-sm', notice.type === 'error' ? 'border-destructive/30 text-destructive' : 'bg-card')}><span>{notice.message}</span><Button variant="ghost" size="icon" className="shrink-0" aria-label="Meldung schließen" onClick={() => setNotice(null)}><X className="h-4 w-4" /></Button></div>}

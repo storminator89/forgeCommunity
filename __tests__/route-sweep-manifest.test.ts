@@ -27,6 +27,9 @@ describe('route-by-route browser review inventory', () => {
         expect(item.evidence).toBe('redirect-only');
         expect(item.redirectTo).toMatch(/^\//);
         expect(item.heading).toBeUndefined();
+        expect(routeSweepCases.some(candidate =>
+          candidate.outcome === 'render' && candidate.url === item.redirectTo
+        )).toBe(true);
       } else {
         expect(item.heading).toBeTruthy();
         expect(item.redirectTo).toBeUndefined();

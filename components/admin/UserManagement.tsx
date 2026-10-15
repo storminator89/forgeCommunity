@@ -323,7 +323,9 @@ function ScopedUserManagement({ viewerId }: { viewerId: string }) {
         </div>}
         {actionError && <p role="alert" className="rounded-xl border border-destructive/40 p-4 text-sm text-destructive">{actionError}</p>}
         {loadState === 'ready' && (filteredUsers.length ?
-          <div role="region" aria-label="Benutzerliste, horizontal verschiebbar" tabIndex={0} className="max-w-full overflow-x-auto rounded-xl border border-border bg-card focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
+          <div className="min-w-0 space-y-2">
+            <p id="users-table-scroll-hint" className="text-xs text-muted-foreground 2xl:hidden">Weitere Spalten: Tabelle seitlich wischen oder mit den Pfeiltasten scrollen →</p>
+            <div role="region" aria-label="Benutzerliste, horizontal verschiebbar" aria-describedby="users-table-scroll-hint" tabIndex={0} className="max-w-full overflow-x-auto rounded-xl border border-border bg-card focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
             <table className="w-full min-w-[690px] text-left text-sm">
               <thead className="border-b border-border bg-muted/40 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><tr>
                 <th scope="col" className="px-4 py-3">Benutzer</th><th scope="col" className="px-4 py-3">Kontakt</th>
@@ -344,6 +346,7 @@ function ScopedUserManagement({ viewerId }: { viewerId: string }) {
                 </DropdownMenu></td>
               </tr>)}</tbody>
             </table>
+            </div>
           </div>
           : <div className="rounded-xl border border-dashed border-border p-8 text-center"><p className="font-medium text-foreground">{searchTerm ? 'Keine Treffer' : 'Noch keine Benutzer'}</p><p className="mt-1 text-sm text-muted-foreground">{searchTerm ? 'Versuchen Sie einen anderen Suchbegriff.' : 'Erstellen Sie das erste Konto, um es hier zu verwalten.'}</p>{searchTerm && <Button variant="outline" size="sm" className="mt-4" onClick={() => setSearchTerm('')}>Suche zurücksetzen</Button>}</div>)}
       </section>
