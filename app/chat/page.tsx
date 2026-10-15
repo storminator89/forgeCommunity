@@ -5,7 +5,7 @@
 /* Hallmark · genre: editorial · macrostructure: split conversation · design-system: design.md · designed-as-app */
 
 import { AppShell, AppHeader } from '@/components/app-shell';
-import { Suspense, useState, useEffect, useRef, useMemo } from 'react'
+import { Suspense, useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Sidebar } from "@/components/Sidebar"
 import { UserNav } from "@/components/user-nav"
@@ -36,7 +36,6 @@ import { de } from 'date-fns/locale'
 import { ChatMessage } from '@/types/chat'
 import Image from 'next/image'
 import { cn } from '@/lib/utils'
-import { getPreferredScrollBehavior } from '@/lib/scroll-behavior'
 
 export default function ChatPage() {
   return <Suspense fallback={<div role="status" className="p-6">Chat wird geladen …</div>}><ChatPageContent /></Suspense>
@@ -55,6 +54,9 @@ function ChatPageContent() {
     channels,
     currentChannel,
     messages,
+    hasOlderMessages,
+    loadingOlderMessages,
+    loadOlderMessages,
     setCurrentChannel,
     sendMessage,
     editMessage,
@@ -78,7 +80,10 @@ function ChatPageContent() {
   const [showChannelsMobile, setShowChannelsMobile] = useState(false)
   const [linkedMessage, setLinkedMessage] = useState<ChatMessage | null>(null)
   const [linkedErrorKey, setLinkedErrorKey] = useState<string | null>(null)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messageLogRef = useRef<HTMLDivElement>(null)
+  const followLatestRef = useRef(true)
+  const previousChannelRef = useRef<string | null>(null)
+  const olderScrollAnchorRef = useRef<{ channelId: string; oldestId: string; scrollTop: number; scrollHeight: number } | null>(null)
   const focusedLinkedMessageRef = useRef<string | null>(null)
   const editInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -113,10 +118,40 @@ function ChatPageContent() {
     ? [...messages, targetMessage].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime() || a.id.localeCompare(b.id))
     : messages
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    const log = messageLogRef.current
+    if (!log) return
+    if (previousChannelRef.current !== (currentChannel?.id ?? null)) {
+      previousChannelRef.current = currentChannel?.id ?? null
+      olderScrollAnchorRef.current = null
+      followLatestRef.current = true
+    }
+    const anchor = olderScrollAnchorRef.current
+    if (anchor && anchor.channelId === currentChannel?.id) {
+      if (messages[0]?.id !== anchor.oldestId) {
+        log.scrollTop = anchor.scrollTop + log.scrollHeight - anchor.scrollHeight
+        olderScrollAnchorRef.current = null
+      } else if (!loadingOlderMessages) {
+        olderScrollAnchorRef.current = null
+      }
+      return
+    }
     if (linkedTarget && currentChannel?.id === linkedTarget.channelId) return
-    messagesEndRef.current?.scrollIntoView({ behavior: getPreferredScrollBehavior() })
-  }, [messages, linkedTarget, currentChannel?.id])
+    if (followLatestRef.current) log.scrollTop = log.scrollHeight
+  }, [messages, loadingOlderMessages, linkedTarget, currentChannel?.id])
+
+  const handleLoadOlder = () => {
+    const log = messageLogRef.current
+    const oldest = messages[0]
+    if (!log || !currentChannel || !oldest || loadingOlderMessages) return
+    olderScrollAnchorRef.current = {
+      channelId: currentChannel.id,
+      oldestId: oldest.id,
+      scrollTop: log.scrollTop,
+      scrollHeight: log.scrollHeight,
+    }
+    void loadOlderMessages()
+  }
 
   useEffect(() => {
     if (!linkedTarget || currentChannel?.id !== linkedTarget.channelId ||
@@ -353,8 +388,12 @@ function ChatPageContent() {
               </div>
               <Button type="button" variant="outline" size="sm" className="md:hidden" onClick={() => setShowChannelsMobile(true)}>Channels</Button>
             </div>
-            <div role="log" aria-label="Nachrichten" className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6">
+            <div ref={messageLogRef} role="log" aria-label="Nachrichten" className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6" onScroll={event => {
+              const log = event.currentTarget
+              followLatestRef.current = log.scrollHeight - log.scrollTop - log.clientHeight < 80
+            }}>
               {linkedError && <p role="status" className="mb-4 rounded-lg border p-3 text-sm text-muted-foreground">Die verlinkte Nachricht ist nicht mehr verfügbar.</p>}
+              {hasOlderMessages && <div className="mb-3 flex justify-center"><Button type="button" size="sm" variant="outline" disabled={loadingOlderMessages} onClick={handleLoadOlder}>{loadingOlderMessages ? 'Lade Nachrichten…' : 'Ältere Nachrichten laden'}</Button></div>}
               {displayedMessages.length === 0 && (
                 <div className="flex min-h-48 flex-col items-center justify-center gap-2 text-center" role="status">
                   <Hash className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
@@ -437,7 +476,6 @@ function ChatPageContent() {
                   </div>
                 </article>
               ))}
-              <div ref={messagesEndRef} />
             </div>
 
             <div className="space-y-4 border-t bg-card px-4 py-3 sm:px-6">

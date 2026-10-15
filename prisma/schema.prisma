@@ -977,6 +977,8 @@ model ChatMessage {
   updatedAt   DateTime    @updatedAt
   imageUrl    String?     
   messageType String      @default("text") 
+
+  @@index([channelId, createdAt, id])
 }
 
 model Notification {

@@ -82,17 +82,38 @@ it('reads the current preference for the member directory back-to-top action', a
   }
 });
 
-it('reads the current preference on each chat message update', () => {
+it('uses instant chat following under either motion setting and leaves older reading position intact', () => {
   const view = render(<ChatPage />);
-  expect(scrollIntoView).toHaveBeenLastCalledWith({ behavior: 'smooth' });
-  const sentinel = screen.getByRole('log', { name: 'Nachrichten' }).lastElementChild;
-  expect(scrollIntoView.mock.instances.at(-1)).toBe(sentinel);
-  for (const preference of [true, false]) {
+  const log = screen.getByRole('log', { name: 'Nachrichten' });
+  let height = 600;
+  Object.defineProperty(log, 'scrollHeight', { configurable: true, get: () => height });
+  Object.defineProperty(log, 'clientHeight', { configurable: true, value: 300 });
+  log.scrollTop = 300;
+  fireEvent.scroll(log);
+  for (const [index, preference] of [false, true, false].entries()) {
     reducedMotion = preference;
+    height += 200;
     const context = jest.mocked(useChat).mock.results.at(-1)!.value;
-    jest.mocked(useChat).mockReturnValue({ ...context, messages: [...context.messages] });
+    jest.mocked(useChat).mockReturnValue({ ...context, messages: [...context.messages, {
+      id: `m${index}`, channelId: channel.id, content: `Message ${index}`,
+      author: { id: 'other', name: 'Other', image: null },
+      createdAt: new Date('2026-10-15T12:00:00.000Z'), messageType: 'text',
+    }] });
     view.rerender(<ChatPage />);
-    expect(scrollIntoView).toHaveBeenLastCalledWith({ behavior: preference ? 'instant' : 'smooth' });
-    expect(scrollIntoView.mock.instances.at(-1)).toBe(sentinel);
+    expect(log.scrollTop).toBe(height);
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    expect(scrollTo).not.toHaveBeenCalled();
   }
+  log.scrollTop = 100;
+  fireEvent.scroll(log);
+  height += 200;
+  const context = jest.mocked(useChat).mock.results.at(-1)!.value;
+  jest.mocked(useChat).mockReturnValue({ ...context, messages: [...context.messages, {
+    id: 'older-reader', channelId: channel.id, content: 'New while reading',
+    author: { id: 'other', name: 'Other', image: null },
+    createdAt: new Date('2026-10-15T12:00:01.000Z'), messageType: 'text',
+  }] });
+  view.rerender(<ChatPage />);
+  expect(log.scrollTop).toBe(100);
+  expect(scrollIntoView).not.toHaveBeenCalled();
 });

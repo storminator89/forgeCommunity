@@ -11,6 +11,9 @@ interface ChatContextType {
   channels: ChatChannel[];
   currentChannel: ChatChannel | null;
   messages: ChatMessage[];
+  hasOlderMessages: boolean;
+  loadingOlderMessages: boolean;
+  loadOlderMessages: () => Promise<void>;
   setCurrentChannel: (channel: ChatChannel) => void;
   sendMessage: (content: string, imageFile?: File) => Promise<boolean>;
   editMessage: (input: EditMessageInput) => Promise<void>;
@@ -27,17 +30,21 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const { data, status } = useSession();
   const session = status === 'authenticated' ? data : null;
 
-  // Chat channels and messages are private to the signed-in account. Remounting
-  // at the account boundary clears them before a new account's fetch can run.
-  return <AccountChatProvider key={session?.user?.id ?? 'anonymous'} session={session}>
+  // Channel-list visibility also depends on role. Remount at either account
+  // or role changes so a downgraded account cannot render stale private room
+  // names while its new channel list is still loading.
+  return <AccountChatProvider key={`${session?.user?.id ?? 'anonymous'}:${session?.user?.role ?? 'none'}`} session={session}>
     {children}
   </AccountChatProvider>;
 }
 
 function AccountChatProvider({ children, session }: { children: ReactNode; session: Session | null }) {
+  const sessionUserId = session?.user?.id;
   const [channels, setChannels] = useState<ChatChannel[]>([]);
   const [currentChannel, setCurrentChannelState] = useState<ChatChannel | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [hasOlderMessages, setHasOlderMessages] = useState(false);
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastSync, setLastSync] = useState<Date>(new Date());
@@ -47,6 +54,10 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
   const activeChannelIdRef = useRef<string | null>(null);
   const activeSessionIdRef = useRef<string | null>(null);
   const sendControllerRef = useRef<AbortController | null>(null);
+  const optimisticSequenceRef = useRef(0);
+  const olderRequestRef = useRef<string | null>(null);
+  const syncingRef = useRef<symbol | null>(null);
+  const initialLoadedChannelRef = useRef<string | null>(null);
 
   useLayoutEffect(() => {
     // This provider is keyed by account. Cancel both upload and message requests
@@ -129,6 +140,11 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
     if (activeChannelIdRef.current === channel.id) return;
     activeChannelIdRef.current = channel.id;
     setMessages([]);
+    setHasOlderMessages(false);
+    setLoadingOlderMessages(false);
+    olderRequestRef.current = null;
+    syncingRef.current = null;
+    initialLoadedChannelRef.current = null;
     setLastSync(new Date(0));
     setLastSyncId(null);
     setCurrentChannelState(channel);
@@ -167,13 +183,22 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
 
   const fetchMessages = useCallback(async (channelId: string, signal?: AbortSignal) => {
     try {
+      initialLoadedChannelRef.current = null;
       setLoading(true);
       const response = await fetch(
         `/api/chat/messages?channelId=${encodeURIComponent(channelId)}&latest=true&limit=50`,
         { signal },
       );
       if (response.status === 403 && activeChannelIdRef.current === channelId) {
+        activeChannelIdRef.current = null;
+        initialLoadedChannelRef.current = null;
         setMessages([]);
+        setHasOlderMessages(false);
+        setLoadingOlderMessages(false);
+        // The finally block only clears loading for a still-active channel.
+        // A revoked room is no longer active, so release the initial spinner
+        // here before showing the remaining channels.
+        setLoading(false);
         setChannels(previous => previous.filter(channel => channel.id !== channelId));
         setCurrentChannelState(null);
       }
@@ -193,6 +218,8 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
       sortedMessages.forEach((msg: ChatMessage) => processedMessageIds.add(msg.id));
 
       setMessages(sortedMessages);
+      setHasOlderMessages(data.hasMore === true);
+      initialLoadedChannelRef.current = channelId;
       // The API limits the initial response. Advancing with the browser clock
       // can move the cursor past server timestamps (and skip messages), so
       // continue from the newest message actually received.
@@ -222,80 +249,110 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
     }
   }, [processedMessageIds]);
 
-  const syncMessages = useCallback(async (signal?: AbortSignal) => {
-    if (!currentChannel || !session?.user) return;
-
-    const channelId = currentChannel.id;
-
+  const loadOlderMessages = useCallback(async () => {
+    const channelId = currentChannel?.id;
+    const oldest = messages[0];
+    if (!channelId || !oldest || !hasOlderMessages || olderRequestRef.current === channelId) return;
+    olderRequestRef.current = channelId;
+    setLoadingOlderMessages(true);
     try {
-      const response = await fetch(
-        `/api/chat/messages?channelId=${encodeURIComponent(channelId)}&after=${encodeURIComponent(lastSync.toISOString())}${lastSyncId ? `&afterId=${encodeURIComponent(lastSyncId)}` : ''}`,
-        { signal },
-      );
+      const before = new Date(oldest.createdAt).toISOString();
+      const response = await fetch(`/api/chat/messages?channelId=${encodeURIComponent(channelId)}&before=${encodeURIComponent(before)}&beforeId=${encodeURIComponent(oldest.id)}`);
       if (response.status === 403 && activeChannelIdRef.current === channelId) {
+        activeChannelIdRef.current = null;
+        initialLoadedChannelRef.current = null;
         setMessages([]);
+        setHasOlderMessages(false);
+        setLoadingOlderMessages(false);
         setChannels(previous => previous.filter(channel => channel.id !== channelId));
         setCurrentChannelState(null);
       }
-      if (!response.ok) throw new Error('Failed to sync messages');
+      if (!response.ok) throw new Error('Failed to fetch older messages');
       const data = await response.json();
-
-      if (signal?.aborted || activeChannelIdRef.current !== channelId || activeSessionIdRef.current !== session.user.id) return;
-
-      const newMessages = data.items.filter((newMsg: ChatMessage) => !processedMessageIds.has(newMsg.id));
-
-      // Keep all Set mutations and notifications outside the state updater.
-      // React may invoke an updater more than once in development.
-      newMessages.forEach((newMsg: ChatMessage) => processedMessageIds.add(newMsg.id));
-
-      newMessages.forEach((newMsg: ChatMessage) => {
-        if (newMsg.author.id === session.user.id) return;
-
-        const notificationContent = `${newMsg.author.name} hat in #${currentChannel.name} geschrieben: ${newMsg.content.length > 50
-          ? newMsg.content.substring(0, 47) + '...'
-          : newMsg.content
-          }`;
-
-        if (!isWindowFocused && browserAlertsEnabledRef.current) {
-          showDesktopNotification('Neue Nachricht', notificationContent);
-        }
+      if (activeChannelIdRef.current !== channelId || activeSessionIdRef.current !== sessionUserId) return;
+      const older = data.items as ChatMessage[];
+      older.forEach(message => processedMessageIds.add(message.id));
+      setMessages(previous => {
+        const known = new Set(previous.map(message => message.id));
+        return [...older.filter(message => !known.has(message.id)), ...previous];
       });
+      setHasOlderMessages(data.hasMore === true);
+      setError(null);
+    } catch (err) {
+      if (activeChannelIdRef.current !== channelId) return;
+      setError(err instanceof Error ? err.message : 'Failed to fetch older messages');
+    } finally {
+      if (olderRequestRef.current === channelId) olderRequestRef.current = null;
+      if (activeChannelIdRef.current === channelId) setLoadingOlderMessages(false);
+    }
+  }, [currentChannel, hasOlderMessages, messages, processedMessageIds, sessionUserId]);
 
-      if (newMessages.length > 0) {
-        setMessages(prev => {
-          const allMessages = [...prev];
-          let hasNewMessages = false;
+  const syncMessages = useCallback(async (signal?: AbortSignal) => {
+    if (!currentChannel || !sessionUserId || syncingRef.current || initialLoadedChannelRef.current !== currentChannel.id) return;
 
-          newMessages.forEach((newMsg: ChatMessage) => {
-            // Prüfe, ob die Nachricht wirklich neu ist
-            if (allMessages.some(message => message.id === newMsg.id)) return;
-            hasNewMessages = true;
-            allMessages.push(newMsg);
-          });
+    const channelId = currentChannel.id;
+    let cursor = lastSync;
+    let cursorId = lastSyncId;
+    const syncToken = Symbol('chat-sync');
+    syncingRef.current = syncToken;
 
-          if (hasNewMessages) {
-            return allMessages.sort(
-              (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-            );
-          }
-
-          return prev;
-        });
-
-      }
-
-      // The API returns a composite cursor because multiple messages can have
-      // the same timestamp. Keep both parts so polling cannot skip a message.
-      if (data.nextCursor?.after) {
-        setLastSync(new Date(data.nextCursor.after));
-        setLastSyncId(
-          typeof data.nextCursor.afterId === 'string' ? data.nextCursor.afterId : null,
+    try {
+      // A burst may span several 50-message pages. Drain a bounded batch now
+      // instead of waiting 10 seconds per page; the next poll resumes if needed.
+      for (let page = 0; page < 4; page++) {
+        const response = await fetch(
+          `/api/chat/messages?channelId=${encodeURIComponent(channelId)}&after=${encodeURIComponent(cursor.toISOString())}${cursorId ? `&afterId=${encodeURIComponent(cursorId)}` : ''}`,
+          { signal },
         );
+        if (response.status === 403 && activeChannelIdRef.current === channelId) {
+          activeChannelIdRef.current = null;
+          initialLoadedChannelRef.current = null;
+          setMessages([]);
+          setHasOlderMessages(false);
+          setChannels(previous => previous.filter(channel => channel.id !== channelId));
+          setCurrentChannelState(null);
+        }
+        if (!response.ok) throw new Error('Failed to sync messages');
+        const data = await response.json();
+        if (signal?.aborted || activeChannelIdRef.current !== channelId || activeSessionIdRef.current !== sessionUserId) return;
+
+        const newMessages = (data.items as ChatMessage[]).filter(newMsg => !processedMessageIds.has(newMsg.id));
+        newMessages.forEach(newMsg => processedMessageIds.add(newMsg.id));
+        for (const newMsg of newMessages) {
+          if (newMsg.author.id === sessionUserId) continue;
+          const notificationContent = `${newMsg.author.name} hat in #${currentChannel.name} geschrieben: ${newMsg.content.length > 50
+            ? newMsg.content.substring(0, 47) + '...'
+            : newMsg.content}`;
+          if (!isWindowFocused && browserAlertsEnabledRef.current) {
+            showDesktopNotification('Neue Nachricht', notificationContent);
+          }
+        }
+        if (newMessages.length > 0) {
+          setMessages(previous => {
+            const known = new Set(previous.map(message => message.id));
+            const added = newMessages.filter(message => !known.has(message.id));
+            if (added.length === 0) return previous;
+            return [...previous, ...added].sort((a, b) =>
+              new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime() || a.id.localeCompare(b.id));
+          });
+        }
+
+        if (data.nextCursor?.after) {
+          cursor = new Date(data.nextCursor.after);
+          cursorId = typeof data.nextCursor.afterId === 'string' ? data.nextCursor.afterId : null;
+        }
+        if (data.hasMore !== true || !data.nextCursor?.after || data.items.length === 0) break;
+      }
+      if (!signal?.aborted && activeChannelIdRef.current === channelId) {
+        setLastSync(cursor);
+        setLastSyncId(cursorId);
       }
     } catch (err) {
       if (!(err instanceof DOMException && err.name === 'AbortError')) console.error('Error syncing messages:', err);
+    } finally {
+      if (syncingRef.current === syncToken) syncingRef.current = null;
     }
-  }, [currentChannel, isWindowFocused, lastSync, lastSyncId, processedMessageIds, session, showDesktopNotification]);
+  }, [currentChannel, isWindowFocused, lastSync, lastSyncId, processedMessageIds, sessionUserId, showDesktopNotification]);
 
 
   useEffect(() => {
@@ -316,9 +373,9 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
     let fetchTimer: ReturnType<typeof setTimeout> | undefined;
     let resetTimer: ReturnType<typeof setTimeout> | undefined;
 
-    if (session?.user) {
+    if (sessionUserId) {
       fetchTimer = setTimeout(() => {
-        void fetchChannels(controller.signal, session.user.id);
+        void fetchChannels(controller.signal, sessionUserId);
       }, 0);
     } else {
       // Do not retain private channel data after sign-out. This also resets the
@@ -341,27 +398,28 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
       if (fetchTimer) clearTimeout(fetchTimer);
       if (resetTimer) clearTimeout(resetTimer);
     };
-  }, [fetchChannels, processedMessageIds, session]);
+  }, [fetchChannels, processedMessageIds, sessionUserId]);
 
+  const currentChannelId = currentChannel?.id;
   useEffect(() => {
-    if (!session?.user || !currentChannel) return;
+    if (!sessionUserId || !currentChannelId) return;
 
     const controller = new AbortController();
     const fetchTimer = setTimeout(() => {
-      void fetchMessages(currentChannel.id, controller.signal);
+      void fetchMessages(currentChannelId, controller.signal);
     }, 0);
 
     return () => {
       controller.abort();
       clearTimeout(fetchTimer);
     };
-  }, [currentChannel, fetchMessages, session?.user, session?.user?.id]);
+  }, [currentChannelId, fetchMessages, sessionUserId]);
 
   useEffect(() => {
     let syncInterval: NodeJS.Timeout;
     const controller = new AbortController();
 
-    if (currentChannel && session?.user) {
+    if (currentChannel && sessionUserId) {
       syncInterval = setInterval(async () => {
         await syncMessages(controller.signal);
       }, 10000); // 10 Sekunden Intervall
@@ -373,7 +431,7 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
         clearInterval(syncInterval);
       }
     };
-  }, [currentChannel, session?.user, session?.user?.id, syncMessages]);
+  }, [currentChannel, sessionUserId, syncMessages]);
 
   useEffect(() => {
     const lastMessage = messages[messages.length - 1];
@@ -401,7 +459,7 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
     if (!currentChannel || !session?.user || !controller || controller.signal.aborted) return false;
 
     const channelId = currentChannel.id;
-    const tempId = `temp-${Date.now()}`;
+    const tempId = `temp-${++optimisticSequenceRef.current}`;
     let imageUrl: string | undefined;
 
     try {
@@ -463,7 +521,9 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
 
       if (activeChannelIdRef.current === channelId) {
         setMessages(prev => {
-          const updatedMessages = prev.filter(msg => msg.id !== tempId);
+          // Polling can deliver the committed row before POST returns. Replace
+          // the optimistic item without rendering the server row twice.
+          const updatedMessages = prev.filter(msg => msg.id !== tempId && msg.id !== actualMessage.id);
           return [...updatedMessages, actualMessage].sort(
             (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
           );
@@ -564,6 +624,9 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
         channels: session?.user ? channels : [],
         currentChannel: session?.user ? currentChannel : null,
         messages: session?.user ? messages : [],
+        hasOlderMessages: session?.user ? hasOlderMessages : false,
+        loadingOlderMessages: session?.user ? loadingOlderMessages : false,
+        loadOlderMessages,
         setCurrentChannel: setActiveChannel,
         sendMessage,
         editMessage,

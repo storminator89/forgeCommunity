@@ -81,9 +81,18 @@ async function mountChat(preference: (id: string) => boolean, nextPollMessage: (
 
 async function pollWhileUnfocused() {
   await act(async () => { window.dispatchEvent(new Event('blur')) })
-  const callback = intervalSpy.mock.calls.filter(([, delay]) => delay === 10000).at(-1)?.[0] as (() => Promise<void>) | undefined
-  expect(callback).toBeDefined()
-  await act(async () => { await callback?.() })
+  const incrementalReads = () => jest.mocked(global.fetch).mock.calls
+    .filter(([url]) => String(url).includes('/api/chat/messages?') && String(url).includes('after=')).length
+  const before = incrementalReads()
+  // The room's initial page is scheduled after its channel list. A poll made
+  // before that page settles deliberately does nothing, so wait for one real
+  // incremental request rather than treating an unready no-op as a poll.
+  await waitFor(async () => {
+    const callback = intervalSpy.mock.calls.filter(([, delay]) => delay === 10000).at(-1)?.[0] as (() => Promise<void>) | undefined
+    expect(callback).toBeDefined()
+    await act(async () => { await callback?.() })
+    expect(incrementalReads()).toBeGreaterThan(before)
+  })
 }
 
 beforeEach(() => {
