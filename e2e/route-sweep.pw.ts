@@ -82,6 +82,11 @@ async function installSyntheticApi(page: Page, item?: RouteSweepCase) {
     } }));
     await page.route('**/api/courses/practice/objectives', route => route.fulfill({ status: 200, json: { objectives: [] } }));
   }
+  if (item?.url === '/courses/qa-route-course/practice/learn') {
+    await page.route('**/api/courses/qa-route-course/practice/learner', route => route.fulfill({ status: 200, json: {
+      status: 'off', dueCount: 0,
+    } }));
+  }
   await page.route(/\/api\/courses\/qa-route-course\/assignments(?:\?|$)/, route => route.fulfill({ status: 200, json: { submissions: [], nextCursor: null } }));
   await page.route(/\/api\/courses\/qa-route-course\/analytics\?/, route => route.fulfill({ status: 200, json: {
     course: { id: 'qa-route-course', title: 'Route QA course', activePublicationId: 'qa-publication' },

@@ -239,6 +239,13 @@ SQLite's case-insensitive matching remains limited for non-ASCII text.
 The SQLite Compose entrypoint applies migrations and runs the read-only
 publication readiness guard before serving. It refuses an old database with
 courses lacking drafts; it does not erase those courses.
+The normal Docker command and `npm start` complete a private formative-practice
+retention sweep after readiness and before serving, then repeat bounded sweeps
+every 15 minutes. Learner practice writes return 503 if the database heartbeat
+is missing or older than 45 minutes. Back up and rehearse recovery before
+deploying: startup deletes already eligible private practice data. Running
+`start:standard` or `server.js` directly does not launch this worker. See the
+[learner practice retention policy](docs/formative-practice-learner.md).
 
 Configure canonical HTTPS `NEXTAUTH_URL` and `NEXT_PUBLIC_APP_URL` in production.
 Set `TRUST_PROXY=true` only behind a trusted proxy that overwrites forwarded

@@ -21,7 +21,7 @@ test('guards owner-only load failures without showing editing controls', async (
   render(<PracticeAuthorWorkspace courseId="course-1" sessionStatus="authenticated" />)
   expect(await screen.findByText('Kein Zugriff auf diesen Übungsentwurf')).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Neue Frage' })).not.toBeInTheDocument()
-  expect(screen.getByText(/Übungsmodus für Mitglieder ist noch nicht verfügbar/)).toBeVisible()
+  expect(screen.getByText(/Veröffentlichte Übungen können Mitglieder im Kurs freiwillig nutzen/)).toBeVisible()
 })
 
 test('pins exact owner revisions, previews from owner API, and publishes only after an explicit review', async () => {
@@ -64,7 +64,7 @@ test('pins exact owner revisions, previews from owner API, and publishes only af
   expect(writes[1].url).toBe('/api/courses/course-1/practice/authoring/publish')
   expect(writes[1].body).toEqual({ expectedRevision: 1, expectedActivePublicationId: 'course-publication-1', requestId: expect.any(String) })
   expect(await screen.findByText(/Veröffentlichungsbeleg · Version 1/)).toBeVisible()
-  expect(screen.getByText(/Lernmodus für Mitglieder ist noch nicht verfügbar/)).toBeVisible()
+  expect(screen.getByText(/Mitglieder können diese Fassung im Kurs freiwillig üben/)).toBeVisible()
 })
 
 test('retains local item text on 412 and explicitly rebases onto the current revision', async () => {

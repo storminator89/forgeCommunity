@@ -146,6 +146,7 @@ model User {
   quizAttempts       QuizAttempt[]
   practiceObjectives PracticeObjective[]
   practiceItems      PracticeItem[]
+  practiceLearnerSettings PracticeLearnerSetting[]
   assignmentSubmissions AssignmentSubmission[]
   rewardLedger       RewardLedger[]
   completionRecords  CourseCompletionRecord[]
@@ -356,6 +357,7 @@ model Course {
   practiceDraft CoursePracticeDraft?
   practiceSnapshots PracticeSnapshot[]
   practicePublicationRequests PracticePublicationRequest[]
+  practiceLearnerSettings PracticeLearnerSetting[]
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
 
@@ -543,6 +545,8 @@ model PracticeSnapshot {
   actorId String
   recordedAt DateTime @default(now())
   requests PracticePublicationRequest[]
+  learnerSessions PracticeLearnerSession[]
+  learnerSchedules PracticeLearnerSchedule[]
 
   @@unique([courseId, sequence])
   @@unique([id, courseId])
@@ -561,6 +565,111 @@ model PracticePublicationRequest {
 
   @@id([courseId, requestId])
   @@index([snapshotId])
+}
+
+// Private, opt-in learner evidence. A published practice snapshot is the only
+// course-level availability switch; no credential quiz state is referenced.
+model PracticeLearnerSetting {
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseId String
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  optedIn Boolean @default(false)
+  paused Boolean @default(false)
+  lastActivityAt DateTime @default(now())
+  resetTokenHash String?
+  resetTokenExpiresAt DateTime?
+  sessions PracticeLearnerSession[]
+  schedules PracticeLearnerSchedule[]
+
+  @@id([userId, courseId])
+  @@index([lastActivityAt])
+}
+
+model PracticeLearnerSession {
+  id String @id @default(cuid())
+  userId String
+  courseId String
+  setting PracticeLearnerSetting @relation(fields: [userId, courseId], references: [userId, courseId], onDelete: Cascade)
+  snapshotId String
+  snapshot PracticeSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  status String @default("ACTIVE")
+  answeredCount Int @default(0)
+  pendingReservationId String?
+  version Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  reservations PracticeLearnerReservation[]
+
+  @@index([userId, courseId, status])
+  @@index([snapshotId])
+}
+
+model PracticeLearnerReservation {
+  id String @id @default(cuid())
+  sessionId String
+  session PracticeLearnerSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  ordinal Int
+  itemId String
+  itemRevision Int
+  shownAt DateTime @default(now())
+  answer PracticeLearnerAnswer?
+
+  @@unique([sessionId, ordinal])
+  @@unique([sessionId, itemId])
+  @@index([itemId, itemRevision])
+}
+
+model PracticeLearnerAnswer {
+  id String @id @default(cuid())
+  reservationId String @unique
+  reservation PracticeLearnerReservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  optionIndex Int
+  correct Boolean
+  canContinue Boolean @default(true)
+  confidence QuizConfidence?
+  nextDueAt DateTime
+  answeredAt DateTime @default(now())
+  receipts PracticeLearnerSubmissionReceipt[]
+
+  @@index([answeredAt])
+}
+
+model PracticeLearnerSubmissionReceipt {
+  sessionId String
+  submissionId String
+  answerId String
+  answer PracticeLearnerAnswer @relation(fields: [answerId], references: [id], onDelete: Cascade)
+  requestDigest String
+  createdAt DateTime @default(now())
+
+  @@id([sessionId, submissionId])
+  @@index([createdAt])
+}
+
+model PracticeLearnerSchedule {
+  userId String
+  courseId String
+  setting PracticeLearnerSetting @relation(fields: [userId, courseId], references: [userId, courseId], onDelete: Cascade)
+  snapshotId String
+  snapshot PracticeSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  itemId String
+  itemRevision Int
+  dueAt DateTime
+  intervalDays Int @default(0)
+  streak Int @default(0)
+  lastAnsweredAt DateTime
+
+  @@id([userId, courseId, snapshotId, itemId])
+  @@index([userId, courseId, snapshotId, dueAt])
+}
+
+// Written only after a successful trusted retention sweep. Learner practice
+// persistence fails closed if this heartbeat is missing or stale.
+model PracticeRetentionHealth {
+  id String @id
+  lastSuccessAt DateTime?
+  updatedAt DateTime @updatedAt
 }
 
 // Private files referenced by drafts, active content or publication history.

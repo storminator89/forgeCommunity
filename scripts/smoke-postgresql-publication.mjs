@@ -128,17 +128,23 @@ async function main() {
   // Make raw SQL rely on explicit schema qualification, rather than an
   // accidentally helpful connection search_path. PrismaPg receives ?schema=
   // separately and must continue to resolve its model queries there.
-  app = spawn(process.execPath, ['.next/standalone/server.js'], { env: {
+  // Exercise the production startup gate, including its first retention sweep,
+  // rather than bypassing it by launching Next's standalone artifact directly.
+  app = spawn(process.execPath, ['scripts/start-standalone.mjs'], { env: {
     ...appEnv, PGOPTIONS: '-c search_path=pg_catalog', PORT: String(selectedPort), HOSTNAME: '127.0.0.1',
   }, stdio: ['ignore', 'pipe', 'pipe'] });
   app.on('error', error => { appError = error; });
   app.stdout.on('data', data => { appLogs = (appLogs + data).slice(-12_000); });
   app.stderr.on('data', data => { appLogs = (appLogs + data).slice(-12_000); });
   await waitForApp(origin);
+  const retentionHealth = (await database.query(`SELECT "lastSuccessAt" FROM "${schema}"."PracticeRetentionHealth" WHERE "id" = 'learner'`)).rows[0];
+  assert.ok(retentionHealth?.lastSuccessAt && Date.now() - retentionHealth.lastSuccessAt.getTime() < 60_000,
+    'Production startup did not complete the initial retention sweep.');
 
   const anonymous = httpClient(origin);
   const author = httpClient(origin);
   const learner = httpClient(origin);
+  const peer = httpClient(origin);
   // The catalogue is available to signed-in community members only. Keep an
   // anonymous negative check and inspect its publication filter as a learner.
   await anonymous('/api/courses', { status: 401 });
@@ -146,14 +152,22 @@ async function main() {
   const password = 'Postgresql-Smoke-Strong-2026!';
   const authorEmail = `lms-author-${suffix}@example.test`;
   const learnerEmail = `lms-learner-${suffix}@example.test`;
+  const peerEmail = `lms-peer-${suffix}@example.test`;
   const authorRegistration = await (await anonymous('/api/register', {
     method: 'POST', status: 201, body: { name: 'PG Smoke Author', email: authorEmail, password },
   })).json();
   const learnerRegistration = await (await anonymous('/api/register', {
     method: 'POST', status: 201, body: { name: 'PG Smoke Learner', email: learnerEmail, password },
   })).json();
+  const peerRegistration = await (await anonymous('/api/register', {
+    method: 'POST', status: 201, body: { name: 'PG Smoke Peer', email: peerEmail, password },
+  })).json();
+  // Practice authoring is staff-only. Promote only this just-created CI account
+  // inside the isolated schema before its first credential session is issued.
+  await database.query(`UPDATE "${schema}"."User" SET "role" = 'INSTRUCTOR' WHERE "id" = $1`, [authorRegistration.userId]);
   await login(author, origin, authorEmail, password);
   await login(learner, origin, learnerEmail, password);
+  await login(peer, origin, peerEmail, password);
   assert.deepEqual(await (await learner('/api/courses')).json(), [],
     'Fresh isolated schema unexpectedly contains visible courses.');
 
@@ -209,6 +223,105 @@ async function main() {
   assert.ok((await (await learner('/api/courses')).json()).some(course => course.id === courseId),
     'Published course is missing from the member directory.');
   await learner(`${route}/enrollment`, { method: 'POST', status: 201 });
+  // A separate, synthetic formative pool must be usable by an authenticated
+  // learner without writing credential progress, grades, certificates or rewards.
+  const practice = `${route}/practice`;
+  const learnerPractice = `${practice}/learner`;
+  const credentialState = async () => (await database.query(`SELECT
+    (SELECT COUNT(*)::integer FROM "${schema}"."QuizAttempt" WHERE "userId" = $1 AND "courseId" = $2) AS "quizAttempts",
+    (SELECT COUNT(*)::integer FROM "${schema}"."AssignmentSubmission" WHERE "userId" = $1 AND "courseId" = $2) AS "assignments",
+    (SELECT COUNT(*)::integer FROM "${schema}"."CourseContentProgress" WHERE "userId" = $1 AND "courseId" = $2) AS "progress",
+    (SELECT COUNT(*)::integer FROM "${schema}"."Certificate" WHERE "userId" = $1 AND "courseId" = $2) AS "certificates",
+    (SELECT COUNT(*)::integer FROM "${schema}"."RewardLedger" WHERE "userId" = $1) AS "rewards",
+    (SELECT "completedAt" FROM "${schema}"."Enrollment" WHERE "userId" = $1 AND "courseId" = $2) AS "completedAt"`,
+  [learnerRegistration.userId, courseId])).rows[0];
+  const beforePractice = await credentialState();
+  assert.deepEqual(beforePractice, { quizAttempts: 0, assignments: 0, progress: 0,
+    certificates: 0, rewards: 0, completedAt: null });
+  await anonymous(learnerPractice, { status: 401 });
+  await peer(learnerPractice, { status: 403 });
+  assert.equal((await (await learner(learnerPractice)).json()).status, 'off');
+  const objective = await (await author('/api/courses/practice/objectives', { method: 'POST', status: 201,
+    body: { title: 'Disposable PG recall' },
+  })).json();
+  const item = await (await author(`/api/courses/practice/objectives/${objective.id}/items`, { method: 'POST', status: 201,
+    body: { choice: { type: 'SINGLE_CHOICE', prompt: 'Which synthetic answer is correct?',
+      options: ['First', 'Second'], correctIndex: 1, explanation: 'Only the second synthetic answer is correct.' } },
+  })).json();
+  const practiceDraft = (await (await author(`${practice}/authoring`, { method: 'PATCH', body: {
+    expectedRevision: 0, items: [{ objectiveId: objective.id, objectiveRevision: objective.revision,
+      itemId: item.id, itemRevision: item.latestRevision }],
+  } })).json()).draft;
+  assert.equal(practiceDraft.revision, 1);
+  const practiceSnapshot = (await (await author(`${practice}/authoring/publish`, { method: 'POST', body: {
+    expectedRevision: 1, expectedActivePublicationId: first.id, requestId: randomUUID(),
+  } })).json()).snapshot;
+  assert.equal(practiceSnapshot.coursePublicationId, first.id);
+  assert.equal((await (await learner(learnerPractice)).json()).status, 'available');
+  await learner(`${learnerPractice}/start`, { method: 'POST', status: 409 });
+  await learner(`${learnerPractice}/opt-in`, { method: 'POST' });
+  assert.equal((await (await learner(learnerPractice)).json()).status, 'ready');
+  const startedPractice = await (await learner(`${learnerPractice}/start`, { method: 'POST' })).json();
+  assert.equal(startedPractice.pending.item.itemId, item.id);
+  assert.deepEqual(startedPractice.pending.item.options, ['First', 'Second']);
+  assert.ok(!JSON.stringify(startedPractice).includes('correctIndex') &&
+    !JSON.stringify(startedPractice).includes('Only the second synthetic answer'), 'Reservation exposed the answer key.');
+  assert.equal((await (await learner(`${learnerPractice}/start`, { method: 'POST' })).json()).pending.reservationId,
+    startedPractice.pending.reservationId, 'Start retry created a second reservation.');
+  await peer(`${route}/enrollment`, { method: 'POST', status: 201 });
+  assert.equal((await (await peer(learnerPractice)).json()).status, 'available', 'Another account inherited learner opt-in.');
+  await peer(`${learnerPractice}/opt-in`, { method: 'POST' });
+  const peerView = await (await peer(learnerPractice)).json();
+  assert.equal(peerView.status, 'ready');
+  assert.ok(!JSON.stringify(peerView).includes(startedPractice.sessionId) &&
+    !JSON.stringify(peerView).includes(startedPractice.pending.reservationId), 'Another account saw private practice state.');
+  await peer(`${learnerPractice}/next`, { method: 'POST', status: 404, body: { sessionId: startedPractice.sessionId } });
+  const practiceAnswer = { sessionId: startedPractice.sessionId,
+    reservationId: startedPractice.pending.reservationId, submissionId: randomUUID(), optionIndex: 1, confidence: 'SURE' };
+  await peer(`${learnerPractice}/answer`, { method: 'POST', status: 404, body: practiceAnswer });
+  const answeredPractice = await (await learner(`${learnerPractice}/answer`, { method: 'POST', body: practiceAnswer })).json();
+  assert.deepEqual({ correct: answeredPractice.correct, correctIndex: answeredPractice.correctIndex,
+    answeredCount: answeredPractice.answeredCount, replay: answeredPractice.replay },
+  { correct: true, correctIndex: 1, answeredCount: 1, replay: false });
+  const replayedPractice = await (await learner(`${learnerPractice}/answer`, { method: 'POST', body: practiceAnswer })).json();
+  assert.equal(replayedPractice.replay, true);
+  assert.equal(replayedPractice.nextDueAt, answeredPractice.nextDueAt);
+  assert.ok(!JSON.stringify(await (await peer(learnerPractice)).json()).includes(startedPractice.sessionId),
+    'Another account saw answered practice history.');
+  await learner(`${learnerPractice}/answer`, { method: 'POST', status: 409,
+    body: { ...practiceAnswer, optionIndex: 0 } });
+  await learner(`${learnerPractice}/answer`, { method: 'POST', status: 409,
+    body: { ...practiceAnswer, submissionId: randomUUID() } });
+  assert.equal((await database.query(`SELECT COUNT(*)::integer AS count FROM "${schema}"."PracticeLearnerAnswer" a
+    JOIN "${schema}"."PracticeLearnerReservation" r ON r."id" = a."reservationId"
+    WHERE r."sessionId" = $1`, [startedPractice.sessionId])).rows[0].count, 1,
+  'Replay or conflict duplicated the private answer.');
+  assert.deepEqual(await credentialState(), beforePractice, 'Formative answer changed credential state.');
+  const resetToken = (await (await learner(`${learnerPractice}/reset/prepare`, { method: 'POST' })).json()).token;
+  await learner(`${learnerPractice}/reset`, { method: 'POST', status: 428,
+    body: { token: resetToken, confirmation: 'no' } });
+  await learner(`${learnerPractice}/reset`, { method: 'POST', body: {
+    token: resetToken, confirmation: 'RESET_MY_PRACTICE',
+  } });
+  await learner(`${learnerPractice}/reset`, { method: 'POST', status: 409, body: {
+    token: resetToken, confirmation: 'RESET_MY_PRACTICE',
+  } });
+  assert.equal((await (await learner(learnerPractice)).json()).status, 'available');
+  assert.equal((await database.query(`SELECT COUNT(*)::integer AS count FROM "${schema}"."PracticeLearnerSetting"
+    WHERE "userId" = $1 AND "courseId" = $2`, [learnerRegistration.userId, courseId])).rows[0].count, 0,
+  'Reset left learner-private state behind.');
+  const resetChildren = (await database.query(`SELECT
+    (SELECT COUNT(*)::integer FROM "${schema}"."PracticeLearnerSession" WHERE "id" = $1) AS "sessions",
+    (SELECT COUNT(*)::integer FROM "${schema}"."PracticeLearnerReservation" WHERE "sessionId" = $1) AS "reservations",
+    (SELECT COUNT(*)::integer FROM "${schema}"."PracticeLearnerSubmissionReceipt" WHERE "sessionId" = $1) AS "receipts",
+    (SELECT COUNT(*)::integer FROM "${schema}"."PracticeLearnerSchedule" WHERE "userId" = $2 AND "courseId" = $3) AS "schedules"`,
+  [startedPractice.sessionId, learnerRegistration.userId, courseId])).rows[0];
+  assert.deepEqual(resetChildren, { sessions: 0, reservations: 0, receipts: 0, schedules: 0 },
+    'Reset left learner-private child rows behind.');
+  assert.equal((await database.query(`SELECT COUNT(*)::integer AS count FROM "${schema}"."PracticeLearnerSetting"
+    WHERE "userId" = $1 AND "courseId" = $2 AND "optedIn"`, [peerRegistration.userId, courseId])).rows[0].count, 1,
+  'Reset changed another account’s opt-in.');
+  assert.deepEqual(await credentialState(), beforePractice, 'Formative reset changed credential state.');
   let contents = await (await learner(`${route}/contents`)).json();
   assert.equal(contents.length, 1);
   assert.equal(contents[0].id, nodeId);
