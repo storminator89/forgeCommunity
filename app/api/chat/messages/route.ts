@@ -116,6 +116,8 @@ export async function GET(req: Request) {
     const channelId = searchParams.get('channelId');
     const after = searchParams.get('after');
     const afterId = searchParams.get('afterId');
+    const before = searchParams.get('before');
+    const beforeId = searchParams.get('beforeId');
     const limit = 50;
 
     if (!validId(channelId)) {
@@ -123,15 +125,34 @@ export async function GET(req: Request) {
     }
 
     let afterDate: Date | undefined;
-    if (after) {
+    if (after !== null) {
       afterDate = new Date(after);
       if (Number.isNaN(afterDate.getTime())) {
         return new NextResponse('Invalid after cursor', { status: 400 });
       }
     }
 
-    if (afterId && (!afterDate || !validId(afterId))) {
+    if (afterId !== null && (!afterDate || !validId(afterId))) {
       return new NextResponse('afterId requires after', { status: 400 });
+    }
+
+    // History and live-update cursors have opposite sort directions. Mixing
+    // them can skip rows, so a request must choose one direction.
+    if ((before !== null || beforeId !== null) && (after !== null || afterId !== null)) {
+      return new NextResponse('Choose before or after', { status: 400 });
+    }
+    let beforeDate: Date | undefined;
+    if (before !== null) {
+      beforeDate = new Date(before);
+      if (Number.isNaN(beforeDate.getTime())) {
+        return new NextResponse('Invalid before cursor', { status: 400 });
+      }
+    }
+    if (beforeId !== null && (!beforeDate || !validId(beforeId))) {
+      return new NextResponse('beforeId requires before', { status: 400 });
+    }
+    if (beforeDate && !beforeId) {
+      return new NextResponse('before requires beforeId', { status: 400 });
     }
 
     // Überprüfen, ob der Benutzer Zugang zum Channel hat
@@ -158,7 +179,14 @@ export async function GET(req: Request) {
     const messages = await prisma.chatMessage.findMany({
       where: {
         channelId,
-        ...(afterDate && afterId
+        ...(beforeDate && beforeId
+          ? {
+              OR: [
+                { createdAt: { lt: beforeDate } },
+                { createdAt: beforeDate, id: { lt: beforeId } },
+              ],
+            }
+          : afterDate && afterId
           ? {
               OR: [
                 { createdAt: { gt: afterDate } },
@@ -169,7 +197,7 @@ export async function GET(req: Request) {
             ? { createdAt: { gt: afterDate } }
             : {}),
       },
-      take: limit,
+      take: limit + 1,
       orderBy: afterDate
         ? [{ createdAt: 'asc' }, { id: 'asc' }]
         : [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -184,19 +212,25 @@ export async function GET(req: Request) {
       },
     });
 
-    // Initial visits show the newest page in display order. Incremental
-    // requests walk forward from the last delivered composite cursor.
+    const hasMore = messages.length > limit;
+    if (hasMore) messages.pop();
+    // Initial and history pages are queried newest first for bounded index
+    // access, then displayed oldest first. Incremental pages move forward.
     if (!afterDate) messages.reverse();
 
     return NextResponse.json({
       items: messages,
+      hasMore,
+      previousCursor: messages.length > 0
+        ? { before: messages[0].createdAt.toISOString(), beforeId: messages[0].id }
+        : null,
       nextCursor: messages.length > 0
         ? {
             after: messages[messages.length - 1].createdAt.toISOString(),
             afterId: messages[messages.length - 1].id,
           }
         : null,
-    });
+    }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     console.error('[MESSAGES_GET]', error);
     return new NextResponse('Internal Error', { status: 500 });

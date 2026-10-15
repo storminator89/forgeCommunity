@@ -12,7 +12,7 @@ import { assertCoursePublicationReady } from './assert-course-publication-ready.
 
 const sqliteNames = readdirSync(new URL('../prisma/sqlite-migrations/', import.meta.url))
   .filter(name => /^\d+_[\w-]+\.sql$/.test(name)).sort();
-assert.equal(sqliteNames.at(-1), '0016_formative_practice_learner.sql');
+assert.equal(sqliteNames.at(-1), '0017_chat_message_cursor_index.sql');
 const publicationIndex = sqliteNames.indexOf('0010_staged_course_publication.sql');
 assert.ok(publicationIndex >= 0);
 
@@ -138,8 +138,10 @@ test('SQLite migration still rolls back an injected DDL failure', () => {
   db.close();
 });
 
-test('SQLite readiness refuses missing, changed, gapped and divergent migration history through learner practice', async () => {
+test('SQLite readiness refuses missing, changed, gapped and divergent migration history through chat pagination', async () => {
   for (const mutate of [
+    db => db.prepare(`DELETE FROM _app_migrations WHERE name='0017_chat_message_cursor_index.sql'`).run(),
+    db => db.prepare(`UPDATE _app_migrations SET checksum='changed' WHERE name='0017_chat_message_cursor_index.sql'`).run(),
     db => db.prepare(`DELETE FROM _app_migrations WHERE name='0016_formative_practice_learner.sql'`).run(),
     db => db.prepare(`UPDATE _app_migrations SET checksum='changed' WHERE name='0016_formative_practice_learner.sql'`).run(),
     db => db.prepare(`DELETE FROM _app_migrations WHERE name='0015_formative_practice_authoring.sql'`).run(),
@@ -168,6 +170,14 @@ test('SQLite deploy refuses learner tail already applied after a missing authori
   assert.throws(() => initializeSqlite(f.url, f.migrations), /gap before 0016_formative_practice_learner\.sql/);
 });
 
+test('SQLite deploy refuses chat index tail already applied after a missing learner predecessor', () => {
+  const f = fixture(); f.upgrade();
+  const db = f.db();
+  db.prepare(`DELETE FROM _app_migrations WHERE name='0016_formative_practice_learner.sql'`).run();
+  db.close();
+  assert.throws(() => initializeSqlite(f.url, f.migrations), /gap before 0017_chat_message_cursor_index\.sql/);
+});
+
 const pgUrl = process.env.DATABASE_URL;
 const pgParsed = pgUrl && /^postgres(?:ql)?:\/\//.test(pgUrl) ? new URL(pgUrl) : null;
 if (process.env.POSTGRESQL_RELEASE_GATE_DISPOSABLE === '1' && pgParsed &&
@@ -186,6 +196,8 @@ if (process.env.POSTGRESQL_RELEASE_GATE_DISPOSABLE === '1' && pgParsed &&
       assert.equal(await assertCoursePublicationReady(freshUrl.toString(), 'postgresql'), true);
       await db.query(`SET search_path TO "${fresh}"`);
       for (const [name, sql, file] of [
+        ['missing chat index tail', `DELETE FROM "_app_schema_upgrades" WHERE name='0016_chat_message_cursor_index.sql'`, '0016_chat_message_cursor_index.sql'],
+        ['tampered chat index tail', `UPDATE "_app_schema_upgrades" SET checksum='changed' WHERE name='0016_chat_message_cursor_index.sql'`, '0016_chat_message_cursor_index.sql'],
         ['missing learner practice tail', `DELETE FROM "_app_schema_upgrades" WHERE name='0015_formative_practice_learner.sql'`, '0015_formative_practice_learner.sql'],
         ['tampered learner practice tail', `UPDATE "_app_schema_upgrades" SET checksum='changed' WHERE name='0015_formative_practice_learner.sql'`, '0015_formative_practice_learner.sql'],
         ['missing authoring predecessor', `DELETE FROM "_app_schema_upgrades" WHERE name='0014_formative_practice_authoring.sql'`, '0014_formative_practice_authoring.sql'],
@@ -202,6 +214,13 @@ if (process.env.POSTGRESQL_RELEASE_GATE_DISPOSABLE === '1' && pgParsed &&
         await db.query(`INSERT INTO "_app_schema_upgrades" (name, checksum) VALUES ($1, $2)
           ON CONFLICT (name) DO UPDATE SET checksum=EXCLUDED.checksum`, [file, checksum]);
       }
+      assert.equal(await assertCoursePublicationReady(freshUrl.toString(), 'postgresql'), true);
+      await db.query(`DELETE FROM "_app_schema_upgrades" WHERE name='0015_formative_practice_learner.sql'`);
+      await assert.rejects(applyPostgresqlUpgrades(freshUrl.toString()), /gap before 0016_chat_message_cursor_index\.sql/);
+      await db.query(`INSERT INTO "_app_schema_upgrades" (name, checksum) VALUES ($1, $2)`, [
+        '0015_formative_practice_learner.sql',
+        createHash('sha256').update(readFileSync(new URL('../prisma/postgresql-upgrades/0015_formative_practice_learner.sql', import.meta.url))).digest('hex'),
+      ]);
       assert.equal(await assertCoursePublicationReady(freshUrl.toString(), 'postgresql'), true);
       await db.query(`CREATE SCHEMA "${legacy}"`);
       await db.query(`SET search_path TO "${legacy}"`);

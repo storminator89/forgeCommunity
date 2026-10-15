@@ -30,22 +30,12 @@ export async function POST(req: Request) {
           },
         },
       },
-      include: {
-        members: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                image: true,
-                role: true,
-              },
-            },
-          },
-        },
+      select: {
+        id: true,
+        name: true,
+        isPrivate: true,
         _count: {
           select: {
-            messages: true,
             members: true,
           },
         },
@@ -84,22 +74,12 @@ export async function GET() {
               },
             ],
           },
-      include: {
-        members: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                image: true,
-                role: true,
-              },
-            },
-          },
-        },
+      select: {
+        id: true,
+        name: true,
+        isPrivate: true,
         _count: {
           select: {
-            messages: true,
             members: true,
           },
         },
@@ -109,7 +89,7 @@ export async function GET() {
       },
     });
 
-    return NextResponse.json(channels);
+    return NextResponse.json(channels, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     console.error('[CHANNELS_GET]', error);
     return new NextResponse('Internal Error', { status: 500 });

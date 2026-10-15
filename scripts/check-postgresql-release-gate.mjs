@@ -37,6 +37,7 @@ const reviewedUpgradeNames = [
   '0013_quiz_confidence_evidence.sql',
   '0014_formative_practice_authoring.sql',
   '0015_formative_practice_learner.sql',
+  '0016_chat_message_cursor_index.sql',
 ];
 // A release image must carry the exact reviewed sequence, including the tail.
 assert.deepEqual(upgradeNames, reviewedUpgradeNames);
@@ -52,6 +53,7 @@ const communityIndexes = {
   Comment_authorId_postId_idx: ['authorId', 'postId'],
   LikePost_postId_idx: ['postId'],
   LikeComment_commentId_idx: ['commentId'],
+  ChatMessage_channelId_createdAt_id_idx: ['channelId', 'createdAt', 'id'],
 };
 
 const quoteIdent = value => `"${value.replaceAll('"', '""')}"`;
@@ -435,7 +437,7 @@ async function assertCurrentSchema(db) {
         JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = k.attnum ORDER BY k.n) AS columns
     FROM pg_index i JOIN pg_class idx ON idx.oid = i.indexrelid
     JOIN pg_class t ON t.oid = i.indrelid JOIN pg_namespace n ON n.oid = t.relnamespace
-    WHERE n.nspname = current_schema() AND t.relname IN ('Post', 'Comment', 'LikePost', 'LikeComment')`);
+    WHERE n.nspname = current_schema() AND t.relname IN ('Post', 'Comment', 'LikePost', 'LikeComment', 'ChatMessage')`);
   const indexesByName = new Map(indexes.map(index => [index.name, index]));
   for (const [name, columns] of Object.entries(communityIndexes)) {
     assert.deepEqual(indexesByName.get(name), { name, valid: true, ready: true, columns }, `community index ${name}`);

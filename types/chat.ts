@@ -20,10 +20,8 @@ export interface ChatMessage {
     name: string;
     isPrivate: boolean;
     _count: {
-      messages: number;
       members: number;
     };
-    members: ChatMember[];
   }
   
   export interface ChatMember {

@@ -198,7 +198,8 @@ it('preserves ordinary image upload and send through a same-account session refr
   const beforeRefresh = historyReads();
   setSession('alice');
   view.rerender(app());
-  await waitFor(() => expect(historyReads()).toBeGreaterThan(beforeRefresh));
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+  expect(historyReads()).toBe(beforeRefresh);
   expect(signal?.aborted).toBe(false);
   await act(async () => { upload.resolve(response({ filePath: imagePath })); });
 
