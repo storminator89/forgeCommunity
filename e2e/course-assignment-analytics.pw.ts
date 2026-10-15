@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { lstatSync, realpathSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { basename, isAbsolute, resolve } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { expect, test, type Page } from '@playwright/test'
@@ -198,11 +199,12 @@ test('author grades a real learner assignment and sees current analytics with a 
     const exported = await exportResponse
     expect(exported.status()).toBe(200)
     expect(exported.headers()['content-type']).toContain('text/csv')
-    const csv = await exported.text()
+    const downloaded = await download
+    expect(downloaded.suggestedFilename()).toBe('kursanalyse.csv')
+    const csv = await readFile(await downloaded.path(), 'utf8')
     expect(csv).toContain(learnerName)
     expect(csv).toContain('current-complete')
     expect(csv.trim().split('\n')).toHaveLength(2)
-    expect((await download).suggestedFilename()).toBe('kursanalyse.csv')
 
     await page.setViewportSize({ width: 320, height: 700 })
     await expect(analyticsRow).toBeVisible()
