@@ -9,7 +9,7 @@ import { CourseContentsEditor } from './CourseContentsEditor'
 import { CourseDraftWorkspace } from './CourseDraftWorkspace'
 import { AuthoringError, getAuthorState, type AuthorState } from './authoring-api'
 
-export function CourseWorkspaceRoute({ courseId, status }: { courseId: string; status: string }) {
+export function CourseWorkspaceRoute({ courseId, status, canAuthorPractice = false }: { courseId: string; status: string; canAuthorPractice?: boolean }) {
   const router = useRouter()
   const [authorState, setAuthorState] = useState<AuthorState | null>(null)
   const [route, setRoute] = useState<'loading' | 'author' | 'learner' | 'error'>('loading')
@@ -36,6 +36,6 @@ export function CourseWorkspaceRoute({ courseId, status }: { courseId: string; s
   }, [courseId, retry, router, status])
 
   if (route === 'learner' || (route === 'author' && liveMode)) return <CourseContentsEditor courseId={courseId} forceLearner onReturnToAuthor={route === 'author' ? () => { setLiveMode(false); setRoute('loading'); setAuthorState(null); setRetry(value => value + 1) } : undefined} />
-  if (route === 'author' && authorState) return <CourseDraftWorkspace key={`${courseId}:${authorState.draft.revision}:${liveMode}`} courseId={courseId} initialState={authorState} onLiveMode={() => setLiveMode(true)} />
+  if (route === 'author' && authorState) return <CourseDraftWorkspace key={`${courseId}:${authorState.draft.revision}:${liveMode}`} courseId={courseId} initialState={authorState} onLiveMode={() => setLiveMode(true)} canAuthorPractice={canAuthorPractice} />
   return <AppShell><Sidebar /><main id="page-content" tabIndex={-1} className="min-w-0 flex-1 p-4 sm:p-6">{route === 'error' ? <PageState kind="error" title="Kurs konnte nicht geladen werden" description={error ?? undefined} action={<RetryButton onClick={() => { setRoute('loading'); setError(null); setRetry(value => value + 1) }} />} /> : <PageState kind="loading" title="Kurs wird geladen" />}</main></AppShell>
 }

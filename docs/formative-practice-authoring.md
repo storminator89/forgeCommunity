@@ -1,0 +1,30 @@
+# Formative practice authoring: first backend cut
+
+This cut adds **private authoring and publishing only**. It does not expose a learner practice API, start a learner session, save learner answers or confidence, alter credential quizzes, create `QuizAttempt` rows, or affect course completion, certificates, rewards, or pathways. Learner evidence and its retention are outside this cut.
+
+## Content and ownership
+
+- An instructor or administrator creates a stable `PracticeObjective` with a title and plain-text description. Updates use an expected objective revision. The objective ID is stable.
+- The same author creates a `PracticeItem` under their objective. The first supported type is plain-text `SINGLE_CHOICE`: a prompt, 2–8 distinct options, one `correctIndex`, and an optional explanation. The item ID is stable; edits append immutable `PracticeItemRevision` rows and advance `latestRevision` with optimistic concurrency.
+- Objective/item authoring endpoints never read from or import `QuestionBankItem`, `QuizQuestion`, or credential quiz attempts. The owner-only item revision endpoint returns its practice answer and explanation so an author can edit it; it is not available to learners or another instructor. Item listings omit keys and explanations.
+- A course practice draft stores an ordered list of explicit `{ objectiveId, objectiveRevision, itemId, itemRevision }` references. Both objective and item revisions are pinned. If the objective changes, the author must refresh the draft references before publishing. At save and publish, references must exist and belong to the acting author. A course's own instructor or a database-verified administrator may edit and publish its draft. A database-verified instructor/administrator may manage only their own objective and item library.
+
+## Publishing and consistency
+
+`GET /api/courses/:courseId/practice/authoring` returns the private practice draft, the current active `CoursePublication` ID, and the practice snapshot for that exact course publication (if one exists). `PATCH` accepts `{ expectedRevision, items }`; a stale draft revision fails with 412.
+
+`POST /api/courses/:courseId/practice/authoring/publish` accepts `{ expectedRevision, expectedActivePublicationId, requestId }`. It requires an existing active credential-course publication and at least one pinned item. A serializable transaction checks the draft revision and active course publication, resolves the pinned item revisions, checks credential duplicates, and writes a copied, immutable `PracticeSnapshot`. The snapshot contains the practice question/key/explanation plus objective text at publication time. Its composite foreign key binds `coursePublicationId` and `courseId` to the exact `CoursePublication` for that course. Publication receipts make identical request retries idempotent, even after another course publication becomes active. Reusing a request ID with different inputs fails with 409. Publishing unchanged material for the same active course publication reuses that snapshot and still records a receipt.
+
+No mutable active-practice pointer is needed. The current practice snapshot is the latest one whose `coursePublicationId` equals `Course.activePublicationId`. A new course publication cannot inherit a snapshot from an older course publication. Any later learner-facing endpoint must enforce this equality before serving practice material.
+
+## Exact credential-quiz duplicate guard
+
+At publish, the server reads the **currently active** credential course publication solely to compare its choice questions against proposed practice items. The comparison key is the prompt plus the unordered option strings after Unicode NFKC normalization, trimming, whitespace collapsing, and lowercasing. Choice order, grading key, and explanation do not affect the key. An exact normalized match blocks practice publication with 409. This includes credential single-choice, multiple-choice, and true/false questions with options. It does not attempt paraphrase, translated-question, image, or other semantic-overlap detection. Authors should review near-duplicates manually. The credential quiz answer and explanation are never copied into the practice snapshot or returned through these endpoints.
+
+The authoring API surface is under `/api/courses/practice/objectives`, `/api/courses/practice/items`, and `/api/courses/:courseId/practice/authoring`. The only answer-bearing read is the owner-only practice-item revision endpoint. All responses are private and `no-store`.
+
+## Storage deployment and checks
+
+The additive migrations are SQLite `0015_formative_practice_authoring.sql` and PostgreSQL `0014_formative_practice_authoring.sql`, following the reviewed tails. Both schemas and the SQLite generated schema have been updated, and the fresh-install publication readiness allowlists include both migrations. SQLite prevents `UPDATE`, direct `DELETE`, and `INSERT OR REPLACE` of item revisions, snapshots, and publication receipts while their parent exists. It also blocks direct deletion and replacement of practice objectives/items, and replacement of a course publication with practice snapshots. PostgreSQL prevents updates, direct deletes, and truncation of immutable records and blocks direct objective/item deletion. Account/course deletion may cascade for privacy; no learner evidence or retention job is implemented here.
+
+SQLite `INSERT OR REPLACE` on a containing `User` or `Course` row can delete children through its implicit FK cascade. Do **not** use `REPLACE` for these parent tables in app code or import scripts. Use `UPDATE` or `INSERT ... ON CONFLICT DO UPDATE` (Prisma `upsert`) instead. SQLite's `BEFORE INSERT` trigger cannot distinguish `REPLACE` from ordinary UPSERT, so blocking those parent conflicts would break the supported User seed/upsert path; the User and Course parent-level `REPLACE` bypass is a documented database-owner limitation. The supported UPSERT path and intentional account/course deletion cascades are covered by tests.

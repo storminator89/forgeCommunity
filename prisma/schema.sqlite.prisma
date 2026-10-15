@@ -144,6 +144,8 @@ model User {
   certificates       Certificate[]
   contentProgress    CourseContentProgress[]
   quizAttempts       QuizAttempt[]
+  practiceObjectives PracticeObjective[]
+  practiceItems      PracticeItem[]
   assignmentSubmissions AssignmentSubmission[]
   rewardLedger       RewardLedger[]
   completionRecords  CourseCompletionRecord[]
@@ -351,6 +353,9 @@ model Course {
   contentProgress CourseContentProgress[]
   quizAttempts QuizAttempt[]
   assignmentSubmissions AssignmentSubmission[]
+  practiceDraft CoursePracticeDraft?
+  practiceSnapshots PracticeSnapshot[]
+  practicePublicationRequests PracticePublicationRequest[]
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
 
@@ -446,8 +451,10 @@ model CoursePublication {
   quizAttempts QuizAttempt[] @relation("AttemptPublication")
   certificates Certificate[] @relation("CertificatePublication")
   assignmentSubmissions AssignmentSubmission[] @relation("AssignmentPublication")
+  practiceSnapshots PracticeSnapshot[]
 
   @@unique([courseId, sequence])
+  @@unique([id, courseId])
   @@index([courseId, recordedAt])
 }
 
@@ -464,6 +471,96 @@ model PublicationRequest {
 
   @@id([courseId, requestId])
   @@index([publicationId])
+}
+
+// Formative practice is separate from credential quizzes and never contributes
+// to QuizAttempt, CourseContentProgress, rewards or certificates.
+model PracticeObjective {
+  id String @id @default(cuid())
+  ownerId String
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  title String
+  description String @default("")
+  revision Int @default(1)
+  items PracticeItem[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId, updatedAt])
+  @@unique([id, ownerId])
+}
+
+model PracticeItem {
+  id String @id @default(cuid())
+  ownerId String
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  objectiveId String
+  objective PracticeObjective @relation(fields: [objectiveId, ownerId], references: [id, ownerId], onDelete: Cascade)
+  latestRevision Int @default(1)
+  revisions PracticeItemRevision[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId, updatedAt])
+  @@index([objectiveId])
+}
+
+model PracticeItemRevision {
+  itemId String
+  item PracticeItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  revision Int
+  payload String
+  createdAt DateTime @default(now())
+
+  @@id([itemId, revision])
+}
+
+// Explicit pinned item revisions. Editing this draft does not expose anything
+// to learners until an instructor/admin publishes against the active course ID.
+model CoursePracticeDraft {
+  courseId String @id
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  revision Int @default(0)
+  payload String
+  digest String
+  lastEditorId String?
+  updatedAt DateTime @updatedAt
+}
+
+// Immutable copied item/answer snapshot, bound to exactly one credential-course
+// publication. A later course publication does not inherit this snapshot.
+model PracticeSnapshot {
+  id String @id @default(cuid())
+  courseId String
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  coursePublicationId String
+  coursePublication CoursePublication @relation(fields: [coursePublicationId, courseId], references: [id, courseId], onDelete: Cascade)
+  sequence Int
+  draftRevision Int
+  payload String
+  digest String
+  itemCount Int
+  actorId String
+  recordedAt DateTime @default(now())
+  requests PracticePublicationRequest[]
+
+  @@unique([courseId, sequence])
+  @@unique([id, courseId])
+  @@index([courseId, coursePublicationId, sequence])
+}
+
+model PracticePublicationRequest {
+  courseId String
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  requestId String
+  actorId String
+  requestDigest String
+  snapshotId String
+  snapshot PracticeSnapshot @relation(fields: [snapshotId, courseId], references: [id, courseId], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([courseId, requestId])
+  @@index([snapshotId])
 }
 
 // Private files referenced by drafts, active content or publication history.

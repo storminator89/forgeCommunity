@@ -13,7 +13,7 @@ function pages(root: string): string[] {
 describe('route-by-route browser review inventory', () => {
   it('accounts for every page.tsx independently', () => {
     const sources = routeSweepCases.map(item => item.source);
-    expect(sources).toHaveLength(40);
+    expect(sources).toHaveLength(41);
     expect(sources).not.toContain('app/projects/[id]test/page.tsx');
     expect(new Set(sources).size).toBe(sources.length);
     expect(sources.sort()).toEqual(pages(join(process.cwd(), 'app')).sort());

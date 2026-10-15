@@ -10,5 +10,6 @@ export default function CourseContentsPage({ params }: { params: Promise<{ cours
   const accountId = status === 'authenticated' ? data?.user?.id ?? null : null
   // Private drafts and learner progress are account-specific. A changed login
   // always remounts and re-authorizes before any previous account data renders.
-  return <CourseWorkspaceRoute key={JSON.stringify([courseId, accountId])} courseId={courseId} status={status} />
+  const canAuthorPractice = data?.user?.role === 'INSTRUCTOR' || data?.user?.role === 'ADMIN'
+  return <CourseWorkspaceRoute key={JSON.stringify([courseId, accountId])} courseId={courseId} status={status} canAuthorPractice={canAuthorPractice} />
 }
