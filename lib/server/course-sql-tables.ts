@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { getDatabaseProvider, getPostgresqlSchema } from '@/lib/database-provider';
 
 const COURSE_SQL_TABLES = {
+  Course: '"Course"',
   AssignmentSubmission: '"AssignmentSubmission"',
   AssignmentGradeDecision: '"AssignmentGradeDecision"',
   Enrollment: '"Enrollment"',

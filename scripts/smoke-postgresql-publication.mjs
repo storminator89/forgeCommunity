@@ -125,7 +125,12 @@ async function main() {
   await run(process.execPath, ['scripts/assert-course-publication-ready.mjs'], appEnv);
   await run('npm', ['run', 'db:generate'], appEnv);
   await run('npm', ['run', 'build'], appEnv);
-  app = spawn(process.execPath, ['.next/standalone/server.js'], { env: { ...appEnv, PORT: String(selectedPort), HOSTNAME: '127.0.0.1' }, stdio: ['ignore', 'pipe', 'pipe'] });
+  // Make raw SQL rely on explicit schema qualification, rather than an
+  // accidentally helpful connection search_path. PrismaPg receives ?schema=
+  // separately and must continue to resolve its model queries there.
+  app = spawn(process.execPath, ['.next/standalone/server.js'], { env: {
+    ...appEnv, PGOPTIONS: '-c search_path=pg_catalog', PORT: String(selectedPort), HOSTNAME: '127.0.0.1',
+  }, stdio: ['ignore', 'pipe', 'pipe'] });
   app.on('error', error => { appError = error; });
   app.stdout.on('data', data => { appLogs = (appLogs + data).slice(-12_000); });
   app.stderr.on('data', data => { appLogs = (appLogs + data).slice(-12_000); });
@@ -420,6 +425,95 @@ async function main() {
   assert.equal(learnerPath[1].content, '<p>Protected last step</p>');
   await pathProgress(pathLast, learnerPath[1].contentVersionToken);
   assert.equal((await (await learner(`${pathRoute}/progress`)).json()).complete, true);
+
+  // Exercise the pathway HTTP routes against the real PostgreSQL adapter. The
+  // two approved quiz courses and administrator are synthetic and live only in
+  // this disposable schema; production-style POST must take the qualified
+  // Course row lock before sealing the definition.
+  const quiz = JSON.stringify({ passingScore: 70, questions: [{ id: 'q1', type: 'SINGLE_CHOICE',
+    question: 'Synthetic question?', options: ['Yes', 'No'], correctAnswers: [0] }] });
+  async function makePathwayCourse(number) {
+    const form = new FormData();
+    form.set('title', `PG verified pathway ${number} ${randomUUID()}`);
+    form.set('description', 'Disposable approved quiz course');
+    const course = (await (await author('/api/courses', { method: 'POST', status: 201, body: form })).json()).id;
+    const courseRoute = `/api/courses/${course}`;
+    const node = randomUUID();
+    const draft = (await (await author(`${courseRoute}/authoring`, { method: 'PATCH', body: {
+      expectedRevision: 0, operation: { kind: 'insertNode', node: {
+        id: node, title: 'Verified quiz', type: 'QUIZ', content: quiz,
+      }, parentId: null, afterId: null },
+    } })).json()).draft;
+    assert.equal(draft.revision, 1);
+    const review = await (await author(`${courseRoute}/authoring/review?expectedRevision=1&expectedActivePublicationId=null`)).json();
+    assert.equal(review.ready, true, `Pathway quiz publication blocked: ${JSON.stringify(review.blockers)}`);
+    const publication = (await (await author(`${courseRoute}/authoring/publish`, { method: 'POST', body: {
+      expectedRevision: 1, expectedActivePublicationId: null, requestId: randomUUID(),
+    } })).json()).publication;
+    assert.ok(publication.id);
+    return course;
+  }
+  const verifiedCourses = [await makePathwayCourse(1), await makePathwayCourse(2)];
+  await database.query(`UPDATE "${schema}"."User" SET "role" = 'ADMIN' WHERE "id" = $1`, [authorRegistration.userId]);
+  const admin = httpClient(origin);
+  await login(admin, origin, authorEmail, password);
+  for (const id of verifiedCourses) {
+    await admin(`/api/admin/courses/${id}/reward-eligibility`, { method: 'PATCH', body: { eligible: true } });
+  }
+
+  // The inspection connection is restrictive too. All SQL assertions below
+  // name the ephemeral schema; the app itself has had pg_catalog search_path
+  // for the entire HTTP journey above.
+  await database.query('SET search_path TO pg_catalog');
+  assert.equal((await database.query('SHOW search_path')).rows[0].search_path, 'pg_catalog');
+  const pathwayId = randomUUID();
+  const definition = { requestId: pathwayId, title: 'Synthetic verified sequence',
+    description: 'Two current approved courses', badgeLabel: 'Synthetic pathway complete', courseIds: verifiedCourses };
+  const adminPath = '/api/admin/learning-pathways';
+  const participationPath = `/api/learning-pathways/${pathwayId}/participation`;
+  const hostileOrigin = { origin: 'https://cross-site.invalid' };
+  const participationRow = () => database.query(`SELECT "optedOutAt", "badgeActive" FROM "${schema}"."LearningPathwayParticipation"
+    WHERE "userId" = $1 AND "pathwayId" = $2`, [learnerRegistration.userId, pathwayId]);
+  await anonymous(adminPath, { status: 401 });
+  await learner(adminPath, { status: 403 });
+  await anonymous('/api/learning-pathways/me', { status: 401 });
+  await admin('/api/learning-pathways/me', { status: 403 });
+  await admin(adminPath, { method: 'POST', status: 403, headers: hostileOrigin, body: definition });
+  assert.equal((await database.query(`SELECT COUNT(*)::integer AS count FROM "${schema}"."LearningPathway"
+    WHERE "id" = $1`, [pathwayId])).rows[0].count, 0, 'Cross-origin create wrote a pathway.');
+  const createdPathway = await admin(adminPath, { method: 'POST', status: 201, body: definition });
+  assert.equal(createdPathway.headers.get('cache-control'), 'private, no-store');
+  assert.deepEqual((await createdPathway.json()).pathway.courses.map(course => course.courseId), verifiedCourses);
+  await admin(adminPath, { method: 'POST', status: 200, body: definition });
+  await admin(adminPath, { method: 'POST', status: 409, body: { ...definition, title: 'Changed receipt' } });
+  const adminList = await (await admin(adminPath)).json();
+  assert.ok(adminList.pathways.some(pathway => pathway.id === pathwayId));
+  assert.ok(!JSON.stringify(adminList).includes(learnerRegistration.userId), 'Admin definitions exposed participant identity.');
+
+  const beforeJoin = await (await learner('/api/learning-pathways/me')).json();
+  assert.equal(beforeJoin.pathways.find(pathway => pathway.id === pathwayId)?.participation, null);
+  await learner(participationPath, { method: 'POST', status: 403, headers: hostileOrigin });
+  assert.equal((await participationRow()).rows.length, 0, 'Cross-origin join wrote participation.');
+  const joined = await learner(participationPath, { method: 'POST', status: 201 });
+  assert.equal(joined.headers.get('cache-control'), 'private, no-store');
+  assert.equal((await joined.json()).pathway.participation.badgeActive, false);
+  const myPathway = (await (await learner('/api/learning-pathways/me')).json()).pathways
+    .find(pathway => pathway.id === pathwayId);
+  assert.ok(myPathway?.participation?.joinedAt && myPathway.participation.optedOutAt === null);
+  assert.equal(myPathway.creditedCount, 0);
+  const adminListAfterJoin = JSON.stringify(await (await admin(adminPath)).json());
+  assert.ok(!adminListAfterJoin.includes(learnerRegistration.userId) &&
+    !adminListAfterJoin.includes('joinedAt') && !adminListAfterJoin.includes('badgeActive'),
+  'Admin definition listing disclosed private participation.');
+  const profile = await (await admin(`/api/users/${learnerRegistration.userId}`)).json();
+  assert.ok(!JSON.stringify(profile).includes(pathwayId) && !JSON.stringify(profile).includes(definition.badgeLabel),
+    'Member profile disclosed private pathway participation.');
+  await learner(participationPath, { method: 'DELETE', status: 403, headers: hostileOrigin });
+  assert.equal((await participationRow()).rows[0].optedOutAt, null, 'Cross-origin opt-out changed participation.');
+  const left = (await (await learner(participationPath, { method: 'DELETE' })).json()).pathway;
+  assert.ok(left.participation.optedOutAt && !left.participation.badgeActive);
+  assert.equal((await participationRow()).rows.length, 1, 'Opt-out erased the audit-bearing participation row.');
+  assert.ok((await participationRow()).rows[0].optedOutAt, 'Opt-out was not persisted in the custom schema.');
   console.log(`PostgreSQL publication runtime smoke: ${checks} HTTP checks passed in isolated schema ${schema}.`);
 }
 

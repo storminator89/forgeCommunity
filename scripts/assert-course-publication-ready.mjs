@@ -6,12 +6,30 @@ import { DatabaseSync } from 'node:sqlite';
 import { sqlitePath } from './sqlite-init.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
+const reviewedSqlite = [
+  '0001_initial.sql', '0002_skill_endorsements.sql', '0003_course_progress.sql',
+  '0004_reports.sql', '0005_reward_ledger.sql', '0006_community_feed_indexes.sql',
+  '0007_accepted_solutions.sql', '0008_notification_targets.sql',
+  '0009_private_learning_goals.sql', '0010_staged_course_publication.sql',
+  '0011_question_bank.sql', '0012_manual_assignments.sql',
+  '0013_verified_learning_pathways.sql',
+];
+const reviewedPostgresql = [
+  '0001_skill_endorsements.sql', '0002_course_progress.sql', '0003_reports.sql',
+  '0004_reward_ledger.sql', '0005_community_feed_indexes.sql',
+  '0006_accepted_solutions.sql', '0007_notification_targets.sql',
+  '0008_private_learning_goals.sql', '0009_staged_course_publication.sql',
+  '0010_question_bank.sql', '0011_manual_assignments.sql',
+  '0012_verified_learning_pathways.sql',
+];
 
 function expectedHistory(provider) {
   const directory = resolve(root, provider === 'sqlite' ? 'prisma/sqlite-migrations' : 'prisma/postgresql-upgrades');
   const names = readdirSync(directory).filter(name => /^\d+_[\w-]+\.sql$/.test(name)).sort();
-  const tail = provider === 'sqlite' ? '0012_manual_assignments.sql' : '0011_manual_assignments.sql';
-  if (names.at(-1) !== tail) throw new Error('Publication migration tail is not the reviewed fresh-install version.');
+  const reviewed = provider === 'sqlite' ? reviewedSqlite : reviewedPostgresql;
+  if (JSON.stringify(names) !== JSON.stringify(reviewed)) {
+    throw new Error('Publication migration history is not the reviewed fresh-install sequence.');
+  }
   return names.map(name => ({
     name,
     checksum: createHash('sha256').update(readFileSync(resolve(directory, name))).digest('hex'),

@@ -54,7 +54,7 @@ async function usePersona(page: Page, persona: Persona) {
   await page.context().addCookies(state.cookies);
 }
 
-async function installSyntheticApi(page: Page) {
+async function installSyntheticApi(page: Page, item?: RouteSweepCase) {
   // Only these exact QA IDs are intercepted. Every other request reaches the
   // disposable CI server; no private real-world records are fetched or saved.
   const article = {
@@ -66,6 +66,14 @@ async function installSyntheticApi(page: Page) {
   await page.route('**/api/articles/qa-route-article', route => route.fulfill({ status: 200, json: article }));
   await page.route('**/api/articles/categories-and-tags', route => route.fulfill({ status: 200, json: { categories: ['QA'], tags: [] } }));
   await page.route('**/api/courses/qa-route-course', route => route.fulfill({ status: 200, json: { id: 'qa-route-course', name: 'Route QA course', canEdit: false } }));
+  if (item?.url === '/courses/pathways/qa-route-pathway') {
+    await page.route('**/api/learning-pathways/me', route => route.fulfill({ status: 200, json: { pathways: [{
+      id: 'qa-route-pathway', title: 'Route QA Lernpfad', description: 'Ein privater Testpfad.', badgeLabel: 'QA Lernabzeichen',
+      courses: [{ courseId: 'qa-route-course', title: 'Route QA course', order: 0, creditActive: false, available: true, isEnrolled: false },
+        { courseId: 'qa-route-course-two', title: 'Zweiter QA Kurs', order: 1, creditActive: false, available: true, isEnrolled: false }],
+      unavailable: false, participation: null, creditedCount: 0, requiredCount: 2, history: [],
+    }] } }));
+  }
   await page.route('**/api/courses/qa-route-course/contents', route => route.fulfill({ status: 200, json: [] }));
   await page.route(/\/api\/courses\/qa-route-course\/assignments(?:\?|$)/, route => route.fulfill({ status: 200, json: { submissions: [], nextCursor: null } }));
   await page.route(/\/api\/courses\/qa-route-course\/analytics\?/, route => route.fulfill({ status: 200, json: {
@@ -139,7 +147,7 @@ test.describe('every App Router page, one at a time', () => {
       const errors: string[] = [];
       page.on('pageerror', error => errors.push(error.message));
       await usePersona(page, item.persona);
-      await installSyntheticApi(page);
+      await installSyntheticApi(page, item);
       // Observe the page's actual data read before navigation, so a fast
       // response cannot race the waiter and a heading-only loading state
       // cannot become a successful screenshot.

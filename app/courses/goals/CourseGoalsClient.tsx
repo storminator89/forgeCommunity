@@ -10,6 +10,7 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { LoadingScreen } from '@/components/page-state';
+import { canSeeLearnerPathways } from '@/lib/pathway-visibility';
 
 type LearningGoal = {
   targetLeaves: number;
@@ -30,10 +31,10 @@ export default function CourseGoalsClient() {
     <p className="mt-3 text-sm text-muted-foreground">Melde dich an, um dein privates Lernziel zu sehen.</p>
     <Button asChild className="mt-5"><Link href="/login">Zur Anmeldung</Link></Button>
   </main>;
-  return <ScopedCourseGoals key={session.user.id} />;
+  return <ScopedCourseGoals key={session.user.id} canSeePathways={canSeeLearnerPathways(session.user.role)} />;
 }
 
-function ScopedCourseGoals() {
+function ScopedCourseGoals({ canSeePathways }: { canSeePathways: boolean }) {
   const [goal, setGoal] = useState<LearningGoal | null | undefined>(undefined);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -115,6 +116,7 @@ function ScopedCourseGoals() {
       <main id="page-content" tabIndex={-1} className="min-w-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-3xl px-4 pb-16 pt-8 sm:px-6 sm:pt-10">
           <Link href="/courses" className="text-sm text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Zur Kursübersicht</Link>
+          {canSeePathways && <Link href="/courses/pathways" className="ml-5 text-sm text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Lernpfade entdecken</Link>}
           <div className="mt-6 border-b pb-6">
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">In deinem Tempo</p>
             <h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Ein kleines Ziel für deinen nächsten Lernschritt</h2>

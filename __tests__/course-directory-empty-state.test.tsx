@@ -39,6 +39,17 @@ beforeEach(() => {
   global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => [] });
 });
 
+it.each(['ADMIN', 'INSTRUCTOR', 'MODERATOR', null, undefined])('does not suggest private pathways to %s', role => {
+  setRole(role);
+  render(<CourseClient />);
+  expect(screen.queryByRole('link', { name: 'Lernpfade' })).not.toBeInTheDocument();
+});
+
+it('suggests private pathways to a member', () => {
+  render(<CourseClient />);
+  expect(screen.getByRole('link', { name: 'Lernpfade' })).toHaveAttribute('href', '/courses/pathways');
+});
+
 it.each(['USER', 'MODERATOR', null, undefined, 'UNKNOWN'])('gives %s a truthful learner next step for an empty catalog', async role => {
   setRole(role);
   render(<CourseClient />);

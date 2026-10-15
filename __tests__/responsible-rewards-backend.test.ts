@@ -53,6 +53,7 @@ function fixture() {
   state.publication.payload = publicationPayload(state.contents)
   state.attempts.push({ userId, courseId, contentId: 'quiz-1', revision: courseContentRevision(state.contents[0]), passed: true })
   const tx = {
+    learningPathwayParticipation: { findMany: jest.fn(async () => []) },
     user: { findUnique: jest.fn(async ({ where }: any) => state.users.get(where.id) ?? null) },
     badge: { upsert: jest.fn(async ({ where, create }: any) => {
       if (!state.badges.has(where.id)) state.badges.set(where.id, { name: create.name })

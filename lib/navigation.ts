@@ -1,4 +1,4 @@
-import { Users, GraduationCap, Calendar, Library, BookOpen, Briefcase, Award, Bookmark,
+import { Users, GraduationCap, Calendar, Library, BookOpen, Briefcase, Award, Bookmark, Route,
   MessageCircle, Bell, Settings, Info, LayoutDashboard, Search, Flag } from 'lucide-react';
 
 export const navigationGroups = [
@@ -10,6 +10,7 @@ export const navigationGroups = [
   ] },
   { title: 'Wissen & Lernen', items: [
     { name: 'Kurse', icon: GraduationCap, href: '/courses' },
+    { name: 'Lernpfade', icon: Route, href: '/courses/pathways' },
     { name: 'Wissensdatenbank', icon: Library, href: '/knowledgebase' },
     { name: 'Ressourcen', icon: BookOpen, href: '/resources' },
     { name: 'Skills', icon: Award, href: '/skills' },
@@ -28,6 +29,7 @@ export const utilityNavigation = [
 export const adminNavigation = [
   { name: 'Dashboard', icon: LayoutDashboard, href: '/admin/dashboard' },
   { name: 'Benutzerverwaltung', icon: Users, href: '/admin/users' },
+  { name: 'Lernpfade', icon: Route, href: '/admin/learning-pathways' },
 ];
 export const moderationNavigation = [
   { name: 'Meldungen prüfen', icon: Flag, href: '/moderation' },
@@ -36,5 +38,6 @@ export const navigationItems = [...navigationGroups.flatMap(group => group.items
 export function isNavigationActive(pathname: string, href: string, aliases: string[] = []) {
   // Drafts have their own menu item, so only one knowledge section is active.
   if (href === '/knowledgebase' && pathname.startsWith('/knowledgebase/drafts')) return false;
+  if (href === '/courses' && pathname.startsWith('/courses/pathways')) return false;
   return [href, ...aliases].some(path => pathname === path || pathname.startsWith(`${path}/`));
 }

@@ -13,7 +13,7 @@ function pages(root: string): string[] {
 describe('route-by-route browser review inventory', () => {
   it('accounts for every page.tsx independently', () => {
     const sources = routeSweepCases.map(item => item.source);
-    expect(sources).toHaveLength(37);
+    expect(sources).toHaveLength(40);
     expect(sources).not.toContain('app/projects/[id]test/page.tsx');
     expect(new Set(sources).size).toBe(sources.length);
     expect(sources.sort()).toEqual(pages(join(process.cwd(), 'app')).sort());
@@ -49,6 +49,23 @@ describe('route-by-route browser review inventory', () => {
       source: 'app/courses/authoring/page.tsx', persona: 'member', outcome: 'render',
       heading: 'Meine Kursentwürfe', evidence: 'account-empty-disposable-db',
       settledText: 'Noch keine Kursentwürfe',
+    });
+  });
+
+  it('keeps the static pathway directory separate from the dynamic course and pathway routes', () => {
+    expect(routeSweepCases.find(item => item.url === '/courses/pathways')).toMatchObject({
+      source: 'app/courses/pathways/page.tsx', persona: 'member', outcome: 'render',
+      heading: 'Lernpfade', evidence: 'shared-disposable-db', settledApi: '/api/learning-pathways/me',
+      settledText: 'Verfügbare Lernpfade',
+    });
+    expect(routeSweepCases.find(item => item.url === '/admin/learning-pathways')).toMatchObject({
+      source: 'app/admin/learning-pathways/page.tsx', persona: 'admin', outcome: 'render',
+      heading: 'Lernpfade verwalten', evidence: 'shared-disposable-db', settledApi: '/api/admin/learning-pathways',
+      settledText: 'Bestehende Lernpfade',
+    });
+    expect(routeSweepCases.find(item => item.url === '/courses/pathways/qa-route-pathway')).toMatchObject({
+      source: 'app/courses/pathways/[pathwayId]/page.tsx', persona: 'member', outcome: 'render',
+      heading: 'Mein Lernpfad', evidence: 'synthetic-api',
     });
   });
 });

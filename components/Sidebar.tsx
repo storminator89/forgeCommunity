@@ -11,6 +11,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useAppNavigation } from '@/components/app-shell';
 import { NavigationSearch } from '@/components/navigation-search';
 import { navigationGroups, utilityNavigation, adminNavigation, moderationNavigation, isNavigationActive } from '@/lib/navigation';
+import { canSeeLearnerPathways } from '@/lib/pathway-visibility';
 import { cn } from '@/lib/utils';
 
 function subscribeCollapse(callback: () => void) {
@@ -23,9 +24,9 @@ function collapsedSnapshot() {
   catch { return false; }
 }
 
-interface SidebarProps { className?: string; isOpen?: boolean; onClose?: () => void }
+interface SidebarProps { className?: string; isOpen?: boolean; onClose?: () => void; hideLearnerPathways?: boolean }
 
-export function Sidebar({ className, isOpen: externalOpen = false, onClose }: SidebarProps) {
+export function Sidebar({ className, isOpen: externalOpen = false, onClose, hideLearnerPathways = false }: SidebarProps) {
   const collapsed = useSyncExternalStore(subscribeCollapse, collapsedSnapshot, () => false);
   const navigation = useAppNavigation();
   const pathname = usePathname();
@@ -41,7 +42,8 @@ export function Sidebar({ className, isOpen: externalOpen = false, onClose }: Si
   };
 
   const renderNavigation = (compact: boolean, mobile = false) => {
-    const groups = [...navigationGroups, { title: 'Einstellungen', items: utilityNavigation },
+    const groups = [...navigationGroups.map(group => ({ ...group, items: group.items.filter(item =>
+      item.href !== '/courses/pathways' || (!hideLearnerPathways && canSeeLearnerPathways(session?.user?.role))) })), { title: 'Einstellungen', items: utilityNavigation },
       ...(['ADMIN', 'MODERATOR'].includes(session?.user?.role ?? '') ? [{ title: 'Moderation', items: moderationNavigation }] : []),
       ...(session?.user?.role === 'ADMIN' ? [{ title: 'Administration', items: adminNavigation }] : [])];
     return <div className="flex h-full flex-col">
@@ -56,7 +58,7 @@ export function Sidebar({ className, isOpen: externalOpen = false, onClose }: Si
         </button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
-        <NavigationSearch collapsed={compact} keyboardShortcut={!mobile} onNavigate={() => setOpen(false)} />
+        <NavigationSearch collapsed={compact} keyboardShortcut={!mobile} onNavigate={() => setOpen(false)} hideLearnerPathways={hideLearnerPathways} />
         <nav aria-label="Hauptnavigation" className="space-y-4">
           {groups.map(group => <div key={group.title}>
             {!compact && <p className="mb-1 px-3 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">{group.title}</p>}
