@@ -57,11 +57,14 @@ const otherCourseId = 'qa-other-course'
 const draftCourseId = 'qa-draft-course'
 const params = (filter = 'all') => new URLSearchParams({ filter })
 const fail = (operation: () => Promise<unknown>, status: number) => expect(operation()).rejects.toMatchObject({ status })
+// CI sets NEXTAUTH_URL to :3013. Keep the synthetic request and its browser
+// Origin aligned with the deployment URL so the production CSRF gate stays real.
+const appOrigin = new URL(process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost').origin
 function setSession(actor: { id: string; role: string } | null) {
   jest.mocked(getServerSession).mockResolvedValue(actor ? { user: actor } as never : null)
 }
 function request(path = '', method = 'GET', body?: object, origin?: string) {
-  const url = new URL(`http://localhost/api/courses/${courseId}/qa${path}`)
+  const url = new URL(`/api/courses/${courseId}/qa${path}`, appOrigin)
   return Object.assign(new Request(url, { method, headers: {
     ...(body ? { 'Content-Type': 'application/json' } : {}), ...(origin ? { Origin: origin } : {}),
   }, ...(body ? { body: JSON.stringify(body) } : {}) }), { nextUrl: url }) as never
@@ -143,8 +146,8 @@ test('HTTP Q&A gates anonymous, outsider, cross-origin and cross-course requests
   const input = { title: 'Eine Kursfrage', body: 'Wie funktioniert diese Kursfrage?', requestId: 'http-question-01' }
   expect((await askHttp(request('', 'POST', input, 'https://evil.invalid'), context)).status).toBe(403)
   expect((await prisma.courseQuestion.count({ where: { requestId: input.requestId } }))).toBe(0)
-  expect((await askHttp(request('', 'POST', input, 'http://localhost'), context)).status).toBe(201)
-  expect((await askHttp(request('', 'POST', input, 'http://localhost'), context)).status).toBe(200)
+  expect((await askHttp(request('', 'POST', input, appOrigin), context)).status).toBe(201)
+  expect((await askHttp(request('', 'POST', input, appOrigin), context)).status).toBe(200)
 })
 
 test('answers, selected solution and hide states stay in the right course', async () => {
@@ -284,7 +287,7 @@ test('visibility batches re-authorize and remove hidden or foreign questions wit
   expect((await revalidateHttp(request('/revalidate', 'POST', input), context)).status).toBe(401)
   setSession(learner)
   expect((await revalidateHttp(request('/revalidate', 'POST', input, 'https://evil.invalid'), context)).status).toBe(403)
-  const http = await revalidateHttp(request('/revalidate', 'POST', input, 'http://localhost'), context)
+  const http = await revalidateHttp(request('/revalidate', 'POST', input, appOrigin), context)
   expect(http.status).toBe(200)
   expect(http.headers.get('cache-control')).toBe('private, no-store')
   expect(await http.json()).toMatchObject({ visibleIds: [question.id], canModerate: false })

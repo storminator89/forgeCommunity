@@ -72,6 +72,9 @@ test('fresh custom-schema PostgreSQL Q&A keeps same-question FK and deletion cas
     assert.equal((await db.query(`SELECT COUNT(*)::int AS n FROM "CourseQuestion" WHERE "courseId"='a'`)).rows[0].n, 0);
     assert.equal((await db.query(`SELECT COUNT(*)::int AS n FROM "CourseAnswer"`)).rows[0].n, 0);
     assert.equal((await db.query(`SELECT COUNT(*)::int AS n FROM "CourseQuestionSolution"`)).rows[0].n, 0);
+    // The synthetic courses have no saved authoring drafts; remove the fixture
+    // before asserting the production fresh-install readiness contract.
+    await db.query(`DELETE FROM "Course" WHERE id = 'a'`);
     assert.equal(await assertCoursePublicationReady(scopedUrl.toString(), 'postgresql'), true);
   } finally {
     try { await db.query(`RESET search_path`); await db.query(`DROP SCHEMA IF EXISTS ${quote(schema)} CASCADE`); }
