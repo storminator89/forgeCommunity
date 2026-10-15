@@ -7,14 +7,16 @@ import { Search, ArrowUpRight } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { navigationItems, adminNavigation } from '@/lib/navigation';
+import { canSeeLearnerPathways } from '@/lib/pathway-visibility';
 
-export function NavigationSearch({ collapsed = false, keyboardShortcut = true, onNavigate }: { collapsed?: boolean; keyboardShortcut?: boolean; onNavigate?: () => void }) {
+export function NavigationSearch({ collapsed = false, keyboardShortcut = true, onNavigate, hideLearnerPathways = false }: { collapsed?: boolean; keyboardShortcut?: boolean; onNavigate?: () => void; hideLearnerPathways?: boolean }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const router = useRouter();
   const { data: session } = useSession();
-  const items = session?.user?.role === 'ADMIN' ? [...navigationItems, ...adminNavigation] : navigationItems;
+  const learnerItems = navigationItems.filter(item => item.href !== '/courses/pathways' || (!hideLearnerPathways && canSeeLearnerPathways(session?.user?.role)));
+  const items = session?.user?.role === 'ADMIN' ? [...learnerItems, ...adminNavigation] : learnerItems;
   const matches = items.filter(item => item.name.toLocaleLowerCase('de').includes(query.toLocaleLowerCase('de')));
 
   useEffect(() => {

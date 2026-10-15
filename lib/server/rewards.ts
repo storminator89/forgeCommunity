@@ -6,6 +6,7 @@ import { getQuizValidationError } from '@/app/courses/[courseId]/contents/types'
 import { completionState, contentQuiz, courseContentRevision, courseLeaves, isQuizLikeContent } from '@/lib/server/course-progress';
 import { VERIFIED_COURSE_BADGE } from '@/lib/course-achievement-badge';
 import { activeCourseContentWhere, publishedCourseWhere } from '@/lib/server/published-course';
+import { reconcileUserPathways } from '@/lib/server/learning-pathways';
 
 export const COURSE_COMPLETION_POINTS = 50;
 const EVENT = 'COURSE_COMPLETED' as const;
@@ -123,6 +124,7 @@ export async function revokeCourseRewards(tx: Prisma.TransactionClient, courseId
   for (const item of active) await revokeReward(tx, item.userId, item.sourceId, reason);
   for (const userId of new Set(active.map(item => item.userId))) {
     await reconcileVerifiedCourseBadge(tx, userId);
+    await reconcileUserPathways(tx, userId);
   }
 }
 
@@ -144,6 +146,7 @@ export async function reconcileLearnerCourseReward(tx: Prisma.TransactionClient,
   if (!qualifies) {
     await revokeReward(tx, userId, courseId, reason);
     await reconcileVerifiedCourseBadge(tx, userId);
+    await reconcileUserPathways(tx, userId, courseId);
     return false;
   }
 
@@ -162,6 +165,7 @@ export async function reconcileLearnerCourseReward(tx: Prisma.TransactionClient,
     await recordChange(tx, row.id, 1, 'AWARDED', null, COURSE_COMPLETION_POINTS);
   }
   await reconcileVerifiedCourseBadge(tx, userId);
+  await reconcileUserPathways(tx, userId, courseId);
   return true;
 }
 
@@ -195,4 +199,5 @@ export async function reconcileUserRewards(tx: Prisma.TransactionClient, userId:
     await reconcileLearnerCourseReward(tx, userId, courseId);
   }
   await reconcileVerifiedCourseBadge(tx, userId);
+  await reconcileUserPathways(tx, userId);
 }

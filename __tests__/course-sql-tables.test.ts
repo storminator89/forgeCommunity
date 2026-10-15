@@ -15,6 +15,7 @@ afterEach(() => {
 test('SQLite raw table identifiers stay unqualified', () => {
   process.env.DATABASE_PROVIDER = 'sqlite';
   expect(courseSqlTable('AssignmentSubmission').strings).toEqual(['"AssignmentSubmission"']);
+  expect(courseSqlTable('Course').strings).toEqual(['"Course"']);
 });
 
 test('PG raw tables use exactly the adapter schema, even with identifier punctuation', () => {
@@ -24,6 +25,7 @@ test('PG raw tables use exactly the adapter schema, even with identifier punctua
   expect(schema).toBe('other".public;--');
   const table = courseSqlTable('AssignmentGradeDecision');
   expect(table.strings).toEqual(['"other"".public;--"."AssignmentGradeDecision"']);
+  expect(courseSqlTable('Course').strings).toEqual(['"other"".public;--"."Course"']);
   expect(table.values).toEqual([]);
   process.env.DATABASE_URL = 'postgresql://localhost/forge';
   expect(getPostgresqlSchema()).toBeNull();

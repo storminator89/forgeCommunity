@@ -95,6 +95,42 @@ it('keeps admin navigation hidden for a regular member', () => {
   render(<AppShell><Sidebar /></AppShell>);
   expect(screen.queryByRole('link', { name: 'Benutzerverwaltung' })).not.toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'Kurse' })).toHaveAttribute('aria-current', 'page');
+  expect(screen.getByRole('link', { name: 'Lernpfade' })).toHaveAttribute('href', '/courses/pathways');
+});
+
+it.each(['ADMIN', 'INSTRUCTOR', 'MODERATOR'])('hides learner pathways from %s while keeping the admin editor for admins', async role => {
+  jest.mocked(useSession).mockReturnValue({ data: { user: { id: 'viewer', role } }, status: 'authenticated', update: jest.fn() } as any);
+  const user = userEvent.setup();
+  render(<AppShell><Sidebar /></AppShell>);
+  const links = screen.queryAllByRole('link', { name: 'Lernpfade' });
+  if (role === 'ADMIN') expect(links.map(link => link.getAttribute('href'))).toEqual(['/admin/learning-pathways']);
+  else expect(links).toHaveLength(0);
+
+  await user.click(screen.getByRole('button', { name: 'Schnellsuche öffnen' }));
+  const results = within(screen.getByRole('navigation', { name: 'Suchergebnisse' }));
+  const pathwayMatches = results.queryAllByRole('button', { name: /Lernpfade/ });
+  expect(pathwayMatches).toHaveLength(role === 'ADMIN' ? 1 : 0);
+  if (role === 'ADMIN') {
+    await user.click(pathwayMatches[0]);
+    expect(push).toHaveBeenCalledWith('/admin/learning-pathways');
+  }
+});
+
+it('offers the learner pathway in quick search for a member', async () => {
+  const user = userEvent.setup();
+  render(<AppShell><Sidebar /></AppShell>);
+  await user.click(screen.getByRole('button', { name: 'Schnellsuche öffnen' }));
+  const results = within(screen.getByRole('navigation', { name: 'Suchergebnisse' }));
+  await user.click(results.getByRole('button', { name: /Lernpfade/ }));
+  expect(push).toHaveBeenCalledWith('/courses/pathways');
+});
+
+it('hides a stale learner-pathway entry after the API denies access', async () => {
+  const user = userEvent.setup();
+  render(<AppShell><Sidebar hideLearnerPathways /></AppShell>);
+  expect(screen.queryByRole('link', { name: 'Lernpfade' })).not.toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Schnellsuche öffnen' }));
+  expect(within(screen.getByRole('navigation', { name: 'Suchergebnisse' })).queryByRole('button', { name: /Lernpfade/ })).not.toBeInTheDocument();
 });
 
 it('gives the account menu a comfortable touch target', () => {

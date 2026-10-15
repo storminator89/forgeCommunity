@@ -20,6 +20,19 @@ beforeEach(() => {
   jest.mocked(useSession).mockReturnValue(session('alice'));
 });
 
+test.each(['ADMIN', 'INSTRUCTOR', 'MODERATOR'])('%s does not get a learner-pathway link from goals', role => {
+  jest.mocked(useSession).mockReturnValue({ data: { user: { id: 'viewer', role }, expires: '2099-01-01' }, status: 'authenticated', update: jest.fn() } as ReturnType<typeof useSession>);
+  global.fetch = jest.fn(async () => reply(null)) as jest.Mock;
+  render(<CourseGoalsClient />);
+  expect(screen.queryByRole('link', { name: 'Lernpfade entdecken' })).not.toBeInTheDocument();
+});
+
+test('a member can navigate from goals to learner pathways', () => {
+  global.fetch = jest.fn(async () => reply(null)) as jest.Mock;
+  render(<CourseGoalsClient />);
+  expect(screen.getByRole('link', { name: 'Lernpfade entdecken' })).toHaveAttribute('href', '/courses/pathways');
+});
+
 test('keyboard user can start, pause, resume, dismiss cancel with Escape, and remove a private goal', async () => {
   const user = userEvent.setup();
   let stored: Goal | null = null;

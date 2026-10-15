@@ -31,11 +31,10 @@ const reviewedUpgradeNames = [
   '0009_staged_course_publication.sql',
   '0010_question_bank.sql',
   '0011_manual_assignments.sql',
+  '0012_verified_learning_pathways.sql',
 ];
-// Stacked drafts add the final two reviewed migrations in order. Reject any
-// unknown migration rather than letting the release gate silently skip it.
-assert.ok(upgradeNames.length >= 6);
-assert.deepEqual(upgradeNames, reviewedUpgradeNames.slice(0, upgradeNames.length));
+// A release image must carry the exact reviewed sequence, including the tail.
+assert.deepEqual(upgradeNames, reviewedUpgradeNames);
 const expectedChecksums = new Map(upgradeNames.map(name => [name, createHash('sha256')
   .update(readFileSync(new URL(`../prisma/postgresql-upgrades/${name}`, import.meta.url)))
   .digest('hex')]));
@@ -371,6 +370,8 @@ async function assertCurrentSchema(db) {
     'RewardLedger', 'RewardLedgerChange', 'CourseCompletionRecord',
     'AcceptedSolution', 'AcceptedSolutionChange', 'CourseDraft',
     'CoursePublication', 'PublicationRequest', 'CourseAsset',
+    'LearningPathway', 'LearningPathwayCourse',
+    'LearningPathwayParticipation', 'LearningPathwayChange',
   ]) {
     assert.ok((await db.query('SELECT to_regclass($1) AS relation', [`"${table}"`])).rows[0].relation, `${table} missing`);
   }
@@ -760,5 +761,92 @@ test('assignment grade decisions are append-only while foreign-key cascades rema
       WHERE "id" = 'assignment-account-submission'`)).rows[0].count, 0);
     assert.equal((await db.query(`SELECT COUNT(*)::int AS count FROM "AssignmentGradeDecision"
       WHERE "id" = 'assignment-account-decision'`)).rows[0].count, 0);
+  });
+});
+
+test('private pathway definitions and audit are immutable but account deletion cascades in a custom schema', async () => {
+  await withSchema({}, async (db, url) => {
+    await applyPostgresqlUpgrades(url, { initializeEmptySchema: true });
+    await db.query(`INSERT INTO "User" (id, email, "updatedAt") VALUES ('learner', 'learner-pathway@example.invalid', CURRENT_TIMESTAMP)`);
+    await db.query(`INSERT INTO "LearningPathway" (id, title, description, "badgeLabel", "createdById")
+      VALUES ('path', 'Sequence', 'Private', 'Finished', 'admin')`);
+    await db.query(`INSERT INTO "LearningPathwayCourse" ("pathwayId", position, "courseId", title)
+      VALUES ('path', 0, 'first', 'First')`);
+    await rejectsCode(db.query(`UPDATE "LearningPathway" SET "sealedAt"=CURRENT_TIMESTAMP WHERE id='path'`), '23514');
+    await db.query(`INSERT INTO "LearningPathwayCourse" ("pathwayId", position, "courseId", title)
+      VALUES ('path', 1, 'second', 'Second')`);
+    await db.query(`UPDATE "LearningPathway" SET "sealedAt"=CURRENT_TIMESTAMP WHERE id='path'`);
+    await rejectsCode(db.query(`UPDATE "LearningPathway" SET title='Changed' WHERE id='path'`), '23514');
+    await rejectsCode(db.query(`DELETE FROM "LearningPathwayCourse" WHERE "pathwayId"='path'`), '23514');
+    await rejectsCode(db.query(`INSERT INTO "LearningPathwayCourse" ("pathwayId", position, "courseId", title)
+      VALUES ('path', 2, 'third', 'Third')`), '23514');
+    await rejectsCode(db.query(`TRUNCATE "LearningPathwayCourse"`), '23514');
+    await db.query(`INSERT INTO "LearningPathwayParticipation"
+      ("userId", "pathwayId", "badgeActive", "badgeFirstAwardedAt", "stateVersion")
+      VALUES ('learner', 'path', true, CURRENT_TIMESTAMP, 1)`);
+    await db.query(`INSERT INTO "LearningPathwayChange" (id, "userId", "pathwayId", version, type)
+      VALUES ('change', 'learner', 'path', 1, 'AWARDED')`);
+    await rejectsCode(db.query(`UPDATE "LearningPathwayChange" SET type='REINSTATED' WHERE id='change'`), '23514');
+    await rejectsCode(db.query(`DELETE FROM "LearningPathwayChange" WHERE id='change'`), '23514');
+    await rejectsCode(db.query(`DELETE FROM "LearningPathwayParticipation" WHERE "userId"='learner'`), '23514');
+    await rejectsCode(db.query(`TRUNCATE "LearningPathwayParticipation" CASCADE`), '23514');
+    await db.query(`DELETE FROM "User" WHERE id='learner'`);
+    assert.equal(await count(db, 'LearningPathwayParticipation'), 0);
+    assert.equal(await count(db, 'LearningPathwayChange'), 0);
+    assert.equal(await count(db, 'LearningPathwayCourse'), 2);
+    assert.equal(await count(db, 'LearningPathway'), 1);
+  });
+});
+
+test('a concurrent child insert cannot slip past pathway sealing in a custom schema', async () => {
+  await withSchema({}, async (sealer, url) => {
+    await applyPostgresqlUpgrades(url, { initializeEmptySchema: true });
+    await sealer.query(`INSERT INTO "LearningPathway" (id, title, description, "badgeLabel", "createdById")
+      VALUES ('race-path', 'Sequence', 'Private', 'Finished', 'admin')`);
+    await sealer.query(`INSERT INTO "LearningPathwayCourse" ("pathwayId", position, "courseId", title)
+      VALUES ('race-path', 0, 'first', 'First'), ('race-path', 1, 'second', 'Second')`);
+    const schema = new URL(url).searchParams.get('schema');
+    const inserter = new pg.Client({ connectionString: baseUrl });
+    let sealerOpen = false;
+    let inserterOpen = false;
+    let pendingInsert;
+    try {
+      await inserter.connect();
+      await inserter.query(`SET search_path TO ${quoteIdent(schema)}`);
+      await sealer.query('BEGIN');
+      sealerOpen = true;
+      await sealer.query(`UPDATE "LearningPathway" SET "sealedAt" = CURRENT_TIMESTAMP WHERE id = 'race-path'`);
+      const sealerPid = (await sealer.query('SELECT pg_backend_pid() AS pid')).rows[0].pid;
+      await inserter.query('BEGIN');
+      inserterOpen = true;
+      await inserter.query(`SET LOCAL lock_timeout = '10s'`);
+      const inserterPid = (await inserter.query('SELECT pg_backend_pid() AS pid')).rows[0].pid;
+      pendingInsert = inserter.query(`INSERT INTO "LearningPathwayCourse" ("pathwayId", position, "courseId", title)
+        VALUES ('race-path', 2, 'third', 'Third')`);
+      // Attach a rejection handler immediately; the assertion below awaits
+      // the original promise after the sealing transaction commits.
+      void pendingInsert.catch(() => {});
+      let blocked = false;
+      const deadline = Date.now() + 5_000;
+      while (Date.now() < deadline) {
+        blocked = (await sealer.query('SELECT $1::integer = ANY(pg_blocking_pids($2::integer)) AS blocked',
+          [sealerPid, inserterPid])).rows[0].blocked;
+        if (blocked) break;
+        await new Promise(resolve => setTimeout(resolve, 25));
+      }
+      assert.ok(blocked, 'Child insert did not wait for the concurrent seal transaction.');
+      await sealer.query('COMMIT');
+      sealerOpen = false;
+      await rejectsCode(pendingInsert, '23514');
+      await inserter.query('ROLLBACK');
+      inserterOpen = false;
+      assert.equal((await sealer.query(`SELECT COUNT(*)::integer AS count FROM "LearningPathwayCourse"
+        WHERE "pathwayId" = 'race-path'`)).rows[0].count, 2, 'A child appeared after the pathway was sealed.');
+    } finally {
+      if (sealerOpen) await sealer.query('ROLLBACK').catch(() => {});
+      if (pendingInsert) await pendingInsert.catch(() => {});
+      if (inserterOpen) await inserter.query('ROLLBACK').catch(() => {});
+      await inserter.end().catch(() => {});
+    }
   });
 });

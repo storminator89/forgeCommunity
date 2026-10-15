@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { copyFileSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -12,7 +12,7 @@ import { assertCoursePublicationReady } from './assert-course-publication-ready.
 
 const sqliteNames = readdirSync(new URL('../prisma/sqlite-migrations/', import.meta.url))
   .filter(name => /^\d+_[\w-]+\.sql$/.test(name)).sort();
-assert.equal(sqliteNames.at(-1), '0012_manual_assignments.sql');
+assert.equal(sqliteNames.at(-1), '0013_verified_learning_pathways.sql');
 const publicationIndex = sqliteNames.indexOf('0010_staged_course_publication.sql');
 assert.ok(publicationIndex >= 0);
 
@@ -138,8 +138,11 @@ test('SQLite migration still rolls back an injected DDL failure', () => {
   db.close();
 });
 
-test('SQLite readiness refuses missing, changed, gapped and divergent #6 migration history', async () => {
+test('SQLite readiness refuses missing, changed, gapped and divergent migration history through pathways', async () => {
   for (const mutate of [
+    db => db.prepare(`DELETE FROM _app_migrations WHERE name='0013_verified_learning_pathways.sql'`).run(),
+    db => db.prepare(`UPDATE _app_migrations SET checksum='changed' WHERE name='0013_verified_learning_pathways.sql'`).run(),
+    db => db.prepare(`DELETE FROM _app_migrations WHERE name='0012_manual_assignments.sql'`).run(),
     db => db.prepare(`DELETE FROM _app_migrations WHERE name='0010_staged_course_publication.sql'`).run(),
     db => db.prepare(`UPDATE _app_migrations SET checksum='changed' WHERE name='0010_staged_course_publication.sql'`).run(),
     db => db.prepare(`DELETE FROM _app_migrations WHERE name='0008_notification_targets.sql'`).run(),
@@ -166,6 +169,20 @@ if (process.env.POSTGRESQL_RELEASE_GATE_DISPOSABLE === '1' && pgParsed &&
     try {
       await db.query(`CREATE SCHEMA "${fresh}"`);
       await applyPostgresqlUpgrades(freshUrl.toString(), { initializeEmptySchema: true });
+      assert.equal(await assertCoursePublicationReady(freshUrl.toString(), 'postgresql'), true);
+      await db.query(`SET search_path TO "${fresh}"`);
+      for (const [name, sql] of [
+        ['missing tail', `DELETE FROM "_app_schema_upgrades" WHERE name='0012_verified_learning_pathways.sql'`],
+        ['tampered tail', `UPDATE "_app_schema_upgrades" SET checksum='changed' WHERE name='0012_verified_learning_pathways.sql'`],
+        ['gap before tail', `DELETE FROM "_app_schema_upgrades" WHERE name='0011_manual_assignments.sql'`],
+      ]) {
+        const file = name === 'gap before tail' ? '0011_manual_assignments.sql' : '0012_verified_learning_pathways.sql';
+        const checksum = createHash('sha256').update(readFileSync(new URL(`../prisma/postgresql-upgrades/${file}`, import.meta.url))).digest('hex');
+        await db.query(sql);
+        await assert.rejects(assertCoursePublicationReady(freshUrl.toString(), 'postgresql'), /history is missing, divergent or has changed checksums/);
+        await db.query(`INSERT INTO "_app_schema_upgrades" (name, checksum) VALUES ($1, $2)
+          ON CONFLICT (name) DO UPDATE SET checksum=EXCLUDED.checksum`, [file, checksum]);
+      }
       assert.equal(await assertCoursePublicationReady(freshUrl.toString(), 'postgresql'), true);
       await db.query(`CREATE SCHEMA "${legacy}"`);
       await db.query(`SET search_path TO "${legacy}"`);

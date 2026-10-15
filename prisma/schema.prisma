@@ -148,6 +148,7 @@ model User {
   completionRecords  CourseCompletionRecord[]
   questionBankItems  QuestionBankItem[]
   learningGoal       LearningGoal?
+  learningPathways   LearningPathwayParticipation[]
   solutionDecisions  AcceptedSolutionChange[] @relation("SolutionActor")
 }
 
@@ -631,6 +632,62 @@ model LearningGoal {
   pausedAt    DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+/** Immutable, private opt-in course sequence; source IDs survive course deletion. */
+model LearningPathway {
+  id          String @id @default(cuid())
+  title       String
+  description String
+  badgeLabel  String
+  createdById String
+  createdAt   DateTime @default(now())
+  sealedAt    DateTime?
+  courses     LearningPathwayCourse[]
+  participants LearningPathwayParticipation[]
+}
+
+model LearningPathwayCourse {
+  pathway   LearningPathway @relation(fields: [pathwayId], references: [id], onDelete: Restrict)
+  pathwayId String
+  position  Int
+  courseId  String
+  title     String
+
+  @@id([pathwayId, position])
+  @@unique([pathwayId, courseId])
+  @@index([courseId])
+}
+
+/** Unique private badge state; never projected into public UserBadge surfaces. */
+model LearningPathwayParticipation {
+  user               User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId             String
+  pathway            LearningPathway @relation(fields: [pathwayId], references: [id], onDelete: Restrict)
+  pathwayId          String
+  joinedAt           DateTime @default(now())
+  optedOutAt         DateTime?
+  badgeActive        Boolean @default(false)
+  badgeFirstAwardedAt DateTime?
+  stateVersion       Int @default(0)
+  changes            LearningPathwayChange[]
+
+  @@id([userId, pathwayId])
+  @@index([pathwayId])
+}
+
+model LearningPathwayChange {
+  id            String @id @default(cuid())
+  participation LearningPathwayParticipation @relation(fields: [userId, pathwayId], references: [userId, pathwayId], onDelete: Cascade)
+  userId        String
+  pathwayId     String
+  version       Int
+  type          String
+  reason        String?
+  createdAt     DateTime @default(now())
+
+  @@unique([userId, pathwayId, version])
+  @@index([createdAt])
 }
 
 model Event {

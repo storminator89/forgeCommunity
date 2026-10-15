@@ -17,6 +17,7 @@ import { ArrowRight, BookOpen, CalendarDays, Clock3, Plus, Search, Trash2, Users
 import { Badge } from "@/components/ui/badge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
+import { canSeeLearnerPathways } from '@/lib/pathway-visibility';
 
 interface Course {
   id: string;
@@ -190,6 +191,7 @@ function ScopedCourseClient({ session }: { session: NonNullable<ReturnType<typeo
                 <p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:text-base">Entdecke Kurse aus der Community, lerne in deinem Tempo und teile selbst, was du kannst.</p>
               </div>
               <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                {canSeeLearnerPathways(session.user.role) && <Button asChild variant="outline" className="w-full shrink-0 sm:w-auto"><Link href="/courses/pathways">Lernpfade</Link></Button>}
                 <Button asChild variant="outline" className="w-full shrink-0 sm:w-auto"><Link href="/courses/goals">Mein Lernziel</Link></Button>
                 <Button asChild variant="outline" className="w-full shrink-0 sm:w-auto"><Link href="/courses/authoring">Meine Kursentwürfe</Link></Button>
                 <Button asChild variant={creatorPerspective ? 'default' : 'outline'} className="w-full shrink-0 sm:w-auto"><Link href="/courses/new"><Plus aria-hidden="true" className="h-4 w-4" />Neuer Kurs</Link></Button>
