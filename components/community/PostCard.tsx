@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -7,6 +7,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { motion, AnimatePresence } from 'framer-motion'
 import { CommentSection } from './CommentSection'
+import { ReportControl } from './ReportControl'
 
 import { cn } from "@/lib/utils"
 import { sanitizeRichHtml } from '@/lib/sanitize-html'
@@ -19,6 +20,7 @@ interface Post {
   id: string
   title: string
   content: string
+  published?: boolean
   authorId: string
   author: {
     id: string
@@ -66,12 +68,26 @@ export function PostCard({
   isLoading = false
 }: PostCardProps) {
   const [expandedComments, setExpandedComments] = useState(false)
+  const cardRef = useRef<HTMLDivElement>(null)
   const isAuthor = currentUserId === post.authorId;
 
   const toggleComments = () => setExpandedComments(!expandedComments)
 
+  useEffect(() => {
+    const followHash = () => {
+      const hash = window.location.hash.slice(1);
+      if (hash === `post-${post.id}`) cardRef.current?.scrollIntoView({ block: 'center' });
+      if (post.comments?.some((comment) => hash === `comment-${comment.id}`)) setExpandedComments(true);
+    };
+    const timer = window.setTimeout(followHash, 0);
+    window.addEventListener('hashchange', followHash);
+    return () => { window.clearTimeout(timer); window.removeEventListener('hashchange', followHash); };
+  }, [post.id, post.comments]);
+
   return (
     <motion.div
+      id={`post-${post.id}`}
+      ref={cardRef}
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
@@ -162,6 +178,8 @@ export function PostCard({
               <span className="ml-1 hidden sm:inline">Kommentare</span>
             </Button>
           </div>
+          {currentUserId && !isAuthor && post.published !== false &&
+            <ReportControl targetType="POST" targetId={post.id} />}
         </CardFooter>
 
         {/* Comments Section */}
@@ -178,6 +196,7 @@ export function PostCard({
                   postId={post.id}
                   comments={post.comments}
                   currentUserId={currentUserId}
+                  canReport={post.published !== false}
                   isLoading={isLoading}
                   onAddComment={onAddComment}
                   onLikeComment={onLikeComment}

@@ -38,6 +38,7 @@ function isPublicApiRequest(pathname: string, method: string): boolean {
 
   return (
     pathname === '/api/health' ||
+    pathname === '/api/leaderboard' ||
     pathname === '/api/resources' ||
     pathname.startsWith('/api/resources/') ||
     pathname === '/api/verify' ||

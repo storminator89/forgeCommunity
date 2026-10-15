@@ -1,13 +1,12 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { PlusCircle, Award } from 'lucide-react';
 import { ContentList } from './ContentList';
 import { NewMainTopicDialog } from './NewMainTopicDialog';
 import { NewSubTopicDialog } from './NewSubTopicDialog';
-import { CourseContent } from './types';
-import { isPageVisited } from './utils/visitedPages';
+import { CourseContent, CourseProgressSnapshot } from './types';
 
 interface CourseContentsSidebarProps {
   contents: CourseContent[];
@@ -30,44 +29,27 @@ interface CourseContentsSidebarProps {
   courseName: string;
   isLoading: boolean;
   isMutating?: boolean;
+  isProgressMutating?: boolean;
   canManage?: boolean;
-  forceUpdate?: boolean;
+  progress?: CourseProgressSnapshot | null;
+  onCertificateIssued?: () => void;
   onMainContentSubmit?: (title: string) => Promise<CourseContent | void>;
   onSubContentSubmit: (title: string, parentId?: string) => Promise<CourseContent | void>;
   onMainContentSelect?: (contentId: string | null) => void;
-  onVisitedToggle: (contentId: string) => void;
 }
 
 export function CourseContentsSidebar(props: CourseContentsSidebarProps) {
   const { contents, selectedContentId, onContentSelect, onEditClick, onDeleteClick, isInlineEditing,
     inlineEditTitle, onInlineEditSubmit, setIsInlineEditing, setInlineEditTitle, onMoveUp, onMoveDown,
     onMoveMainUp, onMoveMainDown, mainContentId, courseId, courseName, isLoading, isMutating = false,
-    canManage = true, forceUpdate, onMainContentSubmit, onSubContentSubmit, onMainContentSelect, onVisitedToggle } = props;
+    canManage = true, progress, isProgressMutating = false, onCertificateIssued, onMainContentSubmit, onSubContentSubmit, onMainContentSelect } = props;
   const [mainTitle, setMainTitle] = useState('');
   const [subTitle, setSubTitle] = useState('');
   const [mainDialogOpen, setMainDialogOpen] = useState(false);
   const [subParentId, setSubParentId] = useState<string | null>(null);
   const [isGeneratingCertificate, setIsGeneratingCertificate] = useState(false);
   const [certificateError, setCertificateError] = useState<string | null>(null);
-  const [visitedVersion, setVisitedVersion] = useState(0);
-
-  useEffect(() => {
-    const handleVisited = (event: Event) => { if ((event as CustomEvent).detail?.courseId === courseId) setVisitedVersion(value => value + 1); };
-    window.addEventListener('visitedPagesChanged', handleVisited);
-    return () => window.removeEventListener('visitedPagesChanged', handleVisited);
-  }, [courseId]);
-
-  const leafContents = useMemo(() => {
-    const leaves: CourseContent[] = [];
-    const walk = (items: CourseContent[]) => items.forEach(item => item.subContents?.length ? walk(item.subContents) : leaves.push(item));
-    walk(contents);
-    return leaves;
-  }, [contents]);
-  const allTopicsCompleted = useMemo(() => {
-    void visitedVersion;
-    void forceUpdate;
-    return leafContents.length > 0 && leafContents.every(item => isPageVisited(courseId, item.id));
-  }, [leafContents, courseId, visitedVersion, forceUpdate]);
+  const canDownloadCertificate = Boolean(progress?.hasCertificate || (progress?.canTrack && progress.complete));
 
   const generateCertificate = useCallback(async () => {
     if (isGeneratingCertificate) return;
@@ -84,9 +66,10 @@ export function CourseContentsSidebar(props: CourseContentsSidebarProps) {
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
+      onCertificateIssued?.();
     } catch (cause) { setCertificateError(cause instanceof Error ? cause.message : 'Das Zertifikat konnte nicht erstellt werden.'); }
     finally { setIsGeneratingCertificate(false); }
-  }, [courseId, courseName, isGeneratingCertificate]);
+  }, [courseId, courseName, isGeneratingCertificate, onCertificateIssued]);
 
   // Capture the parent in this component instead of depending on asynchronous parent state updates.
   const activeParentId = subParentId ?? mainContentId;
@@ -98,7 +81,7 @@ export function CourseContentsSidebar(props: CourseContentsSidebarProps) {
         onEditClick={onEditClick} onDeleteClick={onDeleteClick} isInlineEditing={isInlineEditing}
         inlineEditTitle={inlineEditTitle} onInlineEditSubmit={onInlineEditSubmit} setIsInlineEditing={setIsInlineEditing}
         setInlineEditTitle={setInlineEditTitle} mainContentId="" mainTopicIndex={0} courseId={courseId}
-        isLoading={isLoading} isMutating={isMutating} canManage={canManage} onVisitedToggle={onVisitedToggle}
+        isLoading={isLoading} isMutating={isMutating} canManage={canManage} completedContentIds={progress?.completedContentIds}
         allowRootReorder={Boolean(onMoveMainUp && onMoveMainDown)}
         onMoveUp={(parentId, id) => parentId ? onMoveUp(parentId, id) : onMoveMainUp?.(id)}
         onMoveDown={(parentId, id) => parentId ? onMoveDown(parentId, id) : onMoveMainDown?.(id)}
@@ -106,9 +89,9 @@ export function CourseContentsSidebar(props: CourseContentsSidebarProps) {
       />}
       {canManage && onMainContentSubmit && <Button variant="outline" className="mt-3 w-full gap-2 border-dashed" disabled={isLoading || isMutating} onClick={() => { setMainTitle(''); setMainDialogOpen(true); }}><PlusCircle className="h-4 w-4" />Neues Kapitel</Button>}
     </div>
-    {contents.length > 0 && <div className="shrink-0 space-y-2 border-t p-3">
-      <Button variant="outline" className="w-full gap-2" disabled={isGeneratingCertificate || !allTopicsCompleted} onClick={() => void generateCertificate()} aria-describedby={!allTopicsCompleted ? 'certificate-progress-hint' : undefined}><Award className="h-4 w-4" />{isGeneratingCertificate ? 'Wird erstellt …' : 'Zertifikat herunterladen'}</Button>
-      {!allTopicsCompleted && <p id="certificate-progress-hint" className="text-xs text-muted-foreground">Schließe alle Inhalte ab, um dein Zertifikat herunterzuladen.</p>}
+    {(contents.length > 0 || progress?.hasCertificate) && (progress?.canTrack || progress?.hasCertificate) && <div className="shrink-0 space-y-2 border-t p-3">
+      <Button variant="outline" className="w-full gap-2" disabled={isGeneratingCertificate || isProgressMutating || !canDownloadCertificate} onClick={() => void generateCertificate()} aria-describedby={!canDownloadCertificate ? 'certificate-progress-hint' : undefined}><Award className="h-4 w-4" />{isGeneratingCertificate ? 'Wird erstellt …' : 'Zertifikat herunterladen'}</Button>
+      {!canDownloadCertificate && <p id="certificate-progress-hint" className="text-xs text-muted-foreground">Schließe alle Inhalte ab und bestehe alle Quizfragen, um dein Zertifikat herunterzuladen.</p>}
       {certificateError && <p role="alert" className="text-xs text-destructive">{certificateError}</p>}
     </div>}
     {canManage && onMainContentSubmit && <NewMainTopicDialog isOpen={mainDialogOpen} onOpenChange={setMainDialogOpen} title={mainTitle} onTitleChange={setMainTitle} onSubmit={onMainContentSubmit} />}

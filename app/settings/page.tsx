@@ -12,7 +12,7 @@ import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Bell, Lock, Globe, CheckCircle, XCircle, Code, Database, Languages, Edit, Trash, Award, ExternalLink, Linkedin, Eye, User, Download, Layout } from 'lucide-react'
+import { Bell, Lock, CheckCircle, XCircle, Code, Database, Languages, Edit, Trash, Award, ExternalLink, Linkedin, Eye, User, Download, Layout } from 'lucide-react'
 import { ImageUpload } from "@/components/ImageUpload"
 import axios from 'axios'
 import { toast } from 'react-toastify'
@@ -71,6 +71,7 @@ export default function SettingsPage() {
   const [language, setLanguage] = useState('de')
   const [emailNotifications, setEmailNotifications] = useState(true)
   const [pushNotifications, setPushNotifications] = useState(true)
+  const [publicRankingOptIn, setPublicRankingOptIn] = useState(false)
 
   // Fähigkeiten-Verwaltung
   const [userSkills, setUserSkills] = useState<UserSkill[]>([])
@@ -113,6 +114,7 @@ export default function SettingsPage() {
         setLanguage(userSettings?.language || 'de')
         setEmailNotifications(userSettings?.emailNotifications ?? true)
         setPushNotifications(userSettings?.pushNotifications ?? true)
+        setPublicRankingOptIn(userSettings?.publicRankingOptIn === true)
         setCertificates(certificatesResponse.data)
         setIsLoaded(true)
       } catch (error) {
@@ -146,7 +148,8 @@ export default function SettingsPage() {
         email,
         language,
         emailNotifications,
-        pushNotifications
+        pushNotifications,
+        publicRankingOptIn
       })
       toast.success("Einstellungen erfolgreich gespeichert.")
     } catch (error) {
@@ -264,7 +267,7 @@ export default function SettingsPage() {
           <div className="max-w-4xl mx-auto">
             {loadError && <div role="alert" className="mb-6 rounded-xl border border-destructive/30 bg-destructive/5 p-4"><p>{loadError}</p><Button variant="outline" className="mt-3" onClick={() => window.location.reload()}>Erneut laden</Button></div>}
             <Tabs defaultValue="account" className="w-full">
-              <TabsList className="grid h-auto w-full grid-cols-2 gap-1 bg-muted p-1 mb-6 sm:grid-cols-4">
+              <TabsList className="grid h-auto w-full grid-cols-2 gap-1 bg-muted p-1 mb-6 sm:grid-cols-5">
                 <TabsTrigger value="account" className="w-full">
                   <User className="w-4 h-4 mr-2" />
                   Account
@@ -272,6 +275,10 @@ export default function SettingsPage() {
                 <TabsTrigger value="notifications" className="w-full">
                   <Bell className="w-4 h-4 mr-2" />
                   Benachrichtigungen
+                </TabsTrigger>
+                <TabsTrigger value="privacy" className="w-full">
+                  <Lock className="w-4 h-4 mr-2" />
+                  Privatsphäre
                 </TabsTrigger>
                 <TabsTrigger value="skills" className="w-full">
                   <Code className="w-4 h-4 mr-2" />
@@ -363,22 +370,15 @@ export default function SettingsPage() {
                 <Card>
                   <CardHeader>
                     <CardTitle>Privatsphäre-Einstellungen</CardTitle>
-                    <CardDescription>Sichtbarkeit deines Profils.</CardDescription>
+                    <CardDescription>Du entscheidest, ob dein Name und deine Punkte in der öffentlichen Rangliste erscheinen.</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="flex items-center space-x-2">
-                        <Globe className="w-5 h-5 text-muted-foreground" />
-                        <Label htmlFor="profile-visibility">Öffentliches Profil</Label>
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="space-y-1">
+                        <Label htmlFor="public-ranking-opt-in">In der öffentlichen Rangliste erscheinen</Label>
+                        <p id="ranking-consent-description" className="text-sm text-muted-foreground">Standardmäßig aus. Wenn du zustimmst, können andere deinen Namen, dein Profilbild und deine Punkte in der Rangliste sehen. Deine Punkte und Meilensteine bleiben auch ohne Zustimmung für dich sichtbar. Punkte gibt es für von Admins freigegebene Kurse mit gespeichertem gültigem Quiz und bestandenem Versuch für die aktuelle Kursversion. Du kannst die Zustimmung jederzeit zurücknehmen.</p>
                       </div>
-                      <Switch id="profile-visibility" />
-                    </div>
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="flex items-center space-x-2">
-                        <Lock className="w-5 h-5 text-muted-foreground" />
-                        <Label htmlFor="two-factor-auth">Zwei-Faktor-Authentifizierung</Label>
-                      </div>
-                      <Switch id="two-factor-auth" />
+                      <Switch id="public-ranking-opt-in" aria-describedby="ranking-consent-description" checked={publicRankingOptIn} onCheckedChange={setPublicRankingOptIn} disabled={!isLoaded || isLoading || isSaving} />
                     </div>
                   </CardContent>
                   <CardFooter>

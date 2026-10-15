@@ -1,15 +1,16 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useSession } from 'next-auth/react';
 import CourseClient from '@/app/courses/CourseClient';
 
 const mockRouter = { push: jest.fn() };
+const mockToast = jest.fn();
 jest.mock('next/navigation', () => ({ useRouter: () => mockRouter }));
 jest.mock('next-auth/react', () => ({ useSession: jest.fn() }));
 jest.mock('@/components/Sidebar', () => ({ Sidebar: () => null }));
 jest.mock('@/components/user-nav', () => ({ UserNav: () => null }));
 jest.mock('@/components/theme-toggle', () => ({ ThemeToggle: () => null }));
-jest.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: jest.fn() }) }));
+jest.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: mockToast }) }));
 
 const freeCourse = {
   id: 'free', title: 'Freier Kurs', instructor: 'Lehrkraft', duration: 'Flexibel',
@@ -48,4 +49,19 @@ it('joins and leaves a free course, while keeping paid joining unavailable', asy
   await waitFor(() => expect(screen.getByRole('button', { name: 'Kurs beitreten' })).toBeEnabled());
   expect(screen.getByRole('button', { name: 'Anmeldung derzeit nicht verfügbar' })).toBeDisabled();
   expect(global.fetch).not.toHaveBeenCalledWith('/api/courses/paid/enrollment', expect.anything());
+});
+
+it('shows the certificate protection error when a course deletion is rejected', async () => {
+  const user = userEvent.setup();
+  const protectedCourse = { ...freeCourse, id: 'protected', title: 'Zertifizierter Kurs', canDelete: true };
+  global.fetch = jest.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+    if (url === '/api/courses') return { ok: true, json: async () => [protectedCourse] };
+    if (url === '/api/courses/protected' && init?.method === 'DELETE') return { ok: false, status: 409, json: async () => ({ error: 'Der Kurs hat ausgestellte Zertifikate und kann nicht gelöscht werden.' }) };
+    throw new Error(`Unexpected fetch: ${url}`);
+  });
+  render(<CourseClient />);
+  await user.click(await screen.findByRole('button', { name: 'Löschen' }));
+  await user.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Löschen' }));
+  await waitFor(() => expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ description: 'Der Kurs hat ausgestellte Zertifikate und kann nicht gelöscht werden.', variant: 'destructive' })));
+  expect(screen.getByText('Zertifizierter Kurs')).toBeInTheDocument();
 });

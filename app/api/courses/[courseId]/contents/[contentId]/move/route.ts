@@ -4,6 +4,7 @@ import { authOptions } from '../../../../../auth/[...nextauth]/options';
 import { contentTransaction, ContentMutationError, presentContent } from '../../content-mutations';
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
 import { groupCourseContents } from '@/lib/server/group-course-contents';
+import { reconcileCourseRewards } from '@/lib/server/rewards';
 
 export async function PUT(
   request: NextRequest,
@@ -70,6 +71,7 @@ export async function PUT(
           for (const [index, content] of newDestination.entries()) {
             await tx.courseContent.update({ where: { id: content.id }, data: { order: index + 1, parentId: destinationParentId } });
           }
+          await reconcileCourseRewards(tx, params.courseId);
           return tx.courseContent.findMany({
             where: { courseId: params.courseId }, orderBy: [{ order: 'asc' }, { id: 'asc' }],
           });

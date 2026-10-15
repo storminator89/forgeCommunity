@@ -40,6 +40,7 @@ export async function GET() {
         price: true,
         currency: true,
         maxStudents: true,
+        rewardEligible: true,
         imageUrl: true,
         _count: { select: { enrollments: true } },
         enrollments: {
@@ -61,6 +62,8 @@ export async function GET() {
       category: course.description,
       participants: course._count.enrollments,
       maxStudents: course.maxStudents,
+      rewardEligible: course.rewardEligible,
+      canApproveRewards: session?.user?.role === 'ADMIN',
       price: course.price,
       currency: course.currency,
       isEnrolled: course.enrollments.length > 0,

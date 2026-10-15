@@ -51,6 +51,11 @@ describe('auth middleware public and API boundaries', () => {
     expect(response).toEqual(expect.objectContaining({ kind: 'json', status: 401 }));
   });
 
+  it('exposes only the opt-in leaderboard while keeping individual rewards private', async () => {
+    await expect(proxy(request('/api/leaderboard'))).resolves.toEqual({ kind: 'next' });
+    await expect(proxy(request('/api/rewards/me'))).resolves.toEqual(expect.objectContaining({ kind: 'json', status: 401 }));
+  });
+
   it('lets the opaque H5P player reach runtime and token-checked assets while keeping metadata private', async () => {
     await expect(proxy(request('/h5p-runtime/main.bundle.js'))).resolves.toEqual({ kind: 'next' });
     await expect(proxy(request('/api/h5p/assets/package/token/h5p.json'))).resolves.toEqual({ kind: 'next' });

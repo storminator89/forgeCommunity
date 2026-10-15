@@ -1,7 +1,7 @@
 "use client"
 
 import { AppShell, AppHeader } from '@/components/app-shell';
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { PageState } from '@/components/page-state'
 import { useSession } from 'next-auth/react'
@@ -11,7 +11,6 @@ import { Sidebar } from "@/components/Sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { PlusCircle } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { PointsAnimation } from "@/components/PointsAnimation"
 
 
 // Import our new components
@@ -50,10 +49,22 @@ interface Comment {
 }
 
 interface LeaderboardUser {
-  id: string
   name: string
   image: string | null
   points: number
+}
+
+interface RewardSummary {
+  points: number
+  completedCourses: number
+  firstCourseCompleted: boolean
+  history?: Array<{
+    type: 'AWARDED' | 'REVOKED' | 'REINSTATED'
+    reason: 'QUIZ_REVISED' | 'APPROVAL_WITHDRAWN' | 'LEARNING_CHANGED' | 'ACCOUNT_INELIGIBLE' | 'COURSE_REMOVED' | null
+    pointsDelta: number
+    at: string
+    courseTitle: string
+  }>
 }
 
 function isAbortError(error: unknown): boolean {
@@ -77,36 +88,26 @@ function Community() {
   const [editingPost, setEditingPost] = useState<Post | null>(null)
   const [leaderboardUsers, setLeaderboardUsers] = useState<LeaderboardUser[]>([])
   const [isLeaderboardLoading, setIsLeaderboardLoading] = useState(true)
+  const [rewardResult, setRewardResult] = useState<{ userId: string; data: RewardSummary | null; error: boolean } | null>(null)
   const [notification, setNotification] = useState<{ type: 'success' | 'error', message: string } | null>(null)
-
-  const [pointsAnimation, setPointsAnimation] = useState({
-    isVisible: false,
-    points: 0
-  })
 
   const postsRequestRef = useRef<AbortController | null>(null)
   const leaderboardRequestRef = useRef<AbortController | null>(null)
 
-  const fetchLeaderboard = useCallback(async () => {
-    leaderboardRequestRef.current?.abort()
+  useEffect(() => {
+    const userId = session?.user?.id
+    if (!userId) return
     const controller = new AbortController()
-    leaderboardRequestRef.current = controller
-    setIsLeaderboardLoading(true)
+    void fetchWithErrorHandling('/api/rewards/me', { signal: controller.signal })
+      .then((data: RewardSummary) => { if (!controller.signal.aborted) setRewardResult({ userId, data, error: false }) })
+      .catch((error) => { if (!controller.signal.aborted && !isAbortError(error)) setRewardResult({ userId, data: null, error: true }) })
+    return () => controller.abort()
+  }, [session?.user?.id])
 
-    try {
-      const data = await fetchWithErrorHandling('/api/leaderboard', { signal: controller.signal })
-      if (leaderboardRequestRef.current !== controller) return
-      setLeaderboardUsers(data)
-    } catch (error) {
-      if (controller.signal.aborted || leaderboardRequestRef.current !== controller || isAbortError(error)) return
-      setNotification({ type: 'error', message: 'Fehler beim Laden des Leaderboards.' })
-    } finally {
-      if (leaderboardRequestRef.current === controller) {
-        leaderboardRequestRef.current = null
-        setIsLeaderboardLoading(false)
-      }
-    }
-  }, [])
+  const activeRewardResult = rewardResult && session?.user?.id === rewardResult.userId ? rewardResult : null
+  const rewardsLoading = !!session?.user?.id && !activeRewardResult
+  const rewards = activeRewardResult?.data ?? null
+  const rewardsError = activeRewardResult?.error ?? false
 
   // Effects
   useEffect(() => {
@@ -196,7 +197,6 @@ function Community() {
         ))
       } else {
         setLocalPosts(prev => [response, ...prev])
-        showPointsAndUpdateLeaderboard(10) // Points for new post
       }
 
       setIsEditing(false)
@@ -238,9 +238,6 @@ function Community() {
         return post
       }))
 
-      if (isLikeAdded) {
-        showPointsAndUpdateLeaderboard(1) // Points for new like
-      }
     } catch (error) {
       setNotification({ type: 'error', message: 'Fehler beim Liken.' })
     }
@@ -287,7 +284,6 @@ function Community() {
         return post
       }))
 
-      showPointsAndUpdateLeaderboard(5) // Points for new comment
       setNotification({ type: 'success', message: 'Kommentar wurde hinzugefügt!' })
     } catch (error) {
       setNotification({ type: 'error', message: 'Fehler beim Hinzufügen des Kommentars.' })
@@ -326,11 +322,6 @@ function Community() {
     }
   }
 
-  const showPointsAndUpdateLeaderboard = (points: number) => {
-    setPointsAnimation({ isVisible: true, points })
-    fetchLeaderboard()
-  }
-
   // Calculate user stats
   const userStats = {
     posts: localPosts.filter(post => post.authorId === session?.user.id).length,
@@ -339,7 +330,6 @@ function Community() {
       .reduce((acc, post) => acc + post.votes, 0),
     comments: localPosts.reduce((acc, post) =>
       acc + ((post.comments || []).filter(comment => comment.authorId === session?.user.id).length), 0),
-    totalPoints: leaderboardUsers.find(user => user.id === session?.user.id)?.points || 0
   }
 
   return (
@@ -453,7 +443,7 @@ function Community() {
 
               {/* Sidebar - 4 cols - Sticky */}
               <div className="lg:col-span-4 space-y-6 lg:sticky lg:top-8">
-                <StatsCard stats={userStats} />
+                <StatsCard stats={userStats} rewards={rewards} rewardsLoading={rewardsLoading} rewardsError={rewardsError} isSignedIn={!!session} />
                 <LeaderboardCard
                   users={leaderboardUsers}
                   isLoading={isLeaderboardLoading}
@@ -464,11 +454,6 @@ function Community() {
         </main>
       </div>
 
-      <PointsAnimation
-        points={pointsAnimation.points}
-        isVisible={pointsAnimation.isVisible}
-        onComplete={() => setPointsAnimation({ isVisible: false, points: 0 })}
-      />
     </AppShell>
   )
 }

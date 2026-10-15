@@ -32,6 +32,7 @@ export async function GET() {
                         language: true,
                         emailNotifications: true,
                         pushNotifications: true,
+                        publicRankingOptIn: true,
                     }
                 }
             }
@@ -117,17 +118,19 @@ export async function PUT(request: NextRequest) {
                     verificationToken: null,
                     resetPasswordToken: null,
                 }),
-                ...((data.language !== undefined || data.emailNotifications !== undefined || data.pushNotifications !== undefined) && { userSettings: {
+                ...((data.language !== undefined || data.emailNotifications !== undefined || data.pushNotifications !== undefined || data.publicRankingOptIn !== undefined) && { userSettings: {
                     upsert: {
                         create: {
                             language: data.language,
                             emailNotifications: data.emailNotifications,
                             pushNotifications: data.pushNotifications,
+                            publicRankingOptIn: data.publicRankingOptIn,
                         },
                         update: {
                             language: data.language,
                             emailNotifications: data.emailNotifications,
                             pushNotifications: data.pushNotifications,
+                            publicRankingOptIn: data.publicRankingOptIn,
                         }
                     }
                 } })
@@ -144,6 +147,7 @@ export async function PUT(request: NextRequest) {
                         language: true,
                         emailNotifications: true,
                         pushNotifications: true,
+                        publicRankingOptIn: true,
                     }
                 }
             }

@@ -35,4 +35,5 @@ export const ownProfileInput = z.object({
   language: z.string().max(20).optional(),
   emailNotifications: z.boolean().optional(),
   pushNotifications: z.boolean().optional(),
+  publicRankingOptIn: z.boolean().optional(),
 }).strict();

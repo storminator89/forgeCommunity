@@ -1,5 +1,5 @@
 import { Users, GraduationCap, Calendar, Library, BookOpen, Briefcase, Award, Bookmark,
-  MessageCircle, Bell, Settings, Info, LayoutDashboard, Search } from 'lucide-react';
+  MessageCircle, Bell, Settings, Info, LayoutDashboard, Search, Flag } from 'lucide-react';
 
 export const navigationGroups = [
   { title: 'Entdecken', items: [
@@ -28,6 +28,9 @@ export const utilityNavigation = [
 export const adminNavigation = [
   { name: 'Dashboard', icon: LayoutDashboard, href: '/admin/dashboard' },
   { name: 'Benutzerverwaltung', icon: Users, href: '/admin/users' },
+];
+export const moderationNavigation = [
+  { name: 'Meldungen prüfen', icon: Flag, href: '/moderation' },
 ];
 export const navigationItems = [...navigationGroups.flatMap(group => group.items), ...utilityNavigation];
 export function isNavigationActive(pathname: string, href: string, aliases: string[] = []) {

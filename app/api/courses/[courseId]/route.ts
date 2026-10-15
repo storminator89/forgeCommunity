@@ -4,6 +4,8 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../auth/[...nextauth]/options";
 import { deleteCourseDependencies } from '@/lib/server/course-deletion';
 
+class CourseHasCertificatesError extends Error {}
+
 export async function GET(
   request: NextRequest,
   props: { params: Promise<{ courseId: string }> }
@@ -106,6 +108,8 @@ export async function DELETE(
 
     // Delete all related records in the correct order
     await prisma.$transaction(async (tx) => {
+      const issued = await tx.certificate.findFirst({ where: { courseId }, select: { id: true } });
+      if (issued) throw new CourseHasCertificatesError();
       await deleteCourseDependencies(tx, [courseId]);
 
       // Finally delete the course
@@ -116,6 +120,9 @@ export async function DELETE(
 
     return NextResponse.json({ message: 'Course and all related data deleted successfully' });
   } catch (error) {
+    if (error instanceof CourseHasCertificatesError) {
+      return NextResponse.json({ error: 'Der Kurs hat ausgestellte Zertifikate und kann nicht gelöscht werden.' }, { status: 409 });
+    }
     console.error('Error deleting course:', error);
     return NextResponse.json(
       {

@@ -9,6 +9,8 @@ import { groupCourseContents } from '@/lib/server/group-course-contents';
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
 import { assertCanAttachH5P } from '@/lib/server/h5p-access';
 import { H5PValidationError } from '@/lib/server/h5p-archive';
+import { publicCourseContent } from '@/lib/server/course-progress';
+import { reconcileCourseRewards } from '@/lib/server/rewards';
 import { assertParent, canEdit, contentTransaction, ContentMutationError, normalizeOrder, presentContent, prepareContent, siblings, validateContentFields } from './content-mutations';
 
 // GET-Methode zum Abrufen der Kursinhalte
@@ -35,7 +37,8 @@ export async function GET(
       return NextResponse.json({ error: 'Course not found' }, { status: 404 });
     }
 
-    if (session.user.role !== 'ADMIN' && course.instructorId !== session.user.id) {
+    const canEdit = session.user.role === 'ADMIN' || course.instructorId === session.user.id;
+    if (!canEdit) {
       const enrollment = await prisma.enrollment.findUnique({
         where: {
           userId_courseId: {
@@ -56,7 +59,12 @@ export async function GET(
       orderBy: [{ order: 'asc' }, { id: 'asc' }],
     });
 
-    return NextResponse.json(groupCourseContents(contents.map(presentContent)));
+    // Editors need complete quiz keys; enrolled learners only receive a
+    // strictly allowlisted practice payload. The grading key stays server-side.
+    return NextResponse.json(groupCourseContents(contents.map(content => {
+      const presented = presentContent(content);
+      return canEdit ? presented : publicCourseContent(presented);
+    })));
   } catch (error) {
     console.error('Failed to fetch course contents:', error);
     return NextResponse.json({ error: 'Failed to fetch course contents' }, { status: 500 });
@@ -111,6 +119,7 @@ export async function POST(
       const ids = currentSiblings.map(item => item.id);
       ids.splice(insertionIndex, 0, created.id);
       await normalizeOrder(tx, ids);
+      await reconcileCourseRewards(tx, courseId);
       return presentContent({ ...created, order: insertionIndex + 1 });
     });
 

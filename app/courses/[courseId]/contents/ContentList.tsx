@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog"
-import { isPageVisited } from './utils/visitedPages'
 
 interface ContentListProps {
   contents: CourseContent[];
@@ -30,13 +29,13 @@ interface ContentListProps {
   canManage?: boolean;
   allowRootReorder?: boolean;
   onAddContent?: (parentId: string) => void;
-  onVisitedToggle: (contentId: string) => void;
+  completedContentIds?: string[];
 }
 
 export function ContentList(props: ContentListProps) {
   const { contents, selectedContentId, onContentSelect, onDeleteClick, isInlineEditing, inlineEditTitle,
     onInlineEditSubmit, setIsInlineEditing, setInlineEditTitle, onMoveUp, onMoveDown, mainContentId,
-    courseId, isLoading = false, isMutating = false, canManage = true, allowRootReorder = true, onAddContent, onVisitedToggle } = props;
+    isLoading = false, isMutating = false, canManage = true, allowRootReorder = true, onAddContent, completedContentIds = [] } = props;
   const [deleteTarget, setDeleteTarget] = useState<CourseContent | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,14 +58,14 @@ export function ContentList(props: ContentListProps) {
   return (
     <div className="min-w-0 space-y-1">
       {orderedContents.map((content, index) => {
-        const visited = isPageVisited(courseId, content.id);
         const hasChildren = Boolean(content.subContents?.length);
+        const completed = !hasChildren && completedContentIds.includes(content.id);
         const expanded = !collapsedIds.has(content.id);
         return <Fragment key={content.id}>
           <div className={cn('group min-w-0 rounded-lg border border-transparent px-2 py-2', selectedContentId === content.id ? 'border-primary/20 bg-primary/10' : 'hover:bg-accent/60')}>
             <div className="flex min-w-0 items-center gap-2">
               {hasChildren && <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" aria-label={`${expanded ? 'Einklappen' : 'Aufklappen'}: ${content.title}`} aria-expanded={expanded} aria-controls={`topic-children-${content.id}`} onClick={() => setCollapsedIds(previous => { const next = new Set(previous); if (next.has(content.id)) next.delete(content.id); else next.add(content.id); return next; })}><ChevronRight className={cn('h-4 w-4', expanded && 'rotate-90')} /></Button>}
-              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" aria-label={`${visited ? 'Als ungelesen' : 'Als gelesen'} markieren: ${content.title}`} aria-pressed={visited} onClick={() => onVisitedToggle(content.id)}>{visited ? <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" /> : <FileText className="h-4 w-4 text-muted-foreground" />}</Button>
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center" role={completed ? 'img' : undefined} title={completed ? 'Abgeschlossen' : undefined} aria-label={completed ? `${content.title}: abgeschlossen` : undefined} aria-hidden={!completed}>{completed ? <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" /> : <FileText className="h-4 w-4 text-muted-foreground" />}</span>
               {canManage && isInlineEditing === content.id ? (
                 <form className="min-w-0 flex-1" onSubmit={event => { event.preventDefault(); const title = inlineEditTitle.trim(); if (!title) return; if (title === content.title) { cancelRename(); return; } void runMutation(() => onInlineEditSubmit(content.id, title), cancelRename); }}>
                   <Input autoFocus aria-label={`Titel von ${content.title}`} value={inlineEditTitle} onChange={event => setInlineEditTitle(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); if (!busy) cancelRename(); } }} disabled={busy} className="h-9 text-sm" />

@@ -10,7 +10,7 @@ import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAppNavigation } from '@/components/app-shell';
 import { NavigationSearch } from '@/components/navigation-search';
-import { navigationGroups, utilityNavigation, adminNavigation, isNavigationActive } from '@/lib/navigation';
+import { navigationGroups, utilityNavigation, adminNavigation, moderationNavigation, isNavigationActive } from '@/lib/navigation';
 import { cn } from '@/lib/utils';
 
 function subscribeCollapse(callback: () => void) {
@@ -42,6 +42,7 @@ export function Sidebar({ className, isOpen: externalOpen = false, onClose }: Si
 
   const renderNavigation = (compact: boolean, mobile = false) => {
     const groups = [...navigationGroups, { title: 'Einstellungen', items: utilityNavigation },
+      ...(['ADMIN', 'MODERATOR'].includes(session?.user?.role ?? '') ? [{ title: 'Moderation', items: moderationNavigation }] : []),
       ...(session?.user?.role === 'ADMIN' ? [{ title: 'Administration', items: adminNavigation }] : [])];
     return <div className="flex h-full flex-col">
       <div className={cn("flex h-20 shrink-0 gap-2 px-4", compact ? "flex-col items-center justify-center gap-1" : "items-center")}>

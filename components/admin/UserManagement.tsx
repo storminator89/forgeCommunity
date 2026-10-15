@@ -22,6 +22,8 @@ import {
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import {
   UserPlus,
   RefreshCw,
@@ -78,6 +80,7 @@ interface User {
   endorsements: number;
   lastLogin?: string | null;
   emailVerified?: string | null;
+  isTestAccount?: boolean;
   settings?: UserSettings;
   stats?: UserStats;
   badges?: { name: string; awardedAt: string }[];
@@ -92,6 +95,8 @@ export default function UserManagement() {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
+  const [testAccountPendingId, setTestAccountPendingId] = useState<string | null>(null);
+  const [testAccountError, setTestAccountError] = useState<string | null>(null);
   const { data: session, status } = useSession();
   const router = useRouter();
 
@@ -188,6 +193,27 @@ export default function UserManagement() {
       }
     } catch (error) {
       console.error('Error deleting user:', error);
+    }
+  };
+
+  const updateTestAccount = async (user: User, isTestAccount: boolean) => {
+    if (session?.user?.role !== 'ADMIN') return;
+    setTestAccountPendingId(user.id);
+    setTestAccountError(null);
+    try {
+      const response = await fetch(`/api/admin/users/${user.id}/test-account`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isTestAccount }),
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(result?.error || 'Der Testkonto-Status konnte nicht geändert werden.');
+      setUsers(current => current.map(item => item.id === user.id ? { ...item, isTestAccount: result.isTestAccount } : item));
+      setSelectedUser(current => current?.id === user.id ? { ...current, isTestAccount: result.isTestAccount } : current);
+    } catch (error) {
+      setTestAccountError(error instanceof Error ? error.message : 'Der Testkonto-Status konnte nicht geändert werden.');
+    } finally {
+      setTestAccountPendingId(null);
     }
   };
 
@@ -345,6 +371,7 @@ export default function UserManagement() {
                                   <Badge variant={getRoleBadgeVariant(user.role)}>
                                     {user.role}
                                   </Badge>
+                                  {user.isTestAccount && <Badge variant="outline">Testkonto</Badge>}
                                 </div>
                               </TableCell>
                               <TableCell className="dark:text-muted-foreground">
@@ -419,6 +446,17 @@ export default function UserManagement() {
                           <p className="text-sm text-muted-foreground">{selectedUser.title}</p>
                         </div>
                       </div>
+
+                      {session.user.role === 'ADMIN' && <div className="mt-6 rounded-md border p-4">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="space-y-1">
+                            <Label htmlFor={`test-account-${selectedUser.id}`}>Testkonto</Label>
+                            <p id={`test-account-description-${selectedUser.id}`} className="text-sm text-muted-foreground">Testkonten können keine Punkte oder Kursbelohnungen verdienen und erscheinen nicht in der Rangliste.</p>
+                          </div>
+                          <Switch id={`test-account-${selectedUser.id}`} aria-describedby={`test-account-description-${selectedUser.id}`} checked={selectedUser.isTestAccount === true} disabled={testAccountPendingId === selectedUser.id} onCheckedChange={(checked) => void updateTestAccount(selectedUser, checked)} />
+                        </div>
+                        {testAccountError && <p role="alert" className="mt-2 text-sm text-destructive">{testAccountError}</p>}
+                      </div>}
 
                       <Tabs defaultValue="overview" className="mt-6">
                         <TabsList className="grid h-auto w-full grid-cols-2 gap-1 p-1">

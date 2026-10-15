@@ -35,6 +35,8 @@ interface Course {
   isEnrolled: boolean;
   completed: boolean;
   canDelete: boolean;
+  rewardEligible?: boolean;
+  canApproveRewards?: boolean;
   imageUrl: string | null;
 }
 
@@ -46,6 +48,7 @@ export default function CourseClient() {
   const [loadError, setLoadError] = useState(false);
   const [categories, setCategories] = useState<string[]>([]);
   const [pendingCourseId, setPendingCourseId] = useState<string | null>(null);
+  const [rewardPendingCourseId, setRewardPendingCourseId] = useState<string | null>(null);
   const { data: session, status } = useSession();
   const router = useRouter();
   const { toast } = useToast();
@@ -110,11 +113,32 @@ export default function CourseClient() {
         method: 'DELETE',
       });
       if (!response.ok) {
-        throw new Error('Failed to delete course');
+        const result = await response.json().catch(() => null);
+        throw new Error(typeof result?.error === 'string' ? result.error : 'Der Kurs konnte nicht gelöscht werden.');
       }
-      setCourses(courses.filter(course => course.id !== courseId));
+      setCourses(current => current.filter(course => course.id !== courseId));
     } catch (error) {
-      console.error('Error deleting course:', error);
+      toast({ title: 'Kurs konnte nicht gelöscht werden', description: error instanceof Error ? error.message : 'Bitte versuche es erneut.', variant: 'destructive' });
+    }
+  };
+
+  const updateRewardEligibility = async (course: Course, eligible: boolean) => {
+    if (session?.user?.role !== 'ADMIN' || !course.canApproveRewards) return;
+    setRewardPendingCourseId(course.id);
+    try {
+      const response = await fetch(`/api/admin/courses/${course.id}/reward-eligibility`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eligible }),
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(result?.error || 'Die Freigabe konnte nicht geändert werden.');
+      setCourses(current => current.map(item => item.id === course.id ? { ...item, rewardEligible: result.rewardEligible } : item));
+      toast({ title: eligible ? 'Kurs für Belohnungen freigegeben' : 'Belohnungsfreigabe widerrufen' });
+    } catch (error) {
+      toast({ title: 'Freigabe konnte nicht geändert werden', description: error instanceof Error ? error.message : 'Bitte erneut versuchen.', variant: 'destructive' });
+    } finally {
+      setRewardPendingCourseId(null);
     }
   };
 
@@ -186,7 +210,9 @@ export default function CourseClient() {
                 {!isLoading && !loadError && filteredCourses.map((course) => (
                   <CourseCard key={course.id} course={course} onDelete={handleDeleteCourse}
                     onJoin={() => void changeEnrollment(course)} onLeave={() => void changeEnrollment(course, true)}
-                    pending={pendingCourseId === course.id} />
+                    pending={pendingCourseId === course.id} canManageRewards={session.user.role === 'ADMIN' && course.canApproveRewards === true}
+                    rewardPending={rewardPendingCourseId === course.id}
+                    onRewardEligibilityChange={(eligible) => void updateRewardEligibility(course, eligible)} />
                 ))}
               </motion.div>
             </AnimatePresence>
@@ -216,9 +242,12 @@ interface CourseCardProps {
   onJoin: () => void;
   onLeave: () => void;
   pending: boolean;
+  canManageRewards: boolean;
+  rewardPending: boolean;
+  onRewardEligibilityChange: (eligible: boolean) => void;
 }
 
-function CourseCard({ course, onDelete, onJoin, onLeave, pending }: CourseCardProps) {
+function CourseCard({ course, onDelete, onJoin, onLeave, pending, canManageRewards, rewardPending, onRewardEligibilityChange }: CourseCardProps) {
   const router = useRouter();
   const isPaid = course.price !== null && course.price > 0;
   const isFull = course.maxStudents !== null && course.participants >= course.maxStudents;
@@ -267,6 +296,7 @@ function CourseCard({ course, onDelete, onJoin, onLeave, pending }: CourseCardPr
           </AlertDialog>}
         </div>
         <p className="text-muted-foreground mb-4">{course.instructor}</p>
+        {course.rewardEligible && <Badge variant="secondary" className="mb-3 w-fit">Für Kursbelohnungen freigegeben</Badge>}
         <div className="flex items-center text-sm text-muted-foreground mb-2">
           <Clock className="w-4 h-4 mr-2" />
           <span>{course.duration}</span>
@@ -282,6 +312,23 @@ function CourseCard({ course, onDelete, onJoin, onLeave, pending }: CourseCardPr
           <span>{course.participants}{course.maxStudents !== null ? ` / ${course.maxStudents}` : ''} Teilnehmer</span>
         </div>
         {isPaid && <p className="mb-3 text-sm font-medium">{course.price?.toFixed(2)} {course.currency || 'EUR'}</p>}
+        {canManageRewards && <div className="mb-4 rounded-md border p-3">
+          <p className="text-sm font-medium">Kursbelohnungen</p>
+          <p className="mt-1 text-xs text-muted-foreground">Nur freigeben, wenn ein gültiges Quiz gespeichert ist. Punkte zählen erst bei einem bestandenen Versuch für die aktuelle Kursversion.</p>
+          {course.rewardEligible ? <AlertDialog>
+            <AlertDialogTrigger asChild><Button variant="outline" size="sm" className="mt-3" disabled={rewardPending}>Freigabe widerrufen</Button></AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Belohnungsfreigabe widerrufen?</AlertDialogTitle>
+                <AlertDialogDescription>Dieser Kurs zählt dann nicht mehr für Kursbelohnungen. Bereits vergebene Belohnungen können sich ändern.</AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                <AlertDialogAction onClick={() => onRewardEligibilityChange(false)}>Freigabe widerrufen</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog> : <Button variant="outline" size="sm" className="mt-3" disabled={rewardPending} onClick={() => onRewardEligibilityChange(true)}>Für Belohnungen freigeben</Button>}
+        </div>}
         <div className="mt-auto">
           <TooltipProvider>
             <Tooltip>

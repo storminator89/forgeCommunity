@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../../../../../auth/[...nextauth]/options';
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
 import { groupCourseContents } from '@/lib/server/group-course-contents';
+import { reconcileCourseRewards } from '@/lib/server/rewards';
 import { canEdit, contentTransaction, ContentMutationError, normalizeOrder, presentContent, siblings } from '../../content-mutations';
 
 export async function PUT(request: NextRequest, props: { params: Promise<{ courseId: string; contentId: string }> }) {
@@ -27,6 +28,7 @@ export async function PUT(request: NextRequest, props: { params: Promise<{ cours
       // Swapping equal legacy order values never changes their sort order.
       // Normalize the complete sibling set to unique ranks in one transaction.
       await normalizeOrder(tx, ordered.map(item => item.id));
+      await reconcileCourseRewards(tx, courseId);
       return tx.courseContent.findMany({ where: { courseId }, orderBy: [{ order: 'asc' }, { id: 'asc' }] });
     });
     return NextResponse.json({ success: true, contents: groupCourseContents(contents.map(presentContent)) });

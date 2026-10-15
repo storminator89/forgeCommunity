@@ -8,6 +8,7 @@ import { adminUserInput } from '@/lib/server/account-security'
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input'
 import { deleteCourseDependencies } from '@/lib/server/course-deletion'
 import { decrementSkillEndorsementsForDeletedUser } from '@/lib/server/skill-endorsements'
+import { reconcileUserRewards } from '@/lib/server/rewards'
 
 class LastAdminError extends Error {}
 class MissingUserError extends Error {}
@@ -56,6 +57,7 @@ export async function GET(
         title: true,
         contact: true,
         role: true,
+        isTestAccount: true,
         createdAt: true,
         updatedAt: true,
         lastLogin: true,
@@ -237,7 +239,7 @@ export async function PUT(
         const adminCount = await tx.user.count({ where: { role: 'ADMIN' } })
         if (adminCount <= 1) throw new LastAdminError()
       }
-      return tx.user.update({
+      const updated = await tx.user.update({
         where: { id: params.id },
         data: {
           ...updateData,
@@ -255,6 +257,8 @@ export async function PUT(
         },
         include: { userSettings: true },
       })
+      if (target?.role !== updated.role) await reconcileUserRewards(tx, params.id)
+      return updated
     }, { isolationLevel: 'Serializable' })
 
     // Entferne sensitive Daten

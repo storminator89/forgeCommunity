@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Card, CardContent } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { ThumbsUp, Send, Loader2 } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
+import { ReportControl } from './ReportControl'
 
 const DEFAULT_AVATAR_URL = ''
 
@@ -27,6 +28,7 @@ interface CommentSectionProps {
   postId: string
   comments: Comment[]
   currentUserId?: string
+  canReport?: boolean
   isLoading?: boolean
   onAddComment?: (postId: string, content: string) => Promise<void>
   onLikeComment?: (commentId: string, postId: string) => Promise<void>
@@ -36,11 +38,24 @@ export function CommentSection({
   postId,
   comments,
   currentUserId,
+  canReport = true,
   isLoading = false,
   onAddComment,
   onLikeComment
 }: CommentSectionProps) {
   const [newCommentContent, setNewCommentContent] = useState('')
+
+  useEffect(() => {
+    const followHash = () => {
+      const hash = window.location.hash.slice(1);
+      if (comments?.some((comment) => hash === `comment-${comment.id}`)) {
+        document.getElementById(hash)?.scrollIntoView({ block: 'center' });
+      }
+    };
+    const timer = window.setTimeout(followHash, 0);
+    window.addEventListener('hashchange', followHash);
+    return () => { window.clearTimeout(timer); window.removeEventListener('hashchange', followHash); };
+  }, [comments]);
 
   const handleSubmit = async () => {
     if (!newCommentContent.trim()) return
@@ -94,7 +109,7 @@ export function CommentSection({
       </div>
 
       {(comments || []).map((comment) => (
-        <Card key={comment.id} className="bg-card p-3 rounded-lg shadow-sm border border-border">
+        <Card id={`comment-${comment.id}`} key={comment.id} className="bg-card p-3 rounded-lg shadow-sm border border-border">
           <CardContent className="p-0">
             <div className="flex items-center space-x-3 mb-2">
               <Avatar className="h-6 w-6">
@@ -141,6 +156,8 @@ export function CommentSection({
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
+              {canReport && currentUserId && currentUserId !== comment.authorId &&
+                <ReportControl targetType="COMMENT" targetId={comment.id} />}
             </div>
           </CardContent>
         </Card>
