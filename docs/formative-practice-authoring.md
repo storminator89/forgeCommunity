@@ -21,7 +21,7 @@ No mutable active-practice pointer is needed. The current practice snapshot is t
 
 At publish, the server reads the **currently active** credential course publication solely to compare its choice questions against proposed practice items. The comparison key is the prompt plus the unordered option strings after Unicode NFKC normalization, trimming, whitespace collapsing, and lowercasing. Choice order, grading key, and explanation do not affect the key. An exact normalized match blocks practice publication with 409. This includes credential single-choice, multiple-choice, and true/false questions with options. It does not attempt paraphrase, translated-question, image, or other semantic-overlap detection. Authors should review near-duplicates manually. The credential quiz answer and explanation are never copied into the practice snapshot or returned through these endpoints.
 
-The authoring API surface is under `/api/courses/practice/objectives`, `/api/courses/practice/items`, and `/api/courses/:courseId/practice/authoring`. The only answer-bearing read is the owner-only practice-item revision endpoint. All responses are private and `no-store`.
+The authoring API surface is under `/api/courses/practice/objectives`, `/api/courses/practice/items`, and `/api/courses/:courseId/practice/authoring`. Answer-bearing data is returned only by the owner-only practice-item revision read and the owner/course-author-gated private POST preview of selected saved revisions. Both endpoints require authentication and authorization. All responses are private and `no-store`.
 
 ## Storage deployment and checks
 

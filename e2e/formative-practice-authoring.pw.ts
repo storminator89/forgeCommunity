@@ -62,10 +62,13 @@ async function assertNoHorizontalLoss(page: Page) {
   expect(await page.evaluate(() => Math.max(document.documentElement.scrollWidth,
     document.body.scrollWidth) - innerWidth)).toBeLessThanOrEqual(1)
   const actions = page.getByRole('button', { name: /^(Vorschau|Veröffentlichung prüfen|Diese Übungsfassung veröffentlichen)$/ })
-  expect(await actions.evaluateAll(buttons => buttons.every(button => {
+  const clippedActions = await actions.evaluateAll(buttons => buttons.flatMap(button => {
     const box = button.getBoundingClientRect()
-    return box.left >= -1 && box.right <= innerWidth + 1
-  }))).toBe(true)
+    return box.left >= -1 && box.right <= innerWidth + 1 ? [] : [{
+      label: button.textContent?.trim(), left: box.left, right: box.right, viewport: innerWidth,
+    }]
+  }))
+  expect(clippedActions).toEqual([])
 }
 
 async function assertTextPaintFits(locator: Locator) {
