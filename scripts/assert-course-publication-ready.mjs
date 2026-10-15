@@ -12,7 +12,7 @@ const reviewedSqlite = [
   '0007_accepted_solutions.sql', '0008_notification_targets.sql',
   '0009_private_learning_goals.sql', '0010_staged_course_publication.sql',
   '0011_question_bank.sql', '0012_manual_assignments.sql',
-  '0013_verified_learning_pathways.sql',
+  '0013_verified_learning_pathways.sql', '0014_quiz_confidence_evidence.sql',
 ];
 const reviewedPostgresql = [
   '0001_skill_endorsements.sql', '0002_course_progress.sql', '0003_reports.sql',
@@ -20,7 +20,7 @@ const reviewedPostgresql = [
   '0006_accepted_solutions.sql', '0007_notification_targets.sql',
   '0008_private_learning_goals.sql', '0009_staged_course_publication.sql',
   '0010_question_bank.sql', '0011_manual_assignments.sql',
-  '0012_verified_learning_pathways.sql',
+  '0012_verified_learning_pathways.sql', '0013_quiz_confidence_evidence.sql',
 ];
 
 function expectedHistory(provider) {

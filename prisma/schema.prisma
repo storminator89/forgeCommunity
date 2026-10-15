@@ -507,17 +507,39 @@ model QuizAttempt {
   contentId    String
   submissionId String
   answerDigest String
+  confidenceDigest String?
   revision     String
   score        Float
   passed       Boolean
   submittedAt  DateTime @default(now())
   publicationId String?
   publication CoursePublication? @relation("AttemptPublication", fields: [publicationId], references: [id], onDelete: SetNull)
+  itemEvidence QuizAttemptItemEvidence[]
 
   @@unique([userId, contentId, submissionId])
   @@index([userId, contentId, revision, submittedAt])
   @@index([courseId])
   @@index([publicationId])
+}
+
+// Private, server-graded evidence for a single immutable quiz attempt. The
+// parent carries the publication and scored content revision; no raw answer or
+// grading key is persisted here.
+model QuizAttemptItemEvidence {
+  attempt QuizAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  attemptId String
+  questionId String
+  correct Boolean
+  confidence QuizConfidence?
+
+  @@id([attemptId, questionId])
+}
+
+enum QuizConfidence {
+  SURE
+  SOMEWHAT_SURE
+  UNSURE
+  GUESSED
 }
 
 /** Learner text is private. A fresh submission never replaces an older answer. */

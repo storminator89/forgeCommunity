@@ -4,7 +4,8 @@ import { getServerSession } from 'next-auth/next';
 import { Prisma } from '@prisma/client';
 import { authOptions } from '@/app/api/auth/[...nextauth]/options';
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
-import { contentQuiz, courseContentRevision, gradeQuiz, InvalidQuizAnswersError, matchesContentVersionToken, recordCourseCompletion } from '@/lib/server/course-progress';
+import { contentQuiz, courseContentRevision, gradeQuizWithItemEvidence, InvalidQuizAnswersError, matchesContentVersionToken, recordCourseCompletion } from '@/lib/server/course-progress';
+import { assertConfidenceQuestionIds, InvalidQuizConfidenceError, parseQuizConfidence } from '@/lib/server/quiz-confidence';
 import { getQuizValidationError } from '@/app/courses/[courseId]/contents/types';
 import { contentTransaction } from '../../content-mutations';
 import { assertCurrentPrerequisites, CoursePathError } from '@/lib/server/course-prerequisites';
@@ -26,6 +27,7 @@ export async function POST(request: NextRequest, props: Params) {
     const userId = session.user.id;
     const submissionId = body.submissionId;
     const answers = body.answers;
+    const confidence = parseQuizConfidence(body.confidenceByQuestion);
     // A digest is stored only in the database for safe idempotent retries; it
     // must never be returned to learners because answer-space is often small.
     const answerDigest = createHash('sha256').update(JSON.stringify(answers)).digest('hex');
@@ -35,10 +37,17 @@ export async function POST(request: NextRequest, props: Params) {
       if (!course?.activePublicationId) return { status: 404, error: 'Course not found' };
       const enrollment = await tx.enrollment.findUnique({ where: { userId_courseId: { userId, courseId } }, select: { id: true } });
       if (!enrollment) return { status: 403, error: 'Enrollment required' };
-      const previous = await tx.quizAttempt.findUnique({ where: { userId_contentId_submissionId: { userId, contentId, submissionId } } });
+      const previous = await tx.quizAttempt.findUnique({ where: { userId_contentId_submissionId: { userId, contentId, submissionId } },
+        include: { itemEvidence: { select: { questionId: true } } } });
       if (previous) {
-        if (previous.courseId !== courseId || previous.publicationId !== body.publicationId || previous.answerDigest !== answerDigest) {
-          return { status: 409, error: 'Submission ID was already used for different answers or a different publication' };
+        // Evidence rows retain the original published question IDs even after
+        // republishing, so a lost-response retry can validate its null keys.
+        if (previous.itemEvidence.length) {
+          assertConfidenceQuestionIds(confidence, previous.itemEvidence.map(item => ({ id: item.questionId })));
+        }
+        if (previous.courseId !== courseId || previous.publicationId !== body.publicationId ||
+            previous.answerDigest !== answerDigest || (previous.confidenceDigest ?? null) !== confidence.digest) {
+          return { status: 409, error: 'Submission ID was already used for different answers, confidence or a different publication' };
         }
         // A lost-response retry may return its original outcome after a later
         // publication. It must never create fresh progress on that later version.
@@ -63,9 +72,13 @@ export async function POST(request: NextRequest, props: Params) {
         const oldest = recentFailures[recentFailures.length - 1].submittedAt;
         return { status: 429, error: 'Please review the course and try again later', retryAfterSeconds: Math.max(1, Math.ceil((oldest.getTime() + 60 * 60 * 1000 - now.getTime()) / 1000)) };
       }
-      const graded = gradeQuiz(quiz, answers);
+      assertConfidenceQuestionIds(confidence, quiz.questions);
+      const graded = gradeQuizWithItemEvidence(quiz, answers);
       await tx.quizAttempt.create({ data: { userId, courseId, contentId, submissionId, answerDigest, revision,
-        publicationId: course.activePublicationId, score: graded.score, passed: graded.passed } });
+        publicationId: course.activePublicationId, confidenceDigest: confidence.digest, score: graded.score, passed: graded.passed,
+        itemEvidence: { create: graded.items.map(item => ({
+          questionId: item.questionId, correct: item.correct, confidence: confidence.values.get(item.questionId) ?? null,
+        })) } } });
       if (graded.passed) {
         const existing = await tx.courseContentProgress.findUnique({ where: { userId_contentId: { userId, contentId } }, select: { revision: true } });
         if (existing?.revision !== revision) {
@@ -73,7 +86,7 @@ export async function POST(request: NextRequest, props: Params) {
         }
         await recordCourseCompletion(tx, userId, courseId);
       }
-      return { status: 200, ...graded };
+      return { status: 200, score: graded.score, passed: graded.passed };
     });
 
     let outcome: AttemptOutcome;
@@ -87,8 +100,16 @@ export async function POST(request: NextRequest, props: Params) {
         if (!course?.activePublicationId) return { status: 404, error: 'Course not found' };
         const enrollment = await tx.enrollment.findUnique({ where: { userId_courseId: { userId, courseId } }, select: { id: true } });
         if (!enrollment) return { status: 403, error: 'Enrollment required' };
-        const saved = await tx.quizAttempt.findUnique({ where: { userId_contentId_submissionId: { userId, contentId, submissionId } } });
-        if (!saved || saved.answerDigest !== answerDigest || saved.courseId !== courseId || saved.publicationId !== body.publicationId) throw error;
+        const saved = await tx.quizAttempt.findUnique({ where: { userId_contentId_submissionId: { userId, contentId, submissionId } },
+          include: { itemEvidence: { select: { questionId: true } } } });
+        if (!saved) throw error;
+        if (saved.itemEvidence.length) {
+          assertConfidenceQuestionIds(confidence, saved.itemEvidence.map(item => ({ id: item.questionId })));
+        }
+        if (saved.answerDigest !== answerDigest || saved.courseId !== courseId ||
+            saved.publicationId !== body.publicationId || (saved.confidenceDigest ?? null) !== confidence.digest) {
+          return { status: 409, error: 'Submission ID was already used for different answers, confidence or a different publication' };
+        }
         return { status: 200, score: saved.score, passed: saved.passed };
       });
     }
@@ -98,6 +119,7 @@ export async function POST(request: NextRequest, props: Params) {
   } catch (error) {
     if (error instanceof CoursePathError) return NextResponse.json({ error: error.message }, { status: error.status });
     if (error instanceof InvalidQuizAnswersError) return NextResponse.json({ error: error.message }, { status: 400 });
+    if (error instanceof InvalidQuizConfidenceError) return NextResponse.json({ error: error.message }, { status: 400 });
     const inputError = requestErrorResponse(error);
     if (inputError) return inputError;
     console.error('Failed to grade course quiz:', error);

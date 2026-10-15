@@ -124,16 +124,27 @@ function correct(question: QuizQuestion, answer: unknown): boolean {
   }
 }
 
-export function gradeQuiz(quiz: QuizContent, submitted: unknown): { score: number; passed: boolean } {
+export function gradeQuizWithItemEvidence(quiz: QuizContent, submitted: unknown): {
+  score: number;
+  passed: boolean;
+  items: Array<{ questionId: string; correct: boolean }>;
+} {
   if (getQuizValidationError(quiz)) throw new InvalidQuizAnswersError('Quiz is not ready');
   if (!submitted || typeof submitted !== 'object' || Array.isArray(submitted)) throw new InvalidQuizAnswersError('Invalid quiz answers');
   const answers = submitted as Record<string, unknown>;
   if (Object.keys(answers).length !== quiz.questions.length || quiz.questions.some(question => !Object.hasOwn(answers, question.id))) {
     throw new InvalidQuizAnswersError('Invalid quiz answers');
   }
-  const correctCount = quiz.questions.filter(question => correct(question, answers[question.id])).length;
+  const items = quiz.questions.map(question => ({ questionId: question.id, correct: correct(question, answers[question.id]) }));
+  const correctCount = items.filter(item => item.correct).length;
   const score = correctCount * 100 / quiz.questions.length;
-  return { score, passed: score >= (quiz.passingScore ?? 70) };
+  return { score, passed: score >= (quiz.passingScore ?? 70), items };
+}
+
+/** Preserve the existing aggregate grading contract for callers and clients. */
+export function gradeQuiz(quiz: QuizContent, submitted: unknown): { score: number; passed: boolean } {
+  const { score, passed } = gradeQuizWithItemEvidence(quiz, submitted);
+  return { score, passed };
 }
 
 /** One bounded result set for analytics and progress, regardless of retry/history volume. */
