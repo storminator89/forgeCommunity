@@ -178,3 +178,29 @@ test('refuses a malformed target instead of silently baselining it', async () =>
     assert.equal(history, null);
   });
 });
+
+test('question-bank PostgreSQL upgrade enforces immutable, owner-scoped revision storage', async () => {
+  await fixture(async ({ database, url }) => {
+    await applyPostgresqlUpgrades(url);
+    await applyPostgresqlUpgrades(url);
+    assert.ok((await database.query(`SELECT to_regclass('"QuestionBankItem_ownerId_updatedAt_idx"') AS name`)).rows[0].name);
+    await database.query(`INSERT INTO "User" (id, email, "updatedAt") VALUES ('bank-author', 'bank-author@example.invalid', CURRENT_TIMESTAMP)`);
+    await database.query(`INSERT INTO "QuestionBankItem" (id, "ownerId") VALUES ('bank-item', 'bank-author')`);
+    await assert.rejects(database.query(`INSERT INTO "QuestionBankItem" (id, "ownerId") VALUES ('orphan', 'missing')`),
+      error => error.code === '23503');
+    await assert.rejects(database.query(`UPDATE "QuestionBankItem" SET "latestRevision" = 0 WHERE id = 'bank-item'`),
+      error => error.code === '23514');
+    await database.query(`INSERT INTO "QuestionBankRevision" ("itemId", revision, "questionJson") VALUES ('bank-item', 1, '{"question":"Original"}')`);
+    await assert.rejects(database.query(`INSERT INTO "QuestionBankRevision" ("itemId", revision, "questionJson") VALUES ('bank-item', 1, '{}')`),
+      error => error.code === '23505');
+    await assert.rejects(database.query(`UPDATE "QuestionBankRevision" SET "questionJson" = '{}' WHERE "itemId" = 'bank-item'`),
+      error => error.code === '23514');
+    await database.query(`UPDATE "QuestionBankItem" SET "latestRevision" = 2 WHERE id = 'bank-item'`);
+    await database.query(`INSERT INTO "QuestionBankRevision" ("itemId", revision, "questionJson") VALUES ('bank-item', 2, '{"question":"Revised"}')`);
+    assert.equal((await database.query(`SELECT "questionJson" FROM "QuestionBankRevision" WHERE "itemId" = 'bank-item' AND revision = 1`)).rows[0].questionJson,
+      '{"question":"Original"}');
+    await database.query(`DELETE FROM "User" WHERE id = 'bank-author'`);
+    assert.equal((await database.query(`SELECT COUNT(*)::int AS n FROM "QuestionBankRevision" WHERE "itemId" = 'bank-item'`)).rows[0].n, 0);
+    assert.equal((await database.query(`SELECT COUNT(*)::int AS n FROM "QuestionBankItem" WHERE id = 'bank-item'`)).rows[0].n, 0);
+  });
+});
