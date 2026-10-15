@@ -224,3 +224,119 @@ it('keeps fetch failures in the shell and offers a retry', async () => {
   expect(await screen.findByRole('link', { name: 'Ada' })).toBeInTheDocument();
   errorSpy.mockRestore();
 });
+
+it('requires the searched skill itself to match the selected category', async () => {
+  jest.mocked(fetch).mockResolvedValue({ ok: true, json: async () => ({
+    ...directory,
+    members: [{ ...directory.members[0], skills: [...directory.members[0].skills, { skillName: 'Figma', level: 30 }] }, directory.members[1]],
+  }) } as Response);
+  render(<SkillDirectory />);
+  await screen.findByRole('link', { name: 'Ada' });
+  fireEvent.click(screen.getByRole('button', { name: 'Design' }));
+  fireEvent.change(screen.getByLabelText('Name oder Fähigkeit suchen'), { target: { value: 'TypeScript' } });
+  expect(screen.queryByRole('link', { name: 'Ada' })).not.toBeInTheDocument();
+  expect(screen.getByText('Keine passenden Mitglieder')).toBeInTheDocument();
+  // Names can still find a member who has a skill in this category.
+  fireEvent.change(screen.getByLabelText('Name oder Fähigkeit suchen'), { target: { value: 'Ada' } });
+  expect(screen.getByRole('link', { name: 'Ada' })).toBeInTheDocument();
+});
+
+it('discovers actual catalog entries with member counts, including an unused skill', async () => {
+  jest.mocked(fetch).mockResolvedValue({ ok: true, json: async () => ({
+    ...directory, skills: [...directory.skills, { id: 'unused', name: 'Moderation', category: 'Zusammenarbeit' }],
+  }) } as Response);
+  render(<SkillDirectory />);
+  const chip = await screen.findByRole('button', { name: 'TypeScript: 1 Mitglied finden' });
+  expect(screen.getByRole('button', { name: 'Moderation: 0 Mitglieder finden' })).toBeInTheDocument();
+  chip.focus(); await userEvent.keyboard('{Enter}');
+  expect(screen.getByRole('searchbox')).toHaveFocus();
+  expect(window.location.search).toBe('?query=TypeScript');
+  expect(screen.queryByRole('link', { name: 'Bea' })).not.toBeInTheDocument();
+});
+
+it('keeps the own-skills tab addressable across reload-style mounting and real tab history', async () => {
+  window.history.replaceState({}, '', '/skills?view=mine&query=TypeScript');
+  jest.mocked(fetch).mockImplementation(async url => responseForUrl(String(url)));
+  function responseForUrl(url: string) {
+    return { ok: true, json: async () => url === '/api/user/skills' ? [] : directory } as Response;
+  }
+  render(<SkillDirectory />);
+  expect(screen.getByRole('tab', { name: 'Meine Fähigkeiten' })).toHaveAttribute('aria-selected', 'true');
+  await screen.findByText('Womit kennst du dich aus?');
+  await userEvent.click(screen.getByRole('tab', { name: 'Community' }));
+  await screen.findByRole('link', { name: 'Ada' });
+  expect(window.location.search).toBe('?query=TypeScript');
+  window.history.back();
+  await waitFor(() => expect(screen.getByRole('tab', { name: 'Meine Fähigkeiten' })).toHaveAttribute('aria-selected', 'true'));
+  window.history.forward();
+  await waitFor(() => expect(screen.getByRole('searchbox')).toHaveValue('TypeScript'));
+  expect(jest.mocked(fetch).mock.calls.every(([, init]) => !init?.method)).toBe(true);
+});
+
+it('switches Skills panels immediately by keyboard even before router search params refresh', async () => {
+  jest.mocked(fetch).mockImplementation(async url => ({ ok: true, json: async () =>
+    String(url) === '/api/user/skills' ? [] : directory } as Response));
+  render(<SearchParamsContext.Provider value={new URLSearchParams()}><SkillDirectoryPage /></SearchParamsContext.Provider>);
+  await screen.findByRole('link', { name: 'Ada' });
+  const community = screen.getByRole('tab', { name: 'Community' });
+  const own = screen.getByRole('tab', { name: 'Meine Fähigkeiten' });
+  act(() => community.focus());
+  await userEvent.keyboard('{ArrowRight}');
+  expect(window.location.search).toBe('?view=mine');
+  expect(own).toHaveAttribute('aria-selected', 'true');
+  expect(await screen.findByText('Womit kennst du dich aus?')).toBeVisible();
+});
+
+it('keeps the actual Skills URL through an account remount and same-route navigation while router params lag', async () => {
+  jest.mocked(fetch).mockImplementation(async url => ({ ok: true, json: async () =>
+    String(url) === '/api/user/skills' ? [] : directory } as Response));
+  mockViewerId = 'alice';
+  const staticRouter = () => <SearchParamsContext.Provider value={new URLSearchParams()}><SkillDirectoryPage /></SearchParamsContext.Provider>;
+  const view = render(staticRouter());
+  await screen.findByRole('link', { name: 'Ada' });
+  act(() => screen.getByRole('tab', { name: 'Community' }).focus());
+  await userEvent.keyboard('{ArrowRight}');
+  expect(window.location.search).toBe('?view=mine');
+  expect(await screen.findByText('Womit kennst du dich aus?')).toBeVisible();
+
+  mockViewerId = 'bob';
+  view.rerender(staticRouter());
+  expect(screen.getByRole('tab', { name: 'Meine Fähigkeiten' })).toHaveAttribute('aria-selected', 'true');
+  expect(await screen.findByText('Womit kennst du dich aus?')).toBeVisible();
+
+  act(() => window.history.pushState({}, '', '/skills'));
+  view.rerender(staticRouter());
+  expect(screen.getByRole('tab', { name: 'Community' })).toHaveAttribute('aria-selected', 'true');
+  expect(await screen.findByRole('link', { name: 'Ada' })).toBeVisible();
+  expect(screen.queryByText('Womit kennst du dich aus?')).not.toBeInTheDocument();
+});
+
+it('keeps owned skills usable when the directory fails and retries the catalog from the workbench', async () => {
+  window.history.replaceState({}, '', '/skills?view=mine');
+  const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+  let directoryReads = 0;
+  jest.mocked(fetch).mockImplementation(async url => {
+    if (String(url) === '/api/user/skills') return { ok: true, json: async () => [] } as Response;
+    if (String(url) === '/api/skills/directory') {
+      directoryReads += 1;
+      if (directoryReads === 1) throw new Error('offline');
+      return { ok: true, json: async () => directory } as Response;
+    }
+    throw new Error(`Unexpected request: ${String(url)}`);
+  });
+  try {
+    render(<SkillDirectory />);
+    await screen.findByText('Womit kennst du dich aus?');
+    await waitFor(() => expect(directoryReads).toBe(1));
+    fireEvent.click(screen.getByRole('button', { name: 'Fähigkeit hinzufügen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Aus Verzeichnis' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Verzeichnis nicht verfügbar.');
+    expect(screen.getByLabelText('Fähigkeit', { exact: true })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Erneut laden' }));
+    await waitFor(() => expect(directoryReads).toBe(2));
+    expect(await screen.findByRole('option', { name: 'Figma' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Fähigkeit', { exact: true })).not.toBeDisabled();
+  } finally {
+    errorSpy.mockRestore();
+  }
+});

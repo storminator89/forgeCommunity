@@ -2,6 +2,7 @@
 
 import { AppShell, AppHeader } from '@/components/app-shell';
 import { Suspense, useState, useEffect, useRef, type ReactNode } from 'react'
+import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { Sidebar } from "@/components/Sidebar"
@@ -494,6 +495,8 @@ function AccountSettings({ userId }: { userId: string }) {
                   <Card>
                     <CardHeader>
                       <CardTitle>Fähigkeiten</CardTitle>
+                      <CardDescription>Deine Selbsteinschätzungen sind im Mitgliederprofil sichtbar.</CardDescription>
+                      <Link href="/skills?view=mine" className="inline-flex min-h-11 items-center text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Im Skills-Bereich verwalten</Link>
                     </CardHeader>
                     <CardContent>
                       {isLoading ? (
