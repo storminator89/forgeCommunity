@@ -1,17 +1,48 @@
 # App screenshot provenance
 
-All checked-in PNGs show actual ForgeCommunity rendering with no image
+All PNGs in this README gallery show actual ForgeCommunity rendering with no image
 generation, API-response substitution, compositing, hidden/rewritten UI, or
-added browser or phone chrome. The two **current staged-publication** captures
-and four **historical pre-phase-2** captures were copied byte-for-byte from
-their respective GitHub Actions artifacts and inspected at original dimensions.
+added browser or phone chrome. The two **current real-learner practice**
+captures, two earlier **course-publication** captures, and four **historical
+pre-phase-2** captures were copied byte-for-byte from their respective GitHub
+Actions artifacts and inspected at original dimensions.
 
-## Current staged-publication captures
+## Current practice captures
+
+- Capture date: 15 October 2026
+- PR head: [`a4cc101a1b3a905dcc8645e37d093836d3d1e326`](https://github.com/storminator89/forgeCommunity/commit/a4cc101a1b3a905dcc8645e37d093836d3d1e326), source tree `c7db611cb0dcb5a141aef5014296990b7ed97fcf`
+- Merged main: [`edcd9cfb6611eefe27275d603bedcd108b7430ec`](https://github.com/storminator89/forgeCommunity/commit/edcd9cfb6611eefe27275d603bedcd108b7430ec), with the same Git tree
+- Workflow: [exact-head PR run 38776781726](https://github.com/storminator89/forgeCommunity/actions/runs/38776781726), **all seven jobs passed**, including quality, strict audit, Docker, PostgreSQL release/runtime, browser QA, and validation. Browser QA passed 124 Chromium cases and four Firefox/WebKit critical journeys; 59 configured variants were skipped.
+- Artifact: [`browser-qa-38776781726-1`, ID 11994935278](https://github.com/storminator89/forgeCommunity/actions/runs/38776781726/artifacts/11994935278). The `a9caf4d5a84e` filename suffix identifies the CI checkout, while the run/artifact metadata identify the PR source head above.
+
+| Repository image | Artifact path | Viewport / PNG dimensions | State |
+| --- | --- | --- | --- |
+| `readme/practice-question-desktop.png` | `formative-practice-real-le-115cc-ession-and-private-evidence-desktop-chromium/real-learner-question-desktop-a9caf4d5a84e.png` | 1280×800 / 1280×800 | Enrolled, opted-in learner's reserved question with optional confidence; answer not yet submitted |
+| `readme/practice-feedback-mobile-320.png` | `formative-practice-real-le-115cc-ession-and-private-evidence-desktop-chromium/real-learner-feedback-320-a9caf4d5a84e.png` | 320×700 / 320×700 | Scrolled corrective feedback after a real submitted answer; next question waits for an explicit action |
+
+SHA-256 of new committed PNGs:
+
+```text
+398abbd80345d6dbc117376bdcd1b7a2bd5ff7b04ae8c72cbabeb912cfa4ceaf  readme/practice-question-desktop.png
+e86cebc04c755f42e75b6f9eb411448f81c1d9c97dc7d2de82ca9a500964075b  readme/practice-feedback-mobile-320.png
+```
+
+The selected [real learner journey](../../e2e/formative-practice-real-learner.pw.ts)
+registers synthetic instructor and learner accounts in a guarded, disposable
+loopback SQLite database, publishes a practice pool through the app API, then
+opts in and answers through the actual learner UI. It does not intercept or
+replace the learner API responses. The pixels show only a synthetic account
+name, question, and explanation; no email, password, token, real member record,
+or production data is visible. The 320px frame is scrolled to feedback, so it
+does not document the entire mobile page. These two frames do not prove broad
+mobile, assistive-technology, dark-mode, or cross-engine visual coverage.
+
+## Course publication captures
 
 - Capture date: 15 October 2026
 - PR head: [`326f4798fc59ccb8c15420d95eaf79cb91bec191`](https://github.com/storminator89/forgeCommunity/commit/326f4798fc59ccb8c15420d95eaf79cb91bec191)
 - Checked-out CI merge commit: [`bc805124afb0c5b3f72df0d45e6d1e911e993499`](https://github.com/storminator89/forgeCommunity/commit/bc805124afb0c5b3f72df0d45e6d1e911e993499). Its Git tree `9b58c8986012c95d8f80f9db7ae7bfa96fee3692` is identical to that PR head's tree.
-- Workflow: [PR run 38729421653](https://github.com/storminator89/forgeCommunity/actions/runs/38729421653), **overall failed** because the PostgreSQL smoke and course-page route manifest had outdated authentication/heading fixture expectations. The staged editor's actual desktop and 320px Chromium journeys passed; the security, quality, Docker, PostgreSQL migration, and four Firefox/WebKit critical-journey jobs passed. A later green run must be checked separately.
+- Workflow: [PR run 38729421653](https://github.com/storminator89/forgeCommunity/actions/runs/38729421653), **overall failed** because the PostgreSQL smoke and course-page route manifest had outdated authentication/heading fixture expectations. The staged editor's actual desktop and 320px Chromium journeys passed; the security, quality, Docker, PostgreSQL migration, and four Firefox/WebKit critical-journey jobs passed. The later green #45 run above does not change these earlier screenshot bytes.
 - Artifact: [`browser-qa-38729421653-1`, ID 11968724406](https://github.com/storminator89/forgeCommunity/actions/runs/38729421653/artifacts/11968724406)
 
 | Repository image | Artifact path | Viewport / PNG dimensions | State |
@@ -19,14 +50,14 @@ their respective GitHub Actions artifacts and inspected at original dimensions.
 | `readme/course-draft-authoring-desktop.png` | `course-editor.pw.ts-privat-efd54-nt-use-real-disposable-data-desktop-chromium/private-author-outline-editor-desktop-bc805124afb0c5b3f72df0d45e6d1e911e993499.png` | 1280×800 / 1280×800 | Saved private draft, synthetic text lesson selected, real outline/editor |
 | `readme/course-publication-review-desktop.png` | `course-editor.pw.ts-privat-efd54-nt-use-real-disposable-data-desktop-chromium/publication-review-desktop-bc805124afb0c5b3f72df0d45e6d1e911e993499.png` | 1280×800 / 1280×800 | Real review dialog over synthetic draft, ready state and impact counts before first publish |
 
-SHA-256 of current committed PNGs:
+SHA-256 of committed course-publication PNGs:
 
 ```text
 4e21ffa1b8d9e4ce5826e190e8e57417e6ecdf3ba0cc60427def7b378906d970  readme/course-draft-authoring-desktop.png
 5eb6772fe641427da2e46f2c77209f0122369e8ba6388314cbdd7996aa149a45  readme/course-publication-review-desktop.png
 ```
 
-The new frames show only `Publication Author Fixture` and a generated
+These earlier frames show only `Publication Author Fixture` and a generated
 `Private publication …` title from the disposable browser database. No email,
 password, token, real member record, or production data is visible. The draft
 frame labels the private saved state and shows the selected lesson and editor
@@ -75,7 +106,7 @@ the `1025767` run listed above. No old editor image is relabeled as the new edit
 The older PNGs directly in `docs/ui/` belong to the historical guides that link
 them and are not evidence for a later UI.
 
-## Pixel and privacy review
+## Historical pixel and privacy review
 
 The two landing pages are public and contain no member data. The authoring
 screens use the freshly registered `Course Editor Fixture` account and a
@@ -107,22 +138,25 @@ browser journey and API/database evidence have their own scope in the
 
 ## Refresh instructions
 
-The saved-draft indicator and first-publication review now have reviewed
-captures above. Further capture targets are the private author worklist,
-published learner view, and version-restore-as-draft state. Include a narrow
-viewport with the relevant editor controls in view; inspect scrolled panels
-and distinguish a local unsaved change from a saved private draft. Existing
-historical files remain labeled and are not overwritten.
+The saved course draft, publication review, and real learner practice/feedback
+now have reviewed captures above. Further targets are an actual-data opt-in
+screen, the practice author workspace with controls in view, the private course
+author worklist, and version-restore-as-draft state. Include a narrow viewport
+with the relevant controls in view; inspect scrolled panels and distinguish a
+local unsaved change from a saved private draft. Existing historical files
+remain labeled and are not overwritten.
 
 1. Use the existing approved GitHub Actions browser job on the intended app
    commit. It builds the production app and uses official Chromium with a
    loopback origin and explicitly disposable synthetic SQLite data. Do not aim
    these tests at a deployed app or personal database.
 2. The historical gallery came from `e2e/browser-qa.pw.ts` and the earlier
-   `e2e/course-editor.pw.ts` flow. The staged-publication Playwright journey
-   in that same test file generated the current two course captures on the
-   reviewed phase-2 tree. Inspect a new run's real artifacts before selecting
-   any further images.
+   `e2e/course-editor.pw.ts` flow. The staged-publication journey in that same
+   test file generated the two course captures. The separate
+   `e2e/formative-practice-real-learner.pw.ts` journey generated the two current
+   practice captures. Inspect a new run's real artifacts before selecting any
+   further images; distinguish API-intercepted UI tests from end-to-end learner
+   evidence.
 3. Retrieve the exact run's artifact and inspect actual pixels before copying.
    Reject blank/loading, error, credential-bearing, UUID-heavy, or stale-editor
    frames. Do not replace the app's state or composite a prettier interface.
@@ -147,4 +181,5 @@ including `skills/hallmark/SKILL.md`, the redesign guidance, and output contract
 The applicable guidance is honest content, an existing shared system, real
 screenshots without redrawn chrome, and preserving implementation boundaries.
 This does not claim an installed Hallmark runtime/tool or a fresh app-wide design
-audit. The current pixel review is limited to the two selected authoring captures.
+audit. The current pixel review is limited to the two selected learner-practice
+captures, alongside the earlier scoped course-publication and historical review.
