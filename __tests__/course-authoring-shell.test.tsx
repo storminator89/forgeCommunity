@@ -138,10 +138,15 @@ it('retains a failed draft, blocks repeat saves and retains edit mode using the 
   expect(await screen.findByRole('alert')).toHaveTextContent('Dein Entwurf bleibt erhalten')
   expect(screen.getByLabelText('Titel')).toHaveValue('Lokaler Titel')
   expect(screen.getByLabelText('Lektionstext')).toHaveValue('<p>Lokaler Text</p><script>unsafe()</script>')
-  mockWrite.mockResolvedValueOnce(response(lesson('lesson', { parentId: 'chapter', title: 'Kanonischer Titel', content: '<p>Kanonischer Text</p>', updatedAt: '2026-10-15T09:00:00.000Z' })))
+  let finishSave!: (value: Response) => void
+  mockWrite.mockImplementationOnce(() => new Promise(result => { finishSave = result }))
   const save = screen.getByRole('button', { name: 'Speichern' })
   save.focus()
   await user.click(save)
+  // Browsers can move focus away when the submit control is disabled pending
+  // the request. The replacement control must still receive focus on success.
+  save.blur()
+  await act(async () => finishSave(response(lesson('lesson', { parentId: 'chapter', title: 'Kanonischer Titel', content: '<p>Kanonischer Text</p>', updatedAt: '2026-10-15T09:00:00.000Z' }))))
   await waitFor(() => expect(screen.getByLabelText('Titel')).toHaveValue('Kanonischer Titel'))
   expect(screen.getByLabelText('Lektionstext')).toHaveValue('<p>Kanonischer Text</p>')
   expect(screen.getByRole('form', { name: 'Inhalt bearbeiten' })).toBeInTheDocument()

@@ -42,6 +42,9 @@ async function keyboardActivate(page: Page, target: Locator) {
 }
 
 async function insideViewport(page: Page, target: Locator) {
+  // Dialogs enter with a short slide animation. Check their settled bounds,
+  // while still failing if the final UI remains clipped.
+  await expect.poll(async () => (await target.boundingBox())?.x ?? -999).toBeGreaterThanOrEqual(-1);
   const box = await target.boundingBox();
   expect(box).not.toBeNull();
   expect(box!.x).toBeGreaterThanOrEqual(-1);
@@ -130,6 +133,7 @@ test('course author creates nested typed content, rehearses an unsaved quiz and 
   await form.getByRole('textbox', { name: 'Inhalt', exact: true }).fill('<p>Dieser Lerntext ist gespeichert und sofort sichtbar.</p>');
   await expect(form.getByRole('status').filter({ hasText: /^Lokal ungespeichert$/ })).toBeVisible();
   await saveContent(page, courseId, rootId);
+  await form.getByRole('textbox', { name: 'Titel', exact: true }).scrollIntoViewIfNeeded();
   await capturePopulatedEditor(page, testInfo, 'course-editor-saved-text.png');
 
   await keyboardActivate(page, page.getByRole('button', { name: `Aktionen für ${rootTitle}`, exact: true }));
@@ -207,6 +211,7 @@ test('course author creates nested typed content, rehearses an unsaved quiz and 
   expect(courseEvidence(courseId)).toEqual(beforePreview);
 
   await saveContent(page, courseId, quizId);
+  await form.getByRole('textbox', { name: 'Frage', exact: true }).scrollIntoViewIfNeeded();
   await capturePopulatedEditor(page, testInfo, 'course-editor-saved-quiz.png');
   expect(writes).toEqual([`PUT /api/courses/${courseId}/contents/${quizId}`]);
   const savedQuiz = courseEvidence(courseId);

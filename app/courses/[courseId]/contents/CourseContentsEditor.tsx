@@ -254,7 +254,11 @@ export function CourseContentsEditor({ courseId }: { courseId: string }) {
     void refreshProgress().catch(() => {})
     // Use the sanitized server response as both the saved and editable baseline.
     // Remount only after success so canonical values reach the form's local fields.
-    restoreSaveFocus.current = Boolean(editorRef.current?.contains(document.activeElement))
+    // The submitting button is disabled during the request, so real browsers
+    // can move focus to the body before this response arrives. A successful
+    // form save always remounts the canonical fields; restore focus to its
+    // replacement button regardless of that intermediate browser behavior.
+    restoreSaveFocus.current = true
     setEditingId(data.id)
     setDraft(data)
     setEditorVersion(version => version + 1)
