@@ -194,3 +194,10 @@ test('warns that discarding a never-published draft clears its metadata and cont
   expect(await screen.findByText('Privaten Entwurf geleert. Der Kurs wurde nicht gelöscht.')).toBeInTheDocument()
   expect(screen.getByLabelText('Kurstitel')).toHaveValue('')
 })
+
+test('shows the practice authoring entry only for an instructor or administrator', () => {
+  const view = render(<CourseDraftWorkspace courseId="course" initialState={server} onLiveMode={onLiveMode} />)
+  expect(screen.queryByRole('button', { name: 'Übungspool' })).not.toBeInTheDocument()
+  view.rerender(<CourseDraftWorkspace courseId="course" initialState={server} onLiveMode={onLiveMode} canAuthorPractice />)
+  expect(screen.getByRole('button', { name: 'Übungspool' })).toBeVisible()
+})
