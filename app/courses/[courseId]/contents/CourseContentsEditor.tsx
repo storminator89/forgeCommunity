@@ -24,6 +24,7 @@ import { NewCourseContentDialog, type NewCourseContentInput } from './NewCourseC
 import { InstructorCoursePreview } from './InstructorCoursePreview'
 import { CourseReadinessPanel } from './CourseReadinessPanel'
 import { CoursePathOverview } from './CoursePathOverview'
+import { PracticeEntryLink } from '../practice/learn/PracticeEntryLink'
 import { EditContentForm } from './EditContentForm'
 import { ContentRenderer } from './ContentRenderer'
 import { parseQuizContent, type CourseContent, type CourseProgressSnapshot } from './types'
@@ -409,6 +410,7 @@ export function CourseContentsEditor({ courseId, forceLearner = false, onReturnT
                   <Button type="button" variant="ghost" size="sm" aria-expanded={reviewOpen} aria-controls="course-review" disabled={mutating} onClick={() => setReviewOpen(open => !open)}><Check aria-hidden="true" className="mr-2 h-4 w-4" />Kurs prüfen</Button>
                 </div> : <p className="text-sm text-muted-foreground">{progress?.canTrack ? 'Hier werden deine Antworten und dein Lernfortschritt gespeichert.' : 'Lernansicht des gespeicherten Kursinhalts.'}</p>}
               </div>}
+              {!authorMode && progress?.canTrack && <PracticeEntryLink courseId={courseId} />}
               <div className="flex min-h-0 flex-1 flex-col md:flex-row">
               <div id="course-contents-navigation" className={cn('relative shrink-0 border-b bg-card md:border-b-0 md:border-r', topicsOpen ? 'w-full md:w-[var(--course-sidebar-width)]' : 'hidden')} style={{ '--course-sidebar-width': `${sidebarWidth}px` } as CSSProperties}>
                 <div className="h-72 min-h-0 overflow-hidden md:h-full">

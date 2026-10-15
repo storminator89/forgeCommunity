@@ -107,6 +107,7 @@ jobs:
           DATABASE_PROVIDER=sqlite DATABASE_URL="file:${RUNNER_TEMP}/forge-jest.db" npm run db:generate
           git diff --exit-code -- prisma/schema.sqlite.prisma
           DATABASE_PROVIDER=sqlite DATABASE_URL="file:${RUNNER_TEMP}/forge-jest.db" npm test -- --runInBand
+          DATABASE_PROVIDER=sqlite node --test scripts/check-formative-practice-retention.mjs
           DATABASE_PROVIDER=postgresql npm run db:generate
 
       - name: Verify SQLite migration safety
@@ -161,9 +162,10 @@ jobs:
       - name: Exercise empty install and populated PostgreSQL upgrades
         run: node --test --test-concurrency=1 scripts/check-postgresql-upgrades.mjs scripts/check-postgresql-release-gate.mjs scripts/check-course-publication-ready.mjs
 
-  # Runs the actual production server with Prisma's PostgreSQL adapter against
-  # a unique schema in the disposable local forge_test service. The script
-  # itself enforces these guards before opening the database.
+  # Runs the production startup wrapper and PostgreSQL adapter against a
+  # unique schema in the disposable local forge_test service. The script
+  # guards the database target before opening it and covers publication and
+  # authenticated formative learner HTTP without touching real user data.
   postgresql-publication-runtime:
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -197,7 +199,7 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
-      - name: Exercise fresh PostgreSQL staged-publication HTTP runtime
+      - name: Exercise fresh PostgreSQL publication and learner HTTP runtime
         run: node scripts/smoke-postgresql-publication.mjs
 
       - name: Verify generated SQLite schema remains unchanged

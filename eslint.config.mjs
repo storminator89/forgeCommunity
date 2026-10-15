@@ -4,6 +4,9 @@ import nextVitals from 'eslint-config-next/core-web-vitals';
 export default defineConfig([
   ...nextVitals,
   {
+    // Match eslint-config-next's plugin scope. Server-side .cjs utilities do
+    // not register react-hooks, so an unscoped override breaks ESLint there.
+    files: ['**/*.{js,jsx,mjs,ts,tsx,mts,cts}'],
     // Next 16 surfaces React Compiler diagnostics for code that is still
     // valid React. Keep the diagnostics visible while the components migrate;
     // Core hook ordering remains an error; dependency checks stay visible from

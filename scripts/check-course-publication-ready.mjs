@@ -12,7 +12,7 @@ import { assertCoursePublicationReady } from './assert-course-publication-ready.
 
 const sqliteNames = readdirSync(new URL('../prisma/sqlite-migrations/', import.meta.url))
   .filter(name => /^\d+_[\w-]+\.sql$/.test(name)).sort();
-assert.equal(sqliteNames.at(-1), '0015_formative_practice_authoring.sql');
+assert.equal(sqliteNames.at(-1), '0016_formative_practice_learner.sql');
 const publicationIndex = sqliteNames.indexOf('0010_staged_course_publication.sql');
 assert.ok(publicationIndex >= 0);
 
@@ -138,8 +138,10 @@ test('SQLite migration still rolls back an injected DDL failure', () => {
   db.close();
 });
 
-test('SQLite readiness refuses missing, changed, gapped and divergent migration history through formative authoring', async () => {
+test('SQLite readiness refuses missing, changed, gapped and divergent migration history through learner practice', async () => {
   for (const mutate of [
+    db => db.prepare(`DELETE FROM _app_migrations WHERE name='0016_formative_practice_learner.sql'`).run(),
+    db => db.prepare(`UPDATE _app_migrations SET checksum='changed' WHERE name='0016_formative_practice_learner.sql'`).run(),
     db => db.prepare(`DELETE FROM _app_migrations WHERE name='0015_formative_practice_authoring.sql'`).run(),
     db => db.prepare(`UPDATE _app_migrations SET checksum='changed' WHERE name='0015_formative_practice_authoring.sql'`).run(),
     db => db.prepare(`DELETE FROM _app_migrations WHERE name='0014_quiz_confidence_evidence.sql'`).run(),
@@ -156,6 +158,14 @@ test('SQLite readiness refuses missing, changed, gapped and divergent migration 
     const db = f.db(); mutate(db); db.close();
     await assert.rejects(assertCoursePublicationReady(f.url, 'sqlite'), /history is missing, divergent or has changed checksums/);
   }
+});
+
+test('SQLite deploy refuses learner tail already applied after a missing authoring predecessor', () => {
+  const f = fixture(); f.upgrade();
+  const db = f.db();
+  db.prepare(`DELETE FROM _app_migrations WHERE name='0015_formative_practice_authoring.sql'`).run();
+  db.close();
+  assert.throws(() => initializeSqlite(f.url, f.migrations), /gap before 0016_formative_practice_learner\.sql/);
 });
 
 const pgUrl = process.env.DATABASE_URL;
@@ -176,8 +186,10 @@ if (process.env.POSTGRESQL_RELEASE_GATE_DISPOSABLE === '1' && pgParsed &&
       assert.equal(await assertCoursePublicationReady(freshUrl.toString(), 'postgresql'), true);
       await db.query(`SET search_path TO "${fresh}"`);
       for (const [name, sql, file] of [
-        ['missing formative tail', `DELETE FROM "_app_schema_upgrades" WHERE name='0014_formative_practice_authoring.sql'`, '0014_formative_practice_authoring.sql'],
-        ['tampered formative tail', `UPDATE "_app_schema_upgrades" SET checksum='changed' WHERE name='0014_formative_practice_authoring.sql'`, '0014_formative_practice_authoring.sql'],
+        ['missing learner practice tail', `DELETE FROM "_app_schema_upgrades" WHERE name='0015_formative_practice_learner.sql'`, '0015_formative_practice_learner.sql'],
+        ['tampered learner practice tail', `UPDATE "_app_schema_upgrades" SET checksum='changed' WHERE name='0015_formative_practice_learner.sql'`, '0015_formative_practice_learner.sql'],
+        ['missing authoring predecessor', `DELETE FROM "_app_schema_upgrades" WHERE name='0014_formative_practice_authoring.sql'`, '0014_formative_practice_authoring.sql'],
+        ['tampered authoring predecessor', `UPDATE "_app_schema_upgrades" SET checksum='changed' WHERE name='0014_formative_practice_authoring.sql'`, '0014_formative_practice_authoring.sql'],
         ['missing confidence predecessor', `DELETE FROM "_app_schema_upgrades" WHERE name='0013_quiz_confidence_evidence.sql'`, '0013_quiz_confidence_evidence.sql'],
         ['tampered confidence predecessor', `UPDATE "_app_schema_upgrades" SET checksum='changed' WHERE name='0013_quiz_confidence_evidence.sql'`, '0013_quiz_confidence_evidence.sql'],
         ['missing pathway predecessor', `DELETE FROM "_app_schema_upgrades" WHERE name='0012_verified_learning_pathways.sql'`, '0012_verified_learning_pathways.sql'],

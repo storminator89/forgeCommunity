@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import pg from 'pg';
 import { applyPostgresqlUpgrades } from './postgresql-upgrades.mjs';
+import { assertCoursePublicationReady } from './assert-course-publication-ready.mjs';
+import { createRetentionClient, runPracticeRetentionTick } from './formative-practice-retention-scheduler.mjs';
 
 // This test creates and drops only random schemas in a local, disposable CI database.
 const baseUrl = process.env.DATABASE_URL;
@@ -34,6 +36,7 @@ const reviewedUpgradeNames = [
   '0012_verified_learning_pathways.sql',
   '0013_quiz_confidence_evidence.sql',
   '0014_formative_practice_authoring.sql',
+  '0015_formative_practice_learner.sql',
 ];
 // A release image must carry the exact reviewed sequence, including the tail.
 assert.deepEqual(upgradeNames, reviewedUpgradeNames);
@@ -850,6 +853,69 @@ test('a concurrent child insert cannot slip past pathway sealing in a custom sch
       if (pendingInsert) await pendingInsert.catch(() => {});
       if (inserterOpen) await inserter.query('ROLLBACK').catch(() => {});
       await inserter.end().catch(() => {});
+    }
+  });
+});
+
+test('retention worker validates the custom PostgreSQL schema, respects the advisory lock, and records health only after catch-up', async () => {
+  await withSchema({}, async (db, url) => {
+    await applyPostgresqlUpgrades(url, { initializeEmptySchema: true });
+    const schema = new URL(url).searchParams.get('schema');
+    await db.query(`INSERT INTO "User" ("id", "email", "updatedAt") VALUES
+      ('retention-teacher', 'retention-teacher@example.invalid', CURRENT_TIMESTAMP),
+      ('retention-active', 'retention-active@example.invalid', CURRENT_TIMESTAMP),
+      ('retention-dormant', 'retention-dormant@example.invalid', CURRENT_TIMESTAMP)`);
+    await db.query(`INSERT INTO "Course" ("id", "title", "description", "instructorId", "updatedAt")
+      VALUES ('retention-course', 'Disposable retention', 'CI only', 'retention-teacher', CURRENT_TIMESTAMP)`);
+    await db.query(`INSERT INTO "CourseDraft" ("courseId", "payload", "digest", "updatedAt")
+      VALUES ('retention-course', '{}', 'retention-draft', CURRENT_TIMESTAMP)`);
+    await db.query(`INSERT INTO "PracticeLearnerSetting" ("userId", "courseId", "lastActivityAt") VALUES
+      ('retention-active', 'retention-course', TIMESTAMP '2026-10-01 00:00:00'),
+      ('retention-dormant', 'retention-course', TIMESTAMP '2025-01-01 00:00:00')`);
+    const client = createRetentionClient({ provider: 'postgresql', url, schema });
+    const options = { client, provider: 'postgresql', schema,
+      assertReady: () => assertCoursePublicationReady(url, 'postgresql'),
+      now: new Date('2026-10-15T00:00:00Z'), batchSize: 1, maxBatches: 2 };
+    const otherSchema = `forge_retention_other_${randomUUID().replaceAll('-', '_')}`;
+    const otherUrl = new URL(baseUrl);
+    otherUrl.searchParams.set('schema', otherSchema);
+    await db.query(`CREATE SCHEMA ${quoteIdent(otherSchema)}`);
+    let lockHeld = false;
+    let otherClient;
+    try {
+      await applyPostgresqlUpgrades(otherUrl.toString(), { initializeEmptySchema: true });
+      assert.equal((await db.query('SELECT to_regclass($1) IS NOT NULL AS present',
+        [`${quoteIdent(otherSchema)}."PracticeLearnerSetting"`])).rows[0].present, true);
+      otherClient = createRetentionClient({ provider: 'postgresql', url: otherUrl.toString(), schema: otherSchema });
+      await assert.rejects(runPracticeRetentionTick({ ...options, schema: otherSchema }), /adapter schema mismatch/);
+      await assert.rejects(runPracticeRetentionTick({ ...options, client: otherClient }), /adapter schema mismatch/);
+      assert.equal(await count(db, 'PracticeLearnerSetting'), 2);
+      assert.equal((await db.query(`SELECT COUNT(*)::int AS count FROM ${quoteIdent(otherSchema)}."PracticeRetentionHealth"`)).rows[0].count, 0);
+
+      await db.query('BEGIN');
+      lockHeld = true;
+      await db.query('SELECT pg_catalog.pg_advisory_xact_lock(761834, 27)');
+      const blocked = await runPracticeRetentionTick(options);
+      assert.equal(blocked.skippedLock, true);
+      assert.equal(await count(db, 'PracticeLearnerSetting'), 2);
+      assert.equal(await count(db, 'PracticeRetentionHealth'), 0);
+      await db.query('COMMIT');
+      lockHeld = false;
+
+      await assert.rejects(runPracticeRetentionTick({ ...options, schema: 'public' }), /schema mismatch/);
+      assert.equal(await count(db, 'PracticeLearnerSetting'), 2);
+      const applied = await runPracticeRetentionTick(options);
+      assert.equal(applied.deletedLearners, 1);
+      assert.equal(applied.hasMore, false);
+      assert.equal(await count(db, 'PracticeLearnerSetting'), 1);
+      const health = (await db.query('SELECT "lastSuccessAt" FROM "PracticeRetentionHealth" WHERE id=$1', ['learner'])).rows[0];
+      assert.equal(health.lastSuccessAt.toISOString(), options.now.toISOString());
+      assert.deepEqual((await db.query('SELECT "userId" FROM "PracticeLearnerSetting"')).rows, [{ userId: 'retention-active' }]);
+    } finally {
+      if (lockHeld) await db.query('ROLLBACK').catch(() => {});
+      if (otherClient) await otherClient.$disconnect();
+      await client.$disconnect();
+      await db.query(`DROP SCHEMA IF EXISTS ${quoteIdent(otherSchema)} CASCADE`);
     }
   });
 });

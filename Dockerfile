@@ -29,6 +29,8 @@ COPY --from=builder --chown=node:node /app/.image-db-provider ./.image-db-provid
 COPY --from=builder --chown=node:node /app/.next/standalone ./
 COPY --from=builder --chown=node:node /app/scripts/sqlite-init.mjs ./scripts/sqlite-init.mjs
 COPY --from=builder --chown=node:node /app/scripts/assert-course-publication-ready.mjs ./scripts/assert-course-publication-ready.mjs
+COPY --from=builder --chown=node:node /app/scripts/start-standalone.mjs /app/scripts/formative-practice-retention-scheduler.mjs ./scripts/
+COPY --from=builder --chown=node:node /app/lib/server/formative-practice-retention-core.cjs ./lib/server/formative-practice-retention-core.cjs
 COPY --from=builder --chown=node:node /app/prisma/sqlite-migrations ./prisma/sqlite-migrations
 COPY --from=builder --chown=node:node /app/scripts/db-deploy.mjs /app/scripts/postgresql-upgrades.mjs ./scripts/
 COPY --from=builder --chown=node:node /app/prisma/postgresql-upgrades ./prisma/postgresql-upgrades
@@ -41,4 +43,4 @@ USER node
 EXPOSE 3013
 HEALTHCHECK --interval=15s --timeout=5s --start-period=60s --retries=4 CMD ["node", "docker/healthcheck.mjs"]
 ENTRYPOINT ["/app/docker/entrypoint.sh"]
-CMD ["node", "server.js"]
+CMD ["node", "scripts/start-standalone.mjs"]
