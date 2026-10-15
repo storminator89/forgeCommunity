@@ -12,7 +12,7 @@ import { assertCoursePublicationReady } from './assert-course-publication-ready.
 
 const sqliteNames = readdirSync(new URL('../prisma/sqlite-migrations/', import.meta.url))
   .filter(name => /^\d+_[\w-]+\.sql$/.test(name)).sort();
-assert.equal(sqliteNames.at(-1), '0018_chat_read_cursor.sql');
+assert.equal(sqliteNames.at(-1), '0019_course_qa.sql');
 const publicationIndex = sqliteNames.indexOf('0010_staged_course_publication.sql');
 assert.ok(publicationIndex >= 0);
 
@@ -140,6 +140,8 @@ test('SQLite migration still rolls back an injected DDL failure', () => {
 
 test('SQLite readiness refuses missing, changed, gapped and divergent migration history through chat read cursors', async () => {
   for (const mutate of [
+    db => db.prepare(`DELETE FROM _app_migrations WHERE name='0019_course_qa.sql'`).run(),
+    db => db.prepare(`UPDATE _app_migrations SET checksum='changed' WHERE name='0019_course_qa.sql'`).run(),
     db => db.prepare(`DELETE FROM _app_migrations WHERE name='0018_chat_read_cursor.sql'`).run(),
     db => db.prepare(`UPDATE _app_migrations SET checksum='changed' WHERE name='0018_chat_read_cursor.sql'`).run(),
     db => db.prepare(`DELETE FROM _app_migrations WHERE name='0017_chat_message_cursor_index.sql'`).run(),
@@ -188,6 +190,14 @@ test('SQLite deploy refuses chat read cursor tail after a missing chat index pre
   assert.throws(() => initializeSqlite(f.url, f.migrations), /gap before 0018_chat_read_cursor\.sql/);
 });
 
+test('SQLite deploy refuses course Q&A tail after a missing chat read predecessor', () => {
+  const f = fixture(); f.upgrade();
+  const db = f.db();
+  db.prepare(`DELETE FROM _app_migrations WHERE name='0018_chat_read_cursor.sql'`).run();
+  db.close();
+  assert.throws(() => initializeSqlite(f.url, f.migrations), /gap before 0019_course_qa\.sql/);
+});
+
 const pgUrl = process.env.DATABASE_URL;
 const pgParsed = pgUrl && /^postgres(?:ql)?:\/\//.test(pgUrl) ? new URL(pgUrl) : null;
 if (process.env.POSTGRESQL_RELEASE_GATE_DISPOSABLE === '1' && pgParsed &&
@@ -206,6 +216,8 @@ if (process.env.POSTGRESQL_RELEASE_GATE_DISPOSABLE === '1' && pgParsed &&
       assert.equal(await assertCoursePublicationReady(freshUrl.toString(), 'postgresql'), true);
       await db.query(`SET search_path TO "${fresh}"`);
       for (const [name, sql, file] of [
+        ['missing course Q&A tail', `DELETE FROM "_app_schema_upgrades" WHERE name='0018_course_qa.sql'`, '0018_course_qa.sql'],
+        ['tampered course Q&A tail', `UPDATE "_app_schema_upgrades" SET checksum='changed' WHERE name='0018_course_qa.sql'`, '0018_course_qa.sql'],
         ['missing chat read tail', `DELETE FROM "_app_schema_upgrades" WHERE name='0017_chat_read_cursor.sql'`, '0017_chat_read_cursor.sql'],
         ['tampered chat read tail', `UPDATE "_app_schema_upgrades" SET checksum='changed' WHERE name='0017_chat_read_cursor.sql'`, '0017_chat_read_cursor.sql'],
         ['missing chat index tail', `DELETE FROM "_app_schema_upgrades" WHERE name='0016_chat_message_cursor_index.sql'`, '0016_chat_message_cursor_index.sql'],
