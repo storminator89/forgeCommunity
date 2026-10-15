@@ -12,13 +12,15 @@ import { assertCoursePublicationReady } from './assert-course-publication-ready.
 
 const sqliteNames = readdirSync(new URL('../prisma/sqlite-migrations/', import.meta.url))
   .filter(name => /^\d+_[\w-]+\.sql$/.test(name)).sort();
-assert.equal(sqliteNames.at(-1), '0010_staged_course_publication.sql');
+assert.equal(sqliteNames.at(-1), '0011_question_bank.sql');
+const publicationIndex = sqliteNames.indexOf('0010_staged_course_publication.sql');
+assert.ok(publicationIndex >= 0);
 
 function fixture({ legacy = false } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'forge-publication-fresh-'));
   const migrations = join(dir, 'migrations');
   mkdirSync(migrations);
-  for (const name of sqliteNames.slice(0, -1)) {
+  for (const name of sqliteNames.slice(0, publicationIndex)) {
     copyFileSync(new URL(`../prisma/sqlite-migrations/${name}`, import.meta.url), join(migrations, name));
   }
   process.env.DATABASE_PROVIDER = 'sqlite';
@@ -38,8 +40,9 @@ function fixture({ legacy = false } = {}) {
   return {
     url, migrations,
     upgrade: () => {
-      copyFileSync(new URL('../prisma/sqlite-migrations/0010_staged_course_publication.sql', import.meta.url),
-        join(migrations, '0010_staged_course_publication.sql'));
+      for (const name of sqliteNames.slice(publicationIndex)) {
+        copyFileSync(new URL(`../prisma/sqlite-migrations/${name}`, import.meta.url), join(migrations, name));
+      }
       initializeSqlite(url, migrations);
     },
     db: () => {

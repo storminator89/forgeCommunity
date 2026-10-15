@@ -29,6 +29,7 @@ const reviewedUpgradeNames = [
   '0007_notification_targets.sql',
   '0008_private_learning_goals.sql',
   '0009_staged_course_publication.sql',
+  '0010_question_bank.sql',
 ];
 // Stacked drafts add the final two reviewed migrations in order. Reject any
 // unknown migration rather than letting the release gate silently skip it.
