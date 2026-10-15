@@ -197,12 +197,24 @@ DATABASE_URL="postgresql://forge:<passwort>@localhost:5432/forge?schema=public" 
 npm run db:deploy
 ```
 
-Für eine frische Entwicklungsdatenbank nach `prisma db push` muss einmalig die
-verifizierte Baseline gesetzt werden:
+Für eine neue PostgreSQL-Installation mit einem **leeren, ausdrücklich im URL
+genannten Schema** die gesonderte Initialisierung ausführen. Sie verweigert
+bereits vorhandene Schemaobjekte und führt die festgelegte Basis sowie alle
+Upgrades in einer Transaktion aus:
 
 ```bash
-npm run db:deploy -- --baseline-current-schema
+DATABASE_PROVIDER=postgresql \
+DATABASE_URL="postgresql://forge:<passwort>@localhost:5432/forge?schema=public" \
+npm run db:deploy -- --initialize-empty-schema
 ```
+
+Für eine bestehende Datenbank, die bereits die `SkillEndorsement`-Tabelle des
+früheren Schemas, aber noch keinen Upgrade-Verlauf hat, ist nach Prüfung dieser
+Struktur `npm run db:deploy -- --baseline-current-schema` vorgesehen. Ein
+`prisma db push` mit dem **aktuellen** Schema vor diesen Befehlen ist kein
+unterstützter Installationspfad: Es würde neue Tabellen ohne die SQL-only
+Prüfbedingungen anlegen. Bei einem bereits befüllten aktuellen Schema ohne
+Upgrade-Verlauf nicht automatisch eine Baseline setzen.
 
 Der PostgreSQL-Runner prüft Tabellen, Schlüssel, Prüfsummen und das URL-Schema;
 unbekannte oder manipulierte Strukturen werden abgelehnt. Im Container kann der

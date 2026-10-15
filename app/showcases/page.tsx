@@ -22,6 +22,7 @@ import { Search, ThumbsUp, MessageSquare, Plus, Edit, Trash, LayoutGrid, List, A
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { useSession } from 'next-auth/react';
+import type { Session } from 'next-auth';
 import { Editor } from "@/components/Editor";
 import { sanitizeTextPreview } from '@/lib/sanitize-html';
 
@@ -83,7 +84,12 @@ async function loadProjects(signal: AbortSignal): Promise<Project[]> {
 const defaultDescription = '';
 
 export default function ProjectShowcase() {
-  const { data: session } = useSession();
+  const { data, status } = useSession();
+  const session = status === 'authenticated' ? data : null;
+  return <ProjectShowcaseForViewer key={session?.user?.id ?? 'anonymous'} session={session} />;
+}
+
+function ProjectShowcaseForViewer({ session }: { session: Session | null }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('all');
   const [sortBy, setSortBy] = useState('newest');

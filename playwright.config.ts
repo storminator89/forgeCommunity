@@ -10,11 +10,11 @@ export default defineConfig({
   retries: 0,
   timeout: 180_000,
   expect: { timeout: 20_000 },
-  reporter: [['list'], ['html', { open: 'never', outputFolder: 'playwright-report' }]],
+  reporter: [['list']],
   outputDir: 'test-results',
   use: {
     baseURL,
-    trace: 'retain-on-failure',
+    trace: 'off',
     screenshot: 'only-on-failure',
   },
   projects: [

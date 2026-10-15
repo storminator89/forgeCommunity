@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useSession } from 'next-auth/react'
+import type { Session } from 'next-auth'
 import { toast } from 'react-toastify'
 import { ArrowLeft, Briefcase, Check, ImageIcon, Loader2, Plus, X } from 'lucide-react'
 import { AppShell, AppHeader } from '@/components/app-shell'
@@ -25,7 +26,12 @@ import { sanitizeTextPreview } from '@/lib/sanitize-html'
 const CATEGORIES = ['Web Development', 'Mobile App', 'Desktop Application', 'Machine Learning', 'Data Science', 'Game Development', 'Other']
 
 export default function NewProjectPage() {
-  const { data: session, status } = useSession()
+  const { data, status } = useSession()
+  const session = status === 'authenticated' ? data : null
+  return <ProjectComposer key={session?.user?.id ?? 'anonymous'} session={session} status={status} />
+}
+
+function ProjectComposer({ session, status }: { session: Session | null; status: ReturnType<typeof useSession>['status'] }) {
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [title, setTitle] = useState('')

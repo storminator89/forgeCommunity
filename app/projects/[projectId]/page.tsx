@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ThumbsUp, MessageSquare, ExternalLink, Edit, Trash, Share2, Calendar, User, Tag, ArrowLeft } from 'lucide-react';
 import { useSession } from 'next-auth/react';
+import type { Session } from 'next-auth';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -70,9 +71,14 @@ interface Project {
 }
 
 export default function ProjectDetail() {
-  const router = useRouter();
   const { projectId } = useParams<{ projectId: string }>();
-  const { data: session } = useSession();
+  const { data, status } = useSession();
+  const session = status === 'authenticated' ? data : null;
+  return <ProjectDetailForViewer key={JSON.stringify([projectId, session?.user?.id ?? null])} projectId={projectId} session={session} />;
+}
+
+function ProjectDetailForViewer({ projectId, session }: { projectId: string; session: Session | null }) {
+  const router = useRouter();
   const [project, setProject] = useState<Project | null>(null);
   const [comments, setComments] = useState<ProjectComment[]>([]);
   const [newComment, setNewComment] = useState('');

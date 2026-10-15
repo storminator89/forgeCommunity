@@ -6,7 +6,7 @@ let mockSession: { user: { id: string } } | null = null;
 jest.mock('@/components/Sidebar', () => ({ Sidebar: () => null }));
 jest.mock('@/components/user-nav', () => ({ UserNav: () => null }));
 jest.mock('@/components/theme-toggle', () => ({ ThemeToggle: () => null }));
-jest.mock('next-auth/react', () => ({ useSession: () => ({ data: mockSession }) }));
+jest.mock('next-auth/react', () => ({ useSession: () => ({ data: mockSession, status: mockSession ? 'authenticated' : 'unauthenticated' }) }));
 jest.mock('@/components/Editor', () => ({ Editor: ({ content, onChange }: { content: string; onChange: (value: string) => void }) => <textarea aria-label="Beschreibungstext" value={content} onChange={event => onChange(event.target.value)} /> }));
 
 const project = {
@@ -101,6 +101,24 @@ it('offers keyboard-sized tag controls and an inline validation message in the s
   fireEvent.change(within(dialog).getByRole('textbox', { name: 'Projekt-Link' }), { target: { value: 'https://example.com' } });
   fireEvent.click(within(dialog).getByRole('button', { name: 'Projekt einreichen' }));
   expect(within(dialog).getByRole('alert')).toHaveTextContent('Bitte fülle alle erforderlichen Felder aus.');
+});
+
+it('closes and clears an unfinished submission when the account changes', async () => {
+  mockSession = { user: { id: 'alice' } };
+  const view = render(<ShowcaseDirectory />);
+  await screen.findByRole('link', { name: 'Offenes Projekt' });
+  fireEvent.click(screen.getByRole('button', { name: 'Projekt einreichen' }));
+  const aliceDialog = await screen.findByRole('dialog', { name: 'Neues Projekt einreichen' });
+  fireEvent.change(within(aliceDialog).getByRole('textbox', { name: 'Titel' }), { target: { value: 'Alice private draft' } });
+
+  mockSession = { user: { id: 'bob' } };
+  view.rerender(<ShowcaseDirectory />);
+  expect(screen.queryByRole('dialog', { name: 'Neues Projekt einreichen' })).not.toBeInTheDocument();
+  expect(screen.queryByDisplayValue('Alice private draft')).not.toBeInTheDocument();
+
+  await screen.findByRole('link', { name: 'Offenes Projekt' });
+  fireEvent.click(screen.getByRole('button', { name: 'Projekt einreichen' }));
+  expect(within(screen.getByRole('dialog', { name: 'Neues Projekt einreichen' })).getByRole('textbox', { name: 'Titel' })).toHaveValue('');
 });
 
 it('submits the existing multipart project contract from the directory dialog', async () => {

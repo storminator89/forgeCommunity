@@ -1,11 +1,11 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ProfilePage from '@/app/profile/[id]/page';
 
 let mockSession: { user: { id: string } } | null = { user: { id: 'viewer' } };
 
 jest.mock('next/navigation', () => ({ useParams: () => ({ id: 'author' }) }));
-jest.mock('next-auth/react', () => ({ useSession: () => ({ data: mockSession }) }));
+jest.mock('next-auth/react', () => ({ useSession: () => ({ data: mockSession, status: mockSession ? 'authenticated' : 'unauthenticated' }) }));
 jest.mock('@/components/Sidebar', () => ({ Sidebar: () => null }));
 jest.mock('@/components/user-nav', () => ({ UserNav: () => null }));
 jest.mock('@/components/theme-toggle', () => ({ ThemeToggle: () => null }));
@@ -108,4 +108,48 @@ it('starts an endorsement only for eligible visitors and announces success', asy
   await waitFor(() => expect(global.fetch).toHaveBeenCalledWith('/api/members/author/endorse', expect.objectContaining({ method: 'POST' })));
   expect(await screen.findByRole('button', { name: 'Bereits empfohlen' })).toBeDisabled();
   expect(screen.getByText('4', { selector: 'p' })).toBeInTheDocument();
+});
+
+it('removes owner-only profile fields and editing immediately on account switch and logout', async () => {
+  mockSession = { user: { id: 'author' } };
+  jest.mocked(global.fetch).mockImplementation(async (url: RequestInfo | URL) => String(url) === '/api/users/author'
+    ? { ok: true, json: async () => mockSession?.user.id === 'author'
+      ? { ...profile, isCurrentUser: true, lastLogin: '2026-05-01T00:00:00.000Z' }
+      : { ...profile, isCurrentUser: false, lastLogin: undefined } } as Response
+    : { ok: true, json: async () => ({ socialLinks: profile.socialLinks }) } as Response);
+  const view = render(<ProfilePage />);
+  expect(await screen.findByRole('button', { name: 'Profil bearbeiten' })).toBeInTheDocument();
+  expect(screen.getByText(/Zuletzt angemeldet/)).toBeInTheDocument();
+
+  mockSession = { user: { id: 'viewer' } };
+  view.rerender(<ProfilePage />);
+  expect(screen.queryByRole('button', { name: 'Profil bearbeiten' })).not.toBeInTheDocument();
+  expect(screen.queryByText(/Zuletzt angemeldet/)).not.toBeInTheDocument();
+  expect(await screen.findByRole('button', { name: 'Folgen' })).toBeInTheDocument();
+
+  mockSession = null;
+  view.rerender(<ProfilePage />);
+  expect(screen.getByText('Anmeldung erforderlich')).toBeInTheDocument();
+  expect(screen.queryByText(/Zuletzt angemeldet/)).not.toBeInTheDocument();
+});
+
+it('ignores a late owner profile response after another account signs in', async () => {
+  mockSession = { user: { id: 'author' } };
+  let resolveOwner!: (response: Response) => void;
+  jest.mocked(global.fetch).mockImplementation((url: RequestInfo | URL) => {
+    if (String(url) === '/api/users/author') {
+      if (mockSession?.user.id === 'author') return new Promise<Response>(resolve => { resolveOwner = resolve; });
+      return Promise.resolve({ ok: true, json: async () => ({ ...profile, isCurrentUser: false }) } as Response);
+    }
+    return Promise.resolve({ ok: true, json: async () => ({ socialLinks: profile.socialLinks }) } as Response);
+  });
+  const view = render(<ProfilePage />);
+  await waitFor(() => expect(global.fetch).toHaveBeenCalledWith('/api/users/author', expect.anything()));
+  mockSession = { user: { id: 'viewer' } };
+  view.rerender(<ProfilePage />);
+  expect(await screen.findByRole('button', { name: 'Folgen' })).toBeInTheDocument();
+
+  await act(async () => resolveOwner({ ok: true, json: async () => ({ ...profile, isCurrentUser: true, lastLogin: '2026-05-01T00:00:00.000Z' }) } as Response));
+  expect(screen.queryByRole('button', { name: 'Profil bearbeiten' })).not.toBeInTheDocument();
+  expect(screen.queryByText(/Zuletzt angemeldet/)).not.toBeInTheDocument();
 });

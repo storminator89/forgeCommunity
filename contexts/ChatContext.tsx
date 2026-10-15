@@ -2,6 +2,7 @@
 'use client'
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, ReactNode } from 'react';
+import type { Session } from 'next-auth';
 import { useSession } from 'next-auth/react';
 import { useNotifications } from './NotificationContext';
 import { ChatMessage, ChatChannel, CreateChannelInput, EditMessageInput } from '@/types/chat';
@@ -12,12 +13,13 @@ interface ChatContextType {
   currentChannel: ChatChannel | null;
   messages: ChatMessage[];
   setCurrentChannel: (channel: ChatChannel) => void;
-  sendMessage: (content: string, imageFile?: File) => Promise<void>;
+  sendMessage: (content: string, imageFile?: File) => Promise<boolean>;
   editMessage: (input: EditMessageInput) => Promise<void>;
   createChannel: (input: CreateChannelInput) => Promise<void>;
   deleteChannel: (channelId: string) => Promise<void>;
   loading: boolean;
   error: string | null;
+  clearError: () => void;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -52,7 +54,17 @@ const extractMentions = (content: string): string[] => {
 };
 
 export function ChatProvider({ children }: { children: ReactNode }) {
-  const { data: session } = useSession();
+  const { data, status } = useSession();
+  const session = status === 'authenticated' ? data : null;
+
+  // Chat channels and messages are private to the signed-in account. Remounting
+  // at the account boundary clears them before a new account's fetch can run.
+  return <AccountChatProvider key={session?.user?.id ?? 'anonymous'} session={session}>
+    {children}
+  </AccountChatProvider>;
+}
+
+function AccountChatProvider({ children, session }: { children: ReactNode; session: Session | null }) {
   const { addNotification } = useNotifications();
   const [channels, setChannels] = useState<ChatChannel[]>([]);
   const [currentChannel, setCurrentChannelState] = useState<ChatChannel | null>(null);
@@ -373,8 +385,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
   }, [addNotification, currentChannel, isWindowFocused, messages, processedMessageIds, session?.user?.id, session?.user?.name]);
 
-  const sendMessage = async (content: string, imageFile?: File) => {
-    if (!currentChannel || !session?.user) return;
+  const sendMessage = async (content: string, imageFile?: File): Promise<boolean> => {
+    if (!currentChannel || !session?.user) return false;
 
     const channelId = currentChannel.id;
     const tempId = `temp-${Date.now()}`;
@@ -437,6 +449,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           );
         });
       }
+      setError(null);
+      return true;
     } catch (err) {
       if (activeChannelIdRef.current === channelId) {
         setMessages(prev => prev.filter(msg => msg.id !== tempId));
@@ -444,6 +458,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       const errorMessage = err instanceof Error ? err.message : 'Error sending message';
       setError(errorMessage);
       console.error(errorMessage);
+      return false;
     }
   };
 
@@ -549,6 +564,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         deleteChannel,
         loading,
         error,
+        clearError: () => setError(null),
       }}
     >
       {children}

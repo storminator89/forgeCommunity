@@ -268,11 +268,11 @@ export default function SearchPageClient({
       case 'course':
         return `/courses/${result.id}`;
       case 'event':
-        return `/events/${result.id}`;
+        return `/events#event-${encodeURIComponent(result.id)}`;
       case 'member':
         return `/profile/${result.id}`;
       case 'post':
-        return `/posts/${result.id}`;
+        return `/community#post-${encodeURIComponent(result.id)}`;
       case 'resource':
         return getSafeNavigationUrl(result.url) ?? '/resources';
     }

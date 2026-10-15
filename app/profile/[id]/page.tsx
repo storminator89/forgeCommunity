@@ -48,7 +48,14 @@ const roleLabels: Record<Profile['role'], string> = {
 
 export default function ProfilePage() {
   const { id: profileId } = useParams<{ id: string }>();
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
+  const accountId = status === 'authenticated' ? session?.user?.id ?? null : null;
+  // Profile responses include owner-only fields. Remount before another
+  // account can see a cached owner response or edit state.
+  return <AccountProfilePage key={`${profileId}:${accountId ?? 'anonymous'}`} profileId={profileId} accountId={accountId} status={status} />;
+}
+
+function AccountProfilePage({ profileId, accountId, status }: { profileId: string; accountId: string | null; status: 'loading' | 'authenticated' | 'unauthenticated' }) {
   const mainRef = useRef<HTMLElement>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loadState, setLoadState] = useState<LoadState>('loading');
@@ -61,6 +68,7 @@ export default function ProfilePage() {
   const [showBackToTop, setShowBackToTop] = useState(false);
 
   useEffect(() => {
+    if (!accountId) return;
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
       setLoadState('loading');
@@ -99,7 +107,7 @@ export default function ProfilePage() {
     }, 0);
 
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [profileId, retryKey]);
+  }, [profileId, retryKey, accountId]);
 
   const handleProfileUpdate = (data: Partial<Profile>) => {
     setProfile(previous => previous ? { ...previous, ...data } : null);
@@ -108,7 +116,7 @@ export default function ProfilePage() {
 
   const handleEndorseProfile = async () => {
     if (!profile || profile.isCurrentUser || hasEndorsed || isEndorsing) return;
-    if (!session?.user?.id) {
+    if (!accountId) {
       setActionError('Bitte melde dich an, um dieses Profil zu empfehlen.');
       return;
     }
@@ -131,7 +139,10 @@ export default function ProfilePage() {
     }
   };
 
-  const visibleProfile = loadState === 'ready' && profile?.id === profileId ? profile : null;
+  const ownProfile = Boolean(accountId && profile?.id === accountId);
+  const visibleProfile = status === 'authenticated' && loadState === 'ready' && profile?.id === profileId
+    ? { ...profile, isCurrentUser: ownProfile, email: ownProfile ? profile.email : undefined, lastLogin: ownProfile ? profile.lastLogin : null }
+    : null;
   const safeCoverImage = getSafeNavigationUrl(visibleProfile?.coverImage);
   const availableSocialLinks = socialDestinations.flatMap(({ key, label, Icon }) => {
     const href = getSafeHttpUrl(visibleProfile?.socialLinks?.[key]);
@@ -154,11 +165,11 @@ export default function ProfilePage() {
             {!visibleProfile ? (
               <>
                 <h1 className="sr-only">Profil</h1>
-                {loadState === 'loading' || loadState === 'ready' ? (
+                {status === 'loading' || (accountId && (loadState === 'loading' || loadState === 'ready')) ? (
                   <PageState kind="loading" title="Profil wird geladen" />
                 ) : loadState === 'missing' ? (
                   <PageState title="Profil nicht gefunden" description="Das angeforderte Mitgliedsprofil ist nicht verfügbar." action={<Button asChild variant="outline"><Link href="/members">Zu den Mitgliedern</Link></Button>} />
-                ) : loadState === 'unauthorized' ? (
+                ) : !accountId || loadState === 'unauthorized' ? (
                   <PageState kind="error" title="Anmeldung erforderlich" description="Melde dich an, um dieses Profil zu sehen." action={<Button asChild><Link href={`/login?callbackUrl=${encodeURIComponent(`/profile/${encodeURIComponent(profileId)}`)}`}>Zur Anmeldung</Link></Button>} />
                 ) : (
                   <PageState kind="error" title="Profil konnte nicht geladen werden" description="Prüfe deine Verbindung und versuche es erneut." action={<Button variant="outline" onClick={() => setRetryKey(value => value + 1)}>Erneut versuchen</Button>} />
@@ -199,7 +210,7 @@ export default function ProfilePage() {
                   </div>
                 </header>
 
-                {actionError && <p role="alert" className="mt-5 rounded-[10px] border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">{actionError} {!session && <Link href="/login" className="font-semibold underline underline-offset-2">Zur Anmeldung</Link>}</p>}
+                {actionError && <p role="alert" className="mt-5 rounded-[10px] border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">{actionError} {!accountId && <Link href="/login" className="font-semibold underline underline-offset-2">Zur Anmeldung</Link>}</p>}
 
                 <section aria-label="Profilzahlen" className="grid grid-cols-2 border-b py-5 sm:grid-cols-4">
                   <div className="min-w-0 border-r p-2 sm:p-3"><FollowersList userId={visibleProfile.id} count={visibleProfile.stats.followers} type="followers" /></div>

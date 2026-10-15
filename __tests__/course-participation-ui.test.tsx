@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useSession } from 'next-auth/react';
 import CourseClient from '@/app/courses/CourseClient';
@@ -98,4 +98,64 @@ it('keeps a full course unavailable to visitors but manageable by its owner', as
   render(<CourseClient />);
   expect(await screen.findByRole('button', { name: 'Kurs verwalten' })).toBeEnabled();
   expect(screen.getByRole('button', { name: 'Löschen' })).toBeInTheDocument();
+});
+
+it('distinguishes a historical completion with revised content from a current completion', async () => {
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => [
+    { ...freeCourse, id: 'revised', title: 'Überarbeiteter Kurs', isEnrolled: true, everCompleted: true, completed: false },
+    { ...freeCourse, id: 'current', title: 'Aktueller Kurs', isEnrolled: true, everCompleted: true, completed: true },
+  ] });
+  render(<CourseClient />);
+  expect(await screen.findByText('Früher abgeschlossen · neue Inhalte offen')).toBeVisible();
+  expect(screen.getByText('Abgeschlossen')).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Kurs verlassen' })).not.toBeInTheDocument();
+});
+
+it('hides the previous account’s course rights immediately on account switch and logout', async () => {
+  let resolveBob!: (response: { ok: boolean; json: () => Promise<unknown> }) => void;
+  const bobResponse = new Promise<{ ok: boolean; json: () => Promise<unknown> }>(resolve => { resolveBob = resolve });
+  let calls = 0;
+  global.fetch = jest.fn().mockImplementation(async () => ++calls === 1
+    ? { ok: true, json: async () => [{ ...freeCourse, id: 'alice-only', title: 'Alice Kurs', isEnrolled: true, everCompleted: true, canDelete: true, canApproveRewards: true }] }
+    : bobResponse);
+  jest.mocked(useSession).mockReturnValue({
+    data: { user: { id: 'alice', role: 'ADMIN' }, expires: '2099-01-01' }, status: 'authenticated', update: jest.fn(),
+  } as ReturnType<typeof useSession>);
+  const { rerender } = render(<CourseClient />);
+  expect(await screen.findByText('Alice Kurs')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Löschen' })).toBeVisible();
+
+  jest.mocked(useSession).mockReturnValue({
+    data: { user: { id: 'bob', role: 'USER' }, expires: '2099-01-01' }, status: 'authenticated', update: jest.fn(),
+  } as ReturnType<typeof useSession>);
+  rerender(<CourseClient />);
+  expect(screen.queryByText('Alice Kurs')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Löschen' })).not.toBeInTheDocument();
+  await act(async () => resolveBob({ ok: true, json: async () => [freeCourse] }));
+  expect(await screen.findByText('Freier Kurs')).toBeVisible();
+
+  jest.mocked(useSession).mockReturnValue({ data: { user: { id: 'bob', role: 'USER' }, expires: '2099-01-01' }, status: 'unauthenticated', update: jest.fn() } as unknown as ReturnType<typeof useSession>);
+  rerender(<CourseClient />);
+  expect(screen.queryByText('Freier Kurs')).not.toBeInTheDocument();
+});
+
+it('ignores a pending previous account response after a new viewer loads', async () => {
+  let resolveAlice!: (response: { ok: boolean; json: () => Promise<unknown> }) => void;
+  const aliceResponse = new Promise<{ ok: boolean; json: () => Promise<unknown> }>(resolve => { resolveAlice = resolve });
+  let calls = 0;
+  global.fetch = jest.fn().mockImplementation(async () => ++calls === 1
+    ? aliceResponse
+    : { ok: true, json: async () => [freeCourse] });
+  jest.mocked(useSession).mockReturnValue({
+    data: { user: { id: 'alice', role: 'ADMIN' }, expires: '2099-01-01' }, status: 'authenticated', update: jest.fn(),
+  } as ReturnType<typeof useSession>);
+  const { rerender } = render(<CourseClient />);
+  jest.mocked(useSession).mockReturnValue({
+    data: { user: { id: 'bob', role: 'USER' }, expires: '2099-01-01' }, status: 'authenticated', update: jest.fn(),
+  } as ReturnType<typeof useSession>);
+  rerender(<CourseClient />);
+  expect(await screen.findByText('Freier Kurs')).toBeVisible();
+  await act(async () => { resolveAlice({ ok: true, json: async () => [{ ...freeCourse, title: 'Alice Kurs', canDelete: true }] }); await aliceResponse; });
+  expect(screen.queryByText('Alice Kurs')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Löschen' })).not.toBeInTheDocument();
 });

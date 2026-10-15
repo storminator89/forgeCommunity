@@ -43,10 +43,11 @@ it('lets admins flag an account as a test account and explains reward exclusion'
   await waitFor(() => expect(toggle).toBeChecked())
 })
 
-it('does not render the test-account control for a non-admin session', async () => {
+it('does not fetch or render the user roster for a non-admin session', () => {
   sessionAs('USER')
-  const user = userEvent.setup()
   render(<UserManagement />)
-  await user.click(await screen.findByRole('button', { name: 'Details von Ada Test öffnen' }))
+  expect(screen.getByRole('alert')).toHaveTextContent('Keine Administratorrechte.')
+  expect(screen.queryByRole('button', { name: 'Details von Ada Test öffnen' })).not.toBeInTheDocument()
   expect(screen.queryByRole('switch', { name: 'Testkonto' })).not.toBeInTheDocument()
+  expect(global.fetch).not.toHaveBeenCalled()
 })

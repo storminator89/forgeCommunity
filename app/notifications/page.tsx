@@ -14,6 +14,7 @@ import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
+import { PageState } from '@/components/page-state';
 
 const notificationLabels: Record<string, string> = {
   CHAT_MESSAGE: 'Chatnachricht',
@@ -23,9 +24,8 @@ const notificationLabels: Record<string, string> = {
 
 export default function NotificationsPage() {
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
-  const { notifications, markAsRead, deleteNotification, markAllAsRead } = useNotifications();
+  const { notifications, unreadCount, isLoading, loadError, retry, markAsRead, deleteNotification, markAllAsRead } = useNotifications();
   const reduceMotion = useReducedMotion();
-  const unreadCount = notifications.filter(n => !n.isRead).length;
   const filteredNotifications = filter === 'all' ? notifications : notifications.filter(n => !n.isRead);
 
   const getIcon = (type: string) => {
@@ -65,6 +65,10 @@ export default function NotificationsPage() {
               <Button type="button" size="sm" variant={filter === 'unread' ? 'secondary' : 'ghost'} aria-pressed={filter === 'unread'} onClick={() => setFilter('unread')}>Ungelesen <span className="text-muted-foreground">{unreadCount}</span></Button>
             </div>
 
+            {loadError && <div className="mt-6"><PageState kind="error" title="Aktualisierung fehlgeschlagen" description={loadError}
+              action={<Button type="button" variant="outline" onClick={retry}>Erneut versuchen</Button>} /></div>}
+            {isLoading && <div className="mt-6"><PageState kind="loading" title="Benachrichtigungen werden geladen" /></div>}
+
             <div aria-live="polite">
               <AnimatePresence initial={false}>
                 {filteredNotifications.map(notification => (
@@ -90,7 +94,7 @@ export default function NotificationsPage() {
               </AnimatePresence>
             </div>
 
-            {filteredNotifications.length === 0 && (
+            {!isLoading && !loadError && filteredNotifications.length === 0 && (
               <div className="py-16 text-center" role="status">
                 <Bell className="mx-auto mb-4 h-9 w-9 text-muted-foreground" aria-hidden="true" />
                 <h2 className="text-xl font-semibold">{filter === 'unread' ? 'Alles gelesen' : 'Noch keine Benachrichtigungen'}</h2>

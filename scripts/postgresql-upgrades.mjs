@@ -5,6 +5,32 @@ import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 
 const upgradesDir = fileURLToPath(new URL('../prisma/postgresql-upgrades/', import.meta.url));
+const emptySchemaBaseline = readFileSync(fileURLToPath(new URL('../prisma/postgresql-baselines/0000_main_7814799.sql', import.meta.url)), 'utf8');
+if (/^\s*(?:CREATE|ALTER|DROP)\s+SCHEMA\b/im.test(emptySchemaBaseline) ||
+    /^\s*SET\s+(?:LOCAL\s+)?search_path\b/im.test(emptySchemaBaseline) ||
+    /(?:"public"|public)\s*\./i.test(emptySchemaBaseline)) {
+  throw new Error('PostgreSQL empty-schema baseline must not change or reference another schema.');
+}
+
+async function verifyEmptySchema(client) {
+  const { rows: [{ has_objects: hasObjects }] } = await client.query(`
+    SELECT EXISTS (SELECT 1 FROM pg_class WHERE relnamespace = n.oid)
+        OR EXISTS (SELECT 1 FROM pg_type WHERE typnamespace = n.oid)
+        OR EXISTS (SELECT 1 FROM pg_proc WHERE pronamespace = n.oid)
+        OR EXISTS (SELECT 1 FROM pg_operator WHERE oprnamespace = n.oid)
+        OR EXISTS (SELECT 1 FROM pg_opclass WHERE opcnamespace = n.oid)
+        OR EXISTS (SELECT 1 FROM pg_opfamily WHERE opfnamespace = n.oid)
+        OR EXISTS (SELECT 1 FROM pg_collation WHERE collnamespace = n.oid)
+        OR EXISTS (SELECT 1 FROM pg_conversion WHERE connamespace = n.oid)
+        OR EXISTS (SELECT 1 FROM pg_ts_config WHERE cfgnamespace = n.oid)
+        OR EXISTS (SELECT 1 FROM pg_ts_dict WHERE dictnamespace = n.oid)
+        OR EXISTS (SELECT 1 FROM pg_ts_parser WHERE prsnamespace = n.oid)
+        OR EXISTS (SELECT 1 FROM pg_ts_template WHERE tmplnamespace = n.oid)
+        OR EXISTS (SELECT 1 FROM pg_extension WHERE extnamespace = n.oid)
+        AS has_objects
+    FROM pg_namespace n WHERE n.nspname = current_schema()`);
+  if (hasObjects) throw new Error('PostgreSQL empty-schema initialization requires a schema with no existing objects.');
+}
 
 async function verifyCurrentSkillEndorsement(client) {
   const { rows: [{ relkind }] } = await client.query(`
@@ -83,9 +109,15 @@ async function verifyCurrentSkillEndorsement(client) {
   }
 }
 
-export async function applyPostgresqlUpgrades(url, { baselineCurrentSchema = false } = {}) {
+export async function applyPostgresqlUpgrades(url, { baselineCurrentSchema = false, initializeEmptySchema = false } = {}) {
   if (!/^postgres(?:ql)?:\/\//.test(url ?? '')) {
     throw new Error('PostgreSQL upgrade requires DATABASE_URL=postgresql://...');
+  }
+  if (baselineCurrentSchema && initializeEmptySchema) {
+    throw new Error('PostgreSQL baseline and empty-schema initialization are mutually exclusive.');
+  }
+  if (initializeEmptySchema && !new URL(url).searchParams.has('schema')) {
+    throw new Error('PostgreSQL empty-schema initialization requires an explicit ?schema= target.');
   }
   const files = readdirSync(upgradesDir).filter(name => /^\d+_[\w-]+\.sql$/.test(name)).sort();
   if (files.length === 0) throw new Error('No reviewed PostgreSQL upgrades found.');
@@ -107,6 +139,10 @@ export async function applyPostgresqlUpgrades(url, { baselineCurrentSchema = fal
     if (currentSchema !== schema) throw new Error(`PostgreSQL schema ${schema} does not exist or is not accessible.`);
     // Serialize two deployments before checking history and the target schema.
     await client.query('SELECT pg_advisory_xact_lock(761834, 26)');
+    if (initializeEmptySchema) {
+      await verifyEmptySchema(client);
+      await client.query(emptySchemaBaseline);
+    }
     const { rows: baseColumns } = await client.query(`
       SELECT table_name, column_name FROM information_schema.columns
       WHERE table_schema = current_schema()
@@ -122,12 +158,13 @@ export async function applyPostgresqlUpgrades(url, { baselineCurrentSchema = fal
     const { rows: [{ history, target }] } = await client.query(`
       SELECT to_regclass('"_app_schema_upgrades"') AS history,
              to_regclass('"SkillEndorsement"') AS target`);
+    const explicitBaseline = baselineCurrentSchema || initializeEmptySchema;
     if (!history && target) {
-      if (!baselineCurrentSchema) {
+      if (!explicitBaseline) {
         throw new Error('SkillEndorsement exists without upgrade history; use the explicit baseline option only after verifying a fresh schema.');
       }
       await verifyCurrentSkillEndorsement(client);
-    } else if (baselineCurrentSchema) {
+    } else if (explicitBaseline) {
       throw new Error('Explicit baseline requires an untracked, verified SkillEndorsement table.');
     }
     if (!history) {
@@ -136,7 +173,7 @@ export async function applyPostgresqlUpgrades(url, { baselineCurrentSchema = fal
     }
     const { rows: applied } = await client.query('SELECT name, checksum FROM "_app_schema_upgrades" ORDER BY name');
     const completed = new Set();
-    if (baselineCurrentSchema) {
+    if (explicitBaseline) {
       await client.query('INSERT INTO "_app_schema_upgrades" (name, checksum) VALUES ($1, $2)', [files[0], known.get(files[0]).checksum]);
       completed.add(files[0]);
       console.log(`Baselined verified PostgreSQL upgrade ${files[0]}`);

@@ -70,3 +70,19 @@ it('keeps the existing multipart course creation contract and returns to the dir
   expect(body.get('startDate')).toBeUndefined()
   expect(body.get('endDate')).toBeUndefined()
 })
+
+it('clears an unfinished course before another account sees the composer', () => {
+  const view = render(<NewCoursePage />)
+  fireEvent.change(screen.getByLabelText('Kurstitel'), { target: { value: 'Alice private course' } })
+  fireEvent.change(screen.getByLabelText('Kurskategorie'), { target: { value: 'Alice private category' } })
+
+  jest.mocked(useSession).mockReturnValue({ data: { user: { id: 'user-2' }, expires: '2099-01-01' }, status: 'authenticated', update: jest.fn() } as ReturnType<typeof useSession>)
+  view.rerender(<NewCoursePage />)
+  expect(screen.getByLabelText('Kurstitel')).toHaveValue('')
+  expect(screen.getByLabelText('Kurskategorie')).toHaveValue('')
+  expect(screen.queryByDisplayValue('Alice private course')).not.toBeInTheDocument()
+
+  jest.mocked(useSession).mockReturnValue({ data: null, status: 'unauthenticated', update: jest.fn() } as ReturnType<typeof useSession>)
+  view.rerender(<NewCoursePage />)
+  expect(screen.getByLabelText('Kurstitel')).toHaveValue('')
+})

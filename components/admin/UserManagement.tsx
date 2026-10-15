@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { Award, MoreHorizontal, RefreshCw, Search, UserPlus, Users } from 'lucide-react'
@@ -100,6 +100,20 @@ function DetailPair({ label, value }: { label: string; value: React.ReactNode })
 }
 
 export default function UserManagement() {
+  const { data: session, status } = useSession()
+  const router = useRouter()
+  useEffect(() => {
+    if (status === 'unauthenticated') router.push('/')
+  }, [status, router])
+  if (status === 'loading') return <div role="status" className="py-16 text-center text-sm text-muted-foreground">Benutzer werden geladen …</div>
+  if (!session) return null
+  if (session.user.role !== 'ADMIN' || !session.user.id) return <p role="alert" className="py-16 text-center text-sm text-destructive">Keine Administratorrechte.</p>
+  // A new authenticated account gets a fresh, empty component immediately.
+  // No list, detail, dialog or error from the previous account can render.
+  return <ScopedUserManagement key={session.user.id} viewerId={session.user.id} />
+}
+
+function ScopedUserManagement({ viewerId }: { viewerId: string }) {
   const [users, setUsers] = useState<User[]>([])
   const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading')
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -115,12 +129,12 @@ export default function UserManagement() {
   const [detailRetry, setDetailRetry] = useState(0)
   const [testAccountPendingId, setTestAccountPendingId] = useState<string | null>(null)
   const [testAccountError, setTestAccountError] = useState<string | null>(null)
-  const { data: session, status } = useSession()
-  const router = useRouter()
+  const scopeRef = useRef<string | null>(viewerId)
+  const refreshControllerRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
-    if (status === 'unauthenticated') router.push('/')
-  }, [status, router])
+    return () => { scopeRef.current = null; refreshControllerRef.current?.abort() }
+  }, [])
 
   const fetchUsers = useCallback(async (signal?: AbortSignal): Promise<User[]> => {
     const response = await fetch('/api/admin/users', { method: 'GET', credentials: 'include', signal })
@@ -129,41 +143,46 @@ export default function UserManagement() {
   }, [])
 
   useEffect(() => {
-    if (status !== 'authenticated') return
     const controller = new AbortController()
     void fetchUsers(controller.signal).then(next => {
-      if (!controller.signal.aborted) {
+      if (!controller.signal.aborted && scopeRef.current === viewerId) {
         setUsers(next)
         setLastLoadedAt(Date.now())
         setListError(null)
         setLoadState('ready')
       }
     }).catch(() => {
-      if (!controller.signal.aborted) {
+      if (!controller.signal.aborted && scopeRef.current === viewerId) {
         setListError('Benutzer konnten nicht geladen werden.')
         setLoadState('error')
       }
     })
-    return () => controller.abort()
-  }, [fetchUsers, status])
+    return () => { controller.abort(); refreshControllerRef.current?.abort() }
+  }, [fetchUsers, viewerId])
 
   const refreshUsers = useCallback(async () => {
-    if (isRefreshing) return
+    if (!viewerId || scopeRef.current !== viewerId || isRefreshing) return
+    refreshControllerRef.current?.abort()
+    const controller = new AbortController()
+    refreshControllerRef.current = controller
     setIsRefreshing(true)
     setListError(null)
     try {
-      const next = await fetchUsers()
+      const next = await fetchUsers(controller.signal)
+      if (controller.signal.aborted || scopeRef.current !== viewerId) return
       setUsers(next)
       setLastLoadedAt(Date.now())
       setLoadState('ready')
       setSelectedId(current => current && next.some(user => user.id === current) ? current : null)
     } catch {
+      if (controller.signal.aborted || scopeRef.current !== viewerId) return
       setListError('Benutzer konnten nicht geladen werden. Bitte erneut versuchen.')
       if (loadState === 'loading') setLoadState('error')
     } finally {
-      setIsRefreshing(false)
+      if (refreshControllerRef.current === controller) refreshControllerRef.current = null
+      if (!controller.signal.aborted && scopeRef.current === viewerId) setIsRefreshing(false)
     }
-  }, [fetchUsers, isRefreshing, loadState])
+  }, [fetchUsers, isRefreshing, loadState, viewerId])
 
   useEffect(() => {
     if (!selectedId) return
@@ -174,19 +193,20 @@ export default function UserManagement() {
         return response.json() as Promise<User>
       })
       .then(detail => {
-        if (!controller.signal.aborted) {
+        if (!controller.signal.aborted && scopeRef.current === viewerId) {
           setSelectedDetail(detail)
           setDetailState('ready')
         }
       }).catch(() => {
-        if (!controller.signal.aborted) setDetailState('error')
+        if (!controller.signal.aborted && scopeRef.current === viewerId) setDetailState('error')
       })
     return () => controller.abort()
-  }, [selectedId, detailRetry])
+  }, [selectedId, detailRetry, viewerId])
 
   const selectedRow = users.find(user => user.id === selectedId) ?? null
   const selectedUser = selectedRow && selectedDetail ? mergeUser(selectedRow, selectedDetail) : selectedRow
   const selectUser = (user: User) => {
+    if (!viewerId || scopeRef.current !== viewerId) return
     if (selectedId === user.id) return
     setSelectedId(user.id)
     setSelectedDetail(null)
@@ -199,12 +219,14 @@ export default function UserManagement() {
   })
 
   const handleAddUser = (newUser: User) => {
+    if (!viewerId || scopeRef.current !== viewerId) return
     setUsers(current => [...current, newUser])
     setIsAddUserOpen(false)
     void refreshUsers()
   }
 
   const handleEditUser = async (user: User) => {
+    if (!viewerId || scopeRef.current !== viewerId) return
     setActionError(null)
     if (selectedDetail?.id === user.id) {
       setEditingUser(mergeUser(user, selectedDetail))
@@ -212,14 +234,17 @@ export default function UserManagement() {
     }
     try {
       const response = await fetch(`/api/admin/users/${encodeURIComponent(user.id)}`, { credentials: 'include' })
+      if (scopeRef.current !== viewerId) return
       if (!response.ok) throw await responseError(response, 'Benutzer konnte nicht geladen werden.')
-      setEditingUser(mergeUser(user, await response.json() as User))
+      const detail = await response.json() as User
+      if (scopeRef.current === viewerId) setEditingUser(mergeUser(user, detail))
     } catch {
-      setActionError(`Die Daten von ${displayName(user)} konnten nicht zum Bearbeiten geladen werden.`)
+      if (scopeRef.current === viewerId) setActionError(`Die Daten von ${displayName(user)} konnten nicht zum Bearbeiten geladen werden.`)
     }
   }
 
   const handleUpdateUser = (updated: User) => {
+    if (!viewerId || scopeRef.current !== viewerId) return
     setUsers(current => current.map(user => user.id === updated.id ? mergeUser(user, updated) : user))
     setSelectedDetail(current => current?.id === updated.id ? mergeUser(current, updated) : current)
     setEditingUser(null)
@@ -227,41 +252,44 @@ export default function UserManagement() {
   }
 
   const handleDeleteUser = async (user: User) => {
-    if (!window.confirm(`„${displayName(user)}“ wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`)) return
+    if (!viewerId || scopeRef.current !== viewerId) return
+    if (!window.confirm(`„${displayName(user)}“ wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden. Falls andere Mitglieder Zertifikate für Kurse dieses Kontos besitzen, wird die Löschung zum Schutz ihrer Nachweise abgelehnt.`)) return
+    if (scopeRef.current !== viewerId) return
     setActionError(null)
     try {
       const response = await fetch(`/api/admin/users/${encodeURIComponent(user.id)}`, { method: 'DELETE' })
+      if (scopeRef.current !== viewerId) return
       if (!response.ok) throw await responseError(response, 'Benutzer konnte nicht gelöscht werden.')
       setUsers(current => current.filter(item => item.id !== user.id))
       if (selectedId === user.id) setSelectedId(null)
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : 'Benutzer konnte nicht gelöscht werden.')
+      if (scopeRef.current === viewerId) setActionError(error instanceof Error ? error.message : 'Benutzer konnte nicht gelöscht werden.')
     }
   }
 
   const updateTestAccount = async (user: User, isTestAccount: boolean) => {
-    if (session?.user?.role !== 'ADMIN') return
+    if (!viewerId || scopeRef.current !== viewerId) return
     setTestAccountPendingId(user.id)
     setTestAccountError(null)
     try {
       const response = await fetch(`/api/admin/users/${encodeURIComponent(user.id)}/test-account`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isTestAccount }),
       })
+      if (scopeRef.current !== viewerId) return
       if (!response.ok) throw await responseError(response, 'Der Testkonto-Status konnte nicht geändert werden.')
       const result = await response.json() as { isTestAccount: boolean }
       setUsers(current => current.map(item => item.id === user.id ? { ...item, isTestAccount: result.isTestAccount } : item))
       setSelectedDetail(current => current?.id === user.id ? { ...current, isTestAccount: result.isTestAccount } : current)
     } catch (error) {
-      setTestAccountError(error instanceof Error ? error.message : 'Der Testkonto-Status konnte nicht geändert werden.')
+      if (scopeRef.current === viewerId) setTestAccountError(error instanceof Error ? error.message : 'Der Testkonto-Status konnte nicht geändert werden.')
     } finally {
-      setTestAccountPendingId(null)
+      if (scopeRef.current === viewerId) setTestAccountPendingId(null)
     }
   }
 
-  if (status === 'loading' || (status === 'authenticated' && loadState === 'loading')) {
+  if (loadState === 'loading') {
     return <div role="status" className="py-16 text-center text-sm text-muted-foreground">Benutzer werden geladen …</div>
   }
-  if (!session) return null
 
   return <div className="min-w-0 space-y-6">
     <header className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-5">
@@ -323,7 +351,7 @@ export default function UserManagement() {
       <aside aria-label={selectedUser ? `Details zu ${displayName(selectedUser)}` : 'Benutzerstatistiken'} className="min-w-0 xl:border-l xl:border-border xl:pl-8">
         {selectedUser ? <div className="min-w-0 space-y-5">
           <div className="flex min-w-0 items-center gap-3 border-b border-border pb-4"><Avatar className="h-12 w-12 shrink-0"><AvatarImage src={selectedUser.image || ''} alt="" /><AvatarFallback>{displayName(selectedUser).slice(0, 2).toUpperCase()}</AvatarFallback></Avatar><div className="min-w-0"><h2 className="break-words text-lg font-semibold">{displayName(selectedUser)}</h2><p className="break-all text-sm text-muted-foreground">{selectedUser.email}</p></div></div>
-          {session.user.role === 'ADMIN' && <div className="rounded-xl border border-border bg-card p-4"><div className="flex items-start justify-between gap-4"><div className="space-y-1"><Label htmlFor={`test-account-${selectedUser.id}`}>Testkonto</Label><p id={`test-account-description-${selectedUser.id}`} className="text-sm text-muted-foreground">Testkonten können keine Punkte oder Kursbelohnungen verdienen und erscheinen nicht in der Rangliste.</p></div><Switch id={`test-account-${selectedUser.id}`} aria-describedby={`test-account-description-${selectedUser.id}`} checked={selectedUser.isTestAccount === true} disabled={testAccountPendingId === selectedUser.id} onCheckedChange={checked => void updateTestAccount(selectedUser, checked)} /></div>{testAccountError && <p role="alert" className="mt-2 text-sm text-destructive">{testAccountError}</p>}</div>}
+          <div className="rounded-xl border border-border bg-card p-4"><div className="flex items-start justify-between gap-4"><div className="space-y-1"><Label htmlFor={`test-account-${selectedUser.id}`}>Testkonto</Label><p id={`test-account-description-${selectedUser.id}`} className="text-sm text-muted-foreground">Testkonten können keine Punkte oder Kursbelohnungen verdienen und erscheinen nicht in der Rangliste.</p></div><Switch id={`test-account-${selectedUser.id}`} aria-describedby={`test-account-description-${selectedUser.id}`} checked={selectedUser.isTestAccount === true} disabled={testAccountPendingId === selectedUser.id} onCheckedChange={checked => void updateTestAccount(selectedUser, checked)} /></div>{testAccountError && <p role="alert" className="mt-2 text-sm text-destructive">{testAccountError}</p>}</div>
           {detailState === 'loading' && <p role="status" className="text-sm text-muted-foreground">Weitere Details werden geladen …</p>}
           {detailState === 'error' && <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-destructive"><span>Weitere Details konnten nicht geladen werden.</span><Button size="sm" variant="outline" onClick={() => { setDetailState('loading'); setDetailRetry(current => current + 1) }}>Erneut versuchen</Button></div>}
           <Tabs defaultValue="overview" key={selectedUser.id} className="min-w-0"><TabsList className="flex h-auto w-full justify-start overflow-x-auto"><TabsTrigger value="overview">Übersicht</TabsTrigger><TabsTrigger value="activity">Aktivität</TabsTrigger><TabsTrigger value="skills">Skills</TabsTrigger><TabsTrigger value="settings">Einstellungen</TabsTrigger></TabsList>

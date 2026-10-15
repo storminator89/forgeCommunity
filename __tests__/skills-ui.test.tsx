@@ -1,10 +1,14 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import SkillDirectory from '@/app/skills/page';
 
 jest.mock('@/components/Sidebar', () => ({ Sidebar: () => null }));
 jest.mock('@/components/user-nav', () => ({ UserNav: () => null }));
 jest.mock('@/components/theme-toggle', () => ({ ThemeToggle: () => null }));
-jest.mock('next-auth/react', () => ({ useSession: () => ({ data: { user: { id: 'viewer' } } }) }));
+let mockViewerId: string | null = 'viewer';
+jest.mock('next-auth/react', () => ({ useSession: () => ({
+  data: mockViewerId ? { user: { id: mockViewerId } } : null,
+  status: mockViewerId ? 'authenticated' : 'unauthenticated',
+}) }));
 
 const directory = {
   skills: [{ id: 'skill-1', name: 'TypeScript', category: 'Technik' }, { id: 'skill-2', name: 'Figma', category: 'Design' }],
@@ -15,9 +19,55 @@ const directory = {
 };
 
 beforeEach(() => {
+  mockViewerId = 'viewer';
   global.fetch = jest.fn().mockImplementation(async (url: string) => url === '/api/skills/directory'
     ? { ok: true, json: async () => directory }
     : { ok: true, json: async () => ({ message: 'Empfohlen' }) });
+});
+
+it('discards viewer-specific endorsements and open details immediately on account switch and logout', async () => {
+  mockViewerId = 'alice';
+  jest.mocked(global.fetch).mockImplementation(async (url: string | URL | Request) => url === '/api/skills/directory'
+    ? { ok: true, json: async () => ({ ...directory, members: directory.members.map(member => ({ ...member, hasEndorsed: mockViewerId === 'alice' })) }) } as Response
+    : { ok: true, json: async () => ({ message: 'Empfohlen' }) } as Response);
+  const view = render(<SkillDirectory />);
+  const aliceRow = (await screen.findByRole('link', { name: 'Ada' })).closest('li');
+  expect(within(aliceRow!).getByRole('button', { name: 'Bereits empfohlen' })).toBeDisabled();
+  fireEvent.click(within(aliceRow!).getByRole('button', { name: 'Details anzeigen' }));
+  expect(screen.getByRole('dialog', { name: 'Ada' })).toBeInTheDocument();
+
+  mockViewerId = 'bob';
+  view.rerender(<SkillDirectory />);
+  expect(screen.queryByRole('dialog', { name: 'Ada' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: 'Ada' })).not.toBeInTheDocument();
+  const bobRow = (await screen.findByRole('link', { name: 'Ada' })).closest('li');
+  expect(within(bobRow!).getByRole('button', { name: 'Empfehlen' })).toBeEnabled();
+
+  mockViewerId = null;
+  view.rerender(<SkillDirectory />);
+  expect(screen.queryByRole('link', { name: 'Ada' })).not.toBeInTheDocument();
+  expect(screen.getByText('Anmeldung erforderlich')).toBeInTheDocument();
+  expect(jest.mocked(global.fetch).mock.calls.filter(([url]) => url === '/api/skills/directory')).toHaveLength(2);
+});
+
+it('aborts a former viewer request and ignores its late response', async () => {
+  mockViewerId = 'alice';
+  let finishAlice!: (value: Response) => void;
+  const aliceResponse = new Promise<Response>(resolve => { finishAlice = resolve; });
+  const signals: AbortSignal[] = [];
+  jest.mocked(global.fetch).mockImplementation((url: string | URL | Request, options?: RequestInit) => {
+    if (url !== '/api/skills/directory') return Promise.resolve({ ok: true, json: async () => ({ message: 'Empfohlen' }) } as Response);
+    signals.push(options!.signal as AbortSignal);
+    return mockViewerId === 'alice' ? aliceResponse : Promise.resolve({ ok: true, json: async () => ({ ...directory, members: [directory.members[1]] }) } as Response);
+  });
+  const view = render(<SkillDirectory />);
+  await waitFor(() => expect(signals).toHaveLength(1));
+  mockViewerId = 'bob';
+  view.rerender(<SkillDirectory />);
+  expect(signals[0].aborted).toBe(true);
+  expect(await screen.findByRole('link', { name: 'Bea' })).toBeInTheDocument();
+  await act(async () => finishAlice({ ok: true, json: async () => directory } as Response));
+  expect(screen.queryByRole('link', { name: 'Ada' })).not.toBeInTheDocument();
 });
 
 it('filters the skill directory and links to member profiles', async () => {

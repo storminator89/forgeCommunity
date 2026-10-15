@@ -2,6 +2,7 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { Sidebar } from '@/components/Sidebar';
 import { AppShell, AppHeader } from '@/components/app-shell';
+import { UserNav } from '@/components/user-nav';
 import { isNavigationActive } from '@/lib/navigation';
 import { useSession } from 'next-auth/react';
 
@@ -25,6 +26,7 @@ it('marks nested routes active without activating knowledge twice for drafts', (
 
 it('mobile navigation opens from the page header and closes after selection', () => {
   render(<AppShell><Sidebar /><div><AppHeader><div>Kurse</div></AppHeader><main id="page-content" /></div></AppShell>);
+  expect(screen.getByRole('link', { name: 'ForgeCommunity Start' })).toHaveClass('min-h-11');
   const trigger = screen.getByRole('button', { name: 'Navigation öffnen' });
   expect(trigger).not.toHaveAttribute('aria-controls');
   fireEvent.click(trigger);
@@ -57,4 +59,9 @@ it('keeps admin navigation hidden for a regular member', () => {
   render(<AppShell><Sidebar /></AppShell>);
   expect(screen.queryByRole('link', { name: 'Benutzerverwaltung' })).not.toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'Kurse' })).toHaveAttribute('aria-current', 'page');
+});
+
+it('gives the account menu a comfortable touch target', () => {
+  render(<UserNav />);
+  expect(screen.getByRole('button', { name: 'Benutzermenü öffnen' })).toHaveClass('h-11', 'w-11');
 });

@@ -68,6 +68,7 @@ export function StatsCard({ stats, rewards, rewardsLoading, rewardsError, isSign
                   <dd className="mt-1 text-sm font-medium">{rewards.firstCourseCompleted ? 'Erreicht' : 'Noch nicht erreicht'}</dd>
                 </div>
               </dl>
+              <LearningMilestoneProgress completedCourses={rewards.completedCourses} />
               {rewards.history && rewards.history.length > 0 && <div className="mt-5 border-t pt-4">
                 <h4 className="text-sm font-medium">Punkteverlauf</h4>
                 <ol className="mt-2 space-y-3">
@@ -84,4 +85,24 @@ export function StatsCard({ stats, rewards, rewardsLoading, rewardsError, isSign
       </div>
     </section>
   )
+}
+import Link from 'next/link'
+
+
+function LearningMilestoneProgress({ completedCourses }: { completedCourses: number }) {
+  const nextTarget = [1, 3, 5].find(target => completedCourses < target)
+  return <div className="mt-5 border-t pt-4">
+    <h4 className="text-sm font-medium">Dein nächster Lernmeilenstein</h4>
+    {nextTarget ? <>
+      <p className="mt-1 text-sm text-muted-foreground">{nextTarget} unterschiedliche Kurse abschließen</p>
+      <p className="mt-2 text-sm font-medium tabular-nums">{completedCourses} von {nextTarget} Kursen</p>
+      <progress
+        value={completedCourses}
+        max={nextTarget}
+        aria-label={`Lernmeilenstein: ${completedCourses} von ${nextTarget} Kursen abgeschlossen`}
+        className="mt-2 h-2 w-full accent-primary"
+      >{completedCourses} von {nextTarget}</progress>
+    </> : <p className="mt-1 text-sm text-muted-foreground">Alle derzeitigen Lernmeilensteine erreicht.</p>}
+    <Link href="/courses" className="mt-3 inline-block text-sm text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Kurse entdecken</Link>
+  </div>
 }

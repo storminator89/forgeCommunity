@@ -46,9 +46,22 @@ it('shows private rewards and milestone independently of leaderboard placement',
   </>)
   expect(screen.getByText('Meine Punkte').nextElementSibling).toHaveTextContent('50')
   expect(screen.getByText('Meilenstein: Erster abgeschlossener Kurs').nextElementSibling).toHaveTextContent('Erreicht')
+  expect(screen.getByText('3 unterschiedliche Kurse abschließen')).toBeInTheDocument()
+  expect(screen.getByRole('progressbar', { name: 'Lernmeilenstein: 1 von 3 Kursen abgeschlossen' })).toHaveAttribute('value', '1')
   expect(screen.getByText('Noch keine öffentlichen Einträge.')).toBeInTheDocument()
   expect(screen.getByText(/Was zählt: Ein von Admins freigegebener Kurs/)).toBeInTheDocument()
 })
+
+it('shows reachable private learning milestones without streak pressure or public ranking', () => {
+  const view = render(<StatsCard stats={{ posts: 0, receivedLikes: 0, comments: 0 }} rewards={{ points: 0, completedCourses: 0, firstCourseCompleted: false }} rewardsLoading={false} rewardsError={false} isSignedIn />)
+  expect(screen.getByRole('progressbar', { name: 'Lernmeilenstein: 0 von 1 Kursen abgeschlossen' })).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Kurse entdecken' })).toHaveAttribute('href', '/courses')
+  view.rerender(<StatsCard stats={{ posts: 0, receivedLikes: 0, comments: 0 }} rewards={{ points: 0, completedCourses: 3, firstCourseCompleted: true }} rewardsLoading={false} rewardsError={false} isSignedIn />)
+  expect(screen.getByRole('progressbar', { name: 'Lernmeilenstein: 3 von 5 Kursen abgeschlossen' })).toBeInTheDocument()
+  view.rerender(<StatsCard stats={{ posts: 0, receivedLikes: 0, comments: 0 }} rewards={{ points: 0, completedCourses: 5, firstCourseCompleted: true }} rewardsLoading={false} rewardsError={false} isSignedIn />)
+  expect(screen.getByText('Alle derzeitigen Lernmeilensteine erreicht.')).toBeInTheDocument()
+  expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
+});
 
 it('explains a quiz-revision adjustment without erasing the historical milestone', () => {
   render(<StatsCard stats={{ posts: 0, receivedLikes: 0, comments: 0 }} rewards={{

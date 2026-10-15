@@ -1,7 +1,8 @@
 "use client"
 
 import { AppShell, AppHeader } from '@/components/app-shell';
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useSession } from 'next-auth/react'
 import { Sidebar } from "@/components/Sidebar"
 import { UserNav } from "@/components/user-nav"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -65,6 +66,26 @@ const getLevelLabel = (value: number) => {
 
 
 export default function SettingsPage() {
+  const { data: session, status } = useSession()
+  const userId = status === 'authenticated' ? session?.user?.id : null
+
+  // Remount every private state field on an account transition, including
+  // Alice -> Bob without a route change and logout before a redirect occurs.
+  if (!userId) return <div className="mx-auto max-w-lg px-4 py-12"><PageState
+    kind={status === 'loading' ? 'loading' : 'empty'}
+    title={status === 'loading' ? 'Einstellungen werden geladen' : 'Anmeldung erforderlich'}
+  /></div>
+
+  return <AccountSettings key={userId} userId={userId} />
+}
+
+function AccountSettings({ userId }: { userId: string }) {
+  const actionController = useRef<AbortController | null>(null)
+  useEffect(() => {
+    const controller = new AbortController()
+    actionController.current = controller
+    return () => controller.abort()
+  }, [userId])
   // Grundlegende Benutzerinformationen
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -94,15 +115,17 @@ export default function SettingsPage() {
   const [isLoaded, setIsLoaded] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   useEffect(() => {
+    const controller = new AbortController()
     const fetchData = async () => {
       setIsLoading(true)
       try {
         const [skillsResponse, userSkillsResponse, userResponse, certificatesResponse] = await Promise.all([
-          axios.get('/api/skills'),
-          axios.get('/api/user/skills'),
-          axios.get('/api/user/profile'),
-          axios.get('/api/user/certificates')
+          axios.get('/api/skills', { signal: controller.signal }),
+          axios.get('/api/user/skills', { signal: controller.signal }),
+          axios.get('/api/user/profile', { signal: controller.signal }),
+          axios.get('/api/user/certificates', { signal: controller.signal })
         ])
+        if (controller.signal.aborted) return
         setAvailableSkills(skillsResponse.data)
         setUserSkills(userSkillsResponse.data)
         setUserImage(userResponse.data.image)
@@ -119,22 +142,25 @@ export default function SettingsPage() {
         setCertificates(certificatesResponse.data)
         setIsLoaded(true)
       } catch (error) {
+        if (controller.signal.aborted) return
         console.error("Fehler beim Abrufen der Daten:", error)
         setLoadError("Die Einstellungen konnten nicht geladen werden. Bitte lade die Seite erneut.")
         toast.error("Beim Laden der Daten ist ein Fehler aufgetreten.")
       } finally {
-        setIsLoading(false)
+        if (!controller.signal.aborted) setIsLoading(false)
       }
     }
 
-    fetchData()
-  }, [])
+    void fetchData()
+    return () => controller.abort()
+  }, [userId])
 
   const handleImageUpdate = async (newImageUrl: string) => {
     setUserImage(newImageUrl)
     try {
-      await axios.put('/api/user/profile', { image: newImageUrl })
+      await axios.put('/api/user/profile', { image: newImageUrl }, { signal: actionController.current?.signal })
     } catch (error) {
+      if (actionController.current?.signal.aborted) return
       console.error("Fehler beim Aktualisieren des Profilbilds:", error)
       toast.error("Fehler beim Aktualisieren des Profilbilds")
     }
@@ -151,13 +177,15 @@ export default function SettingsPage() {
         emailNotifications,
         pushNotifications,
         publicRankingOptIn
-      })
+      }, { signal: actionController.current?.signal })
+      if (actionController.current?.signal.aborted) return
       toast.success("Einstellungen erfolgreich gespeichert.")
     } catch (error) {
+      if (actionController.current?.signal.aborted) return
       console.error("Fehler beim Speichern der Einstellungen:", error)
       toast.error("Beim Speichern der Einstellungen ist ein Fehler aufgetreten.")
     } finally {
-      setIsSaving(false)
+      if (!actionController.current?.signal.aborted) setIsSaving(false)
     }
   }
 
@@ -174,7 +202,8 @@ export default function SettingsPage() {
         const createSkillResponse = await axios.post('/api/skills', {
           name: newSkillName.trim(),
           category: 'Unkategorisiert'
-        })
+        }, { signal: actionController.current?.signal })
+        if (actionController.current?.signal.aborted) return
         skillId = createSkillResponse.data.id
       }
 
@@ -188,14 +217,17 @@ export default function SettingsPage() {
         return
       }
 
-      await axios.post('/api/user/skills', { skillId, level: newSkillLevel })
-      const response = await axios.get('/api/user/skills')
+      await axios.post('/api/user/skills', { skillId, level: newSkillLevel }, { signal: actionController.current?.signal })
+      if (actionController.current?.signal.aborted) return
+      const response = await axios.get('/api/user/skills', { signal: actionController.current?.signal })
+      if (actionController.current?.signal.aborted) return
       setUserSkills(response.data)
       toast.success("Fähigkeit erfolgreich hinzugefügt.")
       setNewSkillId('')
       setNewSkillLevel(0)
       setNewSkillName('')
     } catch (error: any) {
+      if (actionController.current?.signal.aborted) return
       console.error("Fehler beim Hinzufügen der Fähigkeit:", error)
       toast.error(error.response?.data?.error || "Fehler beim Hinzufügen der Fähigkeit.")
     }
@@ -203,11 +235,14 @@ export default function SettingsPage() {
 
   const handleDeleteSkill = async (skillId: string) => {
     try {
-      await axios.delete(`/api/user/skills/${skillId}`)
-      const response = await axios.get('/api/user/skills')
+      await axios.delete(`/api/user/skills/${skillId}`, { signal: actionController.current?.signal })
+      if (actionController.current?.signal.aborted) return
+      const response = await axios.get('/api/user/skills', { signal: actionController.current?.signal })
+      if (actionController.current?.signal.aborted) return
       setUserSkills(response.data)
       toast.success("Fähigkeit erfolgreich gelöscht.")
     } catch (error: any) {
+      if (actionController.current?.signal.aborted) return
       console.error("Fehler beim Löschen der Fähigkeit:", error)
       toast.error(error.response?.data?.error || "Fehler beim Löschen der Fähigkeit.")
     }
@@ -222,13 +257,16 @@ export default function SettingsPage() {
         return
       }
 
-      await axios.put(`/api/user/skills/${editSkill.skillId}`, { level: editSkill.level })
-      const response = await axios.get('/api/user/skills')
+      await axios.put(`/api/user/skills/${editSkill.skillId}`, { level: editSkill.level }, { signal: actionController.current?.signal })
+      if (actionController.current?.signal.aborted) return
+      const response = await axios.get('/api/user/skills', { signal: actionController.current?.signal })
+      if (actionController.current?.signal.aborted) return
       setUserSkills(response.data)
       toast.success("Fähigkeit erfolgreich aktualisiert.")
       setIsEditModalOpen(false)
       setEditSkill(null)
     } catch (error: any) {
+      if (actionController.current?.signal.aborted) return
       console.error("Fehler beim Aktualisieren der Fähigkeit:", error)
       toast.error(error.response?.data?.error || "Fehler beim Aktualisieren der Fähigkeit.")
     }
@@ -319,12 +357,13 @@ export default function SettingsPage() {
                 <Card>
                   <CardHeader>
                     <CardTitle>Benachrichtigungseinstellungen</CardTitle>
+                    <CardDescription>Neue Meldungen erscheinen derzeit nur in der App. E-Mail- und Push-Zustellung sind noch nicht eingerichtet; die Schalter speichern lediglich deine Präferenzen für eine mögliche spätere Aktivierung.</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="flex items-center justify-between gap-4">
                       <div className="flex items-center space-x-2">
                         <Bell className="w-5 h-5 text-muted-foreground" />
-                        <Label htmlFor="email-notifications">E-Mail-Benachrichtigungen</Label>
+                        <Label htmlFor="email-notifications">E-Mail-Wunsch für später (kein Versand)</Label>
                       </div>
                       <Switch
                         id="email-notifications"
@@ -337,7 +376,7 @@ export default function SettingsPage() {
                     <div className="flex items-center justify-between gap-4">
                       <div className="flex items-center space-x-2">
                         <Bell className="w-5 h-5 text-muted-foreground" />
-                        <Label htmlFor="push-notifications">Push-Benachrichtigungen</Label>
+                        <Label htmlFor="push-notifications">Push-Wunsch für später (keine Zustellung)</Label>
                       </div>
                       <Switch
                         id="push-notifications"
@@ -551,6 +590,7 @@ export default function SettingsPage() {
                                   try {
                                     const response = await fetch(`/api/courses/${cert.courseId}/certificate`, {
                                       method: 'POST',
+                                      signal: actionController.current?.signal,
                                     });
 
                                     if (!response.ok) {
@@ -558,6 +598,7 @@ export default function SettingsPage() {
                                     }
 
                                     const blob = await response.blob();
+                                    if (actionController.current?.signal.aborted) return;
                                     const url = window.URL.createObjectURL(blob);
                                     const a = document.createElement('a');
                                     a.href = url;
@@ -567,6 +608,7 @@ export default function SettingsPage() {
                                     a.remove();
                                     window.URL.revokeObjectURL(url);
                                   } catch (error) {
+                                    if (actionController.current?.signal.aborted) return;
                                     console.error('Error downloading certificate:', error);
                                     toast.error('Das Zertifikat konnte nicht heruntergeladen werden.');
                                   }

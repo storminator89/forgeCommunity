@@ -1,5 +1,7 @@
 # ForgeCommunity: UI-Modernisierung
 
+> **Historischer Stand (bis 2. Oktober 2026).** Dieses Dokument beschreibt die frühere UI-Modernisierung und deren damalige Prüfungen. Die Aussagen zur Verfügbarkeit von Hallmark, zu Screenshots und zu erfolgreichen Browserprüfungen gelten ausschließlich für diesen früheren Stand. Für das neue, am 14. Oktober begonnene seitenweite Redesign gilt der Hallmark-basierte Vertrag in [`design.md`](../design.md); dessen aktuelle lokale Prüfungen und noch offene Browser-/PostgreSQL-Prüfungen stehen in [`LOCAL-INTEGRATION-VERIFICATION.md`](LOCAL-INTEGRATION-VERIFICATION.md).
+
 ## Designrichtung
 
 ForgeCommunity soll wie ein zusammenhängendes Produkt wirken: klar, ruhig und freundlich. Cobalt ist der primäre Akzent; helle Flächen und dunkle Typografie geben Inhalten Raum. Der Dark Mode verwendet dieselben semantischen Tokens mit abgestimmten Farben. Keine erfundenen Kennzahlen, Aktivitätsmeldungen oder Funktionen.

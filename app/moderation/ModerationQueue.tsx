@@ -2,7 +2,9 @@
 
 import { useEffect, useId, useState, type FormEvent } from 'react';
 import Link from 'next/link';
+import { useSession } from 'next-auth/react';
 import { AppHeader, AppShell } from '@/components/app-shell';
+import { PageState } from '@/components/page-state';
 import { Sidebar } from '@/components/Sidebar';
 import { UserNav } from '@/components/user-nav';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -91,6 +93,15 @@ function ReviewForm({ reportId, onReviewed }: { reportId: string; onReviewed: ()
 }
 
 export function ModerationQueue() {
+  const { data, status } = useSession();
+  if (status === 'loading') return <PageState kind="loading" title="Berechtigung wird geprüft" />;
+  if (status !== 'authenticated' || !data?.user?.id) return <PageState kind="error" title="Anmeldung erforderlich" />;
+  // The server layout checks the database role. Scope report state to the
+  // authenticated identity here without trusting a possibly stale JWT role.
+  return <ModerationQueueForViewer key={data.user.id} />;
+}
+
+function ModerationQueueForViewer() {
   const [status, setStatus] = useState<ReportStatus>('OPEN');
   const [page, setPage] = useState(1);
   const [refresh, setRefresh] = useState(0);
@@ -107,7 +118,7 @@ export function ModerationQueue() {
         if (!response.ok) throw new Error(typeof body.error === 'string' ? body.error : 'Meldungen konnten nicht geladen werden');
         return body as QueueResponse;
       })
-      .then((body) => { if (!controller.signal.aborted) setQueue(body); })
+      .then((body) => { if (!controller.signal.aborted) { setQueue(body); setError(''); } })
       .catch((caught) => { if (!controller.signal.aborted) {
         setQueue(null);
         setError(caught instanceof Error ? caught.message : 'Laden fehlgeschlagen');
@@ -138,14 +149,21 @@ export function ModerationQueue() {
     setLoading(true);
   }
 
+  function retryQueue() {
+    setQueue(null);
+    setError('');
+    setLoading(true);
+    setRefresh((value) => value + 1);
+  }
+
   const hasNextPage = queue !== null && page * queue.pageSize < queue.total;
   return <AppShell>
     <Sidebar />
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <AppHeader>
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
-          <h1 className="text-2xl font-bold">Meldungen prüfen</h1>
-          <div className="flex items-center gap-3"><ThemeToggle /><UserNav /></div>
+        <div className="flex min-w-0 items-center justify-between gap-2">
+          <h1 className="min-w-0 truncate">Meldungen prüfen</h1>
+          <div className="flex shrink-0 items-center gap-2"><ThemeToggle /><UserNav /></div>
         </div>
       </AppHeader>
       <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto p-4 lg:p-8">
@@ -157,7 +175,7 @@ export function ModerationQueue() {
                 aria-pressed={status === value} onClick={() => changeStatus(value)}>{label}</Button>)}
           </div>
           {feedback && <p role="status" className="text-sm text-primary">{feedback}</p>}
-          {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+          {error && <div role="alert" className="flex flex-wrap items-center gap-3 rounded-xl border border-destructive/30 p-4 text-sm text-destructive"><p>{error}</p><Button type="button" variant="outline" onClick={retryQueue}>Erneut versuchen</Button></div>}
           {loading ? <p role="status">Meldungen werden geladen…</p> : queue && <>
             <p aria-live="polite" className="text-sm text-muted-foreground">{queue.total} Meldungen, Seite {page}</p>
             {queue.items.length === 0 ? <p>Keine Meldungen in diesem Status.</p> :

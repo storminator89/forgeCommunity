@@ -56,6 +56,13 @@ interface Draft {
 
 export default function DraftsPage() {
   const { data: session, status } = useSession();
+  const accountId = status === 'authenticated' ? session?.user?.id ?? null : null;
+  // A session change must discard private drafts during render, before a new
+  // account's request starts or a previous account's request settles.
+  return <AccountDrafts key={accountId ?? 'anonymous'} accountId={accountId} status={status} />;
+}
+
+function AccountDrafts({ accountId, status }: { accountId: string | null; status: 'loading' | 'authenticated' | 'unauthenticated' }) {
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -67,25 +74,28 @@ export default function DraftsPage() {
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'title'>('newest');
 
   useEffect(() => {
+    if (!accountId) return;
+    const controller = new AbortController();
     const fetchDrafts = async () => {
       try {
-        const response = await fetch('/api/articles/drafts');
+        const response = await fetch('/api/articles/drafts', { signal: controller.signal });
         if (!response.ok) throw new Error('Draft fetch failed');
-        const data = await response.json();
+        const data = await response.json() as Draft[];
+        if (controller.signal.aborted) return;
         setDrafts(data);
         setLoadError(false);
       } catch (error) {
+        if (controller.signal.aborted) return;
         setLoadError(true);
         toast.error('Fehler beim Laden der Entwürfe');
       } finally {
-        setIsLoading(false);
+        if (!controller.signal.aborted) setIsLoading(false);
       }
     };
 
-    if (session) {
-      fetchDrafts();
-    }
-  }, [session, retryKey]);
+    void fetchDrafts();
+    return () => controller.abort();
+  }, [accountId, retryKey]);
 
   const handleDelete = async (id: string) => {
     setActionInProgress(id);
@@ -175,11 +185,11 @@ export default function DraftsPage() {
               <p role="status" className="text-sm tabular-nums text-muted-foreground">{filteredAndSortedDrafts.length} {filteredAndSortedDrafts.length === 1 ? 'Entwurf' : 'Entwürfe'}</p>
             </div>
 
-            {status === 'loading' || (session && isLoading) ? (
+            {status === 'loading' || (accountId && isLoading) ? (
               <div className="space-y-1" role="status" aria-label="Entwürfe werden geladen">
                 {[1, 2, 3].map(index => <div key={index} className="space-y-3 border-b py-6"><Skeleton className="h-5 w-2/3" /><Skeleton className="h-4 w-1/3" /><Skeleton className="h-4 w-1/2" /></div>)}
               </div>
-            ) : !session ? (
+            ) : !accountId ? (
               <div className="mt-6"><PageState kind="error" title="Anmeldung erforderlich" description="Melde dich an, um deine Entwürfe zu sehen." action={<Button asChild variant="outline"><Link href="/login">Zur Anmeldung</Link></Button>} /></div>
             ) : loadError ? (
               <div className="mt-6"><PageState kind="error" title="Entwürfe konnten nicht geladen werden" description="Bitte versuche es erneut." action={<Button type="button" variant="outline" onClick={retryLoad}>Erneut versuchen</Button>} /></div>

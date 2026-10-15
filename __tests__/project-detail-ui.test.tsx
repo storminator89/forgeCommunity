@@ -1,13 +1,14 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import ProjectDetail from '@/app/projects/[projectId]/page';
 
 const mockPush = jest.fn();
+let mockSession: { user: { id: string } } | null = { user: { id: 'viewer' } };
 
 jest.mock('@/components/Sidebar', () => ({ Sidebar: () => null }));
 jest.mock('@/components/user-nav', () => ({ UserNav: () => null }));
 jest.mock('@/components/theme-toggle', () => ({ ThemeToggle: () => null }));
 jest.mock('next/navigation', () => ({ useParams: () => ({ projectId: 'project-1' }), useRouter: () => ({ push: mockPush }) }));
-jest.mock('next-auth/react', () => ({ useSession: () => ({ data: { user: { id: 'viewer' } } }) }));
+jest.mock('next-auth/react', () => ({ useSession: () => ({ data: mockSession, status: mockSession ? 'authenticated' : 'unauthenticated' }) }));
 
 const project = {
   id: 'project-1', title: 'Ein Projekt', description: '<p>Lesbarer Inhalt</p>', category: 'Design',
@@ -18,6 +19,7 @@ const project = {
 
 beforeEach(() => {
   mockPush.mockClear();
+  mockSession = { user: { id: 'viewer' } };
   global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (url === '/api/projects/project-1' && !init?.method) return { ok: true, json: async () => project } as Response;
@@ -56,4 +58,56 @@ it('keeps the project like action as an accessible pressed state', async () => {
   fireEvent.click(like);
   await waitFor(() => expect(global.fetch).toHaveBeenCalledWith('/api/projects/project-1/like', { method: 'POST' }));
   expect(await screen.findByRole('button', { name: 'Gefällt mir zurücknehmen' })).toHaveAttribute('aria-pressed', 'true');
+});
+
+it('clears Alice’s unsent comment and edit dialog before Bob sees the project', async () => {
+  mockSession = { user: { id: 'author' } };
+  const view = render(<ProjectDetail />);
+  await screen.findByRole('heading', { name: 'Ein Projekt', level: 1 });
+  fireEvent.change(screen.getByRole('textbox', { name: 'Dein Kommentar zum Projekt' }), { target: { value: 'Alice private comment' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Bearbeiten' }));
+  const editor = screen.getByRole('dialog', { name: 'Projekt bearbeiten' });
+  fireEvent.change(within(editor).getByRole('textbox', { name: 'Titel' }), { target: { value: 'Alice private edit' } });
+
+  mockSession = { user: { id: 'bob' } };
+  view.rerender(<ProjectDetail />);
+  expect(screen.queryByRole('dialog', { name: 'Projekt bearbeiten' })).not.toBeInTheDocument();
+  expect(screen.queryByDisplayValue('Alice private comment')).not.toBeInTheDocument();
+  expect(screen.queryByDisplayValue('Alice private edit')).not.toBeInTheDocument();
+
+  await screen.findByRole('heading', { name: 'Ein Projekt', level: 1 });
+  expect(screen.getByRole('textbox', { name: 'Dein Kommentar zum Projekt' })).toHaveValue('');
+  expect(screen.queryByRole('button', { name: 'Bearbeiten' })).not.toBeInTheDocument();
+
+  mockSession = null;
+  view.rerender(<ProjectDetail />);
+  expect(screen.queryByRole('textbox', { name: 'Dein Kommentar zum Projekt' })).not.toBeInTheDocument();
+});
+
+it('ignores Alice’s late project response after Bob signs in', async () => {
+  let resolveAlice!: (value: Response) => void;
+  const aliceResponse = new Promise<Response>(resolve => { resolveAlice = resolve; });
+  mockSession = { user: { id: 'author' } };
+  global.fetch = jest.fn((input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url === '/api/projects/project-1') return mockSession?.user.id === 'author'
+      ? aliceResponse
+      : Promise.resolve({ ok: true, json: async () => ({ ...project, title: 'Bob copy' }) } as Response);
+    if (url.startsWith('/api/projects/project-1/comments?')) return Promise.resolve({ ok: true, json: async () => [] } as Response);
+    throw new Error(`Unexpected fetch: ${url}`);
+  });
+
+  const view = render(<ProjectDetail />);
+  await waitFor(() => expect(global.fetch).toHaveBeenCalledWith('/api/projects/project-1', expect.objectContaining({ signal: expect.any(AbortSignal) })));
+
+  mockSession = { user: { id: 'bob' } };
+  view.rerender(<ProjectDetail />);
+  expect(await screen.findByRole('heading', { name: 'Bob copy', level: 1 })).toBeInTheDocument();
+
+  await act(async () => {
+    resolveAlice({ ok: true, json: async () => ({ ...project, title: 'Alice stale copy' }) } as Response);
+    await aliceResponse;
+  });
+  expect(screen.getByRole('heading', { name: 'Bob copy', level: 1 })).toBeInTheDocument();
+  expect(screen.queryByRole('heading', { name: 'Alice stale copy', level: 1 })).not.toBeInTheDocument();
 });

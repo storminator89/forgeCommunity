@@ -104,7 +104,7 @@ test('landing, account, community, members, chat, and notifications work on desk
   await expect(page.getByRole('link', { name: 'Zum Inhalt springen' })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.locator('#page-content')).toBeFocused();
-  const search = page.getByRole('textbox', { name: 'Suche nach Kursen, Events, Mitgliedern, Beiträgen oder Ressourcen' });
+  const search = page.getByRole('searchbox', { name: 'Suche nach Kursen, Events, Mitgliedern, Beiträgen oder Ressourcen' });
   await search.fill(postTitle);
   await page.getByRole('tab', { name: 'Beiträge' }).click();
   await expect(page.getByRole('heading', { name: postTitle, exact: true })).toBeVisible();
@@ -113,7 +113,10 @@ test('landing, account, community, members, chat, and notifications work on desk
   await page.goBack();
   await expect(page).toHaveURL(/\/community$/);
   await page.goForward();
-  await expect(page).toHaveURL(/\/search$/);
+  await expect(page).toHaveURL(url => url.pathname === '/search' &&
+    url.searchParams.get('q') === postTitle && url.searchParams.get('type') === 'post');
+  await expect(search).toHaveValue(postTitle);
+  await expect(page.getByRole('tab', { name: 'Beiträge' })).toHaveAttribute('aria-selected', 'true');
   await search.focus();
   await expect(search).toBeFocused();
 
@@ -147,7 +150,10 @@ test('landing, account, community, members, chat, and notifications work on desk
   await expect(page.getByRole('heading', { name: `# ${channelName}` })).toBeVisible();
   const composer = page.getByRole('textbox', { name: 'Nachricht', exact: true });
   await composer.fill(message);
+  const sentMessage = page.waitForResponse(response => response.url().endsWith('/api/chat/messages') && response.request().method() === 'POST');
   await composer.press('Enter');
+  expect((await sentMessage).status()).toBe(200);
+  await expect(composer).toHaveValue('');
   const messageLog = page.getByRole('log', { name: 'Nachrichten' });
   await expect(messageLog.getByText(message, { exact: true })).toBeVisible();
   await messageLog.getByRole('button', { name: 'Nachricht bearbeiten' }).click();

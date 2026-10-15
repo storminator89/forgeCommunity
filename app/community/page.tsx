@@ -7,6 +7,7 @@ import { AppShell, AppHeader } from '@/components/app-shell';
 import { useState, useEffect, useRef } from 'react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { PageState } from '@/components/page-state'
+import type { Session } from 'next-auth'
 import { useSession } from 'next-auth/react'
 import { Button } from "@/components/ui/button"
 import { UserNav } from "@/components/user-nav"
@@ -83,11 +84,12 @@ async function fetchWithErrorHandling(url: string, options?: RequestInit) {
   return response.json()
 }
 
-function Community() {
-  const { data: session } = useSession()
+function Community({ session }: { session: Session | null }) {
   const mainRef = useRef<HTMLElement>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [localPosts, setLocalPosts] = useState<Post[]>([])
+  const [postsLoadError, setPostsLoadError] = useState(false)
+  const [postsRetryKey, setPostsRetryKey] = useState(0)
   const [isEditing, setIsEditing] = useState(false)
   const [editingPost, setEditingPost] = useState<Post | null>(null)
   const [leaderboardUsers, setLeaderboardUsers] = useState<LeaderboardUser[]>([])
@@ -131,9 +133,10 @@ function Community() {
         }
         if (!active || postsRequestRef.current !== postsController) return
         setLocalPosts(data)
+        setPostsLoadError(false)
       } catch (error) {
         if (!active || postsController.signal.aborted || postsRequestRef.current !== postsController || isAbortError(error)) return
-        setNotification({ type: 'error', message: 'Fehler beim Laden der Beiträge.' })
+        setPostsLoadError(true)
       } finally {
         if (active && postsRequestRef.current === postsController) {
           postsRequestRef.current = null
@@ -168,7 +171,13 @@ function Community() {
       if (postsRequestRef.current === postsController) postsRequestRef.current = null
       if (leaderboardRequestRef.current === leaderboardController) leaderboardRequestRef.current = null
     }
-  }, [])
+  }, [postsRetryKey])
+
+  const retryPosts = () => {
+    setPostsLoadError(false)
+    setIsLoading(true)
+    setPostsRetryKey(value => value + 1)
+  }
 
   useEffect(() => {
     if (notification) {
@@ -380,7 +389,7 @@ function Community() {
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Austausch / Community</p>
                 <p className="mt-2 max-w-[58ch] text-base leading-relaxed text-muted-foreground">Fragen stellen, Erfahrungen teilen und gemeinsam weiterkommen.</p>
               </div>
-              <p className="text-sm tabular-nums text-muted-foreground">{localPosts.length} {localPosts.length === 1 ? 'Beitrag' : 'Beiträge'}</p>
+              <p className="text-sm tabular-nums text-muted-foreground">{isLoading ? 'Wird geladen…' : postsLoadError ? 'Nicht verfügbar' : `${localPosts.length} ${localPosts.length === 1 ? 'Beitrag' : 'Beiträge'}`}</p>
             </div>
 
             <div className="grid min-w-0 items-start gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,19rem)] lg:gap-12">
@@ -418,10 +427,11 @@ function Community() {
                 <div className="mt-9">
                   <div className="flex flex-wrap items-baseline justify-between gap-3 border-b pb-4">
                     <h2 id="community-feed-title" className="text-xl font-semibold tracking-tight">Aktuelle Beiträge</h2>
-                    <span className="text-sm tabular-nums text-muted-foreground">{localPosts.length} {localPosts.length === 1 ? 'Beitrag' : 'Beiträge'}</span>
+                    <span className="text-sm tabular-nums text-muted-foreground">{isLoading ? 'Wird geladen…' : postsLoadError ? 'Nicht verfügbar' : `${localPosts.length} ${localPosts.length === 1 ? 'Beitrag' : 'Beiträge'}`}</span>
                   </div>
                   <div className="mt-5 space-y-5">
                     {isLoading && localPosts.length === 0 && <PageState kind="loading" title="Beiträge werden geladen" />}
+                    {postsLoadError && !isLoading && <PageState kind="error" title="Beiträge konnten nicht geladen werden" description="Prüfe deine Verbindung und versuche es erneut." action={<Button type="button" variant="outline" onClick={retryPosts}>Erneut versuchen</Button>} />}
                     <AnimatePresence>
                       {localPosts.map((post) => (
                         <PostCard
@@ -442,7 +452,7 @@ function Community() {
                       ))}
                     </AnimatePresence>
 
-                    {localPosts.length === 0 && !isLoading && (
+                    {localPosts.length === 0 && !isLoading && !postsLoadError && (
                       <div className="border-t py-12 text-center" role="status">
                         <PlusCircle className="mx-auto mb-4 h-8 w-8 text-muted-foreground" aria-hidden="true" />
                         <h3 className="text-lg font-semibold text-foreground">Keine Beiträge gefunden</h3>
@@ -471,4 +481,11 @@ function Community() {
 }
 
 
-export default Community
+export default function CommunityPage() {
+  const { data, status } = useSession()
+  const session = status === 'authenticated' ? data : null
+
+  // The posts response can include this viewer's unpublished posts and likes.
+  // Reset the whole feed before a different account can see cached rows.
+  return <Community key={session?.user?.id ?? 'anonymous'} session={session} />
+}

@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Edit, Trash, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
+import type { Session } from 'next-auth';
 
 import Image from 'next/image';
 import { sanitizeRichHtml } from '@/lib/sanitize-html';
@@ -37,11 +38,16 @@ interface Article {
 export default function ArticlePage() {
   const params = useParams();
   const id = params?.id as string;
+  const { data, status } = useSession();
+  const session = status === 'authenticated' ? data : null;
+  return <ArticlePageForViewer key={JSON.stringify([id, session?.user?.id ?? null])} id={id} session={session} />;
+}
+
+function ArticlePageForViewer({ id, session }: { id: string; session: Session | null }) {
   const [article, setArticle] = useState<Article | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [errorArticleId, setErrorArticleId] = useState<string | null>(null);
-  const { data: session } = useSession();
   const router = useRouter();
 
   useEffect(() => {

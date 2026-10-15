@@ -2,7 +2,7 @@
 
 import { PageState, LoadingScreen, RetryButton } from '@/components/page-state';
 import { AppShell, AppHeader } from '@/components/app-shell';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -32,6 +32,7 @@ interface Course {
   currency: string | null;
   isEnrolled: boolean;
   completed: boolean;
+  everCompleted?: boolean;
   canDelete: boolean;
   rewardEligible?: boolean;
   canApproveRewards?: boolean;
@@ -39,6 +40,19 @@ interface Course {
 }
 
 export default function CourseClient() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+  useEffect(() => {
+    if (status === 'unauthenticated') router.push('/');
+  }, [status, router]);
+  if (status === 'loading') return <LoadingScreen />;
+  if (status !== 'authenticated' || !session?.user?.id) return null;
+  // Account-specific enrollment, progress and editor rights never cross this
+  // keyed boundary, even before a new fetch or effect can run.
+  return <ScopedCourseClient key={session.user.id} session={session} />;
+}
+
+function ScopedCourseClient({ session }: { session: NonNullable<ReturnType<typeof useSession>['data']> }) {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [categoryFilter, setCategoryFilter] = useState<string>('Alle');
   const [courses, setCourses] = useState<Course[]>([]);
@@ -47,42 +61,42 @@ export default function CourseClient() {
   const [pendingCourseId, setPendingCourseId] = useState<string | null>(null);
   const [rewardPendingCourseId, setRewardPendingCourseId] = useState<string | null>(null);
   const [deletingCourseId, setDeletingCourseId] = useState<string | null>(null);
-  const { data: session, status } = useSession();
   const router = useRouter();
   const { toast } = useToast();
+  const activeRef = useRef(true);
 
   useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push('/');
-    }
-  }, [status, router]);
-
-  useEffect(() => {
-    if (status !== 'authenticated') return;
+    activeRef.current = true;
+    const controller = new AbortController();
     const fetchCourses = async () => {
       try {
-        const response = await fetch('/api/courses');
+        const response = await fetch('/api/courses', { signal: controller.signal });
         if (!response.ok) {
           throw new Error('Failed to fetch courses');
         }
         const data = (await response.json()) as Course[];
-        setCourses(data);
+        if (activeRef.current && !controller.signal.aborted) setCourses(data);
       } catch (error) {
-        console.error('Error fetching courses:', error);
-        setLoadError(true);
+        if (activeRef.current && !controller.signal.aborted) {
+          console.error('Error fetching courses:', error);
+          setLoadError(true);
+        }
       } finally {
-        setIsLoading(false);
+        if (activeRef.current && !controller.signal.aborted) setIsLoading(false);
       }
     };
 
-    fetchCourses();
-  }, [status]);
+    void fetchCourses();
+    return () => { activeRef.current = false; controller.abort(); };
+  }, []);
 
   const changeEnrollment = async (course: Course, leaving = false) => {
+    if (!activeRef.current) return;
     setPendingCourseId(course.id);
     try {
       const response = await fetch(`/api/courses/${course.id}/enrollment`, { method: leaving ? 'DELETE' : 'POST' });
       const result = await response.json();
+      if (!activeRef.current) return;
       if (!response.ok) throw new Error(result.error || 'Die Anmeldung konnte nicht geändert werden.');
       setCourses(current => current.map(item => item.id === course.id
         ? { ...item, isEnrolled: result.isEnrolled, participants: result.participants }
@@ -90,9 +104,9 @@ export default function CourseClient() {
       toast({ title: leaving ? 'Kurs verlassen' : 'Zum Kurs angemeldet' });
       if (!leaving) router.push(`/courses/${course.id}/contents`);
     } catch (error) {
-      toast({ title: 'Fehler', description: error instanceof Error ? error.message : 'Bitte erneut versuchen.', variant: 'destructive' });
+      if (activeRef.current) toast({ title: 'Fehler', description: error instanceof Error ? error.message : 'Bitte erneut versuchen.', variant: 'destructive' });
     } finally {
-      setPendingCourseId(null);
+      if (activeRef.current) setPendingCourseId(null);
     }
   };
 
@@ -106,11 +120,13 @@ export default function CourseClient() {
   const resetFilters = () => { setSearchTerm(''); setCategoryFilter('Alle'); };
 
   const handleDeleteCourse = async (courseId: string) => {
+    if (!activeRef.current) return;
     setDeletingCourseId(courseId);
     try {
       const response = await fetch(`/api/courses/${courseId}`, {
         method: 'DELETE',
       });
+      if (!activeRef.current) return;
       if (!response.ok) {
         const result = await response.json().catch(() => null);
         throw new Error(typeof result?.error === 'string' ? result.error : 'Der Kurs konnte nicht gelöscht werden.');
@@ -118,14 +134,14 @@ export default function CourseClient() {
       setCourses(current => current.filter(course => course.id !== courseId));
       toast({ title: 'Kurs gelöscht' });
     } catch (error) {
-      toast({ title: 'Kurs konnte nicht gelöscht werden', description: error instanceof Error ? error.message : 'Bitte versuche es erneut.', variant: 'destructive' });
+      if (activeRef.current) toast({ title: 'Kurs konnte nicht gelöscht werden', description: error instanceof Error ? error.message : 'Bitte versuche es erneut.', variant: 'destructive' });
     } finally {
-      setDeletingCourseId(null);
+      if (activeRef.current) setDeletingCourseId(null);
     }
   };
 
   const updateRewardEligibility = async (course: Course, eligible: boolean) => {
-    if (session?.user?.role !== 'ADMIN' || !course.canApproveRewards) return;
+    if (!activeRef.current || session.user.role !== 'ADMIN' || !course.canApproveRewards) return;
     setRewardPendingCourseId(course.id);
     try {
       const response = await fetch(`/api/admin/courses/${course.id}/reward-eligibility`, {
@@ -134,18 +150,16 @@ export default function CourseClient() {
         body: JSON.stringify({ eligible }),
       });
       const result = await response.json().catch(() => null);
+      if (!activeRef.current) return;
       if (!response.ok) throw new Error(result?.error || 'Die Freigabe konnte nicht geändert werden.');
       setCourses(current => current.map(item => item.id === course.id ? { ...item, rewardEligible: result.rewardEligible } : item));
       toast({ title: eligible ? 'Kurs für Belohnungen freigegeben' : 'Belohnungsfreigabe widerrufen' });
     } catch (error) {
-      toast({ title: 'Freigabe konnte nicht geändert werden', description: error instanceof Error ? error.message : 'Bitte erneut versuchen.', variant: 'destructive' });
+      if (activeRef.current) toast({ title: 'Freigabe konnte nicht geändert werden', description: error instanceof Error ? error.message : 'Bitte erneut versuchen.', variant: 'destructive' });
     } finally {
-      setRewardPendingCourseId(null);
+      if (activeRef.current) setRewardPendingCourseId(null);
     }
   };
-
-  if (status === 'loading') return <LoadingScreen />;
-  if (!session) return null;
 
   return (
     <AppShell>
@@ -256,7 +270,7 @@ function CourseRow({ course, onDelete, deleting, onJoin, onLeave, pending, canMa
             <span className="inline-flex items-center gap-1.5"><Users aria-hidden="true" className="h-4 w-4" />{course.participants}{course.maxStudents !== null ? ` / ${course.maxStudents}` : ''} Teilnehmer</span>
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            {course.completed ? <Badge variant="secondary">Abgeschlossen</Badge> : course.isEnrolled ? <Badge variant="secondary">Angemeldet</Badge> : null}
+            {course.completed ? <Badge variant="secondary">Abgeschlossen</Badge> : course.everCompleted ? <Badge variant="secondary">Früher abgeschlossen · neue Inhalte offen</Badge> : course.isEnrolled ? <Badge variant="secondary">Angemeldet</Badge> : null}
             {course.rewardEligible && <Badge variant="secondary">Für Kursbelohnungen freigegeben</Badge>}
             {isPaid && <span className="text-sm font-medium">{course.price?.toFixed(2)} {course.currency || 'EUR'}</span>}
           </div>
@@ -267,7 +281,7 @@ function CourseRow({ course, onDelete, deleting, onJoin, onLeave, pending, canMa
           </Button>
           {isPaid && !canOpen && <p className="text-xs leading-relaxed text-muted-foreground">Für kostenpflichtige Kurse ist eine separate Buchung erforderlich.</p>}
           {isFull && !isPaid && !canOpen && <p className="text-xs leading-relaxed text-muted-foreground">Alle Plätze sind derzeit vergeben.</p>}
-          {course.isEnrolled && !course.completed && !isPaid && !course.canDelete && <Button type="button" variant="ghost" className="w-full" onClick={onLeave} disabled={pending}>Kurs verlassen</Button>}
+          {course.isEnrolled && !course.completed && !course.everCompleted && !isPaid && !course.canDelete && <Button type="button" variant="ghost" className="w-full" onClick={onLeave} disabled={pending}>Kurs verlassen</Button>}
         </div>
       </div>
       {canManageRewards && <div className="mt-5 min-w-0 rounded-2xl border bg-card p-4 sm:ml-32 sm:flex sm:items-center sm:justify-between sm:gap-4">

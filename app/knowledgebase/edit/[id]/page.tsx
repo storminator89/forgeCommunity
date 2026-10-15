@@ -25,6 +25,11 @@ import Link from 'next/link';
 export default function EditArticle({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { data: session, status } = useSession();
+  const accountId = status === 'authenticated' ? session?.user?.id ?? null : null;
+  return <AccountDraftEditor key={`${id}:${accountId ?? 'anonymous'}`} id={id} accountId={accountId} status={status} />;
+}
+
+function AccountDraftEditor({ id, accountId, status }: { id: string; accountId: string | null; status: 'loading' | 'authenticated' | 'unauthenticated' }) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -46,19 +51,25 @@ export default function EditArticle({ params }: { params: Promise<{ id: string }
 
   useEffect(() => {
     if (status === 'loading') return;
-    if (!session) {
+    if (!accountId) {
       router.push('/login');
-      return;
     }
+  }, [accountId, status, router]);
+
+  useEffect(() => {
+    if (!id || !accountId || status !== 'authenticated') return;
+    const controller = new AbortController();
 
     const fetchArticle = async () => {
       setIsLoading(true);
       try {
 
         const [articleResponse, categoriesResponse] = await Promise.all([
-          fetch(`/api/articles/${id}`),
-          fetch('/api/articles/categories-and-tags')
+          fetch(`/api/articles/${encodeURIComponent(id)}`, { signal: controller.signal }),
+          fetch('/api/articles/categories-and-tags', { signal: controller.signal })
         ]);
+
+        if (controller.signal.aborted) return;
 
         if (!articleResponse.ok) {
           throw new Error(`Article fetch failed: ${articleResponse.statusText}`);
@@ -66,7 +77,9 @@ export default function EditArticle({ params }: { params: Promise<{ id: string }
 
         const article = await articleResponse.json();
 
+        if (controller.signal.aborted) return;
         if (!article) throw new Error('Artikel nicht gefunden');
+        if (article.author?.id !== accountId) throw new Error('Du bist nicht berechtigt, diesen Entwurf zu bearbeiten.');
 
         setLoadError(false);
         setTitle(article.title);
@@ -80,20 +93,23 @@ export default function EditArticle({ params }: { params: Promise<{ id: string }
         // Kategorien und Tags setzen
         if (categoriesResponse.ok) {
           const { categories, tags } = await categoriesResponse.json();
+          if (controller.signal.aborted) return;
           setExistingCategories(categories);
           setExistingTags(tags);
         }
       } catch (error) {
+        if (controller.signal.aborted) return;
         console.error('Error fetching article:', error);
         setLoadError(true);
         toast.error('Fehler beim Laden des Artikels');
       } finally {
-        setIsLoading(false);
+        if (!controller.signal.aborted) setIsLoading(false);
       }
     };
 
-    fetchArticle();
-  }, [id, session, status, router, retryKey]);
+    void fetchArticle();
+    return () => controller.abort();
+  }, [id, accountId, status, retryKey]);
 
   const handleSubmit = async (asDraft: boolean) => {
     setSubmittingAsDraft(asDraft);
@@ -140,7 +156,7 @@ export default function EditArticle({ params }: { params: Promise<{ id: string }
     }
   };
 
-  if (status === 'loading' || (session && isLoading)) {
+  if (status === 'loading' || (accountId && isLoading)) {
     return (
       <AppShell><Sidebar /><div className="flex min-h-0 min-w-0 flex-1 flex-col"><AppHeader><div><h1>Entwurf bearbeiten</h1></div></AppHeader><main id="page-content" tabIndex={-1} className="flex min-h-0 flex-1 items-center justify-center p-4"><PageState kind="loading" title="Entwurf wird geladen" /></main></div></AppShell>
     );
@@ -172,7 +188,7 @@ export default function EditArticle({ params }: { params: Promise<{ id: string }
               </div>
             </div>
 
-            {!session ? <div className="pt-8"><PageState kind="error" title="Anmeldung erforderlich" description="Melde dich an, um deinen Entwurf zu bearbeiten." action={<Button asChild variant="outline"><Link href="/login">Zur Anmeldung</Link></Button>} /></div> : loadError ? <div className="pt-8"><PageState kind="error" title="Entwurf konnte nicht geladen werden" description="Bitte versuche es erneut." action={<Button type="button" variant="outline" onClick={() => { setIsLoading(true); setRetryKey(value => value + 1); }}>Erneut versuchen</Button>} /></div> : <div className="grid min-w-0 items-start gap-10 pt-8 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-12">
+            {!accountId ? <div className="pt-8"><PageState kind="error" title="Anmeldung erforderlich" description="Melde dich an, um deinen Entwurf zu bearbeiten." action={<Button asChild variant="outline"><Link href="/login">Zur Anmeldung</Link></Button>} /></div> : loadError ? <div className="pt-8"><PageState kind="error" title="Entwurf konnte nicht geladen werden" description="Bitte versuche es erneut." action={<Button type="button" variant="outline" onClick={() => { setIsLoading(true); setRetryKey(value => value + 1); }}>Erneut versuchen</Button>} /></div> : <div className="grid min-w-0 items-start gap-10 pt-8 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-12">
               <section aria-labelledby="draft-editor-content-title" className="min-w-0 border-t pt-5">
                 <h2 id="draft-editor-content-title" className="text-lg font-semibold tracking-tight">Artikelinhalt</h2>
                 <div className="mt-6 space-y-8">

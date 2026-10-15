@@ -35,8 +35,15 @@ interface Member {
 }
 interface DirectoryResponse { skills: Skill[]; members: Member[] }
 
+// The directory response includes viewer-specific endorsement flags. Remounting at
+// the account boundary discards those flags, open details and in-flight UI state.
 export default function SkillDirectory() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
+  const viewerId = status === 'loading' ? null : session?.user?.id ?? null;
+  return <SkillDirectoryForViewer key={viewerId ?? status} viewerId={viewerId} sessionLoading={status === 'loading'} />;
+}
+
+function SkillDirectoryForViewer({ viewerId, sessionLoading }: { viewerId: string | null; sessionLoading: boolean }) {
   const [skillsData, setSkillsData] = useState<Skill[]>([]);
   const [membersData, setMembersData] = useState<Member[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -52,6 +59,7 @@ export default function SkillDirectory() {
   const [endorsingMembers, setEndorsingMembers] = useState<string[]>([]);
 
   useEffect(() => {
+    if (!viewerId) return;
     const controller = new AbortController();
     void fetch('/api/skills/directory', { signal: controller.signal })
       .then(async response => {
@@ -71,7 +79,7 @@ export default function SkillDirectory() {
       })
       .finally(() => { if (!controller.signal.aborted) setIsLoading(false); });
     return () => controller.abort();
-  }, [retryKey]);
+  }, [retryKey, viewerId]);
 
   const skillByName = useMemo(() => new Map(skillsData.map(skill => [skill.name, skill])), [skillsData]);
   const categories = useMemo(() => ['All', ...new Set(skillsData.map(skill => skill.category))], [skillsData]);
@@ -90,8 +98,8 @@ export default function SkillDirectory() {
   const clearFilters = () => { setSearchTerm(''); setSelectedCategory('All'); };
 
   const endorseMember = async (memberId: string) => {
-    if (!session?.user?.id) { toast.info('Bitte melde dich an, um ein Mitglied zu empfehlen.'); return; }
-    if (memberId === session.user.id || endorsementRequests.current.has(memberId)) return;
+    if (!viewerId) { toast.info('Bitte melde dich an, um ein Mitglied zu empfehlen.'); return; }
+    if (memberId === viewerId || endorsementRequests.current.has(memberId)) return;
     endorsementRequests.current.add(memberId);
     setEndorsingMembers(previous => [...previous, memberId]);
     try {
@@ -110,8 +118,8 @@ export default function SkillDirectory() {
     }
   };
 
-  const canEndorse = (member: Member) => Boolean(session?.user?.id && member.id !== session.user.id && !member.hasEndorsed && !endorsingMembers.includes(member.id));
-  const endorsementLabel = (member: Member) => member.hasEndorsed ? 'Bereits empfohlen' : member.id === session?.user?.id ? 'Eigenes Profil' : endorsingMembers.includes(member.id) ? 'Wird empfohlen…' : 'Empfehlen';
+  const canEndorse = (member: Member) => Boolean(viewerId && member.id !== viewerId && !member.hasEndorsed && !endorsingMembers.includes(member.id));
+  const endorsementLabel = (member: Member) => member.hasEndorsed ? 'Bereits empfohlen' : member.id === viewerId ? 'Eigenes Profil' : endorsingMembers.includes(member.id) ? 'Wird empfohlen…' : 'Empfehlen';
 
   return <AppShell>
     <Sidebar />
@@ -131,7 +139,9 @@ export default function SkillDirectory() {
           <div role="group" aria-label="Skill-Kategorie wählen" className="flex flex-wrap gap-2 border-b py-5">{categories.map(category => <button key={category} type="button" onClick={() => setSelectedCategory(category)} aria-pressed={selectedCategory === category} className={'min-h-11 max-w-full rounded-[10px] border px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 [overflow-wrap:anywhere] ' + (selectedCategory === category ? 'border-primary bg-accent text-foreground' : 'border-border text-muted-foreground hover:bg-muted')}>{category === 'All' ? 'Alle Kategorien' : category}</button>)}</div>
 
           <section aria-labelledby="skill-results-title" className="pt-7"><div className="flex flex-wrap items-baseline justify-between gap-2 border-b pb-4"><h2 id="skill-results-title" className="text-xl font-semibold tracking-tight">Mitglieder entdecken</h2><p role="status" className="text-sm tabular-nums text-muted-foreground">{filteredMembers.length} {filteredMembers.length === 1 ? 'Ergebnis' : 'Ergebnisse'}</p></div>
-            {isLoading ? <div className="mt-6"><PageState kind="loading" title="Skill-Verzeichnis wird geladen" /></div>
+            {sessionLoading ? <div className="mt-6"><PageState kind="loading" title="Anmeldung wird geprüft" /></div>
+              : !viewerId ? <div className="mt-6"><PageState kind="error" title="Anmeldung erforderlich" description="Melde dich an, um das Skill-Verzeichnis zu sehen." /></div>
+              : isLoading ? <div className="mt-6"><PageState kind="loading" title="Skill-Verzeichnis wird geladen" /></div>
               : loadError ? <div className="mt-6"><PageState kind="error" title="Skill-Verzeichnis konnte nicht geladen werden" description="Prüfe deine Verbindung und versuche es erneut." action={<Button type="button" variant="outline" onClick={() => { setIsLoading(true); setLoadError(false); setRetryKey(value => value + 1); }}>Erneut versuchen</Button>} /></div>
               : filteredMembers.length === 0 ? <div className="mt-6"><PageState title={hasFilters ? 'Keine passenden Mitglieder' : 'Noch keine Mitglieder'} description={hasFilters ? 'Versuche es mit einem anderen Suchbegriff oder einer anderen Kategorie.' : 'Sobald Mitglieder Fähigkeiten eintragen, findest du sie hier.'} action={hasFilters ? <Button type="button" variant="outline" onClick={clearFilters}>Filter zurücksetzen</Button> : undefined} /></div>
               : <ul className="divide-y">{filteredMembers.map(member => {

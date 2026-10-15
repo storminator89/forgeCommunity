@@ -33,7 +33,7 @@ it('allows keyboard channel selection and blocks duplicate sends while the messa
   const user = userEvent.setup();
   const setCurrentChannel = jest.fn();
   let completeSend!: () => void;
-  const sendMessage = jest.fn(() => new Promise<void>(resolve => { completeSend = resolve; }));
+  const sendMessage = jest.fn(() => new Promise<boolean>(resolve => { completeSend = () => resolve(true); }));
   const channel = { id: 'channel', name: 'Allgemein', _count: { members: 2 } };
   mockChat.mockReturnValue({ channels: [channel], currentChannel: channel, messages: [], setCurrentChannel, sendMessage, loading: false });
   render(<ChatPage />);
@@ -55,6 +55,22 @@ it('allows keyboard channel selection and blocks duplicate sends while the messa
   expect(screen.getByRole('textbox', { name: 'Nachricht' })).toHaveValue('');
 });
 
+it('keeps a failed chat message draft editable and leaves the channel accessible', async () => {
+  const user = userEvent.setup();
+  const channel = { id: 'channel', name: 'Allgemein', _count: { members: 2 } };
+  const sendMessage = jest.fn().mockResolvedValue(false);
+  mockChat.mockReturnValue({ channels: [channel], currentChannel: channel, messages: [], setCurrentChannel: jest.fn(), sendMessage, loading: false, error: 'Send failed', clearError: jest.fn() });
+
+  render(<ChatPage />);
+  expect(screen.getByRole('navigation', { name: 'Chat-Channels' })).toBeInTheDocument();
+  const composer = screen.getByRole('textbox', { name: 'Nachricht' });
+  await user.type(composer, 'Bitte behalten');
+  await user.click(screen.getByRole('button', { name: 'Nachricht senden' }));
+  await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('Bitte behalten', undefined));
+  expect(composer).toHaveValue('Bitte behalten');
+  expect(screen.getByRole('alert')).toHaveTextContent('Chat konnte nicht geladen oder geändert werden');
+});
+
 it('keeps explicit notification filters, hides read entries and marks all unread notifications', async () => {
   const user = userEvent.setup();
   const markAllAsRead = jest.fn();
@@ -62,7 +78,8 @@ it('keeps explicit notification filters, hides read entries and marks all unread
     notifications: [
       { id: '1', type: 'CHAT_MESSAGE', content: 'Neue Nachricht', createdAt: '2026-10-02T10:00:00Z', isRead: false },
       { id: '2', type: 'CHANNEL_CREATED', content: 'Gelesene Nachricht', createdAt: '2026-10-01T10:00:00Z', isRead: true },
-    ], markAsRead: jest.fn(), deleteNotification: jest.fn(), markAllAsRead,
+    ], unreadCount: 1, isLoading: false, loadError: null, retry: jest.fn(),
+    markAsRead: jest.fn(), deleteNotification: jest.fn(), markAllAsRead,
   });
   render(<NotificationsPage />);
   await user.click(screen.getByRole('button', { name: 'Ungelesen 1' }));
@@ -74,9 +91,21 @@ it('keeps explicit notification filters, hides read entries and marks all unread
 });
 
 it('disables mark-all when there are no unread notifications', () => {
-  mockNotifications.mockReturnValue({ notifications: [], markAsRead: jest.fn(), deleteNotification: jest.fn(), markAllAsRead: jest.fn() });
+  mockNotifications.mockReturnValue({ notifications: [], unreadCount: 0, isLoading: false, loadError: null, retry: jest.fn(), markAsRead: jest.fn(), deleteNotification: jest.fn(), markAllAsRead: jest.fn() });
   render(<NotificationsPage />);
   expect(screen.getByRole('button', { name: 'Alle als gelesen markieren' })).toBeDisabled();
+});
+
+it('offers retry instead of claiming the inbox is empty after a load error', () => {
+  const retry = jest.fn();
+  mockNotifications.mockReturnValue({ notifications: [], unreadCount: 0, isLoading: false,
+    loadError: 'Benachrichtigungen konnten nicht aktualisiert werden.', retry,
+    markAsRead: jest.fn(), deleteNotification: jest.fn(), markAllAsRead: jest.fn() });
+  render(<NotificationsPage />);
+  expect(screen.getByRole('alert')).toHaveTextContent('Aktualisierung fehlgeschlagen');
+  expect(screen.queryByText('Noch keine Benachrichtigungen')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Erneut versuchen' }));
+  expect(retry).toHaveBeenCalledTimes(1);
 });
 
 it('includes events at the start of today and exposes calendar days as keyboard accessible buttons', async () => {

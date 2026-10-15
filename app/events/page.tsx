@@ -66,9 +66,21 @@ interface Event {
 type ViewType = 'month' | 'week' | 'list';
 
 export default function Events() {
+  const { data: session, status: sessionStatus } = useSession();
+  // RSVP state belongs to one account. Remount before any prior account's
+  // attendance or admin controls can render for the next viewer.
+  const viewerKey = sessionStatus === 'loading' ? 'loading' : sessionStatus === 'unauthenticated' ? 'guest' : session?.user?.id ?? 'guest';
+  return <ScopedEvents key={viewerKey} session={sessionStatus === 'unauthenticated' ? null : session} sessionStatus={sessionStatus} />;
+}
+
+function ScopedEvents({ session, sessionStatus }: {
+  session: ReturnType<typeof useSession>['data'];
+  sessionStatus: ReturnType<typeof useSession>['status'];
+}) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
+  const [focusedEventId, setFocusedEventId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [eventsData, setEventsData] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,7 +89,6 @@ export default function Events() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [pendingEventId, setPendingEventId] = useState<string | null>(null);
   const { toast } = useToast();
-  const { data: session, status: sessionStatus } = useSession();
   const isAdmin = session?.user?.role === 'ADMIN';
   const [view, setView] = useState<ViewType>('month');
   const eventsRequestRef = useRef<AbortController | null>(null);
@@ -100,6 +111,10 @@ export default function Events() {
   const handleCloseDialog = () => {
     setSelectedDate(null);
     setSelectedEvent(null);
+    setFocusedEventId(null);
+    if (window.location.hash.startsWith('#event-')) {
+      window.history.replaceState(window.history.state, '', `${window.location.pathname}${window.location.search}`);
+    }
   };
 
   const handleOpenAddDialog = () => {
@@ -180,6 +195,38 @@ export default function Events() {
       if (eventsRequestRef.current === controller) eventsRequestRef.current = null;
     };
   }, [loadEvents, sessionStatus]);
+
+  useEffect(() => () => {
+    eventsRequestRef.current?.abort();
+    eventsRequestRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    const openHashEvent = () => {
+      if (!window.location.hash.startsWith('#event-')) return;
+      let eventId: string;
+      try { eventId = decodeURIComponent(window.location.hash.slice('#event-'.length)); }
+      catch { return; }
+      const event = eventsData.find(item => item.id === eventId);
+      if (!event) return;
+      const date = new Date(event.date);
+      if (Number.isNaN(date.getTime())) return;
+      setSearchTerm('');
+      setCurrentMonth(date);
+      setSelectedDate(date);
+      setFocusedEventId(eventId);
+      setIsEditDialogOpen(false);
+    };
+    openHashEvent();
+    window.addEventListener('hashchange', openHashEvent);
+    return () => window.removeEventListener('hashchange', openHashEvent);
+  }, [eventsData]);
+
+  useEffect(() => {
+    if (!selectedDate || !focusedEventId) return;
+    const timeout = window.setTimeout(() => document.getElementById(`event-${encodeURIComponent(focusedEventId)}`)?.focus(), 0);
+    return () => window.clearTimeout(timeout);
+  }, [selectedDate, focusedEventId, eventsData]);
 
   const filteredEvents = eventsData.filter(event =>
     event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -390,7 +437,7 @@ export default function Events() {
         <div className="divide-y divide-border px-4 lg:px-6">
           {sortedEvents.length > 0 ? (
             sortedEvents.map(event => (
-              <article key={event.id} className="py-5">
+              <article key={event.id} id={selectedDate ? undefined : `event-${encodeURIComponent(event.id)}`} tabIndex={-1} className="py-5">
                 <div className="flex min-w-0 flex-col items-start justify-between gap-3 sm:flex-row">
                   <div className="min-w-0 flex-1 break-words [overflow-wrap:anywhere]">
                     <h3 className="text-lg font-semibold mb-2">{event.title}</h3>
@@ -512,7 +559,7 @@ export default function Events() {
           </DialogHeader>
           <div className="mt-4 space-y-4">
             {selectedDate && getEventsForDate(selectedDate).map((event) => (
-              <div key={event.id} className="bg-card p-4 rounded-lg border border-border">
+              <div key={event.id} id={`event-${encodeURIComponent(event.id)}`} tabIndex={-1} className="bg-card p-4 rounded-lg border border-border">
                 <div className="flex min-w-0 flex-col items-start justify-between gap-3 sm:flex-row">
                   <div className="min-w-0 flex-1 break-words [overflow-wrap:anywhere]">
                     <h3 className="text-lg font-semibold mb-2">{event.title}</h3>

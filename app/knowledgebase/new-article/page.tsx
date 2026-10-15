@@ -25,6 +25,11 @@ import Link from 'next/link';
 
 export default function NewArticle() {
   const { data: session, status } = useSession();
+  const accountId = status === 'authenticated' ? session?.user?.id ?? null : null;
+  return <AccountNewArticle key={accountId ?? 'anonymous'} accountId={accountId} status={status} />;
+}
+
+function AccountNewArticle({ accountId, status }: { accountId: string | null; status: 'loading' | 'authenticated' | 'unauthenticated' }) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -45,20 +50,22 @@ export default function NewArticle() {
 
   useEffect(() => {
     if (status === 'loading') return;
-    if (!session) {
+    if (!accountId) {
       router.push('/login');
     }
-  }, [session, status, router]);
+  }, [accountId, status, router]);
 
   useEffect(() => {
-    if (status === 'loading') return;
-    if (!session) return;
+    if (status !== 'authenticated' || !accountId) return;
+    const controller = new AbortController();
     const fetchCategoriesAndTags = async () => {
       setIsLoading(true);
       try {
-        const response = await fetch('/api/articles/categories-and-tags');
+        const response = await fetch('/api/articles/categories-and-tags', { signal: controller.signal });
+        if (controller.signal.aborted) return;
         if (response.ok) {
           const data = await response.json();
+          if (controller.signal.aborted) return;
           setExistingCategories(data.categories || []);
           setExistingTags(data.tags || []);
         } else {
@@ -67,16 +74,18 @@ export default function NewArticle() {
           setExistingTags([]);
         }
       } catch (error) {
+        if (controller.signal.aborted) return;
         console.error('Error fetching categories and tags:', error);
         setExistingCategories([]);
         setExistingTags([]);
       } finally {
-        setIsLoading(false);
+        if (!controller.signal.aborted) setIsLoading(false);
       }
     };
 
-    fetchCategoriesAndTags();
-  }, [session, status]);
+    void fetchCategoriesAndTags();
+    return () => controller.abort();
+  }, [accountId, status]);
 
   const handleAddTag = (tag: string) => {
     if (!tags.includes(tag) && tags.length < 5) {
@@ -166,7 +175,7 @@ export default function NewArticle() {
     }
   };
 
-  if (status === 'loading' || (session && isLoading)) {
+  if (status === 'loading' || (accountId && isLoading)) {
     return (
       <AppShell><Sidebar /><div className="flex min-h-0 min-w-0 flex-1 flex-col"><AppHeader><div><h1>Neuer Artikel</h1></div></AppHeader><main id="page-content" tabIndex={-1} className="flex min-h-0 flex-1 items-center justify-center p-4"><PageState kind="loading" title="Editor wird geladen" /></main></div></AppShell>
     );
@@ -183,7 +192,7 @@ export default function NewArticle() {
         <main id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto">
             <div className="mx-auto w-full max-w-[1440px] px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
 
-              {!session ? <PageState kind="error" title="Anmeldung erforderlich" description="Melde dich an, um einen Artikel zu schreiben." action={<Button asChild variant="outline"><Link href="/login">Zur Anmeldung</Link></Button>} /> : <>
+              {!accountId ? <PageState kind="error" title="Anmeldung erforderlich" description="Melde dich an, um einen Artikel zu schreiben." action={<Button asChild variant="outline"><Link href="/login">Zur Anmeldung</Link></Button>} /> : <>
 
               <div>
                 <div className="mb-8 border-b pb-6">

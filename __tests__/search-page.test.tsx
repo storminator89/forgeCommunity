@@ -52,9 +52,9 @@ it('renders focusable result links with the existing destinations and safe exter
   const course = await screen.findByRole('link', { name: /Kurs Alpha/ });
   expect(screen.getByRole('heading', { name: 'Ergebnisse (6)' })).toBeInTheDocument();
   expect(course).toHaveAttribute('href', '/courses/course-1');
-  expect(screen.getByRole('link', { name: /Event Beta/ })).toHaveAttribute('href', '/events/event-1');
+  expect(screen.getByRole('link', { name: /Event Beta/ })).toHaveAttribute('href', '/events#event-event-1');
   expect(screen.getByRole('link', { name: /Mitglied Gamma/ })).toHaveAttribute('href', '/profile/member-1');
-  expect(screen.getByRole('link', { name: /Beitrag Delta/ })).toHaveAttribute('href', '/posts/post-1');
+  expect(screen.getByRole('link', { name: /Beitrag Delta/ })).toHaveAttribute('href', '/community#post-post-1');
   expect(screen.getByRole('link', { name: /Ressource Epsilon/ })).toHaveAttribute('href', 'https://example.com/guide');
   expect(screen.getByRole('link', { name: /Ressource Epsilon/ })).toHaveAttribute('target', '_blank');
   expect(screen.getByRole('link', { name: /Ressource Epsilon/ })).toHaveAttribute('rel', 'noopener noreferrer');

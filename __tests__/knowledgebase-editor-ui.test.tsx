@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import NewArticle from '@/app/knowledgebase/new-article/page'
 import PublishedEditor from '@/app/knowledgebase/[id]/edit/page'
 import DraftEditor from '@/app/knowledgebase/edit/[id]/page'
@@ -66,5 +66,51 @@ it('offers a retry when a draft editor cannot load', async () => {
   expect(await screen.findByText('Entwurf konnte nicht geladen werden')).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'Erneut versuchen' }))
   expect(await screen.findByDisplayValue('Bestehender Artikel')).toBeInTheDocument()
+  errorSpy.mockRestore()
+})
+
+it('clears an unsaved new article when the account changes or signs out', async () => {
+  const view = render(<NewArticle />)
+  fireEvent.change(await screen.findByLabelText(/Titel/), { target: { value: 'Alice private notes' } })
+  mockSession = { user: { id: 'bob' } }
+  view.rerender(<NewArticle />)
+  expect(screen.queryByDisplayValue('Alice private notes')).not.toBeInTheDocument()
+  expect(await screen.findByLabelText(/Titel/)).toHaveValue('')
+  mockSession = null
+  view.rerender(<NewArticle />)
+  expect(screen.queryByDisplayValue('Alice private notes')).not.toBeInTheDocument()
+  expect(screen.getByText('Anmeldung erforderlich')).toBeInTheDocument()
+})
+
+it('does not offer a published-article editor to a different account', async () => {
+  const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+  const view = render(<PublishedEditor />)
+  fireEvent.change(await screen.findByDisplayValue('Bestehender Artikel'), { target: { value: 'Alice unpublished changes' } })
+  mockSession = { user: { id: 'bob' } }
+  view.rerender(<PublishedEditor />)
+  expect(screen.queryByDisplayValue('Alice unpublished changes')).not.toBeInTheDocument()
+  expect(await screen.findByText('Artikel konnte nicht geladen werden')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Speichern' })).not.toBeInTheDocument()
+  errorSpy.mockRestore()
+})
+
+it('ignores a late private draft response after the editor changes accounts', async () => {
+  const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+  const paramsValue = { id: 'article-1' }
+  const params = Object.assign(Promise.resolve(paramsValue), { status: 'fulfilled', value: paramsValue })
+  let resolveAlice!: (response: Response) => void
+  jest.mocked(global.fetch).mockImplementation((input: RequestInfo | URL) => {
+    if (String(input) === '/api/articles/categories-and-tags') return Promise.resolve({ ok: true, json: async () => metadata } as Response)
+    if (mockSession?.user.id === 'author') return new Promise<Response>(resolve => { resolveAlice = resolve })
+    return Promise.resolve({ ok: false, statusText: 'Not found' } as Response)
+  })
+
+  const view = render(<DraftEditor params={params} />)
+  await waitFor(() => expect(global.fetch).toHaveBeenCalledWith('/api/articles/article-1', expect.anything()))
+  mockSession = { user: { id: 'bob' } }
+  view.rerender(<DraftEditor params={params} />)
+  expect(await screen.findByText('Entwurf konnte nicht geladen werden')).toBeInTheDocument()
+  await act(async () => resolveAlice({ ok: true, json: async () => article } as Response))
+  expect(screen.queryByDisplayValue('Bestehender Artikel')).not.toBeInTheDocument()
   errorSpy.mockRestore()
 })

@@ -5,7 +5,7 @@ jest.mock('@/components/Sidebar', () => ({ Sidebar: () => null }))
 jest.mock('@/components/user-nav', () => ({ UserNav: () => null }))
 jest.mock('@/components/theme-toggle', () => ({ ThemeToggle: () => null }))
 jest.mock('@/components/Editor', () => ({ Editor: () => <div role="textbox" aria-label="Text bearbeiten" /> }))
-jest.mock('next-auth/react', () => ({ useSession: () => ({ data: { user: { id: 'member', name: 'Ada Lovelace' } } }) }))
+jest.mock('next-auth/react', () => ({ useSession: () => ({ data: { user: { id: 'member', name: 'Ada Lovelace' } }, status: 'authenticated' }) }))
 
 beforeEach(() => {
   global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => [] })
@@ -23,4 +23,22 @@ it('opens and cancels the community composer with one native button', async () =
   fireEvent.click(screen.getByRole('button', { name: 'Abbrechen' }))
   expect(await screen.findByRole('button', { name: 'Neuen Beitrag erstellen' })).toBeInTheDocument()
   await waitFor(() => expect(global.fetch).toHaveBeenCalledWith('/api/posts?page=1', expect.anything()))
+})
+
+it('keeps a failed post load distinct from an empty feed and offers retry', async () => {
+  let attempts = 0
+  global.fetch = jest.fn().mockImplementation(async (url: string) => {
+    if (url.startsWith('/api/posts?') && attempts++ === 0) {
+      return { ok: false, json: async () => ({ message: 'Unavailable' }) }
+    }
+    return { ok: true, json: async () => [] }
+  })
+
+  render(<Community />)
+  expect((await screen.findByText('Beiträge konnten nicht geladen werden')).closest('[role="alert"]')).toBeInTheDocument()
+  expect(screen.queryByText('Keine Beiträge gefunden')).not.toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Erneut versuchen' }))
+  expect(await screen.findByText('Keine Beiträge gefunden')).toBeInTheDocument()
+  expect(global.fetch).toHaveBeenCalledWith('/api/posts?page=1', expect.anything())
 })

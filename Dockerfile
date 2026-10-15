@@ -30,6 +30,7 @@ COPY --from=builder --chown=node:node /app/scripts/sqlite-init.mjs ./scripts/sql
 COPY --from=builder --chown=node:node /app/prisma/sqlite-migrations ./prisma/sqlite-migrations
 COPY --from=builder --chown=node:node /app/scripts/db-deploy.mjs /app/scripts/postgresql-upgrades.mjs ./scripts/
 COPY --from=builder --chown=node:node /app/prisma/postgresql-upgrades ./prisma/postgresql-upgrades
+COPY --from=builder --chown=node:node /app/prisma/postgresql-baselines ./prisma/postgresql-baselines
 COPY --chown=node:node docker/entrypoint.sh docker/healthcheck.mjs ./docker/
 RUN mkdir -p /app/data/h5p /app/public/images/uploads /app/private/chat-uploads && \
     chown -R node:node /app/data /app/public/images/uploads /app/private/chat-uploads && \

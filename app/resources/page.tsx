@@ -19,6 +19,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Book, File, Video, Link as LinkIcon, Search, Plus, MoreVertical, Edit, Trash2, Copy, Check, ArrowUpRight } from 'lucide-react';
 import axios from 'axios';
 import { useSession } from 'next-auth/react';
+import type { Session } from 'next-auth';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useInView } from 'react-intersection-observer';
@@ -58,7 +59,12 @@ const typeLabels: Record<ResourceType, string> = {
 };
 
 export default function ResourceLibrary() {
-  const { data: session } = useSession();
+  const { data, status } = useSession();
+  const session = status === 'authenticated' ? data : null;
+  return <ResourceLibraryForViewer key={session?.user?.id ?? 'anonymous'} session={session} />;
+}
+
+function ResourceLibraryForViewer({ session }: { session: Session | null }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [newResource, setNewResource] = useState({

@@ -46,7 +46,7 @@ export function Sidebar({ className, isOpen: externalOpen = false, onClose }: Si
       ...(session?.user?.role === 'ADMIN' ? [{ title: 'Administration', items: adminNavigation }] : [])];
     return <div className="flex h-full flex-col">
       <div className={cn("flex h-20 shrink-0 gap-2 px-4", compact ? "h-24 flex-col items-center justify-center gap-1" : "items-center")}>
-        <Link href="/community" aria-label="ForgeCommunity Start" className="flex min-w-0 items-center gap-2.5" onClick={() => setOpen(false)}>
+        <Link href="/community" aria-label="ForgeCommunity Start" className="flex min-h-11 min-w-0 items-center gap-2.5" onClick={() => setOpen(false)}>
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground"><Flame className="h-5 w-5" /></span>
           {!compact && <span className="text-[15px] font-bold tracking-tight">Forge<span className="font-normal text-muted-foreground">Community</span></span>}
         </Link>

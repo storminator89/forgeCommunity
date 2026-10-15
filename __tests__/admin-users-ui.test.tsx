@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useSession } from 'next-auth/react'
 import UserManagement from '@/components/admin/UserManagement'
@@ -114,4 +114,82 @@ test('keeps a failed deletion visible instead of silently removing the user', as
   await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Der letzte Administrator muss erhalten bleiben'))
   expect(screen.getByRole('button', { name: 'Details von Ada Beispiel öffnen' })).toBeVisible()
   confirm.mockRestore()
+})
+
+test('explains why another learner’s certificate blocks account deletion', async () => {
+  const user = userEvent.setup()
+  const confirm = jest.spyOn(window, 'confirm').mockReturnValue(true)
+  jest.mocked(global.fetch).mockImplementation(async (input: string | Request | URL, init?: RequestInit) => {
+    if (input === '/api/admin/users' && init?.method === 'GET') return ok(rows)
+    if (input === '/api/admin/users/u1' && init?.method === 'DELETE') return {
+      ok: false, status: 409,
+      json: async () => ({ error: 'Dieses Konto kann nicht gelöscht werden, weil andere Mitglieder Zertifikate für seine Kurse besitzen. Es wurden keine Daten gelöscht.' }),
+    } as Response
+    throw new Error(`Unexpected request ${input}`)
+  })
+  render(<UserManagement />)
+  await user.click(await screen.findByRole('button', { name: 'Aktionen für Ada Beispiel' }))
+  await user.click(screen.getByRole('menuitem', { name: 'Löschen' }))
+  expect(confirm).toHaveBeenCalledWith(expect.stringContaining('Zertifikate für Kurse dieses Kontos'))
+  await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('andere Mitglieder Zertifikate'))
+  expect(screen.getByRole('button', { name: 'Details von Ada Beispiel öffnen' })).toBeVisible()
+  confirm.mockRestore()
+})
+
+test('immediately hides admin data and details when the authenticated account loses admin access', async () => {
+  const user = userEvent.setup()
+  const { rerender } = render(<UserManagement />)
+  await user.click(await screen.findByRole('button', { name: 'Details von Ada Beispiel öffnen' }))
+  expect(await screen.findByText('Arbeitet in der Community.')).toBeVisible()
+
+  jest.mocked(useSession).mockReturnValue({
+    data: { user: { id: 'ordinary-user', role: 'USER' }, expires: '2099-01-01' }, status: 'authenticated', update: jest.fn(),
+  } as ReturnType<typeof useSession>)
+  rerender(<UserManagement />)
+  expect(screen.getByRole('alert')).toHaveTextContent('Keine Administratorrechte')
+  expect(screen.queryByText('ada@example.com')).not.toBeInTheDocument()
+  expect(screen.queryByText('Arbeitet in der Community.')).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Aktionen für Ada Beispiel' })).not.toBeInTheDocument()
+})
+
+test('discards a pending previous admin list after switching to another admin', async () => {
+  let resolveOld!: (response: Response) => void
+  const oldRequest = new Promise<Response>(resolve => { resolveOld = resolve })
+  let listRequests = 0
+  jest.mocked(global.fetch).mockImplementation(async (input: string | Request | URL) => {
+    if (input === '/api/admin/users') return ++listRequests === 1 ? oldRequest : ok([rows[1]])
+    throw new Error(`Unexpected request ${input}`)
+  })
+  const { rerender } = render(<UserManagement />)
+  expect(screen.getByRole('status')).toHaveTextContent('Benutzer werden geladen')
+  jest.mocked(useSession).mockReturnValue({
+    data: { user: { id: 'second-admin', role: 'ADMIN' }, expires: '2099-01-01' }, status: 'authenticated', update: jest.fn(),
+  } as ReturnType<typeof useSession>)
+  rerender(<UserManagement />)
+  expect(await screen.findByRole('button', { name: 'Details von Bert Beispiel öffnen' })).toBeVisible()
+  await act(async () => { resolveOld(ok([rows[0]])); await oldRequest })
+  expect(screen.queryByText('ada@example.com')).not.toBeInTheDocument()
+  expect(screen.getByText('bert@example.com')).toBeVisible()
+})
+
+test('discards previous-admin detail responses after an account switch', async () => {
+  let resolveOld!: (response: Response) => void
+  const oldDetail = new Promise<Response>(resolve => { resolveOld = resolve })
+  let listRequests = 0
+  jest.mocked(global.fetch).mockImplementation(async (input: string | Request | URL) => {
+    if (input === '/api/admin/users') return ok(++listRequests === 1 ? [rows[0]] : [rows[1]])
+    if (input === '/api/admin/users/u1') return oldDetail
+    throw new Error(`Unexpected request ${input}`)
+  })
+  const user = userEvent.setup()
+  const { rerender } = render(<UserManagement />)
+  await user.click(await screen.findByRole('button', { name: 'Details von Ada Beispiel öffnen' }))
+  jest.mocked(useSession).mockReturnValue({
+    data: { user: { id: 'second-admin', role: 'ADMIN' }, expires: '2099-01-01' }, status: 'authenticated', update: jest.fn(),
+  } as ReturnType<typeof useSession>)
+  rerender(<UserManagement />)
+  expect(await screen.findByRole('button', { name: 'Details von Bert Beispiel öffnen' })).toBeVisible()
+  await act(async () => { resolveOld(ok(detail)); await oldDetail })
+  expect(screen.queryByText('Arbeitet in der Community.')).not.toBeInTheDocument()
+  expect(screen.queryByText('ada@example.com')).not.toBeInTheDocument()
 })

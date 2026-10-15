@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import axios from 'axios'
 import Resources from '@/app/resources/page'
@@ -12,7 +12,7 @@ jest.mock('@/components/theme-toggle', () => ({ ThemeToggle: () => null }))
 jest.mock('@/components/ResourcePreview', () => ({ ResourcePreview: () => <div>Ressourcenvorschau</div> }))
 jest.mock('react-intersection-observer', () => ({ useInView: () => ({ ref: jest.fn() }) }))
 jest.mock('next/navigation', () => ({ useParams: () => ({ id: 'resource-1' }) }))
-jest.mock('next-auth/react', () => ({ useSession: () => ({ data: mockSession }) }))
+jest.mock('next-auth/react', () => ({ useSession: () => ({ data: mockSession, status: mockSession ? 'authenticated' : 'unauthenticated' }) }))
 jest.mock('axios', () => ({ get: jest.fn(), post: jest.fn(), put: jest.fn(), delete: jest.fn() }))
 
 const resource = {
@@ -78,6 +78,37 @@ it('confirms a resource deletion before sending the request', async () => {
   expect(axios.delete).not.toHaveBeenCalled()
   fireEvent.click(screen.getByRole('button', { name: 'Abbrechen' }))
   expect(axios.delete).not.toHaveBeenCalled()
+})
+
+it('drops Alice’s admin actions and edit dialog before Bob’s role check resolves', async () => {
+  HTMLElement.prototype.hasPointerCapture = () => false
+  HTMLElement.prototype.scrollIntoView = jest.fn()
+  const user = userEvent.setup()
+  let resolveBobRole!: (value: { data: { role: string } }) => void
+  const bobRole = new Promise<{ data: { role: string } }>(resolve => { resolveBobRole = resolve })
+  mockSession = { user: { id: 'alice' } }
+  jest.mocked(axios.get).mockImplementation(async (url: string) => {
+    if (url === '/api/users/alice/role') return { data: { role: 'ADMIN' } }
+    if (url === '/api/users/bob/role') return bobRole
+    return { data: { resources: [resource], hasMore: false } }
+  })
+
+  const view = render(<Resources />)
+  await screen.findByRole('link', { name: 'Gute Quelle' })
+  await user.click(screen.getByRole('button', { name: 'Aktionen für Gute Quelle' }))
+  await user.click(await screen.findByRole('menuitem', { name: 'Bearbeiten' }))
+  expect(screen.getByRole('dialog', { name: 'Ressource bearbeiten' })).toBeInTheDocument()
+
+  mockSession = { user: { id: 'bob' } }
+  view.rerender(<Resources />)
+  expect(screen.queryByRole('dialog', { name: 'Ressource bearbeiten' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('menuitem', { name: 'Bearbeiten' })).not.toBeInTheDocument()
+
+  await act(async () => { resolveBobRole({ data: { role: 'USER' } }); await bobRole })
+  await screen.findByRole('link', { name: 'Gute Quelle' })
+  await user.click(screen.getByRole('button', { name: 'Aktionen für Gute Quelle' }))
+  expect(screen.queryByRole('menuitem', { name: 'Bearbeiten' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('menuitem', { name: 'Löschen' })).not.toBeInTheDocument()
 })
 
 it('keeps resource detail, loading, and preview inside the main landmark', async () => {

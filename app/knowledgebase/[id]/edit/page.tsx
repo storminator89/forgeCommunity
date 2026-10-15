@@ -48,9 +48,13 @@ interface Article {
 
 export default function EditArticle() {
   const { data: session, status } = useSession();
+  const { id } = useParams<{ id: string }>();
+  const accountId = status === 'authenticated' ? session?.user?.id ?? null : null;
+  return <AccountEditArticle key={`${id}:${accountId ?? 'anonymous'}`} id={id} accountId={accountId} status={status} />;
+}
+
+function AccountEditArticle({ id, accountId, status }: { id: string; accountId: string | null; status: 'loading' | 'authenticated' | 'unauthenticated' }) {
   const router = useRouter();
-  const params = useParams();
-  const { id } = params;
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [title, setTitle] = useState('');
@@ -69,25 +73,31 @@ export default function EditArticle() {
 
   useEffect(() => {
     if (status === 'loading') return;
-    if (!session) {
+    if (!accountId) {
       router.push('/login');
     }
-  }, [session, status, router]);
+  }, [accountId, status, router]);
 
   useEffect(() => {
+    if (!id || !accountId || status !== 'authenticated') return;
+    const controller = new AbortController();
     const fetchArticleAndMetadata = async () => {
       setIsLoading(true);
       try {
         const [articleResponse, metadataResponse] = await Promise.all([
-          fetch(`/api/articles/${id}`),
-          fetch('/api/articles/categories-and-tags')
+          fetch(`/api/articles/${encodeURIComponent(id)}`, { signal: controller.signal }),
+          fetch('/api/articles/categories-and-tags', { signal: controller.signal })
         ]);
+
+        if (controller.signal.aborted) return;
 
         if (!articleResponse.ok) {
           throw new Error(`HTTP error! status: ${articleResponse.status}`);
         }
 
         const articleData: Article = await articleResponse.json();
+        if (controller.signal.aborted) return;
+        if (articleData.author.id !== accountId) throw new Error('Du bist nicht berechtigt, diesen Artikel zu bearbeiten.');
         setLoadError(false);
         setTitle(articleData.title);
         setContent(articleData.content);
@@ -99,22 +109,23 @@ export default function EditArticle() {
 
         if (metadataResponse.ok) {
           const metadataData = await metadataResponse.json();
+          if (controller.signal.aborted) return;
           setExistingCategories(metadataData.categories || []);
           setExistingTags(metadataData.tags || []);
         }
-      } catch (error) {
-        console.error('Error fetching article:', error);
-        setError('Fehler beim Laden des Artikels.');
+      } catch (failure) {
+        if (controller.signal.aborted) return;
+        console.error('Error fetching article:', failure);
+        setError(failure instanceof Error ? failure.message : 'Fehler beim Laden des Artikels.');
         setLoadError(true);
       } finally {
-        setIsLoading(false);
+        if (!controller.signal.aborted) setIsLoading(false);
       }
     };
 
-    if (id && status !== 'loading' && session) {
-      fetchArticleAndMetadata();
-    }
-  }, [id, session, status]);
+    void fetchArticleAndMetadata();
+    return () => controller.abort();
+  }, [id, accountId, status]);
 
   const handleAddTag = (tag: string) => {
     if (!tags.includes(tag) && tags.length < 5) {
@@ -199,7 +210,7 @@ export default function EditArticle() {
     }
   };
 
-  if (status === 'loading' || (session && isLoading)) {
+  if (status === 'loading' || (accountId && isLoading)) {
     return (
       <AppShell><Sidebar /><div className="flex min-h-0 min-w-0 flex-1 flex-col"><AppHeader><div><h1>Artikel bearbeiten</h1></div></AppHeader><main id="page-content" tabIndex={-1} className="flex min-h-0 flex-1 items-center justify-center p-4"><PageState kind="loading" title="Artikel wird geladen" /></main></div></AppShell>
     );
@@ -224,7 +235,7 @@ export default function EditArticle() {
               {!loadError && <Button type="submit" form="editForm" disabled={isSubmitting}>{isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Save className="h-4 w-4" aria-hidden="true" />}{isSubmitting ? 'Speichern…' : 'Speichern'}</Button>}
             </div>
 
-            {!session ? (
+            {!accountId ? (
               <div className="mt-8"><PageState kind="error" title="Anmeldung erforderlich" description="Melde dich an, um einen Artikel zu bearbeiten." action={<Button asChild variant="outline"><Link href="/login">Zur Anmeldung</Link></Button>} /></div>
             ) : loadError ? (
               <div className="mt-8"><PageState kind="error" title="Artikel konnte nicht geladen werden" description={error || 'Bitte versuche es später erneut.'} action={<Button type="button" variant="outline" onClick={() => router.push('/knowledgebase')}>Zur Übersicht</Button>} /></div>

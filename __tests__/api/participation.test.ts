@@ -19,6 +19,8 @@ jest.mock('@/lib/server/sanitize-html', () => ({
 jest.mock('@/lib/prisma', () => ({ __esModule: true, default: {
   $transaction: jest.fn(),
   course: { findUnique: jest.fn(), findMany: jest.fn() },
+  courseContent: { findMany: jest.fn() },
+  courseContentProgress: { findMany: jest.fn() },
   enrollment: { findUnique: jest.fn(), count: jest.fn(), create: jest.fn(), deleteMany: jest.fn() },
   event: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn() },
   eventAttendee: { findUnique: jest.fn(), count: jest.fn(), create: jest.fn(), update: jest.fn() },
@@ -27,6 +29,8 @@ jest.mock('@/lib/prisma', () => ({ __esModule: true, default: {
 type MockDb = {
   $transaction: jest.Mock;
   course: { findUnique: jest.Mock; findMany: jest.Mock };
+  courseContent: { findMany: jest.Mock };
+  courseContentProgress: { findMany: jest.Mock };
   enrollment: { findUnique: jest.Mock; count: jest.Mock; create: jest.Mock; deleteMany: jest.Mock };
   event: { findUnique: jest.Mock; findMany: jest.Mock; create: jest.Mock; update: jest.Mock };
   eventAttendee: { findUnique: jest.Mock; count: jest.Mock; create: jest.Mock; update: jest.Mock };
@@ -49,6 +53,8 @@ beforeEach(() => {
   attendees = new Map();
   db.$transaction.mockImplementation((work: (tx: MockDb) => Promise<unknown>) => work(db));
   db.course.findUnique.mockImplementation(async () => course);
+  db.courseContent.findMany.mockResolvedValue([]);
+  db.courseContentProgress.findMany.mockResolvedValue([]);
   db.enrollment.findUnique.mockImplementation(async ({ where }: { where: { userId_courseId: { userId: string } } }) => enrollments.get(where.userId_courseId.userId) ?? null);
   db.enrollment.count.mockImplementation(async () => enrollments.size);
   db.enrollment.create.mockImplementation(async ({ data }: { data: { userId: string } }) => {
@@ -174,7 +180,7 @@ test('listing exposes counts and own state without sending another participantâ€
     enrollments: [{ completedAt: null }],
   }]);
   const courses = await (await listCourses()).json();
-  expect(courses[0]).toMatchObject({ participants: 2, isEnrolled: true, maxStudents: 5 });
+  expect(courses[0]).toMatchObject({ participants: 2, isEnrolled: true, maxStudents: 5, completed: false, everCompleted: false });
   expect(JSON.stringify(courses)).not.toContain('other-user');
   expect(db.course.findMany.mock.calls[0][0].select.enrollments).toEqual({ where: { userId: 'student' }, select: { completedAt: true } });
   db.event.findMany.mockResolvedValue([{

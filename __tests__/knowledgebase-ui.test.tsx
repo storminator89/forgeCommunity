@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import KnowledgeBase from '@/app/knowledgebase/page'
 import ArticlePage from '@/app/knowledgebase/[id]/page'
 import DraftsPage from '@/app/knowledgebase/drafts/page'
@@ -63,6 +63,49 @@ it('renders a safe reading page with author edit action inside the application s
   expect(screen.getByRole('link', { name: 'Zum Inhalt springen' })).toHaveAttribute('href', '#page-content')
 })
 
+it('removes Alice’s unpublished article before Bob’s failed load and logout', async () => {
+  const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+  const privateArticle = { ...article, title: 'Alice private article', content: '<p>Alice secret body</p>' }
+  jest.mocked(global.fetch)
+    .mockResolvedValueOnce({ ok: true, json: async () => privateArticle } as Response)
+    .mockResolvedValueOnce({ ok: false } as Response)
+    .mockResolvedValueOnce({ ok: false } as Response)
+
+  const view = render(<ArticlePage />)
+  expect(await screen.findByRole('heading', { name: 'Alice private article' })).toBeInTheDocument()
+
+  mockSession = { user: { id: 'bob', name: 'Bob' } }
+  view.rerender(<ArticlePage />)
+  expect(screen.queryByText('Alice secret body')).not.toBeInTheDocument()
+  expect(await screen.findByText('Artikel nicht verfügbar')).toBeInTheDocument()
+
+  mockSession = null
+  view.rerender(<ArticlePage />)
+  expect(screen.queryByText('Alice secret body')).not.toBeInTheDocument()
+  errorSpy.mockRestore()
+})
+
+it('ignores Alice’s late unpublished article response after Bob signs in', async () => {
+  const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+  let resolveAlice!: (value: Response) => void
+  const aliceResponse = new Promise<Response>(resolve => { resolveAlice = resolve })
+  jest.mocked(global.fetch).mockImplementationOnce(() => aliceResponse).mockResolvedValueOnce({ ok: false } as Response)
+
+  const view = render(<ArticlePage />)
+  await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1))
+  mockSession = { user: { id: 'bob', name: 'Bob' } }
+  view.rerender(<ArticlePage />)
+  expect(await screen.findByText('Artikel nicht verfügbar')).toBeInTheDocument()
+
+  await act(async () => {
+    resolveAlice({ ok: true, json: async () => ({ ...article, title: 'Alice late draft', content: '<p>Alice late secret</p>' }) } as Response)
+    await aliceResponse
+  })
+  expect(screen.queryByText('Alice late secret')).not.toBeInTheDocument()
+  expect(screen.getByText('Artikel nicht verfügbar')).toBeInTheDocument()
+  errorSpy.mockRestore()
+})
+
 it('searches drafts and recovers from a failed request', async () => {
   const draft = { id: 'draft-1', title: 'Erster Entwurf', content: '<p>Notizen</p>', category: 'Praxis', featuredImage: null, createdAt: '2026-05-01T10:00:00.000Z', updatedAt: '2026-05-02T10:00:00.000Z' }
   jest.mocked(global.fetch).mockResolvedValueOnce({ ok: false } as Response).mockResolvedValueOnce({ ok: true, json: async () => [draft] } as Response)
@@ -75,6 +118,44 @@ it('searches drafts and recovers from a failed request', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Suche zurücksetzen' }))
   expect(screen.getByRole('link', { name: 'Erster Entwurf' })).toBeInTheDocument()
   await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2))
+})
+
+it('discards loaded drafts immediately on account switch, failed load, and logout', async () => {
+  const aliceDraft = { id: 'alice-draft', title: 'Privater Alice-Entwurf', content: '', category: 'Privat', featuredImage: null, createdAt: '2026-05-01T10:00:00.000Z', updatedAt: '2026-05-02T10:00:00.000Z' }
+  const fetchMock = jest.mocked(global.fetch)
+  fetchMock.mockResolvedValueOnce({ ok: true, json: async () => [aliceDraft] } as Response)
+    .mockResolvedValueOnce({ ok: false } as Response)
+  const view = render(<DraftsPage />)
+  expect(await screen.findByRole('link', { name: 'Privater Alice-Entwurf' })).toBeInTheDocument()
+
+  mockSession = { user: { id: 'bob', name: 'Bob' } }
+  view.rerender(<DraftsPage />)
+  expect(screen.queryByRole('link', { name: 'Privater Alice-Entwurf' })).not.toBeInTheDocument()
+  expect(await screen.findByText('Entwürfe konnten nicht geladen werden')).toBeInTheDocument()
+  expect(screen.queryByText('Privater Alice-Entwurf')).not.toBeInTheDocument()
+
+  mockSession = null
+  view.rerender(<DraftsPage />)
+  expect(screen.getByText('Anmeldung erforderlich')).toBeInTheDocument()
+  expect(screen.queryByText('Privater Alice-Entwurf')).not.toBeInTheDocument()
+})
+
+it('ignores an Alice draft response that settles after Bob signs in', async () => {
+  const aliceDraft = { id: 'alice-draft', title: 'Verspäteter Alice-Entwurf', content: '', category: 'Privat', featuredImage: null, createdAt: '2026-05-01T10:00:00.000Z', updatedAt: '2026-05-02T10:00:00.000Z' }
+  let resolveAlice!: (response: Response) => void
+  jest.mocked(global.fetch)
+    .mockImplementationOnce(() => new Promise<Response>(resolve => { resolveAlice = resolve }))
+    .mockResolvedValueOnce({ ok: false } as Response)
+
+  const view = render(<DraftsPage />)
+  await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1))
+  mockSession = { user: { id: 'bob', name: 'Bob' } }
+  view.rerender(<DraftsPage />)
+  expect(await screen.findByText('Entwürfe konnten nicht geladen werden')).toBeInTheDocument()
+
+  await act(async () => resolveAlice({ ok: true, json: async () => [aliceDraft] } as Response))
+  expect(screen.queryByText('Verspäteter Alice-Entwurf')).not.toBeInTheDocument()
+  expect(screen.getByText('Entwürfe konnten nicht geladen werden')).toBeInTheDocument()
 })
 
 it('provides labeled, keyboard-usable category and tag creation and tag removal', () => {

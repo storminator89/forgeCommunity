@@ -48,7 +48,8 @@ export default function ChatPage() {
     createChannel,
     deleteChannel,
     loading,
-    error
+    error,
+    clearError
   } = useChat()
 
   const [newMessage, setNewMessage] = useState('')
@@ -88,11 +89,13 @@ export default function ChatPage() {
     if (!currentChannel || isSending || (!newMessage.trim() && !selectedImage)) return
     setIsSending(true)
     try {
-      await sendMessage(newMessage, selectedImage || undefined)
-      setNewMessage('')
-      setSelectedImage(null)
-      setImagePreview(null)
-      if (fileInputRef.current) fileInputRef.current.value = ''
+      const sent = await sendMessage(newMessage, selectedImage || undefined)
+      if (sent) {
+        setNewMessage('')
+        setSelectedImage(null)
+        setImagePreview(null)
+        if (fileInputRef.current) fileInputRef.current.value = ''
+      }
     } finally {
       setIsSending(false)
     }
@@ -145,15 +148,15 @@ export default function ChatPage() {
     return session?.user?.id === message.author.id || session?.user?.role === 'ADMIN'
   }
 
-  if (!session || loading || error) {
+  if (!session || loading) {
     return (
       <AppShell>
         <Sidebar />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <AppHeader><div className="flex min-w-0 items-center justify-between gap-3"><h1>Chat</h1><div className="flex shrink-0 items-center gap-2"><ThemeToggle /><UserNav /></div></div></AppHeader>
           <main id="page-content" tabIndex={-1} className="flex flex-1 items-center justify-center p-6 text-center">
-            <div role={error ? 'alert' : 'status'} className="rounded-xl border bg-card p-8">
-              <p className={error ? 'text-destructive' : 'text-muted-foreground'}>{error ? `Fehler: ${error}` : !session ? 'Bitte melde dich an, um den Chat zu nutzen.' : 'Chat wird geladen …'}</p>
+            <div role="status" className="rounded-xl border bg-card p-8">
+              <p className="text-muted-foreground">{!session ? 'Bitte melde dich an, um den Chat zu nutzen.' : 'Chat wird geladen …'}</p>
             </div>
           </main>
         </div>
@@ -175,6 +178,12 @@ export default function ChatPage() {
             </div>
           </div>
         </AppHeader>
+
+        {error && <div role="alert" className="mx-4 my-2 flex flex-wrap items-center gap-3 rounded-xl border border-destructive/30 bg-card px-4 py-3 text-sm text-destructive sm:mx-6">
+          <p className="min-w-0 flex-1">Chat konnte nicht geladen oder geändert werden. Bitte versuche es erneut.</p>
+          <Button type="button" variant="outline" onClick={clearError}>Meldung schließen</Button>
+          {channels.length === 0 && <Button type="button" variant="outline" onClick={() => window.location.reload()}>Chat neu laden</Button>}
+        </div>}
 
         <div id="page-content" role="main" tabIndex={-1} className="flex min-h-0 flex-1 overflow-hidden">
           <aside id="chat-channel-list" aria-label="Chat-Channels" className={cn('min-h-0 min-w-0 flex-col border-r bg-card', showChannelsMobile ? 'flex flex-1' : 'hidden', 'md:flex md:w-64 md:flex-none')}>
@@ -398,7 +407,7 @@ export default function ChatPage() {
                   aria-label="Nachricht"
                   onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.preventDefault(); handleSendMessage() } }}
                   className="min-w-0 flex-1"
-                  disabled={!currentChannel}
+                  disabled={!currentChannel || isSending}
                 />
                 <input
                   type="file"
@@ -414,7 +423,7 @@ export default function ChatPage() {
                   aria-label="Bild anhängen"
                   className="shrink-0"
                   onClick={() => fileInputRef.current?.click()}
-                  disabled={!currentChannel}
+                  disabled={!currentChannel || isSending}
                 >
                   <ImageIcon className="h-4 w-4" />
                 </Button>

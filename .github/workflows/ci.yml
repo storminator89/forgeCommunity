@@ -71,6 +71,44 @@ jobs:
       - name: Smoke test standalone server
         run: node scripts/smoke-standalone.mjs
 
+  # Independent of validate: the dependency audit can fail without hiding the
+  # PostgreSQL migration result. Every object is confined to disposable CI DB.
+  postgresql-release-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: ci-only-upgrade-password
+          POSTGRES_DB: forge_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d forge_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_PROVIDER: postgresql
+      DATABASE_URL: postgresql://postgres:ci-only-upgrade-password@127.0.0.1:5432/forge_test
+      POSTGRESQL_RELEASE_GATE_DISPOSABLE: '1'
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Exercise empty install and populated PostgreSQL upgrades
+        run: node --test --test-concurrency=1 scripts/check-postgresql-upgrades.mjs scripts/check-postgresql-release-gate.mjs
+
   # A sibling job keeps browser coverage visible even while the audit gate in
   # validate is blocked by an upstream dependency advisory.
   browser-qa:
@@ -114,14 +152,12 @@ jobs:
       - name: Exercise desktop and mobile browser flows
         run: npm run test:browser
 
-      - name: Upload browser screenshots and failure traces
+      - name: Upload browser screenshots
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: browser-qa-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            test-results/
-            playwright-report/
+          path: test-results/**/*.png
           if-no-files-found: warn
           retention-days: 7
 

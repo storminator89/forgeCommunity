@@ -4,6 +4,7 @@ import { AppShell, AppHeader } from '@/components/app-shell';
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
+import type { Session } from 'next-auth'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -19,6 +20,12 @@ import Image from 'next/image'
 import Link from 'next/link'
 
 export default function NewCoursePage() {
+  const { data, status } = useSession()
+  const session = status === 'authenticated' ? data : null
+  return <CourseComposer key={session?.user?.id ?? 'anonymous'} session={session} />
+}
+
+function CourseComposer({ session }: { session: Session | null }) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [startDate, setStartDate] = useState<Date | undefined>(undefined)
@@ -32,7 +39,6 @@ export default function NewCoursePage() {
   const [error, setError] = useState<string | null>(null)
 
   const router = useRouter()
-  const { data: session } = useSession()
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -98,7 +104,7 @@ export default function NewCoursePage() {
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <AppHeader>
           <div className="flex items-center justify-between gap-3">
-            <h1>Neuen Kurs erstellen</h1>
+            <h1 className="min-w-0 truncate">Neuen Kurs erstellen</h1>
             <div className="flex shrink-0 items-center gap-1 sm:gap-2"><ThemeToggle /><UserNav /></div>
           </div>
         </AppHeader>

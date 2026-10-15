@@ -1,6 +1,7 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useSession } from 'next-auth/react';
 import { ReportControl } from '@/components/community/ReportControl';
 import { ModerationQueue } from '@/app/moderation/ModerationQueue';
 import { PostCard } from '@/components/community/PostCard';
@@ -13,6 +14,7 @@ jest.mock('next/link', () => ({
 jest.mock('@/components/Sidebar', () => ({ Sidebar: () => null }));
 jest.mock('@/components/user-nav', () => ({ UserNav: () => null }));
 jest.mock('@/components/theme-toggle', () => ({ ThemeToggle: () => null }));
+jest.mock('next-auth/react', () => ({ useSession: jest.fn() }));
 jest.mock('framer-motion', () => {
   const MotionDiv = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement> & {
     initial?: unknown; animate?: unknown; exit?: unknown; transition?: unknown; layout?: unknown;
@@ -27,6 +29,10 @@ jest.mock('framer-motion', () => {
 
 beforeEach(() => {
   (global.fetch as jest.Mock).mockReset();
+  jest.mocked(useSession).mockReturnValue({
+    data: { user: { id: 'alice', role: 'MODERATOR' }, expires: '2099-01-01' },
+    status: 'authenticated', update: jest.fn(),
+  } as ReturnType<typeof useSession>);
 });
 
 it('lets a member report a post with an accessible reason and feedback', async () => {
@@ -87,6 +93,51 @@ it('does not link to deleted or unpublished targets', async () => {
   render(<ModerationQueue />);
   expect(await screen.findByText('Inhalt ist nicht mehr öffentlich verfügbar.')).toBeInTheDocument();
   expect(screen.queryByRole('link', { name: 'Inhalt in der Community öffnen' })).not.toBeInTheDocument();
+});
+
+it('offers a retry when the moderation queue cannot load', async () => {
+  const fetchMock = global.fetch as jest.Mock;
+  fetchMock
+    .mockResolvedValueOnce({ ok: false, json: async () => ({ error: 'Meldungen sind nicht erreichbar' }) })
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ items: [], total: 0, page: 1, pageSize: 20 }) });
+
+  render(<ModerationQueue />);
+  expect(await screen.findByText('Meldungen sind nicht erreichbar')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Erneut versuchen' }));
+  expect(await screen.findByText('Keine Meldungen in diesem Status.')).toBeInTheDocument();
+  expect(screen.queryByText('Meldungen sind nicht erreichbar')).not.toBeInTheDocument();
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+});
+
+it('clears Alice’s report details and review form before Bob or logout can see them', async () => {
+  const privateReport = {
+    id: 'private-report', targetType: 'POST', targetId: 'post-1', reason: 'UNSAFE', details: 'Alice private report', status: 'OPEN',
+    createdAt: '2026-10-01T10:00:00.000Z', reviewedAt: null, reviewedById: null, resolutionNote: null,
+    targetAvailable: false, targetTitle: null, targetPreview: null,
+  };
+  let viewer = 'alice';
+  (global.fetch as jest.Mock).mockImplementation(async () => viewer === 'alice'
+    ? { ok: true, json: async () => ({ items: [privateReport], total: 1, page: 1, pageSize: 20 }) }
+    : { ok: false, json: async () => ({ error: 'Keine Berechtigung' }) });
+
+  const view = render(<ModerationQueue />);
+  expect(await screen.findByText('Alice private report')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Entscheidung speichern' })).toBeInTheDocument();
+
+  viewer = 'bob';
+  jest.mocked(useSession).mockReturnValue({
+    data: { user: { id: 'bob', role: 'USER' }, expires: '2099-01-01' },
+    status: 'authenticated', update: jest.fn(),
+  } as ReturnType<typeof useSession>);
+  view.rerender(<ModerationQueue />);
+  expect(screen.queryByText('Alice private report')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Entscheidung speichern' })).not.toBeInTheDocument();
+  expect(await screen.findByText('Keine Berechtigung')).toBeInTheDocument();
+
+  jest.mocked(useSession).mockReturnValue({ data: null, status: 'unauthenticated', update: jest.fn() } as ReturnType<typeof useSession>);
+  view.rerender(<ModerationQueue />);
+  expect(screen.getByText('Anmeldung erforderlich')).toBeInTheDocument();
+  expect(screen.queryByText('Alice private report')).not.toBeInTheDocument();
 });
 
 it('opens a linked comment and shows separate report controls for another member’s post and comment', async () => {
