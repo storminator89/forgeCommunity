@@ -25,12 +25,13 @@ import { InstructorCoursePreview } from './InstructorCoursePreview'
 import { CourseReadinessPanel } from './CourseReadinessPanel'
 import { CoursePathOverview } from './CoursePathOverview'
 import { PracticeEntryLink } from '../practice/learn/PracticeEntryLink'
+import { CourseQaIcon } from '../qa/CourseQaIcon'
 import { EditContentForm } from './EditContentForm'
 import { ContentRenderer } from './ContentRenderer'
 import { parseQuizContent, type CourseContent, type CourseProgressSnapshot } from './types'
 import { appendContent, editableFields, editableSignature, findContent, parentIds, removeContent, replaceContent } from './content-tree'
 
-type CourseDetails = { id: string; name: string; canEdit: boolean }
+type CourseDetails = { id: string; name: string; canEdit: boolean; activePublicationId: string | null }
 type Notice = { type: 'success' | 'error'; message: string }
 const typeNames: Record<CourseContent['type'], string> = { TEXT: 'Text', VIDEO: 'Video', AUDIO: 'Audio', H5P: 'H5P', QUIZ: 'Quiz', ASSIGNMENT: 'Aufgabe' }
 
@@ -393,7 +394,7 @@ export function CourseContentsEditor({ courseId, forceLearner = false, onReturnT
               {onReturnToAuthor && <Button type="button" size="sm" variant="outline" className="shrink-0" onClick={onReturnToAuthor}>Zum Entwurf</Button>}
               <h1 className="min-w-0 line-clamp-2 break-words [overflow-wrap:anywhere] max-sm:text-base" title={course?.name || 'Kursinhalt'}>{course?.name || 'Kursinhalt'}</h1>
             </div>
-            <div className="flex shrink-0 items-center gap-1 sm:gap-2"><ThemeToggle /><UserNav /></div>
+            <div className="flex shrink-0 items-center gap-1 sm:gap-2">{course?.activePublicationId && <Button type="button" variant="ghost" size="sm" className="max-sm:px-2" onClick={() => requestNavigation(() => router.push(`/courses/${encodeURIComponent(courseId)}/qa`))}><CourseQaIcon className="h-4 w-4" /><span className="hidden sm:inline">Fragen</span><span className="sr-only sm:hidden">Kursfragen</span></Button>}<ThemeToggle /><UserNav /></div>
           </div>
         </AppHeader>
         {notice && <div role={notice.type === 'error' ? 'alert' : 'status'} className={cn('mx-4 my-2 flex items-center justify-between gap-3 rounded-xl border px-4 py-2 text-sm', notice.type === 'error' ? 'border-destructive/30 text-destructive' : 'bg-card')}><span>{notice.message}</span><Button variant="ghost" size="icon" className="shrink-0" aria-label="Meldung schließen" onClick={() => setNotice(null)}><X className="h-4 w-4" /></Button></div>}

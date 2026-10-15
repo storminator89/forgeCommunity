@@ -154,6 +154,8 @@ model User {
   learningGoal       LearningGoal?
   learningPathways   LearningPathwayParticipation[]
   solutionDecisions  AcceptedSolutionChange[] @relation("SolutionActor")
+  courseQuestions    CourseQuestion[] @relation("CourseQuestionAuthor")
+  courseAnswers      CourseAnswer[] @relation("CourseAnswerAuthor")
 }
 
 model UserSettings {
@@ -358,6 +360,7 @@ model Course {
   practiceSnapshots PracticeSnapshot[]
   practicePublicationRequests PracticePublicationRequest[]
   practiceLearnerSettings PracticeLearnerSetting[]
+  questions    CourseQuestion[]
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
 
@@ -392,6 +395,57 @@ model CourseContent {
   progress  CourseContentProgress[]
 
   @@index([courseId, archivedAt])
+}
+
+// Course discussion is private to current participants. It must never be
+// projected into the public Post/Comment feed, search, profile or rewards.
+model CourseQuestion {
+  id        String   @id @default(cuid())
+  courseId  String
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User     @relation("CourseQuestionAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  requestId String
+  title     String
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  hiddenAt  DateTime?
+  solutionRevision String?
+  answers   CourseAnswer[]
+  solution  CourseQuestionSolution?
+
+  @@unique([courseId, authorId, requestId])
+  @@index([courseId, createdAt, id])
+}
+
+model CourseAnswer {
+  id         String   @id @default(cuid())
+  questionId String
+  question   CourseQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  authorId   String
+  author     User     @relation("CourseAnswerAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  requestId  String
+  body       String   @db.Text
+  createdAt  DateTime @default(now())
+  hiddenAt   DateTime?
+  selectedIn CourseQuestionSolution? @relation("SelectedCourseAnswer")
+
+  @@unique([questionId, id])
+  @@unique([questionId, authorId, requestId])
+  @@index([questionId, createdAt, id])
+}
+
+// The composite FK guarantees a selected answer belongs to this question.
+model CourseQuestionSolution {
+  questionId String @id
+  question   CourseQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  answerId   String @unique
+  answer     CourseAnswer @relation("SelectedCourseAnswer", fields: [questionId, answerId], references: [questionId, id], onDelete: Cascade)
+  revision   String @unique
+  createdAt  DateTime @default(now())
+
+  @@unique([questionId, answerId])
 }
 
 // Private author-owned questions. Editing advances the pointer; existing

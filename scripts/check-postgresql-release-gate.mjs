@@ -40,6 +40,7 @@ const reviewedUpgradeNames = [
   '0015_formative_practice_learner.sql',
   '0016_chat_message_cursor_index.sql',
   '0017_chat_read_cursor.sql',
+  '0018_course_qa.sql',
 ];
 // A release image must carry the exact reviewed sequence, including the tail.
 assert.deepEqual(upgradeNames, reviewedUpgradeNames);

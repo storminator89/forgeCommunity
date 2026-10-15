@@ -87,6 +87,14 @@ async function installSyntheticApi(page: Page, item?: RouteSweepCase) {
       status: 'off', dueCount: 0,
     } }));
   }
+  if (item?.url === '/courses/qa-route-course/qa') {
+    await page.route(/\/api\/courses\/qa-route-course\/qa\?filter=all(?:&|$)/, route => route.fulfill({ status: 200, json: {
+      items: [], nextCursor: null, canModerate: false, canAsk: false, canReply: false,
+    } }));
+    await page.route(/\/api\/courses\/qa-route-course\/qa\/revalidate(?:\?|$)/, route => route.fulfill({ status: 200, json: {
+      visibleIds: [], canModerate: false, canAsk: false, canReply: false,
+    } }));
+  }
   await page.route(/\/api\/courses\/qa-route-course\/assignments(?:\?|$)/, route => route.fulfill({ status: 200, json: { submissions: [], nextCursor: null } }));
   await page.route(/\/api\/courses\/qa-route-course\/analytics\?/, route => route.fulfill({ status: 200, json: {
     course: { id: 'qa-route-course', title: 'Route QA course', activePublicationId: 'qa-publication' },

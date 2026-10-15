@@ -111,7 +111,7 @@ jobs:
           DATABASE_PROVIDER=postgresql npm run db:generate
 
       - name: Verify SQLite migration safety
-        run: DATABASE_PROVIDER=sqlite node --test scripts/check-sqlite-migrations.mjs scripts/check-notification-migrations.mjs scripts/check-course-publication-ready.mjs
+        run: DATABASE_PROVIDER=sqlite node --test scripts/check-sqlite-migrations.mjs scripts/check-notification-migrations.mjs scripts/check-course-publication-ready.mjs scripts/check-course-qa-sqlite.mjs
 
       - name: Verify PostgreSQL upgrade safety
         run: node --test scripts/check-postgresql-upgrades.mjs
@@ -160,7 +160,7 @@ jobs:
         run: npm ci --no-audit --no-fund
 
       - name: Exercise empty install and populated PostgreSQL upgrades
-        run: node --test --test-concurrency=1 scripts/check-postgresql-upgrades.mjs scripts/check-postgresql-release-gate.mjs scripts/check-course-publication-ready.mjs
+        run: node --test --test-concurrency=1 scripts/check-postgresql-upgrades.mjs scripts/check-postgresql-release-gate.mjs scripts/check-course-publication-ready.mjs scripts/check-course-qa-postgresql.mjs
 
   # Runs the production startup wrapper and PostgreSQL adapter against a
   # unique schema in the disposable local forge_test service. The script
