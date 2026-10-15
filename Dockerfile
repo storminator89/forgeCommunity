@@ -7,6 +7,7 @@ ENV DATABASE_PROVIDER=${DATABASE_PROVIDER}
 # Only a provider selector is supplied at build time; no deployment credentials.
 RUN case "$DATABASE_PROVIDER" in postgresql|sqlite) printf '%s' "$DATABASE_PROVIDER" > .image-db-provider ;; *) echo 'DATABASE_PROVIDER must be postgresql or sqlite' >&2; exit 1 ;; esac
 COPY package*.json ./
+COPY vendor/next-eslint-plugin-next-16.3.8.tgz ./vendor/
 COPY prisma ./prisma/
 COPY prisma.config.ts ./
 COPY scripts/generate-sqlite-schema.mjs ./scripts/

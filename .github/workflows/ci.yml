@@ -89,6 +89,9 @@ jobs:
       - name: Verify pinned Next ESLint fork
         run: npm run test:next-eslint-fork
 
+      - name: Verify Tailwind generated styles and contrast
+        run: npm run test:styles
+
       - name: Typecheck
         run: npm run typecheck
 

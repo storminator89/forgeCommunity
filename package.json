@@ -8,7 +8,7 @@
     "start": "node scripts/start-standalone.mjs",
     "start:standard": "next start -p 3013",
     "lint": "eslint .",
-    "test:next-eslint-fork": "node --test scripts/check-next-eslint-chain.test.js && node scripts/check-next-eslint-chain.js --installed && node scripts/check-next-eslint-fork.js",
+    "test:next-eslint-fork": "node --test scripts/check-next-eslint-chain.node-tests.js && node scripts/check-next-eslint-chain.js --installed && node scripts/check-next-eslint-fork.js",
     "postinstall": "npm run db:generate",
     "db:schema:sqlite": "node scripts/generate-sqlite-schema.mjs",
     "db:generate": "npm run db:schema:sqlite && prisma generate",
