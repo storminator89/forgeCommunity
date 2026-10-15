@@ -5,6 +5,7 @@ import prisma from '@/lib/prisma';
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
 import { completionState, contentQuiz, courseContentRevision, isQuizLikeContent, recordCourseCompletion } from '@/lib/server/course-progress';
 import { contentTransaction } from '../contents/content-mutations';
+import { hasCurrentAdminReadAccess } from '@/lib/server/read-access';
 
 type Params = { params: Promise<{ courseId: string }> };
 
@@ -16,7 +17,7 @@ export async function GET(_request: NextRequest, props: Params) {
     const course = await prisma.course.findUnique({ where: { id: courseId }, select: { instructorId: true } });
     if (!course) return NextResponse.json({ error: 'Course not found' }, { status: 404 });
     const enrollment = await prisma.enrollment.findUnique({ where: { userId_courseId: { userId: session.user.id, courseId } }, select: { id: true, completedAt: true } });
-    const isEditor = session.user.role === 'ADMIN' || course.instructorId === session.user.id;
+    const isEditor = course.instructorId === session.user.id || await hasCurrentAdminReadAccess(prisma, session.user);
     if (!enrollment && !isEditor) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     const certificate = await prisma.certificate.findFirst({ where: { userId: session.user.id, courseId }, select: { id: true } });
     const progress = enrollment ? await completionState(prisma, session.user.id, courseId) : { completedContentIds: [], complete: false };

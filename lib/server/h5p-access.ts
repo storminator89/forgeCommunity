@@ -2,9 +2,10 @@ import 'server-only';
 
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import prisma from '@/lib/prisma';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { H5PValidationError } from './h5p-archive';
 import { validH5PId } from './h5p-storage';
+import { hasCurrentAdminReadAccess } from './read-access';
 
 export interface H5PUser { id: string; role?: string | null }
 const TOKEN_TTL_SECONDS = 2 * 60 * 60;
@@ -42,20 +43,24 @@ export function verifyH5PAssetToken(id: string, token: string, now = Date.now())
 
 export async function authorizedH5PContent(id: string, user: H5PUser, origin?: string) {
   if (!validH5PId(id)) throw new H5PValidationError('H5P-Inhalt nicht gefunden.', 404);
-  const content = await prisma.h5PContent.findUnique({ where: { id }, select: { id: true, title: true, contentType: true, userId: true, createdAt: true } });
-  if (!content) throw new H5PValidationError('H5P-Inhalt nicht gefunden.', 404);
-  if (content.userId === user.id || user.role === 'ADMIN') return content;
-  const embedPath = `/h5p/embed/${id}`;
-  const reference = await prisma.courseContent.findFirst({
-    where: { type: 'H5P', content: { in: [embedPath, id, ...localOrigins(origin).map(value => `${value}${embedPath}`)] }, course: { OR: [{ instructorId: user.id }, { enrollments: { some: { userId: user.id } } }] } },
-    select: { id: true },
-  });
-  if (!reference) throw new H5PValidationError('Kein Zugriff auf diesen H5P-Inhalt.', 403);
-  return content;
+  // Check current authority and package/course ownership together before a
+  // preview can read private files or issue its existing asset capability.
+  return prisma.$transaction(async tx => {
+    const content = await tx.h5PContent.findUnique({ where: { id }, select: { id: true, title: true, contentType: true, userId: true, createdAt: true } });
+    if (!content) throw new H5PValidationError('H5P-Inhalt nicht gefunden.', 404);
+    if (content.userId === user.id || await hasCurrentAdminReadAccess(tx, user)) return content;
+    const embedPath = `/h5p/embed/${id}`;
+    const reference = await tx.courseContent.findFirst({
+      where: { type: 'H5P', content: { in: [embedPath, id, ...localOrigins(origin).map(value => `${value}${embedPath}`)] }, course: { OR: [{ instructorId: user.id }, { enrollments: { some: { userId: user.id } } }] } },
+      select: { id: true },
+    });
+    if (!reference) throw new H5PValidationError('Kein Zugriff auf diesen H5P-Inhalt.', 403);
+    return content;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
 /** Existing course references grant read access, never permission to invent a new reference. */
-export async function assertCanAttachH5P(userId: string, role: string | null | undefined, source: string, origin?: string, db: Pick<Prisma.TransactionClient, 'h5PContent'> = prisma) {
+export async function assertCanAttachH5P(userId: string, role: string | null | undefined, source: string, origin?: string, db: Pick<Prisma.TransactionClient, 'h5PContent' | 'user'> = prisma) {
   let id: string | undefined;
   if (/^[A-Za-z0-9_-]{1,80}$/.test(source)) id = source;
   else {
@@ -72,5 +77,9 @@ export async function assertCanAttachH5P(userId: string, role: string | null | u
   if (!id) return; // Remote embeds retain the existing safe URL policy.
   const content = await db.h5PContent.findUnique({ where: { id }, select: { userId: true } });
   if (!content) throw new H5PValidationError('Der lokale H5P-Inhalt wurde nicht importiert.', 400);
-  if (content.userId !== userId && role !== 'ADMIN') throw new H5PValidationError('Nur eigene H5P-Inhalte dürfen neu verknüpft werden.', 403);
+  if (content.userId === userId) return;
+  // Owning the destination course does not grant access to another owner's
+  // package. Recheck this separate admin privilege in the mutation snapshot.
+  const actor = role === 'ADMIN' ? await db.user.findUnique({ where: { id: userId }, select: { role: true } }) : null;
+  if (actor?.role !== 'ADMIN') throw new H5PValidationError('Nur eigene H5P-Inhalte dürfen neu verknüpft werden.', 403);
 }

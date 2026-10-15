@@ -244,6 +244,11 @@ jobs:
           docker compose cp scripts/smoke-h5p.mjs app:/tmp/smoke-h5p.mjs
           docker compose exec -T -e SMOKE_SQLITE_FILE=/app/data/forge.db -e SMOKE_BASE_URL=http://127.0.0.1:3013 app node /tmp/smoke-h5p.mjs
 
+      - name: Exercise accepted solutions and private contribution milestones
+        run: |
+          docker compose cp scripts/smoke-contributions.mjs app:/tmp/smoke-contributions.mjs
+          docker compose exec -T -e CI=true -e CONTRIBUTIONS_SMOKE_CI=1 -e CONTRIBUTIONS_SMOKE_DISPOSABLE_DB=1 -e SMOKE_SQLITE_FILE=/app/data/forge.db -e SMOKE_BASE_URL=http://127.0.0.1:3013 app node /tmp/smoke-contributions.mjs
+
       - name: Exercise SQLite application flows
         run: node scripts/smoke-sqlite.mjs
         env:

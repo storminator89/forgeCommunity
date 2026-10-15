@@ -11,6 +11,7 @@ import { assertCanAttachH5P } from '@/lib/server/h5p-access';
 import { H5PValidationError } from '@/lib/server/h5p-archive';
 import { publicCourseContent } from '@/lib/server/course-progress';
 import { reconcileCourseRewards } from '@/lib/server/rewards';
+import { hasCurrentAdminReadAccess } from '@/lib/server/read-access';
 import { assertParent, canEdit, contentTransaction, ContentMutationError, normalizeOrder, presentContent, prepareContent, siblings, validateContentFields } from './content-mutations';
 
 // GET-Methode zum Abrufen der Kursinhalte
@@ -28,44 +29,32 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const course = await prisma.course.findUnique({
-      where: { id: courseId },
-      select: { instructorId: true },
-    });
-
-    if (!course) {
-      return NextResponse.json({ error: 'Course not found' }, { status: 404 });
-    }
-
-    const canEdit = session.user.role === 'ADMIN' || course.instructorId === session.user.id;
-    if (!canEdit) {
-      const enrollment = await prisma.enrollment.findUnique({
-        where: {
-          userId_courseId: {
-            userId: session.user.id,
-            courseId,
-          },
-        },
-        select: { id: true },
+    const contents = await contentTransaction(async tx => {
+      const course = await tx.course.findUnique({
+        where: { id: courseId }, select: { instructorId: true },
       });
-
-      if (!enrollment) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+      if (!course) throw new ContentMutationError('Course not found', 404);
+      // Keep the editor decision, enrollment and returned scoring material in
+      // one snapshot. Demoted enrolled admins receive the learner allowlist.
+      const isEditor = course.instructorId === session.user.id || await hasCurrentAdminReadAccess(tx, session.user);
+      if (!isEditor) {
+        const enrollment = await tx.enrollment.findUnique({
+          where: { userId_courseId: { userId: session.user.id, courseId } }, select: { id: true },
+        });
+        if (!enrollment) throw new ContentMutationError('Unauthorized', 403);
       }
-    }
-
-    const contents = await prisma.courseContent.findMany({
-      where: { courseId: courseId },
-      orderBy: [{ order: 'asc' }, { id: 'asc' }],
+      const rows = await tx.courseContent.findMany({
+        where: { courseId }, orderBy: [{ order: 'asc' }, { id: 'asc' }],
+      });
+      // Only current editors receive persisted quiz keys.
+      return groupCourseContents(rows.map(content => {
+        const presented = presentContent(content);
+        return isEditor ? presented : publicCourseContent(presented);
+      }));
     });
-
-    // Editors need complete quiz keys; enrolled learners only receive a
-    // strictly allowlisted practice payload. The grading key stays server-side.
-    return NextResponse.json(groupCourseContents(contents.map(content => {
-      const presented = presentContent(content);
-      return canEdit ? presented : publicCourseContent(presented);
-    })));
+    return NextResponse.json(contents, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
+    if (error instanceof ContentMutationError) return NextResponse.json({ error: error.message }, { status: error.status });
     console.error('Failed to fetch course contents:', error);
     return NextResponse.json({ error: 'Failed to fetch course contents' }, { status: 500 });
   }
@@ -104,11 +93,11 @@ export async function POST(
     const parentId = typeof body.parentId === 'string' ? body.parentId : null;
     const effectiveType = typeof type === 'string' ? type : 'TEXT';
     const sanitizedContent = prepareContent(typeof content === 'string' ? content : '', effectiveType);
-    if (effectiveType === 'H5P' && sanitizedContent) await assertCanAttachH5P(session.user.id, session.user.role, sanitizedContent, request.nextUrl.origin);
     const newContent = await contentTransaction(async (tx) => {
       const currentCourse = await tx.course.findUnique({ where: { id: courseId }, select: { instructorId: true } });
       if (!currentCourse) throw new ContentMutationError('Course not found', 404);
-      canEdit(currentCourse.instructorId, session.user);
+      await canEdit(tx, currentCourse.instructorId, session.user);
+      if (effectiveType === 'H5P' && sanitizedContent) await assertCanAttachH5P(session.user.id, session.user.role, sanitizedContent, request.nextUrl.origin, tx);
       await assertParent(tx, courseId, parentId);
       const currentSiblings = await siblings(tx, courseId, parentId);
       const insertionIndex = typeof order === 'number' ? Math.max(0, Math.min(order - 1, currentSiblings.length)) : currentSiblings.length;

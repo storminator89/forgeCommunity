@@ -18,7 +18,7 @@ export async function PUT(request: NextRequest, props: { params: Promise<{ cours
     const contents = await contentTransaction(async (tx) => {
       const current = await tx.courseContent.findUnique({ where: { id: contentId }, select: { courseId: true, parentId: true, course: { select: { instructorId: true } } } });
       if (!current || current.courseId !== courseId || current.parentId !== mainContentId) throw new ContentMutationError('Content not found', 404);
-      canEdit(current.course.instructorId, session.user);
+      await canEdit(tx, current.course.instructorId, session.user);
       const ordered = await siblings(tx, courseId, mainContentId as string | null);
       const currentIndex = ordered.findIndex(item => item.id === contentId);
       if (currentIndex < 0) throw new ContentMutationError('Content not found', 404);

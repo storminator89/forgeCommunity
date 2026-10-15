@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth/next";
 import { Prisma } from '@prisma/client';
 import { authOptions } from "../../auth/[...nextauth]/options";
 import { deleteCourseDependencies } from '@/lib/server/course-deletion';
+import { hasCurrentAdminReadAccess } from '@/lib/server/read-access';
 
 class CourseHasCertificatesError extends Error {}
 class CourseNotFoundError extends Error {}
@@ -43,7 +44,8 @@ export async function GET(
       return NextResponse.json({ error: 'Course not found' }, { status: 404 });
     }
 
-    if (session.user.role !== 'ADMIN' && course.instructorId !== session.user.id) {
+    const canEdit = course.instructorId === session.user.id || await hasCurrentAdminReadAccess(prisma, session.user);
+    if (!canEdit) {
       const enrollment = await prisma.enrollment.findUnique({
         where: {
           userId_courseId: {
@@ -62,7 +64,7 @@ export async function GET(
     return NextResponse.json({
       id: course.id,
       name: course.title,
-      canEdit: session.user.role === 'ADMIN' || course.instructorId === session.user.id,
+      canEdit,
       description: course.description,
       createdAt: course.createdAt,
       updatedAt: course.updatedAt,

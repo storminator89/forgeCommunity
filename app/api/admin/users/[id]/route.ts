@@ -9,6 +9,7 @@ import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input'
 import { deleteCourseDependencies } from '@/lib/server/course-deletion'
 import { decrementSkillEndorsementsForDeletedUser } from '@/lib/server/skill-endorsements'
 import { reconcileUserRewards } from '@/lib/server/rewards'
+import { readAsAdmin } from '@/lib/server/admin-read'
 
 class LastAdminError extends Error {}
 class MissingUserError extends Error {}
@@ -49,7 +50,7 @@ export async function GET(
       )
     }
 
-    const user = await prisma.user.findUnique({
+    const result = await readAsAdmin(session.user.id, tx => tx.user.findUnique({
       where: { id: params.id },
       select: {
         id: true,
@@ -95,7 +96,11 @@ export async function GET(
           select: { id: true }
         }
       }
-    })
+    }))
+    if (!result.authorized) {
+      return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 })
+    }
+    const user = result.data
 
     if (!user) {
       return NextResponse.json(

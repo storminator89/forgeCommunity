@@ -31,6 +31,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import Link from 'next/link';
+import { useSession } from 'next-auth/react';
+import { PageState } from '@/components/page-state';
 
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
@@ -42,7 +44,7 @@ interface SearchResult {
   id: string;
   title: string;
   description: string;
-  type: 'course' | 'event' | 'member' | 'post' | 'resource' | 'article' | 'project';
+  type: 'course' | 'event' | 'member' | 'post' | 'resource' | 'article' | 'project' | 'skill';
   author?: string;
   authorImage?: string;
   instructor?: string;
@@ -75,7 +77,7 @@ interface SearchResult {
     timezone: string;
   };
   role?: string;
-  createdAt?: Date;
+  createdAt?: Date | null;
   tags?: string[];
   skills?: Array<{
     name: string;
@@ -103,7 +105,7 @@ const SafeHTML = ({ html }: { html: string }) => {
   return <span className="inline">{sanitizeTextPreview(html, 240)}</span>;
 };
 
-const SEARCH_TYPES = ['all', 'course', 'event', 'member', 'post', 'resource', 'article', 'project'];
+const SEARCH_TYPES = ['all', 'course', 'event', 'member', 'post', 'resource', 'article', 'project', 'skill'];
 const RESULT_TYPE_LABELS: Record<SearchResult['type'], string> = {
   course: 'Kurs',
   event: 'Event',
@@ -112,6 +114,7 @@ const RESULT_TYPE_LABELS: Record<SearchResult['type'], string> = {
   resource: 'Ressource',
   article: 'Artikel',
   project: 'Projekt',
+  skill: 'Fähigkeit',
 };
 
 function readSearchUrl() {
@@ -127,30 +130,46 @@ function readSearchUrl() {
   };
 }
 
-export default function SearchPageClient({
-  initialQuery = '',
-  initialType = 'all',
-  initialPage = 1,
-}: {
+interface SearchPageProps {
   initialQuery?: string;
   initialType?: string;
   initialPage?: number;
-}) {
+}
+
+export default function SearchPageClient(props: SearchPageProps) {
+  const { data: session, status } = useSession();
+  const viewerId = status === 'authenticated' ? session?.user?.id ?? null : null;
+  // Clear all prior-account results immediately, including a direct switch
+  // between signed-in accounts without waiting for a route change.
+  return <SearchPageForViewer key={viewerId ?? status} {...props} viewerId={viewerId} sessionLoading={status === 'loading'} />;
+}
+
+function SearchPageForViewer({
+  initialQuery = '',
+  initialType = 'all',
+  initialPage = 1,
+  viewerId,
+  sessionLoading,
+}: SearchPageProps & { viewerId: string | null; sessionLoading: boolean }) {
   const { toast } = useToast();
-  const [searchTerm, setSearchTerm] = useState(initialQuery);
-  const [activeTab, setActiveTab] = useState(initialType);
+  // A new account starts with the shareable current URL, never old result state
+  // or delayed initial props from the previous account's latest keystroke.
+  const initial = typeof window === 'undefined' ? { query: initialQuery, type: initialType, page: initialPage } : readSearchUrl();
+  const [searchTerm, setSearchTerm] = useState(initial.query);
+  const [activeTab, setActiveTab] = useState(initial.type);
   const [results, setResults] = useState<SearchResult[]>([]);
-  const [isLoading, setIsLoading] = useState(Boolean(initialQuery.trim()));
+  const [isLoading, setIsLoading] = useState(Boolean(initial.query.trim()));
   const [hasError, setHasError] = useState(false);
-  const [page, setPage] = useState(initialPage);
+  const [page, setPage] = useState(initial.page);
   const [totalResults, setTotalResults] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [retryToken, setRetryToken] = useState(0);
   const tabListRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const currentSearch = useRef({
-    query: initialQuery,
-    type: initialType,
-    page: initialPage,
+    query: initial.query,
+    type: initial.type,
+    page: initial.page,
   });
 
   const applySearchState = useCallback((next: { query: string; type: string; page: number }) => {
@@ -166,7 +185,7 @@ export default function SearchPageClient({
     setTotalResults(0);
     setTotalPages(0);
     setIsLoading(Boolean(next.query.trim()));
-  }, []);
+  }, [setSearchTerm, setActiveTab, setPage, setResults, setHasError, setTotalResults, setTotalPages, setIsLoading]);
 
   useEffect(() => {
     // Next's URL updates can reach this component after a newer keystroke.
@@ -274,14 +293,14 @@ export default function SearchPageClient({
     } finally {
       if (!signal.aborted) setIsLoading(false);
     }
-  }, [searchTerm, activeTab, page, toast]);
+  }, [searchTerm, activeTab, page, toast, setResults, setHasError, setTotalResults, setTotalPages, setIsLoading]);
 
   const retrySearch = () => {
     setRetryToken((token) => token + 1);
   };
 
   useEffect(() => {
-    if (!searchTerm.trim()) return;
+    if (!viewerId || !searchTerm.trim()) return;
 
     const controller = new AbortController();
     const timer = setTimeout(() => fetchResults(controller.signal), 300);
@@ -290,7 +309,7 @@ export default function SearchPageClient({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [searchTerm, fetchResults, retryToken]);
+  }, [searchTerm, fetchResults, retryToken, viewerId]);
 
   const getResultHref = (result: SearchResult) => {
     switch (result.type) {
@@ -308,6 +327,8 @@ export default function SearchPageClient({
         return `/knowledgebase/${encodeURIComponent(result.id)}`;
       case 'project':
         return `/projects/${encodeURIComponent(result.id)}`;
+      case 'skill':
+        return `/skills?query=${encodeURIComponent(result.title)}`;
     }
   };
 
@@ -320,6 +341,7 @@ export default function SearchPageClient({
       case 'resource': return <FileText aria-hidden="true" className="h-5 w-5 shrink-0 text-muted-foreground" />;
       case 'article': return <FileText aria-hidden="true" className="h-5 w-5 shrink-0 text-muted-foreground" />;
       case 'project': return <Briefcase aria-hidden="true" className="h-5 w-5 shrink-0 text-muted-foreground" />;
+      case 'skill': return <Tag aria-hidden="true" className="h-5 w-5 shrink-0 text-muted-foreground" />;
       default: return null;
     }
   };
@@ -497,7 +519,7 @@ export default function SearchPageClient({
 
             <div className="relative">
               <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-              <Input aria-label="Suche nach Kursen, Events, Mitgliedern, Beiträgen, Ressourcen, Artikeln oder Projekten"
+              <Input ref={searchInputRef} aria-label="Suche nach Kursen, Events, Mitgliedern, Beiträgen, Ressourcen, Artikeln, Projekten oder Fähigkeiten"
                 role="searchbox"
                 type="text"
                 placeholder="Kurse, Wissen, Projekte und mehr suchen"
@@ -510,7 +532,7 @@ export default function SearchPageClient({
                   variant="ghost"
                   size="icon"
                   className="absolute right-0 top-1/2 -translate-y-1/2"
-                  onClick={() => updateQuery('')}
+                  onClick={() => { updateQuery(''); searchInputRef.current?.focus(); }}
                 >
                   <X aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
                 </Button>
@@ -518,7 +540,7 @@ export default function SearchPageClient({
             </div>
 
             <Tabs value={activeTab} onValueChange={updateTab} className="w-full">
-              <TabsList ref={tabListRef} aria-label="Suchkategorie" aria-describedby="search-tabs-hint" className="w-full justify-start gap-1 overflow-x-auto rounded-[10px] bg-muted p-1">
+              <TabsList ref={tabListRef} aria-label="Suchkategorie" aria-describedby="search-tabs-hint" className="h-auto min-h-12 w-full justify-start gap-1 overflow-x-auto rounded-[10px] bg-muted p-1">
                 <TabsTrigger className="min-h-11" value="all">Alle</TabsTrigger>
                 <TabsTrigger className="min-h-11" value="course">Kurse</TabsTrigger>
                 <TabsTrigger className="min-h-11" value="event">Events</TabsTrigger>
@@ -527,11 +549,16 @@ export default function SearchPageClient({
                 <TabsTrigger className="min-h-11" value="article">Artikel</TabsTrigger>
                 <TabsTrigger className="min-h-11" value="project">Projekte</TabsTrigger>
                 <TabsTrigger className="min-h-11" value="resource">Ressourcen</TabsTrigger>
+                <TabsTrigger className="min-h-11" value="skill">Fähigkeiten</TabsTrigger>
               </TabsList>
               <p id="search-tabs-hint" className="mt-2 text-xs text-muted-foreground sm:sr-only">Weitere Kategorien seitlich scrollen oder mit den Pfeiltasten auswählen</p>
 
               <TabsContent value={activeTab} className="mt-6">
-                {isLoading ? (
+                {sessionLoading ? (
+                  <PageState kind="loading" title="Anmeldung wird geprüft" />
+                ) : !viewerId ? (
+                  <PageState kind="error" title="Anmeldung erforderlich" description="Melde dich an, um die Suche zu verwenden." />
+                ) : isLoading ? (
                   <div role="status" className="flex flex-col items-center justify-center gap-3 py-20 text-sm text-muted-foreground">
                     <Loader2 aria-hidden="true" className="h-7 w-7 animate-spin text-primary motion-reduce:animate-none" />
                     <span>Suche läuft …</span>
@@ -550,7 +577,7 @@ export default function SearchPageClient({
                     </h2>
                     <p className="text-sm text-muted-foreground">
                       {!searchTerm.trim()
-                        ? 'Suchen Sie nach Kursen, Events, Mitgliedern, Beiträgen, Artikeln, Projekten oder Ressourcen.'
+                        ? 'Suchen Sie nach Kursen, Events, Mitgliedern, Beiträgen, Artikeln, Projekten, Ressourcen oder Fähigkeiten.'
                         : searchTerm.trim().length < 2
                           ? 'Ergänzen Sie Ihren Suchbegriff, um Ergebnisse zu sehen.'
                           : 'Versuchen Sie es mit anderen Suchbegriffen oder wählen Sie eine andere Kategorie.'}

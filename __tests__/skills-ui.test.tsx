@@ -1,14 +1,19 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import SkillDirectory from '@/app/skills/page';
+import SkillDirectoryPage from '@/app/skills/page';
+import { SearchUrlContext } from '../test-utils/search-url-context';
+import { SearchParamsContext } from 'next/dist/shared/lib/hooks-client-context.shared-runtime';
+
+function SkillDirectory() { return <SearchUrlContext><SkillDirectoryPage /></SearchUrlContext>; }
 
 jest.mock('@/components/Sidebar', () => ({ Sidebar: () => null }));
 jest.mock('@/components/user-nav', () => ({ UserNav: () => null }));
 jest.mock('@/components/theme-toggle', () => ({ ThemeToggle: () => null }));
 let mockViewerId: string | null = 'viewer';
+let mockSessionStatus: 'loading' | 'authenticated' | 'unauthenticated' = 'authenticated';
 jest.mock('next-auth/react', () => ({ useSession: () => ({
   data: mockViewerId ? { user: { id: mockViewerId } } : null,
-  status: mockViewerId ? 'authenticated' : 'unauthenticated',
+  status: mockSessionStatus,
 }) }));
 
 const directory = {
@@ -20,7 +25,9 @@ const directory = {
 };
 
 beforeEach(() => {
+  window.history.replaceState({}, '', '/skills');
   mockViewerId = 'viewer';
+  mockSessionStatus = 'authenticated';
   global.fetch = jest.fn().mockImplementation(async (url: string) => url === '/api/skills/directory'
     ? { ok: true, json: async () => directory }
     : { ok: true, json: async () => ({ message: 'Empfohlen' }) });
@@ -49,6 +56,18 @@ it('discards viewer-specific endorsements and open details immediately on accoun
   expect(screen.queryByRole('link', { name: 'Ada' })).not.toBeInTheDocument();
   expect(screen.getByText('Anmeldung erforderlich')).toBeInTheDocument();
   expect(jest.mocked(global.fetch).mock.calls.filter(([url]) => url === '/api/skills/directory')).toHaveLength(2);
+});
+
+it.each(['loading', 'unauthenticated'] as const)('does not reuse a stale account or read directory data while session status is %s', async status => {
+  const view = render(<SkillDirectory />);
+  await screen.findByRole('link', { name: 'Ada' });
+  const reads = jest.mocked(global.fetch).mock.calls.length;
+  mockSessionStatus = status;
+  view.rerender(<SkillDirectory />);
+  expect(screen.queryByRole('link', { name: 'Ada' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: 'Eigene Fähigkeiten ergänzen' })).not.toBeInTheDocument();
+  expect(screen.getByText(status === 'loading' ? 'Anmeldung wird geprüft' : 'Anmeldung erforderlich')).toBeInTheDocument();
+  expect(jest.mocked(global.fetch).mock.calls).toHaveLength(reads);
 });
 
 it('aborts a former viewer request and ignores its late response', async () => {
@@ -81,8 +100,88 @@ it('filters the skill directory and links to member profiles', async () => {
   fireEvent.change(screen.getByLabelText('Name oder Fähigkeit suchen'), { target: { value: 'ohne Treffer' } });
   expect(screen.getByText('Keine passenden Mitglieder')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Filter zurücksetzen' }));
+  expect(screen.getByLabelText('Name oder Fähigkeit suchen')).toHaveFocus();
+  expect(window.location.search).toBe('');
   expect(screen.getByRole('link', { name: 'Bea' })).toBeInTheDocument();
   expect(screen.getByText('2 Ergebnisse')).toBeInTheDocument();
+});
+
+it.each(['TypeScript', 'typescript', 'script'])('initializes the directory from the %s URL skill query without losing category filters', async query => {
+  window.history.replaceState({}, '', `/skills?query=${encodeURIComponent(query)}&keep=1#directory`);
+  render(<SkillDirectory />);
+  const input = screen.getByRole('searchbox', { name: 'Name oder Fähigkeit suchen' });
+  expect(input).toHaveValue(query);
+  expect(await screen.findByRole('link', { name: 'Ada' })).toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: 'Bea' })).not.toBeInTheDocument();
+  expect(input).toHaveAttribute('maxlength', '120');
+  expect(input).toHaveClass('h-11');
+  expect(input.closest('section')).toHaveClass('min-w-0', 'sm:grid-cols-[minmax(0,1fr)_12rem_auto]');
+
+  fireEvent.click(screen.getByRole('button', { name: 'Design' }));
+  expect(screen.getByText('Keine passenden Mitglieder')).toBeInTheDocument();
+  fireEvent.change(input, { target: { value: 'Figma' } });
+  expect(window.location.search).toBe('?query=Figma&keep=1');
+  expect(window.location.hash).toBe('#directory');
+  expect(screen.getByRole('button', { name: 'Design' })).toHaveAttribute('aria-pressed', 'true');
+  expect(screen.getByRole('link', { name: 'Bea' })).toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: 'Ada' })).not.toBeInTheDocument();
+});
+
+it('synchronizes later URL navigation and Back/Forward without replacing input focus or accepting stale router values', async () => {
+  window.history.replaceState({}, '', '/skills?query=TypeScript');
+  const view = render(<SkillDirectory />);
+  await screen.findByRole('link', { name: 'Ada' });
+  const input = screen.getByRole('searchbox', { name: 'Name oder Fähigkeit suchen' });
+  input.focus();
+  fireEvent.change(input, { target: { value: 'Figma' } });
+  expect(input).toHaveFocus();
+  expect(window.location.search).toBe('?query=Figma');
+
+  act(() => window.history.pushState({}, '', '/skills?query=TypeScript'));
+  view.rerender(<SkillDirectory />);
+  expect(input).toHaveValue('TypeScript');
+  expect(input).toHaveFocus();
+  expect(screen.getByRole('link', { name: 'Ada' })).toBeInTheDocument();
+  window.history.back();
+  await waitFor(() => expect(input).toHaveValue('Figma'));
+  expect(screen.getByRole('link', { name: 'Bea' })).toBeInTheDocument();
+  window.history.forward();
+  await waitFor(() => expect(input).toHaveValue('TypeScript'));
+  expect(input).toHaveFocus();
+  expect(screen.getByRole('link', { name: 'Ada' })).toBeInTheDocument();
+});
+
+it('keeps a shareable query but clears category and viewer-specific details on account change', async () => {
+  window.history.replaceState({}, '', '/skills?query=TypeScript');
+  const view = render(<SkillDirectory />);
+  const row = (await screen.findByRole('link', { name: 'Ada' })).closest('li')!;
+  fireEvent.click(screen.getByRole('button', { name: 'Technik' }));
+  fireEvent.click(within(row).getByRole('button', { name: 'Details anzeigen' }));
+  mockViewerId = 'another-viewer';
+  view.rerender(<SkillDirectory />);
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: 'Ada' })).not.toBeInTheDocument();
+  expect(screen.getByRole('searchbox', { name: 'Name oder Fähigkeit suchen' })).toHaveValue('TypeScript');
+  await screen.findByRole('link', { name: 'Ada' });
+  expect(screen.getByRole('button', { name: 'Alle Kategorien' })).toHaveAttribute('aria-pressed', 'true');
+  mockViewerId = null;
+  view.rerender(<SkillDirectory />);
+  expect(screen.queryByRole('link', { name: 'Ada' })).not.toBeInTheDocument();
+  expect(screen.getByText('Anmeldung erforderlich')).toBeInTheDocument();
+  expect(window.location.search).toBe('?query=TypeScript');
+});
+
+it('ignores delayed router search parameters after a newer keystroke', async () => {
+  window.history.replaceState({}, '', '/skills?query=TypeScript');
+  const view = render(<SearchParamsContext.Provider value={new URLSearchParams('query=TypeScript')}><SkillDirectoryPage /></SearchParamsContext.Provider>);
+  await screen.findByRole('link', { name: 'Ada' });
+  const input = screen.getByRole('searchbox', { name: 'Name oder Fähigkeit suchen' });
+  fireEvent.change(input, { target: { value: 'Figma' } });
+  view.rerender(<SearchParamsContext.Provider value={new URLSearchParams('query=Fig')}><SkillDirectoryPage /></SearchParamsContext.Provider>);
+  expect(input).toHaveValue('Figma');
+  view.rerender(<SearchParamsContext.Provider value={new URLSearchParams('query=Figma')}><SkillDirectoryPage /></SearchParamsContext.Provider>);
+  expect(input).toHaveValue('Figma');
+  expect(screen.getByRole('link', { name: 'Bea' })).toBeInTheDocument();
 });
 
 it('offers a keyboard-accessible own-skills link and removes it at logout', async () => {

@@ -10,7 +10,7 @@ import { canShowBadgeToViewer } from '@/lib/course-achievement-badge';
 
 import { authOptions } from '../auth/[...nextauth]/options';
 
-const VALID_TYPES = new Set(['all', 'course', 'event', 'member', 'post', 'resource', 'article', 'project']);
+const VALID_TYPES = new Set(['all', 'course', 'event', 'member', 'post', 'resource', 'article', 'project', 'skill']);
 const ALL_RESULTS_LIMIT = 5;
 
 function clamp(value: number, min: number, max: number) {
@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
 
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json(
         { error: 'Nicht authentifiziert' },
         { status: 401 }
@@ -106,6 +106,14 @@ export async function GET(request: NextRequest) {
         { description: containsInsensitive(query) },
         { category: containsInsensitive(query) },
         { tags: { some: { name: containsInsensitive(query) } } },
+      ],
+    };
+
+    // Search the taxonomy, never the attached accounts or their endorsements.
+    const skillWhere = {
+      OR: [
+        { name: containsInsensitive(query) },
+        { category: containsInsensitive(query) },
       ],
     };
 
@@ -448,7 +456,32 @@ export async function GET(request: NextRequest) {
       }));
     };
 
-    const [courses, members, posts, events, resources, articles, projects] = await Promise.all([
+    const searchSkills = async () => {
+      if (type !== 'all' && type !== 'skill') return [];
+
+      const skills = await prisma.skill.findMany({
+        where: skillWhere,
+        select: { id: true, name: true, category: true },
+        skip: type === 'skill' ? skip : 0,
+        take: type === 'skill' ? limit : ALL_RESULTS_LIMIT,
+        orderBy: [{ name: 'asc' }, { id: 'asc' }],
+      });
+
+      return skills.map(skill => ({
+        id: skill.id,
+        title: skill.name,
+        description: sanitizeHtmlPreviewServer(
+          `Fähigkeit im Skill-Verzeichnis. Kategorie: ${sanitizeTextServer(skill.category)}. Mitglieder mit dieser Fähigkeit entdecken.`,
+          220,
+        ),
+        type: 'skill' as const,
+        category: sanitizeTextServer(skill.category),
+        // The taxonomy has no creation timestamp. Do not invent recency.
+        createdAt: null,
+      }));
+    };
+
+    const [courses, members, posts, events, resources, articles, projects, skills] = await Promise.all([
       searchCourses(),
       searchMembers(),
       searchPosts(),
@@ -456,9 +489,10 @@ export async function GET(request: NextRequest) {
       searchResources(),
       searchArticles(),
       searchProjects(),
+      searchSkills(),
     ]);
 
-    const results = [...courses, ...members, ...posts, ...events, ...resources, ...articles, ...projects];
+    const results = [...courses, ...members, ...posts, ...events, ...resources, ...articles, ...projects, ...skills];
 
     if (type === 'all') {
       results.sort((a, b) => {
@@ -492,6 +526,9 @@ export async function GET(request: NextRequest) {
           break;
         case 'project':
           total = await prisma.project.count({ where: projectWhere });
+          break;
+        case 'skill':
+          total = await prisma.skill.count({ where: skillWhere });
           break;
       }
     }

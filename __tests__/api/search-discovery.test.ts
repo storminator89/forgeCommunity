@@ -17,6 +17,7 @@ jest.mock('@/lib/prisma', () => ({
     resource: { findMany: jest.fn(), count: jest.fn() },
     article: { findMany: jest.fn(), count: jest.fn() },
     project: { findMany: jest.fn(), count: jest.fn() },
+    skill: { findMany: jest.fn(), count: jest.fn() },
   },
 }))
 
@@ -32,7 +33,7 @@ function request(query: string, type = 'all', page = 1, limit = 10) {
 beforeEach(() => {
   jest.clearAllMocks()
   jest.mocked(getServerSession).mockResolvedValue({ user: { id: 'viewer', role: 'USER' } } as never)
-  for (const model of [prisma.user, prisma.course, prisma.event, prisma.post, prisma.resource, prisma.article, prisma.project]) {
+  for (const model of [prisma.user, prisma.course, prisma.event, prisma.post, prisma.resource, prisma.article, prisma.project, prisma.skill]) {
     (model.findMany as jest.Mock).mockResolvedValue([]);
     (model.count as jest.Mock).mockResolvedValue(0);
   }

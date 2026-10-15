@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import SearchPageClient from '@/app/search/SearchPageClient';
 
@@ -24,6 +24,11 @@ jest.mock('@/components/app-shell', () => ({
 jest.mock('@/components/Sidebar', () => ({ Sidebar: () => null }));
 jest.mock('@/components/user-nav', () => ({ UserNav: () => null }));
 jest.mock('@/components/theme-toggle', () => ({ ThemeToggle: () => null }));
+let mockViewerId: string | null = 'viewer';
+jest.mock('next-auth/react', () => ({ useSession: () => ({
+  data: mockViewerId ? { user: { id: mockViewerId } } : null,
+  status: mockViewerId ? 'authenticated' : 'unauthenticated',
+}) }));
 const mockToast = jest.fn();
 jest.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: mockToast }) }));
 
@@ -36,9 +41,11 @@ const results = [
   { id: 'resource-2', title: 'Unsichere Ressource', description: '', type: 'resource', url: 'javascript:alert(1)' },
   { id: 'article-1', title: 'Wissensartikel Zeta', description: 'Wissen', type: 'article' },
   { id: 'project-1', title: 'Projekt Eta', description: 'Projekt', type: 'project' },
+  { id: 'skill-1', title: 'TypeScript & React', description: 'Fähigkeit im Skill-Verzeichnis', type: 'skill', category: 'Technik' },
 ];
 
 beforeEach(() => {
+  mockViewerId = 'viewer';
   window.history.replaceState({}, '', '/search?q=Alpha');
   (global.fetch as jest.Mock).mockReset();
   (global.fetch as jest.Mock).mockResolvedValue({
@@ -52,7 +59,7 @@ it('renders focusable result links with the existing destinations and safe exter
   render(<SearchPageClient initialQuery="Alpha" />);
 
   const course = await screen.findByRole('link', { name: /Kurs Alpha/ });
-  expect(screen.getByRole('heading', { name: 'Ergebnisse (8)' })).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Ergebnisse (9)' })).toBeInTheDocument();
   expect(course).toHaveAttribute('href', '/courses/course-1');
   expect(screen.getByRole('link', { name: /Event Beta/ })).toHaveAttribute('href', '/events#event-event-1');
   expect(screen.getByRole('link', { name: /Mitglied Gamma/ })).toHaveAttribute('href', '/profile/member-1');
@@ -64,6 +71,7 @@ it('renders focusable result links with the existing destinations and safe exter
   expect(screen.getByRole('link', { name: /Unsichere Ressource/ })).toHaveAttribute('href', '/resources');
   expect(screen.getByRole('link', { name: /Wissensartikel Zeta/ })).toHaveAttribute('href', '/knowledgebase/article-1');
   expect(screen.getByRole('link', { name: /Projekt Eta/ })).toHaveAttribute('href', '/projects/project-1');
+  expect(screen.getByRole('link', { name: /TypeScript & React/ })).toHaveAttribute('href', '/skills?query=TypeScript%20%26%20React');
   expect(screen.getByText(/Bis zu fünf Treffer je Kategorie/)).toBeInTheDocument();
 
   let reachedWithTab = false;
@@ -83,18 +91,19 @@ it('counts displayed results in the All tab when the API has no aggregate total'
     json: async () => ({ results, pagination: { total: 0, page: 1, limit: 10, pages: 0 } }),
   });
   render(<SearchPageClient initialQuery="Alpha" />);
-  expect(await screen.findByRole('heading', { name: 'Ergebnisse (8)' })).toBeInTheDocument();
+  expect(await screen.findByRole('heading', { name: 'Ergebnisse (9)' })).toBeInTheDocument();
 });
 
-it('keeps all eight categories and controls reachable with mobile-sized touch targets', async () => {
+it('keeps all nine categories and controls reachable with mobile-sized touch targets', async () => {
   const user = userEvent.setup();
   render(<SearchPageClient initialQuery="Alpha" />);
 
   expect(screen.getByRole('searchbox', { name: /Suche nach Kursen/ })).toHaveClass('h-11');
   expect(screen.getByRole('button', { name: 'Suche löschen' })).toHaveClass('h-11', 'w-11');
   expect(screen.getByRole('tablist', { name: 'Suchkategorie' })).toHaveClass('overflow-x-auto');
+  expect(screen.getByRole('tablist', { name: 'Suchkategorie' })).toHaveClass('h-auto', 'min-h-12');
   expect(screen.getByText(/Weitere Kategorien seitlich scrollen/)).toBeInTheDocument();
-  expect(screen.getAllByRole('tab')).toHaveLength(8);
+  expect(screen.getAllByRole('tab')).toHaveLength(9);
   screen.getAllByRole('tab').forEach((tab) => expect(tab).toHaveClass('min-h-11'));
 
   await user.click(screen.getByRole('tab', { name: 'Alle' }));
@@ -104,10 +113,13 @@ it('keeps all eight categories and controls reachable with mobile-sized touch ta
 });
 
 it('shows an empty prompt and a visible, retryable error state', async () => {
+  window.history.replaceState({}, '', '/search');
   const { unmount } = render(<SearchPageClient />);
   expect(screen.getByRole('heading', { name: 'Geben Sie einen Suchbegriff ein' })).toBeInTheDocument();
   expect(global.fetch).not.toHaveBeenCalled();
   unmount();
+
+  window.history.replaceState({}, '', '/search?q=Alpha');
 
   (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('offline'));
   const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
@@ -121,6 +133,35 @@ it('shows an empty prompt and a visible, retryable error state', async () => {
   } finally {
     consoleSpy.mockRestore();
   }
+});
+
+it('clears results and aborts former-account searches on account switch or logout while keeping the current URL', async () => {
+  mockViewerId = 'alice';
+  const view = render(<SearchPageClient initialQuery="Alpha" />);
+  await screen.findByRole('link', { name: /TypeScript & React/ });
+  const input = screen.getByRole('searchbox', { name: /Suche nach Kursen/ });
+  fireEvent.change(input, { target: { value: 'Script' } });
+  let finishAlice!: (value: unknown) => void;
+  const late = new Promise(resolve => { finishAlice = resolve; });
+  (global.fetch as jest.Mock).mockReturnValueOnce(late);
+  await waitFor(() => expect(global.fetch).toHaveBeenCalledWith('/api/search?query=Script&type=all&page=1&limit=10', expect.anything()));
+  const formerSignal = (global.fetch as jest.Mock).mock.calls.at(-1)[1].signal as AbortSignal;
+  mockViewerId = 'bob';
+  view.rerender(<SearchPageClient initialQuery="Alpha" />);
+  expect(formerSignal.aborted).toBe(true);
+  expect(screen.queryByRole('link', { name: /TypeScript & React/ })).not.toBeInTheDocument();
+  expect(screen.getByRole('searchbox', { name: /Suche nach Kursen/ })).toHaveValue('Script');
+  (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ results: [results[8]], pagination: { total: 0, page: 1, limit: 10, pages: 0 } }) });
+  await screen.findByRole('link', { name: /TypeScript & React/ });
+  await act(async () => finishAlice({ ok: true, json: async () => ({ results, pagination: { total: 0, page: 1, limit: 10, pages: 0 } }) }));
+  expect(screen.queryByRole('link', { name: /Mitglied Gamma/ })).not.toBeInTheDocument();
+  const reads = (global.fetch as jest.Mock).mock.calls.length;
+  mockViewerId = null;
+  view.rerender(<SearchPageClient initialQuery="Alpha" />);
+  expect(screen.queryByRole('link', { name: /TypeScript & React/ })).not.toBeInTheDocument();
+  expect(screen.getByText('Anmeldung erforderlich')).toBeInTheDocument();
+  expect(window.location.search).toBe('?q=Script');
+  expect((global.fetch as jest.Mock).mock.calls).toHaveLength(reads);
 });
 
 it('restores filters from the URL and keeps them there before following a result', async () => {
@@ -181,7 +222,7 @@ it('paginates the article and project tabs and restores tab/page state through b
   });
 
   render(<SearchPageClient initialQuery="Alpha" />);
-  await screen.findByRole('heading', { name: 'Ergebnisse (8)' });
+  await screen.findByRole('heading', { name: 'Ergebnisse (9)' });
   await user.click(screen.getByRole('tab', { name: 'Artikel' }));
   expect(window.location.search).toBe('?q=Alpha&type=article');
   expect(await screen.findByRole('heading', { name: 'Ergebnisse (12)' })).toBeInTheDocument();
@@ -210,4 +251,39 @@ it('paginates the article and project tabs and restores tab/page state through b
   window.history.forward();
   await waitFor(() => expect(window.location.search).toBe('?q=Alpha&type=article&page=2'));
   await waitFor(() => expect(screen.getByRole('button', { name: 'Seite 2' })).toHaveAttribute('aria-current', 'page'));
+});
+
+
+it('opens a skill result by keyboard and preserves typed skill pagination and history', async () => {
+  const user = userEvent.setup();
+  window.history.replaceState({}, '', '/search?q=Script&type=skill');
+  (global.fetch as jest.Mock).mockImplementation(async (input: string) => {
+    const params = new URL(input, 'http://localhost').searchParams;
+    return { ok: true, json: async () => ({ results: [results[8]], pagination: { total: 12, page: Number(params.get('page')), limit: 10, pages: 2 } }) };
+  });
+  render(<SearchPageClient initialQuery="Script" initialType="skill" />);
+  const skill = await screen.findByRole('link', { name: /TypeScript & React/ });
+  expect(screen.getByRole('tab', { name: 'Fähigkeiten' })).toHaveAttribute('aria-selected', 'true');
+  expect(screen.getByRole('heading', { name: 'Ergebnisse (12)' })).toBeInTheDocument();
+  const activate = jest.fn((event: Event) => event.preventDefault());
+  skill.addEventListener('click', activate);
+  skill.focus();
+  await user.keyboard('{Enter}');
+  expect(activate).toHaveBeenCalledTimes(1);
+  expect(skill).toHaveAttribute('href', '/skills?query=TypeScript%20%26%20React');
+  expect(skill).toHaveClass('focus-visible:ring-2');
+  expect(skill.querySelector('h3')).toHaveClass('[overflow-wrap:anywhere]');
+
+  await user.click(screen.getByRole('button', { name: /Nächste/ }));
+  await waitFor(() => expect(global.fetch).toHaveBeenCalledWith('/api/search?query=Script&type=skill&page=2&limit=10', expect.anything()));
+  expect(window.location.search).toBe('?q=Script&type=skill&page=2');
+  await screen.findByRole('link', { name: /TypeScript & React/ });
+  await user.click(screen.getByRole('tab', { name: 'Kurse' }));
+  window.history.back();
+  await waitFor(() => expect(screen.getByRole('tab', { name: 'Fähigkeiten' })).toHaveAttribute('aria-selected', 'true'));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Seite 2' })).toHaveAttribute('aria-current', 'page'));
+  await user.click(screen.getByRole('button', { name: 'Suche löschen' }));
+  expect(screen.getByRole('searchbox', { name: /Suche nach Kursen/ })).toHaveFocus();
+  expect(window.location.search).toBe('?type=skill');
+  expect(screen.queryByRole('link', { name: /TypeScript & React/ })).not.toBeInTheDocument();
 });

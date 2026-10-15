@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { useClientReady } from '@/lib/use-client-ready'
 import { validatePassword } from '@/lib/security'
+import { registerNewMemberFirstAction } from '@/lib/new-member-first-action'
 import Link from 'next/link'
 import { UserPlus, Eye, EyeOff, Loader2, Flame, ArrowUpRight } from 'lucide-react'
 
@@ -57,6 +58,10 @@ export default function RegisterPage() {
         return
       }
       setRegistered(true)
+      if (response.status === 201) {
+        const receipt = await response.json().catch(() => null)
+        registerNewMemberFirstAction(receipt?.userId)
+      }
       const result = await signIn('credentials', { redirect: false, email: email.trim(), password })
       if (result?.ok && !result.error) {
         router.push('/community')

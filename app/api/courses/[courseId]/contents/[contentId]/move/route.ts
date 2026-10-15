@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../../../../../auth/[...nextauth]/options';
-import { contentTransaction, ContentMutationError, presentContent } from '../../content-mutations';
+import { canEdit, contentTransaction, ContentMutationError, presentContent } from '../../content-mutations';
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
 import { groupCourseContents } from '@/lib/server/group-course-contents';
 import { reconcileCourseRewards } from '@/lib/server/rewards';
@@ -27,7 +27,7 @@ export async function PUT(
             select: { id: true, courseId: true, parentId: true, order: true, course: { select: { instructorId: true } } },
           });
           if (!moved || moved.courseId !== params.courseId) throw new Error('CONTENT_NOT_FOUND');
-          if (moved.course.instructorId !== session.user.id && session.user.role !== 'ADMIN') throw new Error('CONTENT_FORBIDDEN');
+          await canEdit(tx, moved.course.instructorId, session.user);
           const target = await tx.courseContent.findUnique({
             where: { id: targetId }, select: { id: true, courseId: true, parentId: true, order: true },
           });

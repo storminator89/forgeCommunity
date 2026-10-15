@@ -23,6 +23,7 @@ import { PostCard } from '@/components/community/PostCard'
 import { LeaderboardCard } from '@/components/community/LeaderboardCard'
 import { StatsCard } from '@/components/community/StatsCard'
 import { ContributionMilestonesCard } from '@/components/community/ContributionMilestonesCard'
+import { FirstActionGuide } from '@/components/community/FirstActionGuide'
 import { useCommunityFeed } from '@/hooks/useCommunityFeed'
 import { usePrivateContributions } from '@/hooks/usePrivateContributions'
 import { CommunityPost as Post, CommunityStats, fetchCommunityJson as fetchWithErrorHandling, isAbortError, mergeCommunityRows } from '@/lib/community-feed'
@@ -347,6 +348,7 @@ function Community({ session }: { session: Session | null }) {
               <p className="text-sm tabular-nums text-muted-foreground">{feedCount}</p>
             </div>
 
+            {session?.user?.id && session.user.role === 'USER' && <FirstActionGuide userId={session.user.id} />}
             <div className="grid min-w-0 items-start gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,19rem)] lg:gap-12">
               <section aria-labelledby="community-feed-title" className="min-w-0">
                 <AnimatePresence mode="wait">
@@ -381,7 +383,7 @@ function Community({ session }: { session: Session | null }) {
 
                 <div className="mt-9">
                   <div className="flex flex-wrap items-baseline justify-between gap-3 border-b pb-4">
-                    <h2 id="community-feed-title" className="text-xl font-semibold tracking-tight">Aktuelle Beiträge</h2>
+                    <h2 id="community-feed-title" tabIndex={-1} className="text-xl font-semibold tracking-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Aktuelle Beiträge</h2>
                     <span className="text-sm tabular-nums text-muted-foreground">{feedCount}</span>
                   </div>
                   <div className="mt-5 space-y-5">

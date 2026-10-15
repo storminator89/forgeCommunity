@@ -21,6 +21,7 @@ jest.mock('@/lib/prisma', () => ({
     resource: { findMany: jest.fn() },
     article: { findMany: jest.fn() },
     project: { findMany: jest.fn() },
+    skill: { findMany: jest.fn() },
   },
 }));
 jest.mock('@/lib/server/sanitize-html', () => ({
@@ -47,6 +48,7 @@ describe('member search privacy', () => {
     (prisma.resource.findMany as jest.Mock).mockResolvedValue([]);
     (prisma.article.findMany as jest.Mock).mockResolvedValue([]);
     (prisma.project.findMany as jest.Mock).mockResolvedValue([]);
+    (prisma.skill.findMany as jest.Mock).mockResolvedValue([]);
   });
 
   it('does not run a member lookup without authentication', async () => {

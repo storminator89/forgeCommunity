@@ -16,7 +16,7 @@ export async function DELETE(request: NextRequest, props: { params: Promise<{ co
     const deletedContent = await contentTransaction(async (tx) => {
       const current = await tx.courseContent.findUnique({ where: { id: contentId }, include: { course: { select: { instructorId: true } } } });
       if (!current || current.courseId !== courseId) throw new ContentMutationError('Content not found', 404);
-      canEdit(current.course.instructorId, session.user);
+      await canEdit(tx, current.course.instructorId, session.user);
       const contents = await tx.courseContent.findMany({ where: { courseId }, select: { id: true, parentId: true } });
       const descendants = new Set([contentId]);
       let changed = true;
@@ -57,7 +57,7 @@ export async function PUT(request: NextRequest, props: { params: Promise<{ cours
     const updatedContent = await contentTransaction(async (tx) => {
       const current = await tx.courseContent.findUnique({ where: { id: contentId }, include: { course: { select: { instructorId: true } } } });
       if (!current || current.courseId !== courseId) throw new ContentMutationError('Content not found', 404);
-      canEdit(current.course.instructorId, session.user);
+      await canEdit(tx, current.course.instructorId, session.user);
       const destinationParentId = body.parentId === undefined ? current.parentId : body.parentId as string | null;
       if (body.parentId !== undefined) await assertParent(tx, courseId, destinationParentId, contentId);
       const effectiveType = body.type === undefined ? current.type : body.type as string | null;

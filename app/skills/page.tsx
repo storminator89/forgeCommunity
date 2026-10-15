@@ -5,7 +5,8 @@
 
 import { AppShell, AppHeader } from '@/components/app-shell';
 import { PageState } from '@/components/page-state';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { toast, ToastContainer } from 'react-toastify';
@@ -38,15 +39,22 @@ interface DirectoryResponse { skills: Skill[]; members: Member[] }
 // The directory response includes viewer-specific endorsement flags. Remounting at
 // the account boundary discards those flags, open details and in-flight UI state.
 export default function SkillDirectory() {
-  const { data: session, status } = useSession();
-  const viewerId = status === 'loading' ? null : session?.user?.id ?? null;
-  return <SkillDirectoryForViewer key={viewerId ?? status} viewerId={viewerId} sessionLoading={status === 'loading'} />;
+  return <Suspense fallback={<PageState kind="loading" title="Skill-Verzeichnis wird geladen" />}><SkillDirectoryWithUrl /></Suspense>;
 }
 
-function SkillDirectoryForViewer({ viewerId, sessionLoading }: { viewerId: string | null; sessionLoading: boolean }) {
+function SkillDirectoryWithUrl() {
+  const searchParams = useSearchParams();
+  const queryFromUrl = (searchParams.get('query') ?? '').slice(0, 120);
+  const { data: session, status } = useSession();
+  const viewerId = status === 'authenticated' ? session?.user?.id ?? null : null;
+  return <SkillDirectoryForViewer key={viewerId ?? status} viewerId={viewerId} sessionLoading={status === 'loading'} queryFromUrl={queryFromUrl} />;
+}
+
+function SkillDirectoryForViewer({ viewerId, sessionLoading, queryFromUrl }: { viewerId: string | null; sessionLoading: boolean; queryFromUrl: string }) {
   const [skillsData, setSkillsData] = useState<Skill[]>([]);
   const [membersData, setMembersData] = useState<Member[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchState, setSearchState] = useState({ query: queryFromUrl, urlQuery: queryFromUrl });
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const [sortBy, setSortBy] = useState<'endorsements' | 'name'>('endorsements');
@@ -57,6 +65,32 @@ function SkillDirectoryForViewer({ viewerId, sessionLoading }: { viewerId: strin
   const [expandedSkills, setExpandedSkills] = useState<Record<string, boolean>>({});
   const endorsementRequests = useRef(new Set<string>());
   const [endorsingMembers, setEndorsingMembers] = useState<string[]>([]);
+
+  // Adjust URL-derived state during this render, before children see it.
+  // A delayed router render from an older keystroke must not replace the draft.
+  if (searchState.urlQuery !== queryFromUrl) {
+    const currentQuery = (new URLSearchParams(window.location.search).get('query') ?? '').slice(0, 120);
+    setSearchState({ query: currentQuery === queryFromUrl ? queryFromUrl : searchState.query, urlQuery: queryFromUrl });
+  }
+  const searchTerm = searchState.query;
+
+  useEffect(() => {
+    const restoreQuery = () => {
+      const query = (new URLSearchParams(window.location.search).get('query') ?? '').slice(0, 120);
+      setSearchState({ query, urlQuery: query });
+    };
+    window.addEventListener('popstate', restoreQuery);
+    return () => window.removeEventListener('popstate', restoreQuery);
+  }, []);
+
+  const updateQuery = (value: string) => {
+    const query = value.slice(0, 120);
+    setSearchState(previous => ({ ...previous, query }));
+    const url = new URL(window.location.href);
+    if (query) url.searchParams.set('query', query);
+    else url.searchParams.delete('query');
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+  };
 
   useEffect(() => {
     if (!viewerId) return;
@@ -95,7 +129,7 @@ function SkillDirectoryForViewer({ viewerId, sessionLoading }: { viewerId: strin
     });
   }, [membersData, searchTerm, selectedCategory, skillByName, sortBy, sortOrder]);
   const hasFilters = Boolean(searchTerm || selectedCategory !== 'All');
-  const clearFilters = () => { setSearchTerm(''); setSelectedCategory('All'); };
+  const clearFilters = () => { updateQuery(''); setSelectedCategory('All'); searchInputRef.current?.focus(); };
 
   const endorseMember = async (memberId: string) => {
     if (!viewerId) { toast.info('Bitte melde dich an, um ein Mitglied zu empfehlen.'); return; }
@@ -131,7 +165,7 @@ function SkillDirectoryForViewer({ viewerId, sessionLoading }: { viewerId: strin
           <div className="flex flex-wrap items-end justify-between gap-4 border-b pb-7"><div><p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Community / Fähigkeiten</p><p className="mt-2 max-w-[55ch] text-base leading-relaxed text-muted-foreground">Finde Menschen mit Erfahrung und entdecke ihre Fähigkeiten.</p></div>{viewerId && <Button asChild variant="outline"><Link href="/settings?tab=skills">Eigene Fähigkeiten ergänzen</Link></Button>}</div>
 
           <section aria-label="Mitglieder filtern" className="grid min-w-0 gap-4 border-b py-7 sm:grid-cols-[minmax(0,1fr)_12rem_auto] sm:items-end">
-            <div className="min-w-0"><Label htmlFor="skill-search" className="mb-2 block">Name oder Fähigkeit suchen</Label><div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" /><Input id="skill-search" type="search" value={searchTerm} onChange={event => setSearchTerm(event.target.value)} placeholder="Name oder Fähigkeit" className="pl-10" /></div></div>
+            <div className="min-w-0"><Label htmlFor="skill-search" className="mb-2 block">Name oder Fähigkeit suchen</Label><div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" /><Input ref={searchInputRef} id="skill-search" type="search" maxLength={120} value={searchTerm} onChange={event => updateQuery(event.target.value)} placeholder="Name oder Fähigkeit" className="pl-10" /></div></div>
             <div className="min-w-0"><Label htmlFor="skill-sort" className="mb-2 block">Sortieren nach</Label><Select value={sortBy} onValueChange={value => setSortBy(value as 'endorsements' | 'name')}><SelectTrigger id="skill-sort"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="endorsements">Empfehlungen</SelectItem><SelectItem value="name">Name</SelectItem></SelectContent></Select></div>
             <Button type="button" variant="outline" size="icon" aria-label={sortOrder === 'asc' ? 'Absteigend sortieren' : 'Aufsteigend sortieren'} onClick={() => setSortOrder(value => value === 'asc' ? 'desc' : 'asc')}>{sortOrder === 'asc' ? <ChevronUp className="h-4 w-4" aria-hidden="true" /> : <ChevronDown className="h-4 w-4" aria-hidden="true" />}</Button>
           </section>
