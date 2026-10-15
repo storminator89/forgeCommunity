@@ -40,18 +40,31 @@ it('prevents repeat saves, keeps failure drafts, and permits retry', async () =>
   let rejectSave!: (failure: Error) => void;
   const onSubmit = jest.fn().mockImplementationOnce(() => new Promise((_, reject) => { rejectSave = reject; })).mockResolvedValue(undefined);
   render(<EditContentForm content={initial} onContentChange={jest.fn()} onSubmit={onSubmit} onCancel={jest.fn()} />);
+  expect(screen.getByRole('status')).toHaveTextContent('Gespeicherter Inhalt');
   fireEvent.change(screen.getByLabelText('Titel'), { target: { value: '  Bleibt erhalten  ' } });
+  expect(screen.getByRole('status')).toHaveTextContent('Lokal ungespeichert');
   const submit = screen.getByRole('button', { name: 'Speichern' });
   fireEvent.click(submit);
   fireEvent.submit(submit.closest('form')!);
   expect(onSubmit).toHaveBeenCalledTimes(1);
   expect(screen.getByRole('button', { name: 'Wird gespeichert…' })).toBeDisabled();
+  expect(screen.getByRole('status')).toHaveTextContent('Änderungen werden gespeichert');
   rejectSave(new Error('Keine Berechtigung'));
   await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Keine Berechtigung'));
+  expect(screen.getByRole('status')).toHaveTextContent('Speichern nicht abgeschlossen');
   expect(screen.getByLabelText('Titel')).toHaveValue('  Bleibt erhalten  ');
   fireEvent.click(screen.getByRole('button', { name: 'Speichern' }));
   await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(2));
   expect(onSubmit.mock.calls[1][0]).toMatchObject({ title: 'Bleibt erhalten', content: '<p>Original</p>' });
+});
+
+it('explains live saves and accepts the shell saved baseline after keeping the editor open', () => {
+  const view = render(<EditContentForm content={initial} saveState="dirty" onContentChange={jest.fn()} onSubmit={jest.fn()} onCancel={jest.fn()} />);
+  expect(screen.getByRole('status')).toHaveTextContent('Lokal ungespeichert');
+  expect(screen.getByText('Änderungen werden nach dem Speichern für eingeschriebene Lernende sichtbar.')).toBeVisible();
+  view.rerender(<EditContentForm content={initial} saveState="saved" saveMessage="Inhalt gespeichert." onContentChange={jest.fn()} onSubmit={jest.fn()} onCancel={jest.fn()} />);
+  expect(screen.getByRole('status')).toHaveTextContent('Gespeicherter Inhalt');
+  expect(screen.getByText('Inhalt gespeichert.')).toBeVisible();
 });
 
 it('does not crash or overwrite malformed quizzes and blocks their save', async () => {

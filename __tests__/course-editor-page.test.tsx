@@ -16,6 +16,12 @@ jest.mock('@/app/courses/[courseId]/contents/CourseContentsSidebar', () => ({
     return <nav>{rows(contents)}</nav>
   },
 }))
+jest.mock('@/app/courses/[courseId]/contents/CourseAuthoringOutline', () => ({
+  CourseAuthoringOutline: ({ contents, onContentSelect, requestAction }: { contents: CourseContent[]; onContentSelect: (id: string) => void; requestAction: (action: () => void) => void }) => {
+    const rows = (items: CourseContent[]): React.ReactNode => items.map(item => <div key={item.id}><button onClick={() => requestAction(() => onContentSelect(item.id))}>{item.title}</button>{rows(item.subContents || [])}</div>)
+    return <nav>{rows(contents)}</nav>
+  },
+}))
 jest.mock('@/app/courses/[courseId]/contents/EditContentForm', () => ({
   EditContentForm: ({ content, onContentChange, onSubmit, onCancel }: { content: CourseContent; onContentChange: (content: Partial<CourseContent>) => void; onSubmit: (content: CourseContent) => Promise<void>; onCancel: () => void }) => {
     const [title, setTitle] = useState(content.title)
@@ -55,7 +61,6 @@ beforeEach(() => {
 async function editChapter() {
   render(<CourseContentsEditor courseId="course" />)
   fireEvent.click(await screen.findByRole('button', { name: 'Kapitel' }))
-  fireEvent.click(screen.getByRole('button', { name: 'Inhalt bearbeiten' }))
 }
 
 it('verwirft einen Entwurf ohne den gespeicherten Baum zu verändern', async () => {
