@@ -703,6 +703,32 @@ test('assignment grade decisions are append-only while foreign-key cascades rema
         ('assignment-decision', 'assignment-submission', 'grade-one', 'assignment-teacher', 'GRADED', 85, 1),
         ('assignment-account-decision', 'assignment-account-submission', 'grade-two', 'assignment-teacher', 'GRADED', 85, 1);
     `);
+    // PrismaPg qualifies the target model but does not set the connection's
+    // search_path. The trigger must use the target table's schema even if a
+    // caller selects another search path or shadows CoursePublication in temp.
+    const schema = new URL(url).searchParams.get('schema');
+    assert.ok(schema);
+    await db.query(`INSERT INTO "Course" ("id", "title", "description", "instructorId", "updatedAt")
+      VALUES ('assignment-other-course', 'Other course', '', 'assignment-teacher', CURRENT_TIMESTAMP)`);
+    await db.query(`CREATE TEMP TABLE "CoursePublication" ("id" TEXT, "courseId" TEXT)`);
+    await db.query(`INSERT INTO pg_temp."CoursePublication" VALUES ('assignment-publication', 'assignment-other-course')`);
+    await db.query('SET search_path TO pg_catalog');
+    try {
+      const insert = (id, courseId, requestId) => db.query(`
+        INSERT INTO ${quoteIdent(schema)}."AssignmentSubmission" ("id", "userId", "courseId", "contentId", "publicationId",
+          "revision", "passingScore", "requestId", "response", "responseDigest", "attemptNumber")
+        VALUES ($1, 'assignment-submission-user', $2, 'assignment-shadow-content', 'assignment-publication',
+          'revision', 70, $3, 'Response', 'response-digest', 1)`, [id, courseId, requestId]);
+      await insert('assignment-shadow-valid', 'assignment-course', 'submit-shadow-valid');
+      await rejectsCode(insert('assignment-shadow-cross-course', 'assignment-other-course', 'submit-shadow-invalid'), '23514');
+      await rejectsCode(db.query(`UPDATE ${quoteIdent(schema)}."AssignmentSubmission"
+        SET "courseId" = 'assignment-other-course' WHERE "id" = 'assignment-shadow-valid'`), '23514');
+      assert.equal((await db.query(`SELECT "courseId" FROM ${quoteIdent(schema)}."AssignmentSubmission"
+        WHERE "id" = 'assignment-shadow-valid'`)).rows[0].courseId, 'assignment-course');
+    } finally {
+      await db.query(`SET search_path TO ${quoteIdent(schema)}`);
+      await db.query(`DROP TABLE pg_temp."CoursePublication"`);
+    }
     await rejectsCode(db.query(`UPDATE "AssignmentGradeDecision" SET "feedback" = 'Illicit edit'
       WHERE "id" = 'assignment-decision'`), '23514');
     await rejectsCode(db.query(`UPDATE "AssignmentGradeDecision" SET "feedback" = "feedback"

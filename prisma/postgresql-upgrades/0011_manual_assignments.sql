@@ -86,8 +86,15 @@ CREATE TRIGGER "AssignmentGradeDecision_no_truncate" BEFORE TRUNCATE ON "Assignm
   FOR EACH STATEMENT EXECUTE FUNCTION "assertAssignmentGradeDecisionNoTruncate"();
 
 CREATE FUNCTION "assertAssignmentPublicationCourse"() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+  publication_course_id TEXT;
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM "CoursePublication" p WHERE p."id" = NEW."publicationId" AND p."courseId" = NEW."courseId") THEN
+  -- PrismaPg's schema option qualifies model queries but does not set the
+  -- connection search_path. Resolve the publication in this trigger's schema,
+  -- not in public or a caller-created temporary table.
+  EXECUTE format('SELECT "courseId" FROM %I."CoursePublication" WHERE "id" = $1', TG_TABLE_SCHEMA)
+    INTO publication_course_id USING NEW."publicationId";
+  IF publication_course_id IS DISTINCT FROM NEW."courseId" THEN
     RAISE EXCEPTION 'Cross-course assignment publication' USING ERRCODE = '23514';
   END IF;
   RETURN NEW;
