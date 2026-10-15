@@ -139,6 +139,7 @@ model User {
   quizAttempts       QuizAttempt[]
   rewardLedger       RewardLedger[]
   completionRecords  CourseCompletionRecord[]
+  questionBankItems  QuestionBankItem[]
   learningGoal       LearningGoal?
   solutionDecisions  AcceptedSolutionChange[] @relation("SolutionActor")
 }
@@ -374,6 +375,30 @@ model CourseContent {
   progress  CourseContentProgress[]
 
   @@index([courseId, archivedAt])
+}
+
+// Private author-owned questions. Editing advances the pointer; existing
+// revisions and copied quiz questions remain unchanged.
+model QuestionBankItem {
+  id String @id @default(cuid())
+  ownerId String
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  latestRevision Int @default(1)
+  revisions QuestionBankRevision[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId, updatedAt])
+}
+
+model QuestionBankRevision {
+  itemId String
+  item QuestionBankItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  revision Int
+  questionJson String @db.Text
+  createdAt DateTime @default(now())
+
+  @@id([itemId, revision])
 }
 
 // Only the explicit publish transaction may project this saved payload into

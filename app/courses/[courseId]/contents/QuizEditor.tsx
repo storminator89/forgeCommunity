@@ -27,6 +27,7 @@ import { quizEditorDraft } from './content-form-utils';
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { createQuizQuestion as createEmptyQuestion, duplicateQuizQuestion, getQuizAuthoringReadiness, QUIZ_QUESTION_TYPES as QUESTION_TYPES, quizQuestionTypeLabel } from './quiz-authoring';
 import { QuizAuthorPreview } from './QuizAuthorPreview';
+import { QuestionBankPanel } from './QuestionBankPanel';
 
 interface QuizEditorProps {
   initialContent?: QuizContent | string;
@@ -147,6 +148,15 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
     pendingFocus.current = copy.id;
     setQuestions(next);
     setStatusMessage(`Frage ${index + 1} als Frage ${index + 2} dupliziert.`);
+  };
+
+  const insertBankQuestion = (source: QuizQuestion) => {
+    // A bank revision is read only by its owner. The quiz persists a complete,
+    // independent question snapshot with a fresh local ID, never a bank link.
+    const copy = duplicateQuizQuestion(source, questions.map(question => question.id));
+    pendingFocus.current = copy.id;
+    setQuestions(previous => [...previous, copy]);
+    setStatusMessage(`Pool-Frage als Frage ${questions.length + 1} eingefügt.`);
   };
 
   const updateQuestion = (questionIndex: number, field: string, value: any) => {
@@ -375,6 +385,7 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
             <div className="min-w-0 flex-1 basis-44 space-y-2"><Label htmlFor={`${formId}-new-type`}>Neue Frage als</Label><select id={`${formId}-new-type`} value={newQuestionType} onChange={event => setNewQuestionType(event.target.value as QuestionType)} className="h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">{QUESTION_TYPES.map(type => <option key={type.value} value={type.value}>{type.label}</option>)}</select></div>
             <Button id={`${formId}-add-question`} type="button" onClick={addQuestion} variant="outline" className="min-h-11"><PlusCircle className="mr-2 h-4 w-4" />Neue Frage</Button>
           </div>
+          <QuestionBankPanel activeQuestion={questions.find(question => question.id === activeQuestionId) ?? null} onInsert={insertBankQuestion} />
           <p role="status" className="sr-only">{statusMessage}</p>
           {removedQuestion && <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg bg-muted p-3 text-sm"><span>Frage aus dem Entwurf entfernt.</span><Button type="button" variant="ghost" size="sm" onClick={restoreQuestion}>Rückgängig</Button></div>}
           <div className="space-y-6">
