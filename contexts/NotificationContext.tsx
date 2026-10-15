@@ -12,6 +12,8 @@ interface Notification {
   isRead: boolean;
   createdAt: Date;
   userId: string;
+  targetState?: 'available' | 'unavailable';
+  actionLabel?: string | null;
 }
 
 interface NotificationContextType {
@@ -23,7 +25,7 @@ interface NotificationContextType {
   markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
   deleteNotification: (id: string) => Promise<void>;
-  addNotification: (notification: Omit<Notification, 'id' | 'createdAt' | 'userId'>) => Promise<void>;
+  openNotification: (id: string) => Promise<string | null>;
 }
 
 const NotificationContext = createContext<NotificationContextType | null>(null);
@@ -295,31 +297,41 @@ function SessionNotifications({ children, userId }: { children: ReactNode; userI
     }
   };
 
-  const addNotification = async (notification: Omit<Notification, 'id' | 'createdAt' | 'userId'>) => {
-    if (!userId) return;
-
+  const openNotification = async (id: string): Promise<string | null> => {
+    if (!userId) return null;
+    let destinationMissing = false;
     try {
-      const response = await fetch('/api/notifications', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...notification,
-          userId
-        }),
-        signal: mutationController.current?.signal,
+      const response = await fetch(`/api/notifications/${encodeURIComponent(id)}/open`, {
+        method: 'POST', signal: mutationController.current?.signal,
       });
-
-      if (!response.ok) throw new Error('Failed to add notification');
-
-      const newNotification = await response.json();
-      if (mutationController.current?.signal.aborted) return;
-      updateNotifications(prev => [newNotification, ...prev]);
-      if (!newNotification.isRead) setUnreadDelta(previous => previous + 1);
+      if (!response.ok) {
+        destinationMissing = response.status === 404;
+        throw new Error('Destination unavailable');
+      }
+      const action = await response.json() as { href?: unknown };
+      if (mutationController.current?.signal.aborted || typeof action.href !== 'string' ||
+          !/^(\/profile\/[A-Za-z0-9_-]+|\/community#comment-[A-Za-z0-9_-]+|\/chat\?channelId=[A-Za-z0-9_-]+&messageId=[A-Za-z0-9_-]+)$/.test(action.href)) {
+        throw new Error('Invalid notification destination');
+      }
+      const wasUnread = notificationsRef.current.some(item => item.id === id && !item.isRead);
+      updateNotifications(previous => previous.map(item => item.id === id ? { ...item, isRead: true } : item));
+      if (wasUnread) setUnreadDelta(previous => previous - 1);
       mutationRevision.current += 1;
       requestRefresh.current();
+      return action.href;
     } catch (error) {
-      if (mutationController.current?.signal.aborted) return;
-      console.error('Error adding notification:', error);
+      if (!mutationController.current?.signal.aborted) {
+        if (destinationMissing) {
+          updateNotifications(previous => previous.map(item => item.id === id ? {
+            ...item, content: 'Das zugehörige Ziel ist nicht mehr verfügbar.',
+            targetState: 'unavailable', actionLabel: null,
+          } : item));
+          mutationRevision.current += 1;
+        }
+        requestRefresh.current(true);
+      }
+      console.error('Error opening notification:', error);
+      return null;
     }
   };
 
@@ -336,7 +348,7 @@ function SessionNotifications({ children, userId }: { children: ReactNode; userI
     markAsRead,
     markAllAsRead,
     deleteNotification,
-    addNotification,
+    openNotification,
   };
 
   return (

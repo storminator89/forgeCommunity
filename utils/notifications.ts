@@ -1,7 +1,7 @@
 // utils/notifications.ts
 import { NotificationType, NotificationTemplate } from '@/types/notifications';
 
-export function createNotificationContent<T extends NotificationType>(
+export function createNotificationContent<T extends keyof NotificationTemplate>(
   type: T,
   data: NotificationTemplate[T]
 ): string {

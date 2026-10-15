@@ -4,6 +4,12 @@ import ChatPage from '@/app/chat/page';
 import Events from '@/app/events/page';
 import NotificationsPage from '@/app/notifications/page';
 
+const mockPush = jest.fn();
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({ push: mockPush }),
+  useSearchParams: () => new URLSearchParams(window.location.search),
+}));
+
 jest.mock('@/components/Sidebar', () => ({ Sidebar: () => null }));
 jest.mock('@/components/user-nav', () => ({ UserNav: () => null }));
 jest.mock('@/components/theme-toggle', () => ({ ThemeToggle: () => null }));
@@ -26,6 +32,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  window.history.replaceState({}, '', '/chat');
   Element.prototype.scrollIntoView = jest.fn();
 });
 
@@ -71,6 +78,20 @@ it('keeps a failed chat message draft editable and leaves the channel accessible
   expect(screen.getByRole('alert')).toHaveTextContent('Chat konnte nicht geladen oder geändert werden');
 });
 
+it('loads and focuses an exact older chat message from a notification link', async () => {
+  window.history.replaceState({}, '', '/chat?channelId=room1&messageId=old1');
+  const channel = { id: 'room1', name: 'Allgemein', _count: { members: 2 } };
+  mockChat.mockReturnValue({ channels: [channel], currentChannel: channel, messages: [], setCurrentChannel: jest.fn(), loading: false });
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({
+    id: 'old1', channelId: 'room1', content: 'Older linked message', createdAt: '2026-01-01T00:00:00Z',
+    messageType: 'text', author: { id: 'other', name: 'Other', image: null },
+  }) });
+  render(<ChatPage />);
+  expect(await screen.findByText('Older linked message')).toBeVisible();
+  expect(screen.getByText('Older linked message').closest('article')).toHaveFocus();
+  expect(global.fetch).toHaveBeenCalledWith('/api/chat/messages/old1', expect.objectContaining({ cache: 'no-store' }));
+});
+
 it('keeps explicit notification filters, hides read entries and marks all unread notifications', async () => {
   const user = userEvent.setup();
   const markAllAsRead = jest.fn();
@@ -88,6 +109,23 @@ it('keeps explicit notification filters, hides read entries and marks all unread
   expect(screen.getByRole('button', { name: 'Ungelesen 1' })).toHaveAttribute('aria-pressed', 'true');
   await user.click(screen.getByRole('button', { name: 'Alle als gelesen markieren' }));
   expect(markAllAsRead).toHaveBeenCalledTimes(1);
+});
+
+it('opens an actionable notification with a labeled keyboard-accessible control', async () => {
+  const user = userEvent.setup();
+  const openNotification = jest.fn().mockResolvedValue('/community#comment-reply1');
+  mockNotifications.mockReturnValue({
+    notifications: [{ id: 'notice', type: 'COMMENT', content: 'Ein Mitglied hat kommentiert.',
+      createdAt: '2026-10-02T10:00:00Z', isRead: false, targetState: 'available', actionLabel: 'Kommentar ansehen' }],
+    unreadCount: 1, isLoading: false, loadError: null, retry: jest.fn(), openNotification,
+    markAsRead: jest.fn(), deleteNotification: jest.fn(), markAllAsRead: jest.fn(),
+  });
+  render(<NotificationsPage />);
+  const action = screen.getByRole('button', { name: 'Kommentar ansehen' });
+  action.focus();
+  await user.keyboard('{Enter}');
+  await waitFor(() => expect(openNotification).toHaveBeenCalledWith('notice'));
+  await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/community#comment-reply1'));
 });
 
 it('disables mark-all when there are no unread notifications', () => {

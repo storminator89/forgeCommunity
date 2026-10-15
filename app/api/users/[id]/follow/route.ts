@@ -66,6 +66,8 @@ export async function POST(
           userId: followingId,
           type: 'FOLLOW',
           content: `${session.user.name} folgt Ihnen jetzt`,
+          targetType: 'USER',
+          targetId: followerId,
         },
       });
       return created;

@@ -5,6 +5,7 @@ import ChatPage from '@/app/chat/page';
 import { ChatProvider, useChat } from '@/contexts/ChatContext';
 
 jest.mock('next-auth/react', () => ({ useSession: jest.fn() }));
+jest.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams(window.location.search) }));
 jest.mock('@/contexts/NotificationContext', () => ({
   useNotifications: () => ({ addNotification: jest.fn() }),
 }));

@@ -518,8 +518,13 @@ model Notification {
   userId    String
   type      NotificationType
   content   String
+  // Only server-side domain events set these. Never persist a client URL.
+  targetType String?
+  targetId   String?
   isRead    Boolean          @default(false)
   createdAt DateTime         @default(now())
+
+  @@index([userId, targetType, targetId])
 }
 
 model Badge {

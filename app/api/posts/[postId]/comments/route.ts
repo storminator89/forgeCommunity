@@ -35,13 +35,21 @@ export async function POST(req: NextRequest, props: { params: Promise<{ postId: 
       return NextResponse.json({ error: 'Beitrag nicht gefunden' }, { status: 404 })
     }
 
-    const newComment = await prisma.comment.create({
-      data: {
-        content: sanitizedContent,
-        postId,
-        authorId: session.user.id,
-      },
-      include: communityCommentInclude(session.user.id),
+    const newComment = await prisma.$transaction(async tx => {
+      const comment = await tx.comment.create({
+        data: { content: sanitizedContent, postId, authorId: session.user.id },
+        include: communityCommentInclude(session.user.id),
+      })
+      if (post.authorId !== session.user.id) {
+        await tx.notification.create({
+          data: {
+            userId: post.authorId, type: 'COMMENT',
+            content: 'Ein Mitglied hat deinen Beitrag kommentiert.',
+            targetType: 'COMMENT', targetId: comment.id,
+          },
+        })
+      }
+      return comment
     })
 
     // Format comment for response

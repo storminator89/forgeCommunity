@@ -106,17 +106,17 @@ it('never asks for browser permission on mount and only alerts with saved opt-in
   await pollWhileUnfocused()
   expect(browserNotification).toHaveBeenCalledWith('Neue Nachricht', expect.objectContaining({ body: expect.stringContaining('New message 1') }))
   expect(browserNotification.mock.calls[0][1]).not.toHaveProperty('icon')
-  expect(mockAddNotification).toHaveBeenCalledWith(expect.objectContaining({ type: 'CHAT_MESSAGE' }))
+  expect(mockAddNotification).not.toHaveBeenCalled()
 })
 
-it.each(['default', 'denied', 'unsupported'] as const)('keeps in-app notices but skips desktop alerts with %s browser permission', async (permission) => {
+it.each(['default', 'denied', 'unsupported'] as const)('avoids client-written inbox duplicates and skips desktop alerts with %s browser permission', async (permission) => {
   installBrowserPermission(permission)
   let next = 0
   await mountChat(() => true, () => message(String(++next)))
   await pollWhileUnfocused()
   expect(browserNotification).not.toHaveBeenCalled()
   expect(requestPermission).not.toHaveBeenCalled()
-  expect(mockAddNotification).toHaveBeenCalledWith(expect.objectContaining({ type: 'CHAT_MESSAGE' }))
+  expect(mockAddNotification).not.toHaveBeenCalled()
 })
 
 it.each([undefined, null, 'bob'])('fails closed when the profile account ID is %s', async (profileId) => {
@@ -135,25 +135,25 @@ it.each([undefined, null, 'bob'])('fails closed when the profile account ID is %
   await act(async () => { await Promise.resolve() })
   await pollWhileUnfocused()
   expect(browserNotification).not.toHaveBeenCalled()
-  expect(mockAddNotification).toHaveBeenCalledWith(expect.objectContaining({ type: 'CHAT_MESSAGE' }))
+  expect(mockAddNotification).not.toHaveBeenCalled()
 })
 
-it('follows successful setting off and on updates while keeping in-app notices', async () => {
+it('follows successful setting off and on updates without client-written inbox duplicates', async () => {
   let next = 0
   await mountChat(() => false, () => message(String(++next)))
   await pollWhileUnfocused()
   expect(browserNotification).not.toHaveBeenCalled()
-  expect(mockAddNotification).toHaveBeenCalledTimes(1)
+  expect(mockAddNotification).not.toHaveBeenCalled()
 
   act(() => publishBrowserChatAlertPreference({ userId: 'alice', enabled: true }))
   await pollWhileUnfocused()
   expect(browserNotification).toHaveBeenCalledTimes(1)
-  expect(mockAddNotification).toHaveBeenCalledTimes(2)
+  expect(mockAddNotification).not.toHaveBeenCalled()
 
   act(() => publishBrowserChatAlertPreference({ userId: 'alice', enabled: false }))
   await pollWhileUnfocused()
   expect(browserNotification).toHaveBeenCalledTimes(1)
-  expect(mockAddNotification).toHaveBeenCalledTimes(3)
+  expect(mockAddNotification).not.toHaveBeenCalled()
 })
 
 it('fails closed while the saved preference is pending and ignores a stale reply after an update', async () => {
@@ -173,7 +173,7 @@ it('fails closed while the saved preference is pending and ignores a stale reply
   await screen.findByText('room')
   await pollWhileUnfocused()
   expect(browserNotification).not.toHaveBeenCalled()
-  expect(mockAddNotification).toHaveBeenCalledTimes(1)
+  expect(mockAddNotification).not.toHaveBeenCalled()
 
   act(() => publishBrowserChatAlertPreference({ userId: 'alice', enabled: false }))
   await act(async () => {
@@ -182,7 +182,7 @@ it('fails closed while the saved preference is pending and ignores a stale reply
   })
   await pollWhileUnfocused()
   expect(browserNotification).not.toHaveBeenCalled()
-  expect(mockAddNotification).toHaveBeenCalledTimes(2)
+  expect(mockAddNotification).not.toHaveBeenCalled()
 
   act(() => publishBrowserChatAlertPreference({ userId: 'alice', enabled: true }))
   await pollWhileUnfocused()
@@ -199,7 +199,7 @@ it('does not apply Alice’s preference event to Bob after an account switch', a
   act(() => publishBrowserChatAlertPreference({ userId: 'alice', enabled: true }))
   await pollWhileUnfocused()
   expect(browserNotification).not.toHaveBeenCalled()
-  expect(mockAddNotification).toHaveBeenCalledWith(expect.objectContaining({ type: 'CHAT_MESSAGE' }))
+  expect(mockAddNotification).not.toHaveBeenCalled()
 
   setViewer(null)
   view.rerender(<ChatProvider><ChatProbe /></ChatProvider>)
@@ -233,7 +233,7 @@ it('aborts and ignores a late Alice profile after switching to Bob', async () =>
   await act(async () => { finishAlice(response({ id: 'alice', userSettings: { pushNotifications: true } })); await aliceProfile })
   await pollWhileUnfocused()
   expect(browserNotification).not.toHaveBeenCalled()
-  expect(mockAddNotification).toHaveBeenCalledWith(expect.objectContaining({ type: 'CHAT_MESSAGE' }))
+  expect(mockAddNotification).not.toHaveBeenCalled()
 })
 
 it.each(['bob', null])('closes every private desktop alert when Alice changes session to %s', async nextViewer => {
@@ -272,7 +272,7 @@ it('closes existing desktop alerts immediately when their owner opts out', async
   expect(activeDesktopAlerts.size).toBe(0)
   await pollWhileUnfocused()
   expect(browserNotification).toHaveBeenCalledTimes(1)
-  expect(mockAddNotification).toHaveBeenCalledTimes(2)
+  expect(mockAddNotification).not.toHaveBeenCalled()
 })
 
 it('releases alerts on provider unmount and forgets already-closed handles', async () => {

@@ -5,7 +5,8 @@
 /* Hallmark · genre: editorial · macrostructure: split conversation · design-system: design.md · designed-as-app */
 
 import { AppShell, AppHeader } from '@/components/app-shell';
-import { useState, useEffect, useRef } from 'react'
+import { Suspense, useState, useEffect, useRef, useMemo } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Sidebar } from "@/components/Sidebar"
 import { UserNav } from "@/components/user-nav"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -37,6 +38,17 @@ import Image from 'next/image'
 import { cn } from '@/lib/utils'
 
 export default function ChatPage() {
+  return <Suspense fallback={<div role="status" className="p-6">Chat wird geladen …</div>}><ChatPageContent /></Suspense>
+}
+
+function ChatPageContent() {
+  const searchParams = useSearchParams()
+  const linkedChannelId = searchParams.get('channelId')
+  const linkedMessageId = searchParams.get('messageId')
+  const linkedTarget = useMemo(() => linkedChannelId && linkedMessageId &&
+    /^[A-Za-z0-9_-]{1,100}$/.test(linkedChannelId) && /^[A-Za-z0-9_-]{1,100}$/.test(linkedMessageId)
+      ? { channelId: linkedChannelId, messageId: linkedMessageId }
+      : null, [linkedChannelId, linkedMessageId])
   const { data: session } = useSession()
   const {
     channels,
@@ -63,13 +75,63 @@ export default function ChatPage() {
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [selectedImageForModal, setSelectedImageForModal] = useState<string | null>(null)
   const [showChannelsMobile, setShowChannelsMobile] = useState(false)
+  const [linkedMessage, setLinkedMessage] = useState<ChatMessage | null>(null)
+  const [linkedErrorKey, setLinkedErrorKey] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const focusedLinkedMessageRef = useRef<string | null>(null)
   const editInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
+    if (!linkedTarget || loading || !session) return
+    const channel = channels.find(item => item.id === linkedTarget.channelId)
+    if (!channel) return
+    if (currentChannel?.id !== channel.id) setCurrentChannel(channel)
+  }, [linkedTarget, loading, session, channels, currentChannel?.id, setCurrentChannel])
+
+  useEffect(() => {
+    if (!linkedTarget || currentChannel?.id !== linkedTarget.channelId) return
+    const controller = new AbortController()
+    void fetch(`/api/chat/messages/${encodeURIComponent(linkedTarget.messageId)}`, { signal: controller.signal, cache: 'no-store' })
+      .then(async response => {
+        if (!response.ok) throw new Error('Linked message unavailable')
+        return response.json() as Promise<ChatMessage>
+      })
+      .then(message => {
+        if (controller.signal.aborted) return
+        if (message.id !== linkedTarget.messageId || message.channelId !== linkedTarget.channelId) throw new Error('Wrong linked message')
+        setLinkedMessage(message)
+        setLinkedErrorKey(null)
+      })
+      .catch(() => { if (!controller.signal.aborted) setLinkedErrorKey(`${linkedTarget.channelId}:${linkedTarget.messageId}`) })
+    return () => controller.abort()
+  }, [linkedTarget, currentChannel?.id])
+
+  const targetMessage = linkedMessage
+  const displayedMessages: ChatMessage[] = targetMessage && targetMessage.channelId === currentChannel?.id && targetMessage.id === linkedTarget?.messageId && !messages.some(message => message.id === targetMessage.id)
+    ? [...messages, targetMessage].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime() || a.id.localeCompare(b.id))
+    : messages
+
+  useEffect(() => {
+    if (linkedTarget && currentChannel?.id === linkedTarget.channelId) return
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages])
+  }, [messages, linkedTarget, currentChannel?.id])
+
+  useEffect(() => {
+    if (!linkedTarget || currentChannel?.id !== linkedTarget.channelId ||
+        !(messages.some(message => message.id === linkedTarget.messageId) || linkedMessage?.id === linkedTarget.messageId)) return
+    const focusKey = `${linkedTarget.channelId}:${linkedTarget.messageId}`
+    if (focusedLinkedMessageRef.current === focusKey) return
+    const element = document.getElementById(`chat-message-${linkedTarget.messageId}`)
+    element?.scrollIntoView({ block: 'center' })
+    element?.focus({ preventScroll: true })
+    if (element) focusedLinkedMessageRef.current = focusKey
+  }, [linkedTarget, currentChannel?.id, linkedMessage?.id, messages])
+
+  const linkedError = Boolean(linkedTarget && (
+    linkedErrorKey === `${linkedTarget.channelId}:${linkedTarget.messageId}` ||
+    (!loading && session && !channels.some(channel => channel.id === linkedTarget.channelId))
+  ))
 
   useEffect(() => {
     if (editingMessage && editInputRef.current) {
@@ -291,7 +353,8 @@ export default function ChatPage() {
               <Button type="button" variant="outline" size="sm" className="md:hidden" onClick={() => setShowChannelsMobile(true)}>Channels</Button>
             </div>
             <div role="log" aria-label="Nachrichten" className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6">
-              {messages.length === 0 && (
+              {linkedError && <p role="status" className="mb-4 rounded-lg border p-3 text-sm text-muted-foreground">Die verlinkte Nachricht ist nicht mehr verfügbar.</p>}
+              {displayedMessages.length === 0 && (
                 <div className="flex min-h-48 flex-col items-center justify-center gap-2 text-center" role="status">
                   <Hash className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
                   <h3 className="font-semibold">{currentChannel ? `Willkommen in # ${currentChannel.name}` : 'Wähle einen Channel'}</h3>
@@ -299,8 +362,8 @@ export default function ChatPage() {
                   {!currentChannel && <Button type="button" variant="outline" className="mt-3 md:hidden" onClick={() => setShowChannelsMobile(true)}>Channels ansehen</Button>}
                 </div>
               )}
-              {messages.map((message) => (
-                <article key={message.id} className="border-b py-5 first:pt-0">
+              {displayedMessages.map((message) => (
+                <article id={`chat-message-${message.id}`} tabIndex={-1} key={message.id} className={cn('border-b py-5 first:pt-0', linkedTarget?.messageId === message.id && 'rounded-lg bg-accent/50 px-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring')}>
                   <div className="flex min-w-0 items-start gap-3">
                     <Avatar className="h-9 w-9 shrink-0">
                       <AvatarImage src={message.author.image ?? undefined} alt="" />

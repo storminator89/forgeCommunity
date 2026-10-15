@@ -5,11 +5,12 @@
 
 import { AppShell, AppHeader } from '@/components/app-shell';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Sidebar } from "@/components/Sidebar";
 import { UserNav } from "@/components/user-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
-import { Bell, MessageSquare, Hash, CheckCircle, Trash2, CheckCircle2 } from 'lucide-react';
+import { Bell, MessageSquare, Hash, CheckCircle, Trash2, CheckCircle2, ArrowUpRight } from 'lucide-react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { format } from 'date-fns';
@@ -20,11 +21,16 @@ const notificationLabels: Record<string, string> = {
   CHAT_MESSAGE: 'Chatnachricht',
   CHANNEL_CREATED: 'Neuer Channel',
   CHANNEL_DELETED: 'Channel gelöscht',
+  FOLLOW: 'Neuer Follower',
+  COMMENT: 'Neuer Kommentar',
 };
 
 export default function NotificationsPage() {
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
-  const { notifications, unreadCount, isLoading, loadError, retry, markAsRead, deleteNotification, markAllAsRead } = useNotifications();
+  const [openingId, setOpeningId] = useState<string | null>(null);
+  const [openErrorId, setOpenErrorId] = useState<string | null>(null);
+  const router = useRouter();
+  const { notifications, unreadCount, isLoading, loadError, retry, markAsRead, deleteNotification, markAllAsRead, openNotification } = useNotifications();
   const reduceMotion = useReducedMotion();
   const filteredNotifications = filter === 'all' ? notifications : notifications.filter(n => !n.isRead);
 
@@ -85,9 +91,20 @@ export default function NotificationsPage() {
                       <p className={`mt-2 break-words text-sm leading-relaxed [overflow-wrap:anywhere] ${notification.isRead ? 'text-muted-foreground' : 'font-medium text-foreground'}`}>{notification.content}</p>
                       <time dateTime={new Date(notification.createdAt).toISOString()} className="mt-2 block text-xs text-muted-foreground">{format(new Date(notification.createdAt), 'PPp', { locale: de })}</time>
                       <div className="mt-3 flex flex-wrap items-center gap-x-1 gap-y-2">
+                        {notification.targetState === 'available' && notification.actionLabel && <Button type="button" variant="outline" size="sm" disabled={openingId === notification.id} onClick={async () => {
+                          setOpeningId(notification.id);
+                          setOpenErrorId(null);
+                          try {
+                            const href = await openNotification(notification.id);
+                            if (href) router.push(href);
+                            else setOpenErrorId(notification.id);
+                          } finally { setOpeningId(null); }
+                        }}><ArrowUpRight className="h-4 w-4" aria-hidden="true" />{openingId === notification.id ? 'Wird geöffnet…' : notification.actionLabel}</Button>}
                         {!notification.isRead && <Button type="button" variant="ghost" size="sm" onClick={() => markAsRead(notification.id)}><CheckCircle className="h-4 w-4" aria-hidden="true" />Als gelesen markieren</Button>}
                         <Button type="button" variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive" onClick={() => deleteNotification(notification.id)}><Trash2 className="h-4 w-4" aria-hidden="true" />Löschen</Button>
                       </div>
+                      {notification.targetState === 'unavailable' && <p className="mt-2 text-xs text-muted-foreground">Dieses Ziel wurde gelöscht oder ist nicht mehr für dich sichtbar.</p>}
+                      {openErrorId === notification.id && <p role="status" className="mt-2 text-xs text-destructive">Das Ziel konnte nicht geöffnet werden. Die Liste wird aktualisiert.</p>}
                     </div>
                   </motion.article>
                 ))}

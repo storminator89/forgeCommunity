@@ -19,14 +19,20 @@ if (process.env.POSTGRESQL_RELEASE_GATE_DISPOSABLE !== '1' ||
 const baselineSql = readFileSync(fileURLToPath(new URL('../prisma/postgresql-baselines/0000_main_7814799.sql', import.meta.url)), 'utf8');
 const upgradesDir = fileURLToPath(new URL('../prisma/postgresql-upgrades/', import.meta.url));
 const upgradeNames = readdirSync(upgradesDir).filter(name => /^\d+_[\w-]+\.sql$/.test(name)).sort();
-assert.deepEqual(upgradeNames, [
+const reviewedUpgradeNames = [
   '0001_skill_endorsements.sql',
   '0002_course_progress.sql',
   '0003_reports.sql',
   '0004_reward_ledger.sql',
   '0005_community_feed_indexes.sql',
   '0006_accepted_solutions.sql',
-]);
+  '0007_notification_targets.sql',
+  '0008_private_learning_goals.sql',
+];
+// Stacked drafts add the final two reviewed migrations in order. Reject any
+// unknown migration rather than letting the release gate silently skip it.
+assert.ok(upgradeNames.length >= 6);
+assert.deepEqual(upgradeNames, reviewedUpgradeNames.slice(0, upgradeNames.length));
 const expectedChecksums = new Map(upgradeNames.map(name => [name, createHash('sha256')
   .update(readFileSync(new URL(`../prisma/postgresql-upgrades/${name}`, import.meta.url)))
   .digest('hex')]));

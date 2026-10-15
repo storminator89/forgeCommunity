@@ -4,9 +4,7 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, ReactNode } from 'react';
 import type { Session } from 'next-auth';
 import { useSession } from 'next-auth/react';
-import { useNotifications } from './NotificationContext';
 import { ChatMessage, ChatChannel, CreateChannelInput, EditMessageInput } from '@/types/chat';
-import { NotificationType } from '@/types/notifications';
 import { BROWSER_CHAT_ALERT_PREFERENCE_EVENT, type BrowserChatAlertPreference } from '@/lib/browser-chat-alerts';
 
 interface ChatContextType {
@@ -25,12 +23,6 @@ interface ChatContextType {
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
-const extractMentions = (content: string): string[] => {
-  const mentionRegex = /@(\w+)/g;
-  const matches = content.match(mentionRegex);
-  return matches ? matches.map(match => match.substring(1)) : [];
-};
-
 export function ChatProvider({ children }: { children: ReactNode }) {
   const { data, status } = useSession();
   const session = status === 'authenticated' ? data : null;
@@ -43,7 +35,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 }
 
 function AccountChatProvider({ children, session }: { children: ReactNode; session: Session | null }) {
-  const { addNotification } = useNotifications();
   const [channels, setChannels] = useState<ChatChannel[]>([]);
   const [currentChannel, setCurrentChannelState] = useState<ChatChannel | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -265,21 +256,6 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
           : newMsg.content
           }`;
 
-        addNotification({
-          type: 'CHAT_MESSAGE' as NotificationType,
-          content: notificationContent,
-          isRead: false
-        });
-
-        const mentions = extractMentions(newMsg.content);
-        if (mentions.includes(session.user.name || '')) {
-          addNotification({
-            type: 'MENTION' as NotificationType,
-            content: `${newMsg.author.name} hat Sie in #${currentChannel.name} erwähnt`,
-            isRead: false
-          });
-        }
-
         if (!isWindowFocused && browserAlertsEnabledRef.current) {
           showDesktopNotification('Neue Nachricht', notificationContent);
         }
@@ -319,7 +295,7 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
     } catch (err) {
       if (!(err instanceof DOMException && err.name === 'AbortError')) console.error('Error syncing messages:', err);
     }
-  }, [addNotification, currentChannel, isWindowFocused, lastSync, lastSyncId, processedMessageIds, session, showDesktopNotification]);
+  }, [currentChannel, isWindowFocused, lastSync, lastSyncId, processedMessageIds, session, showDesktopNotification]);
 
 
   useEffect(() => {
@@ -413,27 +389,12 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
           : lastMessage.content
           }`;
 
-        addNotification({
-          type: 'CHAT_MESSAGE' as NotificationType,
-          content: notificationContent,
-          isRead: false
-        });
-
-        const mentions = extractMentions(lastMessage.content);
-        if (mentions.includes(session?.user?.name || '')) {
-          addNotification({
-            type: 'MENTION' as NotificationType,
-            content: `${lastMessage.author.name} hat Sie in #${currentChannel?.name} erwähnt`,
-            isRead: false
-          });
-        }
-
         if (!isWindowFocused && browserAlertsEnabledRef.current) {
           showDesktopNotification('Neue Nachricht', notificationContent);
         }
       }
     }
-  }, [addNotification, currentChannel, isWindowFocused, messages, processedMessageIds, session?.user?.id, session?.user?.name, showDesktopNotification]);
+  }, [currentChannel, isWindowFocused, messages, processedMessageIds, session?.user?.id, showDesktopNotification]);
 
   const sendMessage = async (content: string, imageFile?: File): Promise<boolean> => {
     const controller = sendControllerRef.current;
@@ -559,11 +520,6 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
       setChannels(prev => [...prev, newChannel]);
       setActiveChannel(newChannel);
 
-      addNotification({
-        type: 'SYSTEM' as NotificationType,
-        content: `Neuer Channel #${name} wurde erstellt`,
-        isRead: false
-      });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Error creating channel';
       setError(errorMessage);
@@ -573,8 +529,6 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
 
   const deleteChannel = async (channelId: string) => {
     try {
-      const channelToDelete = channels.find(c => c.id === channelId);
-
       const response = await fetch(`/api/chat/channels/${channelId}`, {
         method: 'DELETE',
       });
@@ -595,13 +549,6 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
         }
       }
 
-      if (channelToDelete) {
-        addNotification({
-          type: 'SYSTEM' as NotificationType,
-          content: `Channel #${channelToDelete.name} wurde gelöscht`,
-          isRead: false
-        });
-      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Error deleting channel';
       setError(errorMessage);
