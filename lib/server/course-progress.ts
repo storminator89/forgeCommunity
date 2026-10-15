@@ -8,6 +8,7 @@ import { groupCourseContents } from '@/lib/server/group-course-contents';
 import { reconcileLearnerCourseReward } from '@/lib/server/rewards';
 import { activeCourseContentWhere, publishedCourseWhere } from '@/lib/server/published-course';
 import { CoursePathError, coursePathAccess, publicationPathNodes } from '@/lib/server/course-path';
+import { courseSqlTable } from '@/lib/server/course-sql-tables';
 
 export type ProgressContent = { id: string; courseId: string; parentId: string | null; type: string | null; content: string; order?: number };
 
@@ -141,17 +142,19 @@ export async function assignmentPassedContentIds(tx: Prisma.TransactionClient, c
   const assignments = activeAssignmentLeaves.filter(content => content.type === 'ASSIGNMENT' && parseAssignmentContent(content.content)?.prompt.trim());
   if (!assignments.length || !userIds.length) return [];
   const currentRevisions = assignments.map(content => Prisma.sql`(s."contentId" = ${content.id} AND s."revision" = ${courseContentRevision(content)})`);
+  const submissions = courseSqlTable('AssignmentSubmission');
+  const decisions = courseSqlTable('AssignmentGradeDecision');
   return tx.$queryRaw<Array<{ userId: string; contentId: string }>>(Prisma.sql`
     WITH ranked_submissions AS (
       SELECT s."id", s."userId", s."contentId", s."passingScore",
         ROW_NUMBER() OVER (PARTITION BY s."userId", s."contentId" ORDER BY s."attemptNumber" DESC) AS attempt_rank
-      FROM "AssignmentSubmission" s
+      FROM ${submissions} s
       WHERE s."courseId" = ${courseId} AND s."userId" IN (${Prisma.join(userIds)})
         AND (${Prisma.join(currentRevisions, ' OR ')})
     )
     SELECT s."userId", s."contentId" FROM ranked_submissions s
-    JOIN "AssignmentGradeDecision" g ON g."id" = (
-      SELECT newest."id" FROM "AssignmentGradeDecision" newest
+    JOIN ${decisions} g ON g."id" = (
+      SELECT newest."id" FROM ${decisions} newest
       WHERE newest."submissionId" = s."id" ORDER BY newest."sequence" DESC LIMIT 1
     )
     WHERE s.attempt_rank = 1 AND g."action" = 'GRADED' AND g."score" >= s."passingScore"
@@ -164,8 +167,9 @@ export async function assignmentSubmittedUserIds(tx: Prisma.TransactionClient, c
   const assignments = activeAssignmentLeaves.filter(content => content.type === 'ASSIGNMENT' && parseAssignmentContent(content.content)?.prompt.trim());
   if (!assignments.length || !userIds.length) return [];
   const currentRevisions = assignments.map(content => Prisma.sql`(s."contentId" = ${content.id} AND s."revision" = ${courseContentRevision(content)})`);
+  const submissions = courseSqlTable('AssignmentSubmission');
   const rows = await tx.$queryRaw<Array<{ userId: string }>>(Prisma.sql`
-    SELECT DISTINCT s."userId" FROM "AssignmentSubmission" s
+    SELECT DISTINCT s."userId" FROM ${submissions} s
     WHERE s."courseId" = ${courseId} AND s."userId" IN (${Prisma.join(userIds)})
       AND (${Prisma.join(currentRevisions, ' OR ')})
   `);

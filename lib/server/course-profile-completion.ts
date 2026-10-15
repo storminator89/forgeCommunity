@@ -5,6 +5,7 @@ import { parseAssignmentContent } from '@/app/courses/[courseId]/contents/assign
 import { contentQuiz, courseContentRevision, courseLeaves, isQuizLikeContent, type ProgressContent } from '@/lib/server/course-progress';
 import { CoursePathError, prepareCoursePath, publicationPathNodes } from '@/lib/server/course-path';
 import { activeCourseContentWhere, publishedCourseWhere } from '@/lib/server/published-course';
+import { courseSqlTable } from '@/lib/server/course-sql-tables';
 
 type ProjectionDb = Pick<Prisma.TransactionClient, 'coursePublication' | 'courseContent' | 'courseContentProgress' | 'quizAttempt' | '$queryRaw'>;
 type ProjectionCourse = { id: string; activePublicationId: string | null; userIds: string[] };
@@ -144,22 +145,25 @@ export async function projectEffectiveCourseLeaves(db: ProjectionDb, courses: Pr
     for (let index = 0; index < assignmentLeaves.length; index += ASSIGNMENT_BATCH_SIZE) {
       const assignments = assignmentLeaves.slice(index, index + ASSIGNMENT_BATCH_SIZE);
       const values = assignments.map(leaf => Prisma.sql`(${leaf.courseId}, ${leaf.id}, ${revisionByLeaf.get(leaf.id)!})`);
+      const submissions = courseSqlTable('AssignmentSubmission');
+      const decisions = courseSqlTable('AssignmentGradeDecision');
+      const enrollments = courseSqlTable('Enrollment');
       for (const userIds of userBatches) {
         const grades = await db.$queryRaw<Array<{ courseId: string; userId: string; contentId: string; completedAt: Date }>>(Prisma.sql`
           WITH active_assignments("courseId", "contentId", "revision") AS (VALUES ${Prisma.join(values)}),
           ranked_submissions AS (
             SELECT s."courseId", s."userId", s."contentId", s."id", s."passingScore",
               ROW_NUMBER() OVER (PARTITION BY s."userId", s."contentId" ORDER BY s."attemptNumber" DESC) AS attempt_rank
-            FROM "AssignmentSubmission" s
+            FROM ${submissions} s
             JOIN active_assignments a ON a."courseId" = s."courseId" AND a."contentId" = s."contentId" AND a."revision" = s."revision"
-            JOIN "Enrollment" e ON e."courseId" = s."courseId" AND e."userId" = s."userId"
+            JOIN ${enrollments} e ON e."courseId" = s."courseId" AND e."userId" = s."userId"
             WHERE s."userId" IN (${Prisma.join(userIds)})
           )
           SELECT s."courseId", s."userId", s."contentId", (
-            SELECT first_pass."createdAt" FROM "AssignmentGradeDecision" first_pass
+            SELECT first_pass."createdAt" FROM ${decisions} first_pass
             WHERE first_pass."submissionId" = s."id"
               AND first_pass."sequence" > COALESCE((
-                SELECT MAX(invalidated."sequence") FROM "AssignmentGradeDecision" invalidated
+                SELECT MAX(invalidated."sequence") FROM ${decisions} invalidated
                 WHERE invalidated."submissionId" = s."id"
                   AND (invalidated."action" <> 'GRADED' OR invalidated."score" IS NULL OR invalidated."score" < s."passingScore")
               ), 0)
@@ -167,8 +171,8 @@ export async function projectEffectiveCourseLeaves(db: ProjectionDb, courses: Pr
             ORDER BY first_pass."sequence" ASC LIMIT 1
           ) AS "completedAt"
           FROM ranked_submissions s
-          JOIN "AssignmentGradeDecision" g ON g."id" = (
-            SELECT newest."id" FROM "AssignmentGradeDecision" newest
+          JOIN ${decisions} g ON g."id" = (
+            SELECT newest."id" FROM ${decisions} newest
             WHERE newest."submissionId" = s."id" ORDER BY newest."sequence" DESC LIMIT 1
           )
           WHERE s.attempt_rank = 1 AND g."action" = 'GRADED' AND g."score" >= s."passingScore"

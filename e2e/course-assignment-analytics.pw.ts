@@ -166,7 +166,7 @@ test('author grades a real learner assignment and sees current analytics with a 
     const gradedRow = page.locator('main ol > li').filter({ hasText: answer }).first()
     await expect(gradedRow.getByText('Bestanden', { exact: true })).toBeVisible()
     await gradedRow.getByText('Bewertungsverlauf (1)').click()
-    await expect(gradedRow.getByText(feedback, { exact: true })).toBeVisible()
+    await expect(gradedRow.locator('details p').filter({ hasText: feedback })).toHaveText(feedback)
     await page.evaluate(async () => { await document.fonts.ready })
     await gradedRow.screenshot({ path: testInfo.outputPath('assignment-grading-populated-desktop-' + candidateSha + '.png'), animations: 'disabled' })
 

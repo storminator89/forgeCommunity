@@ -141,7 +141,9 @@ async function main() {
   const password = 'Postgresql-Smoke-Strong-2026!';
   const authorEmail = `lms-author-${suffix}@example.test`;
   const learnerEmail = `lms-learner-${suffix}@example.test`;
-  await anonymous('/api/register', { method: 'POST', status: 201, body: { name: 'PG Smoke Author', email: authorEmail, password } });
+  const authorRegistration = await (await anonymous('/api/register', {
+    method: 'POST', status: 201, body: { name: 'PG Smoke Author', email: authorEmail, password },
+  })).json();
   const learnerRegistration = await (await anonymous('/api/register', {
     method: 'POST', status: 201, body: { name: 'PG Smoke Learner', email: learnerEmail, password },
   })).json();
@@ -327,12 +329,21 @@ async function main() {
   assert.equal((await (await learner(`${assignmentRoute}/progress`)).json()).complete, false);
   const queue = await (await author(`${assignmentRoute}/assignments`)).json();
   assert.deepEqual(queue.submissions.map(row => row.id), [submitted.id]);
+  const pendingAnalytics = await (await author(`${assignmentRoute}/analytics`)).json();
+  assert.equal(pendingAnalytics.learners[0].currentStatus, 'in-progress');
+  assert.ok(!JSON.stringify(pendingAnalytics).includes('Synthetic PG smoke answer'), 'Analytics exposed a private response.');
   const gradeRoute = `${assignmentRoute}/assignments/${submitted.id}/grade`;
   const graded = await (await author(gradeRoute, { method: 'POST', body: {
     requestId: randomUUID(), expectedDecisionId: null, action: 'GRADED', score: 85, feedback: 'Synthetic review',
   } })).json();
   assert.equal(graded.decision.passed, true);
   assert.equal((await (await learner(`${assignmentRoute}/progress`)).json()).complete, true);
+  const authorCourses = async () => (await (await author(`/api/users/${authorRegistration.userId}/courses`)).json()).courses;
+  const learnerEnrollments = async () => (await (await learner(`/api/users/${learnerRegistration.userId}/enrollments`)).json()).courses;
+  const profileRate = (courses) => courses.find(course => course.id === assignmentCourse.id)?.stats.completionRate;
+  assert.equal((await (await author(`${assignmentRoute}/analytics`)).json()).summary.currentComplete, 1);
+  assert.equal(profileRate(await authorCourses()), 100, 'Author profile must project current assignment completion in the isolated schema.');
+  assert.equal(profileRate(await learnerEnrollments()), 100, 'Learner profile must project current assignment completion in the isolated schema.');
   const goalRoute = '/api/learning-goals/me';
   const startedGoal = await (await learner(goalRoute, { method: 'POST', status: 201,
     body: { targetLeaves: 1, durationDays: 7, timezone: 'UTC' },
@@ -351,6 +362,8 @@ async function main() {
   assert.equal(corrected.decision.passed, false);
   assert.equal((await (await learner(`${assignmentRoute}/progress`)).json()).complete, false);
   assert.equal((await (await learner(goalRoute)).json()).goal.completedLeaves, 0);
+  assert.equal((await (await author(`${assignmentRoute}/analytics`)).json()).summary.currentComplete, 0);
+  assert.equal(profileRate(await authorCourses()), 0, 'A failing correction must revoke current profile completion.');
   const repassed = await (await author(gradeRoute, { method: 'POST', body: {
     requestId: randomUUID(), expectedDecisionId: corrected.decision.id, action: 'GRADED', score: 85,
   } })).json();
@@ -358,6 +371,7 @@ async function main() {
   assert.equal((await (await learner(goalRoute)).json()).goal.completedLeaves, 1,
     'A new pass after failure must begin a new goal-counting interval.');
   assert.equal((await (await learner(`${assignmentRoute}/progress`)).json()).complete, true);
+  assert.equal(profileRate(await learnerEnrollments()), 100, 'Repassing must restore current profile completion.');
 
   // Exercise the actual PostgreSQL adapter with a published dependency, not
   // just schema parity. An author token must not bypass the learner's lock.

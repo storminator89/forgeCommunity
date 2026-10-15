@@ -2,6 +2,7 @@ import 'server-only'
 
 import { createHash, randomUUID } from 'node:crypto'
 import { Prisma } from '@prisma/client'
+import { courseSqlTable } from '@/lib/server/course-sql-tables'
 import prisma from '@/lib/prisma'
 import { MAX_ASSIGNMENT_FEEDBACK, MAX_ASSIGNMENT_RESPONSE, parseAssignmentContent } from '@/app/courses/[courseId]/contents/assignment-content'
 import { contentVersionToken, courseContentRevision, matchesContentVersionToken, recordCourseCompletion } from '@/lib/server/course-progress'
@@ -180,13 +181,15 @@ export async function readAssignmentQueue(courseId: string, actor: Actor, cursor
     if (filter === 'pending') {
       const currentRevisions = conditions.map(item => Prisma.sql`(s."contentId" = ${item.contentId} AND s."revision" = ${item.revision})`)
       const before = anchor ? Prisma.sql`AND (latest."submittedAt" < ${anchor.submittedAt} OR (latest."submittedAt" = ${anchor.submittedAt} AND latest."id" < ${anchor.id}))` : Prisma.empty
+      const submissions = courseSqlTable('AssignmentSubmission')
+      const decisions = courseSqlTable('AssignmentGradeDecision')
       const page = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
         WITH latest AS (
           SELECT s."id", s."submittedAt", ROW_NUMBER() OVER (PARTITION BY s."userId", s."contentId" ORDER BY s."attemptNumber" DESC) AS attempt_rank
-          FROM "AssignmentSubmission" s WHERE s."courseId" = ${courseId} AND (${Prisma.join(currentRevisions, ' OR ')})
+          FROM ${submissions} s WHERE s."courseId" = ${courseId} AND (${Prisma.join(currentRevisions, ' OR ')})
         )
         SELECT latest."id" FROM latest WHERE latest.attempt_rank = 1 ${before}
-          AND (SELECT g."action" FROM "AssignmentGradeDecision" g WHERE g."submissionId" = latest."id" ORDER BY g."sequence" DESC LIMIT 1) IS DISTINCT FROM 'GRADED'
+          AND (SELECT g."action" FROM ${decisions} g WHERE g."submissionId" = latest."id" ORDER BY g."sequence" DESC LIMIT 1) IS DISTINCT FROM 'GRADED'
         ORDER BY latest."submittedAt" DESC, latest."id" DESC LIMIT 51
       `)
       ids = page.map(item => item.id)

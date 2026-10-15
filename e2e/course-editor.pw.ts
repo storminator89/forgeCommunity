@@ -184,7 +184,10 @@ test('private course authoring, publication and latest learner content use real 
   await expect(page.getByText('1 Voraussetzung im Entwurf', { exact: true })).toBeVisible()
   await page.getByRole('navigation', { name: 'Kursstruktur bearbeiten' }).getByTitle('Erste Lektion', { exact: true }).click()
   await reviewAndPublish(page, courseId, 1, async () => {
-    await expect(page.getByRole('dialog', { name: 'Veröffentlichung prüfen' })).toContainText('neue Lernvoraussetzungen')
+    const dialog = page.getByRole('dialog', { name: 'Veröffentlichung prüfen' })
+    await expect(dialog.getByText('Neu', { exact: true }).locator('..').getByText('2', { exact: true })).toBeVisible()
+    await expect(dialog).toContainText('Neue oder geänderte Lerninhalte können einen erneuten Abschluss in der aktuellen Fassung erfordern.')
+    await expect(dialog).toContainText('Änderungen am Lernpfad oder an Bewertungen können bisherige Freigaben und Belohnungen beeinflussen.')
     if (testInfo.project.name === 'desktop-chromium') {
       await page.evaluate(async () => { await document.fonts.ready })
       await page.screenshot({ path: testInfo.outputPath('publication-review-desktop-' + candidateSha + '.png'), animations: 'disabled' })

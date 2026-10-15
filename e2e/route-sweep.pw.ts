@@ -188,12 +188,6 @@ test.describe('every App Router page, one at a time', () => {
       if (item.url === '/settings') await expect(page.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Route QA Member');
       if (item.url === '/courses/qa-route-course/analytics') {
         await expect(main.getByRole('list', { name: 'Lernende im Kurs' })).toContainText('Route QA learner');
-        const search = main.getByRole('textbox', { name: 'Name suchen' });
-        await search.focus();
-        await expect(search).toBeFocused();
-        await search.fill('Route QA');
-        await search.press('Enter');
-        await expect(main.getByRole('list', { name: 'Lernende im Kurs' })).toContainText('Route QA learner');
       }
 
       const overflow = await page.evaluate(() => ({
@@ -212,6 +206,15 @@ test.describe('every App Router page, one at a time', () => {
       expect(await skip.evaluate(element => Number.parseFloat(getComputedStyle(element).outlineWidth))).toBeGreaterThanOrEqual(2);
       await page.keyboard.press('Enter');
       await expect(main).toBeFocused();
+
+      if (item.url === '/courses/qa-route-course/analytics') {
+        const search = main.getByRole('textbox', { name: 'Name suchen' });
+        await search.focus();
+        await expect(search).toBeFocused();
+        await search.fill('Route QA');
+        await search.press('Enter');
+        await expect(main.getByRole('list', { name: 'Lernende im Kurs' })).toContainText('Route QA learner');
+      }
 
       // These pages scroll inside <main>, so a document-level fullPage PNG
       // alone cannot show their lower content. Review the real lower action
