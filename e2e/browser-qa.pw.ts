@@ -200,17 +200,18 @@ test('landing, account, community, members, chat, and notifications work on desk
   await expect(page).toHaveURL(/\/community$/);
 
   await page.goto('/notifications');
-  await expect(page.getByRole('heading', { name: 'Benachrichtigungen' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Benachrichtigungen', exact: true })).toBeVisible();
   const notice = page.getByText('Browser QA Fixture folgt Ihnen jetzt', { exact: true });
+  const noticeItem = page.locator('article').filter({ has: notice });
   await expect(notice).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('notifications-unread.png'), fullPage: true });
   await page.getByRole('button', { name: /Ungelesen/ }).click();
   await expect(notice).toBeVisible();
-  await page.getByRole('button', { name: 'Als gelesen markieren' }).click();
+  await noticeItem.getByRole('button', { name: 'Als gelesen markieren', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Alles gelesen' })).toBeVisible();
   await page.getByRole('button', { name: 'Alle Benachrichtigungen anzeigen' }).click();
   await expect(notice).toBeVisible();
-  await page.getByRole('button', { name: 'Löschen' }).click();
+  await noticeItem.getByRole('button', { name: 'Löschen', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Noch keine Benachrichtigungen' })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('notifications-cleared.png'), fullPage: true });
 });
