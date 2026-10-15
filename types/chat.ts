@@ -19,6 +19,7 @@ export interface ChatMessage {
     id: string;
     name: string;
     isPrivate: boolean;
+    hasUnread?: boolean;
     _count: {
       members: number;
     };

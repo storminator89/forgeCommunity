@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/options';
 import prisma from '@/lib/prisma';
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
+import { getUnreadChannelIds } from '@/lib/server/chat-unread';
 
 export async function POST(req: Request) {
   try {
@@ -42,7 +43,7 @@ export async function POST(req: Request) {
       },
     });
 
-    return NextResponse.json(channel);
+    return NextResponse.json({ ...channel, hasUnread: false });
   } catch (error) {
     const requestError = requestErrorResponse(error);
     if (requestError) return requestError;
@@ -89,7 +90,11 @@ export async function GET() {
       },
     });
 
-    return NextResponse.json(channels, { headers: { 'Cache-Control': 'private, no-store' } });
+    const unread = await getUnreadChannelIds(session.user.id);
+    return NextResponse.json(channels.map(channel => ({
+      ...channel,
+      hasUnread: unread.has(channel.id),
+    })), { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     console.error('[CHANNELS_GET]', error);
     return new NextResponse('Internal Error', { status: 500 });

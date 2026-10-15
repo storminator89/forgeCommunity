@@ -5,6 +5,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import pg from 'pg';
+import prismaPackage from '@prisma/client';
 import { applyPostgresqlUpgrades } from './postgresql-upgrades.mjs';
 import { assertCoursePublicationReady } from './assert-course-publication-ready.mjs';
 import { createRetentionClient, runPracticeRetentionTick } from './formative-practice-retention-scheduler.mjs';
@@ -38,6 +39,7 @@ const reviewedUpgradeNames = [
   '0014_formative_practice_authoring.sql',
   '0015_formative_practice_learner.sql',
   '0016_chat_message_cursor_index.sql',
+  '0017_chat_read_cursor.sql',
 ];
 // A release image must carry the exact reviewed sequence, including the tail.
 assert.deepEqual(upgradeNames, reviewedUpgradeNames);
@@ -57,6 +59,7 @@ const communityIndexes = {
 };
 
 const quoteIdent = value => `"${value.replaceAll('"', '""')}"`;
+const { Prisma } = prismaPackage;
 const count = async (db, table) => Number((await db.query(`SELECT COUNT(*) AS count FROM ${quoteIdent(table)}`)).rows[0].count);
 const rejectsCode = (promise, code) => assert.rejects(promise, error => error?.code === code);
 const deploy = (url, option) => {
@@ -919,5 +922,41 @@ test('retention worker validates the custom PostgreSQL schema, respects the advi
       await client.$disconnect();
       await db.query(`DROP SCHEMA IF EXISTS ${quoteIdent(otherSchema)} CASCADE`);
     }
+  });
+});
+
+test('chat read cursors use the custom PostgreSQL schema, enforce position pairs, and cascade', async () => {
+  await withSchema({}, async (db, url) => {
+    await applyPostgresqlUpgrades(url, { initializeEmptySchema: true });
+    const schema = new URL(url).searchParams.get('schema');
+    const client = createRetentionClient({ provider: 'postgresql', url, schema });
+    try {
+      await client.user.createMany({ data: [
+        { id: 'chat-reader', email: 'chat-reader@example.invalid' },
+        { id: 'chat-author', email: 'chat-author@example.invalid' },
+      ] });
+      await client.chatChannel.create({ data: { id: 'chat-room', name: 'Disposable' } });
+      const message = await client.chatMessage.create({ data: {
+        id: 'chat-message', channelId: 'chat-room', authorId: 'chat-author', content: 'hello',
+      } });
+      await client.chatReadCursor.create({ data: {
+        userId: 'chat-reader', channelId: 'chat-room', lastReadCreatedAt: message.createdAt, lastReadId: message.id,
+      } });
+      const qualifiedCursor = Prisma.raw(`${quoteIdent(schema)}."ChatReadCursor"`);
+      const rows = await client.$queryRaw(Prisma.sql`
+        SELECT "userId", "channelId", "lastReadCreatedAt", "lastReadId"
+        FROM ${qualifiedCursor} WHERE "userId" = ${'chat-reader'}`);
+      assert.equal(rows.length, 1, 'qualified raw SQL must resolve the disposable custom schema');
+      assert.equal(rows[0].lastReadId, 'chat-message');
+      await rejectsCode(db.query(`UPDATE "ChatReadCursor" SET "lastReadId" = NULL WHERE "userId" = 'chat-reader'`), '23514');
+      await rejectsCode(db.query(`INSERT INTO "ChatReadCursor" ("userId", "channelId")
+        VALUES ('missing-user', 'chat-room')`), '23503');
+      await client.chatChannel.delete({ where: { id: 'chat-room' } });
+      assert.equal(await client.chatReadCursor.count(), 0);
+      await client.chatChannel.create({ data: { id: 'second-room', name: 'Disposable two' } });
+      await client.chatReadCursor.create({ data: { userId: 'chat-reader', channelId: 'second-room' } });
+      await client.user.delete({ where: { id: 'chat-reader' } });
+      assert.equal(await client.chatReadCursor.count(), 0);
+    } finally { await client.$disconnect(); }
   });
 });

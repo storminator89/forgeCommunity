@@ -125,6 +125,7 @@ model User {
   courses            Course[]
   eventAttendees     EventAttendee[]
   chatMessages       ChatMessage[]
+  chatReadCursors    ChatReadCursor[]
   notifications      Notification[]
   badges             UserBadge[]
   skills             UserSkill[]
@@ -950,9 +951,23 @@ model ChatChannel {
   name      String
   isPrivate Boolean       @default(false)
   messages  ChatMessage[]
+  readCursors ChatReadCursor[]
   members   ChatMember[]
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
+}
+
+// A row records that this account has visibly opened a readable channel.
+// Null position means it was empty when opened; absence means unvisited.
+model ChatReadCursor {
+  userId            String
+  user              User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channelId         String
+  channel           ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  lastReadCreatedAt DateTime?
+  lastReadId        String?
+
+  @@id([userId, channelId])
 }
 
 model ChatMember {

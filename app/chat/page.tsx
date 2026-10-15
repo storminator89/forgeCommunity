@@ -5,7 +5,7 @@
 /* Hallmark · genre: editorial · macrostructure: split conversation · design-system: design.md · designed-as-app */
 
 import { AppShell, AppHeader } from '@/components/app-shell';
-import { Suspense, useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react'
+import { Suspense, useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Sidebar } from "@/components/Sidebar"
 import { UserNav } from "@/components/user-nav"
@@ -56,7 +56,10 @@ function ChatPageContent() {
     messages,
     hasOlderMessages,
     loadingOlderMessages,
+    loadedChannelId,
+    hasNewerMessages,
     loadOlderMessages,
+    markRead,
     setCurrentChannel,
     sendMessage,
     editMessage,
@@ -117,6 +120,43 @@ function ChatPageContent() {
   const displayedMessages: ChatMessage[] = targetMessage && targetMessage.channelId === currentChannel?.id && targetMessage.id === linkedTarget?.messageId && !messages.some(message => message.id === targetMessage.id)
     ? [...messages, targetMessage].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime() || a.id.localeCompare(b.id))
     : messages
+
+  const latestPersistedMessage = [...messages].reverse().find(message => !message.id.startsWith('temp-'))
+  const latestPersistedId = latestPersistedMessage?.id ?? null
+  const canMarkLatest = currentChannel && loadedChannelId === currentChannel.id && !loading &&
+    !hasNewerMessages && !showChannelsMobile &&
+    (displayedMessages.length === 0 || displayedMessages[displayedMessages.length - 1]?.id === latestPersistedId)
+
+  const markVisibleLatestRead = useCallback(() => {
+    if (!canMarkLatest || document.visibilityState !== 'visible' || !document.hasFocus()) return
+    const log = messageLogRef.current
+    if (!log || !log.isConnected || log.scrollHeight - log.scrollTop - log.clientHeight >= 80) return
+    const logRect = log.getBoundingClientRect()
+    if (logRect.width <= 0 || logRect.height <= 0 || logRect.bottom <= 0 || logRect.top >= window.innerHeight) return
+    if (latestPersistedId) {
+      const last = document.getElementById(`chat-message-${latestPersistedId}`)
+      if (!last || !log.contains(last)) return
+      const lastRect = last.getBoundingClientRect()
+      // Seeing an earlier part of a tall last message is insufficient. The
+      // bottom of the newest persisted message must actually be in view.
+      if (lastRect.bottom > logRect.bottom + 1 || lastRect.bottom <= logRect.top) return
+    }
+    void markRead(currentChannel.id, latestPersistedId)
+  }, [canMarkLatest, currentChannel, latestPersistedId, markRead])
+
+  useEffect(() => {
+    markVisibleLatestRead()
+    const retryInterval = setInterval(markVisibleLatestRead, 10000)
+    window.addEventListener('focus', markVisibleLatestRead)
+    window.addEventListener('resize', markVisibleLatestRead)
+    document.addEventListener('visibilitychange', markVisibleLatestRead)
+    return () => {
+      clearInterval(retryInterval)
+      window.removeEventListener('focus', markVisibleLatestRead)
+      window.removeEventListener('resize', markVisibleLatestRead)
+      document.removeEventListener('visibilitychange', markVisibleLatestRead)
+    }
+  }, [markVisibleLatestRead])
 
   useLayoutEffect(() => {
     const log = messageLogRef.current
@@ -331,10 +371,12 @@ function ChatPageContent() {
                     type="button"
                     className={`relative flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-[10px] px-3 py-2 text-left text-sm transition-colors hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring ${currentChannel?.id === channel.id ? 'bg-accent/70 font-semibold text-foreground before:absolute before:bottom-2 before:left-0 before:top-2 before:w-0.5 before:rounded-full before:bg-primary' : 'text-muted-foreground'}`}
                     aria-current={currentChannel?.id === channel.id ? 'page' : undefined}
+                    aria-label={channel.hasUnread ? `${channel.name}, ungelesene Nachrichten` : channel.name}
                     onClick={() => { setCurrentChannel(channel); setShowChannelsMobile(false) }}
                   >
                     <Hash className={cn('h-4 w-4 shrink-0', currentChannel?.id === channel.id && 'text-primary')} aria-hidden="true" />
                     <span className="min-w-0 truncate">{channel.name}</span>
+                    {channel.hasUnread && <span aria-hidden="true" className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />}
                   </button>
                     {session.user.role === 'ADMIN' && (
                       <AlertDialog>
@@ -391,6 +433,7 @@ function ChatPageContent() {
             <div ref={messageLogRef} role="log" aria-label="Nachrichten" className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6" onScroll={event => {
               const log = event.currentTarget
               followLatestRef.current = log.scrollHeight - log.scrollTop - log.clientHeight < 80
+              markVisibleLatestRead()
             }}>
               {linkedError && <p role="status" className="mb-4 rounded-lg border p-3 text-sm text-muted-foreground">Die verlinkte Nachricht ist nicht mehr verfügbar.</p>}
               {hasOlderMessages && <div className="mb-3 flex justify-center"><Button type="button" size="sm" variant="outline" disabled={loadingOlderMessages} onClick={handleLoadOlder}>{loadingOlderMessages ? 'Lade Nachrichten…' : 'Ältere Nachrichten laden'}</Button></div>}
