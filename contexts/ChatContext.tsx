@@ -1,7 +1,7 @@
 // contexts/ChatContext.tsx
 'use client'
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState, ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, ReactNode } from 'react';
 import type { Session } from 'next-auth';
 import { useSession } from 'next-auth/react';
 import { useNotifications } from './NotificationContext';
@@ -24,16 +24,6 @@ interface ChatContextType {
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
-
-const showDesktopNotification = (title: string, body: string) => {
-  if ('Notification' in window && Notification.permission === 'granted') {
-    try {
-      new Notification(title, { body });
-    } catch (error) {
-      console.error('Error showing desktop notification:', error);
-    }
-  }
-};
 
 const extractMentions = (content: string): string[] => {
   const mentionRegex = /@(\w+)/g;
@@ -65,8 +55,44 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
   const [processedMessageIds] = useState<Set<string>>(new Set());
   const activeChannelIdRef = useRef<string | null>(null);
   const activeSessionIdRef = useRef<string | null>(null);
+  const sendControllerRef = useRef<AbortController | null>(null);
+
+  useLayoutEffect(() => {
+    // This provider is keyed by account. Cancel both upload and message requests
+    // synchronously at the logout/account-switch/unmount commit. Recreate the
+    // controller on setup so Strict Mode's cleanup cannot cancel future sends.
+    const controller = new AbortController();
+    sendControllerRef.current = controller;
+    return () => {
+      controller.abort();
+      sendControllerRef.current = null;
+    };
+  }, []);
   // An unverified or failed preference load must never enable desktop alerts.
   const browserAlertsEnabledRef = useRef(false);
+  // Browser notifications outlive the React tree. Keep their handles with the
+  // account that created them so private excerpts do not survive its session.
+  const desktopNotificationsRef = useRef(new Set<Notification>());
+  const closeDesktopNotifications = useCallback(() => {
+    for (const notification of desktopNotificationsRef.current) {
+      try {
+        notification.close();
+      } catch (error) {
+        console.error('Error closing desktop notification:', error);
+      }
+    }
+    desktopNotificationsRef.current.clear();
+  }, []);
+  const showDesktopNotification = useCallback((title: string, body: string) => {
+    if (!browserAlertsEnabledRef.current || !('Notification' in window) || Notification.permission !== 'granted') return;
+    try {
+      const notification = new Notification(title, { body });
+      desktopNotificationsRef.current.add(notification);
+      notification.addEventListener('close', () => desktopNotificationsRef.current.delete(notification), { once: true });
+    } catch (error) {
+      console.error('Error showing desktop notification:', error);
+    }
+  }, []);
 
   useEffect(() => {
     const userId = session?.user?.id;
@@ -80,6 +106,7 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
       if (preference?.userId !== userId) return;
       updatedAfterRequest = true;
       browserAlertsEnabledRef.current = preference.enabled === true;
+      if (!browserAlertsEnabledRef.current) closeDesktopNotifications();
     };
     window.addEventListener(BROWSER_CHAT_ALERT_PREFERENCE_EVENT, onPreferenceChange);
 
@@ -103,8 +130,9 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
       controller.abort();
       window.removeEventListener(BROWSER_CHAT_ALERT_PREFERENCE_EVENT, onPreferenceChange);
       browserAlertsEnabledRef.current = false;
+      closeDesktopNotifications();
     };
-  }, [session?.user?.id]);
+  }, [closeDesktopNotifications, session?.user?.id]);
 
   const setActiveChannel = useCallback((channel: ChatChannel) => {
     if (activeChannelIdRef.current === channel.id) return;
@@ -291,7 +319,7 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
     } catch (err) {
       if (!(err instanceof DOMException && err.name === 'AbortError')) console.error('Error syncing messages:', err);
     }
-  }, [addNotification, currentChannel, isWindowFocused, lastSync, lastSyncId, processedMessageIds, session]);
+  }, [addNotification, currentChannel, isWindowFocused, lastSync, lastSyncId, processedMessageIds, session, showDesktopNotification]);
 
 
   useEffect(() => {
@@ -405,10 +433,11 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
         }
       }
     }
-  }, [addNotification, currentChannel, isWindowFocused, messages, processedMessageIds, session?.user?.id, session?.user?.name]);
+  }, [addNotification, currentChannel, isWindowFocused, messages, processedMessageIds, session?.user?.id, session?.user?.name, showDesktopNotification]);
 
   const sendMessage = async (content: string, imageFile?: File): Promise<boolean> => {
-    if (!currentChannel || !session?.user) return false;
+    const controller = sendControllerRef.current;
+    if (!currentChannel || !session?.user || !controller || controller.signal.aborted) return false;
 
     const channelId = currentChannel.id;
     const tempId = `temp-${Date.now()}`;
@@ -422,10 +451,15 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
         const uploadResponse = await fetch('/api/chat/upload', {
           method: 'POST',
           body: formData,
+          signal: controller.signal,
         });
 
+        if (controller.signal.aborted) return false;
         if (!uploadResponse.ok) throw new Error('Failed to upload image');
         const uploadData = await uploadResponse.json();
+        // Aborting fetch alone is insufficient if the response/body has already
+        // completed. Never continue this old draft with a new account's cookie.
+        if (controller.signal.aborted) return false;
         imageUrl = uploadData.filePath;
       }
 
@@ -449,6 +483,7 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
 
       const response = await fetch('/api/chat/messages', {
         method: 'POST',
+        signal: controller.signal,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           content,
@@ -458,9 +493,11 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
         }),
       });
 
+      if (controller.signal.aborted) return false;
       if (!response.ok) throw new Error('Failed to send message');
 
       const actualMessage = await response.json();
+      if (controller.signal.aborted) return false;
       processedMessageIds.add(actualMessage.id);
 
       if (activeChannelIdRef.current === channelId) {
@@ -474,6 +511,7 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
       setError(null);
       return true;
     } catch (err) {
+      if (controller.signal.aborted) return false;
       if (activeChannelIdRef.current === channelId) {
         setMessages(prev => prev.filter(msg => msg.id !== tempId));
       }

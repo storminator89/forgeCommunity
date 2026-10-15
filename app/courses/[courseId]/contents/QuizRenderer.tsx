@@ -209,7 +209,7 @@ function QuizRendererState({ content }: { content: QuizContent }) {
             {questions.map((q, index) => (
               <div key={index} className="space-y-2">
                 <p className="font-medium">{q.question}</p>
-                <p className={isAnswerCorrect(index) ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>
+                <p className={isAnswerCorrect(index) ? "text-green-700 dark:text-green-400" : "text-red-600 dark:text-red-400"}>
                   {isAnswerCorrect(index) ? "✓ Richtig" : "✗ Falsch"}
                   {!isAnswerCorrect(index) && isChoiceQuestion(q) && (
                     <span className="block text-sm">

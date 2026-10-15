@@ -13,6 +13,7 @@ const originalNotification = Object.getOwnPropertyDescriptor(window, 'Notificati
 let browserNotification: jest.Mock
 let requestPermission: jest.Mock
 let intervalSpy: jest.SpyInstance
+let activeDesktopAlerts: Set<string>
 
 const channel = { id: 'room', name: 'general', isPrivate: false, _count: { messages: 0, members: 0 }, members: [] }
 const response = (data: unknown) => ({ ok: true, json: async () => data } as Response)
@@ -31,7 +32,18 @@ function setViewer(id: string | null) {
 
 function installBrowserPermission(permission: NotificationPermission | 'unsupported') {
   requestPermission = jest.fn(async () => 'granted')
-  browserNotification = jest.fn()
+  activeDesktopAlerts = new Set()
+  browserNotification = jest.fn((_title: string, options: NotificationOptions) => {
+    const notification = new EventTarget()
+    const body = options.body ?? ''
+    activeDesktopAlerts.add(body)
+    return Object.assign(notification, {
+      close: jest.fn(() => {
+        activeDesktopAlerts.delete(body)
+        notification.dispatchEvent(new Event('close'))
+      }),
+    })
+  })
   if (permission === 'unsupported') {
     Reflect.deleteProperty(window, 'Notification')
     return
@@ -222,4 +234,88 @@ it('aborts and ignores a late Alice profile after switching to Bob', async () =>
   await pollWhileUnfocused()
   expect(browserNotification).not.toHaveBeenCalled()
   expect(mockAddNotification).toHaveBeenCalledWith(expect.objectContaining({ type: 'CHAT_MESSAGE' }))
+})
+
+it.each(['bob', null])('closes every private desktop alert when Alice changes session to %s', async nextViewer => {
+  let next = 0
+  const view = await mountChat(() => true, () => message(String(++next)))
+  await pollWhileUnfocused()
+  await pollWhileUnfocused()
+  expect([...activeDesktopAlerts]).toEqual([
+    expect.stringContaining('New message 1'), expect.stringContaining('New message 2'),
+  ])
+
+  setViewer(nextViewer)
+  view.rerender(<ChatProvider><ChatProbe /></ChatProvider>)
+  expect(activeDesktopAlerts.size).toBe(0)
+  for (const notification of browserNotification.mock.results) {
+    expect(notification.value.close).toHaveBeenCalledTimes(1)
+  }
+
+  if (nextViewer) {
+    await screen.findByText('room')
+    await act(async () => { await Promise.resolve() })
+    await pollWhileUnfocused()
+    expect([...activeDesktopAlerts]).toEqual([expect.stringContaining('New message 3')])
+  }
+})
+
+it('closes existing desktop alerts immediately when their owner opts out', async () => {
+  let next = 0
+  await mountChat(() => true, () => message(String(++next)))
+  await pollWhileUnfocused()
+  expect(activeDesktopAlerts.size).toBe(1)
+
+  act(() => publishBrowserChatAlertPreference({ userId: 'bob', enabled: false }))
+  expect(activeDesktopAlerts.size).toBe(1)
+  act(() => publishBrowserChatAlertPreference({ userId: 'alice', enabled: false }))
+  expect(activeDesktopAlerts.size).toBe(0)
+  await pollWhileUnfocused()
+  expect(browserNotification).toHaveBeenCalledTimes(1)
+  expect(mockAddNotification).toHaveBeenCalledTimes(2)
+})
+
+it('releases alerts on provider unmount and forgets already-closed handles', async () => {
+  let next = 0
+  const view = await mountChat(() => true, () => message(String(++next)))
+  await pollWhileUnfocused()
+  const first = browserNotification.mock.results[0].value
+  act(() => first.close())
+  await pollWhileUnfocused()
+  const second = browserNotification.mock.results[1].value
+  expect(activeDesktopAlerts.size).toBe(1)
+
+  view.unmount()
+  expect(activeDesktopAlerts.size).toBe(0)
+  expect(first.close).toHaveBeenCalledTimes(1)
+  expect(second.close).toHaveBeenCalledTimes(1)
+})
+
+it('keeps alerts across a same-account session refresh', async () => {
+  let next = 0
+  const view = await mountChat(() => true, () => message(String(++next)))
+  await pollWhileUnfocused()
+
+  setViewer('alice')
+  view.rerender(<ChatProvider><ChatProbe /></ChatProvider>)
+  expect(activeDesktopAlerts.size).toBe(1)
+  expect(browserNotification.mock.results[0].value.close).not.toHaveBeenCalled()
+})
+
+it('does not reopen old alerts when a pre-switch poll finishes late', async () => {
+  let next = 0
+  const view = await mountChat(() => true, () => message(String(++next)))
+  await pollWhileUnfocused()
+  let finishPoll!: (value: Response) => void
+  jest.mocked(fetch).mockImplementationOnce(() => new Promise(resolve => { finishPoll = resolve }))
+  const callback = intervalSpy.mock.calls.filter(([, delay]) => delay === 10000).at(-1)?.[0] as () => Promise<void>
+  let pendingPoll!: Promise<void>
+  act(() => { pendingPoll = callback() })
+
+  setViewer('bob')
+  view.rerender(<ChatProvider><ChatProbe /></ChatProvider>)
+  expect(activeDesktopAlerts.size).toBe(0)
+  await act(async () => { finishPoll(response({ items: [message('late-alice')] })); await pendingPoll })
+  expect(activeDesktopAlerts.size).toBe(0)
+  expect(browserNotification).toHaveBeenCalledTimes(1)
 })

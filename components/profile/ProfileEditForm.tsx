@@ -208,11 +208,11 @@ export function ProfileEditForm({ userId, initialData, onUpdate }: ProfileEditFo
                         setFormData({ ...formData, name: e.target.value });
                         if (errors.name) setErrors({ ...errors, name: undefined });
                       }}
-                      className={errors.name ? 'border-red-500' : ''}
+                      className={errors.name ? 'border-destructive' : ''}
                       placeholder="Dein Name"
                     />
                     {errors.name && (
-                      <p className="text-sm text-red-500 flex items-center gap-1">
+                      <p className="text-sm text-destructive flex items-center gap-1">
                         <AlertCircle className="h-4 w-4" />
                         {errors.name}
                       </p>
@@ -258,11 +258,11 @@ export function ProfileEditForm({ userId, initialData, onUpdate }: ProfileEditFo
                         setFormData({ ...formData, contact: e.target.value });
                         if (errors.contact) setErrors({ ...errors, contact: undefined });
                       }}
-                      className={errors.contact ? 'border-red-500' : ''}
+                      className={errors.contact ? 'border-destructive' : ''}
                       placeholder="E-Mail oder Telefonnummer"
                     />
                     {errors.contact && (
-                      <p className="text-sm text-red-500 flex items-center gap-1">
+                      <p className="text-sm text-destructive flex items-center gap-1">
                         <AlertCircle className="h-4 w-4" />
                         {errors.contact}
                       </p>

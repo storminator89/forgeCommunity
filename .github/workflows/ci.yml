@@ -162,7 +162,7 @@ jobs:
       contents: read
     env:
       DATABASE_PROVIDER: sqlite
-      DATABASE_URL: file:${{ runner.temp }}/forge-browser-qa.db
+      DATABASE_URL: file:${{ github.workspace }}/forge-browser-qa.db
       BROWSER_QA_DISPOSABLE_DB: '1'
       NEXTAUTH_URL: http://127.0.0.1:3013
       NEXT_PUBLIC_APP_URL: http://127.0.0.1:3013
