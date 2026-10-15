@@ -189,7 +189,10 @@ function ScopedCourseClient({ session }: { session: NonNullable<ReturnType<typeo
                 <h2 className="text-[clamp(1.65rem,1.2rem+2vw,2.4rem)] font-semibold leading-tight tracking-tight">Wissen teilen. Gemeinsam weiterkommen.</h2>
                 <p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:text-base">Entdecke Kurse aus der Community, lerne in deinem Tempo und teile selbst, was du kannst.</p>
               </div>
-              <Button asChild variant={creatorPerspective ? 'default' : 'outline'} className="w-full shrink-0 sm:w-auto"><Link href="/courses/new"><Plus aria-hidden="true" className="h-4 w-4" />Neuer Kurs</Link></Button>
+              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                <Button asChild variant="outline" className="w-full shrink-0 sm:w-auto"><Link href="/courses/goals">Mein Lernziel</Link></Button>
+                <Button asChild variant={creatorPerspective ? 'default' : 'outline'} className="w-full shrink-0 sm:w-auto"><Link href="/courses/new"><Plus aria-hidden="true" className="h-4 w-4" />Neuer Kurs</Link></Button>
+              </div>
             </div>
             <section aria-labelledby="course-directory-title" className="pt-7 sm:pt-9">
               <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">

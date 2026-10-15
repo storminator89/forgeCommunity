@@ -135,6 +135,7 @@ model User {
   quizAttempts       QuizAttempt[]
   rewardLedger       RewardLedger[]
   completionRecords  CourseCompletionRecord[]
+  learningGoal       LearningGoal?
   solutionDecisions  AcceptedSolutionChange[] @relation("SolutionActor")
 }
 
@@ -450,6 +451,20 @@ model CourseCompletionRecord {
 
   @@id([userId, courseId])
   @@index([userId, completedAt])
+}
+
+/** A private, opt-in calendar-day challenge; progress is always derived from current verified course records. */
+model LearningGoal {
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String    @id
+  targetLeaves Int
+  durationDays Int
+  timezone    String
+  startedAt   DateTime
+  endsAt      DateTime
+  pausedAt    DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model Event {

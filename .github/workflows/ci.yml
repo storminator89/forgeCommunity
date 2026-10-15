@@ -102,7 +102,7 @@ jobs:
           DATABASE_PROVIDER=postgresql npm run db:generate
 
       - name: Verify SQLite migration safety
-        run: node --test scripts/check-sqlite-migrations.mjs
+        run: DATABASE_PROVIDER=sqlite node --test scripts/check-sqlite-migrations.mjs scripts/check-notification-migrations.mjs
 
       - name: Verify PostgreSQL upgrade safety
         run: node --test scripts/check-postgresql-upgrades.mjs
