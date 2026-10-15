@@ -1,59 +1,40 @@
 // contexts/ChatContext.tsx
 'use client'
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState, ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, ReactNode } from 'react';
+import type { Session } from 'next-auth';
 import { useSession } from 'next-auth/react';
-import { useNotifications } from './NotificationContext';
 import { ChatMessage, ChatChannel, CreateChannelInput, EditMessageInput } from '@/types/chat';
-import { NotificationType } from '@/types/notifications';
+import { BROWSER_CHAT_ALERT_PREFERENCE_EVENT, type BrowserChatAlertPreference } from '@/lib/browser-chat-alerts';
 
 interface ChatContextType {
   channels: ChatChannel[];
   currentChannel: ChatChannel | null;
   messages: ChatMessage[];
   setCurrentChannel: (channel: ChatChannel) => void;
-  sendMessage: (content: string, imageFile?: File) => Promise<void>;
+  sendMessage: (content: string, imageFile?: File) => Promise<boolean>;
   editMessage: (input: EditMessageInput) => Promise<void>;
   createChannel: (input: CreateChannelInput) => Promise<void>;
   deleteChannel: (channelId: string) => Promise<void>;
   loading: boolean;
   error: string | null;
+  clearError: () => void;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
-const playNotificationSound = () => {
-  try {
-    const audio = new Audio('/sounds/notification.mp3');
-    audio.volume = 0.5;
-    audio.play().catch(err => console.error('Failed to play notification sound:', err));
-  } catch (error) {
-    console.error('Error playing notification sound:', error);
-  }
-};
-
-const showDesktopNotification = (title: string, body: string) => {
-  if ('Notification' in window && Notification.permission === 'granted') {
-    try {
-      new Notification(title, {
-        body,
-        icon: '/images/notification-icon.png',
-      });
-    } catch (error) {
-      console.error('Error showing desktop notification:', error);
-    }
-  }
-};
-
-const extractMentions = (content: string): string[] => {
-  const mentionRegex = /@(\w+)/g;
-  const matches = content.match(mentionRegex);
-  return matches ? matches.map(match => match.substring(1)) : [];
-};
-
 export function ChatProvider({ children }: { children: ReactNode }) {
-  const { data: session } = useSession();
-  const { addNotification } = useNotifications();
+  const { data, status } = useSession();
+  const session = status === 'authenticated' ? data : null;
+
+  // Chat channels and messages are private to the signed-in account. Remounting
+  // at the account boundary clears them before a new account's fetch can run.
+  return <AccountChatProvider key={session?.user?.id ?? 'anonymous'} session={session}>
+    {children}
+  </AccountChatProvider>;
+}
+
+function AccountChatProvider({ children, session }: { children: ReactNode; session: Session | null }) {
   const [channels, setChannels] = useState<ChatChannel[]>([]);
   const [currentChannel, setCurrentChannelState] = useState<ChatChannel | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -65,6 +46,84 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [processedMessageIds] = useState<Set<string>>(new Set());
   const activeChannelIdRef = useRef<string | null>(null);
   const activeSessionIdRef = useRef<string | null>(null);
+  const sendControllerRef = useRef<AbortController | null>(null);
+
+  useLayoutEffect(() => {
+    // This provider is keyed by account. Cancel both upload and message requests
+    // synchronously at the logout/account-switch/unmount commit. Recreate the
+    // controller on setup so Strict Mode's cleanup cannot cancel future sends.
+    const controller = new AbortController();
+    sendControllerRef.current = controller;
+    return () => {
+      controller.abort();
+      sendControllerRef.current = null;
+    };
+  }, []);
+  // An unverified or failed preference load must never enable desktop alerts.
+  const browserAlertsEnabledRef = useRef(false);
+  // Browser notifications outlive the React tree. Keep their handles with the
+  // account that created them so private excerpts do not survive its session.
+  const desktopNotificationsRef = useRef(new Set<Notification>());
+  const closeDesktopNotifications = useCallback(() => {
+    for (const notification of desktopNotificationsRef.current) {
+      try {
+        notification.close();
+      } catch (error) {
+        console.error('Error closing desktop notification:', error);
+      }
+    }
+    desktopNotificationsRef.current.clear();
+  }, []);
+  const showDesktopNotification = useCallback((title: string, body: string) => {
+    if (!browserAlertsEnabledRef.current || !('Notification' in window) || Notification.permission !== 'granted') return;
+    try {
+      const notification = new Notification(title, { body });
+      desktopNotificationsRef.current.add(notification);
+      notification.addEventListener('close', () => desktopNotificationsRef.current.delete(notification), { once: true });
+    } catch (error) {
+      console.error('Error showing desktop notification:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    const userId = session?.user?.id;
+    browserAlertsEnabledRef.current = false;
+    if (!userId) return;
+
+    const controller = new AbortController();
+    let updatedAfterRequest = false;
+    const onPreferenceChange = (event: Event) => {
+      const preference = (event as CustomEvent<BrowserChatAlertPreference>).detail;
+      if (preference?.userId !== userId) return;
+      updatedAfterRequest = true;
+      browserAlertsEnabledRef.current = preference.enabled === true;
+      if (!browserAlertsEnabledRef.current) closeDesktopNotifications();
+    };
+    window.addEventListener(BROWSER_CHAT_ALERT_PREFERENCE_EVENT, onPreferenceChange);
+
+    void fetch('/api/user/profile', { signal: controller.signal, cache: 'no-store' })
+      .then(async response => {
+        if (!response.ok) throw new Error('Desktop notification preference unavailable');
+        return response.json() as Promise<{ id?: string; userSettings?: { pushNotifications?: boolean } | null }>;
+      })
+      .then(profile => {
+        if (!controller.signal.aborted && !updatedAfterRequest && profile.id === userId) {
+          // An account without a settings row uses the database default. A
+          // malformed settings response must not enable private desktop text.
+          browserAlertsEnabledRef.current = profile.userSettings === null
+            ? true
+            : profile.userSettings?.pushNotifications === true;
+        }
+      })
+      .catch(() => { /* Keep desktop alerts off when preferences cannot be verified. */ });
+
+    return () => {
+      controller.abort();
+      window.removeEventListener(BROWSER_CHAT_ALERT_PREFERENCE_EVENT, onPreferenceChange);
+      browserAlertsEnabledRef.current = false;
+      closeDesktopNotifications();
+    };
+  }, [closeDesktopNotifications, session?.user?.id]);
 
   const setActiveChannel = useCallback((channel: ChatChannel) => {
     if (activeChannelIdRef.current === channel.id) return;
@@ -197,23 +256,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           : newMsg.content
           }`;
 
-        addNotification({
-          type: 'CHAT_MESSAGE' as NotificationType,
-          content: notificationContent,
-          isRead: false
-        });
-
-        const mentions = extractMentions(newMsg.content);
-        if (mentions.includes(session.user.name || '')) {
-          addNotification({
-            type: 'MENTION' as NotificationType,
-            content: `${newMsg.author.name} hat Sie in #${currentChannel.name} erwähnt`,
-            isRead: false
-          });
-        }
-
-        if (!isWindowFocused) {
-          playNotificationSound();
+        if (!isWindowFocused && browserAlertsEnabledRef.current) {
           showDesktopNotification('Neue Nachricht', notificationContent);
         }
       });
@@ -252,14 +295,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       if (!(err instanceof DOMException && err.name === 'AbortError')) console.error('Error syncing messages:', err);
     }
-  }, [addNotification, currentChannel, isWindowFocused, lastSync, lastSyncId, processedMessageIds, session]);
+  }, [currentChannel, isWindowFocused, lastSync, lastSyncId, processedMessageIds, session, showDesktopNotification]);
 
 
   useEffect(() => {
-    if ('Notification' in window) {
-      Notification.requestPermission();
-    }
-
     const handleFocus = () => setIsWindowFocused(true);
     const handleBlur = () => setIsWindowFocused(false);
 
@@ -350,31 +389,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           : lastMessage.content
           }`;
 
-        addNotification({
-          type: 'CHAT_MESSAGE' as NotificationType,
-          content: notificationContent,
-          isRead: false
-        });
-
-        const mentions = extractMentions(lastMessage.content);
-        if (mentions.includes(session?.user?.name || '')) {
-          addNotification({
-            type: 'MENTION' as NotificationType,
-            content: `${lastMessage.author.name} hat Sie in #${currentChannel?.name} erwähnt`,
-            isRead: false
-          });
-        }
-
-        if (!isWindowFocused) {
-          playNotificationSound();
+        if (!isWindowFocused && browserAlertsEnabledRef.current) {
           showDesktopNotification('Neue Nachricht', notificationContent);
         }
       }
     }
-  }, [addNotification, currentChannel, isWindowFocused, messages, processedMessageIds, session?.user?.id, session?.user?.name]);
+  }, [currentChannel, isWindowFocused, messages, processedMessageIds, session?.user?.id, showDesktopNotification]);
 
-  const sendMessage = async (content: string, imageFile?: File) => {
-    if (!currentChannel || !session?.user) return;
+  const sendMessage = async (content: string, imageFile?: File): Promise<boolean> => {
+    const controller = sendControllerRef.current;
+    if (!currentChannel || !session?.user || !controller || controller.signal.aborted) return false;
 
     const channelId = currentChannel.id;
     const tempId = `temp-${Date.now()}`;
@@ -388,10 +412,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         const uploadResponse = await fetch('/api/chat/upload', {
           method: 'POST',
           body: formData,
+          signal: controller.signal,
         });
 
+        if (controller.signal.aborted) return false;
         if (!uploadResponse.ok) throw new Error('Failed to upload image');
         const uploadData = await uploadResponse.json();
+        // Aborting fetch alone is insufficient if the response/body has already
+        // completed. Never continue this old draft with a new account's cookie.
+        if (controller.signal.aborted) return false;
         imageUrl = uploadData.filePath;
       }
 
@@ -415,6 +444,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
       const response = await fetch('/api/chat/messages', {
         method: 'POST',
+        signal: controller.signal,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           content,
@@ -424,9 +454,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         }),
       });
 
+      if (controller.signal.aborted) return false;
       if (!response.ok) throw new Error('Failed to send message');
 
       const actualMessage = await response.json();
+      if (controller.signal.aborted) return false;
       processedMessageIds.add(actualMessage.id);
 
       if (activeChannelIdRef.current === channelId) {
@@ -437,13 +469,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           );
         });
       }
+      setError(null);
+      return true;
     } catch (err) {
+      if (controller.signal.aborted) return false;
       if (activeChannelIdRef.current === channelId) {
         setMessages(prev => prev.filter(msg => msg.id !== tempId));
       }
       const errorMessage = err instanceof Error ? err.message : 'Error sending message';
       setError(errorMessage);
       console.error(errorMessage);
+      return false;
     }
   };
 
@@ -484,11 +520,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setChannels(prev => [...prev, newChannel]);
       setActiveChannel(newChannel);
 
-      addNotification({
-        type: 'SYSTEM' as NotificationType,
-        content: `Neuer Channel #${name} wurde erstellt`,
-        isRead: false
-      });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Error creating channel';
       setError(errorMessage);
@@ -498,8 +529,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const deleteChannel = async (channelId: string) => {
     try {
-      const channelToDelete = channels.find(c => c.id === channelId);
-
       const response = await fetch(`/api/chat/channels/${channelId}`, {
         method: 'DELETE',
       });
@@ -520,13 +549,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      if (channelToDelete) {
-        addNotification({
-          type: 'SYSTEM' as NotificationType,
-          content: `Channel #${channelToDelete.name} wurde gelöscht`,
-          isRead: false
-        });
-      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Error deleting channel';
       setError(errorMessage);
@@ -549,6 +571,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         deleteChannel,
         loading,
         error,
+        clearError: () => setError(null),
       }}
     >
       {children}

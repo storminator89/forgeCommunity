@@ -51,3 +51,19 @@ it('returns an unauthenticated author to this form after sign-in', async () => {
   await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith('/login?callbackUrl=%2Fprojects%2Fnew'))
   expect(screen.getByRole('status')).toHaveTextContent('Weiterleitung zur Anmeldung')
 })
+
+it('clears an unfinished project before another account sees the composer', () => {
+  const view = render(<NewProjectPage />)
+  fireEvent.change(screen.getByLabelText('Titel *'), { target: { value: 'Alice private project' } })
+  fireEvent.change(screen.getByLabelText('Beschreibungstext'), { target: { value: 'Alice private notes' } })
+
+  jest.mocked(useSession).mockReturnValue({ data: { user: { id: 'user-2' }, expires: '2099-01-01' }, status: 'authenticated', update: jest.fn() } as ReturnType<typeof useSession>)
+  view.rerender(<NewProjectPage />)
+  expect(screen.getByLabelText('Titel *')).toHaveValue('')
+  expect(screen.getByLabelText('Beschreibungstext')).toHaveValue('')
+  expect(screen.queryByDisplayValue('Alice private project')).not.toBeInTheDocument()
+
+  jest.mocked(useSession).mockReturnValue({ data: null, status: 'unauthenticated', update: jest.fn() } as ReturnType<typeof useSession>)
+  view.rerender(<NewProjectPage />)
+  expect(screen.queryByLabelText('Titel *')).not.toBeInTheDocument()
+})

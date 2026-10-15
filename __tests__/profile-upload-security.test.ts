@@ -25,8 +25,9 @@ jest.mock('@/lib/server/request-body', () => ({
 }));
 
 import { getServerSession } from 'next-auth/next';
-import { POST } from '@/app/api/users/[id]/upload/route';
-import { saveImageUpload } from '@/lib/server/image-upload';
+import { DELETE, POST } from '@/app/api/users/[id]/upload/route';
+import { deleteUploadedImage, saveImageUpload } from '@/lib/server/image-upload';
+import prisma from '@/lib/prisma';
 
 describe('profile image upload validation', () => {
   it('rejects an unknown image target instead of treating it as an avatar', async () => {
@@ -44,5 +45,38 @@ describe('profile image upload validation', () => {
 
     expect(response.status).toBe(400);
     expect(saveImageUpload).not.toHaveBeenCalled();
+  });
+});
+
+describe('profile image unlink', () => {
+  const params = { params: Promise.resolve({ id: 'user-1' }) };
+  const request = (type: string) => ({ url: `http://localhost/api/users/user-1/upload?type=${type}` }) as never;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (getServerSession as jest.Mock).mockResolvedValue({ user: { id: 'user-1', role: 'USER' } });
+    jest.mocked(prisma.user.findUnique).mockResolvedValue({ image: '/images/uploads/avatar.png', coverImage: '/images/uploads/cover.png' } as never);
+    jest.mocked(prisma.user.update).mockResolvedValue({ id: 'user-1' } as never);
+  });
+
+  it('unlinks an owned avatar and defers physical cleanup to the upload policy', async () => {
+    const response = await DELETE(request('avatar'), params);
+    expect(response.status).toBe(200);
+    expect(prisma.user.update).toHaveBeenCalledWith({ where: { id: 'user-1' }, data: { image: null } });
+    expect(deleteUploadedImage).toHaveBeenCalledWith('/images/uploads/avatar.png');
+  });
+
+  it('rejects another member before reading or changing their images', async () => {
+    (getServerSession as jest.Mock).mockResolvedValue({ user: { id: 'other', role: 'USER' } });
+    const response = await DELETE(request('cover'), params);
+    expect(response.status).toBe(401);
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects unknown image types without changing the profile', async () => {
+    const response = await DELETE(request('sideways'), params);
+    expect(response.status).toBe(400);
+    expect(prisma.user.update).not.toHaveBeenCalled();
   });
 });

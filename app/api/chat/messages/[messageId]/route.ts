@@ -5,6 +5,28 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/options';
 import prisma from '@/lib/prisma';
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
 
+/** Fetch one old linked message without exposing an entire private history. */
+export async function GET(_req: Request, props: { params: Promise<{ messageId: string }> }) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) return new NextResponse('Unauthorized', { status: 401 });
+    const { messageId } = await props.params;
+    if (!/^[A-Za-z0-9_-]{1,100}$/.test(messageId)) return new NextResponse('Invalid message', { status: 400 });
+    const message = await prisma.chatMessage.findFirst({
+      where: { id: messageId, channel: { OR: [
+        { isPrivate: false },
+        { members: { some: { userId: session.user.id } } },
+      ] } },
+      include: { author: { select: { id: true, name: true, image: true } } },
+    });
+    if (!message) return new NextResponse('Message not found', { status: 404 });
+    return NextResponse.json(message, { headers: { 'Cache-Control': 'private, no-store' } });
+  } catch (error) {
+    console.error('[MESSAGE_GET]', error);
+    return new NextResponse('Internal Error', { status: 500 });
+  }
+}
+
 export async function PATCH(
   req: Request,
   props: { params: Promise<{ messageId: string }> }

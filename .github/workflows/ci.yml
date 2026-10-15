@@ -9,7 +9,48 @@ permissions:
   contents: read
 
 jobs:
+  # Preserve the existing required check context. Neither prerequisite depends
+  # on the other, so audit failures cannot hide application validation results.
   validate:
+    needs: [quality, security-audit]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require application validation and security audit
+        env:
+          QUALITY_RESULT: ${{ needs.quality.result }}
+          SECURITY_AUDIT_RESULT: ${{ needs.security-audit.result }}
+        run: |
+          printf 'Required checks: quality=%s; security-audit=%s\n' "$QUALITY_RESULT" "$SECURITY_AUDIT_RESULT"
+          if [ "$QUALITY_RESULT" != "success" ] || [ "$SECURITY_AUDIT_RESULT" != "success" ]; then
+            exit 1
+          fi
+
+  security-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        # v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Set up Node.js
+        # v7.0.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies without lifecycle scripts
+        # The audit reads the locked dependency tree; Prisma generation and
+        # native builds are unnecessary in this job.
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Check security floor
+        run: npm audit --audit-level=high
+
+  quality:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
@@ -45,8 +86,11 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
-      - name: Check security floor
-        run: npm audit --audit-level=high
+      - name: Verify pinned Next ESLint fork
+        run: npm run test:next-eslint-fork
+
+      - name: Verify Tailwind generated styles and contrast
+        run: npm run test:styles
 
       - name: Typecheck
         run: npm run typecheck
@@ -55,10 +99,16 @@ jobs:
         run: npm run lint -- --max-warnings 0
 
       - name: Test
-        run: npm test -- --runInBand
+        # The real DB suites use disposable SQLite files and require a SQLite
+        # generated client. Restore the PostgreSQL client before the app build.
+        run: |
+          DATABASE_PROVIDER=sqlite DATABASE_URL="file:${RUNNER_TEMP}/forge-jest.db" npm run db:generate
+          git diff --exit-code -- prisma/schema.sqlite.prisma
+          DATABASE_PROVIDER=sqlite DATABASE_URL="file:${RUNNER_TEMP}/forge-jest.db" npm test -- --runInBand
+          DATABASE_PROVIDER=postgresql npm run db:generate
 
       - name: Verify SQLite migration safety
-        run: node --test scripts/check-sqlite-migrations.mjs
+        run: DATABASE_PROVIDER=sqlite node --test scripts/check-sqlite-migrations.mjs scripts/check-notification-migrations.mjs
 
       - name: Verify PostgreSQL upgrade safety
         run: node --test scripts/check-postgresql-upgrades.mjs
@@ -70,6 +120,96 @@ jobs:
 
       - name: Smoke test standalone server
         run: node scripts/smoke-standalone.mjs
+
+  # Independent of the validate gate: the audit can fail without hiding the
+  # PostgreSQL migration result. Every object is confined to disposable CI DB.
+  postgresql-release-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: ci-only-upgrade-password
+          POSTGRES_DB: forge_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d forge_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_PROVIDER: postgresql
+      DATABASE_URL: postgresql://postgres:ci-only-upgrade-password@127.0.0.1:5432/forge_test
+      POSTGRESQL_RELEASE_GATE_DISPOSABLE: '1'
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Exercise empty install and populated PostgreSQL upgrades
+        run: node --test --test-concurrency=1 scripts/check-postgresql-upgrades.mjs scripts/check-postgresql-release-gate.mjs
+
+  # A sibling job keeps browser coverage visible even while security-audit
+  # is blocked by an upstream dependency advisory.
+  browser-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      DATABASE_PROVIDER: sqlite
+      DATABASE_URL: file:${{ github.workspace }}/forge-browser-qa.db
+      BROWSER_QA_DISPOSABLE_DB: '1'
+      NEXTAUTH_URL: http://127.0.0.1:3013
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3013
+      PLAYWRIGHT_BASE_URL: http://127.0.0.1:3013
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Create disposable test secret
+        run: echo "NEXTAUTH_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Initialize disposable SQLite database
+        run: npm run db:deploy
+
+      - name: Build production app
+        run: npm run build
+
+      - name: Install official Playwright Chromium
+        run: npx playwright install chromium
+
+      - name: Exercise desktop and mobile browser flows
+        run: npm run test:browser
+
+      - name: Upload browser screenshots
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: browser-qa-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/**/*.png
+          if-no-files-found: warn
+          retention-days: 7
 
   docker:
     runs-on: ubuntu-latest
@@ -109,6 +249,11 @@ jobs:
         run: |
           docker compose cp scripts/smoke-h5p.mjs app:/tmp/smoke-h5p.mjs
           docker compose exec -T -e SMOKE_SQLITE_FILE=/app/data/forge.db -e SMOKE_BASE_URL=http://127.0.0.1:3013 app node /tmp/smoke-h5p.mjs
+
+      - name: Exercise accepted solutions and private contribution milestones
+        run: |
+          docker compose cp scripts/smoke-contributions.mjs app:/tmp/smoke-contributions.mjs
+          docker compose exec -T -e CI=true -e CONTRIBUTIONS_SMOKE_CI=1 -e CONTRIBUTIONS_SMOKE_DISPOSABLE_DB=1 -e SMOKE_SQLITE_FILE=/app/data/forge.db -e SMOKE_BASE_URL=http://127.0.0.1:3013 app node /tmp/smoke-contributions.mjs
 
       - name: Exercise SQLite application flows
         run: node scripts/smoke-sqlite.mjs

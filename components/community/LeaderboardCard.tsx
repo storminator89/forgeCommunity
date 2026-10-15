@@ -1,9 +1,8 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
+import Link from "next/link"
 
 interface LeaderboardUser {
-  id: string
   name: string
   image: string | null
   points: number
@@ -16,11 +15,10 @@ interface LeaderboardCardProps {
 
 export function LeaderboardCard({ users, isLoading }: LeaderboardCardProps) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-lg">Rangliste</CardTitle>
-      </CardHeader>
-      <CardContent className="pt-0">
+    <section aria-labelledby="community-leaderboard-title" className="border-t pt-5">
+      <h2 id="community-leaderboard-title" className="text-base font-semibold tracking-tight">Rangliste</h2>
+      <p className="mt-1 text-sm text-muted-foreground">Nur Mitglieder, die der öffentlichen Rangliste zugestimmt haben, erscheinen hier.</p>
+      <div className="mt-4">
         {isLoading ? (
           <div className="space-y-4" role="status" aria-label="Rangliste wird geladen">
             {Array.from({ length: 5 }).map((_, index) => (
@@ -33,7 +31,7 @@ export function LeaderboardCard({ users, isLoading }: LeaderboardCardProps) {
         ) : users.length ? (
           <ol className="divide-y divide-border">
             {users.map((user, index) => (
-              <li key={user.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+              <li key={`${user.name}-${index}`} className="flex min-w-0 items-center gap-3 py-3 first:pt-0 last:pb-0">
                 <span className="w-4 shrink-0 text-sm tabular-nums text-muted-foreground">{index + 1}</span>
                 <Avatar className="h-9 w-9 shrink-0">
                   <AvatarImage src={user.image || ''} alt={user.name} />
@@ -47,8 +45,10 @@ export function LeaderboardCard({ users, isLoading }: LeaderboardCardProps) {
               </li>
             ))}
           </ol>
-        ) : <p className="text-sm text-muted-foreground">Keine Einträge.</p>}
-      </CardContent>
-    </Card>
+        ) : <p className="text-sm text-muted-foreground">Noch keine öffentlichen Einträge.</p>}
+        <p className="mt-4 text-xs text-muted-foreground">Was zählt: Ein von Admins freigegebener Kurs mit gespeichertem gültigem Quiz und bestandenem Versuch für die aktuelle Kursversion. Beiträge, Kommentare und Likes bringen keine Punkte.</p>
+        <Link href="/settings" className="mt-2 inline-block text-sm text-primary underline-offset-4 hover:underline">Sichtbarkeit in den Einstellungen ändern</Link>
+      </div>
+    </section>
   )
 }

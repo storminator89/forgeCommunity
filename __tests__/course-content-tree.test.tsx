@@ -6,7 +6,6 @@ import { NewMainTopicDialog } from '@/app/courses/[courseId]/contents/NewMainTop
 import { SortableItem } from '@/app/courses/[courseId]/contents/SortableItem';
 import { NewSubTopicDialog } from '@/app/courses/[courseId]/contents/NewSubTopicDialog';
 import type { CourseContent } from '@/app/courses/[courseId]/contents/types';
-import { markPageAsVisited } from '@/app/courses/[courseId]/contents/utils/visitedPages';
 
 const mockDrag = jest.fn();
 jest.mock('@dnd-kit/sortable', () => ({ useSortable: () => ({ attributes: { role: 'button', tabIndex: 0 }, listeners: { onPointerDown: mockDrag }, setNodeRef: jest.fn(), setActivatorNodeRef: jest.fn(), transform: null, transition: undefined, isDragging: false }) }));
@@ -103,13 +102,16 @@ it('captures the chosen nested parent for creation and hides management controls
   expect(props.onContentSelect).toHaveBeenCalledWith('nested');
 });
 
-it('requires standalone leaves and deeply nested leaves before enabling certificates', () => {
-  markPageAsVisited('course', 'deep');
+it('uses server-confirmed leaf progress rather than local visits for certificates', () => {
   const props = { ...baseProps(), contents: [content('chapter', 0, [content('nested', 0, [content('deep')])]), content('standalone', 1)], mainContentId: null, courseName: 'Kurs', isLoading: false, onSubContentSubmit: jest.fn(), canManage: false };
-  const { rerender } = render(<CourseContentsSidebar {...props} />);
+  const { rerender } = render(<CourseContentsSidebar {...props} progress={{ canTrack: true, completedContentIds: ['deep'], complete: false, hasCertificate: false, completedAt: null }} />);
   expect(screen.getByRole('button', { name: 'Zertifikat herunterladen' })).toBeDisabled();
-  act(() => markPageAsVisited('course', 'standalone'));
-  rerender(<CourseContentsSidebar {...props} />);
+  rerender(<CourseContentsSidebar {...props} progress={{ canTrack: true, completedContentIds: ['deep', 'standalone'], complete: true, hasCertificate: false, completedAt: null }} />);
+  expect(screen.getByRole('button', { name: 'Zertifikat herunterladen' })).toBeEnabled();
+});
+
+it('keeps an issued certificate downloadable after course contents are removed', () => {
+  render(<CourseContentsSidebar {...baseProps()} contents={[]} mainContentId={null} courseName="Kurs" isLoading={false} onSubContentSubmit={jest.fn()} canManage={false} progress={{ canTrack: true, completedContentIds: [], complete: false, hasCertificate: true, completedAt: null }} />);
   expect(screen.getByRole('button', { name: 'Zertifikat herunterladen' })).toBeEnabled();
 });
 

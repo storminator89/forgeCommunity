@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Pencil } from 'lucide-react';
 import { QuizRenderer } from './QuizRenderer';
+import { LearnerQuizRenderer } from './LearnerQuizRenderer';
 import { QuizEditor } from './QuizEditor';
 import { getH5PEmbedUrl, getCourseVideoUrl, getCourseAudioEmbedUrl } from './content-form-utils';
 
@@ -21,13 +22,15 @@ interface ContentRendererProps {
   isEditing?: boolean;
   onSave?: (contentId: string, newContent: string) => Promise<void>;
   onEditToggle?: (isEditing: boolean) => void;
+  learnerQuiz?: boolean;
+  onQuizPassed?: () => void;
 }
 
 export function ContentRenderer(props: ContentRendererProps) {
   return <ContentRendererState key={props.content.id} {...props} />;
 }
 
-function ContentRendererState({ content, isEditing: externalIsEditing, onSave, onEditToggle }: ContentRendererProps) {
+function ContentRendererState({ content, isEditing: externalIsEditing, onSave, onEditToggle, learnerQuiz, onQuizPassed }: ContentRendererProps) {
   const [internalIsEditing, setInternalIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -121,6 +124,7 @@ function ContentRendererState({ content, isEditing: externalIsEditing, onSave, o
     );
   }
 
+  if (learnerQuiz && content.type === 'QUIZ') return <LearnerQuizRenderer key={`${content.updatedAt ?? ''}:${JSON.stringify(content.content)}`} courseId={content.courseId} contentId={content.id} updatedAt={content.updatedAt} content={content.content} onPassed={() => onQuizPassed?.()} />;
   if (quizContent || content.type === 'QUIZ') return <QuizRenderer content={quizContent ?? content.content} />;
 
   const renderContent = () => {

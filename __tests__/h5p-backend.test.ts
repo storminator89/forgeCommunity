@@ -18,12 +18,16 @@ jest.mock('@/app/api/auth/[...nextauth]/options', () => ({ authOptions: {} }));
 jest.mock('@/lib/server/request-body', () => ({ requestWithBodyLimit: async (request: Request) => request, RequestBodyLimitError: class extends Error {} }));
 jest.mock('@/lib/server/rate-limit', () => ({ consumeRateLimit: () => ({ allowed: true }), rateLimitHeaders: () => ({}), UPLOAD_RATE_LIMIT: {} }));
 jest.mock('@/lib/prisma', () => ({ __esModule: true, default: {
+  $transaction: jest.fn(),
   h5PContent: { create: jest.fn(), findUnique: jest.fn(), findMany: jest.fn() },
   courseContent: { findFirst: jest.fn() },
+  user: { findUnique: jest.fn() },
 } }));
 const db = prisma as unknown as {
+  $transaction: jest.Mock;
   h5PContent: { create: jest.Mock; findUnique: jest.Mock; findMany: jest.Mock };
   courseContent: { findFirst: jest.Mock };
+  user: { findUnique: jest.Mock };
 };
 const defaultManifest = { title: 'Interaktives Beispiel', mainLibrary: 'H5P.Example', preloadedDependencies: [{ machineName: 'H5P.Example', majorVersion: 1, minorVersion: 0 }] };
 const defaultLibrary = { title: 'Example', machineName: 'H5P.Example', majorVersion: 1, minorVersion: 0, patchVersion: 0, runnable: 1, preloadedJs: [{ path: 'example.js' }], preloadedCss: [{ path: 'example.css' }] };
@@ -64,6 +68,8 @@ beforeEach(async () => {
   db.h5PContent.create.mockImplementation(async ({ data }) => { const saved = { ...data, createdAt: new Date() }; records.set(data.id, saved); return saved; });
   db.h5PContent.findUnique.mockImplementation(async ({ where }) => records.get(where.id) || null);
   db.courseContent.findFirst.mockResolvedValue(null);
+  db.user.findUnique.mockResolvedValue({ role: 'ADMIN' });
+  db.$transaction.mockImplementation(async (work: (tx: typeof db) => unknown) => work(db));
   jest.mocked(getServerSession).mockResolvedValue({ user: { id: 'owner', role: 'INSTRUCTOR' } } as never);
 });
 afterEach(async () => {
@@ -170,6 +176,11 @@ it('grants existing course references only read access and blocks foreign packag
   await expect(assertCanAttachH5P('student', 'INSTRUCTOR', '/h5p/embed/content-1', 'http://localhost')).rejects.toMatchObject({ status: 403 });
   await expect(assertCanAttachH5P('owner', 'INSTRUCTOR', '/h5p/embed/content-1', 'http://localhost')).resolves.toBeUndefined();
   await expect(assertCanAttachH5P('admin', 'ADMIN', '/h5p/embed/content-1', 'http://localhost')).resolves.toBeUndefined();
+  expect(db.user.findUnique).toHaveBeenCalledWith({ where: { id: 'admin' }, select: { role: true } });
+  db.user.findUnique.mockResolvedValue({ role: 'USER' });
+  await expect(assertCanAttachH5P('admin', 'ADMIN', '/h5p/embed/content-1', 'http://localhost')).rejects.toMatchObject({ status: 403 });
+  db.user.findUnique.mockResolvedValue(null);
+  await expect(assertCanAttachH5P('admin', 'ADMIN', '/h5p/embed/content-1', 'http://localhost')).rejects.toMatchObject({ status: 403 });
 });
 
 it('recognizes public deployment origins behind a proxy instead of treating local URLs as remote', async () => {

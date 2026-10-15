@@ -8,9 +8,12 @@ import { adminUserInput } from '@/lib/server/account-security'
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input'
 import { deleteCourseDependencies } from '@/lib/server/course-deletion'
 import { decrementSkillEndorsementsForDeletedUser } from '@/lib/server/skill-endorsements'
+import { reconcileUserRewards } from '@/lib/server/rewards'
+import { readAsAdmin } from '@/lib/server/admin-read'
 
 class LastAdminError extends Error {}
 class MissingUserError extends Error {}
+class OtherLearnersHaveCertificatesError extends Error {}
 
 function mutationError(error: unknown): NextResponse | null {
   if (error instanceof LastAdminError) {
@@ -18,6 +21,9 @@ function mutationError(error: unknown): NextResponse | null {
   }
   if (error instanceof MissingUserError) {
     return NextResponse.json({ error: 'Benutzer nicht gefunden' }, { status: 404 })
+  }
+  if (error instanceof OtherLearnersHaveCertificatesError) {
+    return NextResponse.json({ error: 'Dieses Konto kann nicht gelöscht werden, weil andere Mitglieder Zertifikate für seine Kurse besitzen. Es wurden keine Daten gelöscht.' }, { status: 409 })
   }
   if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2034') {
     return NextResponse.json({ error: 'Gleichzeitige Änderung. Bitte erneut versuchen.' }, { status: 409 })
@@ -44,7 +50,7 @@ export async function GET(
       )
     }
 
-    const user = await prisma.user.findUnique({
+    const result = await readAsAdmin(session.user.id, tx => tx.user.findUnique({
       where: { id: params.id },
       select: {
         id: true,
@@ -56,6 +62,7 @@ export async function GET(
         title: true,
         contact: true,
         role: true,
+        isTestAccount: true,
         createdAt: true,
         updatedAt: true,
         lastLogin: true,
@@ -89,7 +96,11 @@ export async function GET(
           select: { id: true }
         }
       }
-    })
+    }))
+    if (!result.authorized) {
+      return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 })
+    }
+    const user = result.data
 
     if (!user) {
       return NextResponse.json(
@@ -237,7 +248,7 @@ export async function PUT(
         const adminCount = await tx.user.count({ where: { role: 'ADMIN' } })
         if (adminCount <= 1) throw new LastAdminError()
       }
-      return tx.user.update({
+      const updated = await tx.user.update({
         where: { id: params.id },
         data: {
           ...updateData,
@@ -255,6 +266,8 @@ export async function PUT(
         },
         include: { userSettings: true },
       })
+      if (target?.role !== updated.role) await reconcileUserRewards(tx, params.id)
+      return updated
     }, { isolationLevel: 'Serializable' })
 
     // Entferne sensitive Daten
@@ -314,8 +327,10 @@ export async function DELETE(
       )
     }
 
-    // Bereinige zuerst alle abhängigen Daten
-    await prisma.$transaction(async (prisma) => {
+    // Every retry must re-read the owner and their certificates before any
+    // destructive write. A concurrent issuance can then abort serialization
+    // and the next attempt will see the newly issued proof.
+    const deleteUser = () => prisma.$transaction(async (prisma) => {
       const actingAdmin = await prisma.user.findUnique({ where: { id: session.user.id }, select: { role: true } })
       if (actingAdmin?.role !== 'ADMIN') throw new LastAdminError()
       const target = await prisma.user.findUnique({ where: { id: params.id }, select: { role: true } })
@@ -324,6 +339,17 @@ export async function DELETE(
         const adminCount = await prisma.user.count({ where: { role: 'ADMIN' } })
         if (adminCount <= 1) throw new LastAdminError()
       }
+      const ownedCourses = await prisma.course.findMany({
+        where: { instructorId: params.id }, select: { id: true },
+      })
+      if (ownedCourses.length) {
+        const otherLearnerCertificate = await prisma.certificate.findFirst({
+          where: { courseId: { in: ownedCourses.map(course => course.id) }, userId: { not: params.id } },
+          select: { id: true },
+        })
+        if (otherLearnerCertificate) throw new OtherLearnersHaveCertificatesError()
+      }
+
       // Lösche Benutzereinstellungen
       await prisma.userSettings.deleteMany({
         where: { userId: params.id }
@@ -416,9 +442,6 @@ export async function DELETE(
       // Certificates can point both at this user and at courses owned by
       // this instructor, including certificates issued to other users.
       await prisma.certificate.deleteMany({ where: { userId: params.id } })
-      const ownedCourses = await prisma.course.findMany({
-        where: { instructorId: params.id }, select: { id: true },
-      })
       await deleteCourseDependencies(prisma, ownedCourses.map(course => course.id))
 
       // Lösche verknüpfte Kurse des Users
@@ -456,6 +479,15 @@ export async function DELETE(
         where: { id: params.id }
       })
     }, { isolationLevel: 'Serializable' })
+
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        await deleteUser()
+        break
+      } catch (error) {
+        if (attempt === 3 || typeof error !== 'object' || error === null || !('code' in error) || error.code !== 'P2034') throw error
+      }
+    }
 
     return NextResponse.json({
       success: true,

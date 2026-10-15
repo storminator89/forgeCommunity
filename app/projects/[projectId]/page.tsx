@@ -1,15 +1,20 @@
 "use client";
 
+/* Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V5 */
+/* Hallmark · genre: editorial · macrostructure: project reading · design-system: design.md · designed-as-app */
+
 import { AppShell, AppHeader } from '@/components/app-shell';
+import { PageState } from '@/components/page-state';
 import { useRouter, useParams } from 'next/navigation';
 import { useEffect, useState, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ThumbsUp, MessageSquare, ExternalLink, Edit, Trash, Upload, Share2, Calendar, User, Tag } from 'lucide-react';
+import { ThumbsUp, MessageSquare, ExternalLink, Edit, Trash, Share2, Calendar, User, Tag, ArrowLeft } from 'lucide-react';
 import { useSession } from 'next-auth/react';
+import type { Session } from 'next-auth';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,7 +22,6 @@ import { Sidebar } from "@/components/Sidebar";
 import { UserNav } from "@/components/user-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
 import Image from 'next/image';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { sanitizeRichHtml } from '@/lib/sanitize-html';
 import { getSafeHttpUrl } from '@/lib/security';
 
@@ -67,16 +71,23 @@ interface Project {
 }
 
 export default function ProjectDetail() {
-  const router = useRouter();
   const { projectId } = useParams<{ projectId: string }>();
-  const { data: session } = useSession();
+  const { data, status } = useSession();
+  const session = status === 'authenticated' ? data : null;
+  return <ProjectDetailForViewer key={JSON.stringify([projectId, session?.user?.id ?? null])} projectId={projectId} session={session} />;
+}
+
+function ProjectDetailForViewer({ projectId, session }: { projectId: string; session: Session | null }) {
+  const router = useRouter();
   const [project, setProject] = useState<Project | null>(null);
   const [comments, setComments] = useState<ProjectComment[]>([]);
   const [newComment, setNewComment] = useState('');
   const [isLiked, setIsLiked] = useState(false);
 
-  const [activeTab, setActiveTab] = useState('overview');
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadedForId, setLoadedForId] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
   const [isLiking, setIsLiking] = useState(false);
   const [isCommenting, setIsCommenting] = useState(false);
   const likeRequest = useRef(false);
@@ -111,6 +122,8 @@ export default function ProjectDetail() {
         const data: Project = await res.json();
         if (controller.signal.aborted) return;
         setProject(data);
+        setLoadError(null);
+        setLoadedForId(projectId);
         setComments(data.comments || []);
         setIsLiked(data.likes?.some(like => like.userId === session?.user?.id) || false);
         setIsLoading(false);
@@ -137,7 +150,9 @@ export default function ProjectDetail() {
       } catch (error) {
         if (controller.signal.aborted) return;
         console.error('Error fetching project:', error);
-        router.push('/showcases');
+        setProject(null);
+        setLoadError(error instanceof Error ? error.message : 'Projekt konnte nicht geladen werden.');
+        setLoadedForId(projectId);
       } finally {
         if (!controller.signal.aborted) setIsLoading(false);
       }
@@ -145,7 +160,7 @@ export default function ProjectDetail() {
 
     void fetchProject();
     return () => controller.abort();
-  }, [projectId, router, session?.user?.id]);
+  }, [projectId, retryKey, session?.user?.id]);
 
   const handleLike = async () => {
     if (likeRequest.current) return;
@@ -336,42 +351,25 @@ export default function ProjectDetail() {
 
   return (
     <AppShell>
-      {/* Sidebar */}
       <Sidebar />
-
-      {/* Main content */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        {/* Header */}
         <AppHeader>
-          <div className="container mx-auto px-6 py-4">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="flex items-center">
-                <div className="bg-primary/10 p-2 rounded-lg mr-3">
-                  <Tag className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <h1 className="text-2xl font-semibold text-foreground">Projekt-Detail</h1>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <ThemeToggle />
-                <UserNav />
-              </div>
-            </div>
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <Button asChild variant="ghost" size="sm"><Link href="/showcases" aria-label="Zur Projektübersicht"><ArrowLeft className="h-4 w-4" aria-hidden="true" />Zurück</Link></Button>
+            <div className="flex shrink-0 items-center gap-2"><ThemeToggle /><UserNav /></div>
           </div>
         </AppHeader>
 
-        {/* Main scrollable content */}
-        <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto bg-background">
-          {isLoading && <div role="status" className="mx-auto max-w-5xl space-y-6 p-6" aria-label="Projekt wird geladen"><div className="h-12 w-2/3 animate-pulse rounded-lg bg-muted" /><div className="h-64 animate-pulse rounded-xl bg-muted" /></div>}
-          <AnimatePresence>
-            {project && (
-              <div className="container mx-auto py-6 px-4 max-w-5xl">
+        <main id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto">
+          <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
+            {isLoading || loadedForId !== projectId ? <><h1 className="sr-only">Projekt</h1><PageState kind="loading" title="Projekt wird geladen" /></> : !project ? <><h1 className="sr-only">Projekt</h1><PageState kind="error" title="Projekt nicht verfügbar" description={loadError || 'Das Projekt konnte nicht geladen werden oder wurde entfernt.'} action={<div className="flex flex-wrap justify-center gap-2"><Button type="button" variant="outline" onClick={() => { setIsLoading(true); setRetryKey(value => value + 1); }}>Erneut versuchen</Button><Button asChild variant="outline"><Link href="/showcases">Zur Übersicht</Link></Button></div>} /></> : (
+              <article>
                 {/* Project Header */}
-                <div className="flex flex-col space-y-4 mb-8">
+                <div className="mb-8 border-b pb-6">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Projekte / Details</p>
                   <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-start">
                     <div className="min-w-0 flex-1">
-                      <h1 className="text-3xl sm:text-4xl font-bold text-foreground mb-4 break-words">{project.title}</h1>
+                      <h1 className="mb-4 mt-4 min-w-0 break-words text-[clamp(2rem,1.35rem+2.5vw,3.5rem)] font-semibold leading-tight tracking-[-0.045em] [overflow-wrap:anywhere]">{project.title}</h1>
                       <div className="flex flex-wrap items-center gap-4 text-muted-foreground">
                         <div className="flex items-center">
                           <Calendar className="w-4 h-4 mr-2" />
@@ -430,9 +428,9 @@ export default function ProjectDetail() {
                 )}
 
                 {/* Project Content */}
-                <div className="space-y-8">
+                <div className="mx-auto max-w-[72ch] space-y-8">
                   {/* Description */}
-                  <div className="prose dark:prose-invert prose-slate max-w-none break-words overflow-x-auto">
+                  <div className="prose prose-neutral dark:prose-invert max-w-none break-words [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto">
                     <div
                       className="[&>h2]:text-2xl [&>h2]:font-bold [&>h2]:text-foreground [&>h2]:mt-8 [&>h2]:mb-4
                                  [&>p]:text-muted-foreground [&>p]:leading-relaxed [&>p]:mb-4
@@ -448,7 +446,7 @@ export default function ProjectDetail() {
 
                   {/* Tags */}
                   <div className="space-y-3 pt-4 border-t">
-                    <h3 className="text-lg font-semibold text-foreground">Tags</h3>
+                    <h2 className="text-lg font-semibold text-foreground">Tags</h2>
                     <div className="flex flex-wrap gap-2">
                       {project.tags.map((tag) => (
                         <Badge
@@ -464,13 +462,13 @@ export default function ProjectDetail() {
 
                   {/* Project Link */}
                   <div className="space-y-3 pt-4 border-t">
-                    <h3 className="text-lg font-semibold text-foreground">Projekt Link</h3>
+                    <h2 className="text-lg font-semibold text-foreground">Projekt-Link</h2>
                     {safeProjectLink && (
                       <a
                         href={safeProjectLink}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex min-w-0 max-w-full items-center gap-2 break-all text-primary hover:text-primary/80 transition-colors"
+                        className="inline-flex min-h-11 min-w-0 max-w-full items-center gap-2 break-all text-primary hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       >
                         <ExternalLink className="w-4 h-4 mr-2" />
                         {safeProjectLink}
@@ -481,9 +479,9 @@ export default function ProjectDetail() {
                   {/* Interactions Section */}
                   <div className="pt-8 mt-8 border-t">
                     <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-                      <h3 className="text-2xl font-bold text-foreground">
+                      <h2 className="text-xl font-semibold tracking-tight">
                         Kommentare
-                      </h3>
+                      </h2>
                       <div className="flex items-center space-x-4">
                         <Button
                           variant={isLiked ? "default" : "outline"}
@@ -523,11 +521,11 @@ export default function ProjectDetail() {
                         </div>
                       )}
 
-                      <div className="space-y-4">
+                      <div className="divide-y">
                         {comments.map((comment) => (
                           <div
                             key={comment.id}
-                            className="p-4 rounded-lg border bg-card"
+                            className="py-5"
                           >
                             <div className="flex items-center gap-2 mb-2">
                               <Avatar className="h-8 w-8">
@@ -548,13 +546,14 @@ export default function ProjectDetail() {
                             <p className="text-foreground break-words whitespace-pre-wrap">{comment.content}</p>
                           </div>
                         ))}
+                        {comments.length === 0 && <p className="py-5 text-sm text-muted-foreground">Noch keine Kommentare.</p>}
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              </article>
             )}
-          </AnimatePresence>
+          </div>
         </main>
       </div>
 

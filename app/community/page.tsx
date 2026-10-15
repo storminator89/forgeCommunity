@@ -1,9 +1,13 @@
 "use client"
 
+/* Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V5 */
+/* Hallmark · genre: editorial · macrostructure: conversation workbench · design-system: design.md · designed-as-app */
+
 import { AppShell, AppHeader } from '@/components/app-shell';
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useRef, useSyncExternalStore } from 'react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { PageState } from '@/components/page-state'
+import type { Session } from 'next-auth'
 import { useSession } from 'next-auth/react'
 import { Button } from "@/components/ui/button"
 import { UserNav } from "@/components/user-nav"
@@ -11,7 +15,6 @@ import { Sidebar } from "@/components/Sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { PlusCircle } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { PointsAnimation } from "@/components/PointsAnimation"
 
 
 // Import our new components
@@ -19,151 +22,133 @@ import { PostForm } from '@/components/community/PostForm'
 import { PostCard } from '@/components/community/PostCard'
 import { LeaderboardCard } from '@/components/community/LeaderboardCard'
 import { StatsCard } from '@/components/community/StatsCard'
-
-interface Post {
-  id: string
-  title: string
-  content: string
-  authorId: string
-  author: {
-    id: string
-    name: string
-    image: string | null
-  } | null
-  createdAt: string
-  votes: number
-  isLiked: boolean
-  comments: Comment[]
-}
-
-interface Comment {
-  id: string
-  authorId: string
-  author: {
-    name: string
-    image: string | null
-  } | null
-  content: string
-  createdAt: string
-  votes: number
-  isLiked: boolean
-}
+import { ContributionMilestonesCard } from '@/components/community/ContributionMilestonesCard'
+import { FirstActionGuide } from '@/components/community/FirstActionGuide'
+import { TopicNavigation } from '@/components/community/TopicNavigation'
+import { useCommunityFeed } from '@/hooks/useCommunityFeed'
+import { usePrivateContributions } from '@/hooks/usePrivateContributions'
+import { CommunityPost as Post, CommunityStats, fetchCommunityJson as fetchWithErrorHandling, isAbortError, mergeCommunityRows } from '@/lib/community-feed'
+import { validTopicName } from '@/lib/community-topics'
 
 interface LeaderboardUser {
-  id: string
   name: string
   image: string | null
   points: number
 }
 
-function isAbortError(error: unknown): boolean {
-  return error instanceof Error && error.name === 'AbortError'
+interface RewardSummary {
+  points: number
+  completedCourses: number
+  firstCourseCompleted: boolean
+  history?: Array<{
+    type: 'AWARDED' | 'REVOKED' | 'REINSTATED'
+    reason: 'QUIZ_REVISED' | 'APPROVAL_WITHDRAWN' | 'LEARNING_CHANGED' | 'ACCOUNT_INELIGIBLE' | 'COURSE_REMOVED' | null
+    pointsDelta: number
+    at: string
+    courseTitle: string
+  }>
 }
 
-async function fetchWithErrorHandling(url: string, options?: RequestInit) {
-  const response = await fetch(url, options)
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.message || 'Ein Fehler ist aufgetreten')
-  }
-  return response.json()
-}
-
-function Community() {
-  const { data: session } = useSession()
-  const [isLoading, setIsLoading] = useState(true)
-  const [localPosts, setLocalPosts] = useState<Post[]>([])
+function Community({ session, topic, onSelectTopic }: { session: Session | null; topic: string | null; onSelectTopic: (topic: string | null) => void }) {
+  const contributions = usePrivateContributions(session?.user?.id)
+  const mainRef = useRef<HTMLElement>(null)
+  const feedStatusRef = useRef<HTMLParagraphElement>(null)
+  const focusEndOfFeedRef = useRef(false)
+  const { posts: localPosts, setPosts: setLocalPosts, isLoading, isLoadingMore, loadError: postsLoadError, nextCursor, cancelPage, removePost, loadComments, commentsLoading, commentsError, initialLoaded, linkedTargetLoading, linkedTargetError, retryLinkedTarget, loadMore, retry: retryPosts } = useCommunityFeed(topic)
+  useEffect(() => {
+    if (focusEndOfFeedRef.current && !isLoadingMore && initialLoaded && !nextCursor) {
+      focusEndOfFeedRef.current = false
+      // The focused load-more button has just disappeared at the end of the
+      // list. Keep keyboard users at the result, without stealing another focus.
+      if (document.activeElement === document.body) feedStatusRef.current?.focus()
+    }
+  }, [isLoadingMore, initialLoaded, nextCursor])
+  const [isMutating, setIsMutating] = useState(false)
+  const [solutionSaving, setSolutionSaving] = useState<string | null>(null)
+  const [solutionErrors, setSolutionErrors] = useState<Record<string, string>>({})
+  const [activity, setActivity] = useState<CommunityStats | null>(null)
+  const [activityLoading, setActivityLoading] = useState(!!session?.user?.id)
+  const [activityError, setActivityError] = useState(false)
+  const [activityRefresh, setActivityRefresh] = useState(0)
   const [isEditing, setIsEditing] = useState(false)
   const [editingPost, setEditingPost] = useState<Post | null>(null)
   const [leaderboardUsers, setLeaderboardUsers] = useState<LeaderboardUser[]>([])
   const [isLeaderboardLoading, setIsLeaderboardLoading] = useState(true)
+  const [rewardResult, setRewardResult] = useState<{ userId: string; data: RewardSummary | null; error: boolean } | null>(null)
   const [notification, setNotification] = useState<{ type: 'success' | 'error', message: string } | null>(null)
 
-  const [pointsAnimation, setPointsAnimation] = useState({
-    isVisible: false,
-    points: 0
-  })
-
-  const postsRequestRef = useRef<AbortController | null>(null)
+  const mountedRef = useRef(false)
+  const mutationRequestRef = useRef<AbortController | null>(null)
   const leaderboardRequestRef = useRef<AbortController | null>(null)
 
-  const fetchLeaderboard = useCallback(async () => {
-    leaderboardRequestRef.current?.abort()
+  useEffect(() => {
+    const userId = session?.user?.id
+    if (!userId) return
+    const controller = new AbortController()
+    void fetchWithErrorHandling<RewardSummary>('/api/rewards/me', { signal: controller.signal })
+      .then((data: RewardSummary) => { if (!controller.signal.aborted) setRewardResult({ userId, data, error: false }) })
+      .catch((error) => { if (!controller.signal.aborted && !isAbortError(error)) setRewardResult({ userId, data: null, error: true }) })
+    return () => controller.abort()
+  }, [session?.user?.id])
+
+  const activeRewardResult = rewardResult && session?.user?.id === rewardResult.userId ? rewardResult : null
+  const rewardsLoading = !!session?.user?.id && !activeRewardResult
+  const rewards = activeRewardResult?.data ?? null
+  const rewardsError = activeRewardResult?.error ?? false
+
+  useEffect(() => {
+    mountedRef.current = true
     const controller = new AbortController()
     leaderboardRequestRef.current = controller
-    setIsLeaderboardLoading(true)
-
-    try {
-      const data = await fetchWithErrorHandling('/api/leaderboard', { signal: controller.signal })
-      if (leaderboardRequestRef.current !== controller) return
-      setLeaderboardUsers(data)
-    } catch (error) {
-      if (controller.signal.aborted || leaderboardRequestRef.current !== controller || isAbortError(error)) return
-      setNotification({ type: 'error', message: 'Fehler beim Laden des Leaderboards.' })
-    } finally {
-      if (leaderboardRequestRef.current === controller) {
-        leaderboardRequestRef.current = null
-        setIsLeaderboardLoading(false)
-      }
-    }
-  }, [])
-
-  // Effects
-  useEffect(() => {
-    let active = true
-    const postsController = new AbortController()
-    const leaderboardController = new AbortController()
-    postsRequestRef.current = postsController
-    leaderboardRequestRef.current = leaderboardController
-
-    const loadPosts = async () => {
-      try {
-        const data = []
-        for (let page = 1; ; page++) {
-          const batch = await fetchWithErrorHandling(`/api/posts?page=${page}`, { signal: postsController.signal })
-          data.push(...batch)
-          if (batch.length < 50) break
-        }
-        if (!active || postsRequestRef.current !== postsController) return
-        setLocalPosts(data)
-      } catch (error) {
-        if (!active || postsController.signal.aborted || postsRequestRef.current !== postsController || isAbortError(error)) return
-        setNotification({ type: 'error', message: 'Fehler beim Laden der Beiträge.' })
-      } finally {
-        if (active && postsRequestRef.current === postsController) {
-          postsRequestRef.current = null
-          setIsLoading(false)
-        }
-      }
-    }
-
-    const loadLeaderboard = async () => {
-      try {
-        const data = await fetchWithErrorHandling('/api/leaderboard', { signal: leaderboardController.signal })
-        if (!active || leaderboardRequestRef.current !== leaderboardController) return
-        setLeaderboardUsers(data)
-      } catch (error) {
-        if (!active || leaderboardController.signal.aborted || leaderboardRequestRef.current !== leaderboardController || isAbortError(error)) return
-        setNotification({ type: 'error', message: 'Fehler beim Laden des Leaderboards.' })
-      } finally {
-        if (active && leaderboardRequestRef.current === leaderboardController) {
-          leaderboardRequestRef.current = null
-          setIsLeaderboardLoading(false)
-        }
-      }
-    }
-
-    void loadPosts()
-    void loadLeaderboard()
-
+    void fetchWithErrorHandling<LeaderboardUser[]>('/api/leaderboard', { signal: controller.signal })
+      .then(data => { if (!controller.signal.aborted) setLeaderboardUsers(data) })
+      .catch(error => {
+        if (!controller.signal.aborted && !isAbortError(error)) setNotification({ type: 'error', message: 'Fehler beim Laden des Leaderboards.' })
+      })
+      .finally(() => { if (!controller.signal.aborted) setIsLeaderboardLoading(false) })
     return () => {
-      active = false
-      postsController.abort()
-      leaderboardController.abort()
-      if (postsRequestRef.current === postsController) postsRequestRef.current = null
-      if (leaderboardRequestRef.current === leaderboardController) leaderboardRequestRef.current = null
+      mountedRef.current = false
+      controller.abort()
+      mutationRequestRef.current?.abort()
+      mutationRequestRef.current = null
     }
   }, [])
+
+  useEffect(() => {
+    if (!session?.user?.id) return
+    const controller = new AbortController()
+    void fetchWithErrorHandling<CommunityStats>('/api/posts/me/stats', { signal: controller.signal, cache: 'no-store' })
+      .then(data => {
+        if (![data.posts, data.receivedLikes, data.comments].every(value => Number.isSafeInteger(value) && value >= 0)) throw new Error('Ungültige Aktivität')
+        if (!controller.signal.aborted) setActivity(data)
+      })
+      .catch(error => {
+        if (!controller.signal.aborted && !isAbortError(error)) { setActivity(null); setActivityError(true) }
+      })
+      .finally(() => { if (!controller.signal.aborted) setActivityLoading(false) })
+    return () => controller.abort()
+  }, [session?.user?.id, activityRefresh])
+
+  const refreshActivity = () => {
+    setActivityLoading(true)
+    setActivityError(false)
+    setActivityRefresh(value => value + 1)
+  }
+
+  const beginMutation = () => {
+    if (!mountedRef.current || mutationRequestRef.current || isLoading) return null
+    cancelPage()
+    const controller = new AbortController()
+    mutationRequestRef.current = controller
+    setIsMutating(true)
+    return controller
+  }
+
+  const finishMutation = (controller: AbortController) => {
+    if (mutationRequestRef.current !== controller || controller.signal.aborted) return
+    mutationRequestRef.current = null
+    setIsMutating(false)
+  }
 
   useEffect(() => {
     if (notification) {
@@ -172,47 +157,38 @@ function Community() {
     }
   }, [notification])
 
-  // Action handlers
-  const handleSubmitPost = async (title: string, content: string) => {
+  // Mutations abort a page read without advancing its cursor. A retry can safely
+  // merge that page later without overwriting newer edits, likes or comments.
+  const handleSubmitPost = async (title: string, content: string, tags: string[] = []) => {
     if (!session) {
       setNotification({ type: 'error', message: 'Bitte melde dich an, um einen Beitrag zu erstellen.' })
       return
     }
-
-    setIsLoading(true)
+    const controller = beginMutation()
+    if (!controller) return
     try {
-      const endpoint = editingPost ? `/api/posts/${editingPost.id}` : '/api/posts'
-      const method = editingPost ? 'PUT' : 'POST'
-
-      const response = await fetchWithErrorHandling(endpoint, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, content })
+      const response = await fetchWithErrorHandling<Post>(editingPost ? `/api/posts/${editingPost.id}` : '/api/posts', {
+        method: editingPost ? 'PUT' : 'POST', signal: controller.signal,
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, content, tags }),
       })
-
+      if (controller.signal.aborted) return
       if (editingPost) {
-        setLocalPosts(prev => prev.map(post =>
-          post.id === editingPost.id ? { ...post, ...response } : post
-        ))
+        // Keep explicitly loaded older comments when the edit response contains
+        // only the bounded comment preview.
+        setLocalPosts(previous => previous.flatMap(post => post.id === editingPost.id
+          ? topic && !response.tags?.some(tag => tag.name === topic) ? [] : [{ ...post, ...response, comments: post.comments, commentsNextCursor: post.commentsNextCursor }]
+          : [post]))
       } else {
-        setLocalPosts(prev => [response, ...prev])
-        showPointsAndUpdateLeaderboard(10) // Points for new post
+        if (!topic || response.tags?.some(tag => tag.name === topic)) setLocalPosts(previous => mergeCommunityRows([response], previous))
+        refreshActivity()
       }
-
       setIsEditing(false)
       setEditingPost(null)
-      setNotification({
-        type: 'success',
-        message: editingPost ? 'Beitrag aktualisiert!' : 'Beitrag erstellt!'
-      })
+      contributions.refresh()
+      setNotification({ type: 'success', message: editingPost ? 'Beitrag aktualisiert!' : 'Beitrag erstellt!' })
     } catch (error) {
-      setNotification({
-        type: 'error',
-        message: 'Fehler beim Erstellen/Aktualisieren des Beitrags.'
-      })
-    } finally {
-      setIsLoading(false)
-    }
+      if (!controller.signal.aborted && !isAbortError(error)) setNotification({ type: 'error', message: 'Fehler beim Erstellen/Aktualisieren des Beitrags.' })
+    } finally { finishMutation(controller) }
   }
 
   const handleToggleLike = async (postId: string) => {
@@ -220,30 +196,17 @@ function Community() {
       setNotification({ type: 'error', message: 'Bitte melde dich an, um Likes zu vergeben.' })
       return
     }
-
+    const controller = beginMutation()
+    if (!controller) return
     try {
-      const response = await fetchWithErrorHandling(`/api/posts/${postId}/like`, {
-        method: 'POST'
-      })
-
-      const isLikeAdded = response.message !== 'Like entfernt'
-      setLocalPosts(prev => prev.map(post => {
-        if (post.id === postId) {
-          return {
-            ...post,
-            votes: isLikeAdded ? post.votes + 1 : post.votes - 1,
-            isLiked: isLikeAdded
-          }
-        }
-        return post
-      }))
-
-      if (isLikeAdded) {
-        showPointsAndUpdateLeaderboard(1) // Points for new like
-      }
+      const response = await fetchWithErrorHandling<{ message?: string }>(`/api/posts/${postId}/like`, { method: 'POST', signal: controller.signal })
+      if (controller.signal.aborted) return
+      const isLiked = response.message !== 'Like entfernt'
+      setLocalPosts(previous => previous.map(post => post.id === postId ? { ...post, votes: Math.max(0, post.votes + (isLiked ? 1 : -1)), isLiked } : post))
+      refreshActivity()
     } catch (error) {
-      setNotification({ type: 'error', message: 'Fehler beim Liken.' })
-    }
+      if (!controller.signal.aborted && !isAbortError(error)) setNotification({ type: 'error', message: 'Fehler beim Liken.' })
+    } finally { finishMutation(controller) }
   }
 
   const handleDeletePost = async (postId: string) => {
@@ -251,49 +214,43 @@ function Community() {
       setNotification({ type: 'error', message: 'Bitte melde dich an, um Beiträge zu löschen.' })
       return
     }
-
     if (!window.confirm('Möchtest du diesen Beitrag wirklich löschen?')) return
-
-    setIsLoading(true)
+    const controller = beginMutation()
+    if (!controller) return
     try {
-      await fetchWithErrorHandling(`/api/posts/${postId}`, { method: 'DELETE' })
-      setLocalPosts(prev => prev.filter(post => post.id !== postId))
+      await fetchWithErrorHandling(`/api/posts/${postId}`, { method: 'DELETE', signal: controller.signal })
+      if (controller.signal.aborted) return
+      removePost(postId)
+      refreshActivity()
+      contributions.refresh()
       setNotification({ type: 'success', message: 'Beitrag wurde gelöscht!' })
     } catch (error) {
-      setNotification({ type: 'error', message: 'Fehler beim Löschen des Beitrags.' })
-    } finally {
-      setIsLoading(false)
-    }
+      if (!controller.signal.aborted && !isAbortError(error)) setNotification({ type: 'error', message: 'Fehler beim Löschen des Beitrags.' })
+    } finally { finishMutation(controller) }
   }
 
   const handleAddComment = async (postId: string, content: string) => {
     if (!session) {
       setNotification({ type: 'error', message: 'Bitte melde dich an, um zu kommentieren.' })
-      return
+      throw new Error('Nicht authentifiziert')
     }
-
-    setIsLoading(true)
+    const controller = beginMutation()
+    if (!controller) throw new Error('Eine Aktion läuft bereits')
     try {
-      const response = await fetchWithErrorHandling(`/api/posts/${postId}/comments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content })
+      const response = await fetchWithErrorHandling<Post['comments'][number]>(`/api/posts/${postId}/comments`, {
+        method: 'POST', signal: controller.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }),
       })
-
-      setLocalPosts(prev => prev.map(post => {
-        if (post.id === postId) {
-          return { ...post, comments: [response, ...post.comments] }
-        }
-        return post
-      }))
-
-      showPointsAndUpdateLeaderboard(5) // Points for new comment
+      if (controller.signal.aborted) return
+      setLocalPosts(previous => previous.map(post => post.id === postId ? {
+        ...post, comments: mergeCommunityRows([response], post.comments), commentCount: (post.commentCount ?? post.comments.length) + 1,
+      } : post))
+      refreshActivity()
       setNotification({ type: 'success', message: 'Kommentar wurde hinzugefügt!' })
+      contributions.refresh()
     } catch (error) {
-      setNotification({ type: 'error', message: 'Fehler beim Hinzufügen des Kommentars.' })
-    } finally {
-      setIsLoading(false)
-    }
+      if (!controller.signal.aborted && !isAbortError(error)) setNotification({ type: 'error', message: 'Fehler beim Hinzufügen des Kommentars.' })
+      throw error
+    } finally { finishMutation(controller) }
   }
 
   const handleLikeComment = async (commentId: string, postId: string) => {
@@ -301,45 +258,57 @@ function Community() {
       setNotification({ type: 'error', message: 'Bitte melde dich an, um Kommentare zu liken.' })
       return
     }
-
+    const controller = beginMutation()
+    if (!controller) return
     try {
-      const response = await fetchWithErrorHandling(`/api/posts/${postId}/comments/${commentId}/like`, {
-        method: 'POST'
-      })
-
-      setLocalPosts(prev => prev.map(post => ({
-        ...post,
-        comments: post.comments.map(comment => {
-          if (comment.id === commentId) {
-            return {
-              ...comment,
-              votes: response.isLiked ? comment.votes + 1 : comment.votes - 1,
-              isLiked: response.isLiked
-            }
-          }
-          return comment
-        })
-      })))
-
+      const response = await fetchWithErrorHandling<{ isLiked: boolean }>(`/api/posts/${postId}/comments/${commentId}/like`, { method: 'POST', signal: controller.signal })
+      if (controller.signal.aborted) return
+      setLocalPosts(previous => previous.map(post => ({ ...post, comments: post.comments.map(comment => comment.id === commentId ? {
+        ...comment, votes: Math.max(0, comment.votes + (response.isLiked ? 1 : -1)), isLiked: response.isLiked,
+      } : comment) })))
     } catch (error) {
-      setNotification({ type: 'error', message: 'Fehler beim Liken des Kommentars.' })
+      if (!controller.signal.aborted && !isAbortError(error)) setNotification({ type: 'error', message: 'Fehler beim Liken des Kommentars.' })
+    } finally { finishMutation(controller) }
+  }
+
+  const handleSelectSolution = async (postId: string, commentId: string | null) => {
+    const post = localPosts.find(row => row.id === postId)
+    if (!session?.user?.id || post?.authorId !== session.user.id) return
+    const controller = beginMutation()
+    if (!controller) return
+    setSolutionSaving(postId)
+    setSolutionErrors(previous => ({ ...previous, [postId]: '' }))
+    const applyState = (current: Post) => setLocalPosts(previous => previous.map(row => row.id === postId ? {
+      ...row, solutionRevision: current.solutionRevision, acceptedSolution: current.acceptedSolution,
+      acceptedSolutionCount: current.acceptedSolutionCount, published: current.published,
+    } : row))
+    try {
+      const response = await fetch(`/api/posts/${encodeURIComponent(postId)}/solution`, {
+        method: 'PUT', signal: controller.signal, headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ commentId, expectedRevision: post.solutionRevision ?? null }),
+      })
+      const result = await response.json()
+      if (controller.signal.aborted) return
+      if (result.post?.id === postId) applyState(result.post)
+      if (!response.ok) throw new Error(result.error || 'Lösung konnte nicht gespeichert werden.')
+      if (result.post?.id !== postId) throw new Error('Ungültiger Lösungsstand. Bitte erneut versuchen.')
+      contributions.refresh()
+    } catch (error) {
+      if (!controller.signal.aborted && !isAbortError(error)) setSolutionErrors(previous => ({
+        ...previous, [postId]: error instanceof Error ? error.message : 'Lösung konnte nicht gespeichert werden.',
+      }))
+    } finally {
+      if (!controller.signal.aborted) setSolutionSaving(null)
+      finishMutation(controller)
     }
   }
 
-  const showPointsAndUpdateLeaderboard = (points: number) => {
-    setPointsAnimation({ isVisible: true, points })
-    fetchLeaderboard()
-  }
+  const feedCount = isLoading ? 'Wird geladen…' : postsLoadError && localPosts.length === 0 ? 'Nicht verfügbar' : `${localPosts.length} ${localPosts.length === 1 ? 'Beitrag geladen' : 'Beiträge geladen'}`
 
-  // Calculate user stats
-  const userStats = {
-    posts: localPosts.filter(post => post.authorId === session?.user.id).length,
-    receivedLikes: localPosts
-      .filter(post => post.authorId === session?.user.id)
-      .reduce((acc, post) => acc + post.votes, 0),
-    comments: localPosts.reduce((acc, post) =>
-      acc + ((post.comments || []).filter(comment => comment.authorId === session?.user.id).length), 0),
-    totalPoints: leaderboardUsers.find(user => user.id === session?.user.id)?.points || 0
+  const openComposer = () => {
+    setEditingPost(null)
+    setIsEditing(true)
+    mainRef.current?.scrollTo?.({ top: 0, behavior: 'smooth' })
   }
 
   return (
@@ -353,7 +322,7 @@ function Community() {
               initial={{ opacity: 0, y: -20, x: '-50%' }}
               animate={{ opacity: 1, y: 0, x: '-50%' }}
               exit={{ opacity: 0, y: -20, x: '-50%' }}
-              className={`fixed top-6 left-1/2 transform -translate-x-1/2 max-w-[calc(100vw-2rem)] border bg-card px-4 py-3 rounded-xl shadow-sm z-[100] flex items-center space-x-2 ${notification.type === 'success'
+              className={`fixed top-6 left-1/2 transform -translate-x-1/2 max-w-[calc(100vw-2rem)] border bg-card px-4 py-3 rounded-xl shadow-xs z-[100] flex items-center space-x-2 ${notification.type === 'success'
                 ? 'border-border text-foreground'
                 : 'border-destructive/30 text-destructive'
                 }`}
@@ -364,50 +333,53 @@ function Community() {
         </AnimatePresence>
 
         <AppHeader>
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-semibold text-foreground">Community</h1>
-            </div>
-            <div className="flex items-center space-x-4">
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <h1>Community</h1>
+            <div className="flex shrink-0 items-center gap-2">
               <ThemeToggle />
               <UserNav />
             </div>
           </div>
         </AppHeader>
 
-        <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto scroll-smooth">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <main ref={mainRef} id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto scroll-smooth">
+          <div className="mx-auto w-full max-w-[1440px] px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
+            <div className="mb-8 flex flex-wrap items-end justify-between gap-4 border-b pb-6">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Austausch / Community</p>
+                <p className="mt-2 max-w-[58ch] text-base leading-relaxed text-muted-foreground">Fragen stellen, Erfahrungen teilen und gemeinsam weiterkommen.</p>
+              </div>
+              <p className="text-sm tabular-nums text-muted-foreground">{feedCount}</p>
+            </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-              {/* Main Content Feed - 8 cols */}
-              <div className="lg:col-span-8 space-y-6">
+            <TopicNavigation key={isEditing ? 'composing' : 'browsing'} selected={topic} onSelect={onSelectTopic} disabled={isEditing} />
+
+            {session?.user?.id && session.user.role === 'USER' && <FirstActionGuide userId={session.user.id} />}
+            <div className="grid min-w-0 items-start gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,19rem)] lg:gap-12">
+              <section aria-labelledby="community-feed-title" className="min-w-0">
                 <AnimatePresence mode="wait">
                   {!isEditing ? (
-                    <motion.div
+                    <motion.button
                       key="new-post-button"
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.95 }}
-                      className="bg-card rounded-2xl p-4 shadow-sm border border-border flex items-center space-x-4 cursor-pointer hover:border-primary/30 transition-colors"
-                      role="button" tabIndex={0} aria-label="Neuen Beitrag erstellen"
-                      onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setIsEditing(true) } }}
-                      onClick={() => setIsEditing(true)}
+                      type="button"
+                      className="flex min-h-20 w-full min-w-0 items-center gap-3 rounded-[14px] border border-input bg-card p-4 text-left transition-colors hover:border-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      aria-label="Neuen Beitrag erstellen"
+                      onClick={openComposer}
                     >
-                      <Avatar className="h-10 w-10"><AvatarImage src={session?.user?.image || ''} alt="" /><AvatarFallback className="bg-accent text-primary">{session?.user?.name?.[0] || 'F'}</AvatarFallback></Avatar>
-                      <div className="flex-1 bg-muted rounded-full px-4 py-2.5 text-muted-foreground text-sm hover:bg-accent transition-colors">
+                      <Avatar className="h-10 w-10 shrink-0"><AvatarImage src={session?.user?.image || ''} alt="" /><AvatarFallback className="bg-accent text-primary">{session?.user?.name?.[0] || 'F'}</AvatarFallback></Avatar>
+                      <span className="min-w-0 flex-1 text-sm text-muted-foreground">
                         Was möchtest du teilen{session?.user?.name ? `, ${session.user.name.split(' ')[0]}` : ''}?
-                      </div>
-                      <Button aria-label="Hinzufügen" variant="ghost" size="icon" className="text-primary">
-                        <PlusCircle className="h-6 w-6" />
-                      </Button>
-                    </motion.div>
+                      </span>
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-accent text-primary"><PlusCircle className="h-5 w-5" aria-hidden="true" /></span>
+                    </motion.button>
                   ) : (
                     <PostForm
                       onSubmit={handleSubmitPost}
                       initialTitle={editingPost?.title}
                       initialContent={editingPost?.content}
+                      initialTags={editingPost ? editingPost.tags?.map(tag => tag.name) : topic && validTopicName(topic) ? [topic] : []}
                       isEditing={!!editingPost}
-                      isLoading={isLoading}
+                      isLoading={isLoading || isMutating}
                       onCancel={() => {
                         setIsEditing(false)
                         setEditingPost(null)
@@ -416,62 +388,130 @@ function Community() {
                   )}
                 </AnimatePresence>
 
-                <div className="space-y-6">
-                  {isLoading && localPosts.length === 0 && <PageState kind="loading" title="Beiträge werden geladen" />}
-                  <AnimatePresence>
-                    {localPosts.map((post) => (
-                      <PostCard
-                        key={post.id}
-                        post={post}
-                        currentUserId={session?.user.id}
-                        onLike={handleToggleLike}
-                        onDelete={handleDeletePost}
-                        onEdit={(post) => {
-                          setEditingPost(post)
-                          setIsEditing(true)
-                          // Scroll to top to see form
-                          window.scrollTo({ top: 0, behavior: 'smooth' })
-                        }}
-                        onAddComment={handleAddComment}
-                        onLikeComment={handleLikeComment}
-                        isLoading={isLoading}
-                      />
-                    ))}
-                  </AnimatePresence>
+                <div className="mt-9">
+                  <div className="flex flex-wrap items-baseline justify-between gap-3 border-b pb-4">
+                    <h2 id="community-feed-title" tabIndex={-1} className="text-xl font-semibold tracking-tight focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Aktuelle Beiträge</h2>
+                    <span className="text-sm tabular-nums text-muted-foreground">{feedCount}</span>
+                  </div>
+                  <div className="mt-5 space-y-5">
+                    {linkedTargetLoading && <p className="text-sm text-muted-foreground" role="status">Verlinkter Beitrag wird geladen…</p>}
+                    {linkedTargetError && <PageState kind="error" title="Verlinkter Inhalt ist nicht verfügbar" description="Der Inhalt wurde möglicherweise gelöscht oder ist für dieses Konto nicht sichtbar." action={<Button type="button" variant="outline" onClick={() => void retryLinkedTarget()}>Verlinkten Inhalt erneut laden</Button>} />}
+                    {isLoading && localPosts.length === 0 && <PageState kind="loading" title="Beiträge werden geladen" />}
+                    {postsLoadError && !isLoading && localPosts.length === 0 && <PageState kind="error" title="Beiträge konnten nicht geladen werden" description="Prüfe deine Verbindung und versuche es erneut." action={<Button type="button" variant="outline" onClick={retryPosts}>Erneut versuchen</Button>} />}
+                    <AnimatePresence>
+                      {localPosts.map((post) => (
+                        <PostCard
+                          key={post.id}
+                          post={post}
+                          currentUserId={session?.user.id}
+                          onLike={handleToggleLike}
+                          onDelete={handleDeletePost}
+                          onEdit={(post) => {
+                            setEditingPost(post)
+                            setIsEditing(true)
+                            mainRef.current?.scrollTo?.({ top: 0, behavior: 'smooth' })
+                          }}
+                          onSelectTopic={onSelectTopic}
+                          onAddComment={handleAddComment}
+                          onLikeComment={handleLikeComment}
+                          onSelectSolution={handleSelectSolution}
+                          solutionSaving={solutionSaving === post.id}
+                          solutionError={solutionErrors[post.id]}
+                          onLoadComments={loadComments}
+                          commentsLoading={!!commentsLoading[post.id]}
+                          commentsError={!!commentsError[post.id]}
+                          isLoading={isLoading || isMutating}
+                        />
+                      ))}
+                    </AnimatePresence>
+                    {localPosts.length > 0 && <div className="border-t pt-5">
+                      {postsLoadError && <p className="mb-3 text-sm text-destructive" role="alert">Beiträge konnten nicht vollständig geladen werden. Deine geladenen Beiträge bleiben sichtbar.</p>}
+                      {nextCursor || !initialLoaded ? <Button type="button" variant="outline" className="w-full sm:w-auto" disabled={isLoadingMore || isMutating} onClick={event => {
+                        focusEndOfFeedRef.current = document.activeElement === event.currentTarget
+                        void (postsLoadError ? retryPosts() : loadMore())
+                      }}>
+                        {isLoadingMore ? 'Weitere Beiträge werden geladen…' : postsLoadError ? 'Weitere Beiträge erneut laden' : 'Weitere Beiträge laden'}
+                      </Button> : <p className="text-sm text-muted-foreground">Ende der Liste.</p>}
+                      <p ref={feedStatusRef} tabIndex={-1} className="mt-3 text-sm text-muted-foreground" role="status" aria-live="polite">{isLoadingMore ? 'Weitere Beiträge werden geladen…' : feedCount}</p>
+                    </div>}
 
-                  {localPosts.length === 0 && !isLoading && (
-                    <div className="text-center py-12">
-                      <div className="bg-muted dark:bg-card w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <PlusCircle className="h-8 w-8 text-muted-foreground" />
+                    {localPosts.length === 0 && !isLoading && !postsLoadError && (
+                      <div className="border-t py-12 text-center" role="status">
+                        <PlusCircle className="mx-auto mb-4 h-8 w-8 text-muted-foreground" aria-hidden="true" />
+                        <h3 className="text-lg font-semibold text-foreground">Keine Beiträge gefunden</h3>
+                        <p className="mt-2 text-sm text-muted-foreground">{topic ? `Für „${topic}“ gibt es noch keine sichtbaren Beiträge.` : 'Sei der Erste, der etwas teilt!'}</p>
+                        {topic ? <Button type="button" variant="outline" className="mt-5" onClick={() => document.getElementById('community-topic-search')?.focus()}>Anderes Thema suchen</Button>
+                          : <Button type="button" variant="outline" className="mt-5" onClick={openComposer}>Beitrag schreiben</Button>}
                       </div>
-                      <h3 className="text-lg font-medium text-foreground">Keine Beiträge gefunden</h3>
-                      <p className="text-muted-foreground mt-2">Sei der Erste, der etwas teilt!</p>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
-              </div>
+              </section>
 
-              {/* Sidebar - 4 cols - Sticky */}
-              <div className="lg:col-span-4 space-y-6 lg:sticky lg:top-8">
-                <StatsCard stats={userStats} />
+<aside aria-label="Deine Community im Überblick" className="min-w-0 space-y-9 lg:sticky lg:top-8">
+                <StatsCard stats={activity} activityLoading={activityLoading} activityError={activityError} onRetryActivity={refreshActivity} rewards={rewards} rewardsLoading={rewardsLoading} rewardsError={rewardsError} isSignedIn={!!session} />
+                <ContributionMilestonesCard summary={contributions.summary} loading={contributions.loading} error={contributions.error} isSignedIn={!!session?.user?.id} onRefresh={contributions.refresh} />
                 <LeaderboardCard
                   users={leaderboardUsers}
                   isLoading={isLeaderboardLoading}
                 />
-              </div>
+              </aside>
             </div>
           </div>
         </main>
       </div>
 
-      <PointsAnimation
-        points={pointsAnimation.points}
-        isVisible={pointsAnimation.isVisible}
-        onComplete={() => setPointsAnimation({ isVisible: false, points: 0 })}
-      />
     </AppShell>
   )
 }
 
 
-export default Community
+export default function CommunityPage() {
+  const { data, status } = useSession()
+  const session = status === 'authenticated' ? data : null
+  const topic = useSyncExternalStore(
+    callback => {
+      window.addEventListener('popstate', callback)
+      window.addEventListener('community-topic-change', callback)
+      return () => { window.removeEventListener('popstate', callback); window.removeEventListener('community-topic-change', callback) }
+    },
+    () => new URL(window.location.href).searchParams.get('tag'),
+    () => null,
+  )
+  const focusAfterNavigation = useRef(false)
+  useEffect(() => {
+    if (focusAfterNavigation.current) {
+      focusAfterNavigation.current = false
+      document.getElementById('community-feed-title')?.focus()
+    }
+  }, [topic])
+  const selectTopic = (next: string | null) => {
+    if (next === topic) return
+    const url = new URL(window.location.href)
+    if (next) url.searchParams.set('tag', next)
+    else url.searchParams.delete('tag')
+    url.hash = ''
+    focusAfterNavigation.current = true
+    window.history.pushState(window.history.state, '', url)
+    window.dispatchEvent(new Event('community-topic-change'))
+  }
+
+  // The session can resolve after the page first hydrates. Do not expose an
+  // interactive anonymous composer that will be remounted (and lose edits)
+  // when its account-scoped key changes to the signed-in viewer.
+  if (status === 'loading') return (
+    <AppShell>
+      <Sidebar />
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <AppHeader><h1>Community</h1></AppHeader>
+        <main id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto px-4 py-8 sm:px-6 lg:px-8">
+          <PageState kind="loading" title="Community wird geladen" />
+        </main>
+      </div>
+    </AppShell>
+  )
+
+  // The posts response can include this viewer's unpublished posts and likes.
+  // Reset the whole feed before a different account can see cached rows.
+  return <Community key={`${session?.user?.id ?? 'anonymous'}:${session?.user?.role ?? 'USER'}:${topic ?? ''}`} session={session} topic={topic} onSelectTopic={selectTopic} />
+}

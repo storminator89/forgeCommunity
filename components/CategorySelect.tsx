@@ -19,6 +19,9 @@ export const CategorySelect: React.FC<CategorySelectProps> = ({
 }) => {
   const [isAdding, setIsAdding] = useState(false);
   const [newCategory, setNewCategory] = useState('');
+  const options = selectedCategory && !categories.includes(selectedCategory)
+    ? [selectedCategory, ...categories]
+    : categories;
 
   const handleAddCategory = () => {
     const trimmedCategory = newCategory.trim();
@@ -31,17 +34,17 @@ export const CategorySelect: React.FC<CategorySelectProps> = ({
 
   return (
     <div className="space-y-3">
-      <Label htmlFor="category" className="text-sm font-medium">Kategorie</Label>
+      <Label htmlFor={isAdding ? 'new-category' : 'category'} className="text-sm font-medium">Kategorie</Label>
       {!isAdding ? (
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-center gap-2">
           <select
             id="category"
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            className="h-11 min-w-0 flex-1 rounded-xl border border-input bg-background px-3 py-2 text-base text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <option value="" disabled>Wähle eine Kategorie...</option>
-            {categories.map((cat) => (
+            {options.map((cat) => (
               <option key={cat} value={cat}>{cat}</option>
             ))}
           </select>
@@ -49,7 +52,7 @@ export const CategorySelect: React.FC<CategorySelectProps> = ({
             type="button" 
             onClick={() => setIsAdding(true)}
             variant="outline"
-            size="sm"
+            aria-label="Neue Kategorie erstellen"
           >
             Neu
           </Button>
@@ -57,11 +60,18 @@ export const CategorySelect: React.FC<CategorySelectProps> = ({
       ) : (
         <div className="space-y-3">
           <Input
+            id="new-category"
             type="text"
             value={newCategory}
             onChange={(e) => setNewCategory(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleAddCategory();
+              }
+            }}
             placeholder="Neue Kategorie eingeben..."
-            className="w-full h-10 text-base"
+            className="w-full"
           />
           <div className="flex items-center gap-2">
             <Button 

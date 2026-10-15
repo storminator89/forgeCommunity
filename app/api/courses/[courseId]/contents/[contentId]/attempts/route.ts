@@ -1,0 +1,90 @@
+import { createHash } from 'node:crypto';
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth/next';
+import { Prisma } from '@prisma/client';
+import { authOptions } from '@/app/api/auth/[...nextauth]/options';
+import prisma from '@/lib/prisma';
+import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
+import { contentQuiz, courseContentRevision, gradeQuiz, InvalidQuizAnswersError, recordCourseCompletion } from '@/lib/server/course-progress';
+import { getQuizValidationError } from '@/app/courses/[courseId]/contents/types';
+import { contentTransaction } from '../../content-mutations';
+
+type Params = { params: Promise<{ courseId: string; contentId: string }> };
+type AttemptOutcome = { status: number; score?: number; passed?: boolean; retryAfterSeconds?: number; error?: string };
+
+export async function POST(request: NextRequest, props: Params) {
+  const { courseId, contentId } = await props.params;
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const body = await readJsonObject(request, 64 * 1024);
+    if (typeof body.submissionId !== 'string' || !/^[a-zA-Z0-9_-]{8,100}$/.test(body.submissionId) ||
+        typeof body.contentUpdatedAt !== 'string' || !body.contentUpdatedAt ||
+        !body.answers || typeof body.answers !== 'object' || Array.isArray(body.answers)) {
+      return NextResponse.json({ error: 'Invalid quiz submission' }, { status: 400 });
+    }
+    const userId = session.user.id;
+    const submissionId = body.submissionId;
+    const answers = body.answers;
+    // A digest is stored only in the database for safe idempotent retries; it
+    // must never be returned to learners because answer-space is often small.
+    const answerDigest = createHash('sha256').update(JSON.stringify(answers)).digest('hex');
+
+    const attempt = async (): Promise<AttemptOutcome> => contentTransaction(async tx => {
+      const enrollment = await tx.enrollment.findUnique({ where: { userId_courseId: { userId, courseId } }, select: { id: true } });
+      if (!enrollment) return { status: 403, error: 'Enrollment required' };
+      const content = await tx.courseContent.findUnique({ where: { id: contentId }, select: { id: true, courseId: true, parentId: true, type: true, content: true, updatedAt: true, children: { select: { id: true }, take: 1 } } });
+      if (!content || content.courseId !== courseId) return { status: 404, error: 'Content not found' };
+      if (content.children.length) return { status: 409, error: 'Only leaf quizzes can be submitted' };
+      const quiz = contentQuiz(content);
+      if (!quiz || getQuizValidationError(quiz)) return { status: 409, error: 'Quiz is not ready' };
+      if (content.updatedAt.toISOString() !== body.contentUpdatedAt) return { status: 409, error: 'Quiz changed; reload before submitting' };
+      const revision = courseContentRevision(content);
+      const previous = await tx.quizAttempt.findUnique({ where: { userId_contentId_submissionId: { userId, contentId, submissionId } } });
+      if (previous) {
+        if (previous.revision !== revision || previous.answerDigest !== answerDigest) return { status: 409, error: 'Submission ID was already used for different answers' };
+        return { status: 200, score: previous.score, passed: previous.passed };
+      }
+      const now = new Date();
+      const windowStart = new Date(now.getTime() - 60 * 60 * 1000);
+      const recentFailures = await tx.quizAttempt.findMany({
+        where: { userId, contentId, revision, passed: false, submittedAt: { gte: windowStart } },
+        orderBy: { submittedAt: 'desc' }, take: 5, select: { submittedAt: true },
+      });
+      if (recentFailures.length >= 5) {
+        const oldest = recentFailures[recentFailures.length - 1].submittedAt;
+        return { status: 429, error: 'Please review the course and try again later', retryAfterSeconds: Math.max(1, Math.ceil((oldest.getTime() + 60 * 60 * 1000 - now.getTime()) / 1000)) };
+      }
+      const graded = gradeQuiz(quiz, answers);
+      await tx.quizAttempt.create({ data: { userId, courseId, contentId, submissionId, answerDigest, revision, score: graded.score, passed: graded.passed } });
+      if (graded.passed) {
+        const existing = await tx.courseContentProgress.findUnique({ where: { userId_contentId: { userId, contentId } }, select: { revision: true } });
+        if (existing?.revision !== revision) {
+          await tx.courseContentProgress.upsert({ where: { userId_contentId: { userId, contentId } }, create: { userId, courseId, contentId, revision }, update: { revision, completedAt: now } });
+        }
+        await recordCourseCompletion(tx, userId, courseId);
+      }
+      return { status: 200, ...graded };
+    });
+
+    let outcome: AttemptOutcome;
+    try { outcome = await attempt(); }
+    catch (error) {
+      // Two identical submissions can race at the unique key. Reading the
+      // committed attempt yields the same result without double-counting it.
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') throw error;
+      const saved = await prisma.quizAttempt.findUnique({ where: { userId_contentId_submissionId: { userId, contentId, submissionId } } });
+      if (!saved || saved.answerDigest !== answerDigest || saved.courseId !== courseId) throw error;
+      outcome = { status: 200, score: saved.score, passed: saved.passed };
+    }
+    if (outcome.status === 200) return NextResponse.json({ score: outcome.score, passed: outcome.passed });
+    if (outcome.status === 429) return NextResponse.json({ error: outcome.error, retryAfterSeconds: outcome.retryAfterSeconds }, { status: 429, headers: { 'Retry-After': String(outcome.retryAfterSeconds) } });
+    return NextResponse.json({ error: outcome.error }, { status: outcome.status });
+  } catch (error) {
+    if (error instanceof InvalidQuizAnswersError) return NextResponse.json({ error: error.message }, { status: 400 });
+    const inputError = requestErrorResponse(error);
+    if (inputError) return inputError;
+    console.error('Failed to grade course quiz:', error);
+    return NextResponse.json({ error: 'Failed to grade quiz' }, { status: 500 });
+  }
+}

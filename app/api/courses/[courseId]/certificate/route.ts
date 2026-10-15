@@ -5,6 +5,7 @@ import { authOptions } from '../../../auth/[...nextauth]/options';
 import { v4 as uuidv4 } from 'uuid';
 import { Prisma } from '@prisma/client';
 import { certificatePdfResponse } from '@/lib/server/certificate-pdf';
+import { recordCourseCompletion } from '@/lib/server/course-progress';
 
 export async function POST(
   request: NextRequest,
@@ -25,16 +26,18 @@ export async function POST(
           if (!course) return null;
           const user = await tx.user.findUnique({ where: { id: session.user.id }, select: { name: true, email: true } });
           if (!user) return null;
-          const enrollment = await tx.enrollment.findUnique({
-            where: { userId_courseId: { userId: session.user.id, courseId } },
-            select: { completedAt: true },
-          });
-          if (!enrollment?.completedAt) return false;
           const existing = await tx.certificate.findFirst({
             where: { userId: session.user.id, courseId },
             orderBy: [{ issuedAt: 'desc' }, { id: 'desc' }],
           });
-          return existing ?? tx.certificate.create({
+          // A previously issued credential remains valid after later edits.
+          if (existing) return existing;
+          const enrollment = await tx.enrollment.findUnique({
+            where: { userId_courseId: { userId: session.user.id, courseId } },
+            select: { id: true },
+          });
+          if (!enrollment || !(await recordCourseCompletion(tx, session.user.id, courseId)).complete) return false;
+          return tx.certificate.create({
             data: {
               id: uuidv4(), userId: session.user.id, courseId,
               issuedAt: new Date(), courseName: course.title, userName: user.name || user.email,

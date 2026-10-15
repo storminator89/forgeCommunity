@@ -5,6 +5,7 @@ import { sanitizeTextServer } from '@/lib/server/sanitize-html';
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
 import { assertCanAttachH5P } from '@/lib/server/h5p-access';
 import { H5PValidationError } from '@/lib/server/h5p-archive';
+import { reconcileCourseRewards } from '@/lib/server/rewards';
 import { assertParent, canEdit, contentTransaction, ContentMutationError, normalizeOrder, presentContent, prepareContent, siblings, validateContentFields } from '../content-mutations';
 
 export async function DELETE(request: NextRequest, props: { params: Promise<{ courseId: string; contentId: string }> }) {
@@ -15,7 +16,7 @@ export async function DELETE(request: NextRequest, props: { params: Promise<{ co
     const deletedContent = await contentTransaction(async (tx) => {
       const current = await tx.courseContent.findUnique({ where: { id: contentId }, include: { course: { select: { instructorId: true } } } });
       if (!current || current.courseId !== courseId) throw new ContentMutationError('Content not found', 404);
-      canEdit(current.course.instructorId, session.user);
+      await canEdit(tx, current.course.instructorId, session.user);
       const contents = await tx.courseContent.findMany({ where: { courseId }, select: { id: true, parentId: true } });
       const descendants = new Set([contentId]);
       let changed = true;
@@ -34,6 +35,7 @@ export async function DELETE(request: NextRequest, props: { params: Promise<{ co
         leaves.forEach(id => remaining.delete(id));
       }
       await normalizeOrder(tx, (await siblings(tx, courseId, current.parentId)).map(item => item.id));
+      await reconcileCourseRewards(tx, courseId);
       const { course: _course, ...deleted } = current;
       return deleted;
     });
@@ -55,7 +57,7 @@ export async function PUT(request: NextRequest, props: { params: Promise<{ cours
     const updatedContent = await contentTransaction(async (tx) => {
       const current = await tx.courseContent.findUnique({ where: { id: contentId }, include: { course: { select: { instructorId: true } } } });
       if (!current || current.courseId !== courseId) throw new ContentMutationError('Content not found', 404);
-      canEdit(current.course.instructorId, session.user);
+      await canEdit(tx, current.course.instructorId, session.user);
       const destinationParentId = body.parentId === undefined ? current.parentId : body.parentId as string | null;
       if (body.parentId !== undefined) await assertParent(tx, courseId, destinationParentId, contentId);
       const effectiveType = body.type === undefined ? current.type : body.type as string | null;
@@ -81,6 +83,7 @@ export async function PUT(request: NextRequest, props: { params: Promise<{ cours
       } else {
         updated = await tx.courseContent.update({ where: { id: contentId }, data });
       }
+      await reconcileCourseRewards(tx, courseId);
       return presentContent({ ...updated, order });
     });
     return NextResponse.json(updatedContent);

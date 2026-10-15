@@ -117,6 +117,7 @@ test('grouping preserves descendants at every level', () => {
 test('course deletion removes descendants before their parents at arbitrary depth', async () => {
   const deletes: string[][] = []
   const tx = {
+    rewardLedger: { findMany: jest.fn().mockResolvedValue([]) },
     certificate: { deleteMany: jest.fn() },
     enrollment: { deleteMany: jest.fn() },
     courseContent: {

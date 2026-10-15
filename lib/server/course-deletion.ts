@@ -1,7 +1,11 @@
 import type { Prisma } from '@prisma/client';
+import { revokeCourseRewards } from '@/lib/server/rewards';
 
 export async function deleteCourseDependencies(tx: Prisma.TransactionClient, courseIds: string[]) {
   if (courseIds.length === 0) return;
+
+  // Source IDs are intentionally retained for audit after a course is removed.
+  await revokeCourseRewards(tx, courseIds, 'COURSE_REMOVED');
 
   await tx.certificate.deleteMany({ where: { courseId: { in: courseIds } } });
   await tx.enrollment.deleteMany({ where: { courseId: { in: courseIds } } });

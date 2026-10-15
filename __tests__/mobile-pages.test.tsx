@@ -4,6 +4,12 @@ import ChatPage from '@/app/chat/page';
 import Events from '@/app/events/page';
 import NotificationsPage from '@/app/notifications/page';
 
+const mockPush = jest.fn();
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({ push: mockPush }),
+  useSearchParams: () => new URLSearchParams(window.location.search),
+}));
+
 jest.mock('@/components/Sidebar', () => ({ Sidebar: () => null }));
 jest.mock('@/components/user-nav', () => ({ UserNav: () => null }));
 jest.mock('@/components/theme-toggle', () => ({ ThemeToggle: () => null }));
@@ -26,6 +32,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  window.history.replaceState({}, '', '/chat');
   Element.prototype.scrollIntoView = jest.fn();
 });
 
@@ -33,14 +40,18 @@ it('allows keyboard channel selection and blocks duplicate sends while the messa
   const user = userEvent.setup();
   const setCurrentChannel = jest.fn();
   let completeSend!: () => void;
-  const sendMessage = jest.fn(() => new Promise<void>(resolve => { completeSend = resolve; }));
+  const sendMessage = jest.fn(() => new Promise<boolean>(resolve => { completeSend = () => resolve(true); }));
   const channel = { id: 'channel', name: 'Allgemein', _count: { members: 2 } };
   mockChat.mockReturnValue({ channels: [channel], currentChannel: channel, messages: [], setCurrentChannel, sendMessage, loading: false });
   render(<ChatPage />);
+  const channelToggle = screen.getByRole('button', { name: 'Channels öffnen' });
+  await user.click(channelToggle);
+  expect(channelToggle).toHaveAttribute('aria-expanded', 'true');
   const channelButton = screen.getByRole('button', { name: 'Allgemein' });
   channelButton.focus();
   await user.keyboard('{Enter}');
   expect(setCurrentChannel).toHaveBeenCalledWith(channel);
+  expect(channelToggle).toHaveAttribute('aria-expanded', 'false');
   expect(screen.getByRole('navigation', { name: 'Chat-Channels' })).toBeVisible();
   await user.type(screen.getByRole('textbox', { name: 'Nachricht' }), 'Hallo');
   await user.click(screen.getByRole('button', { name: 'Nachricht senden' }));
@@ -51,6 +62,36 @@ it('allows keyboard channel selection and blocks duplicate sends while the messa
   expect(screen.getByRole('textbox', { name: 'Nachricht' })).toHaveValue('');
 });
 
+it('keeps a failed chat message draft editable and leaves the channel accessible', async () => {
+  const user = userEvent.setup();
+  const channel = { id: 'channel', name: 'Allgemein', _count: { members: 2 } };
+  const sendMessage = jest.fn().mockResolvedValue(false);
+  mockChat.mockReturnValue({ channels: [channel], currentChannel: channel, messages: [], setCurrentChannel: jest.fn(), sendMessage, loading: false, error: 'Send failed', clearError: jest.fn() });
+
+  render(<ChatPage />);
+  expect(screen.getByRole('navigation', { name: 'Chat-Channels' })).toBeInTheDocument();
+  const composer = screen.getByRole('textbox', { name: 'Nachricht' });
+  await user.type(composer, 'Bitte behalten');
+  await user.click(screen.getByRole('button', { name: 'Nachricht senden' }));
+  await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('Bitte behalten', undefined));
+  expect(composer).toHaveValue('Bitte behalten');
+  expect(screen.getByRole('alert')).toHaveTextContent('Chat konnte nicht geladen oder geändert werden');
+});
+
+it('loads and focuses an exact older chat message from a notification link', async () => {
+  window.history.replaceState({}, '', '/chat?channelId=room1&messageId=old1');
+  const channel = { id: 'room1', name: 'Allgemein', _count: { members: 2 } };
+  mockChat.mockReturnValue({ channels: [channel], currentChannel: channel, messages: [], setCurrentChannel: jest.fn(), loading: false });
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({
+    id: 'old1', channelId: 'room1', content: 'Older linked message', createdAt: '2026-01-01T00:00:00Z',
+    messageType: 'text', author: { id: 'other', name: 'Other', image: null },
+  }) });
+  render(<ChatPage />);
+  expect(await screen.findByText('Older linked message')).toBeVisible();
+  expect(screen.getByText('Older linked message').closest('article')).toHaveFocus();
+  expect(global.fetch).toHaveBeenCalledWith('/api/chat/messages/old1', expect.objectContaining({ cache: 'no-store' }));
+});
+
 it('keeps explicit notification filters, hides read entries and marks all unread notifications', async () => {
   const user = userEvent.setup();
   const markAllAsRead = jest.fn();
@@ -58,7 +99,8 @@ it('keeps explicit notification filters, hides read entries and marks all unread
     notifications: [
       { id: '1', type: 'CHAT_MESSAGE', content: 'Neue Nachricht', createdAt: '2026-10-02T10:00:00Z', isRead: false },
       { id: '2', type: 'CHANNEL_CREATED', content: 'Gelesene Nachricht', createdAt: '2026-10-01T10:00:00Z', isRead: true },
-    ], markAsRead: jest.fn(), deleteNotification: jest.fn(), markAllAsRead,
+    ], unreadCount: 1, isLoading: false, loadError: null, retry: jest.fn(),
+    markAsRead: jest.fn(), deleteNotification: jest.fn(), markAllAsRead,
   });
   render(<NotificationsPage />);
   await user.click(screen.getByRole('button', { name: 'Ungelesen 1' }));
@@ -69,23 +111,75 @@ it('keeps explicit notification filters, hides read entries and marks all unread
   expect(markAllAsRead).toHaveBeenCalledTimes(1);
 });
 
+it('opens an actionable notification with a labeled keyboard-accessible control', async () => {
+  const user = userEvent.setup();
+  const openNotification = jest.fn().mockResolvedValue('/community#comment-reply1');
+  mockNotifications.mockReturnValue({
+    notifications: [{ id: 'notice', type: 'COMMENT', content: 'Ein Mitglied hat kommentiert.',
+      createdAt: '2026-10-02T10:00:00Z', isRead: false, targetState: 'available', actionLabel: 'Kommentar ansehen' }],
+    unreadCount: 1, isLoading: false, loadError: null, retry: jest.fn(), openNotification,
+    markAsRead: jest.fn(), deleteNotification: jest.fn(), markAllAsRead: jest.fn(),
+  });
+  render(<NotificationsPage />);
+  const action = screen.getByRole('button', { name: 'Kommentar ansehen' });
+  action.focus();
+  await user.keyboard('{Enter}');
+  await waitFor(() => expect(openNotification).toHaveBeenCalledWith('notice'));
+  await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/community#comment-reply1'));
+});
+
 it('disables mark-all when there are no unread notifications', () => {
-  mockNotifications.mockReturnValue({ notifications: [], markAsRead: jest.fn(), deleteNotification: jest.fn(), markAllAsRead: jest.fn() });
+  mockNotifications.mockReturnValue({ notifications: [], unreadCount: 0, isLoading: false, loadError: null, retry: jest.fn(), markAsRead: jest.fn(), deleteNotification: jest.fn(), markAllAsRead: jest.fn() });
   render(<NotificationsPage />);
   expect(screen.getByRole('button', { name: 'Alle als gelesen markieren' })).toBeDisabled();
+});
+
+it('offers retry instead of claiming the inbox is empty after a load error', () => {
+  const retry = jest.fn();
+  mockNotifications.mockReturnValue({ notifications: [], unreadCount: 0, isLoading: false,
+    loadError: 'Benachrichtigungen konnten nicht aktualisiert werden.', retry,
+    markAsRead: jest.fn(), deleteNotification: jest.fn(), markAllAsRead: jest.fn() });
+  render(<NotificationsPage />);
+  expect(screen.getByRole('alert')).toHaveTextContent('Aktualisierung fehlgeschlagen');
+  expect(screen.queryByText('Noch keine Benachrichtigungen')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Erneut versuchen' }));
+  expect(retry).toHaveBeenCalledTimes(1);
 });
 
 it('includes events at the start of today and exposes calendar days as keyboard accessible buttons', async () => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const event = { id: 'today', title: 'Heute dabei', date: today.toISOString(), description: 'Details', location: 'Community', timezone: 'Europe/Berlin' };
+  const event = { id: 'today', title: 'Heute dabei', date: today.toISOString(), description: 'Details', location: 'Community', timezone: 'Europe/Berlin', maxAttendees: null, attendeeCount: 0, isAttending: false, canCancelRsvp: false };
   global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => [event] });
   render(<Events />);
   const dayButton = await screen.findByRole('button', { name: /1 Event$/ });
   expect(dayButton).toHaveAttribute('aria-current', 'date');
+  const monthScroller = screen.getByRole('group', { name: 'Monatskalender horizontal verschieben' });
+  expect(monthScroller).toHaveClass('overflow-x-auto');
+  expect(monthScroller.firstElementChild).toHaveClass('min-w-[314px]');
   fireEvent.click(screen.getByRole('button', { name: 'Liste' }));
+  expect(screen.getByRole('region', { name: 'Listenansicht' })).toBeInTheDocument();
+  expect(screen.getByRole('article')).toHaveTextContent('Heute dabei');
   expect(screen.getByRole('heading', { name: 'Heute dabei' })).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Woche' }));
   expect(screen.getByRole('region', { name: 'Wochenkalender' })).toBeVisible();
   expect(screen.getAllByRole('button', { name: /\d+ Events?$/ })).toHaveLength(7);
+});
+
+it('lets a signed-in member RSVP and cancel from the event list', async () => {
+  const user = userEvent.setup();
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const event = { id: 'workshop', title: 'Workshop', date: tomorrow.toISOString(), description: 'Details', location: 'Community', timezone: 'Europe/Berlin', maxAttendees: 1, attendeeCount: 0, isAttending: false, canCancelRsvp: false };
+  global.fetch = jest.fn().mockImplementation(async (_url: string, init?: RequestInit) => {
+    if (init?.method === 'POST') return { ok: true, json: async () => ({ isAttending: true, canCancelRsvp: true, attendeeCount: 1 }) };
+    if (init?.method === 'DELETE') return { ok: true, json: async () => ({ isAttending: false, canCancelRsvp: false, attendeeCount: 0 }) };
+    return { ok: true, json: async () => [event] };
+  });
+  render(<Events />);
+  await user.click(await screen.findByRole('button', { name: 'Liste' }));
+  await user.click(screen.getByRole('button', { name: 'Teilnehmen' }));
+  expect(global.fetch).toHaveBeenCalledWith('/api/events/workshop/rsvp', { method: 'POST' });
+  await user.click(await screen.findByRole('button', { name: 'Zusage zurücknehmen' }));
+  expect(global.fetch).toHaveBeenCalledWith('/api/events/workshop/rsvp', { method: 'DELETE' });
 });

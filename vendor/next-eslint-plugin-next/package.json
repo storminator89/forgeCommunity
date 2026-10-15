@@ -1,0 +1,20 @@
+{
+  "name": "@next/eslint-plugin-next",
+  "version": "16.3.8",
+  "description": "Version-pinned internal fork of the Next.js ESLint plugin 16.3.8",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "license": "MIT",
+  "private": true,
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "url": "https://github.com/vercel/next.js",
+    "directory": "packages/eslint-plugin-next"
+  },
+  "dependencies": {
+    "@eslint-community/eslint-utils": "4.9.1",
+    "tinyglobby": "0.2.15"
+  }
+}

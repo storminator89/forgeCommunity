@@ -5,6 +5,8 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/options';
 import prisma from '@/lib/prisma';
 import { NotificationType } from '@prisma/client';
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
+import { notificationTargetState, resolveNotificationTargets } from '@/lib/server/notification-target';
+import { decodeNotificationCursor, encodeNotificationCursor, type NotificationCursor } from '@/lib/server/notification-cursor';
 
 const PAGE_SIZE = 50;
 const validId = (value: unknown): value is string =>
@@ -18,16 +20,17 @@ export async function GET(req: Request) {
     }
 
     const cursor = new URL(req.url).searchParams.get('cursor');
-    if (cursor !== null && !validId(cursor)) {
-      return new NextResponse('Invalid cursor', { status: 400 });
+    let cursorNotification: NotificationCursor | null = null;
+    if (cursor?.startsWith('v1.')) {
+      cursorNotification = decodeNotificationCursor(cursor, session.user.id);
+    } else if (cursor !== null && validId(cursor)) {
+      // Accept old row-ID cursors during a rolling client upgrade.
+      cursorNotification = await prisma.notification.findFirst({
+        where: { id: cursor, userId: session.user.id },
+        select: { id: true, createdAt: true },
+      });
     }
-    const cursorNotification = cursor
-      ? await prisma.notification.findFirst({
-          where: { id: cursor, userId: session.user.id },
-          select: { id: true, createdAt: true },
-        })
-      : null;
-    if (cursor && !cursorNotification) {
+    if (cursor !== null && !cursorNotification) {
       return new NextResponse('Invalid cursor', { status: 400 });
     }
 
@@ -48,8 +51,21 @@ export async function GET(req: Request) {
       prisma.notification.count({ where: { userId: session.user.id, isRead: false } }),
     ]);
 
-    const items = notifications.slice(0, PAGE_SIZE);
-    return NextResponse.json({ items, nextCursor: notifications.length > PAGE_SIZE ? items[items.length - 1].id : null, unreadCount });
+    const page = notifications.slice(0, PAGE_SIZE);
+    const actions = await resolveNotificationTargets(page, session.user.id);
+    const items = page.map((notification, index) => {
+      const { targetType, targetId, ...publicNotification } = notification;
+      if (!targetType && !targetId) return publicNotification;
+      const action = actions[index];
+      const targetState = notificationTargetState(notification, action);
+      return {
+        ...publicNotification,
+        content: targetState === 'unavailable' ? 'Das zugehörige Ziel ist nicht mehr verfügbar.' : notification.content,
+        targetState,
+        actionLabel: action?.label ?? null,
+      };
+    });
+    return NextResponse.json({ items, nextCursor: notifications.length > PAGE_SIZE ? encodeNotificationCursor(page[page.length - 1], session.user.id) : null, unreadCount }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     console.error('[NOTIFICATIONS_GET]', error);
     return new NextResponse('Internal Error', { status: 500 });
@@ -71,7 +87,9 @@ export async function POST(req: Request) {
       !content.trim() ||
       content.length > 2000 ||
       typeof type !== 'string' ||
-      !Object.values(NotificationType).includes(type as NotificationType)
+      !Object.values(NotificationType).includes(type as NotificationType) ||
+      !['SYSTEM', 'CHAT_MESSAGE', 'MENTION'].includes(type) ||
+      ['targetType', 'targetId', 'href', 'url', 'destination', 'action'].some(key => Object.prototype.hasOwnProperty.call(body, key))
     ) {
       return new NextResponse('Invalid notification', { status: 400 });
     }
@@ -120,8 +138,9 @@ export async function PATCH(req: Request) {
     });
 
     if (result.count === 0) return new NextResponse('Notification not found', { status: 404 });
-    const notification = await prisma.notification.findFirst({ where: { id, userId: session.user.id } });
-    return NextResponse.json(notification);
+    // A read-state mutation must not re-expose stale content from a target
+    // which has since been deleted or made private.
+    return NextResponse.json({ id, isRead });
   } catch (error) {
     const requestError = requestErrorResponse(error);
     if (requestError) return requestError;

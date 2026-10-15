@@ -23,6 +23,9 @@ export default defineConfig([
     'build/**',
     'coverage/**',
     'node_modules/**',
+    // Checked-in upstream distribution; its one modified utility is covered
+    // by the pinned provenance and diagnostic parity checks.
+    'vendor/next-eslint-plugin-next/**',
     'next-env.d.ts',
   ]),
 ]);

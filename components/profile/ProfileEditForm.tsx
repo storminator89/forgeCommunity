@@ -163,7 +163,7 @@ export function ProfileEditForm({ userId, initialData, onUpdate }: ProfileEditFo
       <DialogTrigger asChild>
         <Button variant="outline" size="sm" className="gap-2">
           <Edit2 className="h-4 w-4" />
-          Profil bearbeiten
+          Stammdaten bearbeiten
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[700px] h-[80vh] overflow-y-auto">
@@ -208,11 +208,11 @@ export function ProfileEditForm({ userId, initialData, onUpdate }: ProfileEditFo
                         setFormData({ ...formData, name: e.target.value });
                         if (errors.name) setErrors({ ...errors, name: undefined });
                       }}
-                      className={errors.name ? 'border-red-500' : ''}
+                      className={errors.name ? 'border-destructive' : ''}
                       placeholder="Dein Name"
                     />
                     {errors.name && (
-                      <p className="text-sm text-red-500 flex items-center gap-1">
+                      <p className="text-sm text-destructive flex items-center gap-1">
                         <AlertCircle className="h-4 w-4" />
                         {errors.name}
                       </p>
@@ -258,11 +258,11 @@ export function ProfileEditForm({ userId, initialData, onUpdate }: ProfileEditFo
                         setFormData({ ...formData, contact: e.target.value });
                         if (errors.contact) setErrors({ ...errors, contact: undefined });
                       }}
-                      className={errors.contact ? 'border-red-500' : ''}
+                      className={errors.contact ? 'border-destructive' : ''}
                       placeholder="E-Mail oder Telefonnummer"
                     />
                     {errors.contact && (
-                      <p className="text-sm text-red-500 flex items-center gap-1">
+                      <p className="text-sm text-destructive flex items-center gap-1">
                         <AlertCircle className="h-4 w-4" />
                         {errors.contact}
                       </p>
@@ -291,7 +291,7 @@ export function ProfileEditForm({ userId, initialData, onUpdate }: ProfileEditFo
                       </Avatar>
                       <label
                         htmlFor="profile-image"
-                        className="absolute bottom-0 right-0 p-2 bg-card rounded-full shadow-sm cursor-pointer focus-within:ring-2 focus-within:ring-ring"
+                        className="absolute bottom-0 right-0 p-2 bg-card rounded-full shadow-xs cursor-pointer focus-within:ring-2 focus-within:ring-ring"
                       >
                         <Camera className="h-4 w-4" />
                         <input

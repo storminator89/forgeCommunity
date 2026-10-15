@@ -35,7 +35,8 @@ import {
   Trash2,
   Download,
   CalendarDays,
-  List
+  List,
+  X
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -43,6 +44,7 @@ import { Badge } from "@/components/ui/badge";
 import EventForm from '@/components/EventForm';
 import { useToast } from '@/hooks/use-toast';
 import { sanitizeRichHtml } from '@/lib/sanitize-html';
+import { useSession } from 'next-auth/react';
 
 
 interface Event {
@@ -55,24 +57,47 @@ interface Event {
   endTime?: string;
   category?: string;
   timezone: string;
+  maxAttendees: number | null;
+  attendeeCount: number;
+  isAttending: boolean;
+  canCancelRsvp: boolean;
 }
 
 
 type ViewType = 'month' | 'week' | 'list';
 
 export default function Events() {
+  const { data: session, status: sessionStatus } = useSession();
+  // RSVP state belongs to one account. Remount before any prior account's
+  // attendance or admin controls can render for the next viewer.
+  const viewerKey = sessionStatus === 'loading' ? 'loading' : sessionStatus === 'unauthenticated' ? 'guest' : session?.user?.id ?? 'guest';
+  return <ScopedEvents key={viewerKey} session={sessionStatus === 'unauthenticated' ? null : session} sessionStatus={sessionStatus} />;
+}
+
+function ScopedEvents({ session, sessionStatus }: {
+  session: ReturnType<typeof useSession>['data'];
+  sessionStatus: ReturnType<typeof useSession>['status'];
+}) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
+  const [focusedEventId, setFocusedEventId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [eventsData, setEventsData] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [pendingEventId, setPendingEventId] = useState<string | null>(null);
   const { toast } = useToast();
+  const isAdmin = session?.user?.role === 'ADMIN';
   const [view, setView] = useState<ViewType>('month');
   const eventsRequestRef = useRef<AbortController | null>(null);
+  const activeRef = useRef(true);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const upcomingTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const listHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  const focusListHeadingRef = useRef(false);
 
   const handlePreviousMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
   const handleNextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
@@ -85,13 +110,38 @@ export default function Events() {
   const days = eachDayOfInterval({ start: firstDayOfMonth, end: lastDayOfMonth });
 
   const handleSelectDate = (date: Date) => {
+    upcomingTriggerRef.current = null;
     setSelectedDate(date);
     setSelectedEvent(null);
+  };
+
+  const handleOpenUpcomingEvent = (event: Event, trigger: HTMLButtonElement) => {
+    const date = new Date(event.date);
+    upcomingTriggerRef.current = trigger;
+    setCurrentMonth(date);
+    setSelectedDate(date);
+    setSelectedEvent(null);
+    setFocusedEventId(event.id);
+    setIsEditDialogOpen(false);
+  };
+
+  const handleClearSearch = () => {
+    setSearchTerm('');
+    searchInputRef.current?.focus();
+  };
+
+  const handleShowUpcomingList = () => {
+    focusListHeadingRef.current = true;
+    setView('list');
   };
 
   const handleCloseDialog = () => {
     setSelectedDate(null);
     setSelectedEvent(null);
+    setFocusedEventId(null);
+    if (window.location.hash.startsWith('#event-')) {
+      window.history.replaceState(window.history.state, '', `${window.location.pathname}${window.location.search}`);
+    }
   };
 
   const handleOpenAddDialog = () => {
@@ -122,6 +172,7 @@ export default function Events() {
   }, []);
 
   const fetchEvents = useCallback(() => {
+    if (!activeRef.current) return;
     eventsRequestRef.current?.abort();
     const controller = new AbortController();
     eventsRequestRef.current = controller;
@@ -146,6 +197,7 @@ export default function Events() {
   }, [loadEvents]);
 
   useEffect(() => {
+    if (sessionStatus === 'loading') return;
     const controller = new AbortController();
     eventsRequestRef.current = controller;
     void loadEvents(controller)
@@ -170,13 +222,64 @@ export default function Events() {
       controller.abort();
       if (eventsRequestRef.current === controller) eventsRequestRef.current = null;
     };
-  }, [loadEvents]);
+  }, [loadEvents, sessionStatus]);
+
+  useEffect(() => {
+    activeRef.current = true;
+    return () => {
+      activeRef.current = false;
+      eventsRequestRef.current?.abort();
+      eventsRequestRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const openHashEvent = () => {
+      if (!window.location.hash.startsWith('#event-')) return;
+      let eventId: string;
+      try { eventId = decodeURIComponent(window.location.hash.slice('#event-'.length)); }
+      catch { return; }
+      const event = eventsData.find(item => item.id === eventId);
+      if (!event) return;
+      const date = new Date(event.date);
+      if (Number.isNaN(date.getTime())) return;
+      upcomingTriggerRef.current = null;
+      setSearchTerm('');
+      setCurrentMonth(date);
+      setSelectedDate(date);
+      setFocusedEventId(eventId);
+      setIsEditDialogOpen(false);
+    };
+    openHashEvent();
+    window.addEventListener('hashchange', openHashEvent);
+    return () => window.removeEventListener('hashchange', openHashEvent);
+  }, [eventsData]);
+
+  useEffect(() => {
+    if (!selectedDate || !focusedEventId) return;
+    const timeout = window.setTimeout(() => document.getElementById(`event-${encodeURIComponent(focusedEventId)}`)?.focus(), 0);
+    return () => window.clearTimeout(timeout);
+  }, [selectedDate, focusedEventId]);
+
+  useEffect(() => {
+    if (view === 'list' && focusListHeadingRef.current) {
+      listHeadingRef.current?.focus();
+      focusListHeadingRef.current = false;
+    }
+  }, [view]);
 
   const filteredEvents = eventsData.filter(event =>
     event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
     event.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (event.category && event.category.toLowerCase().includes(searchTerm.toLowerCase()))
   );
+
+  // Match the list's existing date boundary, regardless of the displayed
+  // calendar month. Events earlier today remain visible with their RSVP closed.
+  const today = startOfToday();
+  const upcomingEvents = filteredEvents
+    .filter(event => new Date(event.date) >= today)
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
   const getEventsForDate = (date: Date) => {
     return filteredEvents.filter(event => isSameDay(new Date(event.date), date));
@@ -191,9 +294,11 @@ export default function Events() {
       const res = await fetch(`/api/events/${id}`, {
         method: 'DELETE',
       });
+      if (!activeRef.current) return;
 
       if (!res.ok) {
         const errorData = await res.json();
+        if (!activeRef.current) return;
         throw new Error(errorData.error || 'Etwas ist schief gelaufen');
       }
 
@@ -205,6 +310,7 @@ export default function Events() {
 
       fetchEvents();
     } catch (error: any) {
+      if (!activeRef.current) return;
       console.error('Fehler beim Löschen des Events:', error);
       toast({
         title: 'Fehler',
@@ -217,10 +323,12 @@ export default function Events() {
   const handleDownloadICS = async (event: Event) => {
     try {
       const response = await fetch(`/api/events/${event.id}/ics`);
+      if (!activeRef.current) return;
       if (!response.ok) {
         throw new Error('Fehler beim Generieren der ICS-Datei');
       }
       const blob = await response.blob();
+      if (!activeRef.current) return;
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.style.display = 'none';
@@ -236,6 +344,7 @@ export default function Events() {
         variant: 'default',
       });
     } catch (error) {
+      if (!activeRef.current) return;
       console.error('Fehler beim Herunterladen der ICS-Datei:', error);
       toast({
         title: 'Fehler',
@@ -243,6 +352,45 @@ export default function Events() {
         variant: 'destructive',
       });
     }
+  };
+
+  const handleRsvp = async (event: Event) => {
+    if (!session?.user?.id) {
+      toast({ title: 'Bitte melde dich an', description: 'Für eine Zusage benötigst du ein Konto.', variant: 'destructive' });
+      return;
+    }
+    setPendingEventId(event.id);
+    try {
+      const response = await fetch(`/api/events/${event.id}/rsvp`, { method: event.isAttending ? 'DELETE' : 'POST' });
+      const result = await response.json();
+      if (!activeRef.current) return;
+      if (!response.ok) throw new Error(result.error || 'Die Zusage konnte nicht geändert werden.');
+      setEventsData(current => current.map(item => item.id === event.id
+        ? { ...item, isAttending: result.isAttending, canCancelRsvp: result.canCancelRsvp, attendeeCount: result.attendeeCount }
+        : item));
+      toast({ title: result.isAttending ? 'Du bist dabei' : 'Zusage zurückgenommen' });
+    } catch (error) {
+      if (activeRef.current) toast({ title: 'Fehler', description: error instanceof Error ? error.message : 'Bitte erneut versuchen.', variant: 'destructive' });
+    } finally {
+      if (activeRef.current) setPendingEventId(null);
+    }
+  };
+
+  const renderRsvp = (event: Event) => {
+    const full = event.maxAttendees !== null && event.attendeeCount >= event.maxAttendees;
+    const past = new Date(event.date) <= new Date();
+    return (
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <span className="text-xs text-muted-foreground">
+          {event.attendeeCount} {event.maxAttendees !== null ? `/ ${event.maxAttendees}` : ''} Zusagen
+        </span>
+        <Button size="sm" variant={event.isAttending ? 'outline' : 'default'}
+          disabled={pendingEventId === event.id || (event.isAttending && !event.canCancelRsvp) || (!event.isAttending && (full || past))}
+          onClick={() => void handleRsvp(event)}>
+          {pendingEventId === event.id ? 'Wird verarbeitet …' : event.isAttending ? event.canCancelRsvp ? 'Zusage zurücknehmen' : 'Teilgenommen' : past ? 'Anmeldung geschlossen' : full ? 'Ausgebucht' : 'Teilnehmen'}
+        </Button>
+      </div>
+    );
   };
 
   if (loading || error) {
@@ -271,7 +419,7 @@ export default function Events() {
         aria-label={`${format(day, 'EEEE, dd. MMMM yyyy', { locale: de })}, ${dayEvents.length} ${dayEvents.length === 1 ? 'Event' : 'Events'}`}
         aria-current={today ? 'date' : undefined}
         className={cn(
-          "min-w-0 bg-card p-1.5 text-left transition-colors hover:bg-accent focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:p-3",
+          "min-w-0 bg-card p-1.5 text-left transition-colors hover:bg-accent focus-visible:z-10 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:p-3",
           week ? "flex min-h-20 items-start gap-4 sm:block sm:h-44" : "h-20 sm:h-32 lg:h-40",
           today && "bg-primary/5"
         )}>
@@ -280,7 +428,7 @@ export default function Events() {
         </time>
         <span className={cn("mt-1 min-w-0 space-y-1", week ? "block sm:mt-2" : "hidden sm:block")}>
           {week && <span className="block text-xs text-muted-foreground sm:hidden">{format(day, 'EEEE', { locale: de })}</span>}
-          {dayEvents.slice(0, 2).map(event => <span key={event.id} className="block truncate rounded bg-primary/10 px-1.5 py-1 text-xs font-medium text-primary">{event.startTime ? `${event.startTime} · ` : ''}{event.title}</span>)}
+          {dayEvents.slice(0, 2).map(event => <span key={event.id} className="block truncate rounded-[0.25rem] bg-primary/10 px-1.5 py-1 text-xs font-medium text-primary">{event.startTime ? `${event.startTime} · ` : ''}{event.title}</span>)}
           {dayEvents.length > 2 && <span className="block text-xs text-muted-foreground">+{dayEvents.length - 2} weitere</span>}
           {week && dayEvents.length === 0 && <span className="block text-xs text-muted-foreground sm:hidden">Keine Events</span>}
         </span>
@@ -296,11 +444,13 @@ export default function Events() {
         <h2 className="text-center text-base font-semibold sm:text-xl">{format(currentMonth, 'MMMM yyyy', { locale: de })}</h2>
         <Button variant="outline" size="icon" aria-label="Nächster Monat" onClick={handleNextMonth}><ChevronRight className="h-4 w-4" /></Button>
       </div>
-      <div className="grid grid-cols-7 gap-px bg-border">
-        {['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].map(day => <div key={day} className="bg-card py-2 text-center text-xs font-medium text-muted-foreground">{day}</div>)}
-        {Array.from({ length: startingDayIndex }).map((_, index) => <div key={`empty-${index}`} className="h-20 bg-muted/30 sm:h-32 lg:h-40" aria-hidden="true" />)}
-        {days.map(day => renderDay(day))}
-        {Array.from({ length: (7 - (startingDayIndex + days.length) % 7) % 7 }).map((_, index) => <div key={`trailing-${index}`} className="h-20 bg-muted/30 sm:h-32 lg:h-40" aria-hidden="true" />)}
+      <div role="group" aria-label="Monatskalender horizontal verschieben" tabIndex={0} className="max-w-full overflow-x-auto focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
+        <div className="grid min-w-[314px] grid-cols-7 gap-px bg-border">
+          {['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].map(day => <div key={day} className="bg-card py-2 text-center text-xs font-medium text-muted-foreground">{day}</div>)}
+          {Array.from({ length: startingDayIndex }).map((_, index) => <div key={`empty-${index}`} className="h-20 bg-muted/30 sm:h-32 lg:h-40" aria-hidden="true" />)}
+          {days.map(day => renderDay(day))}
+          {Array.from({ length: (7 - (startingDayIndex + days.length) % 7) % 7 }).map((_, index) => <div key={`trailing-${index}`} className="h-20 bg-muted/30 sm:h-32 lg:h-40" aria-hidden="true" />)}
+        </div>
       </div>
       <p className="border-t px-4 py-3 text-xs text-muted-foreground">Wähle einen Tag, um die Events und Details zu öffnen.</p>
     </section>
@@ -323,14 +473,10 @@ export default function Events() {
   };
 
   const renderListView = () => {
-    const today = startOfToday();
-    const futureEvents = filteredEvents.filter(event => new Date(event.date) >= today);
-    const sortedEvents = [...futureEvents].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
     return (
-      <div className="mx-auto max-w-6xl overflow-hidden rounded-xl border bg-card">
+      <section aria-labelledby="event-list-heading" className="mx-auto max-w-6xl border-y">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4 lg:p-6">
-          <h2 className="text-lg lg:text-2xl font-semibold text-foreground">
+          <h2 ref={listHeadingRef} tabIndex={-1} id="event-list-heading" className="text-lg font-semibold text-foreground lg:text-2xl">
             Listenansicht
           </h2>
           <Button variant="outline" size="sm" onClick={() => setView('month')} className="flex items-center">
@@ -338,10 +484,10 @@ export default function Events() {
             Monatsansicht
           </Button>
         </div>
-        <div className="p-4 lg:p-6">
-          {sortedEvents.length > 0 ? (
-            sortedEvents.map(event => (
-              <div key={event.id} className="bg-card p-4 rounded-lg mb-4 border border-border">
+        <div className="divide-y divide-border px-4 lg:px-6">
+          {upcomingEvents.length > 0 ? (
+            upcomingEvents.map(event => (
+              <article key={event.id} id={selectedDate ? undefined : `event-${encodeURIComponent(event.id)}`} tabIndex={-1} className="py-5">
                 <div className="flex min-w-0 flex-col items-start justify-between gap-3 sm:flex-row">
                   <div className="min-w-0 flex-1 break-words [overflow-wrap:anywhere]">
                     <h3 className="text-lg font-semibold mb-2">{event.title}</h3>
@@ -356,27 +502,30 @@ export default function Events() {
                       </div>
                       <div dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(event.description) }} />
                       {event.category && <Badge variant="secondary">{event.category}</Badge>}
+                      {renderRsvp(event)}
                     </div>
                   </div>
                   <div className="flex shrink-0 gap-1">
+                    {isAdmin && <>
                     <Button variant="ghost" size="icon" aria-label={`Event ${event.title} bearbeiten`} onClick={() => handleOpenEditDialog(event)}>
                       <Edit className="h-4 w-4" />
                     </Button>
                     <Button variant="ghost" size="icon" aria-label={`Event ${event.title} löschen`} onClick={() => handleDeleteEvent(event.id)}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
+                    </>}
                     <Button variant="ghost" size="icon" aria-label={`Event ${event.title} als Kalenderdatei herunterladen`} onClick={() => handleDownloadICS(event)}>
                       <Download className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
-              </div>
+              </article>
             ))
           ) : (
-            <p className="text-center text-muted-foreground">Keine zukünftigen Events gefunden.</p>
+            <p className="py-10 text-center text-sm text-muted-foreground">Keine zukünftigen Events gefunden.</p>
           )}
         </div>
-      </div>
+      </section>
     );
   };
 
@@ -397,13 +546,47 @@ export default function Events() {
               <Button variant={view === 'week' ? 'default' : 'ghost'} size="sm" aria-pressed={view === 'week'} onClick={() => setView('week')}><CalendarIcon className="mr-1 h-4 w-4" aria-hidden="true" />Woche</Button>
               <Button variant={view === 'list' ? 'default' : 'ghost'} size="sm" aria-pressed={view === 'list'} onClick={() => setView('list')}><List className="mr-1 h-4 w-4" aria-hidden="true" />Liste</Button>
             </div>
-            <Button size="sm" onClick={handleOpenAddDialog} className="gap-2"><Plus className="h-4 w-4" aria-hidden="true" />Event erstellen</Button>
+            {isAdmin && <Button size="sm" onClick={handleOpenAddDialog} className="gap-2"><Plus className="h-4 w-4" aria-hidden="true" />Event erstellen</Button>}
             <div className="relative w-full">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-              <Input type="search" aria-label="Events durchsuchen" placeholder="Titel, Beschreibung oder Kategorie suchen …" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9" />
+              <Input ref={searchInputRef} type="search" aria-label="Events durchsuchen" placeholder="Titel, Beschreibung oder Kategorie suchen …" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9 pr-12 [&::-webkit-search-cancel-button]:appearance-none" />
+              {searchTerm && <Button type="button" variant="ghost" size="icon" aria-label="Eventsuche löschen" onClick={handleClearSearch} className="absolute right-0 top-1/2 -translate-y-1/2"><X className="h-4 w-4" aria-hidden="true" /></Button>}
             </div>
             {searchTerm && <p className="w-full text-sm text-muted-foreground" role="status">{filteredEvents.length} {filteredEvents.length === 1 ? 'Event gefunden' : 'Events gefunden'}</p>}
           </div>
+
+          {view !== 'list' && (
+            <section aria-labelledby="upcoming-events-heading" className="mx-auto mb-5 max-w-6xl rounded-xl border bg-card p-4 sm:p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 id="upcoming-events-heading" className="text-lg font-semibold">Nächste Events</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">Termine ab heute, auch in späteren Monaten. Deine Suche gilt auch hier.</p>
+                </div>
+                {upcomingEvents.length > 0 && <Button type="button" variant="outline" size="sm" onClick={handleShowUpcomingList}>Alle in der Liste ansehen</Button>}
+              </div>
+              {upcomingEvents.length > 0 ? (
+                <>
+                  <p className="mt-3 text-xs text-muted-foreground">{Math.min(upcomingEvents.length, 3)} von {upcomingEvents.length} {upcomingEvents.length === 1 ? 'Event' : 'Events'} ab heute</p>
+                  <ul className="mt-2 grid gap-2 sm:grid-cols-3">
+                    {upcomingEvents.slice(0, 3).map(event => (
+                      <li key={event.id} className="min-w-0">
+                        <button type="button" aria-label={`Details öffnen: ${event.title}, ${format(new Date(event.date), 'dd. MMMM yyyy', { locale: de })}`}
+                          onClick={e => handleOpenUpcomingEvent(event, e.currentTarget)}
+                          className="h-full w-full min-w-0 rounded-lg border p-3 text-left transition-colors hover:bg-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                          <time dateTime={event.date} className="block text-xs text-muted-foreground">{format(new Date(event.date), 'dd. MMM yyyy', { locale: de })}{event.startTime ? ` · ${event.startTime}` : ''}</time>
+                          <span className="mt-1 block break-words font-semibold [overflow-wrap:anywhere]">{event.title}</span>
+                          <span className="mt-1 block break-words text-sm text-muted-foreground [overflow-wrap:anywhere]">{event.location}</span>
+                          <span className="mt-2 block text-sm font-medium text-primary">Details öffnen</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : (
+                <p className="mt-4 text-sm text-muted-foreground" role="status">{searchTerm ? 'Keine passenden Events ab heute gefunden.' : 'Keine Events ab heute geplant.'}</p>
+              )}
+            </section>
+          )}
 
           {view === 'month' && renderMonthView()}
           {view === 'week' && renderWeekView()}
@@ -420,6 +603,7 @@ export default function Events() {
           <div className="mt-4">
             <EventForm
               onSuccess={() => {
+                if (!activeRef.current) return;
                 fetchEvents();
                 handleCloseAddDialog();
               }}
@@ -440,6 +624,7 @@ export default function Events() {
               <EventForm
                 initialData={selectedEvent}
                 onSuccess={() => {
+                  if (!activeRef.current) return;
                   fetchEvents();
                   handleCloseEditDialog();
                 }}
@@ -452,7 +637,14 @@ export default function Events() {
 
       {/* Detailansicht Dialog */}
       <Dialog open={!!selectedDate} onOpenChange={handleCloseDialog}>
-        <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-[600px]">
+        <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-[600px]" onCloseAutoFocus={event => {
+          const trigger = upcomingTriggerRef.current;
+          upcomingTriggerRef.current = null;
+          if (trigger?.isConnected && !isEditDialogOpen) {
+            event.preventDefault();
+            trigger.focus();
+          }
+        }}>
           <DialogHeader>
             <DialogTitle>
               {selectedDate && format(selectedDate, 'dd. MMMM yyyy', { locale: de })}
@@ -460,7 +652,7 @@ export default function Events() {
           </DialogHeader>
           <div className="mt-4 space-y-4">
             {selectedDate && getEventsForDate(selectedDate).map((event) => (
-              <div key={event.id} className="bg-card p-4 rounded-lg border border-border">
+              <div key={event.id} id={`event-${encodeURIComponent(event.id)}`} tabIndex={-1} className="bg-card p-4 rounded-lg border border-border">
                 <div className="flex min-w-0 flex-col items-start justify-between gap-3 sm:flex-row">
                   <div className="min-w-0 flex-1 break-words [overflow-wrap:anywhere]">
                     <h3 className="text-lg font-semibold mb-2">{event.title}</h3>
@@ -477,15 +669,18 @@ export default function Events() {
                       </div>
                       <div dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(event.description) }} />
                       {event.category && <Badge variant="secondary">{event.category}</Badge>}
+                      {renderRsvp(event)}
                     </div>
                   </div>
                   <div className="flex shrink-0 gap-1">
+                    {isAdmin && <>
                     <Button variant="ghost" size="icon" aria-label={`Event ${event.title} bearbeiten`} onClick={() => handleOpenEditDialog(event)}>
                       <Edit className="h-4 w-4" />
                     </Button>
                     <Button variant="ghost" size="icon" aria-label={`Event ${event.title} löschen`} onClick={() => handleDeleteEvent(event.id)}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
+                    </>}
                     <Button variant="ghost" size="icon" aria-label={`Event ${event.title} als Kalenderdatei herunterladen`} onClick={() => handleDownloadICS(event)}>
                       <Download className="h-4 w-4" />
                     </Button>

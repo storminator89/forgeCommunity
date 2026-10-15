@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma' // Sicherstellen, dass dies korrekt ist
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth' // Import von lib/auth.ts
+import { isCurrentCommunityAdmin } from '@/lib/server/community-feed'
 
 export async function POST(req: NextRequest, props: { params: Promise<{ postId: string }> }) {
   const params = await props.params;
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ postId: 
       return NextResponse.json({ error: 'Beitrag nicht gefunden' }, { status: 404 })
     }
 
-    if (!post.published && post.authorId !== userId && session.user.role !== 'ADMIN') {
+    if (!post.published && post.authorId !== userId && !await isCurrentCommunityAdmin(userId, session.user.role)) {
       return NextResponse.json({ error: 'Beitrag nicht gefunden' }, { status: 404 })
     }
 

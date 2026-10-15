@@ -1,0 +1,372 @@
+{
+  "ruleNames": [
+    "google-font-display",
+    "google-font-preconnect",
+    "inline-script-id",
+    "next-script-for-ga",
+    "no-assign-module-variable",
+    "no-async-client-component",
+    "no-before-interactive-script-outside-document",
+    "no-css-tags",
+    "no-document-import-in-page",
+    "no-duplicate-head",
+    "no-head-element",
+    "no-head-import-in-document",
+    "no-html-link-for-pages",
+    "no-img-element",
+    "no-location-assign-relative-destination",
+    "no-page-custom-font",
+    "no-script-component-in-head",
+    "no-styled-jsx-in-document",
+    "no-sync-scripts",
+    "no-title-in-document-head",
+    "no-typos",
+    "no-unwanted-polyfillio"
+  ],
+  "pluginConfigs": {
+    "recommended-legacy": {
+      "@next/next/google-font-display": "warn",
+      "@next/next/google-font-preconnect": "warn",
+      "@next/next/inline-script-id": "error",
+      "@next/next/next-script-for-ga": "warn",
+      "@next/next/no-assign-module-variable": "error",
+      "@next/next/no-async-client-component": "warn",
+      "@next/next/no-before-interactive-script-outside-document": "warn",
+      "@next/next/no-css-tags": "warn",
+      "@next/next/no-document-import-in-page": "error",
+      "@next/next/no-duplicate-head": "error",
+      "@next/next/no-head-element": "warn",
+      "@next/next/no-head-import-in-document": "error",
+      "@next/next/no-html-link-for-pages": "warn",
+      "@next/next/no-img-element": "warn",
+      "@next/next/no-location-assign-relative-destination": "warn",
+      "@next/next/no-page-custom-font": "warn",
+      "@next/next/no-script-component-in-head": "error",
+      "@next/next/no-styled-jsx-in-document": "warn",
+      "@next/next/no-sync-scripts": "warn",
+      "@next/next/no-title-in-document-head": "warn",
+      "@next/next/no-typos": "warn",
+      "@next/next/no-unwanted-polyfillio": "warn"
+    },
+    "core-web-vitals-legacy": {
+      "@next/next/no-html-link-for-pages": "error",
+      "@next/next/no-sync-scripts": "error"
+    },
+    "recommended": {
+      "@next/next/google-font-display": "warn",
+      "@next/next/google-font-preconnect": "warn",
+      "@next/next/inline-script-id": "error",
+      "@next/next/next-script-for-ga": "warn",
+      "@next/next/no-assign-module-variable": "error",
+      "@next/next/no-async-client-component": "warn",
+      "@next/next/no-before-interactive-script-outside-document": "warn",
+      "@next/next/no-css-tags": "warn",
+      "@next/next/no-document-import-in-page": "error",
+      "@next/next/no-duplicate-head": "error",
+      "@next/next/no-head-element": "warn",
+      "@next/next/no-head-import-in-document": "error",
+      "@next/next/no-html-link-for-pages": "warn",
+      "@next/next/no-img-element": "warn",
+      "@next/next/no-location-assign-relative-destination": "warn",
+      "@next/next/no-page-custom-font": "warn",
+      "@next/next/no-script-component-in-head": "error",
+      "@next/next/no-styled-jsx-in-document": "warn",
+      "@next/next/no-sync-scripts": "warn",
+      "@next/next/no-title-in-document-head": "warn",
+      "@next/next/no-typos": "warn",
+      "@next/next/no-unwanted-polyfillio": "warn"
+    },
+    "core-web-vitals": {
+      "@next/next/google-font-display": "warn",
+      "@next/next/google-font-preconnect": "warn",
+      "@next/next/inline-script-id": "error",
+      "@next/next/next-script-for-ga": "warn",
+      "@next/next/no-assign-module-variable": "error",
+      "@next/next/no-async-client-component": "warn",
+      "@next/next/no-before-interactive-script-outside-document": "warn",
+      "@next/next/no-css-tags": "warn",
+      "@next/next/no-document-import-in-page": "error",
+      "@next/next/no-duplicate-head": "error",
+      "@next/next/no-head-element": "warn",
+      "@next/next/no-head-import-in-document": "error",
+      "@next/next/no-html-link-for-pages": "error",
+      "@next/next/no-img-element": "warn",
+      "@next/next/no-location-assign-relative-destination": "warn",
+      "@next/next/no-page-custom-font": "warn",
+      "@next/next/no-script-component-in-head": "error",
+      "@next/next/no-styled-jsx-in-document": "warn",
+      "@next/next/no-sync-scripts": "error",
+      "@next/next/no-title-in-document-head": "warn",
+      "@next/next/no-typos": "warn",
+      "@next/next/no-unwanted-polyfillio": "warn"
+    }
+  },
+  "nextConfigRules": {
+    "next": {
+      "@next/next/google-font-display": "warn",
+      "@next/next/google-font-preconnect": "warn",
+      "@next/next/inline-script-id": "error",
+      "@next/next/next-script-for-ga": "warn",
+      "@next/next/no-assign-module-variable": "error",
+      "@next/next/no-async-client-component": "warn",
+      "@next/next/no-before-interactive-script-outside-document": "warn",
+      "@next/next/no-css-tags": "warn",
+      "@next/next/no-document-import-in-page": "error",
+      "@next/next/no-duplicate-head": "error",
+      "@next/next/no-head-element": "warn",
+      "@next/next/no-head-import-in-document": "error",
+      "@next/next/no-html-link-for-pages": "warn",
+      "@next/next/no-img-element": "warn",
+      "@next/next/no-location-assign-relative-destination": "warn",
+      "@next/next/no-page-custom-font": "warn",
+      "@next/next/no-script-component-in-head": "error",
+      "@next/next/no-styled-jsx-in-document": "warn",
+      "@next/next/no-sync-scripts": "warn",
+      "@next/next/no-title-in-document-head": "warn",
+      "@next/next/no-typos": "warn",
+      "@next/next/no-unwanted-polyfillio": "warn"
+    },
+    "next/core-web-vitals": {
+      "@next/next/google-font-display": "warn",
+      "@next/next/google-font-preconnect": "warn",
+      "@next/next/inline-script-id": "error",
+      "@next/next/next-script-for-ga": "warn",
+      "@next/next/no-assign-module-variable": "error",
+      "@next/next/no-async-client-component": "warn",
+      "@next/next/no-before-interactive-script-outside-document": "warn",
+      "@next/next/no-css-tags": "warn",
+      "@next/next/no-document-import-in-page": "error",
+      "@next/next/no-duplicate-head": "error",
+      "@next/next/no-head-element": "warn",
+      "@next/next/no-head-import-in-document": "error",
+      "@next/next/no-html-link-for-pages": "error",
+      "@next/next/no-img-element": "warn",
+      "@next/next/no-location-assign-relative-destination": "warn",
+      "@next/next/no-page-custom-font": "warn",
+      "@next/next/no-script-component-in-head": "error",
+      "@next/next/no-styled-jsx-in-document": "warn",
+      "@next/next/no-sync-scripts": "error",
+      "@next/next/no-title-in-document-head": "warn",
+      "@next/next/no-typos": "warn",
+      "@next/next/no-unwanted-polyfillio": "warn"
+    }
+  },
+  "roots": {
+    "default": [
+      "<ROOT>"
+    ],
+    "plain": [
+      "apps/alpha"
+    ],
+    "plainTrailingSlash": [
+      "apps/alpha/"
+    ],
+    "dot": [
+      "."
+    ],
+    "dotPrefix": [
+      "./apps/alpha"
+    ],
+    "missing": [],
+    "glob": [
+      "apps/alpha",
+      "apps/beta",
+      "apps/nested"
+    ],
+    "globstar": [
+      "apps/alpha/pages",
+      "apps/beta/src/pages",
+      "apps/nested/deep/pages"
+    ],
+    "terminalGlobstar": [
+      "apps/alpha",
+      "apps/beta",
+      "apps/nested",
+      "apps/alpha/app",
+      "apps/alpha/pages",
+      "apps/beta/src",
+      "apps/nested/deep",
+      "apps/alpha/app/support",
+      "apps/alpha/pages/guides",
+      "apps/beta/src/pages",
+      "apps/nested/deep/pages",
+      "apps/beta/src/pages/guides",
+      "apps/nested/deep/pages/guides"
+    ],
+    "dynamicTerminalGlobstar": [
+      "apps/alpha",
+      "apps/beta",
+      "apps/nested",
+      "apps/alpha/app",
+      "apps/alpha/pages",
+      "apps/beta/src",
+      "apps/nested/deep",
+      "apps/alpha/app/support",
+      "apps/alpha/pages/guides",
+      "apps/beta/src/pages",
+      "apps/nested/deep/pages",
+      "apps/beta/src/pages/guides",
+      "apps/nested/deep/pages/guides"
+    ],
+    "braceGlob": [
+      "apps/alpha",
+      "apps/beta"
+    ],
+    "array": [
+      "apps/alpha",
+      "apps/beta"
+    ],
+    "mixedArray": [
+      "apps/alpha",
+      "apps/beta",
+      "apps/nested",
+      "apps/alpha"
+    ],
+    "absolutePlain": [
+      "<ROOT>/apps/alpha"
+    ],
+    "absoluteGlob": [
+      "<ROOT>/apps/alpha",
+      "<ROOT>/apps/beta",
+      "<ROOT>/apps/nested"
+    ],
+    "windowsPlain": [
+      "apps/alpha"
+    ],
+    "windowsGlob": [
+      "apps/alpha",
+      "apps/beta",
+      "apps/nested"
+    ],
+    "nested": [
+      "apps/nested/deep"
+    ],
+    "nestedGlob": [
+      "apps/nested/deep/pages"
+    ],
+    "literalBrackets": [
+      "literal[brackets]"
+    ]
+  },
+  "diagnostics": {
+    "allLayers": [
+      {
+        "ruleId": "react-hooks/rules-of-hooks",
+        "severity": 2,
+        "message": "React Hook \"useState\" is called conditionally. React Hooks must be called in the exact same order in every component render.",
+        "line": 2,
+        "column": 74
+      },
+      {
+        "ruleId": "@next/next/no-html-link-for-pages",
+        "severity": 2,
+        "message": "Do not use an `<a>` element to navigate to `/guides/deep/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages",
+        "line": 2,
+        "column": 96
+      },
+      {
+        "ruleId": "@next/next/no-sync-scripts",
+        "severity": 2,
+        "message": "Synchronous scripts should not be used. See: https://nextjs.org/docs/messages/no-sync-scripts",
+        "line": 2,
+        "column": 127
+      },
+      {
+        "ruleId": "@next/next/no-img-element",
+        "severity": 1,
+        "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element",
+        "line": 2,
+        "column": 159
+      },
+      {
+        "ruleId": "jsx-a11y/alt-text",
+        "severity": 1,
+        "message": "img elements must have an alt prop, either with meaningful text, or an empty string for decorative images.",
+        "line": 2,
+        "column": 159
+      }
+    ],
+    "default": [
+      {
+        "ruleId": "@next/next/no-html-link-for-pages",
+        "severity": 2,
+        "message": "Do not use an `<a>` element to navigate to `/guides/deep/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages",
+        "line": 1,
+        "column": 44
+      }
+    ],
+    "plain": [
+      {
+        "ruleId": "@next/next/no-html-link-for-pages",
+        "severity": 2,
+        "message": "Do not use an `<a>` element to navigate to `/guides/deep/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages",
+        "line": 1,
+        "column": 44
+      }
+    ],
+    "missing": [],
+    "glob": [
+      {
+        "ruleId": "@next/next/no-html-link-for-pages",
+        "severity": 2,
+        "message": "Do not use an `<a>` element to navigate to `/guides/deep/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages",
+        "line": 1,
+        "column": 44
+      }
+    ],
+    "array": [
+      {
+        "ruleId": "@next/next/no-html-link-for-pages",
+        "severity": 2,
+        "message": "Do not use an `<a>` element to navigate to `/guides/deep/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages",
+        "line": 1,
+        "column": 44
+      }
+    ],
+    "absolutePlain": [
+      {
+        "ruleId": "@next/next/no-html-link-for-pages",
+        "severity": 2,
+        "message": "Do not use an `<a>` element to navigate to `/guides/deep/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages",
+        "line": 1,
+        "column": 44
+      }
+    ],
+    "absoluteGlob": [
+      {
+        "ruleId": "@next/next/no-html-link-for-pages",
+        "severity": 2,
+        "message": "Do not use an `<a>` element to navigate to `/guides/deep/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages",
+        "line": 1,
+        "column": 44
+      }
+    ],
+    "windowsPlain": [
+      {
+        "ruleId": "@next/next/no-html-link-for-pages",
+        "severity": 2,
+        "message": "Do not use an `<a>` element to navigate to `/guides/deep/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages",
+        "line": 1,
+        "column": 44
+      }
+    ],
+    "windowsGlob": [
+      {
+        "ruleId": "@next/next/no-html-link-for-pages",
+        "severity": 2,
+        "message": "Do not use an `<a>` element to navigate to `/guides/deep/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages",
+        "line": 1,
+        "column": 44
+      }
+    ],
+    "nested": [
+      {
+        "ruleId": "@next/next/no-html-link-for-pages",
+        "severity": 2,
+        "message": "Do not use an `<a>` element to navigate to `/guides/deep/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages",
+        "line": 1,
+        "column": 44
+      }
+    ]
+  }
+}

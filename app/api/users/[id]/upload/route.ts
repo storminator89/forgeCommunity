@@ -102,3 +102,38 @@ export async function POST(
     );
   }
 }
+
+// Unlink an avatar or cover from its owning profile. The current
+// deleteUploadedImage policy deliberately defers physical file cleanup.
+export async function DELETE(
+  request: NextRequest,
+  props: { params: Promise<{ id: string }> }
+) {
+  const { id } = await props.params;
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user || (session.user.id !== id && session.user.role !== 'ADMIN')) {
+      return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
+    }
+
+    const type = new URL(request.url).searchParams.get('type');
+    if (type !== 'avatar' && type !== 'cover') {
+      return NextResponse.json({ error: 'Ungültiger Bildtyp' }, { status: 400 });
+    }
+
+    const currentUser = await prisma.user.findUnique({
+      where: { id }, select: { image: true, coverImage: true },
+    });
+    if (!currentUser) return NextResponse.json({ error: 'Profil nicht gefunden' }, { status: 404 });
+
+    const oldImagePath = type === 'avatar' ? currentUser.image : currentUser.coverImage;
+    await prisma.user.update({ where: { id }, data: type === 'avatar' ? { image: null } : { coverImage: null } });
+    if (oldImagePath) {
+      try { await deleteUploadedImage(oldImagePath); } catch (error) { console.error('Old profile image cleanup failed:', error); }
+    }
+    return NextResponse.json({ success: true, url: null }, { headers: { 'Cache-Control': 'private, no-store' } });
+  } catch (error) {
+    console.error('Error removing profile image:', error);
+    return NextResponse.json({ error: 'Fehler beim Entfernen des Bildes' }, { status: 500 });
+  }
+}

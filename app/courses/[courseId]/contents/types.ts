@@ -51,6 +51,52 @@ export interface CourseContent {
   parentId: string | null;
   subContents?: CourseContent[];
   completed?: boolean;
+  updatedAt?: string;
+}
+
+export type LearnerQuizQuestion =
+  | { id: string; type: 'SINGLE_CHOICE' | 'MULTIPLE_CHOICE' | 'TRUE_FALSE'; question: string; options: string[] }
+  | { id: string; type: 'TEXT_INPUT'; question: string }
+  | { id: string; type: 'MATCHING'; question: string; pairs: Array<{ left: string }> }
+  | { id: string; type: 'FILL_BLANKS'; question: string; text: string; blankCount: number };
+
+export interface LearnerQuizContent {
+  questions: LearnerQuizQuestion[];
+  shuffleQuestions: boolean;
+  passingScore: number;
+}
+
+export interface CourseProgressSnapshot {
+  completedContentIds: string[];
+  complete: boolean;
+  canTrack: boolean;
+  hasCertificate: boolean;
+  completedAt: string | null;
+}
+
+export function parseLearnerQuizContent(value: unknown): LearnerQuizContent | null {
+  if (typeof value === 'string') {
+    try { value = JSON.parse(value); } catch { return null; }
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const source = value as Record<string, unknown>;
+  if (!Array.isArray(source.questions) || !source.questions.length ||
+      typeof source.shuffleQuestions !== 'boolean' || typeof source.passingScore !== 'number') return null;
+  const ids = new Set<string>();
+  for (const item of source.questions) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
+    const question = item as Record<string, unknown>;
+    if (typeof question.id !== 'string' || !question.id || ids.has(question.id) || typeof question.question !== 'string') return null;
+    ids.add(question.id);
+    if (question.type === 'SINGLE_CHOICE' || question.type === 'MULTIPLE_CHOICE' || question.type === 'TRUE_FALSE') {
+      if (!Array.isArray(question.options) || question.options.length < 2 || !question.options.every(option => typeof option === 'string')) return null;
+    } else if (question.type === 'MATCHING') {
+      if (!Array.isArray(question.pairs) || !question.pairs.length || !question.pairs.every(pair => pair && typeof pair.left === 'string')) return null;
+    } else if (question.type === 'FILL_BLANKS') {
+      if (typeof question.text !== 'string' || !Number.isInteger(question.blankCount) || Number(question.blankCount) < 1) return null;
+    } else if (question.type !== 'TEXT_INPUT') return null;
+  }
+  return source as unknown as LearnerQuizContent;
 }
 
 /** Read current and legacy persisted quizzes without discarding malformed content. */

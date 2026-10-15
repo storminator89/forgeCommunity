@@ -4,11 +4,33 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile, rename, rm, realpath, lstat, open } from 'node:fs/promises';
 import path from 'node:path';
 import { constants } from 'node:fs';
+import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { H5PValidationError, H5PPackage, validateH5PPath } from './h5p-archive';
 
 export function h5pStorageRoot() { return path.resolve(process.env.H5P_STORAGE_PATH || path.join(process.cwd(), 'data', 'h5p')); }
 export function validH5PId(id: string) { return /^[A-Za-z0-9_-]{1,80}$/.test(id); }
+
+async function createAuthorizedH5PContent(data: { id: string; title: string; contentType: string; userId: string }) {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      return await prisma.$transaction(async tx => {
+        // Session lookup refreshes the role, but a demotion or deletion may
+        // commit while the request body and package files are being processed.
+        const actor = await tx.user.findUnique({ where: { id: data.userId }, select: { role: true } });
+        if (actor?.role !== 'ADMIN' && actor?.role !== 'INSTRUCTOR') {
+          throw new H5PValidationError('Insufficient permissions', 403);
+        }
+        return tx.h5PContent.create({ data, select: { id: true, title: true, contentType: true, createdAt: true } });
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    } catch (error) {
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2034') throw error;
+      if (attempt === 3) throw new H5PValidationError('Gleichzeitige Änderung. Bitte erneut versuchen.', 409);
+      // Retry only the database work, re-reading authority in the new snapshot.
+    }
+  }
+  throw new H5PValidationError('Gleichzeitige Änderung. Bitte erneut versuchen.', 409);
+}
 
 export async function storeH5PPackage(packageData: H5PPackage, userId: string, title = packageData.title) {
   const id = randomUUID();
@@ -30,7 +52,9 @@ export async function storeH5PPackage(packageData: H5PPackage, userId: string, t
     }
     await writeFile(path.join(temporary, 'metadata.json'), JSON.stringify({ version: 1, title, mainLibrary: packageData.mainLibrary, expandedBytes: packageData.expandedBytes, fileCount: packageData.files.size, libraries: packageData.libraries }), { mode: 0o600, flag: 'wx' });
     await rename(temporary, destination);
-    const saved = await prisma.h5PContent.create({ data: { id, title, contentType: packageData.mainLibrary, userId }, select: { id: true, title: true, contentType: true, createdAt: true } });
+    // Keep slow filesystem work outside the transaction. Authorization denial
+    // and transaction failure use the same cleanup as any other failed import.
+    const saved = await createAuthorizedH5PContent({ id, title, contentType: packageData.mainLibrary, userId });
     return { ...saved, embedUrl: `/h5p/embed/${id}` };
   } catch (error) {
     await Promise.all([rm(temporary, { recursive: true, force: true }), rm(destination, { recursive: true, force: true })]);

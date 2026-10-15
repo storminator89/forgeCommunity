@@ -1,24 +1,13 @@
 "use client";
 
-import { useEffect, useState, useCallback, useEffectEvent, useRef } from 'react';
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import {
-  MessageSquare,
-  ThumbsUp,
-  Users,
-  Book,
-  Code,
-  Calendar,
-  Loader2,
-  ChevronDown
-} from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
-import { motion, AnimatePresence } from 'framer-motion';
-import DOMPurify from 'dompurify';
+import { MessageSquare, ThumbsUp, Users } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { PageState } from '@/components/page-state';
+import { sanitizeTextPreview } from '@/lib/sanitize-html';
 
 interface Activity {
   type: 'post' | 'comment' | 'project' | 'course';
@@ -26,300 +15,113 @@ interface Activity {
   title?: string;
   content?: string;
   description?: string;
-  author?: {
-    name: string;
-    image: string | null;
-  };
-  instructor?: {
-    name: string;
-    image: string | null;
-  };
   postTitle?: string;
   postId?: string;
-  stats?: {
-    comments?: number;
-    likes?: number;
-    enrollments?: number;
-  };
-  createdAt: Date;
+  stats?: { comments?: number; likes?: number; enrollments?: number };
+  createdAt: string;
 }
 
-interface ActivityFeedProps {
-  userId: string;
+const activityTypes: Record<Activity['type'], string> = {
+  post: 'Beitrag', comment: 'Kommentar', project: 'Projekt', course: 'Kurs',
+};
+
+function activityHref(activity: Activity) {
+  if (activity.type === 'post') return `/community#post-${encodeURIComponent(activity.id)}`;
+  if (activity.type === 'comment') return `/community#comment-${encodeURIComponent(activity.id)}`;
+  if (activity.type === 'project') return `/projects/${encodeURIComponent(activity.id)}`;
+  return `/courses/${encodeURIComponent(activity.id)}`;
 }
 
-export function ActivityFeed({ userId }: ActivityFeedProps) {
+function activityTitle(activity: Activity) {
+  if (activity.type === 'comment') return activity.postTitle || 'Kommentar ansehen';
+  return activity.title || `${activityTypes[activity.type]} ansehen`;
+}
+
+export function ActivityFeed({ userId }: { userId: string }) {
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
+  const [hasMore, setHasMore] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [loadedForUserId, setLoadedForUserId] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const requestIdRef = useRef(0);
   const activeControllerRef = useRef<AbortController | null>(null);
 
-  const fetchActivities = useCallback(async (
-    pageNum: number,
-    signal: AbortSignal,
-    requestId: number,
-  ) => {
+  const fetchActivities = useCallback(async (pageNum: number, signal: AbortSignal, requestId: number) => {
     try {
-      const response = await fetch(
-        `/api/users/${userId}/activity?page=${pageNum}&limit=10`,
-        {
-          credentials: 'include',
-          signal,
-        }
-      );
-
-      if (!response.ok) throw new Error('Failed to fetch activities');
-
-      const data = await response.json();
-
+      const response = await fetch(`/api/users/${encodeURIComponent(userId)}/activity?page=${pageNum}&limit=10`, {
+        credentials: 'include', signal,
+      });
+      if (!response.ok) throw new Error('Aktivitäten konnten nicht geladen werden.');
+      const data = await response.json() as { activities: Activity[]; pagination: { hasMore: boolean } };
       if (signal.aborted || requestIdRef.current !== requestId) return;
-
-      if (pageNum === 1) {
-        setActivities(data.activities);
-      } else {
-        setActivities(prev => [...prev, ...data.activities]);
-      }
-
-      setHasMore(data.pagination.hasMore);
+      setActivities(previous => pageNum === 1 ? data.activities : [...previous, ...data.activities]);
       setPage(pageNum);
+      setHasMore(data.pagination.hasMore);
+      setLoadError(null);
       setLoadedForUserId(userId);
     } catch (error) {
       if (signal.aborted || requestIdRef.current !== requestId) return;
       console.error('Error fetching activities:', error);
+      setLoadError('Aktivitäten konnten nicht geladen werden.');
       setLoadedForUserId(userId);
     } finally {
-      if (!signal.aborted && requestIdRef.current === requestId) {
-        setIsLoading(false);
-      }
+      if (!signal.aborted && requestIdRef.current === requestId) setIsLoading(false);
     }
   }, [userId]);
 
-  const startInitialFetch = useEffectEvent(() => {
-    activeControllerRef.current?.abort();
-    const controller = new AbortController();
-    activeControllerRef.current = controller;
-    const requestId = ++requestIdRef.current;
-    void fetchActivities(1, controller.signal, requestId);
-  });
-
-  useEffect(() => {
-    startInitialFetch();
-
-    return () => {
-      activeControllerRef.current?.abort();
-      requestIdRef.current += 1;
-    };
-  }, [userId]);
-
-  const loadMore = () => {
-    const nextPage = page + 1;
+  const startFetch = useCallback((pageNum: number) => {
     activeControllerRef.current?.abort();
     const controller = new AbortController();
     activeControllerRef.current = controller;
     const requestId = ++requestIdRef.current;
     setIsLoading(true);
-    void fetchActivities(nextPage, controller.signal, requestId);
-  };
-
-  const getTimeAgo = (date: Date) => {
-    const now = new Date();
-    const diff = now.getTime() - new Date(date).getTime();
-    const minutes = Math.floor(diff / 60000);
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
-
-    if (minutes < 60) return `vor ${minutes} Minuten`;
-    if (hours < 24) return `vor ${hours} Stunden`;
-    if (days === 1) return 'gestern';
-    if (days < 7) return `vor ${days} Tagen`;
-    return format(new Date(date), 'dd. MMMM yyyy', { locale: de });
-  };
-
-  const renderActivityIcon = (type: string) => {
-    switch (type) {
-      case 'post':
-        return <MessageSquare className="h-5 w-5 text-blue-500" />;
-      case 'comment':
-        return <MessageSquare className="h-5 w-5 text-green-500" />;
-      case 'project':
-        return <Code className="h-5 w-5 text-purple-500" />;
-      case 'course':
-        return <Book className="h-5 w-5 text-yellow-500" />;
-      default:
-        return null;
+    setLoadError(null);
+    if (pageNum === 1) {
+      setActivities([]);
+      setPage(1);
+      setHasMore(false);
+      setLoadedForUserId(null);
     }
-  };
+    void fetchActivities(pageNum, controller.signal, requestId);
+  }, [fetchActivities]);
 
-  const sanitizeHtml = (html: string) => {
-    return DOMPurify.sanitize(html, {
-      ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'a'],
-      ALLOWED_ATTR: ['href', 'target'],
-    });
-  };
+  useEffect(() => {
+    const timer = window.setTimeout(() => startFetch(1), 0);
+    return () => { window.clearTimeout(timer); activeControllerRef.current?.abort(); requestIdRef.current += 1; };
+  }, [startFetch]);
 
-  const renderActivityContent = (activity: Activity) => {
-    const author = activity.author || activity.instructor;
-
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -20 }}
-        className="flex items-start space-x-4"
-      >
-        <Avatar className="h-10 w-10">
-          <AvatarImage src={author?.image || ''} alt={author?.name} />
-          <AvatarFallback>
-            {author?.name?.slice(0, 2).toUpperCase()}
-          </AvatarFallback>
-        </Avatar>
-
-        <div className="flex-1 space-y-1">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <span className="font-medium">{author?.name}</span>
-              <Badge variant="secondary">
-                {activity.type}
-              </Badge>
-            </div>
-            <span className="text-sm text-muted-foreground">
-              {getTimeAgo(activity.createdAt)}
-            </span>
-          </div>
-
-          {activity.type === 'post' && (
-            <div>
-              <h4 className="font-medium">{activity.title}</h4>
-              <p className="text-muted-foreground line-clamp-2">
-                <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(activity.content || '') }} />
-              </p>
-              {activity.stats && (
-                <div className="flex space-x-4 mt-2 text-sm text-muted-foreground">
-                  <span className="flex items-center">
-                    <ThumbsUp className="h-4 w-4 mr-1" />
-                    {activity.stats.likes}
-                  </span>
-                  <span className="flex items-center">
-                    <MessageSquare className="h-4 w-4 mr-1" />
-                    {activity.stats.comments}
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {activity.type === 'comment' && (
-            <div>
-              <p className="text-muted-foreground">
-                Hat auf <span className="font-medium">{activity.postTitle}</span> kommentiert:
-              </p>
-              <p className="text-muted-foreground mt-1">
-                <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(activity.content || '') }} />
-              </p>
-            </div>
-          )}
-
-          {activity.type === 'project' && (
-            <div>
-              <h4 className="font-medium">{activity.title}</h4>
-              <p className="text-muted-foreground line-clamp-2">
-                <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(activity.description || '') }} />
-              </p>
-              {activity.stats && (
-                <div className="flex space-x-4 mt-2 text-sm text-muted-foreground">
-                  <span className="flex items-center">
-                    <ThumbsUp className="h-4 w-4 mr-1" />
-                    {activity.stats.likes}
-                  </span>
-                  <span className="flex items-center">
-                    <MessageSquare className="h-4 w-4 mr-1" />
-                    {activity.stats.comments}
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {activity.type === 'course' && (
-            <div>
-              <h4 className="font-medium">{activity.title}</h4>
-              <p className="text-muted-foreground line-clamp-2">
-                <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(activity.description || '') }} />
-              </p>
-              {activity.stats && (
-                <div className="flex space-x-4 mt-2 text-sm text-muted-foreground">
-                  <span className="flex items-center">
-                    <Users className="h-4 w-4 mr-1" />
-                    {activity.stats.enrollments} Teilnehmer
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </motion.div>
-    );
-  };
-
-  const isCurrentUserLoaded = loadedForUserId === userId;
-
-  if (isLoading || !isCurrentUserLoaded) {
-    return (
-      <div className="flex justify-center items-center py-8">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-      </div>
-    );
+  if (loadedForUserId !== userId || (isLoading && page === 1 && activities.length === 0)) {
+    return <PageState kind="loading" title="Aktivitäten werden geladen" />;
+  }
+  if (loadError && activities.length === 0) {
+    return <PageState kind="error" title={loadError} description="Prüfe deine Verbindung und versuche es erneut." action={<Button variant="outline" onClick={() => startFetch(1)}>Erneut versuchen</Button>} />;
+  }
+  if (activities.length === 0) {
+    return <PageState title="Noch keine Aktivitäten" description="Hier erscheinen Beiträge, Kommentare, Projekte und Kurse dieses Mitglieds." />;
   }
 
   return (
-    <Card>
-      <CardContent className="pt-6 space-y-6">
-        <AnimatePresence mode="popLayout">
-          {activities.length === 0 ? (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="text-center py-8"
-            >
-              <Calendar className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-lg font-medium text-foreground mb-2">
-                Keine Aktivitäten
-              </h3>
-              <p className="text-muted-foreground">
-                Hier erscheinen zukünftige Aktivitäten.
-              </p>
-            </motion.div>
-          ) : (
-            <>
-              {activities.map((activity) => (
-                <div
-                  key={`${activity.type}-${activity.id}`}
-                  className="border-b border-border last:border-0 pb-6 last:pb-0"
-                >
-                  {renderActivityContent(activity)}
-                </div>
-              ))}
-
-              {hasMore && (
-                <div className="text-center pt-4">
-                  <Button
-                    variant="outline"
-                    onClick={loadMore}
-                    className="w-full sm:w-auto"
-                  >
-                    <ChevronDown className="h-4 w-4 mr-2" />
-                    Mehr laden
-                  </Button>
-                </div>
-              )}
-            </>
-          )}
-        </AnimatePresence>
-      </CardContent>
-    </Card>
+    <div>
+      {loadError && <p role="alert" className="mb-4 rounded-[10px] border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">{loadError} <Button variant="outline" size="sm" className="ml-2" onClick={() => startFetch(page + 1)}>Erneut versuchen</Button></p>}
+      <ol className="divide-y border-y">
+        {activities.map(activity => (
+          <li key={`${activity.type}-${activity.id}`} className="grid min-w-0 gap-2 py-5 sm:grid-cols-[7rem_minmax(0,1fr)_auto] sm:gap-5">
+            <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">{activityTypes[activity.type]}</span>
+            <div className="min-w-0">
+              <Link href={activityHref(activity)} className="break-words font-semibold hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 [overflow-wrap:anywhere]">{activityTitle(activity)}</Link>
+              {(activity.content || activity.description) && <p className="mt-1 line-clamp-2 break-words text-sm leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">{sanitizeTextPreview(activity.content || activity.description || '', 220)}</p>}
+              {activity.stats && <div className="mt-2 flex flex-wrap gap-4 text-xs text-muted-foreground">
+                {typeof activity.stats.likes === 'number' && <span className="inline-flex items-center gap-1"><ThumbsUp className="h-3.5 w-3.5" aria-hidden="true" />{activity.stats.likes} Likes</span>}
+                {typeof activity.stats.comments === 'number' && <span className="inline-flex items-center gap-1"><MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />{activity.stats.comments} Kommentare</span>}
+                {typeof activity.stats.enrollments === 'number' && <span className="inline-flex items-center gap-1"><Users className="h-3.5 w-3.5" aria-hidden="true" />{activity.stats.enrollments} Teilnahmen</span>}
+              </div>}
+            </div>
+            <time dateTime={activity.createdAt} className="text-xs text-muted-foreground sm:text-right">{format(new Date(activity.createdAt), 'dd. MMM yyyy', { locale: de })}</time>
+          </li>
+        ))}
+      </ol>
+      {hasMore && <div className="mt-6"><Button type="button" variant="outline" onClick={() => startFetch(page + 1)} disabled={isLoading}>{isLoading ? 'Wird geladen…' : 'Mehr laden'}</Button></div>}
+    </div>
   );
 }

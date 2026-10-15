@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { useEffect, useEffectEvent, useState } from 'react'
 import { CourseContentsEditor } from '@/app/courses/[courseId]/contents/CourseContentsEditor'
-import type { CourseContent } from '@/app/courses/[courseId]/contents/types'
+import type { CourseContent, CourseProgressSnapshot } from '@/app/courses/[courseId]/contents/types'
 
 const mockPush = jest.fn()
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush, replace: jest.fn() }) }))
@@ -26,17 +26,26 @@ jest.mock('@/app/courses/[courseId]/contents/EditContentForm', () => ({
   },
 }))
 
-const child: CourseContent = { id: 'child', courseId: 'course', title: 'Unterthema', type: 'TEXT', content: '<p>Gespeichert</p>', order: 1, parentId: 'chapter' }
+const child: CourseContent = { id: 'child', courseId: 'course', title: 'Unterthema', type: 'TEXT', content: '<p>Gespeichert</p>', order: 1, parentId: 'chapter', updatedAt: '2026-10-01T12:00:00.000Z' }
 const chapter: CourseContent = { id: 'chapter', courseId: 'course', title: 'Kapitel', type: 'TEXT', content: '<p>Kapitelinhalt</p>', order: 1, parentId: null, subContents: [child] }
 let mockFailSave = false
 let mockCanEdit = true
 let mockEmptyText = false
 let mockRequest: jest.Mock
+let mockProgress: CourseProgressSnapshot
 
 beforeEach(() => {
   history.replaceState({}, '', '/')
   mockFailSave = false; mockCanEdit = true; mockEmptyText = false; mockPush.mockClear()
+  mockProgress = { completedContentIds: [], complete: false, canTrack: false, hasCertificate: false, completedAt: null }
   mockRequest = jest.fn(async (input: string, options?: RequestInit) => {
+    if (input.endsWith('/progress')) {
+      if (options?.method === 'PATCH') {
+        const { contentId, completed } = JSON.parse(String(options.body))
+        mockProgress = { ...mockProgress, completedContentIds: completed ? [contentId] : [], complete: completed }
+      }
+      return { ok: true, status: 200, json: async () => mockProgress }
+    }
     if (options?.method === 'PUT') return { ok: !mockFailSave, status: mockFailSave ? 500 : 200, json: async () => ({ ...chapter, ...JSON.parse(String(options.body)), subContents: undefined }) }
     return { ok: true, status: 200, json: async () => input.endsWith('/contents') ? [JSON.parse(JSON.stringify({ ...chapter, content: mockEmptyText ? '' : chapter.content }))] : { id: 'course', name: 'Testkurs', canEdit: mockCanEdit } }
   })
@@ -98,11 +107,41 @@ it('zeigt Lernenden keinen Inhalt-bearbeiten-Button', async () => {
   expect(screen.queryByRole('button', { name: 'Inhalt bearbeiten' })).not.toBeInTheDocument()
 })
 
+it('marks a non-quiz leaf complete only after an explicit server-confirmed action', async () => {
+  mockCanEdit = false
+  mockProgress = { completedContentIds: [], complete: false, canTrack: true, hasCertificate: false, completedAt: null }
+  render(<CourseContentsEditor courseId="course" />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Kapitel' }))
+  expect(screen.queryByRole('button', { name: 'Als abgeschlossen markieren' })).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Unterthema' }))
+  const mark = screen.getByRole('button', { name: 'Als abgeschlossen markieren' })
+  expect(mark).toBeInTheDocument()
+  expect(mockRequest.mock.calls.filter(call => call[1]?.method === 'PATCH')).toHaveLength(0)
+  fireEvent.click(mark)
+  expect(await screen.findByRole('button', { name: 'Abschlussmarkierung entfernen' })).toBeInTheDocument()
+  expect(mockRequest.mock.calls.filter(call => call[1]?.method === 'PATCH')).toHaveLength(1)
+})
+
 it('lädt den in der URL ausgewählten Inhalt wieder', async () => {
   history.replaceState({}, '', '/?content=child')
   render(<CourseContentsEditor courseId="course" />)
   expect(await screen.findByRole('heading', { name: 'Unterthema' })).toBeInTheDocument()
   await waitFor(() => expect(location.search).toBe('?content=child'))
+})
+
+it('keeps one page title and a scrollable mobile contents pane as topics change', async () => {
+  render(<CourseContentsEditor courseId="course" />)
+  expect(await screen.findByRole('heading', { level: 1, name: 'Testkurs' })).toBeInTheDocument()
+  const navigation = document.getElementById('course-contents-navigation')
+  expect(navigation?.firstElementChild).toHaveClass('h-72')
+
+  fireEvent.click(screen.getByRole('button', { name: 'Kapitel' }))
+  expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
+  expect(screen.getByRole('heading', { level: 2, name: 'Kapitel' })).toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Inhaltsverzeichnis schließen' }))
+  expect(navigation).toHaveClass('hidden')
+  expect(screen.getByRole('button', { name: 'Inhaltsverzeichnis öffnen' })).toHaveAttribute('aria-expanded', 'false')
 })
 
 it('behandelt ein normalisiertes leeres Textfeld als unverändert', async () => {
