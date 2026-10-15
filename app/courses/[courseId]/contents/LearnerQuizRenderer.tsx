@@ -38,10 +38,12 @@ function submissionId() {
   return `attempt_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`
 }
 
-export function LearnerQuizRenderer({ courseId, contentId, updatedAt, content, onPassed }: {
+export function LearnerQuizRenderer({ courseId, contentId, publicationId, contentVersionToken, content, onPassed }: {
   courseId: string
   contentId: string
   updatedAt: string | undefined
+  publicationId?: string | null
+  contentVersionToken?: string | null
   content: unknown
   onPassed: () => void
 }) {
@@ -80,7 +82,7 @@ export function LearnerQuizRenderer({ courseId, contentId, updatedAt, content, o
     }
   })
   const submit = async () => {
-    if (sending.current || !ready || !updatedAt) return
+    if (sending.current || !ready || !publicationId || !contentVersionToken) return
     sending.current = true
     setPending(true)
     setError(null)
@@ -89,10 +91,10 @@ export function LearnerQuizRenderer({ courseId, contentId, updatedAt, content, o
     try {
       const response = await fetch(`/api/courses/${encodeURIComponent(courseId)}/contents/${encodeURIComponent(contentId)}/attempts`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...submission, contentUpdatedAt: updatedAt }),
+        body: JSON.stringify({ ...submission, publicationId, contentVersionToken }),
       })
       if (!response.ok) {
-        if (response.status === 409) throw new Error('Dieses Quiz wurde geändert. Bitte lade die Seite neu und versuche es erneut.')
+        if (response.status === 409 || response.status === 412) throw new Error('Dieses Quiz wurde geändert. Deine Antworten bleiben hier erhalten. Bitte lade den Kurs neu, bevor du sie erneut abgibst.')
         if (response.status === 429) throw new Error('Bitte sieh dir die Inhalte noch einmal an und versuche es später erneut.')
         if (response.status === 403) throw new Error('Du musst für diesen Kurs eingeschrieben sein.')
         throw new Error('Deine Antworten konnten nicht geprüft werden. Bitte versuche es erneut.')
@@ -120,6 +122,6 @@ export function LearnerQuizRenderer({ courseId, contentId, updatedAt, content, o
     </fieldset>)}
     {result && <p role="status" className={result.passed ? 'text-foreground' : 'text-destructive'}>Du hast {result.score.toFixed(1)}% erreicht. {result.passed ? 'Bestanden!' : 'Noch nicht bestanden.'}</p>}
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-    <div className="flex flex-wrap gap-2">{result ? <Button type="button" variant="outline" onClick={() => { setAnswers({}); setResult(null); setError(null); pendingSubmission.current = null }}>Quiz wiederholen</Button> : <Button type="button" disabled={!ready || pending || !updatedAt} onClick={() => void submit()}>{pending ? 'Wird geprüft …' : 'Antworten abgeben'}</Button>}{!updatedAt && <p className="text-sm text-muted-foreground">Bitte lade das Quiz neu, bevor du Antworten abgibst.</p>}</div>
+    <div className="flex flex-wrap gap-2">{result ? <Button type="button" variant="outline" onClick={() => { setAnswers({}); setResult(null); setError(null); pendingSubmission.current = null }}>Quiz wiederholen</Button> : <Button type="button" disabled={!ready || pending || !publicationId || !contentVersionToken} onClick={() => void submit()}>{pending ? 'Wird geprüft …' : 'Antworten abgeben'}</Button>}{(!publicationId || !contentVersionToken) && <p className="text-sm text-muted-foreground">Bitte lade das Quiz neu, bevor du Antworten abgibst.</p>}</div>
   </section>
 }

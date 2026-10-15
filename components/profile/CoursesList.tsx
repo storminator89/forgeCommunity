@@ -205,7 +205,7 @@ export function CoursesList({ userId, isInstructor, showEnrolled = false }: Cour
                     className="group"
                   >
                     <Card className="overflow-hidden transition-colors hover:border-primary/40">
-                      {course.imageUrl && <div className="relative h-48"><Image src={course.imageUrl} alt={course.title} fill className="object-cover" /></div>}
+                      {course.imageUrl && <div className="relative h-48"><Image src={course.imageUrl} alt={course.title} fill unoptimized={course.imageUrl.startsWith('/api/courses/')} className="object-cover" /></div>}
                       <CardContent className="p-4">
                         {course.enrolled && course.progress && (
                           <div className="mb-4 space-y-2">

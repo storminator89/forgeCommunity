@@ -52,6 +52,8 @@ export interface CourseContent {
   subContents?: CourseContent[];
   completed?: boolean;
   updatedAt?: string;
+  publicationId?: string | null;
+  contentVersionToken?: string | null;
 }
 
 export type LearnerQuizQuestion =

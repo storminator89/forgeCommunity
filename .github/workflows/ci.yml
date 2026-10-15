@@ -12,19 +12,20 @@ jobs:
   # Preserve the existing required check context. The prerequisites run
   # independently, so one failure cannot hide another job's result.
   validate:
-    needs: [quality, security-audit, browser-qa]
+    needs: [quality, security-audit, browser-qa, postgresql-publication-runtime]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - name: Require application validation, security audit, and browser QA
+      - name: Require application validation, security audit, browser QA, and PostgreSQL publication runtime
         env:
           QUALITY_RESULT: ${{ needs.quality.result }}
           SECURITY_AUDIT_RESULT: ${{ needs.security-audit.result }}
           BROWSER_QA_RESULT: ${{ needs.browser-qa.result }}
+          POSTGRESQL_PUBLICATION_RUNTIME_RESULT: ${{ needs.postgresql-publication-runtime.result }}
         run: |
-          printf 'Required checks: quality=%s; security-audit=%s; browser-qa=%s\n' "$QUALITY_RESULT" "$SECURITY_AUDIT_RESULT" "$BROWSER_QA_RESULT"
-          if [ "$QUALITY_RESULT" != "success" ] || [ "$SECURITY_AUDIT_RESULT" != "success" ] || [ "$BROWSER_QA_RESULT" != "success" ]; then
+          printf 'Required checks: quality=%s; security-audit=%s; browser-qa=%s; postgresql-publication-runtime=%s\n' "$QUALITY_RESULT" "$SECURITY_AUDIT_RESULT" "$BROWSER_QA_RESULT" "$POSTGRESQL_PUBLICATION_RUNTIME_RESULT"
+          if [ "$QUALITY_RESULT" != "success" ] || [ "$SECURITY_AUDIT_RESULT" != "success" ] || [ "$BROWSER_QA_RESULT" != "success" ] || [ "$POSTGRESQL_PUBLICATION_RUNTIME_RESULT" != "success" ]; then
             exit 1
           fi
 
@@ -109,7 +110,7 @@ jobs:
           DATABASE_PROVIDER=postgresql npm run db:generate
 
       - name: Verify SQLite migration safety
-        run: DATABASE_PROVIDER=sqlite node --test scripts/check-sqlite-migrations.mjs scripts/check-notification-migrations.mjs
+        run: DATABASE_PROVIDER=sqlite node --test scripts/check-sqlite-migrations.mjs scripts/check-notification-migrations.mjs scripts/check-course-publication-ready.mjs
 
       - name: Verify PostgreSQL upgrade safety
         run: node --test scripts/check-postgresql-upgrades.mjs
@@ -158,7 +159,49 @@ jobs:
         run: npm ci --no-audit --no-fund
 
       - name: Exercise empty install and populated PostgreSQL upgrades
-        run: node --test --test-concurrency=1 scripts/check-postgresql-upgrades.mjs scripts/check-postgresql-release-gate.mjs
+        run: node --test --test-concurrency=1 scripts/check-postgresql-upgrades.mjs scripts/check-postgresql-release-gate.mjs scripts/check-course-publication-ready.mjs
+
+  # Runs the actual production server with Prisma's PostgreSQL adapter against
+  # a unique schema in the disposable local forge_test service. The script
+  # itself enforces these guards before opening the database.
+  postgresql-publication-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: ci-only-upgrade-password
+          POSTGRES_DB: forge_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d forge_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_PROVIDER: postgresql
+      DATABASE_URL: postgresql://postgres:ci-only-upgrade-password@127.0.0.1:5432/forge_test
+      POSTGRESQL_PUBLICATION_SMOKE_DISPOSABLE: '1'
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Exercise fresh PostgreSQL staged-publication HTTP runtime
+        run: node scripts/smoke-postgresql-publication.mjs
+
+      - name: Verify generated SQLite schema remains unchanged
+        run: git diff --exit-code -- prisma/schema.sqlite.prisma
 
   # A sibling job keeps browser coverage visible even while security-audit
   # is blocked by an upstream dependency advisory.

@@ -3,6 +3,7 @@ import 'server-only';
 import type { LearningGoal, Prisma } from '@prisma/client';
 import { contentQuiz, courseContentRevision, courseLeaves, isQuizLikeContent } from '@/lib/server/course-progress';
 import { pausedCalendarDays, shiftGoalDeadline } from '@/lib/learning-goal-clock';
+import { activeCourseContentWhere, publishedCourseWhere } from '@/lib/server/published-course';
 
 type GoalReadClient = Pick<Prisma.TransactionClient, 'enrollment' | 'courseContent' | 'courseContentProgress' | 'quizAttempt'>;
 
@@ -20,9 +21,9 @@ export async function countVerifiedGoalLeaves(db: GoalReadClient, goal: Learning
   const end = effectiveGoalDeadline(goal, now);
   const enrollments = await db.enrollment.findMany({
     where: { userId: goal.userId },
-    select: { courseId: true, course: { select: { instructorId: true } } },
+    select: { courseId: true, course: { select: { instructorId: true, activePublicationId: true } } },
   });
-  const courseIds = enrollments.filter(row => row.course.instructorId !== goal.userId).map(row => row.courseId);
+  const courseIds = enrollments.filter(row => row.course.instructorId !== goal.userId && row.course.activePublicationId !== null).map(row => row.courseId);
   if (!courseIds.length) return 0;
 
   const progress = await db.courseContentProgress.findMany({
@@ -32,7 +33,7 @@ export async function countVerifiedGoalLeaves(db: GoalReadClient, goal: Learning
   if (!progress.length) return 0;
   const progressedCourseIds = [...new Set(progress.map(row => row.courseId))];
   const contents = await db.courseContent.findMany({
-    where: { courseId: { in: progressedCourseIds } },
+    where: { courseId: { in: progressedCourseIds }, ...activeCourseContentWhere, course: publishedCourseWhere },
     select: { id: true, courseId: true, parentId: true, type: true, content: true, order: true },
   });
 

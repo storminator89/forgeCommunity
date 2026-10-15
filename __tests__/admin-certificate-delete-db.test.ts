@@ -12,7 +12,7 @@ jest.mock('next/server', () => ({
 jest.mock('next-auth', () => ({ getServerSession: jest.fn() }));
 jest.mock('@/app/api/auth/[...nextauth]/options', () => ({ authOptions: {} }));
 jest.mock('@/lib/prisma', () => {
-  const { mkdtempSync, readFileSync } = require('node:fs');
+  const { mkdtempSync, readFileSync, readdirSync } = require('node:fs');
   const { tmpdir } = require('node:os');
   const { join } = require('node:path');
   const { DatabaseSync } = require('node:sqlite');
@@ -23,7 +23,7 @@ jest.mock('@/lib/prisma', () => {
   const db = new DatabaseSync(path);
   try {
     db.exec('PRAGMA foreign_keys = ON');
-    for (const name of ['0001_initial.sql', '0002_skill_endorsements.sql', '0003_course_progress.sql', '0004_reports.sql', '0005_reward_ledger.sql']) {
+    for (const name of readdirSync(join(process.cwd(), 'prisma', 'sqlite-migrations')).filter((name: string) => /^\d+_.*\.sql$/.test(name)).sort()) {
       db.exec(readFileSync(join(process.cwd(), 'prisma', 'sqlite-migrations', name), 'utf8'));
     }
   } finally { db.close(); }
@@ -45,6 +45,13 @@ test('third-party certificates block instructor erasure without partial changes;
   await prisma.user.create({ data: { id: 'learner', email: 'learner@example.invalid', role: 'USER' } });
   await prisma.userSettings.create({ data: { id: 'teacher-settings', userId: 'teacher' } });
   await prisma.course.create({ data: { id: 'course', instructorId: 'teacher', title: 'Earned course', description: 'Course' } });
+  const payload = { schemaVersion: 1, title: 'Earned course', description: 'Course', startDate: null, endDate: null,
+    imageUrl: null, contents: [] };
+  await prisma.coursePublication.create({ data: { id: 'publication', courseId: 'course', sequence: 1, source: 'AUTHOR',
+    payload: JSON.stringify(payload), digest: 'fixture-certificate', contentCount: 0 } });
+  await prisma.course.update({ where: { id: 'course' }, data: { activePublicationId: 'publication' } });
+  await prisma.courseDraft.create({ data: { courseId: 'course', basePublicationId: 'publication',
+    payload: JSON.stringify(payload), digest: 'fixture-certificate' } });
   const completedAt = new Date('2026-10-01T12:00:00Z');
   await prisma.enrollment.create({ data: { id: 'enrollment', userId: 'learner', courseId: 'course', completedAt } });
   await prisma.courseCompletionRecord.create({ data: { userId: 'learner', courseId: 'course', courseTitle: 'Earned course', completedAt } });

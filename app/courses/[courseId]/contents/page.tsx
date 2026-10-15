@@ -2,13 +2,13 @@
 
 import { use } from 'react'
 import { useSession } from 'next-auth/react'
-import { CourseContentsEditor } from './CourseContentsEditor'
+import { CourseWorkspaceRoute } from './CourseWorkspaceRoute'
 
 export default function CourseContentsPage({ params }: { params: Promise<{ courseId: string }> }) {
   const { courseId } = use(params)
   const { data, status } = useSession()
   const accountId = status === 'authenticated' ? data?.user?.id ?? null : null
-  // Contents, editing drafts, and progress are viewer-specific. Remount before
-  // another signed-in account can see the previous viewer's player state.
-  return <CourseContentsEditor key={JSON.stringify([courseId, accountId])} courseId={courseId} />
+  // Private drafts and learner progress are account-specific. A changed login
+  // always remounts and re-authorizes before any previous account data renders.
+  return <CourseWorkspaceRoute key={JSON.stringify([courseId, accountId])} courseId={courseId} status={status} />
 }

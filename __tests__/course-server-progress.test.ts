@@ -3,7 +3,7 @@ import { GET as readContents } from '@/app/api/courses/[courseId]/contents/route
 import { GET as readProgress, PATCH as markProgress } from '@/app/api/courses/[courseId]/progress/route'
 import { POST as submitQuiz } from '@/app/api/courses/[courseId]/contents/[contentId]/attempts/route'
 import { DELETE as deleteCourse } from '@/app/api/courses/[courseId]/route'
-import { courseContentRevision, gradeQuiz, publicQuiz } from '@/lib/server/course-progress'
+import { contentVersionToken, courseContentRevision, gradeQuiz, publicQuiz } from '@/lib/server/course-progress'
 import { parseQuizContent } from '@/app/courses/[courseId]/contents/types'
 import prisma from '@/lib/prisma'
 import { getServerSession } from 'next-auth/next'
@@ -39,11 +39,16 @@ const quiz = JSON.stringify({ passingScore: 70, questions: [
 ] })
 const updatedAt = new Date('2026-10-01T12:00:00.000Z')
 const content = { id: 'quiz', courseId: 'course', parentId: null, title: 'Quiz', type: 'TEXT', content: quiz, order: 1, updatedAt, children: [] }
+const publicationId = 'publication-123'
+function versionFields(row: typeof content, id = publicationId) {
+  return { publicationId: id, contentVersionToken: contentVersionToken(id, row) }
+}
 
 beforeEach(() => {
+  process.env.NEXTAUTH_SECRET = 'test-only-publication-token-secret'
   jest.clearAllMocks()
   ;(getServerSession as jest.Mock).mockResolvedValue({ user: { id: 'learner', role: 'USER' } })
-  db.course.findUnique.mockResolvedValue({ instructorId: 'editor' })
+  db.course.findUnique.mockResolvedValue({ instructorId: 'editor', activePublicationId: publicationId })
   db.enrollment.findUnique.mockResolvedValue({ id: 'enrollment' })
   db.courseContent.findMany.mockResolvedValue([content])
   db.courseContent.findUnique.mockResolvedValue(content)
@@ -70,7 +75,7 @@ test('does not disclose lessons, progress or grading to a non-enrolled user', as
   db.enrollment.findUnique.mockResolvedValue(null)
   const lessons = await readContents(new Request('http://localhost/api/courses/course/contents') as never, params)
   const progress = await readProgress(new Request('http://localhost/api/courses/course/progress') as never, params)
-  const grading = await submitQuiz(new Request('http://localhost/api/courses/course/contents/quiz/attempts', { method: 'POST', body: JSON.stringify({ submissionId: 'attempt_123', contentUpdatedAt: updatedAt.toISOString(), answers: {} }) }) as never, attemptParams)
+  const grading = await submitQuiz(new Request('http://localhost/api/courses/course/contents/quiz/attempts', { method: 'POST', body: JSON.stringify({ submissionId: 'attempt_123', ...versionFields(content), answers: {} }) }) as never, attemptParams)
   expect(lessons.status).toBe(403)
   expect(progress.status).toBe(403)
   expect(grading.status).toBe(403)
@@ -85,7 +90,7 @@ test('fails closed for malformed legacy quiz JSON rather than leaking keys or al
   const learner = (await response.json())[0]
   expect(learner.type).toBe('QUIZ')
   expect(JSON.stringify(learner)).not.toMatch(/correctAnswer|Secret|Hidden/)
-  const marking = await markProgress(new Request('http://localhost/api/courses/course/progress', { method: 'PATCH', body: JSON.stringify({ contentId: 'quiz', completed: true, contentUpdatedAt: updatedAt.toISOString() }) }) as never, params)
+  const marking = await markProgress(new Request('http://localhost/api/courses/course/progress', { method: 'PATCH', body: JSON.stringify({ contentId: 'quiz', completed: true, ...versionFields(malformed) }) }) as never, params)
   expect(marking.status).toBe(409)
 })
 
@@ -97,7 +102,7 @@ test('fails closed for explicitly typed quizzes even when their JSON cannot be p
   const learner = (await response.json())[0]
   expect(learner.type).toBe('QUIZ')
   expect(JSON.stringify(learner)).not.toMatch(/correctAnswer|Secret/)
-  const marking = await markProgress(new Request('http://localhost/api/courses/course/progress', { method: 'PATCH', body: JSON.stringify({ contentId: 'quiz', completed: true, contentUpdatedAt: updatedAt.toISOString() }) }) as never, params)
+  const marking = await markProgress(new Request('http://localhost/api/courses/course/progress', { method: 'PATCH', body: JSON.stringify({ contentId: 'quiz', completed: true, ...versionFields(malformed) }) }) as never, params)
   expect(marking.status).toBe(409)
   expect(db.courseContentProgress.upsert).not.toHaveBeenCalled()
 })
@@ -108,7 +113,7 @@ test('fails closed for unparseable legacy TEXT quiz JSON with a questions key', 
   db.courseContent.findUnique.mockResolvedValue(malformed)
   const response = await readContents(new Request('http://localhost/api/courses/course/contents') as never, params)
   expect(JSON.stringify(await response.json())).not.toMatch(/correctAnswer|Secret/)
-  const marking = await markProgress(new Request('http://localhost/api/courses/course/progress', { method: 'PATCH', body: JSON.stringify({ contentId: 'quiz', completed: true, contentUpdatedAt: updatedAt.toISOString() }) }) as never, params)
+  const marking = await markProgress(new Request('http://localhost/api/courses/course/progress', { method: 'PATCH', body: JSON.stringify({ contentId: 'quiz', completed: true, ...versionFields(malformed) }) }) as never, params)
   expect(marking.status).toBe(409)
 })
 
@@ -129,17 +134,17 @@ test('tracks only current-revision leaf progress and rejects self-attesting a qu
   db.courseContentProgress.findMany.mockResolvedValue([{ contentId: 'quiz', revision: oldRevision }])
   const before = await readProgress(new Request('http://localhost/api/courses/course/progress') as never, params)
   expect(await before.json()).toMatchObject({ complete: false, completedContentIds: [] })
-  const quizMark = await markProgress(new Request('http://localhost/api/courses/course/progress', { method: 'PATCH', body: JSON.stringify({ contentId: 'quiz', completed: true, contentUpdatedAt: updatedAt.toISOString() }) }) as never, params)
+  const quizMark = await markProgress(new Request('http://localhost/api/courses/course/progress', { method: 'PATCH', body: JSON.stringify({ contentId: 'quiz', completed: true, ...versionFields(content) }) }) as never, params)
   expect(quizMark.status).toBe(409)
   expect(db.courseContentProgress.upsert).not.toHaveBeenCalled()
   const lesson = { ...content, id: 'lesson', type: 'TEXT', content: '<p>Lesson</p>' }
   db.courseContent.findUnique.mockResolvedValue(lesson)
   db.courseContent.findMany.mockResolvedValue([lesson])
   db.courseContentProgress.findMany.mockResolvedValue([{ contentId: 'lesson', revision: courseContentRevision(lesson) }])
-  const stale = await markProgress(new Request('http://localhost/api/courses/course/progress', { method: 'PATCH', body: JSON.stringify({ contentId: 'lesson', completed: true, contentUpdatedAt: '2026-09-01T00:00:00.000Z' }) }) as never, params)
+  const stale = await markProgress(new Request('http://localhost/api/courses/course/progress', { method: 'PATCH', body: JSON.stringify({ contentId: 'lesson', completed: true, ...versionFields(lesson, 'old-publication-123') }) }) as never, params)
   expect(stale.status).toBe(412)
   expect(db.courseContentProgress.upsert).not.toHaveBeenCalled()
-  const marked = await markProgress(new Request('http://localhost/api/courses/course/progress', { method: 'PATCH', body: JSON.stringify({ contentId: 'lesson', completed: true, contentUpdatedAt: updatedAt.toISOString() }) }) as never, params)
+  const marked = await markProgress(new Request('http://localhost/api/courses/course/progress', { method: 'PATCH', body: JSON.stringify({ contentId: 'lesson', completed: true, ...versionFields(lesson) }) }) as never, params)
   expect(marked.status).toBe(200)
   expect(await marked.json()).toMatchObject({ complete: true, completedContentIds: ['lesson'] })
   expect(db.enrollment.updateMany).toHaveBeenCalledTimes(1)
@@ -153,7 +158,7 @@ test('repeating a completed leaf request leaves the saved revision untouched', a
   db.courseContentProgress.findUnique.mockResolvedValue({ revision })
   db.courseContentProgress.findMany.mockResolvedValue([{ contentId: 'lesson', revision }])
   for (let index = 0; index < 2; index++) {
-    const response = await markProgress(new Request('http://localhost/api/courses/course/progress', { method: 'PATCH', body: JSON.stringify({ contentId: 'lesson', completed: true, contentUpdatedAt: updatedAt.toISOString() }) }) as never, params)
+    const response = await markProgress(new Request('http://localhost/api/courses/course/progress', { method: 'PATCH', body: JSON.stringify({ contentId: 'lesson', completed: true, ...versionFields(lesson) }) }) as never, params)
     expect(response.status).toBe(200)
   }
   expect(db.courseContentProgress.upsert).not.toHaveBeenCalled()
@@ -168,15 +173,15 @@ test('saves the verified first completion as a private snapshot without rewritin
   db.courseContent.findMany.mockResolvedValue([lesson])
   db.courseContentProgress.findMany.mockResolvedValue([{ contentId: 'lesson', revision }])
   db.enrollment.findUnique.mockResolvedValue({ id: 'enrollment', completedAt: firstCompletedAt })
-  db.course.findUnique.mockResolvedValue({ instructorId: 'editor', title: 'Original course title' })
-  const request = () => new Request('http://localhost/api/courses/course/progress', { method: 'PATCH', body: JSON.stringify({ contentId: 'lesson', completed: true, contentUpdatedAt: updatedAt.toISOString() }) }) as never
+  db.course.findUnique.mockResolvedValue({ instructorId: 'editor', title: 'Original course title', activePublicationId: publicationId })
+  const request = () => new Request('http://localhost/api/courses/course/progress', { method: 'PATCH', body: JSON.stringify({ contentId: 'lesson', completed: true, ...versionFields(lesson) }) }) as never
   expect((await markProgress(request(), params)).status).toBe(200)
   expect(db.courseCompletionRecord.upsert).toHaveBeenCalledWith({
     where: { userId_courseId: { userId: 'learner', courseId: 'course' } },
     create: { userId: 'learner', courseId: 'course', courseTitle: 'Original course title', completedAt: firstCompletedAt },
     update: { completedAt: firstCompletedAt },
   })
-  db.course.findUnique.mockResolvedValue({ instructorId: 'editor', title: 'Later title' })
+  db.course.findUnique.mockResolvedValue({ instructorId: 'editor', title: 'Later title', activePublicationId: publicationId })
   expect((await markProgress(request(), params)).status).toBe(200)
   expect(db.courseCompletionRecord.upsert).toHaveBeenCalledTimes(2)
   expect(db.courseCompletionRecord.upsert.mock.calls[1][0].update).toEqual({ completedAt: firstCompletedAt })
@@ -184,7 +189,7 @@ test('saves the verified first completion as a private snapshot without rewritin
 
 test('submitting and retrying one quiz attempt returns a stable result without counting twice', async () => {
   const answer = { choice: [1], text: 'Secret', match: ['Hidden'], blank: ['Hidden'] }
-  const request = () => new Request('http://localhost/api/courses/course/contents/quiz/attempts', { method: 'POST', body: JSON.stringify({ submissionId: 'attempt_123', contentUpdatedAt: updatedAt.toISOString(), answers: answer }) }) as never
+  const request = () => new Request('http://localhost/api/courses/course/contents/quiz/attempts', { method: 'POST', body: JSON.stringify({ submissionId: 'attempt_123', ...versionFields(content), answers: answer }) }) as never
   const first = await submitQuiz(request(), attemptParams)
   expect(first.status).toBe(200)
   expect(await first.json()).toEqual({ score: 100, passed: true })
@@ -199,7 +204,7 @@ test('submitting and retrying one quiz attempt returns a stable result without c
 
 test('rate-limits repeated failed guesses without disclosing the answer key', async () => {
   db.quizAttempt.findMany.mockResolvedValue(Array.from({ length: 5 }, () => ({ submittedAt: new Date() })))
-  const response = await submitQuiz(new Request('http://localhost/api/courses/course/contents/quiz/attempts', { method: 'POST', body: JSON.stringify({ submissionId: 'attempt_123', contentUpdatedAt: updatedAt.toISOString(), answers: { choice: [0], text: 'guess', match: ['guess'], blank: ['guess'] } }) }) as never, attemptParams)
+  const response = await submitQuiz(new Request('http://localhost/api/courses/course/contents/quiz/attempts', { method: 'POST', body: JSON.stringify({ submissionId: 'attempt_123', ...versionFields(content), answers: { choice: [0], text: 'guess', match: ['guess'], blank: ['guess'] } }) }) as never, attemptParams)
   expect(response.status).toBe(429)
   expect(response.headers.get('Retry-After')).toBeTruthy()
   expect(JSON.stringify(await response.json())).not.toMatch(/correctAnswer|Secret|Hidden/)

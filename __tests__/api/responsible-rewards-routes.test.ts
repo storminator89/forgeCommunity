@@ -56,7 +56,7 @@ beforeEach(() => {
   session.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } })
   db.user.findUnique.mockImplementation(async ({ where }: any) =>
     where.id === 'admin-1' ? { id: 'admin-1', role: 'ADMIN' } : { id: where.id })
-  db.course.findUnique.mockResolvedValue({ id: 'course-1' })
+  db.course.findUnique.mockResolvedValue({ id: 'course-1', activePublicationId: 'publication-1' })
   db.course.update.mockResolvedValue({})
   db.user.update.mockResolvedValue({})
   ;(courseHasRewardableQuiz as jest.Mock).mockResolvedValue(true)
@@ -223,6 +223,13 @@ describe('administrator reward controls', () => {
     expect((await setCourseEligibility(jsonRequest({ eligible: true }), courseParams)).status).toBe(409)
     expect(db.course.update).not.toHaveBeenCalled()
     expect(reconcileCourseRewards).not.toHaveBeenCalled()
+  })
+
+  it('never approves points on an unpublished course', async () => {
+    db.course.findUnique.mockResolvedValue({ id: 'course-1', activePublicationId: null })
+    expect((await setCourseEligibility(jsonRequest({ eligible: true }), courseParams)).status).toBe(409)
+    expect(courseHasRewardableQuiz).not.toHaveBeenCalled()
+    expect(db.course.update).not.toHaveBeenCalled()
   })
 
   it('binds an enabled approval to the current quiz fingerprint', async () => {

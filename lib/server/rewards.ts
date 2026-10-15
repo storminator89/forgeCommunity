@@ -5,6 +5,7 @@ import { Prisma, type RewardChangeReason } from '@prisma/client';
 import { getQuizValidationError } from '@/app/courses/[courseId]/contents/types';
 import { completionState, contentQuiz, courseContentRevision, courseLeaves, isQuizLikeContent } from '@/lib/server/course-progress';
 import { VERIFIED_COURSE_BADGE } from '@/lib/course-achievement-badge';
+import { activeCourseContentWhere, publishedCourseWhere } from '@/lib/server/published-course';
 
 export const COURSE_COMPLETION_POINTS = 50;
 const EVENT = 'COURSE_COMPLETED' as const;
@@ -29,7 +30,7 @@ export function courseQuizApprovalRevision(contents: RewardContent[]) {
 
 export async function courseApprovalFingerprint(tx: Prisma.TransactionClient, courseId: string) {
   const contents = await tx.courseContent.findMany({
-    where: { courseId }, select: { id: true, courseId: true, parentId: true, type: true, content: true, order: true },
+    where: { courseId, ...activeCourseContentWhere, course: publishedCourseWhere }, select: { id: true, courseId: true, parentId: true, type: true, content: true, order: true },
   });
   return courseQuizApprovalRevision(contents);
 }
@@ -37,14 +38,14 @@ export async function courseApprovalFingerprint(tx: Prisma.TransactionClient, co
 /** Admin approval requires a persisted, valid quiz that can actually be passed. */
 export async function courseHasRewardableQuiz(tx: Prisma.TransactionClient, courseId: string) {
   const contents = await tx.courseContent.findMany({
-    where: { courseId }, select: { id: true, courseId: true, parentId: true, type: true, content: true, order: true },
+    where: { courseId, ...activeCourseContentWhere, course: publishedCourseWhere }, select: { id: true, courseId: true, parentId: true, type: true, content: true, order: true },
   });
   return validQuizLeaves(contents).length > 0;
 }
 
 async function learnerPassedCurrentQuiz(tx: Prisma.TransactionClient, userId: string, courseId: string) {
   const contents = await tx.courseContent.findMany({
-    where: { courseId }, select: { id: true, courseId: true, parentId: true, type: true, content: true, order: true },
+    where: { courseId, ...activeCourseContentWhere, course: publishedCourseWhere }, select: { id: true, courseId: true, parentId: true, type: true, content: true, order: true },
   });
   const quizzes = validQuizLeaves(contents);
   if (!quizzes.length) return false;

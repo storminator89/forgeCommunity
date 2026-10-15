@@ -1,50 +1,47 @@
-# Kurseditor: Lernpfad und Inhaltspflege
+# Kurseditor: private Entwürfe und Veröffentlichungen
 
-Der Kurseditor trennt gespeicherte Inhalte von lokalen Entwürfen. Kapitel, Themen und Unterthemen werden in einem rekursiven Inhaltsverzeichnis gepflegt. Die Bearbeitungsrechte stammen aus der Kurs-API; Lernende erhalten eine Leseansicht.
+Phase 2 trennt drei Zustände: lokale, noch nicht gespeicherte Eingaben; den serverseitig gespeicherten **privaten Kursentwurf**; und die **veröffentlichte Version**, die Lernende sehen. Ein neuer Kurs beginnt als privater Entwurf. **Speichern** ändert die Live-Version nicht. Erst die ausdrückliche Veröffentlichung nach einer Prüfung macht den gespeicherten Stand sichtbar.
 
-## Autorenarbeitsplatz
+## Autorenreise
 
-- Kursverantwortliche öffnen standardmäßig **Bearbeiten**. Die nummerierte Kursstruktur bündelt Kapitel und verschachtelte Inhalte. Hinzufügen fragt zuerst nach Titel und Inhaltstyp und führt danach direkt zum neuen Inhalt.
-- Der Bereich **Lernpfad im Kurs** zeigt die aktuelle Reihenfolge, die Inhalte ohne Unterthemen und konkrete Pflegehinweise. **Kurs prüfen** bewertet den gespeicherten Stand und verlinkt zu betroffenen Inhalten. Beides ist Orientierung, kein Veröffentlichungs- oder Abschluss-Gate.
-- **Vorschau** durchläuft den Kurs einschließlich lokaler ungespeicherter Änderungen. Antworten in der interaktiven Quizvorschau erzeugen weder Versuche noch Fortschritt oder Zertifikate. **Lernen** zeigt den gespeicherten Kursinhalt und muss ausdrücklich gewählt werden.
-- Der Quizeditor führt Fragen nach Typ durch die passenden Felder und prüft sie vor dem Speichern. Unterstützt sind Einfach- und Mehrfachauswahl, Wahr/Falsch, Kurzantwort, Lückentext und Zuordnung. Die lokale Quizvorschau ermöglicht das Ausprobieren ohne Bewertung oder Schreibaktion.
-- **Anlegen** und **Speichern** machen Inhalte sofort für eingeschriebene Lernende sichtbar. Es gibt in dieser Ausbaustufe keinen Entwurfsstatus, Freigabeknopf oder versionierten Veröffentlichungsvorgang. Ungespeicherte Änderungen bleiben nur lokal und werden beim Verlassen geschützt.
+1. Unter `/courses/authoring` (**Meine Kursentwürfe**) einen eigenen Kurs öffnen oder über **Neuer Kursentwurf** anlegen. Diese Liste zeigt auch unveröffentlichte Kurse und weist auf unveröffentlichte Änderungen hin. Die nur nach Anmeldung erreichbare Kursübersicht enthält ausschließlich veröffentlichte Kurse.
+2. Im Autorenarbeitsplatz **Kursdaten** oder einen Eintrag in der verschachtelten Kursstruktur bearbeiten. Kapitel und Themen können hinzugefügt, umbenannt, verschoben, sortiert und aus dem Entwurf entfernt werden. Bei Texten, Video, Audio, H5P und Quiz speichert die jeweilige Aktion den privaten Entwurf. Kursdaten haben **Entwurf speichern**. Ein hochgeladenes Bild muss anschließend noch als Kursbild im Entwurf gespeichert werden.
+3. Mit **Vorschau** den Entwurf ausprobieren, auch mit einer lokalen ungespeicherten Änderung am ausgewählten Inhalt. Quizantworten und Abschlussaktionen dort erzeugen weder Lernversuche noch Fortschritt oder Zertifikate. **Lernen** öffnet die aktuelle veröffentlichte Fassung und ist vor der ersten Veröffentlichung nicht verfügbar.
+4. Lokale Änderungen speichern oder verwerfen. **Änderungen veröffentlichen** beziehungsweise **Veröffentlichung prüfen** öffnet die serverseitige Prüfung. Sie zeigt Sperrgründe und die Zahl hinzugefügter, entfernter, geänderter sowie umbenannter/neu sortierter Inhalte. Sie nennt die Zahl eingeschriebener Lernender und mögliche Folgen für Abschluss und Belohnungen. Nur der gespeicherte Entwurf wird veröffentlicht; lokale Änderungen sperren die Veröffentlichung.
+5. Bei einer bereiten Prüfung im Dialog **Änderungen veröffentlichen** bestätigen. Danach ist die neue Version die Live-Version für alle Lernenden. Eine Prüfung ohne anschließenden Veröffentlichungs-Klick ändert den Live-Kurs nicht.
 
-## Behobene Fehler
+Die Prüfung kann unter anderem fehlende Titel, leere lernbare Inhalte, ungültige Medienquellen, unvollständige Quiz und nicht erreichbare oder fremde Kursdateien blockieren. Der Kurs kann dennoch als privater Entwurf weiterbearbeitet werden. Die Kursübersicht **Lernpfad im Kurs** hilft bei der Strukturpflege, ersetzt die Veröffentlichungsprüfung aber nicht.
 
-| Ablauf | Vorher | Jetzt |
-| --- | --- | --- |
-| Abbrechen | Titel/Inhalt änderten bereits den sichtbaren Kursbaum. | Entwurf bleibt getrennt; Verwerfen verändert gespeicherte Daten nicht. |
-| Speichern eines Kapitels | Die lokale Antwort ersetzte den Elternknoten und verlor dessen Kinder. | Der Unterbaum bleibt erhalten, auch bei mehreren Ebenen. |
-| Fehlgeschlagene Aktionen | Fehler wurden verschluckt, Dialoge geschlossen oder Zeilen voreilig entfernt. | Eingaben und Dialoge bleiben erhalten; Speichern/Löschen lassen sich wiederholen. |
-| Umbenennen | Enter und Blur konnten doppelt speichern; tiefe Themen wurden nicht aktualisiert. | Explizites Speichern, Abbrechen und Escape; ein Request, rekursive Aktualisierung. |
-| Sortieren | Falsche Callback-ID; identische Rangwerte; unabhängige PUTs mit möglichen Teiländerungen. | Richtige Parent-/Child-ID, atomare Reihenfolge, auch für Hauptkapitel. |
-| Verschieben | Keine verlässliche Aktion für Tastatur und Touch. | Zielauswahl mit Unterbaum; eigene Nachfahren sind ausgeschlossen, die API verhindert Zyklen. |
-| Inhaltstyp wechseln | Wechsel löschte den bisherigen Entwurf. | Pro Typ bleibt der Entwurf bis zum Speichern/Verwerfen erhalten. |
-| Quiz bearbeiten | String-/Objektformate, Vorschau und Antwortindizes waren inkonsistent. | Gemeinsamer Legacy-Parser, direkte Formularänderungen, Vorschau ohne Speichern und korrekte Antwortzuordnung. |
-| Medien | Queryparameter wurden HTML-kodiert; H5P-Quellen gingen verloren. | Sichere Quellen bleiben erhalten; Anbieter-Links werden in passende Player-URLs übersetzt. |
-| Leerer Text | Editor-Normalisierung erzeugte ohne Eingabe eine Änderung. | Leere Absätze gelten als unverändert. |
+## Versionen, Konflikte und Lernende
 
-## Bedienung
+- **Versionen** zeigt frühere Veröffentlichungen. **Als Entwurf wiederherstellen** ersetzt den aktuellen privaten Entwurf mit einer Kopie der gewählten Version. Der Live-Kurs bleibt gleich, bis der wiederhergestellte Entwurf erneut geprüft und veröffentlicht wird.
+- **Entwurf verwerfen** setzt einen bereits veröffentlichten Kurs auf die Live-Fassung zurück. Bei einem noch nie veröffentlichten Kurs leert es den Entwurf; der Kurseintrag bleibt bestehen. Beide Aktionen betreffen keine ältere Veröffentlichung.
+- Wenn ein anderer Autor denselben Entwurf oder die Veröffentlichung inzwischen geändert hat, fordert der Arbeitsplatz zum Vergleichen oder erneuten Laden auf. Lokale Eingaben werden nicht still zusammengeführt. Vor Navigation aus ungespeicherten Eingaben wird gewarnt; der bereits gespeicherte private Entwurf bleibt erhalten.
+- Lernende und die Kursansichten angemeldeter Mitglieder folgen ausschließlich der neuesten aktiven Veröffentlichung. Neue oder geänderte lernbare Inhalte können den aktuellen Abschlussstatus verändern. Ein geänderter Inhalt muss in der aktuellen Fassung erneut abgeschlossen werden; bei Quiz kann eine neue Bewertung Freigaben und Belohnungen beeinflussen. Bisherige Lernaktivitäten bleiben erhalten. Bereits ausgestellte Zertifikate bleiben als historische Nachweise gültig; neue werden nicht automatisch ausgestellt.
+- Lernende erhalten weder private Entwurfsdaten noch Versionsverlauf oder Autorenaktionen. Kostenpflichtige Kurse haben weiterhin keinen integrierten Checkout; die bestehende kostenlose Selbsteinschreibung ist der unterstützte Beitritt.
 
-- Neue Kapitel und Themen öffnen direkt die Inhaltspflege. Titel, Text, Video, Audio, H5P und Quiz verwenden ein gemeinsames Formular.
-- Das aktuell ausgewählte Thema bleibt über `?content=…` nach dem Neuladen erreichbar.
-- Themenwechsel, Abbrechen und interne Links schützen ungespeicherte Änderungen. Beim vollständigen Verlassen greift die Browserwarnung.
-- Speichern blockiert Doppelanfragen. Strukturaktionen werden während laufender Mutationen gesperrt.
-- API-Schreibaktionen prüfen Berechtigung und Kurszugehörigkeit innerhalb einer serialisierbaren Transaktion. Konflikte lassen sich wiederholen; bei erfolgloser Wiederholung antwortet die API mit 409.
-- Quiz-Inhalte bleiben kompatibel mit der bestehenden Datenbank: Darstellung `QUIZ`, Speicherung weiterhin als `TEXT` mit JSON. Es ist keine Schemaänderung oder Datenmigration nötig.
-- Auch verwaiste oder zyklische Altbestände bleiben in der Leseansicht sichtbar; neue ungültige Hierarchien werden verhindert.
+## Private Kursbilder
 
-## Prüfung und Grenzen
+Neue Titelbilder und Bilder in Textinhalten werden kursbezogen außerhalb von `public/` gespeichert. Autoren und Administratoren können sie im Entwurf laden. Für andere wird ein Bild erst über eine Referenz in der aktiven Veröffentlichung zugänglich: ein aktives Titelbild über die öffentliche Kursansicht, ein Bild im veröffentlichten Textinhalt nur für eingeschriebene Lernende. Ein bloßer Upload, eine private oder alte Versionsreferenz macht ein Bild nicht öffentlich. Bereits vorhandene öffentliche oder externe Bild-URLs bleiben unter ihren bisherigen Adressen erreichbar. Sichere, persistente Speicherung und gemeinsame Sicherung mit der Datenbank sind erforderlich; siehe [Staged publication storage](COURSE-PUBLICATION-STORAGE.md) und [Deployment](../README.md#deployment).
 
-Die lokale Komponenten-, API- und Integrationsprüfung des integrierten LMS-Editors bestand vor dem ergänzten Browserfall mit 148 Testsuiten und 1.229 Tests. ESLint, Typprüfung und Stilprüfungen bestanden. Der neue Browserfall ist für eine isolierte synthetische SQLite-Datenbank und einen Loopback-Server abgesichert; er prüft die echte Autorenreise am Desktop und bei 320 px, wurde für diesen Stand aber noch nicht in CI ausgeführt. Produktionsbuild, PostgreSQL und die endgültige Browserprüfung sind bis zum PR-Lauf offen. Die Ergebnisse werden hier erst nach dem Lauf auf einen konkreten Commit bezogen ergänzt.
+## Betrieb und Entwicklung
 
-Die Vorschau prüft keine tatsächliche Wiedergabe externer Video-, Audio- oder H5P-Quellen; diese benötigen erreichbare Quellen. Die unveränderte Lern- und Zertifikatslogik wird nicht durch die Autoren-Vorschau ersetzt.
+Diese Phase unterstützt nur eine **frische leere Datenbank**. SQLite-Migration `0010_staged_course_publication.sql` beziehungsweise PostgreSQL-Upgrade `0009_staged_course_publication.sql` legen Entwürfe, unveränderliche Veröffentlichungen, Veröffentlichungsbelege, private Kursdatei-Metadaten und die Kurs-Zeiger an. Beim Anlegen werden Kurs und erster Entwurf in einer Transaktion gespeichert. Vor dem Start mit derselben `DATABASE_PROVIDER`- und `DATABASE_URL`-Konfiguration `npm run db:publication:ready` ausführen. Der schreibgeschützte Check prüft die vollständige Migrationshistorie samt Prüfsummen, vorhandene Entwürfe für jeden Kurs und gültige aktive Veröffentlichungszeiger. Container- und Standalone-Start verweigern bei einem Fehlschlag den Dienst; die Health-Route weist fehlende Entwürfe ebenfalls zurück.
 
-## Frühere Ansichten
+Eine alte Entwicklungsdatenbank mit Kursen ohne Entwurf kann trotz additiv angewendeter Migrationen den Check nicht bestehen. Vor einem Wechsel sichern und eine neue leere Datenbank bereitstellen. Startskripte löschen oder konvertieren diese Daten nicht automatisch. Die genaue Provider-Reihenfolge und die privaten Storage-Volumes stehen im [README](../README.md#local-development) und in [Staged publication storage](COURSE-PUBLICATION-STORAGE.md).
 
-Diese Bilder zeigen den bereits geprüften früheren Kurseditor. Neue Screenshots des Autorenarbeitsplatzes werden erst aus einer erfolgreich ausgeführten Browserprüfung des veröffentlichten Stands übernommen.
+Quiz werden in der Autorenoberfläche als `QUIZ` geführt; die materialisierte Inhaltsprojektion speichert sie für das bestehende Schema weiterhin als `TEXT` mit JSON. Die öffentliche Antwortdarstellung lässt Lösungsschlüssel weg. Veröffentlichungsaufrufe prüfen Entwurfsrevision und aktuelle Live-Version und verwenden eine Anforderungs-ID, damit eine Wiederholung desselben Aufrufs nicht versehentlich eine weitere Version erzeugt. Veraltete Lernfortschritts- oder Quiz-Anfragen werden gegen die aktuelle Veröffentlichung abgewiesen.
 
-![Kurseditor und Quiz, Desktop](ui/course-editor-desktop.png)
+## Prüfung und Bildnachweise
 
-![Kurseditor und Quiz, Mobil](ui/course-editor-mobile.png)
+Die älteren Testzahlen und Screenshots unten stammen aus der früheren Editor-Ausbaustufe; sie belegen **nicht** den phase-2-Stand. Die neuen Entwurfs- und Veröffentlichungsbilder im [README](../README.md#screenshots) stammen aus einem realen Browserlauf der Phase 2 mit synthetischen Daten in einer ausdrücklich wegwerfbaren SQLite-Datenbank; [Provenienz, Pixelprüfung und Grenzen](ui/README.md) sind dokumentiert. Dieser erste Lauf bestand den neuen Editor-Browserfall auf Desktop und 320px, aber der Gesamtworkflow war wegen veralteter Fixture-Erwartungen in zwei anderen Prüfungen rot. Für die tatsächliche Abnahme sind die Qualitäts-, Sicherheits-, Browser- und PostgreSQL-Laufzeitprüfungen des [CI-Workflows](../.github/workflows/ci.yml) am jeweils letzten PR-Head zu prüfen. Es gibt keine Prüfung auf einer persönlichen oder produktiven Datenbank. Die Bilder allein belegen weder alle Kurszustände noch eine vollständige Barrierefreiheitsabnahme.
+
+Die frühere integrierte Editor-Prüfung meldete vor ihrem ergänzten Browserfall 148 Testsuiten und 1.229 Tests sowie bestandene Lint-, Typ- und Stilprüfungen. Der damals ergänzte Browserfall war zum Zeitpunkt dieses früheren Berichts noch nicht in CI ausgeführt. Diese Zahlen sind historische Kontextinformation und kein Testnachweis für die gestufte Veröffentlichung. Die Vorschau prüft auch keine tatsächliche Wiedergabe externer Video-, Audio- oder H5P-Quellen; dafür müssen die Quellen erreichbar sein.
+
+### Historische Editor-Ansichten (vor Phase 2)
+
+Diese Bilder zeigen den früheren Kurseditor, **nicht** den privaten Entwurfs- und Veröffentlichungsablauf. Sie bleiben zur Nachvollziehbarkeit erhalten und werden nicht als neue Phase-2-Captures ausgegeben.
+
+![Früherer Kurseditor und Quiz, Desktop](ui/course-editor-desktop.png)
+
+![Früherer Kurseditor und Quiz, Mobil](ui/course-editor-mobile.png)

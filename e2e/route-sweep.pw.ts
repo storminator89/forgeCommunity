@@ -197,13 +197,14 @@ test.describe('every App Router page, one at a time', () => {
       // alone cannot show their lower content. Review the real lower action
       // without filling or submitting either form.
       const lowerTarget = item.url === '/courses/new'
-        ? page.getByRole('button', { name: 'Kurs erstellen', exact: true })
+        ? page.getByRole('button', { name: 'Kursentwurf anlegen', exact: true })
         : item.url === '/projects/new'
           ? page.getByRole('button', { name: 'Projekt einreichen', exact: true })
           : item.url === '/about'
             ? page.getByRole('link', { name: 'E-Mail schreiben', exact: true })
             : null;
       if (lowerTarget) {
+        await expect(lowerTarget).toBeVisible();
         await lowerTarget.scrollIntoViewIfNeeded();
         await expect(lowerTarget).toBeInViewport();
         await expect(lowerTarget).toBeEnabled();

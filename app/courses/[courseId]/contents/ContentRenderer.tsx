@@ -124,7 +124,7 @@ function ContentRendererState({ content, isEditing: externalIsEditing, onSave, o
     );
   }
 
-  if (learnerQuiz && content.type === 'QUIZ') return <LearnerQuizRenderer key={`${content.updatedAt ?? ''}:${JSON.stringify(content.content)}`} courseId={content.courseId} contentId={content.id} updatedAt={content.updatedAt} content={content.content} onPassed={() => onQuizPassed?.()} />;
+  if (learnerQuiz && content.type === 'QUIZ') return <LearnerQuizRenderer key={`${content.publicationId ?? ''}:${content.contentVersionToken ?? content.updatedAt ?? ''}:${JSON.stringify(content.content)}`} courseId={content.courseId} contentId={content.id} updatedAt={content.updatedAt} publicationId={content.publicationId} contentVersionToken={content.contentVersionToken} content={content.content} onPassed={() => onQuizPassed?.()} />;
   if (quizContent || content.type === 'QUIZ') return <QuizRenderer content={quizContent ?? content.content} />;
 
   const renderContent = () => {

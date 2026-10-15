@@ -23,8 +23,9 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ cou
     const result = await contentTransaction(async tx => {
       const actor = await tx.user.findUnique({ where: { id: session.user.id }, select: { role: true } });
       if (actor?.role !== 'ADMIN') throw new ApprovalError('Forbidden', 403);
-      const course = await tx.course.findUnique({ where: { id: courseId }, select: { id: true } });
+      const course = await tx.course.findUnique({ where: { id: courseId }, select: { id: true, activePublicationId: true } });
       if (!course) throw new ApprovalError('Course not found', 404);
+      if (body.eligible && !course.activePublicationId) throw new ApprovalError('A published course is required for reward approval', 409);
       if (body.eligible && !(await courseHasRewardableQuiz(tx, courseId))) {
         throw new ApprovalError('A published valid quiz leaf is required for reward approval', 409);
       }

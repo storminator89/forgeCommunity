@@ -1,15 +1,36 @@
 import 'server-only';
 
-import { createHash } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
 import { getQuizValidationError, parseQuizContent, type QuizContent, type QuizQuestion } from '@/app/courses/[courseId]/contents/types';
 import { groupCourseContents } from '@/lib/server/group-course-contents';
 import { reconcileLearnerCourseReward } from '@/lib/server/rewards';
+import { activeCourseContentWhere, publishedCourseWhere } from '@/lib/server/published-course';
 
 export type ProgressContent = { id: string; courseId: string; parentId: string | null; type: string | null; content: string; order?: number };
 
 export function courseContentRevision(content: Pick<ProgressContent, 'type' | 'content'>): string {
   return createHash('sha256').update(JSON.stringify([content.type ?? 'TEXT', content.content])).digest('hex');
+}
+
+function versionSecret() {
+  const secret = process.env.NEXTAUTH_SECRET;
+  if (!secret) throw new Error('NEXTAUTH_SECRET is required for course version tokens');
+  return secret;
+}
+
+/** Opaque client precondition; never expose the stored digest of quiz answers. */
+export function contentVersionToken(publicationId: string, content: Pick<ProgressContent, 'id' | 'type' | 'content'>) {
+  return createHmac('sha256', versionSecret()).update(JSON.stringify(['course-content-v1', publicationId, content.id,
+    courseContentRevision(content)])).digest('base64url');
+}
+
+export function matchesContentVersionToken(token: unknown, publicationId: string,
+  content: Pick<ProgressContent, 'id' | 'type' | 'content'>) {
+  if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(token)) return false;
+  const expected = Buffer.from(contentVersionToken(publicationId, content));
+  const actual = Buffer.from(token);
+  return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
 export function contentQuiz(content: Pick<ProgressContent, 'type' | 'content'>): QuizContent | null {
@@ -114,7 +135,7 @@ export function gradeQuiz(quiz: QuizContent, submitted: unknown): { score: numbe
 
 export async function completionState(tx: Prisma.TransactionClient, userId: string, courseId: string) {
   const [contents, progress] = await Promise.all([
-    tx.courseContent.findMany({ where: { courseId }, select: { id: true, courseId: true, parentId: true, type: true, content: true, order: true } }),
+    tx.courseContent.findMany({ where: { courseId, ...activeCourseContentWhere, course: publishedCourseWhere }, select: { id: true, courseId: true, parentId: true, type: true, content: true, order: true } }),
     tx.courseContentProgress.findMany({ where: { userId, courseId }, select: { contentId: true, revision: true } }),
   ]);
   const revisions = new Map(progress.map(item => [item.contentId, item.revision]));

@@ -3,6 +3,7 @@ import { POST as submitQuiz } from '@/app/api/courses/[courseId]/contents/[conte
 import { courseQuizApprovalRevision } from '@/lib/server/rewards';
 import { deleteCourseDependencies } from '@/lib/server/course-deletion';
 import { rmSync } from 'node:fs';
+import { contentVersionToken } from '@/lib/server/course-progress';
 import prisma from '@/lib/prisma';
 import { getServerSession } from 'next-auth/next';
 import { VERIFIED_COURSE_BADGE } from '@/lib/course-achievement-badge';
@@ -18,7 +19,7 @@ jest.mock('next/server', () => {
 jest.mock('next-auth/next', () => ({ getServerSession: jest.fn() }));
 jest.mock('@/app/api/auth/[...nextauth]/options', () => ({ authOptions: {} }));
 jest.mock('@/lib/prisma', () => {
-  const { mkdtempSync, readFileSync } = require('node:fs');
+  const { mkdtempSync, readFileSync, readdirSync } = require('node:fs');
   const { tmpdir } = require('node:os');
   const { join } = require('node:path');
   const { DatabaseSync } = require('node:sqlite');
@@ -29,7 +30,7 @@ jest.mock('@/lib/prisma', () => {
   const db = new DatabaseSync(path);
   try {
     db.exec('PRAGMA foreign_keys = ON');
-    for (const name of ['0001_initial.sql', '0002_skill_endorsements.sql', '0003_course_progress.sql', '0004_reports.sql', '0005_reward_ledger.sql']) {
+    for (const name of readdirSync(join(process.cwd(), 'prisma', 'sqlite-migrations')).filter((name: string) => /^\d+_.*\.sql$/.test(name)).sort()) {
       db.exec(readFileSync(join(process.cwd(), 'prisma', 'sqlite-migrations', name), 'utf8'));
     }
   } finally { db.close(); }
@@ -40,12 +41,20 @@ const params = { params: Promise.resolve({ courseId: 'reward-course', contentId:
 const quiz = JSON.stringify({ questions: [{ id: 'q1', type: 'SINGLE_CHOICE', question: 'Correct?', options: ['yes', 'no'], correctAnswers: [0] }] });
 
 beforeAll(async () => {
+  process.env.NEXTAUTH_SECRET ??= 'test-only-reward-attempt-secret';
   jest.mocked(getServerSession).mockResolvedValue({ user: { id: 'learner', role: 'USER' } } as never);
   await prisma.user.create({ data: { id: 'teacher', email: 'teacher@example.invalid' } });
   await prisma.user.create({ data: { id: 'learner', email: 'learner@example.invalid' } });
   const approval = courseQuizApprovalRevision([{ id: 'quiz-content', courseId: 'reward-course', parentId: null, type: 'TEXT', content: quiz, order: 1 }]);
   await prisma.course.create({ data: { id: 'reward-course', title: 'Reward course', description: 'Course', instructorId: 'teacher', rewardEligible: true, rewardApprovalRevision: approval } });
   await prisma.courseContent.create({ data: { id: 'quiz-content', title: 'Quiz', type: 'TEXT', content: quiz, order: 1, courseId: 'reward-course' } });
+  const payload = { schemaVersion: 1, title: 'Reward course', description: 'Course', startDate: null, endDate: null,
+    imageUrl: null, contents: [{ id: 'quiz-content', parentId: null, title: 'Quiz', type: 'TEXT', content: quiz, order: 1 }] };
+  await prisma.coursePublication.create({ data: { id: 'reward-publication', courseId: 'reward-course', sequence: 1,
+    source: 'AUTHOR', payload: JSON.stringify(payload), digest: 'fixture-reward', contentCount: 1 } });
+  await prisma.course.update({ where: { id: 'reward-course' }, data: { activePublicationId: 'reward-publication' } });
+  await prisma.courseDraft.create({ data: { courseId: 'reward-course', basePublicationId: 'reward-publication',
+    payload: JSON.stringify(payload), digest: 'fixture-reward' } });
   await prisma.enrollment.create({ data: { id: 'enrollment', userId: 'learner', courseId: 'reward-course' } });
 });
 
@@ -58,7 +67,8 @@ test('distinct simultaneous passing submissions never duplicate a reward or tran
   const content = await prisma.courseContent.findUniqueOrThrow({ where: { id: 'quiz-content' } });
   const outcomes = await Promise.all(Array.from({ length: 6 }, (_, index) => submitQuiz(new Request(
     'http://localhost/api/courses/reward-course/contents/quiz-content/attempts',
-    { method: 'POST', body: JSON.stringify({ submissionId: `simultaneous_${index}`, contentUpdatedAt: content.updatedAt.toISOString(), answers: { q1: [0] } }) },
+    { method: 'POST', body: JSON.stringify({ submissionId: `simultaneous_${index}`, publicationId: 'reward-publication',
+      contentVersionToken: contentVersionToken('reward-publication', content), answers: { q1: [0] } }) },
   ) as never, params)));
   expect(outcomes.map(result => result.status)).toEqual(Array(6).fill(200));
   expect(await prisma.quizAttempt.count({ where: { userId: 'learner', courseId: 'reward-course', passed: true } })).toBe(6);

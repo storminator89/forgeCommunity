@@ -173,6 +173,13 @@ it('grants existing course references only read access and blocks foreign packag
   await expect(authorizedH5PContent('content-1', { id: 'stranger' }, 'http://localhost')).rejects.toMatchObject({ status: 403 });
   db.courseContent.findFirst.mockResolvedValue({ id: 'authorized-reference' });
   await expect(authorizedH5PContent('content-1', { id: 'student' }, 'http://localhost')).resolves.toMatchObject({ id: 'content-1' });
+  expect(db.courseContent.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({
+    archivedAt: null,
+    course: { activePublicationId: { not: null }, enrollments: { some: { userId: 'student' } } },
+  }) }));
+  db.user.findUnique.mockResolvedValue(null);
+  await expect(authorizedH5PContent('content-1', { id: 'student' }, 'http://localhost')).rejects.toMatchObject({ status: 403 });
+  db.user.findUnique.mockResolvedValue({ role: 'ADMIN' });
   await expect(assertCanAttachH5P('student', 'INSTRUCTOR', '/h5p/embed/content-1', 'http://localhost')).rejects.toMatchObject({ status: 403 });
   await expect(assertCanAttachH5P('owner', 'INSTRUCTOR', '/h5p/embed/content-1', 'http://localhost')).resolves.toBeUndefined();
   await expect(assertCanAttachH5P('admin', 'ADMIN', '/h5p/embed/content-1', 'http://localhost')).resolves.toBeUndefined();

@@ -3,9 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { Prisma } from '@prisma/client';
 import { authOptions } from '@/app/api/auth/[...nextauth]/options';
-import prisma from '@/lib/prisma';
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
-import { contentQuiz, courseContentRevision, gradeQuiz, InvalidQuizAnswersError, recordCourseCompletion } from '@/lib/server/course-progress';
+import { contentQuiz, courseContentRevision, gradeQuiz, InvalidQuizAnswersError, matchesContentVersionToken, recordCourseCompletion } from '@/lib/server/course-progress';
 import { getQuizValidationError } from '@/app/courses/[courseId]/contents/types';
 import { contentTransaction } from '../../content-mutations';
 
@@ -19,7 +18,7 @@ export async function POST(request: NextRequest, props: Params) {
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const body = await readJsonObject(request, 64 * 1024);
     if (typeof body.submissionId !== 'string' || !/^[a-zA-Z0-9_-]{8,100}$/.test(body.submissionId) ||
-        typeof body.contentUpdatedAt !== 'string' || !body.contentUpdatedAt ||
+        typeof body.publicationId !== 'string' || typeof body.contentVersionToken !== 'string' ||
         !body.answers || typeof body.answers !== 'object' || Array.isArray(body.answers)) {
       return NextResponse.json({ error: 'Invalid quiz submission' }, { status: 400 });
     }
@@ -31,20 +30,27 @@ export async function POST(request: NextRequest, props: Params) {
     const answerDigest = createHash('sha256').update(JSON.stringify(answers)).digest('hex');
 
     const attempt = async (): Promise<AttemptOutcome> => contentTransaction(async tx => {
+      const course = await tx.course.findUnique({ where: { id: courseId }, select: { activePublicationId: true } });
+      if (!course?.activePublicationId) return { status: 404, error: 'Course not found' };
       const enrollment = await tx.enrollment.findUnique({ where: { userId_courseId: { userId, courseId } }, select: { id: true } });
       if (!enrollment) return { status: 403, error: 'Enrollment required' };
-      const content = await tx.courseContent.findUnique({ where: { id: contentId }, select: { id: true, courseId: true, parentId: true, type: true, content: true, updatedAt: true, children: { select: { id: true }, take: 1 } } });
-      if (!content || content.courseId !== courseId) return { status: 404, error: 'Content not found' };
+      const previous = await tx.quizAttempt.findUnique({ where: { userId_contentId_submissionId: { userId, contentId, submissionId } } });
+      if (previous) {
+        if (previous.courseId !== courseId || previous.publicationId !== body.publicationId || previous.answerDigest !== answerDigest) {
+          return { status: 409, error: 'Submission ID was already used for different answers or a different publication' };
+        }
+        // A lost-response retry may return its original outcome after a later
+        // publication. It must never create fresh progress on that later version.
+        return { status: 200, score: previous.score, passed: previous.passed };
+      }
+      if (course.activePublicationId !== body.publicationId) return { status: 409, error: 'Quiz changed; reload before submitting' };
+      const content = await tx.courseContent.findUnique({ where: { id: contentId }, select: { id: true, courseId: true, parentId: true, type: true, content: true, archivedAt: true, children: { where: { archivedAt: null }, select: { id: true }, take: 1 } } });
+      if (!content || content.courseId !== courseId || content.archivedAt) return { status: 404, error: 'Content not found' };
       if (content.children.length) return { status: 409, error: 'Only leaf quizzes can be submitted' };
       const quiz = contentQuiz(content);
       if (!quiz || getQuizValidationError(quiz)) return { status: 409, error: 'Quiz is not ready' };
-      if (content.updatedAt.toISOString() !== body.contentUpdatedAt) return { status: 409, error: 'Quiz changed; reload before submitting' };
+      if (!matchesContentVersionToken(body.contentVersionToken, course.activePublicationId, content)) return { status: 409, error: 'Quiz changed; reload before submitting' };
       const revision = courseContentRevision(content);
-      const previous = await tx.quizAttempt.findUnique({ where: { userId_contentId_submissionId: { userId, contentId, submissionId } } });
-      if (previous) {
-        if (previous.revision !== revision || previous.answerDigest !== answerDigest) return { status: 409, error: 'Submission ID was already used for different answers' };
-        return { status: 200, score: previous.score, passed: previous.passed };
-      }
       const now = new Date();
       const windowStart = new Date(now.getTime() - 60 * 60 * 1000);
       const recentFailures = await tx.quizAttempt.findMany({
@@ -56,7 +62,8 @@ export async function POST(request: NextRequest, props: Params) {
         return { status: 429, error: 'Please review the course and try again later', retryAfterSeconds: Math.max(1, Math.ceil((oldest.getTime() + 60 * 60 * 1000 - now.getTime()) / 1000)) };
       }
       const graded = gradeQuiz(quiz, answers);
-      await tx.quizAttempt.create({ data: { userId, courseId, contentId, submissionId, answerDigest, revision, score: graded.score, passed: graded.passed } });
+      await tx.quizAttempt.create({ data: { userId, courseId, contentId, submissionId, answerDigest, revision,
+        publicationId: course.activePublicationId, score: graded.score, passed: graded.passed } });
       if (graded.passed) {
         const existing = await tx.courseContentProgress.findUnique({ where: { userId_contentId: { userId, contentId } }, select: { revision: true } });
         if (existing?.revision !== revision) {
@@ -73,9 +80,15 @@ export async function POST(request: NextRequest, props: Params) {
       // Two identical submissions can race at the unique key. Reading the
       // committed attempt yields the same result without double-counting it.
       if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') throw error;
-      const saved = await prisma.quizAttempt.findUnique({ where: { userId_contentId_submissionId: { userId, contentId, submissionId } } });
-      if (!saved || saved.answerDigest !== answerDigest || saved.courseId !== courseId) throw error;
-      outcome = { status: 200, score: saved.score, passed: saved.passed };
+      outcome = await contentTransaction(async tx => {
+        const course = await tx.course.findUnique({ where: { id: courseId }, select: { activePublicationId: true } });
+        if (!course?.activePublicationId) return { status: 404, error: 'Course not found' };
+        const enrollment = await tx.enrollment.findUnique({ where: { userId_courseId: { userId, courseId } }, select: { id: true } });
+        if (!enrollment) return { status: 403, error: 'Enrollment required' };
+        const saved = await tx.quizAttempt.findUnique({ where: { userId_contentId_submissionId: { userId, contentId, submissionId } } });
+        if (!saved || saved.answerDigest !== answerDigest || saved.courseId !== courseId || saved.publicationId !== body.publicationId) throw error;
+        return { status: 200, score: saved.score, passed: saved.passed };
+      });
     }
     if (outcome.status === 200) return NextResponse.json({ score: outcome.score, passed: outcome.passed });
     if (outcome.status === 429) return NextResponse.json({ error: outcome.error, retryAfterSeconds: outcome.retryAfterSeconds }, { status: 429, headers: { 'Retry-After': String(outcome.retryAfterSeconds) } });

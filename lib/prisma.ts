@@ -7,9 +7,14 @@ import { getDatabaseProvider, getDatabaseUrl } from './database-provider';
 
 const provider = getDatabaseProvider();
 const url = getDatabaseUrl();
+// pg ignores Prisma's ?schema= URL parameter. The driver adapter must also
+// receive it or a custom-schema deployment would query public instead of the
+// schema initialized by scripts/postgresql-upgrades.mjs.
+const schema = provider === 'postgresql' ? new URL(url).searchParams.get('schema') : null;
+if (schema === '') throw new Error('PostgreSQL DATABASE_URL has an empty schema name.');
 const adapter = provider === 'sqlite'
   ? new PrismaBetterSqlite3({ url })
-  : new PrismaPg({ connectionString: url });
+  : new PrismaPg({ connectionString: url }, schema ? { schema } : undefined);
 
 declare global {
   // Ermöglicht globale Variablen ohne TypeScript-Fehler

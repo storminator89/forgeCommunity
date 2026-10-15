@@ -5,7 +5,6 @@ import prisma from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { H5PValidationError } from './h5p-archive';
 import { validH5PId } from './h5p-storage';
-import { hasCurrentAdminReadAccess } from './read-access';
 
 export interface H5PUser { id: string; role?: string | null }
 const TOKEN_TTL_SECONDS = 2 * 60 * 60;
@@ -48,10 +47,18 @@ export async function authorizedH5PContent(id: string, user: H5PUser, origin?: s
   return prisma.$transaction(async tx => {
     const content = await tx.h5PContent.findUnique({ where: { id }, select: { id: true, title: true, contentType: true, userId: true, createdAt: true } });
     if (!content) throw new H5PValidationError('H5P-Inhalt nicht gefunden.', 404);
-    if (content.userId === user.id || await hasCurrentAdminReadAccess(tx, user)) return content;
+    // A deleted account or stale administrator session must not retain
+    // package preview rights after the role/account change commits.
+    const actor = await tx.user.findUnique({ where: { id: user.id }, select: { role: true } });
+    if (!actor) throw new H5PValidationError('Kein Zugriff auf diesen H5P-Inhalt.', 403);
+    if (content.userId === user.id || (user.role === 'ADMIN' && actor.role === 'ADMIN')) return content;
     const embedPath = `/h5p/embed/${id}`;
     const reference = await tx.courseContent.findFirst({
-      where: { type: 'H5P', content: { in: [embedPath, id, ...localOrigins(origin).map(value => `${value}${embedPath}`)] }, course: { OR: [{ instructorId: user.id }, { enrollments: { some: { userId: user.id } } }] } },
+      where: {
+        type: 'H5P', archivedAt: null,
+        content: { in: [embedPath, id, ...localOrigins(origin).map(value => `${value}${embedPath}`)] },
+        course: { activePublicationId: { not: null }, enrollments: { some: { userId: user.id } } },
+      },
       select: { id: true },
     });
     if (!reference) throw new H5PValidationError('Kein Zugriff auf diesen H5P-Inhalt.', 403);

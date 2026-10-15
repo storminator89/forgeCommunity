@@ -112,3 +112,30 @@ it('does not query content for unauthenticated requests or short queries', async
   expect(articleFindMany).not.toHaveBeenCalled()
   expect(projectFindMany).not.toHaveBeenCalled()
 })
+
+it.each(['course', 'all'])('keeps unpublished courses out of %s search', async (type) => {
+  const courses = [
+    { id: 'draft', activePublicationId: null, title: 'Hidden lesson', description: 'Unreleased', instructor: { name: 'Ada', image: null }, _count: { enrollments: 0 }, createdAt: new Date('2026-03-02') },
+    { id: 'baseline', activePublicationId: 'baseline-1', title: 'Published lesson', description: 'Available', instructor: { name: 'Ada', image: null }, _count: { enrollments: 0 }, createdAt: new Date('2026-03-01') },
+  ];
+  (prisma.course.findMany as jest.Mock).mockImplementation(async ({ where }: { where: { activePublicationId: { not: null } } }) =>
+    courses.filter(course => course.activePublicationId !== where.activePublicationId.not));
+  (prisma.course.count as jest.Mock).mockImplementation(async ({ where }: { where: { activePublicationId: { not: null } } }) =>
+    courses.filter(course => course.activePublicationId !== where.activePublicationId.not).length);
+
+  const response = await GET(request('lesson', type));
+  const body = await response.json();
+  expect(body.results.filter((result: { type: string }) => result.type === 'course').map((result: { id: string }) => result.id)).toEqual(['baseline']);
+  expect(JSON.stringify(body)).not.toContain('Hidden lesson');
+  expect(prisma.course.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ activePublicationId: { not: null } }) }));
+  if (type === 'course') {
+    expect(prisma.course.count).toHaveBeenCalledWith({ where: (prisma.course.findMany as jest.Mock).mock.calls[0][0].where });
+    expect(body.pagination.total).toBe(1);
+  }
+});
+
+it('counts only published courses in member search results', async () => {
+  await GET(request('Ada', 'member'));
+  expect((prisma.user.findMany as jest.Mock).mock.calls[0][0].select._count.select.courses)
+    .toEqual({ where: { activePublicationId: { not: null } } });
+});

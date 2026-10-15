@@ -28,6 +28,7 @@ const reviewedUpgradeNames = [
   '0006_accepted_solutions.sql',
   '0007_notification_targets.sql',
   '0008_private_learning_goals.sql',
+  '0009_staged_course_publication.sql',
 ];
 // Stacked drafts add the final two reviewed migrations in order. Reject any
 // unknown migration rather than letting the release gate silently skip it.
@@ -236,15 +237,143 @@ async function assertAcceptedSolutionSchema(db) {
   }
 }
 
+async function assertCoursePublicationSchema(db) {
+  const { rows: columns } = await db.query(`
+    SELECT table_name, column_name, data_type, udt_name, is_nullable
+    FROM information_schema.columns WHERE table_schema = current_schema() AND table_name IN
+      ('Course', 'CourseContent', 'QuizAttempt', 'Certificate', 'CourseDraft', 'CoursePublication',
+       'PublicationRequest', 'CourseAsset')`);
+  const column = (table, name) => columns.find(row => row.table_name === table && row.column_name === name);
+  for (const [table, name, dataType, nullable] of [
+    ['Course', 'activePublicationId', 'text', 'YES'],
+    ['CourseContent', 'archivedAt', 'timestamp without time zone', 'YES'],
+    ['QuizAttempt', 'publicationId', 'text', 'YES'],
+    ['Certificate', 'publicationId', 'text', 'YES'],
+    ['CourseDraft', 'courseId', 'text', 'NO'],
+    ['CourseDraft', 'revision', 'integer', 'NO'],
+    ['CourseDraft', 'basePublicationId', 'text', 'YES'],
+    ['CourseDraft', 'payload', 'text', 'NO'],
+    ['CourseDraft', 'digest', 'text', 'NO'],
+    ['CourseDraft', 'lastEditorId', 'text', 'YES'],
+    ['CoursePublication', 'id', 'text', 'NO'],
+    ['CoursePublication', 'courseId', 'text', 'NO'],
+    ['CoursePublication', 'sequence', 'integer', 'NO'],
+    ['CoursePublication', 'payload', 'text', 'NO'],
+    ['CoursePublication', 'digest', 'text', 'NO'],
+    ['CoursePublication', 'contentCount', 'integer', 'NO'],
+    ['CoursePublication', 'previousPublicationId', 'text', 'YES'],
+    ['CoursePublication', 'actorId', 'text', 'YES'],
+    ['PublicationRequest', 'courseId', 'text', 'NO'],
+    ['PublicationRequest', 'requestId', 'text', 'NO'],
+    ['PublicationRequest', 'actorId', 'text', 'NO'],
+    ['PublicationRequest', 'requestDigest', 'text', 'NO'],
+    ['PublicationRequest', 'publicationId', 'text', 'NO'],
+    ['CourseAsset', 'id', 'text', 'NO'],
+    ['CourseAsset', 'courseId', 'text', 'NO'],
+    ['CourseAsset', 'uploaderId', 'text', 'YES'],
+    ['CourseAsset', 'storageKey', 'text', 'NO'],
+    ['CourseAsset', 'contentType', 'text', 'NO'],
+    ['CourseAsset', 'byteSize', 'integer', 'NO'],
+  ]) {
+    const actual = column(table, name);
+    assert.ok(actual, `${table}.${name} missing`);
+    assert.equal(actual.data_type, dataType, `${table}.${name} type`);
+    assert.equal(actual.is_nullable, nullable, `${table}.${name} nullability`);
+  }
+  assert.deepEqual(column('CoursePublication', 'source') &&
+    [column('CoursePublication', 'source').data_type, column('CoursePublication', 'source').udt_name,
+      column('CoursePublication', 'source').is_nullable],
+  ['USER-DEFINED', 'PublicationSource', 'NO']);
+  const { rows: labels } = await db.query(`
+    SELECT e.enumlabel FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid
+    JOIN pg_namespace n ON n.oid = t.typnamespace
+    WHERE n.nspname = current_schema() AND t.typname = 'PublicationSource' ORDER BY e.enumsortorder`);
+  assert.deepEqual(labels.map(row => row.enumlabel), ['AUTHOR', 'RESTORE']);
+
+  const { rows: foreignKeys } = await db.query(`
+    SELECT c.conname AS name, c.convalidated AS valid, c.confdeltype AS on_delete,
+      rt.relname AS target, rn.nspname = n.nspname AS same_schema
+    FROM pg_constraint c JOIN pg_class t ON t.oid = c.conrelid
+    JOIN pg_namespace n ON n.oid = t.relnamespace
+    JOIN pg_class rt ON rt.oid = c.confrelid JOIN pg_namespace rn ON rn.oid = rt.relnamespace
+    WHERE n.nspname = current_schema() AND c.contype = 'f' AND t.relname IN
+      ('Course', 'CourseDraft', 'CoursePublication', 'PublicationRequest', 'CourseAsset',
+       'QuizAttempt', 'Certificate')`);
+  const fks = new Map(foreignKeys.map(row => [row.name, row]));
+  for (const [name, target, onDelete] of [
+    ['Course_activePublicationId_fkey', 'CoursePublication', 'n'],
+    ['CourseDraft_courseId_fkey', 'Course', 'c'],
+    ['CourseDraft_basePublicationId_fkey', 'CoursePublication', 'n'],
+    ['CoursePublication_courseId_fkey', 'Course', 'c'],
+    ['CoursePublication_previousPublicationId_fkey', 'CoursePublication', 'n'],
+    ['PublicationRequest_courseId_fkey', 'Course', 'c'],
+    ['PublicationRequest_publicationId_fkey', 'CoursePublication', 'c'],
+    ['CourseAsset_courseId_fkey', 'Course', 'c'],
+    ['QuizAttempt_publicationId_fkey', 'CoursePublication', 'n'],
+    ['Certificate_publicationId_fkey', 'CoursePublication', 'n'],
+  ]) {
+    const fk = fks.get(name);
+    assert.ok(fk, `${name} missing`);
+    assert.equal(fk.target, target, `${name} target`);
+    assert.equal(fk.on_delete, onDelete, `${name} on-delete`);
+    assert.equal(fk.valid, true, `${name} unvalidated`);
+    assert.equal(fk.same_schema, true, `${name} leaked to another schema`);
+  }
+  const { rows: checks } = await db.query(`
+    SELECT c.conname AS name, c.convalidated AS valid FROM pg_constraint c
+    JOIN pg_class t ON t.oid = c.conrelid JOIN pg_namespace n ON n.oid = t.relnamespace
+    WHERE n.nspname = current_schema() AND c.contype = 'c' AND t.relname IN
+      ('CourseDraft', 'CoursePublication', 'CourseAsset')`);
+  const byCheck = new Map(checks.map(row => [row.name, row]));
+  for (const name of [
+    'CourseDraft_revision_check', 'CoursePublication_sequence_check', 'CoursePublication_contentCount_check',
+    'CourseAsset_byteSize_check',
+  ]) assert.equal(byCheck.get(name)?.valid, true, `${name} missing or unvalidated`);
+  const { rows: indexes } = await db.query(`
+    SELECT idx.relname AS name, i.indisvalid AS valid, i.indisready AS ready,
+      ARRAY(SELECT a.attname::text FROM unnest(i.indkey) WITH ORDINALITY AS k(attnum, n)
+        JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = k.attnum ORDER BY k.n) AS columns
+    FROM pg_index i JOIN pg_class idx ON idx.oid = i.indexrelid
+    JOIN pg_class t ON t.oid = i.indrelid JOIN pg_namespace n ON n.oid = t.relnamespace
+    WHERE n.nspname = current_schema() AND t.relname IN
+      ('Course', 'CourseContent', 'QuizAttempt', 'Certificate', 'CoursePublication', 'PublicationRequest', 'CourseAsset')`);
+  const byIndex = new Map(indexes.map(row => [row.name, row]));
+  for (const [name, expectedColumns] of [
+    ['Course_activePublicationId_idx', ['activePublicationId']],
+    ['CourseContent_courseId_archivedAt_idx', ['courseId', 'archivedAt']],
+    ['QuizAttempt_publicationId_idx', ['publicationId']],
+    ['Certificate_publicationId_idx', ['publicationId']],
+    ['CoursePublication_courseId_sequence_key', ['courseId', 'sequence']],
+    ['CoursePublication_courseId_recordedAt_idx', ['courseId', 'recordedAt']],
+    ['PublicationRequest_publicationId_idx', ['publicationId']],
+    ['CourseAsset_storageKey_key', ['storageKey']],
+    ['CourseAsset_courseId_idx', ['courseId']],
+  ]) assert.deepEqual(byIndex.get(name), { name, valid: true, ready: true, columns: expectedColumns }, `${name} index`);
+  const { rows: triggers } = await db.query(`
+    SELECT tg.tgname AS name, t.relname AS table_name FROM pg_trigger tg
+    JOIN pg_class t ON t.oid = tg.tgrelid JOIN pg_namespace n ON n.oid = t.relnamespace
+    WHERE n.nspname = current_schema() AND NOT tg.tgisinternal`);
+  for (const [table, name] of [
+    ['Course', 'Course_activePublication_same_course'],
+    ['CourseDraft', 'CourseDraft_basePublication_same_course'],
+    ['CoursePublication', 'CoursePublication_previous_same_course'],
+    ['PublicationRequest', 'PublicationRequest_publication_same_course'],
+    ['QuizAttempt', 'QuizAttempt_publication_same_course'],
+    ['Certificate', 'Certificate_publication_same_course'],
+  ]) assert.ok(triggers.some(row => row.table_name === table && row.name === name), `${table} publication-reference trigger missing`);
+}
+
 async function assertCurrentSchema(db) {
   for (const table of [
     'SkillEndorsement', 'CourseContentProgress', 'QuizAttempt', 'ContentReport',
     'RewardLedger', 'RewardLedgerChange', 'CourseCompletionRecord',
-    'AcceptedSolution', 'AcceptedSolutionChange',
+    'AcceptedSolution', 'AcceptedSolutionChange', 'CourseDraft',
+    'CoursePublication', 'PublicationRequest', 'CourseAsset',
   ]) {
     assert.ok((await db.query('SELECT to_regclass($1) AS relation', [`"${table}"`])).rows[0].relation, `${table} missing`);
   }
   await assertAcceptedSolutionSchema(db);
+  await assertCoursePublicationSchema(db);
   const requiredFks = [
     'CourseContentProgress_userId_fkey', 'CourseContentProgress_courseId_fkey',
     'CourseContentProgress_contentId_fkey', 'QuizAttempt_userId_fkey',

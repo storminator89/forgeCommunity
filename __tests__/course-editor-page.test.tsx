@@ -32,21 +32,23 @@ jest.mock('@/app/courses/[courseId]/contents/EditContentForm', () => ({
   },
 }))
 
-const child: CourseContent = { id: 'child', courseId: 'course', title: 'Unterthema', type: 'TEXT', content: '<p>Gespeichert</p>', order: 1, parentId: 'chapter', updatedAt: '2026-10-01T12:00:00.000Z' }
+const child: CourseContent = { id: 'child', courseId: 'course', title: 'Unterthema', type: 'TEXT', content: '<p>Gespeichert</p>', order: 1, parentId: 'chapter', updatedAt: '2026-10-01T12:00:00.000Z', publicationId: 'pub-1', contentVersionToken: 'opaque-child' }
 const chapter: CourseContent = { id: 'chapter', courseId: 'course', title: 'Kapitel', type: 'TEXT', content: '<p>Kapitelinhalt</p>', order: 1, parentId: null, subContents: [child] }
 let mockFailSave = false
 let mockCanEdit = true
 let mockEmptyText = false
+let mockProgressStale = false
 let mockRequest: jest.Mock
 let mockProgress: CourseProgressSnapshot
 
 beforeEach(() => {
   history.replaceState({}, '', '/')
-  mockFailSave = false; mockCanEdit = true; mockEmptyText = false; mockPush.mockClear()
+  mockFailSave = false; mockCanEdit = true; mockEmptyText = false; mockProgressStale = false; mockPush.mockClear()
   mockProgress = { completedContentIds: [], complete: false, canTrack: false, hasCertificate: false, completedAt: null }
   mockRequest = jest.fn(async (input: string, options?: RequestInit) => {
     if (input.endsWith('/progress')) {
       if (options?.method === 'PATCH') {
+        if (mockProgressStale) return { ok: false, status: 412, json: async () => ({ error: 'stale' }) }
         const { contentId, completed } = JSON.parse(String(options.body))
         mockProgress = { ...mockProgress, completedContentIds: completed ? [contentId] : [], complete: completed }
       }
@@ -125,6 +127,21 @@ it('marks a non-quiz leaf complete only after an explicit server-confirmed actio
   fireEvent.click(mark)
   expect(await screen.findByRole('button', { name: 'Abschlussmarkierung entfernen' })).toBeInTheDocument()
   expect(mockRequest.mock.calls.filter(call => call[1]?.method === 'PATCH')).toHaveLength(1)
+  expect(JSON.parse(String(mockRequest.mock.calls.find(call => call[1]?.method === 'PATCH')?.[1]?.body))).toEqual({ contentId: 'child', completed: true, publicationId: 'pub-1', contentVersionToken: 'opaque-child' })
+})
+
+it('keeps the current completion control and progress unchanged on a stale publication', async () => {
+  mockCanEdit = false
+  mockProgressStale = true
+  mockProgress = { completedContentIds: [], complete: false, canTrack: true, hasCertificate: false, completedAt: null }
+  render(<CourseContentsEditor courseId="course" forceLearner />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Kapitel' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Unterthema' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Als abgeschlossen markieren' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('Bitte lade die Ansicht erneut')
+  expect(screen.getByRole('button', { name: 'Als abgeschlossen markieren' })).toBeEnabled()
+  expect(screen.queryByRole('button', { name: 'Abschlussmarkierung entfernen' })).not.toBeInTheDocument()
+  expect(mockProgress.completedContentIds).toEqual([])
 })
 
 it('lädt den in der URL ausgewählten Inhalt wieder', async () => {

@@ -63,6 +63,11 @@ enum ContentType {
   H5P
 }
 
+enum PublicationSource {
+  AUTHOR
+  RESTORE
+}
+
 enum ResourceType {
   ARTICLE
   VIDEO
@@ -322,6 +327,13 @@ model Course {
   rewardEligible Boolean @default(false)
   rewardApprovalRevision String?
   imageUrl     String?
+  // Null is an unpublished course. New courses create a draft transactionally.
+  activePublicationId String?
+  activePublication CoursePublication? @relation("ActiveCoursePublication", fields: [activePublicationId], references: [id], onDelete: SetNull)
+  publications CoursePublication[] @relation("CoursePublicationHistory")
+  draft CourseDraft?
+  publicationRequests PublicationRequest[]
+  assets CourseAsset[]
   enrollments  Enrollment[]
   lessons      Lesson[]
   contents     CourseContent[]
@@ -330,6 +342,8 @@ model Course {
   quizAttempts QuizAttempt[]
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
+
+  @@index([activePublicationId])
 }
 
 model Lesson {
@@ -356,7 +370,79 @@ model CourseContent {
   children  CourseContent[] @relation("ParentChild")
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
+  archivedAt DateTime?
   progress  CourseContentProgress[]
+
+  @@index([courseId, archivedAt])
+}
+
+// Only the explicit publish transaction may project this saved payload into
+// Course/CourseContent. The payload is bounded and validated by authoring code.
+model CourseDraft {
+  courseId String @id
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  revision Int @default(0)
+  basePublicationId String?
+  basePublication CoursePublication? @relation("DraftBasePublication", fields: [basePublicationId], references: [id], onDelete: SetNull)
+  payload String @db.Text
+  digest String
+  lastEditorId String?
+  updatedAt DateTime @updatedAt
+}
+
+// Immutable, author-only snapshots.
+model CoursePublication {
+  id String @id @default(cuid())
+  courseId String
+  course Course @relation("CoursePublicationHistory", fields: [courseId], references: [id], onDelete: Cascade)
+  sequence Int
+  source PublicationSource
+  payload String @db.Text
+  digest String
+  contentCount Int
+  previousPublicationId String?
+  previousPublication CoursePublication? @relation("PreviousCoursePublication", fields: [previousPublicationId], references: [id], onDelete: SetNull)
+  laterPublications CoursePublication[] @relation("PreviousCoursePublication")
+  actorId String?
+  recordedAt DateTime @default(now())
+  activeFor Course[] @relation("ActiveCoursePublication")
+  draftsBasedOn CourseDraft[] @relation("DraftBasePublication")
+  requests PublicationRequest[] @relation("RequestPublication")
+  quizAttempts QuizAttempt[] @relation("AttemptPublication")
+  certificates Certificate[] @relation("CertificatePublication")
+
+  @@unique([courseId, sequence])
+  @@index([courseId, recordedAt])
+}
+
+// The receipt is written even when publishing an unchanged saved payload.
+model PublicationRequest {
+  courseId String
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  requestId String
+  actorId String
+  requestDigest String
+  publicationId String
+  publication CoursePublication @relation("RequestPublication", fields: [publicationId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([courseId, requestId])
+  @@index([publicationId])
+}
+
+// Private files referenced by drafts, active content or publication history.
+// The stable URL is /api/courses/:courseId/assets/:assetId.
+model CourseAsset {
+  id String @id @default(cuid())
+  courseId String
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  uploaderId String?
+  storageKey String @unique
+  contentType String
+  byteSize Int
+  createdAt DateTime @default(now())
+
+  @@index([courseId])
 }
 
 model CourseContentProgress {
@@ -390,10 +476,13 @@ model QuizAttempt {
   score        Float
   passed       Boolean
   submittedAt  DateTime @default(now())
+  publicationId String?
+  publication CoursePublication? @relation("AttemptPublication", fields: [publicationId], references: [id], onDelete: SetNull)
 
   @@unique([userId, contentId, submissionId])
   @@index([userId, contentId, revision, submittedAt])
   @@index([courseId])
+  @@index([publicationId])
 }
 
 model Enrollment {
@@ -693,7 +782,10 @@ model Certificate {
   issuedAt    DateTime  @default(now())
   courseName  String
   userName    String
+  publicationId String?
+  publication CoursePublication? @relation("CertificatePublication", fields: [publicationId], references: [id], onDelete: SetNull)
   
   @@index([userId])
   @@index([courseId])
+  @@index([publicationId])
 }

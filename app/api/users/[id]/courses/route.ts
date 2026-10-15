@@ -1,8 +1,10 @@
 import { PaginationError, readPagination } from '@/lib/server/pagination';
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../../auth/[...nextauth]/options";
+import { activeCourseContentWhere, publishedCourseWhere } from '@/lib/server/published-course';
+import { contentTransaction } from '@/app/api/courses/[courseId]/contents/content-mutations';
+import { profileCourseCompletionStats } from '@/lib/server/course-profile-completion';
 
 export async function GET(
   request: NextRequest,
@@ -19,10 +21,12 @@ export async function GET(
     const { searchParams } = new URL(request.url);
     const { page, limit, skip } = readPagination(searchParams, 6);
 
+    const { courses, total, completion } = await contentTransaction(async tx => {
     const [courses, total] = await Promise.all([
-      prisma.course.findMany({
+      tx.course.findMany({
         where: {
-          instructorId: params.id
+          instructorId: params.id,
+          ...publishedCourseWhere,
         },
         include: {
           instructor: {
@@ -35,17 +39,10 @@ export async function GET(
           _count: {
             select: {
               enrollments: true,
-              lessons: true,
+              contents: { where: activeCourseContentWhere },
             },
           },
-          enrollments: {
-            select: { id: true },
-            where: {
-              completedAt: {
-                not: null
-              }
-            }
-          }
+          enrollments: { select: { userId: true, completedAt: true } }
         },
         orderBy: {
           createdAt: 'desc'
@@ -53,12 +50,15 @@ export async function GET(
         skip,
         take: limit,
       }),
-      prisma.course.count({
+      tx.course.count({
         where: {
-          instructorId: params.id
+          instructorId: params.id,
+          ...publishedCourseWhere,
         }
       })
     ]);
+    return { courses, total, completion: await profileCourseCompletionStats(tx, courses) };
+    });
 
     const formattedCourses = courses.map(course => {
       // Rating logic removed as 'rating' field does not exist on Enrollment
@@ -79,12 +79,11 @@ export async function GET(
         stats: {
           enrollments: course._count.enrollments,
           maxStudents: course.maxStudents,
-          completionRate: course._count.enrollments > 0
-            ? (course.enrollments.length / course._count.enrollments) * 100
-            : 0,
+          completionRate: completion.get(course.id)?.completionRate ?? 0,
+          everCompletionRate: completion.get(course.id)?.everCompletionRate ?? 0,
           rating: averageRating,
           ratingCount: ratingCount,
-          lessonsCount: course._count.lessons,
+          lessonsCount: course._count.contents,
         },
         createdAt: course.createdAt,
       };
@@ -98,7 +97,7 @@ export async function GET(
         currentPage: page,
         hasMore: skip + courses.length < total
       }
-    });
+    }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     if (error instanceof PaginationError) return NextResponse.json({ error: error.message }, { status: 400 });
     console.error('Failed to fetch user courses:', error);

@@ -191,6 +191,7 @@ function ScopedCourseClient({ session }: { session: NonNullable<ReturnType<typeo
               </div>
               <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
                 <Button asChild variant="outline" className="w-full shrink-0 sm:w-auto"><Link href="/courses/goals">Mein Lernziel</Link></Button>
+                <Button asChild variant="outline" className="w-full shrink-0 sm:w-auto"><Link href="/courses/authoring">Meine Kursentwürfe</Link></Button>
                 <Button asChild variant={creatorPerspective ? 'default' : 'outline'} className="w-full shrink-0 sm:w-auto"><Link href="/courses/new"><Plus aria-hidden="true" className="h-4 w-4" />Neuer Kurs</Link></Button>
               </div>
             </div>
@@ -276,7 +277,7 @@ function CourseRow({ course, onDelete, deleting, onJoin, onLeave, pending, canMa
     <article role="listitem" className="min-w-0 py-5 sm:py-6">
       <div className="grid min-w-0 gap-4 sm:grid-cols-[112px_minmax(0,1fr)] lg:grid-cols-[112px_minmax(0,1fr)_minmax(180px,240px)] lg:gap-6">
         <div className="relative hidden h-28 overflow-hidden rounded-2xl border bg-secondary sm:block">
-          {course.imageUrl ? <Image src={course.imageUrl} alt="" fill sizes="112px" className="object-cover" /> : <div className="flex h-full items-center justify-center text-muted-foreground"><BookOpen aria-hidden="true" className="h-8 w-8" /></div>}
+          {course.imageUrl ? <Image src={course.imageUrl} alt="" fill sizes="112px" unoptimized={course.imageUrl.startsWith('/api/courses/')} className="object-cover" /> : <div className="flex h-full items-center justify-center text-muted-foreground"><BookOpen aria-hidden="true" className="h-8 w-8" /></div>}
         </div>
         <div className="min-w-0">
           <div className="flex min-w-0 items-start justify-between gap-3">

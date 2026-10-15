@@ -37,16 +37,17 @@ database(db => {
 function client() {
   const cookies = new Map();
   return async function request(path, { status = 200, method = 'GET', body, headers = {} } = {}) {
+    const multipart = body instanceof FormData;
     const response = await fetch(origin + path, {
       method,
       redirect: 'manual',
       headers: {
         ...(cookies.size ? { cookie: [...cookies].map(([key, value]) => `${key}=${value}`).join('; ') } : {}),
         ...(method !== 'GET' ? { origin } : {}),
-        ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
+        ...(body !== undefined && !multipart && typeof body !== 'string' ? { 'content-type': 'application/json' } : {}),
         ...headers,
       },
-      body: body === undefined ? undefined : typeof body === 'string' ? body : JSON.stringify(body),
+      body: body === undefined ? undefined : multipart || typeof body === 'string' ? body : JSON.stringify(body),
     });
     for (const header of response.headers.getSetCookie()) {
       const [pair] = header.split(';');
@@ -56,6 +57,35 @@ function client() {
     assert.equal(response.status, status, `${method} ${path}: ${await response.clone().text()}`);
     return response;
   };
+}
+
+async function createPublishedTextCourse(author, title, description) {
+  const form = new FormData();
+  form.set('title', title);
+  form.set('description', description);
+  const course = await (await author('/api/courses', { method: 'POST', status: 201, body: form })).json();
+  assert.equal(course.activePublicationId, null, 'A new course must begin as a private draft');
+  const courseId = course.id;
+  const contentIds = [randomUUID(), randomUUID(), randomUUID()];
+  let draft = (await (await author(`/api/courses/${courseId}/authoring`)).json()).draft;
+  for (const [index, id] of contentIds.entries()) {
+    draft = (await (await author(`/api/courses/${courseId}/authoring`, {
+      method: 'PATCH', body: {
+        expectedRevision: draft.revision,
+        operation: {
+          kind: 'insertNode',
+          node: { id, title: `Depth ${index + 1}`, type: 'TEXT', content: '<p>Content</p>' },
+          parentId: index ? contentIds[index - 1] : null,
+          afterId: null,
+        },
+      },
+    })).json()).draft;
+  }
+  const publication = await (await author(`/api/courses/${courseId}/authoring/publish`, {
+    method: 'POST', body: { expectedRevision: draft.revision, expectedActivePublicationId: null, requestId: randomUUID() },
+  })).json();
+  assert.equal(publication.publication.sequence, 1);
+  return { courseId, contentIds };
 }
 
 async function login(request, email, password) {
@@ -70,6 +100,7 @@ async function login(request, email, password) {
 
 const admin = client();
 const member = client();
+const instructor = client();
 const suffix = randomUUID();
 const adminEmail = `audit-admin-${suffix}@example.test`;
 const memberEmail = `audit-member-${suffix}@example.test`;
@@ -96,6 +127,7 @@ const { adminId, memberId, instructorId, skillId } = database(db => {
 
 await login(admin, adminEmail, password);
 await login(member, memberEmail, password);
+await login(instructor, instructorEmail, password);
 await admin('/api/admin/users', {
   method: 'POST', status: 400,
   body: { name: 'Weak Password', email: `weak-${suffix}@example.test`, password: 'weak', role: 'USER' },
@@ -122,20 +154,16 @@ const profile = await (await admin(`/api/users/${memberId}`)).json();
 assert.equal(profile.skills.find(skill => skill.id === userSkill.id)?.endorsements, 1,
   'Duplicate endorsement changed the aggregate count');
 
-const { courseId, contentIds, contentUpdatedAt } = database(db => {
-  const courseId = randomUUID();
-  const contentIds = [randomUUID(), randomUUID(), randomUUID()];
-  const now = new Date().toISOString();
-  db.prepare('INSERT INTO "Course" (id, title, description, instructorId, updatedAt) VALUES (?, ?, ?, ?, ?)')
-    .run(courseId, `Audit Course ${suffix}`, 'Disposable certificate fixture', instructorId, now);
-  db.prepare('INSERT INTO "Enrollment" (id, userId, courseId) VALUES (?, ?, ?)')
-    .run(randomUUID(), memberId, courseId);
-  const insert = db.prepare('INSERT INTO "CourseContent" (id, title, content, "order", courseId, parentId, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)');
-  contentIds.forEach((id, index) => insert.run(id, `Depth ${index + 1}`, 'Content', index, courseId, index ? contentIds[index - 1] : null, now));
-  return { courseId, contentIds, contentUpdatedAt: now };
-});
+const { courseId, contentIds } = await createPublishedTextCourse(instructor, `Audit Course ${suffix}`, 'Disposable certificate fixture');
+await member(`/api/courses/${courseId}/enrollment`, { method: 'POST', status: 201 });
+const contentTree = await (await member(`/api/courses/${courseId}/contents`)).json();
+const leaf = contentTree[0]?.subContents?.[0]?.subContents?.[0];
+assert.equal(leaf?.id, contentIds.at(-1), 'Published course leaf missing from learner tree');
 const completion = await (await member(`/api/courses/${courseId}/progress`, {
-  method: 'PATCH', body: { contentId: contentIds.at(-1), completed: true, contentUpdatedAt },
+  method: 'PATCH', body: {
+    contentId: leaf.id, completed: true,
+    publicationId: leaf.publicationId, contentVersionToken: leaf.contentVersionToken,
+  },
 })).json();
 assert.equal(completion.complete, true, 'Certificate fixture did not complete the current course leaf');
 const certificateResponses = await Promise.all([1, 2].map(() => member(`/api/courses/${courseId}/certificate`, { method: 'POST' })));
@@ -171,24 +199,23 @@ assert.equal(Buffer.from(await retainedPdf.arrayBuffer()).subarray(0, 5).toStrin
 
 // An instructor with only their own certificates remains eligible for erasure.
 // Include their own proof for another instructor's protected course as well.
-const eligible = database(db => {
+const eligibleUserId = database(db => {
   const id = randomUUID();
-  const ownCourseId = randomUUID();
-  const ownContentIds = [randomUUID(), randomUUID(), randomUUID()];
   const now = new Date().toISOString();
   db.prepare('INSERT INTO "User" (id, email, role, updatedAt) VALUES (?, ?, ?, ?)')
     .run(id, `erasable-instructor-${suffix}@example.test`, 'INSTRUCTOR', now);
   db.prepare('INSERT INTO "UserSettings" (id, userId) VALUES (?, ?)').run(randomUUID(), id);
-  db.prepare('INSERT INTO "Course" (id, title, description, instructorId, updatedAt) VALUES (?, ?, ?, ?, ?)')
-    .run(ownCourseId, `Own Certificate Course ${suffix}`, 'Disposable own-certificate fixture', id, now);
-  const insertContent = db.prepare('INSERT INTO "CourseContent" (id, title, content, "order", courseId, parentId, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)');
-  ownContentIds.forEach((contentId, index) => insertContent.run(contentId, `Depth ${index + 1}`, 'Content', index, ownCourseId, index ? ownContentIds[index - 1] : null, now));
-  db.prepare('INSERT INTO "Enrollment" (id, userId, courseId) VALUES (?, ?, ?)').run(randomUUID(), memberId, ownCourseId);
+  return id;
+});
+const own = await createPublishedTextCourse(admin, `Own Certificate Course ${suffix}`, 'Disposable own-certificate fixture');
+const eligible = database(db => {
+  db.prepare('UPDATE "Course" SET instructorId=? WHERE id=?').run(eligibleUserId, own.courseId);
+  db.prepare('INSERT INTO "Enrollment" (id, userId, courseId) VALUES (?, ?, ?)').run(randomUUID(), memberId, own.courseId);
   const certificateIds = [randomUUID(), randomUUID()];
   const insertCertificate = db.prepare('INSERT INTO "Certificate" (id, userId, courseId, courseName, userName) VALUES (?, ?, ?, ?, ?)');
-  insertCertificate.run(certificateIds[0], id, ownCourseId, `Own Certificate Course ${suffix}`, 'Erasable Instructor');
-  insertCertificate.run(certificateIds[1], id, courseId, `Audit Course ${suffix}`, 'Erasable Instructor');
-  return { id, courseId: ownCourseId, contentIds: ownContentIds, certificateIds };
+  insertCertificate.run(certificateIds[0], eligibleUserId, own.courseId, `Own Certificate Course ${suffix}`, 'Erasable Instructor');
+  insertCertificate.run(certificateIds[1], eligibleUserId, courseId, `Audit Course ${suffix}`, 'Erasable Instructor');
+  return { id: eligibleUserId, courseId: own.courseId, contentIds: own.contentIds, certificateIds };
 });
 await admin(`/api/admin/users/${eligible.id}`, { method: 'DELETE' });
 database(db => {

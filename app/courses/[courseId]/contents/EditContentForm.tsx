@@ -21,9 +21,11 @@ interface EditContentFormProps {
   onCancel: () => void;
   saveState?: 'saved' | 'dirty';
   saveMessage?: string;
+  staged?: boolean;
+  onImageUpload?: (file: File) => Promise<string>;
 }
 
-export function EditContentForm({ content: initialContent, onSubmit, onContentChange, onCancel, saveState, saveMessage }: EditContentFormProps) {
+export function EditContentForm({ content: initialContent, onSubmit, onContentChange, onCancel, saveState, saveMessage, staged = false, onImageUpload }: EditContentFormProps) {
   const fieldId = useId();
   const initialType = inferContentType(initialContent);
   const [title, setTitle] = useState(initialContent.title);
@@ -57,7 +59,7 @@ export function EditContentForm({ content: initialContent, onSubmit, onContentCh
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (saving.current || isH5PBusy) return;
-    const validationError = !title.trim() ? 'Gib einen Titel ein.' : getContentValidationError(type, content);
+    const validationError = staged ? null : !title.trim() ? 'Gib einen Titel ein.' : getContentValidationError(type, content);
     if (validationError) { setError(validationError); return; }
     saving.current = true;
     setIsSubmitting(true);
@@ -85,7 +87,7 @@ export function EditContentForm({ content: initialContent, onSubmit, onContentCh
       <fieldset disabled={isSubmitting || isH5PBusy} className="space-y-5 min-w-0">
         <div className="space-y-2">
           <Label htmlFor={`${fieldId}-title`}>Titel</Label>
-          <Input id={`${fieldId}-title`} value={title} required maxLength={300} onChange={event => { setTitle(event.target.value); onContentChange({ title: event.target.value }); setError(null); }} />
+          <Input id={`${fieldId}-title`} value={title} required={!staged} maxLength={300} onChange={event => { setTitle(event.target.value); onContentChange({ title: event.target.value }); setError(null); }} />
         </div>
         <div className="space-y-2">
           <Label>Inhaltstyp</Label>
@@ -105,7 +107,7 @@ export function EditContentForm({ content: initialContent, onSubmit, onContentCh
               <Label id={`${fieldId}-text-label`} htmlFor={htmlMode ? `${fieldId}-html` : undefined}>Inhalt</Label>
               <div className="flex items-center gap-2"><Label htmlFor={`${fieldId}-html-mode`}>HTML</Label><Switch id={`${fieldId}-html-mode`} checked={htmlMode} onCheckedChange={setHtmlMode} /></div>
             </div>
-            {htmlMode ? <Textarea id={`${fieldId}-html`} value={draftString(content)} onChange={event => updateContent(event.target.value)} className="min-h-64 font-mono" /> : <div role="group" aria-labelledby={`${fieldId}-text-label`}><Editor content={draftString(content)} onChange={updateContent} readOnly={isSubmitting} className="min-h-56" /></div>}
+            {htmlMode ? <Textarea id={`${fieldId}-html`} value={draftString(content)} onChange={event => updateContent(event.target.value)} className="min-h-64 font-mono" /> : <div role="group" aria-labelledby={`${fieldId}-text-label`}><Editor content={draftString(content)} onChange={updateContent} readOnly={isSubmitting} uploadImage={onImageUpload} className="min-h-56" /></div>}
           </div>
         ) : type === 'H5P' ? (
           <H5PSourceField id={`${fieldId}-source`} value={draftString(content)} onChange={updateContent} disabled={isSubmitting || isH5PBusy} onBusyChange={setIsH5PBusy} />
@@ -118,9 +120,9 @@ export function EditContentForm({ content: initialContent, onSubmit, onContentCh
         )}
       </fieldset>
       <div className="sticky bottom-0 z-10 space-y-3 border-t bg-card py-4">
-        <p className="text-xs text-muted-foreground">{saveMessage || 'Änderungen werden nach dem Speichern für eingeschriebene Lernende sichtbar.'}</p>
+        <p className="text-xs text-muted-foreground">{saveMessage || (staged ? 'Für Lernende noch nicht sichtbar.' : 'Änderungen werden nach dem Speichern für eingeschriebene Lernende sichtbar.')}</p>
         <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="outline" disabled={isSubmitting || isH5PBusy} onClick={onCancel}>Abbrechen</Button>
-        <Button type="submit" disabled={isSubmitting || isH5PBusy || !title.trim()}>{isSubmitting ? 'Wird gespeichert…' : 'Speichern'}</Button></div>
+        <Button type="submit" disabled={isSubmitting || isH5PBusy || (!staged && !title.trim())}>{isSubmitting ? 'Wird gespeichert…' : staged ? 'Entwurf speichern' : 'Speichern'}</Button></div>
       </div>
     </form>
   );

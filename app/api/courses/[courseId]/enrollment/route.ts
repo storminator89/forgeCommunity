@@ -22,8 +22,8 @@ export async function POST(_request: Request, { params }: Context) {
   const { courseId } = await params;
   try {
     const result = await participationTransaction(async tx => {
-      const course = await tx.course.findUnique({ where: { id: courseId }, select: { price: true, maxStudents: true } });
-      if (!course) throw new ParticipationError('Course not found', 404);
+      const course = await tx.course.findUnique({ where: { id: courseId }, select: { price: true, maxStudents: true, activePublicationId: true } });
+      if (!course?.activePublicationId) throw new ParticipationError('Course not found', 404);
       const existing = await tx.enrollment.findUnique({
         where: { userId_courseId: { userId, courseId } }, select: { id: true },
       });
@@ -49,8 +49,8 @@ export async function DELETE(_request: Request, { params }: Context) {
   const { courseId } = await params;
   try {
     const participants = await participationTransaction(async tx => {
-      const course = await tx.course.findUnique({ where: { id: courseId }, select: { price: true } });
-      if (!course) throw new ParticipationError('Course not found', 404);
+      const course = await tx.course.findUnique({ where: { id: courseId }, select: { price: true, activePublicationId: true } });
+      if (!course?.activePublicationId) throw new ParticipationError('Course not found', 404);
       if (course.price !== null && course.price > 0) throw new ParticipationError('Paid enrollment cannot be cancelled here', 403);
       const existing = await tx.enrollment.findUnique({
         where: { userId_courseId: { userId, courseId } }, select: { completedAt: true },

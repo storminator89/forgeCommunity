@@ -2,9 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../auth/[...nextauth]/options';
-import { ImageUploadValidationError, saveImageUpload } from '@/lib/server/image-upload';
 import { requestWithBodyLimit, RequestBodyLimitError } from '@/lib/server/request-body';
 import { courseContentRevision, courseLeaves } from '@/lib/server/course-progress';
+import { publishedCourseWhere, activeCourseContentWhere } from '@/lib/server/published-course';
+import { publicationDigest, type CoursePayload } from '@/lib/server/course-authoring';
+import { sanitizeTextServer } from '@/lib/server/sanitize-html';
+import { contentTransaction } from './[courseId]/contents/content-mutations';
 
 const MAX_MULTIPART_REQUEST_BYTES = 5 * 1024 * 1024 + 256 * 1024;
 
@@ -29,7 +32,9 @@ export async function GET() {
   try {
     const session = await getServerSession(authOptions);
     const userId = session?.user?.id;
-    const courses = await prisma.course.findMany({
+    const formattedCourses = await contentTransaction(async tx => {
+    const courses = await tx.course.findMany({
+      where: publishedCourseWhere,
       select: {
         id: true,
         title: true,
@@ -56,11 +61,11 @@ export async function GET() {
     // courses; quiz answer keys never leave the server.
     const enrolledCourseIds = userId ? courses.filter(course => course.enrollments.length > 0).map(course => course.id) : [];
     const [contents, progress] = enrolledCourseIds.length ? await Promise.all([
-      prisma.courseContent.findMany({
-        where: { courseId: { in: enrolledCourseIds } },
+      tx.courseContent.findMany({
+        where: { courseId: { in: enrolledCourseIds }, ...activeCourseContentWhere },
         select: { id: true, courseId: true, parentId: true, type: true, content: true, order: true },
       }),
-      prisma.courseContentProgress.findMany({
+      tx.courseContentProgress.findMany({
         where: { userId: userId!, courseId: { in: enrolledCourseIds } },
         select: { courseId: true, contentId: true, revision: true },
       }),
@@ -83,7 +88,7 @@ export async function GET() {
       return [courseId, leaves.length > 0 && leaves.every(leaf => revisions?.get(leaf.id) === courseContentRevision(leaf))] as const;
     }));
 
-    const formattedCourses = courses.map(course => ({
+    return courses.map(course => ({
       id: course.id,
       title: course.title,
       instructor: course.instructor.name,
@@ -105,6 +110,7 @@ export async function GET() {
       canDelete: !!userId && (course.instructorId === userId || session?.user?.role === 'ADMIN'),
       imageUrl: course.imageUrl,
     }));
+    });
 
     return NextResponse.json(formattedCourses, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
@@ -120,6 +126,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+
   try {
     const contentLength = Number(request.headers.get('content-length'));
     if (Number.isFinite(contentLength) && contentLength > MAX_MULTIPART_REQUEST_BYTES) {
@@ -131,10 +138,14 @@ export async function POST(request: NextRequest) {
     const description = formData.get('description');
     const currency = formData.get('currency');
     const image = formData.get('image');
-    if (typeof title !== 'string' || !title.trim() || typeof description !== 'string' || !description.trim() ||
+    if (typeof title !== 'string' || !title.trim() || title.length > 300 ||
+        typeof description !== 'string' || !description.trim() || description.length > 10_000 ||
         (currency !== null && typeof currency !== 'string') || (image !== null && !(image instanceof File))) {
       return NextResponse.json({ error: 'Invalid course fields' }, { status: 400 });
     }
+    // A newly created course is a private draft. The legacy upload writes to
+    // public/, so require subsequent use of the authenticated course asset API.
+    if (image) return NextResponse.json({ error: 'Bitte den Kurs zuerst anlegen und das Bild anschließend privat hochladen.' }, { status: 400 });
     let startDate: Date | null;
     let endDate: Date | null;
     let price: number | null;
@@ -151,38 +162,32 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'End date precedes start date' }, { status: 400 });
     }
 
-    let imageUrl = null;
-    if (image) {
-      imageUrl = await saveImageUpload(image, 'course');
+    const staged: CoursePayload = { schemaVersion: 1, title: sanitizeTextServer(title),
+      description: sanitizeTextServer(description), startDate: startDate?.toISOString() ?? null,
+      endDate: endDate?.toISOString() ?? null, imageUrl: null, contents: [] };
+    if (!staged.title || !staged.description) {
+      return NextResponse.json({ error: 'Invalid course fields' }, { status: 400 });
     }
-
-    const newCourse = await prisma.course.create({
-      data: {
-        title: title.trim(),
-        description: description.trim(),
-        startDate,
-        endDate,
-        price,
-        currency: currency || null,
-        maxStudents,
-        imageUrl,
-        instructor: {
-          connect: { id: session.user.id }
-        }
-      },
-      include: {
-        instructor: {
-          select: { name: true }
-        }
-      }
+    const newCourse = await prisma.$transaction(async tx => {
+      const course = await tx.course.create({
+        data: {
+          title: 'Unveröffentlichter Kurs', description: '', price,
+          currency: currency || null, maxStudents,
+          instructor: { connect: { id: session.user.id } },
+        },
+        include: { instructor: { select: { name: true } } },
+      });
+      await tx.courseDraft.create({ data: { courseId: course.id, revision: 0,
+        payload: JSON.stringify(staged), digest: publicationDigest(staged), lastEditorId: session.user.id } });
+      return course;
     });
 
-    return NextResponse.json(newCourse, { status: 201 });
+    return NextResponse.json(newCourse, { status: 201, headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     console.error('Failed to create course:', error);
     return NextResponse.json(
-      { error: error instanceof ImageUploadValidationError ? error.message : 'Failed to create course' },
-      { status: error instanceof ImageUploadValidationError ? 400 : error instanceof RequestBodyLimitError ? 413 : 500 }
+      { error: 'Failed to create course' },
+      { status: error instanceof RequestBodyLimitError ? 413 : 500 }
     );
   }
 }

@@ -13,7 +13,7 @@ jest.mock('@/components/user-nav', () => ({ UserNav: () => null }))
 jest.mock('@/components/Editor', () => ({ Editor: ({ content, onChange, readOnly }: { content: string; onChange: (value: string) => void; readOnly?: boolean }) => <textarea aria-label="Lektionstext" value={content} disabled={readOnly} onChange={event => onChange(event.target.value)} /> }))
 jest.mock('@/app/courses/[courseId]/contents/QuizEditor', () => ({ QuizEditor: ({ onChange }: { onChange?: (value: QuizContent) => void }) => <button type="button" onClick={() => onChange?.({ questions: [{ id: 'draft-question', type: 'SINGLE_CHOICE', question: 'Lokale Quizfrage?', options: ['Richtig', 'Andere'], correctAnswers: [0] }], passingScore: 70 })}>Quizentwurf ändern</button> }))
 
-const lesson = (id: string, overrides: Partial<CourseContent> = {}): CourseContent => ({ id, courseId: 'course', parentId: null, title: id, type: 'TEXT', content: '<p>Gespeicherter Lerninhalt</p>', order: 1, updatedAt: '2026-10-15T08:00:00.000Z', ...overrides })
+const lesson = (id: string, overrides: Partial<CourseContent> = {}): CourseContent => ({ id, courseId: 'course', parentId: null, title: id, type: 'TEXT', content: '<p>Gespeicherter Lerninhalt</p>', order: 1, updatedAt: '2026-10-15T08:00:00.000Z', publicationId: 'pub-1', contentVersionToken: `opaque-${id}`, ...overrides })
 const quiz: QuizContent = { questions: [{ id: 'saved-question', type: 'SINGLE_CHOICE', question: 'Gespeicherte Quizfrage?', options: ['Richtig', 'Andere'], correctAnswers: [0] }], passingScore: 70 }
 const response = (data: unknown, status = 200) => ({ ok: status >= 200 && status < 300, status, json: async () => data }) as Response
 let mockTree: CourseContent[]
@@ -74,7 +74,7 @@ it('uses the URL selection in author mode and keeps real learner completion and 
   expect(mockWrite).not.toHaveBeenCalled()
   await user.click(screen.getByRole('button', { name: 'Als abgeschlossen markieren' }))
   await screen.findByRole('button', { name: 'Abschlussmarkierung entfernen' })
-  expect(mockWrite).toHaveBeenCalledWith('/api/courses/course/progress', expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ contentId: 'lesson', completed: true, contentUpdatedAt: '2026-10-15T08:00:00.000Z' }) }))
+  expect(mockWrite).toHaveBeenCalledWith('/api/courses/course/progress', expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ contentId: 'lesson', completed: true, publicationId: 'pub-1', contentVersionToken: 'opaque-lesson' }) }))
   await user.click(screen.getByRole('button', { name: 'Bearbeiten' }))
   expect(screen.getByLabelText('Titel')).toHaveValue('Lektion')
   expect(location.search).toBe('?content=lesson')
