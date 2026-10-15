@@ -32,6 +32,7 @@ const reviewedUpgradeNames = [
   '0010_question_bank.sql',
   '0011_manual_assignments.sql',
   '0012_verified_learning_pathways.sql',
+  '0013_quiz_confidence_evidence.sql',
 ];
 // A release image must carry the exact reviewed sequence, including the tail.
 assert.deepEqual(upgradeNames, reviewedUpgradeNames);
@@ -366,7 +367,7 @@ async function assertCoursePublicationSchema(db) {
 
 async function assertCurrentSchema(db) {
   for (const table of [
-    'SkillEndorsement', 'CourseContentProgress', 'QuizAttempt', 'ContentReport',
+    'SkillEndorsement', 'CourseContentProgress', 'QuizAttempt', 'QuizAttemptItemEvidence', 'ContentReport',
     'RewardLedger', 'RewardLedgerChange', 'CourseCompletionRecord',
     'AcceptedSolution', 'AcceptedSolutionChange', 'CourseDraft',
     'CoursePublication', 'PublicationRequest', 'CourseAsset',
@@ -380,6 +381,7 @@ async function assertCurrentSchema(db) {
   const requiredFks = [
     'CourseContentProgress_userId_fkey', 'CourseContentProgress_courseId_fkey',
     'CourseContentProgress_contentId_fkey', 'QuizAttempt_userId_fkey',
+    'QuizAttemptItemEvidence_attemptId_fkey',
     'QuizAttempt_courseId_fkey', 'RewardLedger_userId_fkey',
     'RewardLedgerChange_ledgerId_fkey', 'CourseCompletionRecord_userId_fkey',
     'Post_authorId_fkey', 'Comment_postId_fkey', 'Comment_authorId_fkey',
@@ -391,7 +393,7 @@ async function assertCurrentSchema(db) {
     JOIN pg_class t ON t.oid = c.conrelid
     JOIN pg_namespace n ON n.oid = t.relnamespace
     WHERE n.nspname = current_schema() AND c.contype = 'f' AND t.relname IN
-      ('CourseContentProgress', 'QuizAttempt', 'RewardLedger', 'RewardLedgerChange', 'CourseCompletionRecord', 'Post', 'Comment', 'LikePost', 'LikeComment')`);
+      ('CourseContentProgress', 'QuizAttempt', 'QuizAttemptItemEvidence', 'RewardLedger', 'RewardLedgerChange', 'CourseCompletionRecord', 'Post', 'Comment', 'LikePost', 'LikeComment')`);
   const byName = new Map(foreignKeys.map(fk => [fk.name, fk]));
   for (const name of requiredFks) {
     const fk = byName.get(name);
