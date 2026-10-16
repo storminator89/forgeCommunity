@@ -12,9 +12,9 @@ export function SpaceShell({ children }: { children: ReactNode }) {
     <Sidebar />
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <AppHeader>
-        <div className="flex min-w-0 items-center justify-between gap-3">
-          <Link href="/community/spaces" className="min-w-0 truncate text-base font-semibold text-foreground underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Spaces</Link>
-          <div className="flex shrink-0 items-center gap-2"><ThemeToggle /><UserNav /></div>
+        <div className="app-header-row">
+          <Link href="/community/spaces" className="app-header-title text-base font-semibold text-foreground underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Spaces</Link>
+          <div className="app-header-actions"><ThemeToggle /><UserNav /></div>
         </div>
       </AppHeader>
       <main id="page-content" tabIndex={-1} className="min-h-0 min-w-0 flex-1 overflow-y-auto">

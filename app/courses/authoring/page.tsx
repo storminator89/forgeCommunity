@@ -57,7 +57,7 @@ function ScopedAuthorCourses() {
   return <AppShell>
     <Sidebar />
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      <AppHeader><div className="flex items-center justify-between gap-3"><h1 className="min-w-0 truncate">Meine Kursentwürfe</h1><div className="flex shrink-0 items-center gap-1 sm:gap-2"><ThemeToggle /><UserNav /></div></div></AppHeader>
+      <AppHeader><div className="app-header-row"><h1 className="app-header-title">Meine Kursentwürfe</h1><div className="app-header-actions"><ThemeToggle /><UserNav /></div></div></AppHeader>
       <main id="page-content" tabIndex={-1} className="min-w-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-[1080px] px-4 pb-16 pt-7 sm:px-6 sm:pt-10 lg:px-8">
           <Link href="/courses" className="inline-flex min-h-11 items-center text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:rounded-sm">← Zur Kursübersicht</Link>

@@ -45,6 +45,33 @@ async function main() {
     return rule;
   }
 
+  // Shared header reflow is explicit geometry, not an overflow-hidden fix.
+  // Keep this separate from the existing topic-filter and palette contracts;
+  // real browser title/control rectangles remain the acceptance evidence.
+  const headerDeclarations = {
+    '.app-header-layout': { display: 'flex', 'flex-wrap': 'wrap' },
+    '.app-header-row': { display: 'contents' },
+    '.app-header-leading': { display: 'contents' },
+    '.app-header-title': { flex: '1 1 6rem', 'min-inline-size': 'min(100%, 6rem)', 'max-inline-size': '100%', 'overflow-wrap': 'anywhere' },
+    '.app-header-actions': { display: 'flex', 'flex-wrap': 'wrap', 'min-inline-size': '0', 'max-inline-size': '100%' },
+    '.app-header .fc-button': { 'min-inline-size': '44px', 'min-block-size': '44px' },
+    '.app-menu': { flex: 'none' },
+  };
+  for (const [selector, declarations] of Object.entries(headerDeclarations)) {
+    const matches = rules.filter(rule => rule.selector.split(',').map(part => part.trim()).includes(selector) && mediaQueries(rule).length === 0);
+    assert.equal(matches.length, 1, `Missing or ambiguous compiled shared-header slot ${selector}`);
+    for (const [property, value] of Object.entries(declarations)) {
+      assert.ok(matches[0].nodes.some(node => node.type === 'decl' && node.prop === property && node.value.replace(/\s/g, '') === value.replace(/\s/g, '') && !node.important), `Missing compiled reflow declaration ${selector}: ${property}: ${value}`);
+    }
+  }
+  for (const rule of rules.filter(rule => /\.app-header|\.app-menu/.test(rule.selector))) {
+    assert.ok(!/\.app-header\s*>\s*div/.test(rule.selector), 'Header geometry must not depend on arbitrary nested divs');
+    rule.walkDecls(declaration => {
+      if (['overflow', 'overflow-x', 'overflow-y'].includes(declaration.prop)) assert.ok(!/hidden|clip/.test(declaration.value), `Header must reflow instead of clipping: ${rule.selector}`);
+      if (rule.selector === '.app-menu') assert.ok(!(declaration.prop === 'position' && declaration.value === 'absolute'), 'The mobile menu must participate in header reflow');
+    });
+  }
+
   expectClass('bg-background', 'background-color', 'hsl(var(--background))');
   expectClass('text-foreground', 'color', 'hsl(var(--foreground))');
   expectClass('bg-white', 'background-color');
@@ -142,7 +169,7 @@ async function main() {
   assert.ok(buttonTransition.toString().includes('translate'), 'Button active translation must animate');
   const darkRule = expectClass('dark:scale-0', 'scale');
   assert.ok(darkRule.selector.includes('.dark'), 'Dark mode must follow the .dark class');
-  console.log('Tailwind v4 utility, token, native-progress, dark-mode, focus, animation, and transition checks passed');
+  console.log('Tailwind v4 utility, token, shared-header reflow, native-progress, dark-mode, focus, animation, and transition checks passed');
 }
 
 main().catch((error) => {

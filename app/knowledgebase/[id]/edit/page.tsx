@@ -212,7 +212,7 @@ function AccountEditArticle({ id, accountId, status }: { id: string; accountId: 
 
   if (status === 'loading' || (accountId && isLoading)) {
     return (
-      <AppShell><Sidebar /><div className="flex min-h-0 min-w-0 flex-1 flex-col"><AppHeader><div><h1>Artikel bearbeiten</h1></div></AppHeader><main id="page-content" tabIndex={-1} className="flex min-h-0 flex-1 items-center justify-center p-4"><PageState kind="loading" title="Artikel wird geladen" /></main></div></AppShell>
+      <AppShell><Sidebar /><div className="flex min-h-0 min-w-0 flex-1 flex-col"><AppHeader><div className="app-header-row"><h1 className="app-header-title">Artikel bearbeiten</h1></div></AppHeader><main id="page-content" tabIndex={-1} className="flex min-h-0 flex-1 items-center justify-center p-4"><PageState kind="loading" title="Artikel wird geladen" /></main></div></AppShell>
     );
   }
 
@@ -221,7 +221,7 @@ function AccountEditArticle({ id, accountId, status }: { id: string; accountId: 
       <Sidebar />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <AppHeader>
-          <div className="flex min-w-0 items-center justify-between gap-3"><h1>Artikel bearbeiten</h1><div className="flex shrink-0 items-center gap-2"><ThemeToggle /><UserNav /></div></div>
+          <div className="app-header-row"><h1 className="app-header-title">Artikel bearbeiten</h1><div className="app-header-actions"><ThemeToggle /><UserNav /></div></div>
         </AppHeader>
 
         <main id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto">

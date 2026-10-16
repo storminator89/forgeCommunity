@@ -33,7 +33,7 @@ export default function About() {
     <AppShell>
       <Sidebar />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <AppHeader><div className="flex min-w-0 items-center justify-between gap-3"><span className="min-w-0 truncate text-sm font-semibold">Über uns</span><div className="flex shrink-0 items-center gap-2"><ThemeToggle /><UserNav /></div></div></AppHeader>
+        <AppHeader><div className="app-header-row"><span className="app-header-title text-sm font-semibold">Über uns</span><div className="app-header-actions"><ThemeToggle /><UserNav /></div></div></AppHeader>
         <main id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-[1100px] px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
             <section className="border-b pb-10 sm:pb-14">

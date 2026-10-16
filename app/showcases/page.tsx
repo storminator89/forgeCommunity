@@ -409,7 +409,7 @@ function ProjectShowcaseForViewer({ session }: { session: Session | null }) {
     <AppShell>
       <Sidebar />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <AppHeader><div className="flex min-w-0 items-center justify-between gap-3"><h1 className="min-w-0 truncate">Projekte</h1><div className="flex shrink-0 items-center gap-2"><ThemeToggle /><UserNav /></div></div></AppHeader>
+        <AppHeader><div className="app-header-row"><h1 className="app-header-title">Projekte</h1><div className="app-header-actions"><ThemeToggle /><UserNav /></div></div></AppHeader>
         <main id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-[1440px] px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
             <div className="flex flex-wrap items-end justify-between gap-5 border-b pb-7"><div><p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Community / Projekte</p><p className="mt-2 max-w-[55ch] text-base leading-relaxed text-muted-foreground">Entdecke Arbeiten, Ideen und Erfahrungen aus der Community.</p></div>{session && <Button type="button" onClick={() => setIsSubmitDialogOpen(true)}><Plus className="h-4 w-4" aria-hidden="true" />Projekt einreichen</Button>}</div>

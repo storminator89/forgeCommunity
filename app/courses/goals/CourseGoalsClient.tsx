@@ -112,7 +112,7 @@ function ScopedCourseGoals({ canSeePathways }: { canSeePathways: boolean }) {
   return <AppShell>
     <Sidebar />
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      <AppHeader><div className="flex items-center justify-between gap-3"><h1>Mein Lernziel</h1><div className="flex items-center gap-2"><ThemeToggle /><UserNav /></div></div></AppHeader>
+      <AppHeader><div className="app-header-row"><h1 className="app-header-title">Mein Lernziel</h1><div className="app-header-actions"><ThemeToggle /><UserNav /></div></div></AppHeader>
       <main id="page-content" tabIndex={-1} className="min-w-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-3xl px-4 pb-16 pt-8 sm:px-6 sm:pt-10">
           <Link href="/courses" className="text-sm text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Zur Kursübersicht</Link>

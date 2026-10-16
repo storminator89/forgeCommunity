@@ -27,7 +27,7 @@ function PathwaysAccessDenied() {
   return <AppShell>
     <Sidebar hideLearnerPathways />
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      <AppHeader><div className="flex items-center justify-between gap-3"><h1>Lernpfade</h1><div className="flex shrink-0 items-center gap-1 sm:gap-2"><ThemeToggle /><UserNav /></div></div></AppHeader>
+      <AppHeader><div className="app-header-row"><h1 className="app-header-title">Lernpfade</h1><div className="app-header-actions"><ThemeToggle /><UserNav /></div></div></AppHeader>
       <main id="page-content" tabIndex={-1} className="min-w-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-2xl px-4 py-12 sm:px-6">
           <PageState kind="error" title="Kein Zugriff auf Lernpfade"
@@ -170,7 +170,7 @@ function ScopedPathways({ pathwayId }: { pathwayId?: string }) {
   return <AppShell>
     <Sidebar />
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      <AppHeader><div className="flex items-center justify-between gap-3"><h1>{pathwayId ? 'Mein Lernpfad' : 'Lernpfade'}</h1><div className="flex shrink-0 items-center gap-1 sm:gap-2"><ThemeToggle /><UserNav /></div></div></AppHeader>
+      <AppHeader><div className="app-header-row"><h1 className="app-header-title">{pathwayId ? 'Mein Lernpfad' : 'Lernpfade'}</h1><div className="app-header-actions"><ThemeToggle /><UserNav /></div></div></AppHeader>
       <main id="page-content" tabIndex={-1} className="min-w-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-5xl px-4 pb-16 pt-7 sm:px-6 sm:pt-10 lg:px-8">
           <nav aria-label="Brotkrumen" className="flex items-center gap-2 text-sm text-muted-foreground">

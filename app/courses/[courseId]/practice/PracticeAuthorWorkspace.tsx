@@ -419,7 +419,7 @@ export function PracticeAuthorWorkspace({ courseId, sessionStatus }: { courseId:
   const classInput = 'min-h-11'
   const classSelect = 'min-h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50'
   return <AppShell><Sidebar /><div className="min-w-0 flex-1">
-    <AppHeader><div className="flex min-w-0 flex-1 items-center justify-between gap-2"><span className="min-w-0 truncate font-semibold">Kursautorenschaft</span><div className="flex shrink-0 items-center gap-1"><ThemeToggle /><UserNav /></div></div></AppHeader>
+    <AppHeader><div className="app-header-row"><span className="app-header-title font-semibold">Kursautorenschaft</span><div className="app-header-actions"><ThemeToggle /><UserNav /></div></div></AppHeader>
     <main id="page-content" tabIndex={-1} className="min-w-0 px-4 py-5 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl space-y-8">
         <div className="space-y-3 border-b pb-5">

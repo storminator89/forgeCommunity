@@ -95,7 +95,7 @@ export function CourseAnalytics({ courseId, accountId, sessionStatus }: { course
   return <AppShell>
     <Sidebar />
     <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-      <AppHeader><div className="flex min-w-0 items-center justify-between gap-2"><h1 className="min-w-0 break-words text-base font-semibold [overflow-wrap:anywhere]">Kursanalyse</h1><div className="flex shrink-0 items-center gap-1"><ThemeToggle /><UserNav /></div></div></AppHeader>
+      <AppHeader><div className="app-header-row"><h1 className="app-header-title break-words text-base font-semibold [overflow-wrap:anywhere]">Kursanalyse</h1><div className="app-header-actions"><ThemeToggle /><UserNav /></div></div></AppHeader>
       <main id="page-content" tabIndex={-1} className="min-w-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-6xl space-y-7">
           <div className="space-y-3 border-b pb-6">

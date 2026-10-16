@@ -227,21 +227,55 @@
   .app-shell > div:not([data-radix-popper-content-wrapper]) { min-width: 0; min-height: 0; }
   .app-sidebar { height: 100dvh; }
   .app-header { @apply relative z-20 shrink-0 border-b bg-card; }
-  .app-header > div { @apply mx-auto w-full max-w-[1600px] px-4 py-4 sm:px-6 lg:px-8; }
-  @media (max-width: 1023px) {
-    .app-header > div { padding-left: 4.25rem; }
+  .app-header-layout {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: min(.5rem, 12px);
+    row-gap: min(.75rem, 16px);
+    width: 100%;
+    max-width: 1600px;
+    margin-inline: auto;
+    /* Keep the menu's original mobile inset without scaling an empty reserve. */
+    padding: min(1rem, 16px) min(1rem, 16px) min(1rem, 16px) 12px;
+  }
+  /* Only these explicitly structural wrappers join the shared flex line. */
+  .app-header-row, .app-header-leading { display: contents; }
+  .app-header-title {
+    flex: 1 1 6rem;
+    min-inline-size: min(100%, 6rem);
+    max-inline-size: 100%;
+    overflow-wrap: anywhere;
+  }
+  .app-header-actions {
+    display: flex;
+    flex: 0 1 auto;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: min(.5rem, 12px);
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    margin-inline-start: auto;
+  }
+  .app-header .fc-button {
+    flex-shrink: 0;
+    min-inline-size: 44px;
+    min-block-size: 44px;
+  }
+  @media (min-width: 640px) {
+    .app-header-layout { padding-inline-end: min(1.5rem, 32px); }
+  }
+  @media (min-width: 1024px) {
+    .app-header-layout { padding-inline: min(2rem, 48px); }
   }
   .app-header h1, .app-header h2 {
     @apply font-semibold tracking-tight text-foreground;
     font-size: clamp(1.3rem, 1.06rem + 1vw, 1.75rem);
     line-height: 1.2;
   }
-  .app-menu { @apply absolute left-3 top-3; }
+  .app-menu { flex: none; }
   .skip-link { @apply fixed left-4 top-4 z-[100] -translate-y-24 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground focus:translate-y-0; }
-}
-@media (max-width: 1023px) {
-  .app-header > div { padding-left: 4rem; }
-  .app-header > div > div { min-width: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto !important; }

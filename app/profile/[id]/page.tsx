@@ -156,9 +156,9 @@ function AccountProfilePage({ profileId, accountId, status }: { profileId: strin
       <Sidebar />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <AppHeader>
-          <div className="flex min-w-0 items-center justify-between gap-3">
-            <span className="min-w-0 truncate text-sm font-semibold">Profil</span>
-            <div className="flex shrink-0 items-center gap-2"><ThemeToggle /><UserNav /></div>
+          <div className="app-header-row">
+            <span className="app-header-title text-sm font-semibold">Profil</span>
+            <div className="app-header-actions"><ThemeToggle /><UserNav /></div>
           </div>
         </AppHeader>
         <main id="page-content" tabIndex={-1} ref={mainRef} onScroll={event => setShowBackToTop(event.currentTarget.scrollTop > 500)} className="min-h-0 flex-1 overflow-y-auto">

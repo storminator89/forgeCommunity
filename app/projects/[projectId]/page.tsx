@@ -354,9 +354,9 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
       <Sidebar />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <AppHeader>
-          <div className="flex min-w-0 items-center justify-between gap-3">
-            <Button asChild variant="ghost" size="sm"><Link href="/showcases" aria-label="Zur Projektübersicht"><ArrowLeft className="h-4 w-4" aria-hidden="true" />Zurück</Link></Button>
-            <div className="flex shrink-0 items-center gap-2"><ThemeToggle /><UserNav /></div>
+          <div className="app-header-row">
+            <div className="app-header-title"><Button asChild variant="ghost" size="sm"><Link href="/showcases" aria-label="Zur Projektübersicht"><ArrowLeft className="h-4 w-4" aria-hidden="true" />Zurück</Link></Button></div>
+            <div className="app-header-actions"><ThemeToggle /><UserNav /></div>
           </div>
         </AppHeader>
 
