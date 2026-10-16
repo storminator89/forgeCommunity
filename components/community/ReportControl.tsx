@@ -11,12 +11,12 @@ import {
 import { reportReasons, type ReportReason, type ReportTargetType } from '@/lib/reporting';
 
 export function ReportControl({ targetType, targetId }: {
-  targetType: ReportTargetType;
+  targetType: ReportTargetType | 'SPACE_DISCUSSION' | 'SPACE_REPLY';
   targetId: string;
 }) {
   const reasonId = useId();
   const detailsId = useId();
-  const targetLabel = targetType === 'POST' ? 'Beitrag' : 'Kommentar';
+  const targetLabel = targetType === 'POST' ? 'Beitrag' : targetType === 'COMMENT' ? 'Kommentar' : targetType === 'SPACE_DISCUSSION' ? 'Space-Diskussion' : 'Space-Antwort';
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState<ReportReason>('SPAM');
   const [details, setDetails] = useState('');

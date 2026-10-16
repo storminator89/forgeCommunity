@@ -5,6 +5,7 @@
 
 import { AppShell, AppHeader } from '@/components/app-shell';
 import { useState, useEffect, useRef, useSyncExternalStore } from 'react'
+import Link from 'next/link'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { PageState } from '@/components/page-state'
 import type { Session } from 'next-auth'
@@ -349,6 +350,7 @@ function Community({ session, topic, onSelectTopic }: { session: Session | null;
               <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Austausch / Community</p>
                 <p className="mt-2 max-w-[58ch] text-base leading-relaxed text-muted-foreground">Fragen stellen, Erfahrungen teilen und gemeinsam weiterkommen.</p>
+                <Link href="/community/spaces" className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-primary underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Spaces entdecken</Link>
               </div>
               <p className="text-sm tabular-nums text-muted-foreground">{feedCount}</p>
             </div>

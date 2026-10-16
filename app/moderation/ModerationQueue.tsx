@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { AppHeader, AppShell } from '@/components/app-shell';
@@ -14,7 +14,7 @@ import { reportReasonLabel, type ReportStatus, type ReportTargetType } from '@/l
 
 interface ReportItem {
   id: string;
-  targetType: ReportTargetType;
+  targetType: ReportTargetType | 'SPACE_DISCUSSION' | 'SPACE_REPLY';
   targetId: string;
   reason: string;
   details: string | null;
@@ -26,6 +26,24 @@ interface ReportItem {
   targetAvailable: boolean;
   targetTitle: string | null;
   targetPreview: string | null;
+  scopeSpaceId?: string | null;
+  targetDiscussionId?: string | null;
+}
+
+function targetLabel(type: ReportItem['targetType']) {
+  switch (type) {
+    case 'POST': return 'Beitrag';
+    case 'COMMENT': return 'Kommentar';
+    case 'SPACE_DISCUSSION': return 'Space-Diskussion';
+    case 'SPACE_REPLY': return 'Space-Antwort';
+  }
+}
+
+function reportLink(report: ReportItem) {
+  if (report.targetType === 'SPACE_DISCUSSION' && report.scopeSpaceId) return `/community/spaces/${encodeURIComponent(report.scopeSpaceId)}/discussions/${encodeURIComponent(report.targetId)}#discussion-${encodeURIComponent(report.targetId)}`;
+  if (report.targetType === 'SPACE_REPLY' && report.scopeSpaceId && report.targetDiscussionId) return `/community/spaces/${encodeURIComponent(report.scopeSpaceId)}/discussions/${encodeURIComponent(report.targetDiscussionId)}#reply-${encodeURIComponent(report.targetId)}`;
+  if (report.targetType === 'POST' || report.targetType === 'COMMENT') return `/community#${report.targetType === 'POST' ? 'post' : 'comment'}-${encodeURIComponent(report.targetId)}`;
+  return null;
 }
 
 interface QueueResponse {
@@ -35,7 +53,11 @@ interface QueueResponse {
   pageSize: number;
 }
 
-function ReviewForm({ reportId, onReviewed }: { reportId: string; onReviewed: () => void }) {
+function ReviewForm({ reportId, onReviewed, onAccessLost }: {
+  reportId: string;
+  onReviewed: () => void;
+  onAccessLost: () => void;
+}) {
   const statusId = useId();
   const noteId = useId();
   const actionId = useId();
@@ -56,6 +78,10 @@ function ReviewForm({ reportId, onReviewed }: { reportId: string; onReviewed: ()
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status, resolutionNote: note, actionTaken }),
       });
+      if (response.status === 401 || response.status === 403) {
+        onAccessLost();
+        return;
+      }
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(typeof body.error === 'string' ? body.error : 'Bearbeitung fehlgeschlagen');
       onReviewed();
@@ -110,31 +136,103 @@ function ModerationQueueForViewer() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [feedback, setFeedback] = useState('');
+  const [accessLost, setAccessLost] = useState(false);
+  const accessLostRef = useRef(false);
+  const requestGenerationRef = useRef(0);
+  const activeRequestRef = useRef<AbortController | null>(null);
+  const refreshPendingRef = useRef(false);
+  const revalidationInFlightRef = useRef(false);
+
+  const abortCurrentRequest = useCallback(() => {
+    requestGenerationRef.current += 1;
+    activeRequestRef.current?.abort();
+    activeRequestRef.current = null;
+  }, []);
+
+  const denyAccess = useCallback(() => {
+    if (accessLostRef.current) return;
+    accessLostRef.current = true;
+    refreshPendingRef.current = false;
+    revalidationInFlightRef.current = false;
+    abortCurrentRequest();
+    setQueue(null);
+    setFeedback('');
+    setError('');
+    setLoading(false);
+    setAccessLost(true);
+  }, [abortCurrentRequest]);
 
   useEffect(() => {
+    if (accessLostRef.current) return;
+    abortCurrentRequest();
     const controller = new AbortController();
-    fetch(`/api/reports?status=${status}&page=${page}`, { signal: controller.signal })
-      .then(async (response) => {
+    const generation = requestGenerationRef.current;
+    activeRequestRef.current = controller;
+    refreshPendingRef.current = false;
+    const isCurrent = () => !controller.signal.aborted &&
+      generation === requestGenerationRef.current && !accessLostRef.current;
+    void (async () => {
+      try {
+        const response = await fetch(`/api/reports?status=${status}&page=${page}`, { signal: controller.signal });
+        if (!isCurrent()) return;
+        if (response.status === 401 || response.status === 403) {
+          denyAccess();
+          return;
+        }
         const body = await response.json();
+        if (!isCurrent()) return;
         if (!response.ok) throw new Error(typeof body.error === 'string' ? body.error : 'Meldungen konnten nicht geladen werden');
-        return body as QueueResponse;
-      })
-      .then((body) => { if (!controller.signal.aborted) { setQueue(body); setError(''); } })
-      .catch((caught) => { if (!controller.signal.aborted) {
+        setQueue(body as QueueResponse);
+        setError('');
+      } catch (caught) {
+        if (!isCurrent()) return;
         setQueue(null);
         setError(caught instanceof Error ? caught.message : 'Laden fehlgeschlagen');
-      } })
-      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
-    return () => controller.abort();
-  }, [status, page, refresh]);
+      } finally {
+        if (isCurrent()) {
+          activeRequestRef.current = null;
+          revalidationInFlightRef.current = false;
+          setLoading(false);
+        }
+      }
+    })();
+    return () => {
+      controller.abort();
+      if (activeRequestRef.current === controller) activeRequestRef.current = null;
+    };
+  }, [status, page, refresh, abortCurrentRequest, denyAccess]);
+
+  useEffect(() => {
+    const revalidate = () => {
+      if (document.visibilityState === 'hidden' || accessLostRef.current ||
+          refreshPendingRef.current || revalidationInFlightRef.current) return;
+      refreshPendingRef.current = true;
+      revalidationInFlightRef.current = true;
+      abortCurrentRequest();
+      setLoading(true);
+      setRefresh((value) => value + 1);
+    };
+    window.addEventListener('focus', revalidate);
+    document.addEventListener('visibilitychange', revalidate);
+    const interval = window.setInterval(revalidate, 60_000);
+    return () => {
+      window.removeEventListener('focus', revalidate);
+      document.removeEventListener('visibilitychange', revalidate);
+      window.clearInterval(interval);
+    };
+  }, [abortCurrentRequest]);
 
   function reviewed() {
+    if (accessLostRef.current) return;
     setFeedback('Entscheidung gespeichert.');
     setLoading(true);
     setRefresh((value) => value + 1);
   }
 
   function changeStatus(nextStatus: ReportStatus) {
+    if (accessLostRef.current || nextStatus === status) return;
+    revalidationInFlightRef.current = false;
+    abortCurrentRequest();
     setStatus(nextStatus);
     setPage(1);
     setQueue(null);
@@ -144,6 +242,9 @@ function ModerationQueueForViewer() {
   }
 
   function changePage(nextPage: number) {
+    if (accessLostRef.current || nextPage === page) return;
+    revalidationInFlightRef.current = false;
+    abortCurrentRequest();
     setPage(nextPage);
     setQueue(null);
     setError('');
@@ -151,11 +252,16 @@ function ModerationQueueForViewer() {
   }
 
   function retryQueue() {
+    if (accessLostRef.current) return;
+    revalidationInFlightRef.current = false;
+    abortCurrentRequest();
     setQueue(null);
     setError('');
     setLoading(true);
     setRefresh((value) => value + 1);
   }
+
+  if (accessLost) return <PageState kind="error" title="Keine Berechtigung" />;
 
   const hasNextPage = queue !== null && page * queue.pageSize < queue.total;
   return <AppShell>
@@ -183,7 +289,7 @@ function ModerationQueueForViewer() {
               <ul className="space-y-4">
                 {queue.items.map((report) => <li key={report.id} className="rounded-xl border bg-card p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h2 className="font-semibold">{report.targetType === 'POST' ? 'Beitrag' : 'Kommentar'} · {reportReasonLabel(report.reason)}</h2>
+                    <h2 className="font-semibold">{targetLabel(report.targetType)} · {reportReasonLabel(report.reason)}</h2>
                     <time dateTime={report.createdAt} className="text-xs text-muted-foreground">
                       Gemeldet: {new Date(report.createdAt).toLocaleString('de-DE')}
                     </time>
@@ -191,13 +297,13 @@ function ModerationQueueForViewer() {
                   {report.targetAvailable ? <>
                     {report.targetTitle && <p className="mt-2 font-medium">{report.targetTitle}</p>}
                     {report.targetPreview && <p className="mt-1 text-sm text-muted-foreground">{report.targetPreview}</p>}
-                    <Link href={`/community#${report.targetType === 'POST' ? 'post' : 'comment'}-${report.targetId}`}
+                    {reportLink(report) && <Link href={reportLink(report)!}
                       className="mt-2 inline-block text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
-                      Inhalt in der Community öffnen
-                    </Link>
+                      Inhalt öffnen
+                    </Link>}
                   </> : <p className="mt-2 text-sm text-muted-foreground">Inhalt ist nicht mehr öffentlich verfügbar.</p>}
                   {report.details && <p className="mt-3 text-sm"><span className="font-medium">Hinweis: </span>{report.details}</p>}
-                  {report.status === 'OPEN' ? <ReviewForm reportId={report.id} onReviewed={reviewed} /> :
+                  {report.status === 'OPEN' ? <ReviewForm reportId={report.id} onReviewed={reviewed} onAccessLost={denyAccess} /> :
                     <div className="mt-3 border-t pt-3 text-sm">
                       <p>{report.status === 'DISMISSED' ? 'Ohne Maßnahme geschlossen' : 'Durchgeführte Maßnahme dokumentiert'}</p>
                       {report.resolutionNote && <p className="mt-1">Begründung: {report.resolutionNote}</p>}
