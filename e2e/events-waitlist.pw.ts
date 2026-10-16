@@ -236,7 +236,15 @@ test('real FIFO opt-in, leave/rejoin and seat promotions reach the existing inbo
       description: `<p>${'Gemeinsam können wir komplexe Fragen verständlich machen. '.repeat(5)}</p>`,
       location: 'OnlineCommunityWerkstattMitOffenemAustausch'.repeat(2),
     } }));
-    await openEvent(alicePage, id);
+    // The current URL already points at this same event hash. Navigating to it
+    // again is same-document and leaves the calendar's old event list mounted.
+    // A hard reload must fetch and render the actual updated server projection.
+    const refreshedEvents = alicePage.waitForResponse(response => new URL(response.url()).pathname === '/api/events' && response.request().method() === 'GET');
+    await alicePage.reload();
+    const refreshedResponse = await refreshedEvents;
+    expect(refreshedResponse.status()).toBe(200);
+    expect((await refreshedResponse.json() as Array<{ id: string; title: string }>).find(item => item.id === id)?.title).toBe(longTitle);
+    await expect(alicePanel).toBeVisible();
     await expect(alicePanel.getByRole('heading', { name: longTitle, exact: true })).toBeVisible();
     for (const width of [320, 768]) {
       await alicePage.setViewportSize({ width, height: 900 }); await checkReflow(alicePage);

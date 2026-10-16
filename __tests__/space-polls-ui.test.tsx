@@ -185,3 +185,52 @@ test.each([false, true])('vote refresh restores a useful checked choice without 
   expect(await screen.findByRole('radio', { name: /Testen/ })).toBeChecked();
   expect(moved ? screen.getByRole('button', { name: 'Andere Aktion' }) : screen.getByRole('radio', { name: /Testen/ })).toHaveFocus();
 });
+
+test.each([false, true])('captures focus before the browser blurs a pending-disabled action, without stealing an outside control (%s)', async moved => {
+  let finish!: (value: unknown) => void;
+  let current = poll();
+  const saved = poll({ ownVote: { optionId: 'two', revision: 1 }, totalVotes: 4 });
+  const request = jest.fn(async (_path: string, init?: RequestInit) => init?.method
+    ? new Promise(resolve => { finish = resolve; }) : page([current]));
+  render(<><SpacePolls spaceId="secret" canManage={false} request={request as PollRequest} onUnavailable={jest.fn()} /><button>Andere Aktion</button></>);
+  await userEvent.click(await screen.findByRole('radio', { name: /Testen/ }));
+  const submit = screen.getByRole('button', { name: 'Abstimmen' });
+  await userEvent.click(submit);
+  expect(submit).toBeDisabled();
+  // JSDOM retains focus on disabled buttons and ignores their blur(); model
+  // Chromium's native focus loss explicitly before the response arrives.
+  document.body.setAttribute('tabindex', '-1'); document.body.focus(); document.body.removeAttribute('tabindex');
+  expect(document.activeElement).toBe(document.body);
+  if (moved) screen.getByRole('button', { name: 'Andere Aktion' }).focus();
+  current = saved;
+  await act(async () => finish(saved));
+  expect(await screen.findByRole('radio', { name: /Testen/ })).toBeChecked();
+  expect(moved ? screen.getByRole('button', { name: 'Andere Aktion' }) : screen.getByRole('radio', { name: /Testen/ })).toHaveFocus();
+});
+
+test.each([false, true])('a lost-response retry restores the re-enabled action and keeps its receipt without stealing moved focus (%s)', async moved => {
+  let fail!: (error: Error) => void;
+  let current = poll();
+  let attempts = 0;
+  const request = jest.fn(async (_path: string, init?: RequestInit) => {
+    if (!init?.method) return page([current]);
+    if (++attempts === 1) return new Promise((_resolve, reject) => { fail = reject; });
+    current = poll({ ownVote: { optionId: 'one', revision: 1 }, totalVotes: 4 });
+    return current;
+  });
+  render(<><SpacePolls spaceId="secret" canManage={false} request={request as PollRequest} onUnavailable={jest.fn()} /><button>Andere Aktion</button></>);
+  await userEvent.click(await screen.findByRole('radio', { name: /Zugänglichkeit/ }));
+  const submit = screen.getByRole('button', { name: 'Abstimmen' });
+  await userEvent.click(submit);
+  document.body.setAttribute('tabindex', '-1'); document.body.focus(); document.body.removeAttribute('tabindex');
+  if (moved) screen.getByRole('button', { name: 'Andere Aktion' }).focus();
+  await act(async () => fail(new Error('Response lost')));
+  expect(screen.getByRole('alert')).toHaveTextContent('Response lost');
+  expect(submit).toBeEnabled();
+  expect(moved ? screen.getByRole('button', { name: 'Andere Aktion' }) : submit).toHaveFocus();
+  fireEvent.click(submit);
+  expect(await screen.findByText('Deine gespeicherte Auswahl')).toBeVisible();
+  expect(mutationCalls(request)).toHaveLength(2);
+  expect(JSON.parse(mutationCalls(request)[0][1].body)).toEqual(JSON.parse(mutationCalls(request)[1][1].body));
+  expect(moved ? screen.getByRole('button', { name: 'Andere Aktion' }) : screen.getByRole('radio', { name: /Zugänglichkeit/ })).toHaveFocus();
+});

@@ -10,6 +10,8 @@ import { useSpaceListGeneration } from '@/hooks/useSpaceAccess';
 import { apiSpaceUrl, isSpaceAbort, revalidateSpacePages, spaceDate, SpaceHttpError, type SpacePage } from './space-api';
 import type { PollRequest, SpacePoll } from './poll-api';
 
+type PollFocusIntent = { origin: HTMLElement; manage: boolean };
+
 export function SpacePolls({ spaceId, canManage, request, onUnavailable }: {
   spaceId: string; canManage: boolean; request: PollRequest; onUnavailable: () => void;
 }) {
@@ -100,11 +102,13 @@ export function SpacePolls({ spaceId, canManage, request, onUnavailable }: {
     finally { if (read.isCurrent()) setLoading(false); }
   }
 
-  async function recheckPoll(pollId: string, confirmed = false) {
+  async function recheckPoll(pollId: string, confirmed = false, intent?: PollFocusIntent | null) {
     const focused = document.activeElement;
-    if (focused instanceof HTMLElement && focused.closest('[data-poll-id]')?.getAttribute('data-poll-id') === pollId) {
-      restorePollFocus.current = { id: pollId, manage: Boolean(focused.closest('details')) };
-    }
+    // Chromium can blur a focused button as soon as pending disables it. Carry
+    // the pre-write intent across that blur, but never override another control.
+    restorePollFocus.current = focused === document.body && intent ? { id: pollId, manage: intent.manage }
+      : focused instanceof HTMLElement && focused.closest('[data-poll-id]')?.getAttribute('data-poll-id') === pollId
+        ? { id: pollId, manage: Boolean(focused.closest('details')) } : null;
     await load();
     if (alive.current && confirmed) setConfirmedPoll(pollId);
   }
@@ -155,7 +159,7 @@ export function SpacePolls({ spaceId, canManage, request, onUnavailable }: {
       {createError && <p role="alert" className="text-sm text-destructive">{createError}</p>}
       <div className="flex flex-wrap gap-2"><Button type="submit" disabled={pending} aria-busy={pending}>{pending ? 'Wird erstellt…' : 'Umfrage veröffentlichen'}</Button><Button type="button" variant="ghost" disabled={pending} onClick={closeForm}>Abbrechen</Button></div>
     </form>}
-    {items.length > 0 && <ul className={styles.pollList}>{items.map(item => <li key={`${item.id}:${item.ownVote.revision}:${item.moderationRevision}:${item.closedAt}`} className="min-w-0"><PollCard poll={item} base={base} request={request} confirmed={motion.enabled && confirmedPoll === item.id} onChange={confirmed => recheckPoll(item.id, confirmed)} onUnavailable={onUnavailable} /></li>)}</ul>}
+    {items.length > 0 && <ul className={styles.pollList}>{items.map(item => <li key={`${item.id}:${item.ownVote.revision}:${item.moderationRevision}:${item.closedAt}`} className="min-w-0"><PollCard poll={item} base={base} request={request} confirmed={motion.enabled && confirmedPoll === item.id} onChange={(confirmed, intent) => recheckPoll(item.id, confirmed, intent)} onUnavailable={onUnavailable} /></li>)}</ul>}
     {loading && <p role="status" className="mt-4 text-sm text-muted-foreground">Umfragen werden geladen…</p>}
     {!loading && !error && items.length === 0 && <p className="mt-4 text-sm text-muted-foreground">Noch keine Umfragen. Admins können eine Frage zur gemeinsamen Entscheidung stellen.</p>}
     {error && <div className="mt-4"><p role="alert" className="text-sm text-destructive">{error}</p><Button type="button" variant="outline" className="mt-3" onClick={() => void load()}>Umfragen erneut laden</Button></div>}
@@ -164,27 +168,43 @@ export function SpacePolls({ spaceId, canManage, request, onUnavailable }: {
 }
 
 function PollCard({ poll, base, request, onChange, onUnavailable, confirmed }: {
-  poll: SpacePoll; base: string; request: PollRequest; onChange: (confirmed?: boolean) => Promise<void>; onUnavailable: () => void; confirmed: boolean;
+  poll: SpacePoll; base: string; request: PollRequest; onChange: (confirmed?: boolean, intent?: PollFocusIntent | null) => Promise<void>; onUnavailable: () => void; confirmed: boolean;
 }) {
   const id = useId();
   const [choice, setChoice] = useState(poll.ownVote.optionId ?? '');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   const lock = useRef(false); const alive = useRef(true);
+  const writeFocus = useRef<PollFocusIntent | null>(null);
   const receipt = useRef<{ payload: string; id: string } | null>(null);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+
+  useLayoutEffect(() => {
+    if (pending || !writeFocus.current) return;
+    const intent = writeFocus.current;
+    writeFocus.current = null;
+    // A failed write keeps this card mounted. Restore the original action only
+    // after React has re-enabled it, including an explicit receipt retry.
+    if (document.activeElement === document.body && intent.origin.isConnected && !intent.origin.matches(':disabled')) {
+      intent.origin.focus();
+    }
+  }, [pending]);
 
   async function write(body: object, vote = false) {
     if (lock.current) return;
     const payload = JSON.stringify(body);
     if (vote && receipt.current?.payload !== payload) receipt.current = { payload, id: crypto.randomUUID() };
+    const focused = document.activeElement;
+    const intent = focused instanceof HTMLElement && focused.closest('[data-poll-id]')?.getAttribute('data-poll-id') === poll.id
+      ? { origin: focused, manage: Boolean(focused.closest('details')) } : null;
+    writeFocus.current = intent;
     lock.current = true; setPending(true); setError('');
     try {
       await request<SpacePoll>(`${base}/${encodeURIComponent(poll.id)}${vote ? '/vote' : ''}`, {
         method: vote ? 'PUT' : 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(vote ? { ...body, requestId: receipt.current!.id } : body),
       });
-      if (alive.current) await onChange(true);
+      if (alive.current) await onChange(true, intent);
     } catch (caught) {
       if (!alive.current || isSpaceAbort(caught)) return;
       if (caught instanceof SpaceHttpError && [401, 403, 404].includes(caught.status)) { onUnavailable(); return; }

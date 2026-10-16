@@ -285,9 +285,12 @@ test.describe('every App Router page, one at a time', () => {
       if (item.url === '/chat') await expect(page.getByRole('log', { name: 'Nachrichten' })).toBeVisible();
       if (item.url === '/community') await expect(main.getByRole('status').filter({ hasText: /^\d+ (?:Beitrag|Beiträge) geladen$/ })).toBeVisible();
       if (item.url === '/community/missions') {
-        await expect(main.getByRole('link', { name: 'Route QA overview mission', exact: true }))
+        const missionLink = main.getByRole('link', { name: 'Route QA overview mission', exact: true });
+        await expect(missionLink)
           .toHaveAttribute('href', `/community/spaces/${encodeURIComponent(privateSpaceId)}/missions/${encodeURIComponent(privateMissionId)}`);
-        await expect(main.getByText('Space: Route QA private space', { exact: true })).toBeVisible();
+        const missionCard = main.getByRole('listitem').filter({ has: page.getByRole('link', { name: 'Route QA overview mission', exact: true }) });
+        await expect(missionCard).toHaveCount(1);
+        await expect(missionCard.getByText('Route QA private space', { exact: true })).toBeVisible();
         await expect(main.getByRole('button', { name: /teilnehmen|beenden/i })).toHaveCount(0);
       }
       if (item.url === '/courses') await expect(main.getByText(/^\d+ (?:Kurs|Kurse) verfügbar$/)).toBeVisible();

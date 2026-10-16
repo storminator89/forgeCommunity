@@ -1,5 +1,5 @@
 import { StrictMode, type ComponentProps, type ReactNode } from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useSession } from 'next-auth/react';
 import MissionOverviewPage from '@/app/community/missions/page';
@@ -66,6 +66,24 @@ it('shows loading, minimal descriptive rows and detail links without prefetch or
   expect(screen.queryByRole('button', { name: /teilnehmen|beenden|erstellen|teilen/i })).not.toBeInTheDocument();
   expect(global.fetch).toHaveBeenCalledWith('/api/space-missions', expect.objectContaining({ cache: 'no-store', signal: expect.any(AbortSignal) }));
   expect((global.fetch as jest.Mock).mock.calls.every(([, init]) => !init.method)).toBe(true);
+});
+
+it('keeps each mission visibly associated with its own private Space', async () => {
+  global.fetch = jest.fn().mockResolvedValue(page([
+    mission('first', { space: { id: 'space-a', name: 'Lernwerkstatt' } }),
+    mission('second', { space: { id: 'space-b', name: 'Ideenküche' } }),
+  ]));
+  render(<MissionOverviewPage />);
+  const first = await screen.findByRole('link', { name: 'Mission first' });
+  const second = screen.getByRole('link', { name: 'Mission second' });
+  expect(first).toHaveAttribute('href', '/community/spaces/space-a/missions/first');
+  expect(second).toHaveAttribute('href', '/community/spaces/space-b/missions/second');
+  const firstCard = within(first.closest('li')!);
+  const secondCard = within(second.closest('li')!);
+  expect(firstCard.getByText('Lernwerkstatt', { exact: true })).toBeVisible();
+  expect(firstCard.queryByText('Ideenküche', { exact: true })).not.toBeInTheDocument();
+  expect(secondCard.getByText('Ideenküche', { exact: true })).toBeVisible();
+  expect(secondCard.queryByText('Lernwerkstatt', { exact: true })).not.toBeInTheDocument();
 });
 
 it('explains an empty result and links to Spaces', async () => {
