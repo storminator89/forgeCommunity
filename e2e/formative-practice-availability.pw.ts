@@ -101,15 +101,21 @@ test('real private return window stays read-only until explicit refresh and reop
   const contentId = `return-content-${nonce}`
   const payload = JSON.stringify({ schemaVersion: 1, contents: [{ id: contentId, parentId: null, title: 'Synthetic lesson', order: 1, type: 'TEXT', content: '<p>Private return fixture.</p>' }] })
   database(path, db => {
-    db.prepare('UPDATE "User" SET "role" = ? WHERE "id" = ?').run('INSTRUCTOR', authorId)
-    db.prepare('INSERT INTO "Course" ("id", "title", "description", "instructorId", "price", "updatedAt") VALUES (?, ?, ?, ?, 0, CURRENT_TIMESTAMP)')
-      .run(courseId, 'Synthetic return practice', 'Disposable private practice', authorId)
-    db.prepare('INSERT INTO "CourseContent" ("id", "title", "content", "order", "courseId", "type", "updatedAt") VALUES (?, ?, ?, 1, ?, ?, CURRENT_TIMESTAMP)')
-      .run(contentId, 'Synthetic lesson', '<p>Private return fixture.</p>', courseId, 'TEXT')
-    db.prepare('INSERT INTO "CoursePublication" ("id", "courseId", "sequence", "source", "payload", "digest", "contentCount") VALUES (?, ?, 1, ?, ?, ?, 1)')
-      .run(publicationId, courseId, 'AUTHOR', payload, nonce)
-    db.prepare('UPDATE "Course" SET "activePublicationId" = ? WHERE "id" = ?').run(publicationId, courseId)
-    db.prepare('INSERT INTO "Enrollment" ("id", "userId", "courseId") VALUES (?, ?, ?)').run(randomUUID(), learnerId, courseId)
+    db.exec('BEGIN')
+    try {
+      db.prepare('UPDATE "User" SET "role" = ? WHERE "id" = ?').run('INSTRUCTOR', authorId)
+      db.prepare('INSERT INTO "Course" ("id", "title", "description", "instructorId", "price", "updatedAt") VALUES (?, ?, ?, ?, 0, CURRENT_TIMESTAMP)')
+        .run(courseId, 'Synthetic return practice', 'Disposable private practice', authorId)
+      db.prepare('INSERT INTO "CourseContent" ("id", "title", "content", "order", "courseId", "type", "updatedAt") VALUES (?, ?, ?, 1, ?, ?, CURRENT_TIMESTAMP)')
+        .run(contentId, 'Synthetic lesson', '<p>Private return fixture.</p>', courseId, 'TEXT')
+      db.prepare('INSERT INTO "CoursePublication" ("id", "courseId", "sequence", "source", "payload", "digest", "contentCount") VALUES (?, ?, 1, ?, ?, ?, 1)')
+        .run(publicationId, courseId, 'AUTHOR', payload, nonce)
+      db.prepare('INSERT INTO "CourseDraft" ("courseId", "basePublicationId", "payload", "digest", "updatedAt") VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)')
+        .run(courseId, publicationId, payload, nonce)
+      db.prepare('UPDATE "Course" SET "activePublicationId" = ? WHERE "id" = ?').run(publicationId, courseId)
+      db.prepare('INSERT INTO "Enrollment" ("id", "userId", "courseId") VALUES (?, ?, ?)').run(randomUUID(), learnerId, courseId)
+      db.exec('COMMIT')
+    } catch (error) { db.exec('ROLLBACK'); throw error }
   })
   const learnerPath = `/api/courses/${courseId}/practice/learner`
   const workspace = `/courses/${courseId}/practice/learn`

@@ -88,21 +88,144 @@ async function keyboardActivate(page: Page, action: Locator) {
   await page.keyboard.press('Enter')
 }
 
+type ReaderFocusProbeWindow = Window & { __readerTextZoomProbe?: {
+  sample: (reason: string) => void
+  finish: () => unknown
+} }
+
+// Observe the original keyboard path without changing focus, scrolling, styles,
+// animation or assertion timing. No lesson text, URLs, identifiers or tokens.
+async function observeReaderTextZoom(refresh: Locator) {
+  await refresh.evaluate(target => {
+    const limits = { rows: 40, ringBytes: 96 * 1024, ancestors: 12, rafBurst: 3 }
+    const rows: Array<{ value: unknown; bytes: number }> = []
+    const milestones: unknown[] = []
+    let ringBytes = 0
+    let droppedRows = 0
+    let raf = 0
+    let framesLeft = 0
+    let stopped = false
+    const rectangle = (element: Element) => {
+      const rect = element.getBoundingClientRect()
+      const round = (value: number) => Math.round(value * 1000) / 1000
+      return { top: round(rect.top), right: round(rect.right), bottom: round(rect.bottom), left: round(rect.left), width: round(rect.width), height: round(rect.height) }
+    }
+    const identity = (element: Element | null) => element ? {
+      tag: element.tagName.toLowerCase(), target: element === target,
+      main: element.id === 'page-content', outline: element.id === 'course-contents-navigation',
+      reader: element === target.closest('[role="region"]'), active: element === document.activeElement,
+    } : null
+    const snapshot = (reason: string) => {
+      const owners = new Set<Element>()
+      let ancestor: Element | null = target
+      for (let depth = 0; ancestor && depth < limits.ancestors; depth++, ancestor = ancestor.parentElement) owners.add(ancestor)
+      for (const selector of ['.app-header', '#course-contents-navigation']) {
+        const element = document.querySelector(selector)
+        if (element) owners.add(element)
+      }
+      const viewport = window.visualViewport
+      return { reason, time: Math.round(performance.now()), rootFont: getComputedStyle(document.documentElement).fontSize,
+        viewport: { width: innerWidth, height: innerHeight, scrollX, scrollY,
+          visual: viewport ? { top: viewport.offsetTop, left: viewport.offsetLeft, width: viewport.width, height: viewport.height, scale: viewport.scale } : null },
+        focused: identity(document.activeElement), focusVisible: target.matches(':focus-visible'), connected: target.isConnected,
+        focusedRect: document.activeElement ? rectangle(document.activeElement) : null,
+        ancestorsTruncated: ancestor !== null,
+        owners: Array.from(owners).map(element => {
+          const style = getComputedStyle(element)
+          return { ...identity(element), rect: rectangle(element), scrollTop: element.scrollTop, scrollLeft: element.scrollLeft,
+            scrollHeight: element.scrollHeight, clientHeight: element.clientHeight, scrollWidth: element.scrollWidth, clientWidth: element.clientWidth,
+            maxScrollTop: Math.max(0, element.scrollHeight - element.clientHeight), maxScrollLeft: Math.max(0, element.scrollWidth - element.clientWidth),
+            overflowX: style.overflowX, overflowY: style.overflowY, scrollBehavior: style.scrollBehavior, overflowAnchor: style.overflowAnchor,
+            display: style.display, position: style.position, height: style.height, minHeight: style.minHeight, maxHeight: style.maxHeight,
+            flexDirection: style.flexDirection, flexBasis: style.flexBasis, flexGrow: style.flexGrow, flexShrink: style.flexShrink }
+        }) }
+    }
+    const record = (reason: string, milestone = false) => {
+      if (stopped) return
+      const value = snapshot(reason)
+      if (milestone && milestones.length < 8) milestones.push(value)
+      const bytes = new TextEncoder().encode(JSON.stringify(value)).byteLength
+      if (bytes > limits.ringBytes) { droppedRows++; return }
+      while (rows.length && (rows.length >= limits.rows || ringBytes + bytes > limits.ringBytes)) {
+        ringBytes -= rows.shift()!.bytes
+        droppedRows++
+      }
+      rows.push({ value, bytes }); ringBytes += bytes
+    }
+    const frame = () => {
+      raf = 0
+      if (stopped) return
+      record(`rAF:${limits.rafBurst - framesLeft + 1}`)
+      if (--framesLeft > 0) raf = requestAnimationFrame(frame)
+    }
+    const sample = (reason: string) => {
+      record(reason, true)
+      framesLeft = limits.rafBurst
+      if (!raf) raf = requestAnimationFrame(frame)
+    }
+    const observe = (event: Event) => {
+      if (event instanceof KeyboardEvent && event.key !== 'Tab') return
+      record(`${event.type}${event instanceof KeyboardEvent ? `:${event.shiftKey ? 'Shift+' : ''}Tab` : ''}`)
+      framesLeft = limits.rafBurst
+      if (!raf) raf = requestAnimationFrame(frame)
+    }
+    const events = ['keydown', 'keyup', 'focusin', 'focusout', 'scroll', 'resize'] as const
+    for (const event of events) window.addEventListener(event, observe, { capture: true, passive: true })
+    const resize = new ResizeObserver(() => { if (!stopped) record('layout-resize') })
+    for (const element of [target, target.closest('[role="region"]'), document.querySelector('#page-content'), document.querySelector('.app-header')]) {
+      if (element) resize.observe(element)
+    }
+    ;(window as ReaderFocusProbeWindow).__readerTextZoomProbe = { sample, finish: () => {
+      record('original-verdict', true)
+      stopped = true
+      if (raf) cancelAnimationFrame(raf)
+      resize.disconnect()
+      for (const event of events) window.removeEventListener(event, observe, true)
+      delete (window as ReaderFocusProbeWindow).__readerTextZoomProbe
+      return { limits, ringBytes, droppedRows, milestones, rows: rows.map(row => row.value) }
+    } }
+    sample('before-text-zoom')
+  })
+}
+
+async function emitReaderTextZoomEvidence(page: Page, info: TestInfo, state: string, mode: 'light' | 'dark', originalCompleted: boolean, phase: string) {
+  try {
+    const evidence = await page.evaluate(() => (window as ReaderFocusProbeWindow).__readerTextZoomProbe?.finish())
+    const payload = JSON.stringify({ state, mode, candidateSha, originalCompleted, phase, evidence })
+    // Observation must never replace the original assertion's verdict.
+    if (Buffer.byteLength(payload) <= 192 * 1024) {
+      console.info('Reader text-zoom focus evidence:', payload)
+      await info.attach(`reader-${state}-text200-focus-${mode}`, { body: Buffer.from(payload), contentType: 'application/json' })
+    } else console.info('Reader text-zoom evidence exceeded its bounded output cap.')
+  } catch (error) {
+    console.info('Reader text-zoom evidence unavailable:', error instanceof Error ? error.name : 'unknown error')
+  }
+}
+
 async function captureReaderTextZoom(page: Page, info: TestInfo, state: string, mode: 'light' | 'dark') {
   const reader = page.getByRole('region', { name: 'Ausgewählter Kursinhalt' })
   const refresh = reader.getByRole('button', { name: 'Lernfortschritt aktualisieren', exact: true })
   const originalRootSize = await page.locator('html').evaluate(element => element.style.fontSize)
   const rootPixels = await page.locator('html').evaluate(element => parseFloat(getComputedStyle(element).fontSize))
   const originalLabelPixels = await refresh.evaluate(element => parseFloat(getComputedStyle(element).fontSize))
+  await observeReaderTextZoom(refresh)
+  let originalCompleted = false
+  let phase = 'text-enlargement'
   try {
     // Actual text enlargement changes computed font size and layout. Do not use
     // a screenshot transform, device scale factor, or an overflow-hiding rule.
     await page.locator('html').evaluate((element, pixels) => { element.style.fontSize = `${pixels * 2}px` }, rootPixels)
     await expect.poll(() => refresh.evaluate(element => parseFloat(getComputedStyle(element).fontSize))).toBeGreaterThanOrEqual(originalLabelPixels * 1.99)
+    await page.evaluate(() => (window as ReaderFocusProbeWindow).__readerTextZoomProbe?.sample('text-enlarged'))
     await page.keyboard.press('Tab')
+    await page.evaluate(() => (window as ReaderFocusProbeWindow).__readerTextZoomProbe?.sample('after-native-tab'))
+    phase = 'locator-focus'
     await refresh.focus()
+    await page.evaluate(() => (window as ReaderFocusProbeWindow).__readerTextZoomProbe?.sample('after-locator-focus'))
     await expect(refresh).toBeFocused()
+    phase = 'full-viewport-assertion'
     await expect(refresh).toBeInViewport({ ratio: 1 })
+    phase = 'remaining-original-assertions'
     expect(await refresh.evaluate(element => element.matches(':focus-visible'))).toBe(true)
     expect(await page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - innerWidth), `${state} ${mode} 320px text200 document overflow`).toBeLessThanOrEqual(1)
     expect(await page.locator('#page-content').evaluate(element => element.scrollWidth - element.clientWidth), `${state} text200 main overflow`).toBeLessThanOrEqual(1)
@@ -124,7 +247,9 @@ async function captureReaderTextZoom(page: Page, info: TestInfo, state: string, 
     await page.keyboard.press('Enter')
     expect((await checking).status()).toBe(200)
     await expect(refresh).toBeEnabled()
+    originalCompleted = true
   } finally {
+    await emitReaderTextZoomEvidence(page, info, state, mode, originalCompleted, phase)
     await page.locator('html').evaluate((element, previous) => { element.style.fontSize = previous }, originalRootSize)
   }
 }
