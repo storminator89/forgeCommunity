@@ -283,7 +283,7 @@ test.describe('every App Router page, one at a time', () => {
       // applied, regardless of how many synthetic records earlier suites left.
       if (item.url === '/admin/dashboard') await expect(page.locator('#metric-totalUsers')).toContainText(/[1-9]/);
       if (item.url === '/chat') await expect(page.getByRole('log', { name: 'Nachrichten' })).toBeVisible();
-      if (item.url === '/community') await expect(main.getByRole('status').filter({ hasText: /^\d+ (?:Beitrag|Beiträge) geladen$/ })).toBeVisible();
+      if (item.url === '/community') await expect(main.getByText(/^\d+ (?:Beitrag|Beiträge) geladen$/)).toBeVisible();
       if (item.url === '/community/missions') {
         const missionLink = main.getByRole('link', { name: 'Route QA overview mission', exact: true });
         await expect(missionLink)

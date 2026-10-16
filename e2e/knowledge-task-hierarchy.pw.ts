@@ -171,6 +171,12 @@ test('new article keeps a single early draft/publish pair, keyboard order and un
   const submitted: string[] = [];
   let finishPost!: () => void;
   await page.route('**/api/articles', async route => {
+    // Sidebar/navigation reads share this endpoint. Serve the known rendering
+    // fixture without counting a read as an explicit article submission.
+    if (route.request().method() === 'GET') {
+      await route.fulfill({ json: articles });
+      return;
+    }
     expect(route.request().method()).toBe('POST');
     submitted.push(route.request().postData() ?? '');
     await new Promise<void>(resolve => { finishPost = resolve; });
