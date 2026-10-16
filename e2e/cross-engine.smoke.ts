@@ -9,7 +9,7 @@ test.beforeEach(() => {
 
 test('signed-out entry preserves keyboard navigation and browser history', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: /Wissen teilen/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Lernen. Machen. Weitergeben.', exact: true })).toBeVisible();
   await page.keyboard.press('Tab');
   await expect(page.getByRole('link', { name: 'Zum Inhalt springen' })).toBeFocused();
   await page.keyboard.press('Enter');
