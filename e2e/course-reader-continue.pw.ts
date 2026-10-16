@@ -188,10 +188,80 @@ async function observeReaderTextZoom(refresh: Locator) {
   })
 }
 
-async function emitReaderTextZoomEvidence(page: Page, info: TestInfo, state: string, mode: 'light' | 'dark', originalCompleted: boolean, phase: string) {
+// One read-only sample before the original overflow verdict identifies the
+// actual overflowing descendants, rather than inferring a leaf from ancestors.
+// Known control names are enums; lesson text, URLs, IDs and tokens stay private.
+async function readerOverflowGeometry(reader: Locator) {
+  return reader.evaluate(region => {
+    const limits = { scannedElements: 1024, rows: 64, bytes: 48 * 1024 }
+    const rect = (element: Element) => {
+      const value = element.getBoundingClientRect()
+      const round = (number: number) => Math.round(number * 1000) / 1000
+      return { left: round(value.left), right: round(value.right), top: round(value.top), bottom: round(value.bottom), width: round(value.width), height: round(value.height) }
+    }
+    const main = document.querySelector('#page-content')!
+    const mainRect = rect(main)
+    const regionRect = rect(region)
+    const knownControls: Record<string, string> = {
+      'Als abgeschlossen markieren': 'mark-complete',
+      'Abschlussmarkierung entfernen': 'remove-complete',
+      'Wird gespeichert …': 'completion-busy',
+      'Kurs starten': 'start', Weiterlernen: 'continue',
+      'Nächste Lektion öffnen': 'next',
+      'Lernfortschritt aktualisieren': 'refresh',
+      'Wird geprüft …': 'refresh-busy',
+      'Zugriff neu prüfen': 'recheck-access',
+    }
+    const walker = document.createTreeWalker(region, NodeFilter.SHOW_ELEMENT)
+    const elements: Element[] = [region]
+    while (elements.length < limits.scannedElements) {
+      const next = walker.nextNode()
+      if (!next) break
+      elements.push(next as Element)
+    }
+    const truncatedScan = elements.length === limits.scannedElements && walker.nextNode() !== null
+    const rows: unknown[] = []
+    let bytes = 0
+    let droppedRows = 0
+    for (const [index, element] of elements.entries()) {
+      const bounds = rect(element)
+      const parent = element.parentElement
+      const parentRect = parent ? rect(parent) : null
+      const control = element.matches('button, a, input, select, textarea, [role="button"]')
+      const overflowX = element.scrollWidth - element.clientWidth
+      const outsideRegion = bounds.left < regionRect.left - 1 || bounds.right > regionRect.right + 1
+      const outsideParent = Boolean(parentRect && (bounds.left < parentRect.left - 1 || bounds.right > parentRect.right + 1))
+      if (!bounds.width || !bounds.height || (!control && overflowX <= 1 && !outsideRegion && !outsideParent)) continue
+      const style = getComputedStyle(element)
+      const value = {
+        index, parentIndex: parent ? elements.indexOf(parent) : null,
+        tag: element.tagName.toLowerCase(), control: control ? knownControls[element.textContent?.trim() || ''] || 'other' : null,
+        rect: bounds, parentRect, outsideRegion, outsideParent,
+        scrollWidth: element.scrollWidth, clientWidth: element.clientWidth,
+        scrollHeight: element.scrollHeight, clientHeight: element.clientHeight,
+        style: { display: style.display, position: style.position, width: style.width, minWidth: style.minWidth, maxWidth: style.maxWidth,
+          height: style.height, minHeight: style.minHeight, maxHeight: style.maxHeight,
+          whiteSpace: style.whiteSpace, overflowWrap: style.overflowWrap, wordBreak: style.wordBreak,
+          overflowX: style.overflowX, overflowY: style.overflowY,
+          fontSize: style.fontSize, fontFamily: style.fontFamily, fontWeight: style.fontWeight, lineHeight: style.lineHeight,
+          paddingLeft: style.paddingLeft, paddingRight: style.paddingRight, boxSizing: style.boxSizing,
+          flexDirection: style.flexDirection, flexBasis: style.flexBasis, flexGrow: style.flexGrow, flexShrink: style.flexShrink },
+      }
+      const rowBytes = new TextEncoder().encode(JSON.stringify(value)).byteLength
+      if (rows.length >= limits.rows || bytes + rowBytes > limits.bytes) { droppedRows++; continue }
+      rows.push(value); bytes += rowBytes
+    }
+    return { limits, scannedElements: elements.length, truncatedScan, droppedRows, bytes,
+      rootFont: getComputedStyle(document.documentElement).fontSize, viewport: { width: innerWidth, height: innerHeight },
+      main: { rect: mainRect, scrollWidth: main.scrollWidth, clientWidth: main.clientWidth, scrollLeft: main.scrollLeft },
+      region: { rect: regionRect, scrollWidth: region.scrollWidth, clientWidth: region.clientWidth }, rows }
+  })
+}
+
+async function emitReaderTextZoomEvidence(page: Page, info: TestInfo, state: string, mode: 'light' | 'dark', originalCompleted: boolean, phase: string, overflowEvidence: unknown) {
   try {
     const evidence = await page.evaluate(() => (window as ReaderFocusProbeWindow).__readerTextZoomProbe?.finish())
-    const payload = JSON.stringify({ state, mode, candidateSha, originalCompleted, phase, evidence })
+    const payload = JSON.stringify({ state, mode, candidateSha, originalCompleted, phase, evidence, overflowEvidence })
     // Observation must never replace the original assertion's verdict.
     if (Buffer.byteLength(payload) <= 192 * 1024) {
       console.info('Reader text-zoom focus evidence:', payload)
@@ -211,6 +281,7 @@ async function captureReaderTextZoom(page: Page, info: TestInfo, state: string, 
   await observeReaderTextZoom(refresh)
   let originalCompleted = false
   let phase = 'text-enlargement'
+  let overflowEvidence: unknown = null
   try {
     // Actual text enlargement changes computed font size and layout. Do not use
     // a screenshot transform, device scale factor, or an overflow-hiding rule.
@@ -227,6 +298,8 @@ async function captureReaderTextZoom(page: Page, info: TestInfo, state: string, 
     await expect(refresh).toBeInViewport({ ratio: 1 })
     phase = 'remaining-original-assertions'
     expect(await refresh.evaluate(element => element.matches(':focus-visible'))).toBe(true)
+    try { overflowEvidence = await readerOverflowGeometry(reader) }
+    catch (error) { overflowEvidence = { unavailable: error instanceof Error ? error.name : 'unknown error' } }
     expect(await page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - innerWidth), `${state} ${mode} 320px text200 document overflow`).toBeLessThanOrEqual(1)
     expect(await page.locator('#page-content').evaluate(element => element.scrollWidth - element.clientWidth), `${state} text200 main overflow`).toBeLessThanOrEqual(1)
     expect(await reader.evaluate(element => element.scrollWidth - element.clientWidth), `${state} text200 reader overflow`).toBeLessThanOrEqual(1)
@@ -248,8 +321,17 @@ async function captureReaderTextZoom(page: Page, info: TestInfo, state: string, 
     expect((await checking).status()).toBe(200)
     await expect(refresh).toBeEnabled()
     originalCompleted = true
+  } catch (error) {
+    // The automatic failure screenshot runs after finally restores normal text.
+    // Capture the actual enlarged state without replacing the original verdict.
+    try {
+      await page.screenshot({ path: info.outputPath(`reader-${state}-failure-before-text-reset-${mode}-320-${candidateSha}.png`), fullPage: true, animations: 'disabled' })
+    } catch (captureError) {
+      console.info('Reader enlarged failure capture unavailable:', captureError instanceof Error ? captureError.name : 'unknown error')
+    }
+    throw error
   } finally {
-    await emitReaderTextZoomEvidence(page, info, state, mode, originalCompleted, phase)
+    await emitReaderTextZoomEvidence(page, info, state, mode, originalCompleted, phase, overflowEvidence)
     await page.locator('html').evaluate((element, previous) => { element.style.fontSize = previous }, originalRootSize)
   }
 }
