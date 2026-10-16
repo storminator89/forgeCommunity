@@ -9,6 +9,7 @@ let mockSession: { user: { id: string } } | null = { user: { id: 'author' } }
 jest.mock('@/components/Sidebar', () => ({ Sidebar: () => null }))
 jest.mock('@/components/user-nav', () => ({ UserNav: () => null }))
 jest.mock('@/components/theme-toggle', () => ({ ThemeToggle: () => null }))
+jest.mock('@/components/ui/sonner', () => ({ Toaster: () => null }))
 jest.mock('@/components/Editor', () => ({ Editor: ({ content, onChange }: { content: string; onChange: (value: string) => void }) => <textarea aria-label="Inhalt" value={content} onChange={event => onChange(event.target.value)} /> }))
 jest.mock('next/navigation', () => ({ useParams: () => ({ id: 'article-1' }), useRouter: () => ({ push: mockPush }) }))
 jest.mock('next-auth/react', () => ({ useSession: () => ({ data: mockSession, status: mockSession ? 'authenticated' : 'unauthenticated' }) }))

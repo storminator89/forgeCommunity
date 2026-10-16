@@ -1,9 +1,8 @@
 .section { margin-block: 2rem; padding-bottom: 2rem; border-bottom: 1px solid hsl(var(--border)); min-width: 0; }
-.sectionHeader { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+.sectionHeader { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem; }
 .intro { display: flex; align-items: center; gap: .75rem; min-width: 0; }
-.illustration { width: 76px; height: 68px; flex-shrink: 0; }
-.eyebrow { color: hsl(var(--muted-foreground)); font-size: .75rem; font-weight: 600; }
-.sectionTitle { font-size: 1.4rem; line-height: 1.3; font-weight: 650; letter-spacing: -.025em; }
+.illustration { width: 48px; height: 44px; flex-shrink: 0; }
+.sectionTitle { font-size: 1.25rem; line-height: 1.3; font-weight: 650; letter-spacing: -.025em; }
 .headerActions { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; }
 .privacy { margin-top: 1rem; padding-left: .875rem; border-left: 2px solid hsl(var(--border)); color: hsl(var(--muted-foreground)); font-size: .8125rem; line-height: 1.6; max-width: 70ch; }
 .privacy > p:first-child { font-weight: 600; color: hsl(var(--foreground)); margin-bottom: .25rem; }
@@ -43,5 +42,5 @@
 .pollCard[data-confirmed] .saved svg { animation: confirmedTick 320ms ease-out both; }
 @keyframes confirmedBar { from { transform: scaleX(.88); } to { transform: scaleX(1); } }
 @keyframes confirmedTick { from { transform: scale(.8); } to { transform: scale(1); } }
-@media (max-width: 420px) { .pollCard { padding: 1rem; border-radius: 1.25rem; } .illustration { width: 58px; height: 58px; } .choice { gap: .5rem; padding: .75rem; } .choiceLetter { width: 1.5rem; height: 1.5rem; } .choiceLabel { font-size: .875rem; } .voteFooter { align-items: stretch; } .voteButton { width: 100%; } }
+@media (max-width: 420px) { .pollCard { padding: 1rem; border-radius: 1.25rem; } .illustration { width: 40px; height: 40px; } .choice { gap: .5rem; padding: .75rem; } .choiceLetter { width: 1.5rem; height: 1.5rem; } .choiceLabel { font-size: .875rem; } .voteFooter { align-items: stretch; } .voteButton { width: 100%; } }
 @media (prefers-reduced-motion: reduce) { .pollCard[data-confirmed] .bar, .pollCard[data-confirmed] .saved svg { animation: none; } }

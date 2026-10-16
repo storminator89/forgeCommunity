@@ -8,6 +8,7 @@ import { ThumbsUp, Send, Loader2, CheckCircle2 } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import { ReportControl } from './ReportControl'
+import { useCommentActionFocus } from './useCommentActionFocus'
 
 const DEFAULT_AVATAR_URL = ''
 
@@ -61,6 +62,8 @@ export function CommentSection({
   onLikeComment
 }: CommentSectionProps) {
   const [newCommentContent, setNewCommentContent] = useState('')
+  const commentInputRef = useRef<HTMLInputElement>(null)
+  const actionFocus = useCommentActionFocus(postId, currentUserId, isLoading)
   const commentsStatusRef = useRef<HTMLParagraphElement>(null)
   const focusEndOfCommentsRef = useRef(false)
 
@@ -83,20 +86,23 @@ export function CommentSection({
     return () => { window.clearTimeout(timer); window.removeEventListener('hashchange', followHash); };
   }, [comments]);
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (origin: HTMLElement) => {
     if (!newCommentContent.trim()) return
+    const focus = actionFocus.begin(origin, commentInputRef.current)
     try {
       await onAddComment?.(postId, newCommentContent)
       setNewCommentContent('')
     } catch (error) {
       console.error('Fehler beim Hinzufügen des Kommentars:', error)
+    } finally {
+      actionFocus.complete(focus)
     }
   }
 
   const handleKeyPress = async (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      await handleSubmit()
+      await handleSubmit(e.currentTarget)
     }
   }
 
@@ -111,6 +117,7 @@ export function CommentSection({
       <div className="bg-card p-4 rounded-lg shadow-xs border border-border">
         <div className="relative flex items-center">
           <Input
+            ref={commentInputRef}
             value={newCommentContent}
             onChange={(e) => setNewCommentContent(e.target.value)}
             onKeyPress={handleKeyPress}
@@ -120,7 +127,7 @@ export function CommentSection({
             disabled={isLoading}
           />
           <Button
-            onClick={handleSubmit}
+            onClick={event => void handleSubmit(event.currentTarget)}
             type="button"
             aria-label="Kommentar senden"
             disabled={isLoading || !newCommentContent.trim()}
@@ -174,7 +181,11 @@ export function CommentSection({
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => onLikeComment?.(comment.id, postId)}
+                      onClick={async event => {
+                        const focus = actionFocus.begin(event.currentTarget)
+                        try { await onLikeComment?.(comment.id, postId) }
+                        finally { actionFocus.complete(focus) }
+                      }}
                       aria-label={comment.isLiked ? 'Kommentar-Like entfernen' : 'Kommentar liken'}
                       className={`hover:bg-accent flex items-center space-x-1 rounded-md p-2 h-auto py-1 transition-colors duration-200 ${comment.isLiked ? 'text-destructive bg-destructive/10 hover:bg-destructive/20' : 'text-muted-foreground'
                         }`}

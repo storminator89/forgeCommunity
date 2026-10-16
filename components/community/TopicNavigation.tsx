@@ -43,29 +43,31 @@ export function TopicNavigation({ selected, onSelect, disabled = false }: { sele
     onSelect(topic)
   }
 
-  return <section className="mt-6 rounded-[14px] border border-border bg-card p-4 sm:p-5" aria-labelledby="community-topic-heading">
-    <div className="flex flex-wrap items-center justify-between gap-2">
-      <h2 id="community-topic-heading" className="text-base font-semibold">Themen entdecken</h2>
-      {selected && <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={() => choose(null)}>Alle Beiträge zeigen</Button>}
+  return <section className="mt-4 min-w-0" aria-labelledby="community-topic-heading">
+    <h3 id="community-topic-heading" className="sr-only">Themenfilter</h3>
+    <div className="flex min-w-0 flex-wrap items-center gap-3">
+      <Label htmlFor="community-topic-search" className="min-w-0 text-sm">Thema suchen</Label>
+      <Input id="community-topic-search" type="search" value={query} maxLength={MAX_TOPIC_LENGTH} disabled={disabled} onFocus={() => setOpen(true)}
+        onKeyDown={event => { if (event.key === 'Escape') setOpen(false) }}
+        onChange={event => { setQuery(event.target.value); setOpen(true) }} placeholder="z. B. Design" className="min-w-0 max-w-full flex-[1_1_8rem]" />
     </div>
-    {selected && <p className="mt-2 text-sm text-muted-foreground">Aktives Thema: <strong className="text-foreground">{selected}</strong></p>}
+    {selected && <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+      <p className="min-w-0 rounded-md bg-accent px-2 py-1 text-sm text-accent-foreground [overflow-wrap:anywhere]">Aktives Thema: <strong>{selected}</strong></p>
+      <Button type="button" variant="ghost" size="sm" className="h-auto min-h-11 max-w-full whitespace-normal text-left" disabled={disabled} onClick={() => choose(null)}>Alle Beiträge zeigen</Button>
+    </div>}
     {disabled && <p className="mt-2 text-sm text-muted-foreground" role="status">Schließe zuerst deinen Beitragsentwurf, bevor du das Thema wechselst.</p>}
-    <Label htmlFor="community-topic-search" className="mt-4 block text-sm">Thema suchen</Label>
-    <Input id="community-topic-search" type="search" value={query} maxLength={MAX_TOPIC_LENGTH} disabled={disabled} onFocus={() => setOpen(true)}
-      onKeyDown={event => { if (event.key === 'Escape') setOpen(false) }}
-      onChange={event => { setQuery(event.target.value); setOpen(true) }} placeholder="z. B. Design oder Weiterbildung" className="mt-2" />
     {open && !disabled && <div className="mt-3">
       {loading && <p className="text-sm text-muted-foreground">Themen werden geladen…</p>}
-      {error && <div aria-live="polite" className="flex flex-wrap items-center gap-2 text-sm text-destructive">Themen konnten nicht geladen werden. <Button type="button" variant="outline" size="sm" onClick={() => setAttempt(value => value + 1)}>Erneut versuchen</Button></div>}
+      {error && <div aria-live="polite" className="flex flex-wrap items-center gap-2 text-sm text-destructive">Themen konnten nicht geladen werden. <Button type="button" variant="outline" size="sm" className="h-auto min-h-11 max-w-full whitespace-normal" onClick={() => setAttempt(value => value + 1)}>Erneut versuchen</Button></div>}
       {!loading && !error && <>
         {topics.length > 0 ? <ul className="flex flex-wrap gap-2" aria-label="Gefundene Themen">
-          {topics.map(topic => <li key={topic.id}><a href={`/community?tag=${encodeURIComponent(topic.name)}`}
+          {topics.map(topic => <li key={topic.id} className="min-w-0 max-w-full"><a href={`/community?tag=${encodeURIComponent(topic.name)}`}
             aria-current={selected === topic.name ? 'page' : undefined}
             onClick={event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey && event.button === 0) { event.preventDefault(); choose(topic.name) } }}
-            className="inline-flex min-h-9 items-center rounded-full border border-border px-3 text-sm text-foreground hover:border-primary hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">{topic.name}</a></li>)}
+            className="inline-flex min-h-11 max-w-full items-center rounded-full border border-border px-3 text-sm text-foreground [overflow-wrap:anywhere] hover:border-primary hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">{topic.name}</a></li>)}
         </ul> : <p className="text-sm text-muted-foreground">Keine öffentlichen Themen gefunden. Versuche einen anderen Suchbegriff.</p>}
       </>}
-      <Button type="button" variant="ghost" size="sm" className="mt-2" onClick={() => setOpen(false)}>Vorschläge schließen</Button>
+      <Button type="button" variant="ghost" size="sm" className="mt-2 h-auto min-h-11 max-w-full whitespace-normal text-left" onClick={() => setOpen(false)}>Vorschläge schließen</Button>
     </div>}
   </section>
 }

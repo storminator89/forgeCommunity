@@ -20,6 +20,7 @@ import Image from 'next/image';
 import { CategorySelect } from "@/components/CategorySelect";
 import { TagSelect } from "@/components/TagSelect";
 import { toast } from 'sonner';
+import { Toaster } from '@/components/ui/sonner';
 import { Editor } from "@/components/Editor";
 import Link from 'next/link';
 
@@ -190,174 +191,144 @@ function AccountNewArticle({ accountId, status }: { accountId: string | null; st
         </AppHeader>
 
         <main id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto">
-            <div className="mx-auto w-full max-w-[1440px] px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
+            <div className="mx-auto w-full max-w-[1440px] px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
 
               {!accountId ? <PageState kind="error" title="Anmeldung erforderlich" description="Melde dich an, um einen Artikel zu schreiben." action={<Button asChild variant="outline"><Link href="/login">Zur Anmeldung</Link></Button>} /> : <>
 
               <div>
-                <div className="mb-8 border-b pb-6">
-                  <Button type="button" variant="ghost" size="sm" onClick={() => router.push('/knowledgebase')}><ArrowLeft className="h-4 w-4" aria-hidden="true" />Zur Übersicht</Button>
-                  <p className="mt-4 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Wissen / Schreiben</p>
-                  <p className="mt-2 max-w-[55ch] text-base leading-relaxed text-muted-foreground">Halte Erfahrungen und Anleitungen für die Community fest.</p>
+                <div className="flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
+                  <Button type="button" variant="ghost" size="sm" className="self-start" onClick={() => router.push('/knowledgebase')}><ArrowLeft className="h-4 w-4" aria-hidden="true" />Zur Übersicht</Button>
+                  <div role="group" aria-label="Artikel speichern oder veröffentlichen" className="grid gap-2 sm:flex sm:gap-3">
+                    <Button
+                      variant="outline"
+                      onClick={() => submitArticle(true)}
+                      disabled={isSubmitting}
+                      type="button"
+                      className="w-full sm:w-auto"
+                    >
+                      {isSubmitting && isDraft ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Speichere...
+                        </>
+                      ) : (
+                        <>
+                          <Bookmark className="mr-2 h-4 w-4" />
+                          Als Entwurf speichern
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      onClick={() => submitArticle(false)}
+                      disabled={isSubmitting}
+                      type="button"
+                      className="w-full sm:w-auto"
+                    >
+                      {isSubmitting && !isDraft ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Veröffentliche...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="mr-2 h-4 w-4" />
+                          Veröffentlichen
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </div>
-                {alert && <Alert variant={alert.type === 'error' ? 'destructive' : 'default'} className="mb-6" role={alert.type === 'error' ? 'alert' : 'status'}><AlertDescription>{alert.message}</AlertDescription></Alert>}
-                <div className="grid min-w-0 items-start gap-10 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-12">
-                  <section aria-labelledby="new-article-content-title" className="min-w-0 border-t pt-5">
-                    <h2 id="new-article-content-title" className="text-lg font-semibold tracking-tight">Artikelinhalt</h2>
-                    <div className="mt-6">
-                      <div className="space-y-8">
-                        {/* Titel */}
-                        <div className="border-b pb-7">
-                          <div className="flex justify-between items-center mb-2">
-                            <Label htmlFor="title" className="text-sm font-medium text-foreground">
-                              Titel <span className="text-destructive">*</span>
-                            </Label>
-                            <span className="text-xs text-muted-foreground">
-                              {title.length}/{maxTitleLength}
-                            </span>
-                          </div>
-                          <Input
-                            id="title"
-                            value={title}
-                            onChange={(e) => setTitle(e.target.value.slice(0, maxTitleLength))}
-                            className="text-lg py-2"
-                            placeholder="Geben Sie einen aussagekräftigen Titel ein"
-                            required
-                          />
-                        </div>
-
-                        {/* Beitragsbild */}
-                        <div className="border-b pb-7">
-                          <Label className="text-sm font-medium text-foreground mb-2 block">Beitragsbild</Label>
-                          <div className="flex flex-wrap items-center gap-4">
-                            <Button
-                              type="button"
-                              onClick={() => fileInputRef.current?.click()}
-                              variant="outline"
-                              className="hover:bg-muted"
-                            >
-                              <Upload className="mr-2 h-4 w-4" />
-                              Bild auswählen
-                            </Button>
-                            {featuredImagePreview && (
-                              <div className="relative group">
-                                <div className="w-20 h-20 rounded-lg overflow-hidden border border-border relative">
-                                  <Image src={featuredImagePreview} alt="Vorschau" fill className="object-cover" />
-                                  <div className="absolute inset-0 bg-background/80 opacity-100 md:opacity-0 md:group-hover:opacity-100 focus-within:opacity-100 transition-opacity flex items-center justify-center z-10">
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="sm"
-                                      aria-label="Beitragsbild entfernen"
-                                      className="text-destructive hover:text-destructive/90"
-                                      onClick={() => {
-                                        setFeaturedImage(null);
-                                        setFeaturedImagePreview('');
-                                      }}
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                            <input
-                              type="file"
-                              id="featuredImage"
-                              ref={fileInputRef}
-                              onChange={handleImageUpload}
-                              accept="image/*"
-                              className="hidden"
-                            />
-                          </div>
-                        </div>
-
-                        {/* Editor */}
-                        <div>
-                          <p className="mb-2 text-sm font-medium text-foreground">Inhalt</p>
-                          <div className="overflow-hidden rounded-[10px] focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
-                            <Editor
-                              content={content}
-                              onChange={setContent}
-                              className="min-h-[400px]"
-                            />
-                          </div>
-                        </div>
-                      </div>
+                <p id="new-article-required-fields" className="mt-4 text-sm text-muted-foreground">Pflichtangaben: Titel, Inhalt und Kategorie.</p>
+                {alert && <Alert variant={alert.type === 'error' ? 'destructive' : 'default'} className="mt-4" role={alert.type === 'error' ? 'alert' : 'status'}><AlertDescription>{alert.message}</AlertDescription></Alert>}
+                <div className="mt-5 grid min-w-0 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-8" role="group" aria-label="Pflichtangaben" aria-describedby="new-article-required-fields">
+                  <div className="min-w-0">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <Label htmlFor="title" className="text-sm font-medium text-foreground">Titel</Label>
+                      <span id="new-article-title-count" className="text-xs tabular-nums text-muted-foreground">{title.length}/{maxTitleLength}</span>
                     </div>
-                  </section>
-
-                  <aside aria-label="Artikeloptionen" className="min-w-0 space-y-7">
-                    <section className="border-t pt-5">
-                      <h2 className="text-base font-semibold tracking-tight">Aktionen</h2>
-                      <div className="mt-4 space-y-3">
-                        <Button
-                          variant="outline"
-                          onClick={() => submitArticle(true)}
-                          disabled={isSubmitting}
-                          type="button"
-                          className="w-full justify-start"
-                        >
-                          {isSubmitting && isDraft ? (
-                            <>
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              Speichere...
-                            </>
-                          ) : (
-                            <>
-                              <Bookmark className="mr-2 h-4 w-4" />
-                              Als Entwurf speichern
-                            </>
-                          )}
-                        </Button>
-                        <Button
-                          onClick={() => submitArticle(false)}
-                          disabled={isSubmitting}
-                          type="button"
-                          className="w-full justify-start"
-                        >
-                          {isSubmitting && !isDraft ? (
-                            <>
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              Veröffentliche...
-                            </>
-                          ) : (
-                            <>
-                              <Send className="mr-2 h-4 w-4" />
-                              Veröffentlichen
-                            </>
-                          )}
-                        </Button>
-                      </div>
-                    </section>
-
-                    <section className="border-t pt-5">
-                      <h2 className="text-base font-semibold tracking-tight">Kategorie</h2>
-                      <div className="mt-4">
-                        <CategorySelect
-                          categories={existingCategories}
-                          selectedCategory={category}
-                          setSelectedCategory={setCategory}
-                          onAddCategory={handleAddNewCategory}
-                        />
-                      </div>
-                    </section>
-
-                    <section className="border-t pt-5">
-                      <h2 className="text-base font-semibold tracking-tight">Tags</h2>
-                      <div className="mt-4">
-                        <TagSelect
-                          availableTags={existingTags}
-                          selectedTags={tags}
-                          onTagSelect={handleAddTag}
-                          onTagRemove={handleRemoveTag}
-                          onAddTag={handleAddNewTag}
-                        />
-                      </div>
-                    </section>
-                  </aside>
+                    <Input
+                      id="title"
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value.slice(0, maxTitleLength))}
+                      className="text-lg py-2"
+                      placeholder="Ein aussagekräftiger Titel"
+                      aria-describedby="new-article-required-fields new-article-title-count"
+                      required
+                    />
+                  </div>
+                  <div className="min-w-0">
+                    <CategorySelect
+                      categories={existingCategories}
+                      selectedCategory={category}
+                      setSelectedCategory={setCategory}
+                      onAddCategory={handleAddNewCategory}
+                    />
+                  </div>
+                </div>
+                <section aria-labelledby="new-article-content-title" aria-describedby="new-article-required-fields" className="mt-6 min-w-0">
+                  <h2 id="new-article-content-title" className="mb-2 text-sm font-medium">Artikelinhalt</h2>
+                  <div className="overflow-hidden rounded-[10px] focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+                    <Editor content={content} onChange={setContent} className="min-h-[400px]" />
+                  </div>
+                </section>
+                <div className="mt-6 grid min-w-0 items-start gap-6 border-t pt-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-8">
+                  {/* Beitragsbild */}
+                  <div className="min-w-0">
+                    <Label className="text-sm font-medium text-foreground mb-2 block">Beitragsbild (optional)</Label>
+                    <div className="flex flex-wrap items-center gap-4">
+                      <Button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        variant="outline"
+                        className="hover:bg-muted"
+                      >
+                        <Upload className="mr-2 h-4 w-4" />
+                        Bild auswählen
+                      </Button>
+                      {featuredImagePreview && (
+                        <div className="relative group">
+                          <div className="w-20 h-20 rounded-lg overflow-hidden border border-border relative">
+                            <Image src={featuredImagePreview} alt="Vorschau" fill className="object-cover" />
+                            <div className="absolute inset-0 bg-background/80 opacity-100 md:opacity-0 md:group-hover:opacity-100 focus-within:opacity-100 transition-opacity flex items-center justify-center z-10">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                aria-label="Beitragsbild entfernen"
+                                className="text-destructive hover:text-destructive/90"
+                                onClick={() => {
+                                  setFeaturedImage(null);
+                                  setFeaturedImagePreview('');
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      <input
+                        type="file"
+                        id="featuredImage"
+                        ref={fileInputRef}
+                        onChange={handleImageUpload}
+                        accept="image/*"
+                        className="hidden"
+                      />
+                    </div>
+                  </div>
+                  <div className="min-w-0">
+                    <TagSelect
+                      availableTags={existingTags}
+                      selectedTags={tags}
+                      onTagSelect={handleAddTag}
+                      onTagRemove={handleRemoveTag}
+                      onAddTag={handleAddNewTag}
+                    />
+                  </div>
                 </div>
               </div>
+              <Toaster />
               </>}
             </div>
         </main>

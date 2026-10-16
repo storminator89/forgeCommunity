@@ -139,18 +139,18 @@ export function SpacePolls({ spaceId, canManage, request, onUnavailable }: {
   return <section ref={rootRef} aria-labelledby={headingId} className={styles.section}>
     <div className={styles.sectionHeader}>
       <div className={styles.intro}>
-        <BallotIllustration />
-        <div className="min-w-0"><p className={styles.eyebrow}>Gemeinsam entscheiden</p><h2 id={headingId} className={styles.sectionTitle}>Umfragen</h2><p className="mt-1 text-sm text-muted-foreground">Eine Frage. Deine Perspektive.</p></div>
+        {(items.length > 0 || formOpen) && <BallotIllustration />}
+        <h2 id={headingId} className={styles.sectionTitle}>Umfragen</h2>
       </div>
-      <div className={styles.headerActions}><FriendlyMotionToggle />
+      <div className={styles.headerActions}><span hidden={items.length === 0}><FriendlyMotionToggle /></span>
         {canManage && <Button ref={buttonRef} type="button" variant="outline" disabled={pending} aria-expanded={formOpen} aria-controls={formId} onClick={() => formOpen ? closeForm() : setFormOpen(true)}>{formOpen ? 'Schließen' : 'Umfrage erstellen'}</Button>}
       </div>
     </div>
-    <div className={styles.privacy}>
+    {(items.length > 0 || formOpen) && <div className={styles.privacy}>
       <p>Freiwillig · Eine Stimme pro Person</p>
       <p>In kleinen Gruppen können Antworten erkennbar sein. Keine sensiblen Fragen.</p>
       <details className={styles.details}><summary>So wird gezählt</summary><p>Angezeigt werden nur Summen und deine eigene Auswahl. Solange die Umfrage offen ist, kannst du deine Auswahl ändern.</p></details>
-    </div>
+    </div>}
     {canManage && formOpen && <form id={formId} onSubmit={create} onKeyDown={event => { if (event.key === 'Escape' && !pending) { event.preventDefault(); closeForm(); } }} className="mt-5 max-w-3xl space-y-4 rounded-2xl border bg-card p-4 sm:p-6">
       <div className="space-y-2"><label htmlFor={questionId} className="text-sm font-medium">Frage</label><Input ref={questionRef} id={questionId} value={question} onChange={event => setQuestion(event.target.value)} minLength={5} maxLength={200} required disabled={pending} /></div>
       <fieldset className="min-w-0 space-y-3"><legend className="mb-2 text-sm font-medium">Antworten (2 bis 8)</legend>{options.map((label, index) => <div key={index} className="space-y-1"><label htmlFor={`${formId}-option-${index}`} className="text-sm">Antwort {index + 1}</label><Input ref={index === options.length - 1 ? lastOptionRef : undefined} id={`${formId}-option-${index}`} value={label} onChange={event => setOptions(previous => previous.map((value, at) => at === index ? event.target.value : value))} maxLength={100} required disabled={pending} /></div>)}
@@ -161,7 +161,7 @@ export function SpacePolls({ spaceId, canManage, request, onUnavailable }: {
     </form>}
     {items.length > 0 && <ul className={styles.pollList}>{items.map(item => <li key={`${item.id}:${item.ownVote.revision}:${item.moderationRevision}:${item.closedAt}`} className="min-w-0"><PollCard poll={item} base={base} request={request} confirmed={motion.enabled && confirmedPoll === item.id} onChange={(confirmed, intent) => recheckPoll(item.id, confirmed, intent)} onUnavailable={onUnavailable} /></li>)}</ul>}
     {loading && <p role="status" className="mt-4 text-sm text-muted-foreground">Umfragen werden geladen…</p>}
-    {!loading && !error && items.length === 0 && <p className="mt-4 text-sm text-muted-foreground">Noch keine Umfragen. Admins können eine Frage zur gemeinsamen Entscheidung stellen.</p>}
+    {!loading && !error && !formOpen && items.length === 0 && <p className="mt-2 text-sm text-muted-foreground">Noch keine Umfragen.</p>}
     {error && <div className="mt-4"><p role="alert" className="text-sm text-destructive">{error}</p><Button type="button" variant="outline" className="mt-3" onClick={() => void load()}>Umfragen erneut laden</Button></div>}
     {cursor && <Button type="button" variant="outline" className="mt-4" disabled={loading} onClick={more}>Weitere Umfragen laden</Button>}
   </section>;
