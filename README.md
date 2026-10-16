@@ -17,71 +17,77 @@ PostgreSQL is an explicit alternative.
 ## Screenshots
 
 These unedited Playwright captures show the real app with disposable synthetic
-accounts and content. The private practice question and feedback came from
-[PR #45's passing CI run](https://github.com/storminator89/forgeCommunity/actions/runs/38776781726)
-on [source head `a4cc101`](https://github.com/storminator89/forgeCommunity/commit/a4cc101a1b3a905dcc8645e37d093836d3d1e326),
-whose tree matches [merged main `edcd9cf`](https://github.com/storminator89/forgeCommunity/commit/edcd9cfb6611eefe27275d603bedcd108b7430ec).
-See [screenshot provenance](docs/ui/README.md) for artifact paths, hashes, and
-the visual QA limits.
+accounts and content. The Space learning-week and poll images come from
+[PR #65's passing CI run](https://github.com/storminator89/forgeCommunity/actions/runs/38871008041)
+on [source head `0a8cead`](https://github.com/storminator89/forgeCommunity/commit/0a8cead91c7f24609236bd516a61722d22472001),
+whose source tree matches [merged main `38a0826`](https://github.com/storminator89/forgeCommunity/commit/38a0826458387056ea079d46797b3be4b7a36b96).
+The public landing image was retrieved from that run too and is byte-identical
+to the earlier capture. See [screenshot provenance](docs/ui/README.md) for exact
+artifact paths, hashes, fixture setup, and visual QA limits.
 
-![Private learner practice question with optional confidence, synthetic content](docs/ui/readme/practice-question-desktop.png)
+![ForgeCommunity public landing page, desktop light mode](docs/ui/readme/landing-desktop-light.png)
 
 <details>
-<summary>320px answer feedback</summary>
+<summary>Private Space: optional learning week and cooperation</summary>
 
-The mobile capture starts at the scrolled feedback section. A learner opens the
-next question explicitly.
+An administrator can attach the current learning week and an explicit IANA zone
+to a new private-Space mission. The first frame shows the real scrolled creation
+form at 768px; the submit button is below the fold.
 
-![Private practice corrective feedback at a 320px viewport, synthetic content](docs/ui/readme/practice-feedback-mobile-320.png)
+![Private-Space mission creation with optional current learning week and Europe/Berlin zone, synthetic content](docs/ui/readme/space-learning-week-form-light-768.png)
+
+The second frame shows a completed cooperation milestone after the soft week
+ended. The disposable test deliberately moves the stored week into the past to
+exercise that state; the production app has no rescheduling control. The long
+synthetic title tests wrapping. The week ending leaves participation open.
+
+![Private-Space mission with an ended soft learning week and a current cooperation milestone, synthetic content](docs/ui/readme/space-mission-light-768.png)
+
+<details>
+<summary>Same mission, 320px dark mode</summary>
+
+This is the top viewport only. The contribution controls are further down the
+page; this frame does not show a complete mobile workflow.
+
+<img src="docs/ui/readme/space-mission-dark-320.png" alt="Private-Space mission at 320px in dark mode with synthetic content" width="320" />
+
+</details>
+</details>
+
+<details>
+<summary>Voluntary Space poll</summary>
+
+A current member's changed choice and option totals in a private Space, at
+768px. The synthetic question is deliberately long. The lower action controls
+are below this viewport. Totals are not anonymous in a small group.
+
+![Voluntary private-Space poll with aggregate option totals and the caller's saved choice, synthetic content](docs/ui/readme/space-poll-light-768.png)
 
 </details>
 
 <details>
-<summary>Course publication authoring</summary>
+<summary>Earlier learner practice and course publication captures</summary>
 
-These earlier [PR #39 captures](docs/ui/README.md#course-publication-captures)
-show the separate course-draft and publication-review flow, not practice-pool
-authoring.
+The [PR #45 practice captures](docs/ui/README.md#earlier-practice-captures) show an
+opted-in learner's real question and corrective feedback. These earlier pixels
+are retained with their original source attribution.
+
+![Private learner practice question with optional confidence, synthetic content](docs/ui/readme/practice-question-desktop.png)
+
+The mobile capture starts at the scrolled feedback section. A learner opens the
+next question explicitly.
+
+<img src="docs/ui/readme/practice-feedback-mobile-320.png" alt="Private practice corrective feedback at a 320px viewport, synthetic content" width="320" />
+
+The earlier [PR #39 captures](docs/ui/README.md#course-publication-captures)
+show private course-draft authoring and publication review.
 
 ![Private course draft authoring workspace, synthetic lesson](docs/ui/readme/course-draft-authoring-desktop.png)
 
 ![Course publication review with synthetic impact counts](docs/ui/readme/course-publication-review-desktop.png)
 
-</details>
-
-<details>
-<summary>Earlier landing and immediate-save editor captures</summary>
-
-The four captures below are historical, pre-phase-2 evidence from merged-main
-Chromium run `38717775096` on `1025767`. The landing pages contain no member
-data. The earlier quiz authoring and preview used a disposable synthetic
-account and course, not production activity. They do not depict the new
-private-draft workflow.
-
-![ForgeCommunity public landing page, desktop light mode](docs/ui/readme/landing-desktop-light.png)
-
-Earlier quiz authoring after save, 1280px light mode. The independently scrollable editor
-panel is positioned at the question and save controls; not every field is shown.
-Synthetic example content.
-
-![Historical course quiz authoring with nested outline and saved-state controls](docs/ui/readme/course-quiz-authoring-desktop-light.png)
-
-<details>
-<summary>Earlier course preview, 1280px light mode, synthetic unsaved draft</summary>
-
-The course preview displays a local unsaved quiz draft. Rehearsal answers stay
-inside the preview and do not record a learner attempt or completion.
-
-![Historical course preview showing an isolated synthetic quiz draft](docs/ui/readme/course-quiz-preview-desktop-light.png)
-
-</details>
-
-<details>
-<summary>Public landing page, 390px mobile light mode</summary>
-
-<img src="docs/ui/readme/landing-mobile-light.png" alt="ForgeCommunity public landing page on a 390px mobile viewport" width="390" />
-
-</details>
+The [historical gallery](docs/ui/README.md#historical-pre-phase-2-gallery) retains
+pre-phase-2 immediate-save editor screenshots separately.
 
 </details>
 
@@ -90,15 +96,16 @@ inside the preview and do not record a learner attempt or completion.
 | Area | Available in the app | Routes |
 | --- | --- | --- |
 | Community | Posts and replies, topic filters, likes, bounded feed/comment pagination, author-selected solutions, and reporting | `/community` |
+| Spaces | Signed-in public/private topic rooms, membership, paginated discussions/replies, voluntary polls, and optional private-Space cooperative missions with a soft learning week | `/community/spaces`, `/community/spaces/[spaceId]`, `/community/spaces/[spaceId]/discussions/[discussionId]`, `/community/spaces/[spaceId]/missions/[missionId]` |
 | Members | Search/filter, grid/list views, profiles, following, and skill endorsements | `/members`, `/profile/[id]` |
 | Courses | Private course drafts, review/publish/version restore, free self-enrollment with capacity checks, nested text/video/audio/H5P/quiz lessons, revision-aware progress, and completion-gated certificate downloads | `/courses`, `/courses/authoring`, `/courses/new`, `/courses/[courseId]/contents` |
-| Course tools | Private versioned quiz-question bank, assignments with instructor grading, UTC chapter release dates, and bounded course analytics/CSV export | `/courses/[courseId]/contents`, `/courses/[courseId]/grading`, `/courses/[courseId]/analytics` |
+| Course tools | Private versioned quiz-question bank, assignments with instructor grading, UTC chapter release dates, enrolled course Q&A, and bounded analytics/CSV export | `/courses/[courseId]/contents`, `/courses/[courseId]/qa`, `/courses/[courseId]/grading`, `/courses/[courseId]/analytics` |
 | Formative practice | Private, versioned instructor-owned single-choice pool; separate course-bound publication; enrolled learner opt-in, recall sessions, corrective feedback, and private controls | `/courses/[courseId]/practice`, `/courses/[courseId]/practice/learn` |
 | Learning pathways | Administrator-curated course sequences with private, opt-in participation and current-credit badges | `/courses/pathways`, `/courses/pathways/[pathwayId]`, `/admin/learning-pathways` |
-| Personal learning | Optional private learning goals, completion milestones, and course-reward history; administrator-approved quiz learning can qualify for a verified-learning badge and opt-in ranking | `/courses/goals`, community reward panels, profiles |
+| Personal learning | Private enrolled-course journey and next available step, optional private goals, completion milestones, and course-reward history; administrator-approved quiz learning can qualify for a verified-learning badge and opt-in ranking | `/courses/journey`, `/courses/goals`, community reward panels, profiles |
 | Knowledge base | Published articles, category/tag search, rich-text authoring, and private drafts | `/knowledgebase`, `/knowledgebase/[id]`, `/knowledgebase/new-article`, `/knowledgebase/drafts` |
 | Resources and projects | Resource browsing/details, project submission/details, likes and project comments | `/resources`, `/resources/[id]`, `/projects/new`, `/projects/[projectId]`, `/showcases` |
-| Events | Calendar/list discovery, upcoming events, creation, and RSVP with capacity checks | `/events` |
+| Events | Calendar/list discovery, explicit event time zones, calendar-file downloads, RSVP capacity checks, and voluntary FIFO waitlists with in-app promotion notices | `/events` |
 | Skills and search | Skill directory, personal skills, and cross-content discovery with URL-backed search filters | `/skills`, `/search` |
 | Chat and notifications | Channel conversations, message editing, private attachments, and a recipient-scoped in-app inbox with links to available targets | `/chat`, `/notifications` |
 | Account and staff | Registration/login, profile/settings, administrator dashboard/user management, and role-limited moderation | `/register`, `/login`, `/settings`, `/admin/dashboard`, `/admin/users`, `/moderation` |
@@ -145,10 +152,32 @@ every App Router page, including redirects.
   depend on local permission and settings. See [notifications](docs/ACTIONABLE-NOTIFICATION-INBOX.md).
 - Public course-reward ranking is opt-in. Private goals and contribution
   milestones do not award posting points or streaks. See [reward rules](docs/RESPONSIBLE-REWARDS.md).
+- Spaces are separate from the global feed. PUBLIC means readable by signed-in
+  accounts; PRIVATE requires current membership or an administrator role.
+  Administrators create Spaces and manage private membership. Space membership
+  alone does not enroll anyone in a mission. See [Spaces](docs/SPACES.md).
+- Private-Space missions are voluntary, named teach-back relays for up to five
+  eligible members. Their reversible cooperation milestone is not mastery,
+  course progress, a grade, or a reward. An optional current learning week has
+  a fixed zone-aware window and a soft end: late participation remains open
+  until an administrator explicitly closes the mission. There is no automatic
+  weekly rollover, deadline penalty, reminder, or carried-over consent. See
+  [cooperative missions](docs/COOPERATIVE-MISSIONS.md).
 - Voluntary Space polls let current members choose one option and change their
   vote; admins create, close and hide questions. Results show totals and your
   own choice, without a voter list. Small-group choices may still be inferred.
   See [Space polls](docs/SPACE-POLLS.md).
+- A full event offers a separate waitlist opt-in. Vacancies promote the oldest
+  eligible queue ticket into a registration and add a recipient-scoped in-app
+  notice. The caller can see only their own queue position, not queue identities.
+  There is no background waitlist monitor or external notification sender. Event
+  dates and times stay in the event's chosen zone, rather than the viewer's.
+  See [event waitlists](docs/EVENT-WAITLIST.md).
+- **Mein Lernweg** reads existing, publication-matched course progress for regular
+  learners enrolled in other instructors' courses. Opening the page records no
+  completion. Its optional Forge Spark figure and animations can be switched
+  off locally; reduced-motion settings suppress motion. These are browser
+  presentation preferences, not shared account settings.
 - The member directory is not server-paginated. Unicode/collation and freshness
   semantics need an explicit decision before changing that contract.
 
@@ -379,11 +408,13 @@ SQLite settings. After testing, regenerate the client for the intended build
 provider. The [CI workflow](.github/workflows/ci.yml) is the complete reference
 for ordered generation, migration checks, build, and runtime smokes.
 
-CI separates application `quality` from the unchanged strict
-`npm audit --audit-level=high` job. The `validate` aggregate succeeds only when
-both succeed. Independent jobs exercise PostgreSQL upgrades, Docker/SQLite/H5P,
-and real Chromium journeys with disposable data. Browser screenshots are retained
-as workflow artifacts for seven days; selected documentation images are kept in
+CI separates application `quality` from the strict
+`npm audit --audit-level=high` job. The `validate` aggregate requires quality,
+security audit, browser QA, and PostgreSQL publication runtime. The Docker and
+PostgreSQL release-gate jobs are independent of that aggregate, so inspect
+those results too. The release gate includes real PostgreSQL mission, poll,
+and waitlist contracts; browser QA runs the production app with disposable
+data. Browser screenshots are retained as workflow artifacts for seven days; selected documentation images are kept in
 `docs/ui` with provenance.
 
 Browser QA requires a production build, official Playwright Chromium,
@@ -394,23 +425,22 @@ server; never aim it at a production or personal database. Run
 1280px and 320px; the journey suites also run at 390px. Some dynamic route-sweep
 responses are synthetic API fixtures, as documented in [route-sweep coverage](docs/ROUTE-SWEEP-QA.md).
 
-The [PR #45 exact-head run 38776781726](https://github.com/storminator89/forgeCommunity/actions/runs/38776781726)
-passed all seven jobs on `a4cc101a1b3a905dcc8645e37d093836d3d1e326`:
-quality, strict security audit, Docker application flows, PostgreSQL release
-gate, authenticated PostgreSQL publication/learner runtime, browser QA, and
-aggregate validation. Browser QA passed 124 Chromium cases and four
-Firefox/WebKit critical journeys; 59 configured variants were skipped. Its
-source tree `c7db611cb0dcb5a141aef5014296990b7ed97fcf` is identical to
-merged main `edcd9cfb6611eefe27275d603bedcd108b7430ec`. The two new
-practice images come from that run's actual disposable learner journey. This
-dated evidence applies to that source tree, not to future changes or a
-production deployment.
+The [PR #65 exact-head run 38871008041](https://github.com/storminator89/forgeCommunity/actions/runs/38871008041)
+passed all seven jobs on 16 October 2026 for
+`0a8cead91c7f24609236bd516a61722d22472001`: quality, strict security audit,
+Docker application flows, PostgreSQL release gate, authenticated PostgreSQL
+publication/learner runtime, browser QA, and aggregate validation. Browser QA
+completed its separate desktop, 320px and 390px Chromium invocations and four
+Firefox/WebKit critical journeys. The Space mission and poll journeys also
+check 320/375/414/768px light/dark layouts and 200% CSS zoom. Their actual
+screenshots are linked above; the suite's fixture and coverage limits still apply.
 
-The older, pre-phase-2 [merged-main run 38717775096](https://github.com/storminator89/forgeCommunity/actions/runs/38717775096)
-on `102576735dd3b7cb23c8657e3a74098228582bc6` passed all six jobs. Its
-landing and earlier editor captures remain labeled as historical in the
-[gallery provenance](docs/ui/README.md). See the [course editor guide](docs/COURSE-EDITOR.md)
-and [release handoff](docs/RELEASE-HANDOFF-2026-10-15.md) for their scopes.
+That source tree `9ea80641be9e08520675503971124e76aeee0770` matches merged main
+`38a0826458387056ea079d46797b3be4b7a36b96`. Its separate
+[post-merge main run 38872143016](https://github.com/storminator89/forgeCommunity/actions/runs/38872143016)
+also passed all seven jobs on 16 October 2026. These are dated results for that
+source tree. Earlier practice, course-publication and pre-phase-2 screenshots
+retain their own source/run provenance in the [gallery](docs/ui/README.md).
 
 This is repository integration evidence. Production deployment still requires
 operational review and a backed-up migration rehearsal. Chromium viewport tests
@@ -442,6 +472,11 @@ The redesign follows the inspected [Hallmark source](https://github.com/Nutlope/
 within the existing routes and product boundaries. Screenshots show real app
 rendering; no generated mock interfaces or added browser/phone chrome are used.
 
+- [Spaces, access, and discussion boundaries](docs/SPACES.md)
+- [Private-Space cooperative missions and soft learning weeks](docs/COOPERATIVE-MISSIONS.md)
+- [Voluntary Space polls](docs/SPACE-POLLS.md)
+- [Event waitlists and promotion notices](docs/EVENT-WAITLIST.md)
+- [Bounded community feed](docs/COMMUNITY-FEED-PAGINATION.md)
 - [Course editor](docs/COURSE-EDITOR.md)
 - [Staged publication storage and fresh-database boundary](docs/COURSE-PUBLICATION-STORAGE.md)
 - [Private formative-practice authoring](docs/formative-practice-authoring.md)
@@ -450,7 +485,7 @@ rendering; no generated mock interfaces or added browser/phone chrome are used.
 - [Responsible rewards and private learning goals](docs/RESPONSIBLE-REWARDS.md)
 - [Accepted solutions](docs/ACCEPTED-SOLUTIONS.md)
 - [Actionable notifications](docs/ACTIONABLE-NOTIFICATION-INBOX.md)
-- [Current release handoff and historical evidence](docs/RELEASE-HANDOFF-2026-10-15.md)
+- [Earlier release handoff and historical evidence](docs/RELEASE-HANDOFF-2026-10-15.md)
 - [Security modernization](docs/SECURITY-MODERNIZATION.md)
 - [Product roadmap](docs/REDESIGN-ROADMAP-2026-10-14.md)
 
