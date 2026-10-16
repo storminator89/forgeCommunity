@@ -168,6 +168,8 @@ test('a separately included old accepted reply keeps the 3-comment preview and 5
   const post = await (await getPost(request('/api/posts/public'), params())).json();
   expect(post.comments).toHaveLength(3); expect(post.commentCount).toBe(74);
   expect(post.acceptedSolution.comment.id).toBe('reply-a');
+  const feedPost = (await (await getPosts(request('/api/posts?feed=1'))).json()).posts.find((row: { id: string }) => row.id === 'public');
+  expect(feedPost).toMatchObject({ comments: [], commentsDeferred: true, commentCount: 74, acceptedSolution: { comment: { id: 'reply-a' } } });
   expect(post.acceptedSolution.comment.author).not.toHaveProperty('isTestAccount');
   const page = await (await getComments(request('/api/posts/public/comments?feed=1'), params())).json();
   expect(page.comments).toHaveLength(50);

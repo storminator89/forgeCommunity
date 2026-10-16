@@ -59,7 +59,10 @@ export function PostCard({
   const commentCount = post.commentCount ?? (post.comments || []).length;
   const commentLabel = commentCount === 1 ? 'Kommentar' : 'Kommentare';
 
-  const toggleComments = () => setExpandedComments(!expandedComments)
+  const toggleComments = () => {
+    if (!expandedComments && post.commentsDeferred) void onLoadComments?.(post.id)
+    setExpandedComments(!expandedComments)
+  }
 
   useEffect(() => {
     const followHash = () => {
@@ -210,7 +213,7 @@ export function PostCard({
                   isLoading={isLoading}
                   onAddComment={onAddComment}
                   onLikeComment={onLikeComment}
-                  hasMore={!!post.commentsNextCursor}
+                  hasMore={!!post.commentsDeferred || !!post.commentsNextCursor}
                   commentCount={post.commentCount}
                   onLoadMore={() => onLoadComments?.(post.id)}
                   isLoadingMore={commentsLoading}

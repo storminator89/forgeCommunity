@@ -19,7 +19,9 @@ type Progress = { completedContentIds: string[]; complete: boolean; canTrack: bo
 type Detail = { kind: 'idle' | 'loading' | 'error' } | { kind: 'ready'; courseId: string; contents: JourneyContent[]; progress: Progress };
 
 const motionPreferenceKey = 'forge-journey-motion-off';
+const mascotPreferenceKey = 'forge-journey-mascot-hidden';
 let fallbackMotionEnabled = true;
+let fallbackMascotVisible = true;
 
 function subscribeMotion(callback: () => void) {
   window.addEventListener('storage', callback);
@@ -33,6 +35,20 @@ function subscribeMotion(callback: () => void) {
 function motionSnapshot() {
   try { return window.localStorage.getItem(motionPreferenceKey) !== 'true'; }
   catch { return fallbackMotionEnabled; }
+}
+
+function subscribeMascot(callback: () => void) {
+  window.addEventListener('storage', callback);
+  window.addEventListener('forge-journey-mascot-visibility-change', callback);
+  return () => {
+    window.removeEventListener('storage', callback);
+    window.removeEventListener('forge-journey-mascot-visibility-change', callback);
+  };
+}
+
+function mascotSnapshot() {
+  try { return window.localStorage.getItem(mascotPreferenceKey) !== 'true'; }
+  catch { return fallbackMascotVisible; }
 }
 
 function subscribeReducedMotion(callback: () => void) {
@@ -84,6 +100,7 @@ function ScopedJourney() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<Detail>({ kind: 'idle' });
   const [detailRetry, setDetailRetry] = useState(0);
+  const mascotVisible = useSyncExternalStore(subscribeMascot, mascotSnapshot, () => false);
   const motionEnabled = useSyncExternalStore(subscribeMotion, motionSnapshot, () => false);
   const reducedMotion = useSyncExternalStore(subscribeReducedMotion, reducedMotionSnapshot, () => true);
   const [celebrating, setCelebrating] = useState(false);
@@ -151,6 +168,13 @@ function ScopedJourney() {
     window.dispatchEvent(new Event('forge-journey-motion-change'));
   };
 
+  const toggleMascot = () => {
+    const next = !mascotVisible;
+    fallbackMascotVisible = next;
+    try { window.localStorage.setItem(mascotPreferenceKey, String(!next)); } catch { /* Memory preference still works. */ }
+    window.dispatchEvent(new Event('forge-journey-mascot-visibility-change'));
+  };
+
   const retryCourses = () => { detailSequence.current++; setCourses(null); setCourseError(false); setDetail({ kind: 'idle' }); setCourseRetry(value => value + 1); };
   const retryDetail = () => { detailSequence.current++; setDetail({ kind: 'loading' }); setDetailRetry(value => value + 1); };
 
@@ -169,7 +193,7 @@ function ScopedJourney() {
           <nav aria-label="Brotkrumen" className="text-sm text-muted-foreground"><Link href="/courses" className="rounded-sm underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Kurse</Link><span className="mx-2" aria-hidden="true">/</span><span aria-current="page" className="text-foreground">Mein Lernweg</span></nav>
           <div className="mt-6 flex flex-col gap-5 border-b pb-7 sm:flex-row sm:items-end sm:justify-between">
             <div className="max-w-2xl"><p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">In deinem Tempo</p><h2 className="text-[clamp(1.65rem,1.1rem+2vw,2.35rem)] font-semibold leading-tight tracking-tight">Ein Schritt nach dem anderen.</h2><p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:text-base">Dein bestätigter Kursfortschritt und ein freier nächster Schritt.</p></div>
-            <div className="shrink-0"><Button type="button" variant="outline" size="sm" aria-pressed={motionEnabled && !reducedMotion} onClick={toggleMotion} disabled={reducedMotion}>{reducedMotion ? 'Figurenanimationen aus' : `Figurenanimationen ${motionEnabled ? 'an' : 'aus'}`}</Button>{reducedMotion && <p className="mt-1 text-xs text-muted-foreground">Weniger Bewegung ist am Gerät eingestellt.</p>}</div>
+            <div className="shrink-0"><div className="flex flex-wrap gap-2 sm:justify-end"><Button type="button" variant="outline" size="sm" aria-label="Maskottchen anzeigen" aria-pressed={mascotVisible} onClick={toggleMascot}>Figur {mascotVisible ? 'an' : 'aus'}</Button>{mascotVisible && <Button type="button" variant="outline" size="sm" aria-pressed={motionEnabled && !reducedMotion} onClick={toggleMotion} disabled={reducedMotion}>{reducedMotion ? 'Figurenanimationen aus' : `Figurenanimationen ${motionEnabled ? 'an' : 'aus'}`}</Button>}</div>{mascotVisible && reducedMotion && <p className="mt-1 text-xs text-muted-foreground">Weniger Bewegung ist am Gerät eingestellt.</p>}</div>
           </div>
 
           {courses === null && !courseError && <div className="mt-8"><PageState kind="loading" title="Deine Kurse werden geladen" /></div>}
@@ -187,7 +211,7 @@ function ScopedJourney() {
               <section aria-labelledby="journey-progress-title" className="rounded-2xl border bg-card p-5 sm:p-7">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="min-w-0 flex-1"><p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Dein Kurs</p><h2 id="journey-progress-title" className="mt-2 break-words text-xl font-semibold tracking-tight sm:text-2xl">{selectedCourse.title}</h2><p className="mt-3 text-sm font-medium" role="status" aria-live="polite">{complete ? 'Alle aktuellen Kursinhalte bestätigt' : projection.leaves.length ? `${projection.completedCount} von ${projection.leaves.length} Inhalten aktuell bestätigt` : 'Noch keine Kursinhalte verfügbar'}</p></div>
-                  <JourneyMascot complete={complete} animating={celebrating && motionEnabled && !reducedMotion} ambientMotion={motionEnabled && !reducedMotion} />
+                  {mascotVisible && <JourneyMascot complete={complete} animating={celebrating && motionEnabled && !reducedMotion} ambientMotion={motionEnabled && !reducedMotion} />}
                 </div>
                 {projection.leaves.length > 0 && <progress className="mt-5 h-3 w-full accent-primary" value={projection.completedCount} max={projection.leaves.length} aria-label={`${projection.completedCount} von ${projection.leaves.length} Kursinhalten aktuell bestätigt`}>{projection.completedCount} von {projection.leaves.length}</progress>}
                 <div className="mt-5 border-t pt-5">

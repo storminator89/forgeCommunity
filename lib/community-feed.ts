@@ -27,6 +27,7 @@ export interface CommunityPost {
   isLiked: boolean
   comments: CommunityComment[]
   commentCount?: number
+  commentsDeferred?: boolean
   commentsNextCursor?: string | null
   solutionRevision?: string | null
   acceptedSolution?: AcceptedCommunitySolution | null
