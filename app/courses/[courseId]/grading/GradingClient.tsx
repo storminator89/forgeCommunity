@@ -71,7 +71,7 @@ function GradeRow({ row, courseId, onChanged, onStale, onDenied }: { row: Submis
       <h4 className="font-semibold">{latest ? 'Bewertung korrigieren' : 'Bewertung abgeben'}</h4>
       <div className="grid min-w-0 gap-4 sm:grid-cols-[minmax(0,10rem)_minmax(0,1fr)]"><div className="min-w-0 space-y-2"><Label htmlFor={`grade-${row.id}`}>Punkte (0–100)</Label><Input id={`grade-${row.id}`} type="number" inputMode="numeric" min={0} max={100} step={1} value={score} onChange={event => { setScore(event.target.value); receipt.current = null; setError(null) }} aria-invalid={Boolean(error && error.includes('Punktzahl'))} /></div>
       <div className="min-w-0 space-y-2"><Label htmlFor={`feedback-${row.id}`}>Rückmeldung (optional)</Label><Textarea id={`feedback-${row.id}`} className="min-h-24 resize-y" maxLength={MAX_ASSIGNMENT_FEEDBACK} value={feedback} onChange={event => { setFeedback(event.target.value); receipt.current = null; setError(null) }} /><p className="text-xs text-muted-foreground">Die lernende Person sieht diese Rückmeldung.</p></div></div>
-      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}{success && <p role="status" className="text-sm text-foreground">{success}</p>}
+      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}{success && <p role="status" className="text-sm text-success">{success}</p>}
       <div className="flex flex-wrap gap-2"><Button type="submit" disabled={busy || score === ''}>{busy ? 'Wird gespeichert …' : latest ? 'Korrektur speichern' : 'Bewertung speichern'}</Button>
         {latest?.action === 'GRADED' && <Button type="button" variant="outline" disabled={busy} onClick={() => void submit('WITHDRAWN')}>Bewertung zurücknehmen</Button>}</div>
     </form>}

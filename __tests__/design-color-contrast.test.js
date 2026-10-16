@@ -1,5 +1,42 @@
 /** @jest-environment node */
-const { audit, composite, contrast, hslToRgb, oklchToRgb, luminance, resolveColor, utilityColor } = require('../scripts/check-color-contrast.js');
+const { audit, composite, contrast, hexToRgb, hslToRgb, oklchToRgb, luminance, resolveColor, themes, utilityColor } = require('../scripts/check-color-contrast.js');
+
+// Revision 2 of the agreed sRGB palette. Numeric HSL storage may round to three
+// decimals, so assert channels to four decimal places, not textual HSL spelling.
+const paletteHex = {
+  light: {
+    background: '#EFF8F6', foreground: '#14343D', card: '#FFFFFF', 'card-foreground': '#14343D', popover: '#FFFFFF', 'popover-foreground': '#14343D',
+    primary: '#075C65', 'primary-foreground': '#FFFFFF', progress: '#075C65', 'progress-foreground': '#FFFFFF', ring: '#075C65',
+    secondary: '#FBE3DC', 'secondary-foreground': '#713D33', accent: '#D9EEEB', 'accent-foreground': '#075C65', muted: '#E2EEEC', 'muted-foreground': '#4A666C',
+    input: '#63868A', border: '#C7DDDA', coral: '#A54130', 'coral-foreground': '#FFFFFF', 'coral-highlight': '#EF8D75', 'coral-highlight-foreground': '#14343D',
+    reward: '#F2C75C', 'reward-foreground': '#14343D', 'reward-ink': '#846112', info: '#126A7A', 'info-foreground': '#FFFFFF',
+    warning: '#8B5A0A', 'warning-foreground': '#FFFFFF', success: '#1E7257', 'success-foreground': '#FFFFFF', destructive: '#B72E4A', 'destructive-foreground': '#FFFFFF',
+    'chart-1': '#075C65', 'chart-2': '#A54130', 'chart-3': '#8B6A0C', 'chart-4': '#357D73', 'chart-5': '#52616B',
+  },
+  dark: {
+    background: '#08252F', foreground: '#E8F5F2', card: '#10333D', 'card-foreground': '#E8F5F2', popover: '#10333D', 'popover-foreground': '#E8F5F2',
+    primary: '#72D0CC', 'primary-foreground': '#08252F', progress: '#72D0CC', 'progress-foreground': '#08252F', ring: '#72D0CC',
+    secondary: '#713D33', 'secondary-foreground': '#FFE9E1', accent: '#164B55', 'accent-foreground': '#A7E7E0', muted: '#183E47', 'muted-foreground': '#ADC8CA',
+    input: '#83A7AB', border: '#365E68', coral: '#F3A18D', 'coral-foreground': '#08252F', 'coral-highlight': '#F3A18D', 'coral-highlight-foreground': '#08252F',
+    reward: '#F2C75C', 'reward-foreground': '#08252F', 'reward-ink': '#F2C75C', info: '#82D5E4', 'info-foreground': '#08252F',
+    warning: '#F0C270', 'warning-foreground': '#08252F', success: '#8BD8AF', 'success-foreground': '#08252F', destructive: '#FF8AA4', 'destructive-foreground': '#08252F',
+    'chart-1': '#72D0CC', 'chart-2': '#F3A18D', 'chart-3': '#F2C75C', 'chart-4': '#9BC8B0', 'chart-5': '#B7C6D3',
+  },
+};
+
+// Explicit inventory is independent of audit()'s emitted results. Removing a
+// pair from the script cannot turn its missing coverage into a passing test.
+const expectedPairNames = [
+  ...['background', 'card', 'popover', 'secondary', 'muted', 'accent', 'primary', 'destructive', 'progress', 'coral', 'coral-highlight', 'reward', 'info', 'warning', 'success'].map(role => `${role} text`),
+  ...['background', 'card', 'muted', 'popover', 'accent', 'secondary'].map(surface => `muted text on ${surface}`),
+  ...['background', 'card', 'popover', 'muted', 'accent', 'secondary'].flatMap(surface => ['input boundary', 'focus ring', 'link text', 'reward ink'].map(role => `${role} on ${surface}`)),
+  ...['background', 'card', 'popover', 'muted'].flatMap(surface => [...['success', 'destructive', 'info', 'warning', 'coral'].map(role => `${role} text on ${surface}`), `progress indicator on ${surface}`]),
+  ...['background', 'card'].flatMap(surface => [1, 2, 3, 4, 5].map(index => `chart ${index} stroke on ${surface}`)),
+  ...['primary', 'destructive'].flatMap(role => ['button', 'badge'].flatMap(component => [`${role} ${component} hover`, ...['background', 'muted', 'accent', 'secondary'].map(surface => `${role} ${component} hover on ${surface}`)])),
+  'selected navigation text', 'selected navigation icon', 'selected tab text', 'post like hover on muted footer', 'selected comment like text', 'selected comment like hover', 'comment body translucent text', 'logout destructive focus text',
+  'disabled button text (voluntary inactive target)', 'loading button text', 'notification deletion hover text',
+  'profile validation message', 'correct quiz answer', 'incorrect quiz answer', 'notification count', 'toast close icon', 'destructive toast close icon', 'destructive toast close hover icon', 'destructive toast close focus ring',
+];
 
 describe('WCAG sRGB contrast arithmetic', () => {
   it('matches the black/white extrema and the sRGB transfer-function threshold', () => {
@@ -48,8 +85,28 @@ describe('measured shared tokens and visible component color pairings', () => {
   });
 
   it('covers both themes with the same curated source pairings', () => {
-    expect(results.filter(result => result.mode === 'light').map(result => result.name))
-      .toEqual(results.filter(result => result.mode === 'dark').map(result => result.name));
-    expect(results).toHaveLength(52);
+    expect(expectedPairNames).toHaveLength(118);
+    for (const mode of ['light', 'dark']) {
+      const names = results.filter(result => result.mode === mode).map(result => result.name);
+      expect(new Set(names).size).toBe(names.length);
+      expect(names.sort()).toEqual([...expectedPairNames].sort());
+    }
+    expect(results).toHaveLength(236);
+  });
+
+  it('retains the exact agreed theme-specific sRGB roles, including text-only reward ink', () => {
+    const tokens = themes();
+    for (const mode of ['light', 'dark']) {
+      for (const [role, hex] of Object.entries(paletteHex[mode])) {
+        expect(tokens[mode]).toHaveProperty(role);
+        hexToRgb(hex).forEach((channel, index) => {
+          expect(tokens[mode][role][index]).toBeCloseTo(channel, 4);
+        });
+      }
+      expect(tokens[mode].progress).toEqual(tokens[mode].primary);
+      expect(tokens[mode]['progress-foreground']).toEqual(tokens[mode]['primary-foreground']);
+      expect(tokens[mode].warning).not.toEqual(tokens[mode].reward);
+      expect(tokens[mode].coral).not.toEqual(tokens[mode].destructive);
+    }
   });
 });

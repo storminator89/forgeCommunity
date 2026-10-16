@@ -437,7 +437,7 @@ function ResourceItem({ resource, isAdmin, currentUserId, onDelete, onEdit }: {
           <DropdownMenuItem onSelect={() => void handleCopyLink()}>{copied ? <Check className="mr-2 h-4 w-4" aria-hidden="true" /> : <Copy className="mr-2 h-4 w-4" aria-hidden="true" />}Link kopieren</DropdownMenuItem>
           <DropdownMenuItem onSelect={() => shareResource('twitter')}>Auf X teilen</DropdownMenuItem>
           <DropdownMenuItem onSelect={() => shareResource('linkedin')}>Auf LinkedIn teilen</DropdownMenuItem>
-          {canModify && <><DropdownMenuSeparator /><DropdownMenuItem onSelect={() => onEdit(resource)}><Edit className="mr-2 h-4 w-4" aria-hidden="true" />Bearbeiten</DropdownMenuItem><DropdownMenuItem onSelect={() => setDeleteOpen(true)} className="text-destructive focus:text-destructive"><Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />Löschen</DropdownMenuItem></>}
+          {canModify && <><DropdownMenuSeparator /><DropdownMenuItem onSelect={() => onEdit(resource)}><Edit className="mr-2 h-4 w-4" aria-hidden="true" />Bearbeiten</DropdownMenuItem><DropdownMenuItem onSelect={() => setDeleteOpen(true)} className="text-destructive focus:text-destructive focus:bg-destructive/10"><Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />Löschen</DropdownMenuItem></>}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

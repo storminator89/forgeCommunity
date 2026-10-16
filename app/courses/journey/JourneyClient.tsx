@@ -237,7 +237,7 @@ function ScopedJourney() {
                 {mascotVisible && <JourneyMascot complete={complete} celebrationId={motionEnabled && !reducedMotion && celebration?.courseId === selectedId && celebration.publicationId === detail.progress.publicationId ? celebration.id : null} ambientMotion={motionEnabled && !reducedMotion} />}
               </div>
               <Button asChild variant={next && !complete ? 'default' : 'outline'} className="mt-4 w-full sm:w-auto"><Link href={next && !complete ? `${readerHref}?content=${encodeURIComponent(next.id)}` : readerHref}>{next && !complete ? 'Lernschritt öffnen' : 'Kurs ansehen'}</Link></Button>
-              {projection.leaves.length > 0 && <progress className="mt-5 block h-2 w-full accent-primary" value={projection.completedCount} max={projection.leaves.length} aria-label={`${projection.completedCount} von ${projection.leaves.length} Kursinhalten aktuell bestätigt`}>{projection.completedCount} von {projection.leaves.length}</progress>}
+              {projection.leaves.length > 0 && <progress className="mt-5 block h-2 w-full accent-progress" value={projection.completedCount} max={projection.leaves.length} aria-label={`${projection.completedCount} von ${projection.leaves.length} Kursinhalten aktuell bestätigt`}>{projection.completedCount} von {projection.leaves.length}</progress>}
             </section>}
           </div>}
 

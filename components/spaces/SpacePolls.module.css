@@ -31,7 +31,7 @@
 .percentage { font-size: .8125rem; color: hsl(var(--muted-foreground)); font-variant-numeric: tabular-nums; flex-shrink: 0; }
 .track { display: block; height: .375rem; overflow: hidden; border-radius: 999px; background: hsl(var(--muted)); margin-top: .75rem; }
 .bar { display: block; height: 100%; border-radius: inherit; background: hsl(var(--muted-foreground) / .65); transform-origin: left center; }
-.choice[data-saved] .bar { background: hsl(var(--primary)); }
+.choice[data-saved] .bar { background: hsl(var(--progress)); }
 .choiceBottom { display: flex; flex-wrap: wrap; gap: .25rem .75rem; justify-content: space-between; margin-top: .5rem; color: hsl(var(--muted-foreground)); font-size: .75rem; line-height: 1.5; }
 .saved { display: inline-flex; align-items: center; gap: .25rem; color: hsl(var(--foreground)); font-weight: 600; }
 .saved svg { flex-shrink: 0; }

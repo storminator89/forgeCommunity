@@ -156,7 +156,7 @@ export function CoursesList({ userId, isInstructor, showEnrolled = false }: Cour
             <Star
               key={star}
               className={`h-4 w-4 ${star <= rating
-                ? 'text-yellow-400 fill-current'
+                ? 'text-primary fill-current'
                 : 'text-muted-foreground'
                 }`}
             />
@@ -171,7 +171,7 @@ export function CoursesList({ userId, isInstructor, showEnrolled = false }: Cour
     <div className="space-y-6">
       {isLoading || loadedForKey !== requestKey ? (
         <div className="flex justify-center items-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       ) : (
         <>

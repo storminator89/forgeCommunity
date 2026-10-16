@@ -189,7 +189,7 @@ function LearnerQuizSession({ courseId, contentId, publicationId, contentVersion
         </div>
       </fieldset>
     </fieldset>)}
-    {result && <p role="status" className={result.passed ? 'text-foreground' : 'text-destructive'}>Du hast {result.score.toFixed(1)}% erreicht. {result.passed ? 'Bestanden!' : 'Noch nicht bestanden.'}</p>}
+    {result && <p role="status" className={result.passed ? 'text-success' : 'text-destructive'}>Du hast {result.score.toFixed(1)}% erreicht. {result.passed ? 'Bestanden!' : 'Noch nicht bestanden.'}</p>}
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     {error && !staleVersion && <p className="text-sm text-muted-foreground">Deine Antworten sind bis zur Klärung gesperrt. Die erneute Prüfung verwendet dieselbe Abgabe.</p>}
     <div className="flex flex-wrap gap-2">{result ? <Button type="button" variant="outline" onClick={() => { setAnswers({}); setConfidence({}); setSubmitted(false); setResult(null); setError(null); pendingSubmission.current = null }}>Quiz wiederholen</Button> : <Button type="button" disabled={!ready || pending || staleVersion || !publicationId || !contentVersionToken} onClick={() => void submit()}>{pending ? 'Wird geprüft …' : error && !staleVersion ? 'Abgabe erneut prüfen' : 'Antworten abgeben'}</Button>}{(!publicationId || !contentVersionToken) && <p className="text-sm text-muted-foreground">Bitte lade das Quiz neu, bevor du Antworten abgibst.</p>}</div>

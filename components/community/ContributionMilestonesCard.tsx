@@ -29,12 +29,12 @@ export function ContributionMilestonesCard({ summary, loading, error, isSignedIn
             <ol className="mt-4 space-y-2 text-sm" aria-label="Aktuelle Diskussionsmeilensteine">
               {CONTRIBUTION_TARGETS.map(target => <li key={target} className="flex flex-wrap justify-between gap-x-3 gap-y-1">
                 <span>{target} {target === 1 ? 'Diskussionsautor' : 'unterschiedliche Diskussionsautoren'}</span>
-                <span className="text-muted-foreground">{count >= target ? 'Aktuell erreicht' : 'Noch nicht erreicht'}</span>
+                <span className={count >= target ? "text-coral" : "text-muted-foreground"}>{count >= target ? 'Aktuell erreicht' : 'Noch nicht erreicht'}</span>
               </li>)}
             </ol>
             {nextTarget ? <>
               <p className="mt-4 text-sm tabular-nums">{count} von {nextTarget} unterschiedlichen Diskussionsautoren</p>
-              <progress value={count} max={nextTarget} aria-label={`Diskussionsmeilenstein: ${count} von ${nextTarget} unterschiedlichen Diskussionsautoren`} className="mt-2 h-2 w-full accent-primary">{count} von {nextTarget}</progress>
+              <progress value={count} max={nextTarget} aria-label={`Diskussionsmeilenstein: ${count} von ${nextTarget} unterschiedlichen Diskussionsautoren`} className="mt-2 h-2 w-full accent-progress">{count} von {nextTarget}</progress>
             </> : <p className="mt-4 text-sm">Alle derzeitigen Diskussionsmeilensteine sind aktuell erreicht. Die Anzeige endet bei 5+.</p>}
           </>}
         <Button type="button" variant="outline" className="mt-4" onClick={onRefresh}>Diskussionsmeilensteine aktualisieren</Button>

@@ -29,3 +29,23 @@ it('handles external H5P resize messages and resets height on content changes', 
   rerender(<H5PEmbed src="/h5p/embed/package2" title="Andere Übung" />);
   expect(screen.getByTitle('Andere Übung').style.height).toBe('480px');
 });
+
+it.each(['/h5p/embed/package1', 'http://localhost/h5p/embed/package1'])(
+  'gives the local player an opaque light fallback without changing its source: %s', src => {
+    render(<H5PEmbed src={src} title="Lokale Übung" />);
+    const frame = screen.getByTitle('Lokale Übung');
+    expect(frame).toHaveClass('bg-white', '[color-scheme:light]');
+    expect(frame).not.toHaveClass('bg-background');
+    expect(frame).toHaveAttribute('src', src);
+    expect(frame).toHaveAttribute('sandbox', 'allow-scripts allow-forms allow-downloads');
+  },
+);
+
+it('preserves the external authored player background and color-scheme boundary', () => {
+  render(<H5PEmbed src="https://h5p.example.org/embed/1" title="Externe Übung" />);
+  const frame = screen.getByTitle('Externe Übung');
+  expect(frame).toHaveClass('bg-background');
+  expect(frame).not.toHaveClass('bg-white');
+  expect(frame).not.toHaveClass('[color-scheme:light]');
+  expect(frame).toHaveAttribute('sandbox', 'allow-scripts allow-forms allow-downloads allow-same-origin');
+});

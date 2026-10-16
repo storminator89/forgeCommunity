@@ -102,7 +102,7 @@ export default function NotificationsPage() {
                           } finally { setOpeningId(null); }
                         }}><ArrowUpRight className="h-4 w-4" aria-hidden="true" />{openingId === notification.id ? 'Wird geöffnet…' : notification.actionLabel}</Button>}
                         {!notification.isRead && <Button type="button" variant="ghost" size="sm" onClick={() => markAsRead(notification.id)}><CheckCircle className="h-4 w-4" aria-hidden="true" />Als gelesen markieren</Button>}
-                        <Button type="button" variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive" onClick={() => deleteNotification(notification.id)}><Trash2 className="h-4 w-4" aria-hidden="true" />Löschen</Button>
+                        <Button type="button" variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive hover:bg-destructive/10" onClick={() => deleteNotification(notification.id)}><Trash2 className="h-4 w-4" aria-hidden="true" />Löschen</Button>
                       </div>
                       {notification.targetState === 'unavailable' && <p className="mt-2 text-xs text-muted-foreground">Dieses Ziel wurde gelöscht oder ist nicht mehr für dich sichtbar.</p>}
                       {openErrorId === notification.id && <p role="status" className="mt-2 text-xs text-destructive">Das Ziel konnte nicht geöffnet werden. Die Liste wird aktualisiert.</p>}

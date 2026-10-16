@@ -16,14 +16,53 @@ jest.mock('sonner', () => ({ toast: { error: (...args: unknown[]) => mockToastEr
 
 const metadata = { categories: ['Werkstatt'], tags: ['Checkliste'] }
 
+async function renderReadyArticle() {
+  // Flush the resolved metadata fixture and its React updates before starting
+  // the DOM-query retry window. Loading behavior is covered separately below.
+  await act(async () => {
+    render(<NewArticle />)
+  })
+}
+
 beforeEach(() => {
   mockPush.mockClear()
   mockToastError.mockClear()
   global.fetch = jest.fn(async () => ({ ok: true, json: async () => metadata } as Response))
 })
 
-it('has one early action pair, required title/category before content and optional image after it', async () => {
+it('keeps the composer loading until its category and tag metadata resolves', async () => {
+  let finishMetadata!: (value: typeof metadata) => void
+  const pendingMetadata = new Promise<typeof metadata>(resolve => { finishMetadata = resolve })
+  jest.mocked(global.fetch).mockResolvedValueOnce({ ok: true, json: () => pendingMetadata } as Response)
+
   render(<NewArticle />)
+  expect(global.fetch).toHaveBeenCalledWith('/api/articles/categories-and-tags', expect.objectContaining({ signal: expect.any(AbortSignal) }))
+  expect(screen.getByRole('status')).toHaveTextContent('Editor wird geladen')
+  expect(screen.queryByLabelText('Titel')).not.toBeInTheDocument()
+  expect(screen.queryByLabelText('Kategorie')).not.toBeInTheDocument()
+  expect(screen.queryByRole('textbox', { name: 'Inhalt' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Als Entwurf speichern' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Veröffentlichen' })).not.toBeInTheDocument()
+
+  await act(async () => {
+    finishMetadata(metadata)
+    await pendingMetadata
+  })
+
+  expect(screen.queryByText('Editor wird geladen')).not.toBeInTheDocument()
+  expect(screen.getByLabelText('Titel')).toBeRequired()
+  expect(screen.getByLabelText('Kategorie')).toBeInTheDocument()
+  expect(screen.getByRole('option', { name: 'Werkstatt' })).toHaveValue('Werkstatt')
+  expect(screen.getByRole('textbox', { name: 'Inhalt' })).toBeInTheDocument()
+  for (const name of ['Als Entwurf speichern', 'Veröffentlichen']) {
+    expect(screen.getAllByRole('button', { name })).toHaveLength(1)
+    expect(screen.getByRole('button', { name })).toBeEnabled()
+    expect(screen.getByRole('button', { name })).toHaveAttribute('type', 'button')
+  }
+})
+
+it('has one early action pair, required title/category before content and optional image after it', async () => {
+  await renderReadyArticle()
   const title = await screen.findByLabelText('Titel')
   const draft = screen.getByRole('button', { name: 'Als Entwurf speichern' })
   const publish = screen.getByRole('button', { name: 'Veröffentlichen' })
@@ -56,7 +95,7 @@ it.each([
   jest.mocked(global.fetch).mockImplementation(async (_input, options) => options?.method === 'POST'
     ? new Promise<Response>(resolve => { finish = resolve })
     : { ok: true, json: async () => metadata } as Response)
-  render(<NewArticle />)
+  await renderReadyArticle()
   fireEvent.change(await screen.findByLabelText('Titel'), { target: { value: 'Neue Anleitung' } })
   fireEvent.change(screen.getByRole('textbox', { name: 'Inhalt' }), { target: { value: 'Schritt für Schritt' } })
   fireEvent.change(screen.getByLabelText('Kategorie'), { target: { value: 'Werkstatt' } })
@@ -86,7 +125,7 @@ it.each([
 })
 
 it.each(['Titel', 'Inhalt', 'Kategorie'])('keeps %s mandatory for both explicit actions', async missing => {
-  render(<NewArticle />)
+  await renderReadyArticle()
   const title = await screen.findByLabelText('Titel')
   if (missing !== 'Titel') fireEvent.change(title, { target: { value: 'Neue Anleitung' } })
   if (missing !== 'Inhalt') fireEvent.change(screen.getByRole('textbox', { name: 'Inhalt' }), { target: { value: 'Schritt für Schritt' } })
@@ -101,7 +140,7 @@ it.each(['Titel', 'Inhalt', 'Kategorie'])('keeps %s mandatory for both explicit 
 
 it('retains optional image selection, preview and removal', async () => {
   const user = userEvent.setup()
-  render(<NewArticle />)
+  await renderReadyArticle()
   await screen.findByLabelText('Titel')
   const file = new File(['synthetic image'], 'fixture.png', { type: 'image/png' })
   const input = document.getElementById('featuredImage') as HTMLInputElement

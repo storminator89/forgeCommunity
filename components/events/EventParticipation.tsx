@@ -231,10 +231,10 @@ function SeatIllustration({ attending, waiting }: { attending: boolean; waiting:
   return <svg aria-hidden="true" className={styles.seat} viewBox="0 0 76 76" fill="none">
     <circle cx="36" cy="38" r="32" fill="hsl(var(--muted))" />
     <path d="M24 39V23a7 7 0 0 1 7-7h12a7 7 0 0 1 7 7v16" fill="hsl(var(--card))" stroke="hsl(var(--foreground))" strokeWidth="1.6" />
-    <rect x="19" y="37" width="36" height="11" rx="5.5" fill="hsl(var(--accent))" stroke="hsl(var(--foreground))" strokeWidth="1.6" />
+    <rect x="19" y="37" width="36" height="11" rx="5.5" fill="hsl(var(--coral-highlight))" stroke="hsl(var(--coral-highlight-foreground))" strokeWidth="1.6" />
     <path d="m25 48-3 13m27-13 3 13M28 30h17" stroke="hsl(var(--foreground))" strokeWidth="1.6" strokeLinecap="round" />
     <circle cx="58" cy="23" r="12" fill="hsl(var(--card))" stroke="hsl(var(--border))" strokeWidth="1.5" />
-    {attending ? <path className={styles.confirmationMark} d="m52 23 4 4 8-8" stroke="hsl(var(--primary))" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    {attending ? <path className={styles.confirmationMark} d="m52 23 4 4 8-8" stroke="hsl(var(--success))" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
       : waiting ? <g stroke="hsl(var(--muted-foreground))" strokeWidth="1.5" strokeLinecap="round"><circle cx="58" cy="23" r="6" /><path d="M58 19v4l3 2" /></g>
         : <path d="M54 23h8m-4-4v8" stroke="hsl(var(--muted-foreground))" strokeWidth="1.5" strokeLinecap="round" />}
   </svg>;

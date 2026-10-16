@@ -8,12 +8,12 @@ The latest brief calls for less default prose, a friendly and distinctive produc
 
 Lead with the person's job: find a course, continue the next available learning step, find someone, or make a deliberate private choice. Avoid repeating the app title as an oversized slogan before the task. Decorative all-caps eyebrows, arbitrary numbered categories and single-fragment headline accents are not a default page template. A meaningful real person, learning figure, path, ballot or seat can carry the page's character; no illustration is required on every page.
 
-The existing palette and installed Inter family provide continuity. Keep their semantic dark-mode/contrast behavior rather than introduce an unrelated rebrand or new font dependency. Distinctiveness must come from real content and task-specific composition, not another decorative kit. Required consent, privacy, retention, inference, exit and publication facts remain understandable at the relevant decision; supporting detail can be disclosed on demand.
+The palette deliberately changes to deep petrol, warm coral and targeted sunny reward accents. The installed Inter family and existing task-specific layouts retain continuity; no new font dependency or unrelated decorative kit is required. Light and dark colors have separately tested semantic pairs. Required consent, privacy, retention, inference, exit and publication facts remain understandable at the relevant decision; supporting detail can be disclosed on demand.
 
 ## Direction
 
 - **Genre:** a collaborative learning workshop. Quiet surroundings with a friendly, purposeful visual focus.
-- **Theme:** warm paper and charcoal ink with the existing blue used sparingly for active state, primary action, and focus. Avoid generic gradients, floating glass and repeated card grids. Original product-specific artwork and the existing native learning figure are welcome where they support the task; do not paste mascots onto every page.
+- **Theme:** cool daylight surfaces and deep-water dark mode, with petrol for actions/progress, coral for cooperation and sunny accents for existing earned rewards. Avoid generic gradients, floating glass and repeated card grids. Original product-specific artwork and the existing native learning figure are welcome where they support the task; do not paste mascots onto every page.
 - **Typography:** Inter for display and body through the existing `next/font` setup. Headings are roman, not italic. Use weight, width, and spacing for distinction; no new font dependency.
 - **Macrostructure:**
   - Public pages: an editorial opening with strong typographic lead, concise proof of what a user can do, and one clear action. `/` is an introduction, not a dashboard.
@@ -25,22 +25,33 @@ The existing palette and installed Inter family provide continuity. Keep their s
 
 `app/globals.css` owns these semantic HSL channels because Tailwind and shadcn already consume them through `hsl(var(--token))`. Do not scatter raw brand colors through page classes. When a role is missing, add a named token first.
 
-| Role | Light HSL | Dark HSL | Intent |
-| --- | --- | --- | --- |
-| `--background` | `42 31% 97%` | `220 21% 10%` | warm paper / dark canvas |
-| `--foreground` | `218 23% 17%` | `42 22% 94%` | body ink |
-| `--card` | `40 33% 99%` | `220 19% 14%` | raised surface |
-| `--secondary`, `--muted` | `42 21% 93%` | `220 16% 19%` | quiet controls and regions |
-| `--muted-foreground` | `218 12% 39%` | `220 13% 71%` | supporting text; check contrast in situ |
-| `--border` | `42 16% 83%` | `220 15% 29%` | separators |
-| `--input` | `42 12% 52%` | `220 14% 46%` | tested control boundary |
-| `--primary` | `225 75% 43%` | `224 88% 76%` | sparing brand blue / action |
-| `--primary-foreground` | `0 0% 100%` | `220 24% 10%` | primary-action text |
-| `--accent` | `225 66% 93%` | `225 28% 23%` | selected surface |
-| `--accent-foreground` | `225 75% 34%` | `224 88% 87%` | selected text |
-| `--ring` | `225 75% 43%` | `224 88% 76%` | keyboard focus |
+The six visual anchors are petrol `#075C65`, coral `#EF8D75`, sun `#F2C75C`, cool daylight `#EFF8F6`, deep water `#08252F` and ink `#14343D`. The table gives reference sRGB hex values; runtime values remain numeric HSL channels.
 
-Use the existing semantic destructive/chart tokens, adjusting their contrast if a tested screen needs it. Surface hierarchy comes from paper, subtle rules, and whitespace before shadow. Keep blue to roughly 5% of a viewport; avoid blue-tinted cards throughout a page.
+| Role | Light reference | Dark reference | Intent |
+| --- | --- | --- | --- |
+| `--background` / `--foreground` | `#EFF8F6` / `#14343D` | `#08252F` / `#E8F5F2` | quiet canvas and body ink |
+| `--card`, `--popover` / foreground | `#FFFFFF` / `#14343D` | `#10333D` / `#E8F5F2` | reading and tool surfaces |
+| `--primary`, `--progress`, `--ring` | `#075C65` | `#72D0CC` | action, actual progress and external focus |
+| primary/progress foreground | `#FFFFFF` | `#08252F` | text on solid action fill |
+| `--secondary` / foreground | `#FBE3DC` / `#713D33` | `#713D33` / `#FFE9E1` | quiet warm secondary surface |
+| `--accent` / foreground | `#D9EEEB` / `#075C65` | `#164B55` / `#A7E7E0` | selected interactive surface |
+| `--muted` / foreground | `#E2EEEC` / `#4A666C` | `#183E47` / `#ADC8CA` | supporting regions and text |
+| `--border` / `--input` | `#C7DDDA` / `#63868A` | `#365E68` / `#83A7AB` | quiet separator / visible control boundary |
+| `--coral` / foreground | `#A54130` / `#FFFFFF` | `#F3A18D` / `#08252F` | social text or paired solid fill |
+| `--coral-highlight` / foreground | `#EF8D75` / `#14343D` | `#F3A18D` / `#08252F` | bright artwork and avatar fill |
+| `--reward` / foreground | `#F2C75C` / `#14343D` | `#F2C75C` / `#08252F` | existing earned reward fill |
+| `--reward-ink` | `#846112` | `#F2C75C` | small reward text/icons only |
+| `--success` / foreground | `#1E7257` / `#FFFFFF` | `#8BD8AF` / `#08252F` | confirmed success plus wording/check |
+| `--warning` / foreground | `#8B5A0A` / `#FFFFFF` | `#F0C270` / `#08252F` | warning plus wording/icon |
+| `--info` / foreground | `#126A7A` / `#FFFFFF` | `#82D5E4` / `#08252F` | informational state |
+| `--destructive` / foreground | `#B72E4A` / `#FFFFFF` | `#FF8AA4` / `#08252F` | error/destructive action plus text/icon |
+| `--chart-1` to `--chart-5` | `#075C65`, `#A54130`, `#8B6A0C`, `#357D73`, `#52616B` | `#72D0CC`, `#F3A18D`, `#F2C75C`, `#9BC8B0`, `#B7C6D3` | reserved plot strokes; retain labels/tooltips and other cues |
+
+Bright coral and yellow do not support white small text. Use their paired dark foregrounds, and use `reward-ink` for small reward text rather than yellow text on a light surface. Reading or visiting content is progress, not an earned award; preserve the actual badge/point eligibility conditions. Existing Spark artwork retains its amber/copper, mint, graphite and ivory colors, assets and voluntary motion controls.
+
+Measure actual alpha compositing and interaction surfaces. In dark mode, destructive text on solid accent/secondary and coral text on solid secondary do not meet the normal-text target; use the paired surface foreground or the measured status-specific `/10` state. Shared disabled controls use opaque muted pairs, while loading labels retain full paired contrast. Source contrast checks cover named pairings and do not certify every possible page/state or authored content.
+
+Persisted project/resource colors and authored third-party content keep their own intentional colors. Isolated embed chrome must still use an explicit readable opaque pair without weakening its security boundaries. Imported local H5P packages deliberately retain a light isolated canvas and color scheme; their own loading/error status uses the opaque daylight/ink pair in either outer app theme. External embeds keep their existing presentation. Surface hierarchy comes from quiet surfaces, subtle rules and whitespace before shadow; spend saturation where it explains a real action, social object or reward.
 
 ## Type, spacing, and geometry
 
@@ -54,10 +65,10 @@ Use the existing semantic destructive/chart tokens, adjusting their contrast if 
 ## Navigation and component voice
 
 - Keep the sidebar/navigation destinations and exact URL behavior. The current mobile Sheet, skip link, active state, and collapsed rail are good foundations.
-- Sidebar groups should be readable at 12px or larger; nav items should have 44px minimum comfortable touch height. Active destination uses a quiet accent surface plus clear ink/blue cue, not color alone.
+- Sidebar groups should be readable at 12px or larger; nav items should have 44px minimum comfortable touch height. Active destination uses a quiet accent surface plus clear ink/petrol cue, not color alone.
 - A page header includes page title, optional one-line purpose, and at most one primary action. Move secondary actions into a tidy utility cluster; collapse/reflow before labels wrap on mobile.
 - Search, the first real result or the next available learning action should take priority over introductory prose and statistics. Do not invent an activity metric to decorate a directory; counts and progress labels must describe their actual data.
-- Primary buttons are solid blue, secondary buttons are quiet outlined or text. Labels use a single line. Destructive actions are explicit, visually separate, and have confirmation when irrecoverable.
+- Primary buttons are solid petrol, secondary buttons are quiet outlined or text. Labels use a single line. Destructive actions are explicit, visually separate, and have confirmation when irrecoverable.
 - Search and filter controls have persistent accessible names. Filter state is exposed with `aria-pressed`, native checked state, or Radix selection. Empty states explain the next useful action.
 - Every interactive row/card is a real link or button. Never use a mouse-only clickable `div`, `tr`, or card. Avoid nested interactive controls.
 - Loading, error, empty, success, disabled, hover, focus-visible, and active states are part of each component's design. Reuse `PageState` where it fits.

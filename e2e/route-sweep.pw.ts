@@ -3,6 +3,7 @@ import { basename, isAbsolute } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { expect, test, type APIRequestContext, type Browser, type BrowserContext, type Page } from '@playwright/test';
 import { routeSweepCases, type RouteSweepCase } from './route-sweep-manifest';
+import type { MemberPathway } from '../app/courses/pathways/pathway-types';
 
 const origin = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3013';
 type Persona = RouteSweepCase['persona'];
@@ -170,8 +171,8 @@ function caseUrl(item: RouteSweepCase) {
     .replace(':publicDiscussionId', encodeURIComponent(publicDiscussionId));
 }
 
-function screenshotName(item: RouteSweepCase) {
-  return item.source.replace(/^app\//, '').replace(/\/page\.tsx$/, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '') + '.png';
+function screenshotName(item: RouteSweepCase, theme: 'light' | 'dark') {
+  return item.source.replace(/^app\//, '').replace(/\/page\.tsx$/, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '') + `-${theme}.png`;
 }
 
 test.describe('every App Router page, one at a time', () => {
@@ -236,18 +237,43 @@ test.describe('every App Router page, one at a time', () => {
   });
 
   for (const item of routeSweepCases) {
-    test(`${item.source}: ${item.outcome} ${item.url}`, async ({ page }, testInfo) => {
+    // Each rendered route gets two fresh, real browser states against the SAME
+    // production build. Redirects remain separate, single destination checks.
+    for (const paletteTheme of item.outcome === 'render' ? ['light', 'dark'] as const : ['light'] as const) {
+    test(`${item.source}: ${item.outcome} ${item.url} [${paletteTheme}]`, async ({ page }, testInfo) => {
       const errors: string[] = [];
       page.on('pageerror', error => errors.push(error.message));
+      // Set only the disposable context's next-themes preference, before its
+      // initialization. Do not recolor the DOM or fabricate component states.
+      await page.addInitScript(theme => localStorage.setItem('theme', theme), paletteTheme);
+      await page.emulateMedia({ colorScheme: paletteTheme });
       await usePersona(page, item.persona);
       await installSyntheticApi(page, item);
+      let releaseLoading: (() => void) | undefined;
+      if (item.url === '/courses/qa-route-course/analytics') {
+        const loadingGate = new Promise<void>(resolve => { releaseLoading = resolve; });
+        // Hold only the already declared synthetic analytics response. Capture
+        // the real component's pending render, then resume its normal fixture.
+        await page.route(/\/api\/courses\/qa-route-course\/analytics\?/, async route => {
+          await loadingGate;
+          await route.fallback();
+        });
+      }
       // Observe the page's actual data read before navigation, so a fast
       // response cannot race the waiter and a heading-only loading state
       // cannot become a successful screenshot.
       const settledResponse = item.settledApi ? page.waitForResponse(response =>
         response.request().method() === 'GET' && new URL(response.url()).pathname === caseUrl({ ...item, url: item.settledApi! })
       ) : null;
-      await page.goto(caseUrl(item));
+      try {
+        await page.goto(caseUrl(item));
+        if (releaseLoading) {
+          if (paletteTheme === 'dark') await expect(page.locator('html')).toHaveClass(/\bdark\b/);
+          else await expect(page.locator('html')).not.toHaveClass(/\bdark\b/);
+          await expect(page.getByRole('status').filter({ hasText: 'Kursanalyse wird geladen' })).toBeVisible();
+          await page.screenshot({ path: testInfo.outputPath(`palette-real-loading-${paletteTheme}.png`), animations: 'disabled' });
+        }
+      } finally { releaseLoading?.(); }
 
       if (item.outcome === 'redirect') {
         await expect(page).toHaveURL(new RegExp(`${item.redirectTo!.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`));
@@ -261,12 +287,15 @@ test.describe('every App Router page, one at a time', () => {
         }
         // Capture the settled destination. The redirect-only source does not
         // claim a stable rendered state of its own.
-        await page.screenshot({ path: testInfo.outputPath(screenshotName(item)), fullPage: true });
+        await page.screenshot({ path: testInfo.outputPath(screenshotName(item, paletteTheme)), fullPage: true, animations: 'disabled' });
         expect(errors).toEqual([]);
         return;
       }
 
       await expect(page).toHaveURL(url => url.pathname === caseUrl(item));
+      if (paletteTheme === 'dark') await expect(page.locator('html')).toHaveClass(/\bdark\b/);
+      else await expect(page.locator('html')).not.toHaveClass(/\bdark\b/);
+      await expect(page.locator('body')).toHaveCSS('background-color', paletteTheme === 'dark' ? 'rgb(8, 37, 47)' : 'rgb(239, 248, 246)');
       const main = page.locator('#page-content');
       await expect(main).toHaveCount(1);
       await expect(page.getByRole('main')).toHaveCount(1);
@@ -321,7 +350,7 @@ test.describe('every App Router page, one at a time', () => {
       }));
       expect(overflow.html, `${item.url} document width ${JSON.stringify(overflow)}`).toBeLessThanOrEqual(overflow.viewport + 1);
       expect(overflow.body, `${item.url} body width ${JSON.stringify(overflow)}`).toBeLessThanOrEqual(overflow.viewport + 1);
-      await page.screenshot({ path: testInfo.outputPath(screenshotName(item)), fullPage: true });
+      await page.screenshot({ path: testInfo.outputPath(screenshotName(item, paletteTheme)), fullPage: true, animations: 'disabled' });
 
       await page.keyboard.press('Tab');
       const skip = page.getByRole('link', { name: 'Zum Inhalt springen', exact: true });
@@ -338,6 +367,57 @@ test.describe('every App Router page, one at a time', () => {
         await search.fill('Route QA');
         await search.press('Enter');
         await expect(main.getByRole('list', { name: 'Lernende im Kurs' })).toContainText('Route QA learner');
+        const pagination = main.getByRole('navigation', { name: 'Seiten der Lernenden' });
+        // Disabled controls have a WCAG contrast exception. This evidence
+        // checks their actual native state and labels, without claiming 4.5:1.
+        await expect(pagination.getByRole('button', { name: 'Vorherige Seite', exact: true })).toBeDisabled();
+        await expect(pagination.getByRole('button', { name: 'Nächste Seite', exact: true })).toBeDisabled();
+        await pagination.scrollIntoViewIfNeeded();
+        await page.screenshot({ path: testInfo.outputPath(`palette-disabled-pagination-${paletteTheme}.png`), animations: 'disabled' });
+      }
+
+      if (item.url === '/login') {
+        const email = main.getByRole('textbox', { name: 'E-Mail-Adresse' });
+        await email.focus();
+        await expect(email).toBeFocused();
+        expect(await email.evaluate(element => element.matches(':focus-visible'))).toBe(true);
+        expect(await email.evaluate(element => getComputedStyle(element).boxShadow)).not.toBe('none');
+        await page.screenshot({ path: testInfo.outputPath(`palette-input-keyboard-focus-${paletteTheme}.png`), animations: 'disabled' });
+        const submit = main.getByRole('button', { name: 'Anmelden', exact: true });
+        await expect(submit).toBeEnabled();
+        // Tailwind v4 deliberately does not apply hover colors on touch-only
+        // devices, even when the automation can position a pointer there.
+        if (await page.evaluate(() => matchMedia('(hover: hover)').matches)) {
+          await submit.hover();
+          expect(await submit.evaluate(element => element.matches(':hover'))).toBe(true);
+          await page.screenshot({ path: testInfo.outputPath(`palette-primary-hover-${paletteTheme}.png`), animations: 'disabled' });
+        }
+      }
+
+      if (item.url === '/settings') {
+        const privacy = main.getByRole('tab', { name: 'Privatsphäre', exact: true });
+        await privacy.focus();
+        await page.keyboard.press('Enter');
+        await expect(privacy).toHaveAttribute('aria-selected', 'true');
+        await expect(privacy).toHaveAttribute('data-state', 'active');
+        await expect(main.getByLabel('In der öffentlichen Rangliste erscheinen', { exact: true })).toBeVisible();
+        await page.screenshot({ path: testInfo.outputPath(`palette-selected-tab-${paletteTheme}.png`), animations: 'disabled' });
+      }
+
+      if (item.url === '/profile/:memberId') {
+        await page.getByRole('button', { name: 'Profil bearbeiten', exact: true }).click();
+        await expect(page.getByRole('button', { name: 'Bearbeitung schließen', exact: true })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Profil verwalten', exact: true })).toBeVisible();
+        await page.getByRole('button', { name: 'Stammdaten bearbeiten', exact: true }).click();
+        const dialog = page.getByRole('dialog', { name: 'Profil bearbeiten', exact: true });
+        await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('');
+        await dialog.getByRole('textbox', { name: 'Kontakt', exact: true }).fill('invalid');
+        await dialog.getByRole('button', { name: 'Speichern', exact: true }).click();
+        await expect(dialog.getByText('Name ist erforderlich', { exact: true })).toBeVisible();
+        await expect(dialog.getByText('Ungültiges Kontaktformat', { exact: true })).toBeVisible();
+        // Existing client validation stops before saving; no API replacement
+        // or private-data/authorization shortcut is introduced by this state.
+        await page.screenshot({ path: testInfo.outputPath(`palette-profile-validation-${paletteTheme}.png`), animations: 'disabled' });
       }
 
       // These pages scroll inside <main>, so a document-level fullPage PNG
@@ -357,8 +437,84 @@ test.describe('every App Router page, one at a time', () => {
         await expect(lowerTarget).toBeEnabled();
         await lowerTarget.focus();
         await expect(lowerTarget).toBeFocused();
-        await page.screenshot({ path: testInfo.outputPath(screenshotName(item).replace(/\.png$/, '-lower.png')) });
+        await page.screenshot({ path: testInfo.outputPath(screenshotName(item, paletteTheme).replace(/\.png$/, '-lower.png')), animations: 'disabled' });
       }
+      expect(errors).toEqual([]);
+    });
+    }
+  }
+
+  for (const paletteTheme of ['light', 'dark'] as const) {
+    test(`synthetic rendering only: existing private active pathway reward [${paletteTheme}]`, async ({ page }, testInfo) => {
+      // Additional render evidence only. The original unstarted route fixture,
+      // real consent/exit journey and award/persistence tests are unchanged.
+      const fixture: MemberPathway = {
+        id: 'qa-palette-active-pathway', title: 'Route QA private Anerkennung',
+        description: 'Synthetische Darstellung einer privaten Anerkennung mit zwei aktuell angerechneten Kursen.',
+        badgeLabel: 'QA Kursanerkennung', unavailable: false, creditedCount: 2, requiredCount: 2,
+        courses: [
+          { courseId: 'qa-palette-course-one', title: 'Erster angerechneter QA Kurs', order: 0, creditActive: true, available: true, isEnrolled: true },
+          { courseId: 'qa-palette-course-two', title: 'Zweiter angerechneter QA Kurs', order: 1, creditActive: true, available: true, isEnrolled: true },
+        ],
+        participation: { joinedAt: '2026-10-01T08:00:00.000Z', optedOutAt: null, badgeActive: true, badgeFirstAwardedAt: '2026-10-02T08:00:00.000Z' },
+        history: [{ type: 'AWARDED', reason: null, at: '2026-10-02T08:00:00.000Z' }],
+      };
+      const mutations: string[] = [];
+      const errors: string[] = [];
+      page.on('pageerror', error => errors.push(error.message));
+      page.on('request', request => {
+        const path = new URL(request.url()).pathname;
+        if (request.method() !== 'GET' && (path.startsWith('/api/learning-pathways/') || /^\/api\/courses\/[^/]+\/enrollment$/.test(path))) {
+          mutations.push(`${request.method()} ${path}`);
+        }
+      });
+      await page.addInitScript(theme => localStorage.setItem('theme', theme), paletteTheme);
+      await page.emulateMedia({ colorScheme: paletteTheme });
+      await usePersona(page, 'member');
+      await page.route('**/api/learning-pathways/me', route => route.fulfill({ status: 200, json: { pathways: [fixture] } }));
+      const appliedResponse = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname === '/api/learning-pathways/me');
+      await page.goto(`/courses/pathways/${fixture.id}`);
+      expect((await appliedResponse).status()).toBe(200);
+      if (paletteTheme === 'dark') await expect(page.locator('html')).toHaveClass(/\bdark\b/);
+      else await expect(page.locator('html')).not.toHaveClass(/\bdark\b/);
+      const main = page.locator('#page-content');
+      await expect(main.getByRole('heading', { name: 'Abzeichen aktiv', exact: true })).toBeVisible();
+      await expect(main.getByText('2 von 2 Kursen aktuell bestätigt', { exact: true })).toBeVisible();
+      await expect(main.getByText('Aktuell bestätigt', { exact: true })).toHaveCount(2);
+      const progress = main.getByRole('progressbar', { name: 'Lernpfad: 2 von 2 Kursen aktuell bestätigt', exact: true });
+      await expect(progress).toHaveAttribute('value', '2');
+      await expect(progress).toHaveAttribute('max', '2');
+      await expect(progress).toHaveClass(/\baccent-progress\b/);
+      await expect(progress).toHaveCSS('accent-color', paletteTheme === 'dark' ? 'rgb(114, 208, 204)' : 'rgb(7, 92, 101)');
+      const label = main.getByText(`Privates Abzeichen aktiv: ${fixture.badgeLabel}`, { exact: true });
+      await expect(label).toBeVisible();
+      const badge = label.locator('..');
+      await expect(badge).toHaveClass(/\bbg-reward\b/);
+      await expect(badge).toHaveClass(/\btext-reward-foreground\b/);
+      await expect(badge).toHaveCSS('background-color', 'rgb(242, 199, 92)');
+      await expect(badge).toHaveCSS('color', paletteTheme === 'dark' ? 'rgb(8, 37, 47)' : 'rgb(20, 52, 61)');
+      await expect(badge.getByText('Diese Anerkennung ist nur in deinem Lernpfad sichtbar. Sie ist kein Zertifikat.', { exact: true })).toBeVisible();
+      await expect(main.getByRole('button', { name: 'Teilnahme beenden', exact: true })).toBeVisible();
+      await expect(main.getByRole('button', { name: 'Privat teilnehmen', exact: true })).toHaveCount(0);
+      await expect(main.getByText('Abzeichen erstmals aktiv', { exact: true })).toBeVisible();
+      const overflow = await page.evaluate(() => ({ viewport: innerWidth, html: document.documentElement.scrollWidth, body: document.body.scrollWidth }));
+      expect(overflow.html).toBeLessThanOrEqual(overflow.viewport + 1);
+      expect(overflow.body).toBeLessThanOrEqual(overflow.viewport + 1);
+      // main is a real scroll container. Ensure both the earned badge and its
+      // privacy explanation are in the image, including at the 320px width.
+      await badge.scrollIntoViewIfNeeded();
+      await expect(label).toBeInViewport();
+      await expect(badge.getByText('Diese Anerkennung ist nur in deinem Lernpfad sichtbar. Sie ist kein Zertifikat.', { exact: true })).toBeInViewport();
+      // The image review must verify the painted native fill, not only the
+      // accent-color property: Chromium can paint an unrelated default green.
+      await expect(progress).toHaveCSS('appearance', 'none');
+      await page.screenshot({ path: testInfo.outputPath(`palette-synthetic-private-active-reward-${paletteTheme}.png`), animations: 'disabled' });
+      await page.emulateMedia({ forcedColors: 'active' });
+      await expect(progress).not.toHaveCSS('appearance', 'none');
+      await expect(progress).toHaveAttribute('value', '2');
+      await expect(progress).toHaveAttribute('max', '2');
+      await page.screenshot({ path: testInfo.outputPath(`palette-native-progress-forced-colors-${paletteTheme}.png`), animations: 'disabled' });
+      expect(mutations).toEqual([]);
       expect(errors).toEqual([]);
     });
   }
@@ -422,7 +578,7 @@ test.describe('every App Router page, one at a time', () => {
         expect(control.whiteSpace, `${name} at ${width}px`).toBe('nowrap');
         expect(control.scrollWidth, `${name} at ${width}px`).toBeLessThanOrEqual(control.clientWidth + 1);
       }
-      if (width === 320) await page.screenshot({ path: testInfo.outputPath('course-analytics-320.png'), fullPage: true });
+      if (width === 320) await page.screenshot({ path: testInfo.outputPath('course-analytics-320.png'), fullPage: true, animations: 'disabled' });
     }
     const search = page.getByRole('textbox', { name: 'Name suchen' });
     await search.focus();

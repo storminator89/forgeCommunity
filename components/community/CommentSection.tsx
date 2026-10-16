@@ -153,7 +153,7 @@ export function CommentSection({
                   src={comment.author?.image || DEFAULT_AVATAR_URL}
                   alt={comment.author?.name || 'Anonym'}
                 />
-                <AvatarFallback className="text-xs bg-primary/10 text-primary">{comment.author?.name?.[0] || 'A'}</AvatarFallback>
+                <AvatarFallback className="text-xs bg-coral-highlight text-coral-highlight-foreground">{comment.author?.name?.[0] || 'A'}</AvatarFallback>
               </Avatar>
               <span className="text-sm font-medium text-foreground">
                 {comment.author?.name || 'Anonym'}
@@ -168,7 +168,7 @@ export function CommentSection({
                 })}
               </span>
             </div>
-            {acceptedCommentId === comment.id && <p className="mb-2 pl-9 text-sm font-medium text-primary">
+            {acceptedCommentId === comment.id && <p className="mb-2 pl-9 text-sm font-medium text-coral">
               <CheckCircle2 className="mr-1 inline h-4 w-4" aria-hidden="true" /> Vom Beitragsautor als Lösung ausgewählt
             </p>}
             <p className="text-sm text-foreground/90 leading-relaxed pl-9">
@@ -187,7 +187,7 @@ export function CommentSection({
                         finally { actionFocus.complete(focus) }
                       }}
                       aria-label={comment.isLiked ? 'Kommentar-Like entfernen' : 'Kommentar liken'}
-                      className={`hover:bg-accent flex items-center space-x-1 rounded-md p-2 h-auto py-1 transition-colors duration-200 ${comment.isLiked ? 'text-destructive bg-destructive/10 hover:bg-destructive/20' : 'text-muted-foreground'
+                      className={`hover:bg-coral/10 hover:text-coral flex items-center space-x-1 rounded-md p-2 h-auto py-1 transition-colors duration-200 ${comment.isLiked ? 'text-coral bg-coral/10 hover:bg-coral/15' : 'text-muted-foreground'
                         }`}
                       disabled={isLoading}
                     >

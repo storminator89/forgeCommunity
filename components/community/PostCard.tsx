@@ -95,7 +95,7 @@ export function PostCard({
                   src={post.author?.image || DEFAULT_AVATAR_URL}
                   alt={post.author?.name || 'Anonym'}
                 />
-                <AvatarFallback className="bg-primary/10 text-primary">{post.author?.name?.[0] || 'A'}</AvatarFallback>
+                <AvatarFallback className="bg-coral-highlight text-coral-highlight-foreground">{post.author?.name?.[0] || 'A'}</AvatarFallback>
               </Avatar>
               <div>
                 <h3 className="font-semibold text-lg text-foreground leading-tight">
@@ -141,8 +141,8 @@ export function PostCard({
                 className="inline-flex min-h-8 items-center rounded-full border border-border bg-muted/50 px-3 text-xs font-medium text-foreground hover:border-primary hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">{tag.name}</a></li>)}
             </ul>}
           </div>
-          {post.published !== false && post.acceptedSolution && <section aria-label="Ausgewählte Lösung" className="mt-5 rounded-lg border border-primary/30 bg-primary/5 p-4">
-            <h3 className="flex items-center gap-2 text-sm font-semibold"><CheckCircle2 className="h-4 w-4 text-primary" aria-hidden="true" /> Vom Beitragsautor als Lösung ausgewählt</h3>
+          {post.published !== false && post.acceptedSolution && <section aria-label="Ausgewählte Lösung" className="mt-5 rounded-lg border border-coral/30 bg-coral/5 p-4">
+            <h3 className="flex items-center gap-2 text-sm font-semibold"><CheckCircle2 className="h-4 w-4 text-coral" aria-hidden="true" /> Vom Beitragsautor als Lösung ausgewählt</h3>
             {(!expandedComments || !post.comments.some(comment => comment.id === post.acceptedSolution?.comment.id)) &&
               <p className="mt-2 whitespace-pre-wrap text-sm">{post.acceptedSolution.comment.content}</p>}
             <p className="mt-2 text-xs text-muted-foreground">Antwort von {post.acceptedSolution.comment.author?.name || 'Anonym'}. Diese Auswahl vergibt keine Punkte.</p>
@@ -162,8 +162,8 @@ export function PostCard({
               onClick={() => onLike(post.id)}
               disabled={isLoading}
               className={cn(
-                "rounded-full px-4 h-9 transition-all hover:bg-destructive/10 active:scale-95",
-                post.isLiked ? "text-destructive bg-destructive/10" : "text-muted-foreground hover:text-destructive"
+                "rounded-full px-4 h-9 transition-all hover:bg-coral/10 active:scale-95",
+                post.isLiked ? "text-coral bg-coral/10 hover:text-coral" : "text-muted-foreground hover:text-coral"
               )}
             >
               <Heart className={cn("mr-2 h-4 w-4", post.isLiked && "fill-current")} />

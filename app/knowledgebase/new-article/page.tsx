@@ -295,7 +295,7 @@ function AccountNewArticle({ accountId, status }: { accountId: string | null; st
                                 variant="ghost"
                                 size="sm"
                                 aria-label="Beitragsbild entfernen"
-                                className="text-destructive hover:text-destructive/90"
+                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
                                 onClick={() => {
                                   setFeaturedImage(null);
                                   setFeaturedImagePreview('');

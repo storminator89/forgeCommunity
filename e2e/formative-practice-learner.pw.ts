@@ -23,18 +23,26 @@ async function setTheme(page: Page, theme: 'light' | 'dark') {
 async function checkDecision(page: Page, actionName: string) {
   const action = page.getByRole('button', { name: actionName, exact: true })
   const notice = page.getByRole('complementary', { name: 'Privat und freiwillig' })
+  await page.evaluate(async () => { await document.fonts.ready })
+  await expect(action).toBeVisible()
   await expect(notice).toBeVisible()
   await expect(notice.getByText('Deine Antworten und deine optionale Sicherheitseinschätzung werden für deine private Übung gespeichert.', { exact: true })).toBeVisible()
   await expect(notice.getByText('Kein Einfluss auf Kursabschluss, Prüfungen, Zertifikate oder Belohnungen. Keine persönliche Übungsauswertung für Lehrende.', { exact: true })).toBeVisible()
-  expect(await notice.evaluate((element, name) => {
+  const decision = await notice.evaluate((element, name) => {
     const button = Array.from(document.querySelectorAll('button')).find(candidate => candidate.textContent === name)
-    return Boolean(button && (element.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING))
-  }, actionName)).toBe(true)
-  const noticeBox = await notice.boundingBox()
-  const actionBox = await action.boundingBox()
-  expect(noticeBox).not.toBeNull()
-  expect(actionBox).not.toBeNull()
-  expect(noticeBox!.y + noticeBox!.height).toBeLessThanOrEqual(actionBox!.y)
+    if (!button) return null
+    // Read both rectangles in one layout/scroll snapshot after font readiness.
+    const noticeBox = element.getBoundingClientRect()
+    const actionBox = button.getBoundingClientRect()
+    return {
+      noticeBeforeAction: Boolean(element.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING),
+      noticeBottom: noticeBox.bottom,
+      actionTop: actionBox.top,
+    }
+  }, actionName)
+  expect(decision).not.toBeNull()
+  expect(decision!.noticeBeforeAction).toBe(true)
+  expect(decision!.noticeBottom).toBeLessThanOrEqual(decision!.actionTop)
   const disclosure = notice.locator('summary')
   const details = notice.locator('details')
   await expect(details).not.toHaveAttribute('open')
