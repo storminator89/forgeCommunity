@@ -12,6 +12,7 @@ let memberId = '';
 let adminId = '';
 let publicSpaceId = '';
 let privateSpaceId = '';
+let privateMissionId = '';
 let publicDiscussionId = '';
 
 function disposableDatabasePath() {
@@ -219,6 +220,12 @@ test.describe('every App Router page, one at a time', () => {
       expect(joined.ok(), await joined.text()).toBe(true);
       const added = await adminContext.request.post(`/api/spaces/${encodeURIComponent(privateSpaceId)}/members`, { data: { userId: memberId } });
       expect(added.ok(), await added.text()).toBe(true);
+      const mission = await adminContext.request.post(`/api/spaces/${encodeURIComponent(privateSpaceId)}/missions`, { headers: { origin }, data: {
+        title: 'Route QA overview mission', prompt: 'A real disposable mission for the private Space overview.', requestId: randomUUID(),
+      } });
+      expect(mission.status(), await mission.text()).toBe(201);
+      privateMissionId = (await mission.json() as { id: string }).id;
+      expect(privateMissionId).toBeTruthy();
       const discussion = await memberContext.request.post(`/api/spaces/${encodeURIComponent(publicSpaceId)}/discussions`, { data: {
         title: 'Route QA discussion', content: 'Route QA discussion body.', requestId: randomUUID(),
       } });
@@ -277,6 +284,15 @@ test.describe('every App Router page, one at a time', () => {
       if (item.url === '/admin/dashboard') await expect(page.locator('#metric-totalUsers')).toContainText(/[1-9]/);
       if (item.url === '/chat') await expect(page.getByRole('log', { name: 'Nachrichten' })).toBeVisible();
       if (item.url === '/community') await expect(main.getByRole('status').filter({ hasText: /^\d+ (?:Beitrag|Beiträge) geladen$/ })).toBeVisible();
+      if (item.url === '/community/missions') {
+        const missionLink = main.getByRole('link', { name: 'Route QA overview mission', exact: true });
+        await expect(missionLink)
+          .toHaveAttribute('href', `/community/spaces/${encodeURIComponent(privateSpaceId)}/missions/${encodeURIComponent(privateMissionId)}`);
+        const missionCard = main.getByRole('listitem').filter({ has: page.getByRole('link', { name: 'Route QA overview mission', exact: true }) });
+        await expect(missionCard).toHaveCount(1);
+        await expect(missionCard.getByText('Route QA private space', { exact: true })).toBeVisible();
+        await expect(main.getByRole('button', { name: /teilnehmen|beenden/i })).toHaveCount(0);
+      }
       if (item.url === '/courses') await expect(main.getByText(/^\d+ (?:Kurs|Kurse) verfügbar$/)).toBeVisible();
       if (item.url === '/courses/journey') {
         await expect(page.getByRole('link', { name: 'Lernschritt öffnen' })).toHaveAttribute('href', '/courses/qa-route-course/contents?content=qa-open');

@@ -163,7 +163,7 @@ jobs:
         run: node --test --test-concurrency=1 scripts/check-postgresql-upgrades.mjs scripts/check-postgresql-release-gate.mjs scripts/check-course-publication-ready.mjs scripts/check-course-qa-postgresql.mjs scripts/event-waitlist.node-tests.mjs scripts/mission-week.node-tests.mjs
 
       - name: Exercise private mission API contracts on PostgreSQL
-        run: SPACE_MISSIONS_POSTGRESQL_DISPOSABLE=1 npm test -- --runInBand __tests__/api/space-missions-db.test.ts
+        run: SPACE_MISSIONS_POSTGRESQL_DISPOSABLE=1 npm test -- --runInBand __tests__/api/space-missions-db.test.ts __tests__/api/space-mission-overview-db.test.ts
 
       - name: Exercise Space poll contracts on PostgreSQL
         run: SPACE_POLLS_POSTGRESQL_DISPOSABLE=1 npm test -- --runInBand __tests__/api/space-polls-db.test.ts

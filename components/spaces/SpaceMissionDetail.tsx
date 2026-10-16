@@ -1,10 +1,13 @@
 'use client';
 
-/* Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V4 */
-/* Editorial workbench · named teach-back reading column · existing rail and locked design.md tokens */
+/* Friendly mission workbench. Motion follows confirmed server changes only. */
 
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import Link from 'next/link';
+import { ArrowRight, CalendarDays, Check, Lightbulb, LockKeyhole, MessageCircle, Users } from 'lucide-react';
+import { FriendlyMotionToggle, useFriendlyMotion } from '@/components/community/FriendlyMotion';
+import { MissionGoalTrail, MissionIllustration } from './MissionVisuals';
+import styles from './friendly-missions.module.css';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { PageState } from '@/components/page-state';
@@ -21,6 +24,7 @@ type Snapshot = { space: SpaceSummary; mission: SpaceMission };
 
 export function SpaceMissionDetail({ spaceId, missionId, viewerId }: { spaceId: string; missionId: string; viewerId: string }) {
   const base = missionApiUrl(spaceId, missionId);
+  const { enabled: motionEnabled } = useFriendlyMotion();
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -131,36 +135,47 @@ export function SpaceMissionDetail({ spaceId, missionId, viewerId }: { spaceId: 
   const mayPost = mission.participation.active && !mission.closedAt && (!ownInsight || !ownBuildOn);
 
   return <SpaceShell>
-    <nav aria-label="Pfad" className="mb-6 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground"><Link prefetch={false} href="/community/spaces" className="rounded-sm py-2 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring">Spaces</Link><span aria-hidden="true">/</span><Link prefetch={false} href={spaceUrl(spaceId)} className="min-w-0 max-w-full truncate rounded-sm py-2 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring">{space.name}</Link></nav>
-    <header className="max-w-3xl border-b pb-6">
-      <p className="text-sm font-medium text-muted-foreground">Freiwillige Mission · Privater Space · {mission.closedAt ? 'Geschlossen' : 'Offen'}</p>
-      <h1 className="mt-2 min-w-0 text-[clamp(1.65rem,1.1rem+2vw,2.35rem)] font-semibold tracking-tight [overflow-wrap:anywhere]">{mission.title}</h1>
-      <p className="mt-4 whitespace-pre-wrap break-words text-base leading-relaxed">{mission.prompt}</p>
-      {mission.week && <div className="mt-4 space-y-2 text-sm leading-relaxed">
+    <nav aria-label="Pfad" className="mb-6 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground"><Link prefetch={false} href="/community/spaces" className="rounded-sm py-2 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring">Spaces</Link><span aria-hidden="true">/</span><Link prefetch={false} href={spaceUrl(spaceId)} className="min-w-0 max-w-full truncate rounded-sm py-2 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring">{space.name}</Link><span className="ml-auto"><FriendlyMotionToggle /></span></nav>
+    <div data-confirmed={Boolean(feedback && !actionError)} className={`max-w-4xl ${motionEnabled ? styles.motion : ''}`}>
+    <header className={`${styles.surface} ${styles.hero}`}>
+      <div className={styles.heroCopy}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className={styles.eyebrow}><LockKeyhole size={14} aria-hidden="true" /> Privater Space <span aria-hidden="true">·</span> {mission.closedAt ? 'Geschlossen' : 'Freiwillige Mission'}</p>
+        </div>
+        <h1 className="mt-3 min-w-0 text-[clamp(1.65rem,1.1rem+2vw,2.35rem)] font-semibold leading-tight tracking-tight [overflow-wrap:anywhere]">{mission.title}</h1>
+        <p className="mt-3 whitespace-pre-wrap break-words text-base leading-relaxed">{mission.prompt}</p>
+      </div>
+      <MissionIllustration />
+    </header>
+    {mission.week && <div className={`${styles.week} mt-3`}>
+      <CalendarDays size={18} aria-hidden="true" />
+      <div className="min-w-0">
         <p className="font-medium">{missionWindowLabel(mission)}</p>
         <p className="text-muted-foreground [overflow-wrap:anywhere]">{missionWeekDates(mission.week)}</p>
-        <p className="text-muted-foreground">Der Zeitraum endet am folgenden Montag um 00:00 Uhr in dieser Zeitzone. {mission.windowState === 'past' ? 'Spätere Beiträge gehören zum aktuellen gemeinsamen Stand dieser Mission; sie belegen keine Teilnahme innerhalb der Lernwoche.' : 'Die Lernwoche ist ein freiwilliger Zeitrahmen. Die Mission bleibt danach offen, bis ein Admin sie schließt.'}</p>
-      </div>}
-      {mission.creator && <div className="mt-4"><SpaceAuthorLine author={mission.creator} date={mission.createdAt} /></div>}
-    </header>
+        {mission.windowState === 'past' && <p className="mt-1 text-muted-foreground">Spätere Beiträge zählen weiter; sie belegen keine Teilnahme innerhalb der Lernwoche.</p>}
+        <details className={styles.disclosure}><summary>Zum Zeitrahmen</summary><p>Der Zeitraum endet am folgenden Montag um 00:00 Uhr in dieser Zeitzone. Die Lernwoche ist ein freiwilliger Zeitrahmen. {mission.closedAt ? 'Die Mission ist geschlossen.' : 'Die Mission bleibt danach offen, bis ein Admin sie schließt.'}</p></details>
+      </div>
+    </div>}
 
-    <div className="mt-6 max-w-3xl">
-      <p ref={feedbackRef} id={feedbackId} tabIndex={-1} role={actionError ? 'alert' : 'status'} className={`text-sm leading-relaxed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${actionError ? 'text-destructive' : 'text-muted-foreground'}`}>{actionError || feedback}</p>
-      <section aria-labelledby="mission-goal" className="mt-4 border-b pb-6">
-        <h2 id="mission-goal" className="text-lg font-semibold">Das gemeinsame Ziel</h2>
-        <ol className="mt-3 divide-y border-y text-sm leading-relaxed">
-          <li className="py-3"><h3 className="font-medium">1. In eigenen Worten erklären</h3><p className="mt-1"><span aria-hidden="true" className="mr-2">{mission.progress.insightAuthors >= 2 ? '●' : '○'}</span>Zwei verschiedene Personen teilen je eine Erkenntnis. <span className="text-muted-foreground">{Math.min(mission.progress.insightAuthors, 2)}/2</span></p></li>
-          <li className="py-3"><h3 className="font-medium">2. Eine andere Erklärung lesen</h3><p className="mt-1 text-muted-foreground">Lies eine Erkenntnis im Abschnitt „Erkenntnisse und Gedanken“. Lesen wird nicht erfasst oder abgehakt.</p></li>
-          <li className="py-3"><h3 className="font-medium">3. Darauf aufbauen</h3><p className="mt-1"><span aria-hidden="true" className="mr-2">{mission.progress.hasCrossPersonBuildOn ? '●' : '○'}</span>Eine Person baut auf der Erkenntnis einer anderen auf. <span className="text-muted-foreground">{mission.progress.hasCrossPersonBuildOn ? '1/1' : '0/1'}</span></p></li>
-        </ol>
-        <p className="mt-3 text-sm font-medium" role="status">{mission.progress.complete ? 'Gemeinsam weitergedacht. Das aktuelle Ziel ist erreicht.' : 'Das gemeinsame Ziel ist noch offen.'}</p>
-        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Gezählt werden nur aktuell sichtbare Beiträge aktiver Teilnehmender. Das kann sich ändern. Diese Mission bewertet kein Wissen und verändert deinen Kursfortschritt nicht. Sie belegt keine Qualifikation.</p>
+    <div className="mt-4">
+      <p ref={feedbackRef} id={feedbackId} tabIndex={-1} role={actionError ? 'alert' : 'status'} data-feedback={Boolean(feedback && !actionError)} className={`${styles.confirmed} text-sm leading-relaxed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${actionError ? 'text-destructive' : 'text-muted-foreground'}`}>{actionError || feedback}</p>
+      <section aria-labelledby="mission-goal" className={`${styles.surface} ${styles.goalPanel} mt-4`}>
+        <div className="flex flex-wrap items-center justify-between gap-2"><h2 id="mission-goal" className="text-lg font-semibold">Das gemeinsame Ziel</h2><span className={styles.pill}><Users size={14} aria-hidden="true" /> Gemeinsam</span></div>
+        <MissionGoalTrail progress={mission.progress} />
+        <p className={styles.goalStatus} role="status">{mission.progress.complete ? <Check size={18} aria-hidden="true" /> : <MessageCircle size={18} aria-hidden="true" />}{mission.progress.complete ? 'Gemeinsam weitergedacht. Das aktuelle Ziel ist erreicht.' : 'Das gemeinsame Ziel ist noch offen.'}</p>
+        <p className="mt-2 text-xs leading-relaxed text-muted-foreground">Kein Wissensnachweis. Kein Einfluss auf deinen Kursfortschritt.</p>
+        <details className={`${styles.disclosure} mt-1`}><summary>So funktioniert das Ziel</summary>
+          <p>Zwei verschiedene Personen teilen je eine Erkenntnis. Eine Person baut auf der Erkenntnis einer anderen auf.</p>
+          <p className="mt-2">Lies eine Erkenntnis im Abschnitt „Erkenntnisse und Gedanken“. Lesen wird nicht erfasst oder abgehakt.</p>
+          <p className="mt-2">Gezählt werden nur aktuell sichtbare Beiträge aktiver Teilnehmender. Das kann sich ändern. Diese Mission bewertet kein Wissen und verändert deinen Kursfortschritt nicht. Sie belegt keine Qualifikation.</p>
+        </details>
       </section>
 
       <section aria-labelledby="mission-participation" className="border-b py-6">
         <div className="flex flex-wrap items-baseline justify-between gap-2"><h2 id="mission-participation" className="text-lg font-semibold">Wer dabei ist</h2><p className="text-sm text-muted-foreground">{mission.participants.length}/{mission.participantLimit} Personen</p></div>
-        {mission.participants.length ? <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm">{mission.participants.map(person => <li key={person.id} className="min-w-0 break-words">{person.name || 'Mitglied'}{person.id === viewerId ? ' (du)' : ''}</li>)}</ul> : <p className="mt-3 text-sm text-muted-foreground">Bisher nimmt niemand teil.</p>}
-        <p id={privacyId} className="mt-4 text-sm leading-relaxed text-muted-foreground">{missionPrivacy}</p>
+        {mission.participants.length ? <ul className={styles.participants}>{mission.participants.map(person => <li key={person.id}><span aria-hidden="true" className={styles.initial}>{(person.name || 'M').slice(0, 1)}</span><span className="min-w-0">{person.name || 'Mitglied'}{person.id === viewerId ? ' (du)' : ''}</span></li>)}</ul> : <p className="mt-3 text-sm text-muted-foreground">Bisher nimmt niemand teil.</p>}
+        <p className="mt-3 text-sm text-muted-foreground">Freiwillig dabei. Dein Name und deine Beiträge sind im privaten Space sichtbar.</p>
+        <details open={mission.canJoin} className={`${styles.disclosure} mt-1`}><summary>Teilnahme und Privatsphäre</summary><p id={privacyId}>{missionPrivacy}</p></details>
         <div className="mt-4 flex flex-wrap gap-2">
           {mission.participation.active ? <SpaceMissionConfirm label="Teilnahme beenden" description="Deine Missionsbeiträge werden für Mitglieder verborgen und zählen nicht mehr zum Ziel. Erneutes Beitreten macht alte Beiträge nicht wieder sichtbar. Admins können sie zur Moderation aufbewahren." onConfirm={() => void mutate(`${base}/participation`, 'DELETE', { epoch: mission.participation.epoch }, 'Deine Teilnahme ist beendet. Deine Beiträge werden nicht mehr mitgezählt.')} /> : mission.canJoin && <Button type="button" aria-describedby={privacyId} onClick={() => void mutate(`${base}/participation`, 'POST', { expectedEpoch: mission.participation.epoch }, 'Du nimmst jetzt freiwillig teil.')}>Freiwillig teilnehmen</Button>}
           {mission.canManage && !mission.closedAt && <SpaceMissionConfirm label="Mission schließen" description="Danach sind keine neuen Teilnahmen oder Beiträge möglich. Sichtbare Beiträge bleiben im privaten Space. Teilnehmende können weiter austreten und eigene Beiträge zurückziehen." onConfirm={() => void mutate(base, 'PATCH', { closed: true }, 'Die Mission ist geschlossen.')} />}
@@ -170,10 +185,10 @@ export function SpaceMissionDetail({ spaceId, missionId, viewerId }: { spaceId: 
 
       <section aria-labelledby="mission-contributions" className="py-6">
         <h2 id="mission-contributions" className="text-lg font-semibold">Erkenntnisse und Gedanken</h2>
-        {mission.contributions.length ? <ul className="mt-4 divide-y border-y">{mission.contributions.map(item => {
+        {mission.contributions.length ? <ul className={`${styles.list} mt-4`}>{mission.contributions.map(item => {
           const target = mission.contributions.find(other => other.id === item.targetContributionId);
-          return <li id={`mission-contribution-${item.id}`} key={item.id} className="min-w-0 scroll-mt-6 py-5">
-            <p className="mb-2 text-sm font-medium">{item.kind === 'INSIGHT' ? 'Erkenntnis' : 'Weitergedacht'}</p>
+          return <li id={`mission-contribution-${item.id}`} key={item.id} data-kind={item.kind} className={styles.contribution}>
+            <p className={`${styles.pill} mb-3`}>{item.kind === 'INSIGHT' ? <Lightbulb size={14} aria-hidden="true" /> : <MessageCircle size={14} aria-hidden="true" />}{item.kind === 'INSIGHT' ? 'Erkenntnis' : 'Weitergedacht'}</p>
             <SpaceAuthorLine author={item.author} date={item.createdAt} />
             {target && <p className="mt-2 text-sm text-muted-foreground">Baut auf <a href={`#mission-contribution-${target.id}`} className="rounded-sm text-foreground underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-ring">{target.author.name || 'Mitglied'}s Erkenntnis</a> auf.</p>}
             <p className="mt-3 whitespace-pre-wrap break-words text-base leading-relaxed">{item.content}</p>
@@ -190,16 +205,19 @@ export function SpaceMissionDetail({ spaceId, missionId, viewerId }: { spaceId: 
           {item.canWithdraw && <SpaceMissionConfirm label="Beitrag zurückziehen" description="Der Beitrag bleibt für Mitglieder verborgen. Admins können den Inhalt zur Moderation aufbewahren. Er wird auch nach erneuter Teilnahme nicht wieder sichtbar." onConfirm={() => void mutate(`${base}/contributions/${encodeURIComponent(item.id)}`, 'DELETE', { epoch: mission.participation.epoch }, 'Dein verborgener Beitrag ist zurückgezogen.')} />}
         </div>)}
 
-        {mayPost && <form onSubmit={contribute} aria-describedby={privacyId} className="mt-6 space-y-4 rounded-2xl border bg-card p-4 sm:p-6">
+        {mayPost && <form onSubmit={contribute} aria-describedby={privacyId} className={`${styles.surface} ${styles.form} space-y-4`}>
           <h3 className="text-base font-semibold">Dein Beitrag</h3>
-          <fieldset><legend className="mb-2 text-sm font-medium">Was möchtest du teilen?</legend><div className="flex flex-wrap gap-3"><label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm"><input type="radio" name="mission-kind" checked={kind === 'INSIGHT'} onChange={() => { setKind('INSIGHT'); setContent(''); setTargetId(''); }} disabled={ownInsight} className="h-4 w-4 accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" />Eine Erkenntnis{ownInsight ? ' (geteilt)' : ''}</label><label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm"><input type="radio" name="mission-kind" checked={kind === 'BUILD_ON'} onChange={() => { setKind('BUILD_ON'); setContent(''); setTargetId(''); }} disabled={ownBuildOn || targets.length === 0} className="h-4 w-4 accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" />Darauf aufbauen{ownBuildOn ? ' (geteilt)' : ''}</label></div></fieldset>
+          <p className="text-xs leading-relaxed text-muted-foreground">Im privaten Space sichtbar. In kleinen Gruppen können Änderungen einzelne Personen erkennen lassen.</p>
+          <fieldset><legend className="mb-2 text-sm font-medium">Was möchtest du teilen?</legend><div className={styles.kindChoices}><label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm"><input type="radio" name="mission-kind" checked={kind === 'INSIGHT'} onChange={() => { setKind('INSIGHT'); setContent(''); setTargetId(''); }} disabled={ownInsight} className="h-4 w-4 accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" />Eine Erkenntnis{ownInsight ? ' (geteilt)' : ''}</label><label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm"><input type="radio" name="mission-kind" checked={kind === 'BUILD_ON'} onChange={() => { setKind('BUILD_ON'); setContent(''); setTargetId(''); }} disabled={ownBuildOn || targets.length === 0} className="h-4 w-4 accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" />Darauf aufbauen{ownBuildOn ? ' (geteilt)' : ''}</label></div></fieldset>
           {!targets.length && !ownBuildOn && <p className="text-sm text-muted-foreground">Aufbauen ist möglich, sobald eine andere teilnehmende Person eine Erkenntnis teilt.</p>}
           {kind === 'BUILD_ON' && <fieldset aria-labelledby={targetLabelId}><legend id={targetLabelId} className="mb-2 text-sm font-medium">Auf welche Erkenntnis?</legend><div className="space-y-2">{targets.map(target => <label key={target.id} className="flex min-h-11 min-w-0 cursor-pointer items-start gap-3 rounded-xl border p-3 text-sm"><input type="radio" name="mission-target" value={target.id} checked={targetId === target.id} onChange={() => setTargetId(target.id)} required className="mt-1 h-4 w-4 shrink-0 accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" /><span className="min-w-0 whitespace-pre-wrap break-words"><span className="font-medium">{target.author.name || 'Mitglied'}: </span>{target.content}</span></label>)}</div></fieldset>}
-          {availableKind && <><div className="space-y-2"><label htmlFor={contentId} className="text-sm font-medium">{kind === 'INSIGHT' ? 'Deine Erkenntnis' : 'Dein weiterführender Gedanke'}</label><Textarea id={contentId} value={content} onChange={event => setContent(event.target.value)} minLength={10} maxLength={2000} required aria-required="true" rows={5} /></div><Button type="submit" disabled={kind === 'BUILD_ON' && !targetId}>Im Space teilen</Button></>}
+          {availableKind && <><div className="space-y-2"><label htmlFor={contentId} className="text-sm font-medium">{kind === 'INSIGHT' ? 'Deine Erkenntnis' : 'Dein weiterführender Gedanke'}</label><Textarea id={contentId} value={content} onChange={event => setContent(event.target.value)} minLength={10} maxLength={2000} required aria-required="true" rows={4} /></div><Button type="submit" disabled={kind === 'BUILD_ON' && !targetId}><ArrowRight size={16} aria-hidden="true" />Im Space teilen</Button></>}
           {!availableKind && <p className="text-sm text-muted-foreground">Wähle die andere Beitragsart, um weiterzumachen.</p>}
         </form>}
       </section>
+      {mission.creator && <details className={styles.disclosure}><summary>Mission erstellt von</summary><SpaceAuthorLine author={mission.creator} date={mission.createdAt} /></details>}
       {mission.canManage && <SpaceMissionModeration base={base} request={request} onModerate={(id, hidden) => void mutate(`${base}/contributions/${encodeURIComponent(id)}/moderation`, 'PATCH', { hidden }, hidden ? 'Der Beitrag ist ausgeblendet.' : 'Moderation gespeichert. Nur aktuell gültige Beiträge sind sichtbar.')} />}
+    </div>
     </div>
   </SpaceShell>;
 }

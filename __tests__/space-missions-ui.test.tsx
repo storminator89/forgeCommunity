@@ -86,6 +86,8 @@ test('names participants and contribution authors and renders only server-derive
   expect(screen.getByText('0/2')).toBeVisible();
   expect(screen.getByText('0/1')).toBeVisible();
   expect(screen.getByText('Das gemeinsame Ziel ist noch offen.')).toBeVisible();
+  expect(screen.getByText('Kein Wissensnachweis. Kein Einfluss auf deinen Kursfortschritt.')).toBeVisible();
+  await userEvent.click(screen.getByText('So funktioniert das Ziel'));
   expect(screen.getByText(/Diese Mission bewertet kein Wissen und verändert deinen Kursfortschritt nicht/)).toBeVisible();
   expect(screen.queryByText(/XP|Rangliste|Meisterschaft|Zertifikat|Streak/i)).not.toBeInTheDocument();
 });
@@ -106,6 +108,8 @@ test('voluntary opt-in sends the current expected epoch and waits for a fresh se
   render(<SpaceMissionPage />);
   const join = await screen.findByRole('button', { name: 'Freiwillig teilnehmen' });
   expect(join).toHaveAccessibleDescription(/Dein Name und deine Beiträge.*aktuelle Mitglieder.*privaten Spaces/);
+  expect(screen.getByText(/Bereits Gesehenes lässt sich nicht zurückholen/)).toBeVisible();
+  expect(screen.getByText(/Änderungen Rückschlüsse auf einzelne Personen erlauben/)).toBeVisible();
   expect(screen.queryByRole('textbox', { name: 'Deine Erkenntnis' })).not.toBeInTheDocument();
   await userEvent.click(join);
   expect(JSON.parse(mutationCalls(`${base}/participation`, 'POST')[0][1]!.body as string)).toEqual({ expectedEpoch: 3 });
@@ -173,6 +177,7 @@ test.each(['INSIGHT', 'BUILD_ON'] as const)('posts %s with only its exact epoch,
   }
   const label = kind === 'INSIGHT' ? 'Deine Erkenntnis' : 'Dein weiterführender Gedanke';
   const input = screen.getByRole('textbox', { name: label });
+  expect(screen.getByText(/In kleinen Gruppen können Änderungen einzelne Personen erkennen lassen/)).toBeVisible();
   expect(input).toHaveAttribute('minlength', '10');
   expect(input).toHaveAttribute('maxlength', '2000');
   fireEvent.change(input, { target: { value: '  Ein gemeinsam formulierter Gedanke.  ' } });
@@ -510,10 +515,13 @@ test('the three learning steps guide reading without tracking it or inventing a 
   render(<SpaceMissionPage />);
   await screen.findByRole('heading', { name: '1. In eigenen Worten erklären' });
   const reading = screen.getByRole('heading', { name: '2. Eine andere Erklärung lesen' }).closest('li')!;
-  expect(within(reading).getByText(/Lesen wird nicht erfasst oder abgehakt/)).toBeVisible();
+  expect(within(reading).getByText('Wird nicht erfasst')).toBeVisible();
+  await userEvent.click(screen.getByText('So funktioniert das Ziel'));
+  expect(screen.getByText(/Lesen wird nicht erfasst oder abgehakt/)).toBeVisible();
   expect(within(reading).queryByRole('checkbox')).not.toBeInTheDocument();
   expect(within(reading).queryByText(/[●○✓]|\d\/\d/)).not.toBeInTheDocument();
   expect(screen.getByRole('heading', { name: '3. Darauf aufbauen' })).toBeVisible();
+  await userEvent.click(screen.getByText('Teilnahme und Privatsphäre'));
   expect(screen.getByText(/Änderungen Rückschlüsse auf einzelne Personen erlauben/)).toBeVisible();
   expect(screen.getByText(/Bereits Gesehenes lässt sich nicht zurückholen/)).toBeVisible();
 });

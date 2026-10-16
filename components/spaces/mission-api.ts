@@ -8,6 +8,16 @@ export interface MissionWeek {
   endsAt: string;
 }
 
+/** Minimal, read-only discovery projection. Participation stays on the detail page. */
+export interface SpaceMissionOverview {
+  id: string;
+  title: string;
+  space: { id: string; name: string };
+  week: MissionWeek | null;
+  windowState: 'self-paced' | 'current' | 'past';
+  participationActive: boolean;
+}
+
 export interface SpaceMission {
   id: string;
   spaceId: string;

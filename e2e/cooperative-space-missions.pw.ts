@@ -42,7 +42,7 @@ test('two learners use a soft learning week, teach back after its end, reverse c
   const nonce = randomUUID();
   const password = `MissionQa1!${nonce}`;
   const accounts: { name: string; email: string; id: string }[] = [];
-  for (const name of ['Mission QA Admin', 'Mission QA Alice', 'Mission QA Bob', 'Mission QA Outsider']) {
+  for (const name of ['Ada Winter', 'Mara Sommer', 'Jonas Weber', 'Privates Testkonto']) {
     const email = `mission-${accounts.length}-${nonce}@example.test`;
     const response = await request.post(`${origin}/api/register`, { headers: { origin }, data: { name, email, password } });
     expect(response.status(), await response.text()).toBe(201);
@@ -66,7 +66,7 @@ test('two learners use a soft learning week, teach back after its end, reverse c
     }
     const [adminPage, alicePage, bobPage] = pages;
     const createdSpace = await contexts[0].request.post('/api/spaces', { headers: { origin }, data: {
-      name: `Mission QA ${nonce.slice(0, 8)}`, description: 'Disposable private cooperative mission.', visibility: 'PRIVATE',
+      name: 'Lernwerkstatt', description: 'Disposable private cooperative mission.', visibility: 'PRIVATE',
     } });
     expect(createdSpace.status(), await createdSpace.text()).toBe(201);
     const spaceId = (await createdSpace.json() as { id: string }).id;
@@ -80,7 +80,7 @@ test('two learners use a soft learning week, teach back after its end, reverse c
 
     await adminPage.goto(`/community/spaces/${spaceId}`);
     await adminPage.getByRole('button', { name: 'Mission starten', exact: true }).click();
-    const title = `Zusammenhänge${'VerständlichErklären'.repeat(3)}`;
+    const title = 'Aha! So wird eine Idee klar';
     await adminPage.getByRole('textbox', { name: 'Thema', exact: true }).fill(title);
     await adminPage.getByRole('textbox', { name: 'Aufgabe', exact: true }).fill('Erklärt eine neue Idee und entwickelt den Gedanken einer anderen Person weiter.');
     await adminPage.getByRole('checkbox', { name: 'Diese Lernwoche' }).check();
@@ -98,6 +98,14 @@ test('two learners use a soft learning week, teach back after its end, reverse c
         await adminPage.screenshot({ path: testInfo.outputPath(`mission-week-form-${theme}-${width}.png`), animations: 'disabled' });
       }
     }
+    const stressTitle = `Zusammenhänge${'VerständlichErklären'.repeat(3)}`;
+    await adminPage.getByRole('textbox', { name: 'Thema', exact: true }).fill(stressTitle);
+    for (const width of [320, 768]) {
+      await adminPage.setViewportSize({ width, height: 900 });
+      await checkReflow(adminPage);
+      await adminPage.screenshot({ path: testInfo.outputPath(`mission-week-form-stress-${width}.png`), animations: 'disabled' });
+    }
+    await adminPage.getByRole('textbox', { name: 'Thema', exact: true }).fill(title);
     await adminPage.setViewportSize({ width: 1280, height: 900 });
     await adminPage.evaluate(() => { document.documentElement.style.zoom = '2'; });
     await checkReflow(adminPage);
@@ -120,16 +128,50 @@ test('two learners use a soft learning week, teach back after its end, reverse c
       await page.goto(url);
       await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
       await expect(page.getByRole('heading', { name: '2. Eine andere Erklärung lesen' })).toBeVisible();
+      await expect(page.getByText('Wird nicht erfasst', { exact: true })).toBeVisible();
+      await page.getByText('So funktioniert das Ziel', { exact: true }).click();
       await expect(page.getByText(/Lesen wird nicht erfasst oder abgehakt/)).toBeVisible();
+      await page.getByText('So funktioniert das Ziel', { exact: true }).click();
+      await expect(page.getByText(/Bereits Gesehenes lässt sich nicht zurückholen/)).toBeVisible();
       await expect(page.getByRole('button', { name: 'Freiwillig teilnehmen' })).toBeVisible();
       await page.getByRole('button', { name: 'Freiwillig teilnehmen' }).focus();
       await page.keyboard.press('Enter');
       await expect(page.getByRole('button', { name: 'Teilnahme beenden', exact: true })).toBeVisible();
-      await page.getByLabel('Deine Erkenntnis', { exact: true }).fill(page === alicePage
+      const insightText = page === alicePage
         ? 'Eine Erklärung wird klarer, wenn ein konkretes Beispiel den Zusammenhang zeigt.'
-        : `Ein Gegenbeispiel zeigt die Grenze eines Gedankens. ${'Lernzusammenhang'.repeat(15)}`);
-      await page.getByRole('button', { name: 'Im Space teilen', exact: true }).click();
-      await expect(page.getByText('Dein Beitrag ist im Space sichtbar.', { exact: true })).toBeVisible();
+        : 'Ein Gegenbeispiel zeigt die Grenze eines Gedankens.';
+      await expect(page.getByText(/In kleinen Gruppen können Änderungen einzelne Personen erkennen lassen/)).toBeVisible();
+      if (page === alicePage) {
+        await page.emulateMedia({ reducedMotion: 'no-preference' });
+        await page.getByRole('button', { name: 'Animationen ausschalten' }).click();
+        await page.reload();
+        await expect(page.getByRole('button', { name: 'Animationen einschalten' })).toHaveAttribute('aria-pressed', 'false');
+        // An interrupted first POST must allow an exact retry, and rapid clicks must not double-submit.
+        let interrupt = true;
+        const posts: string[] = [];
+        await page.route(`**${base}/contributions`, async route => {
+          if (route.request().method() === 'POST') {
+            posts.push(route.request().postData()!);
+            if (interrupt) { interrupt = false; await route.abort('failed'); return; }
+          }
+          await route.continue();
+        });
+        await page.getByLabel('Deine Erkenntnis', { exact: true }).fill(insightText);
+        await page.getByRole('button', { name: 'Im Space teilen', exact: true }).evaluate(element => { (element as HTMLButtonElement).click(); (element as HTMLButtonElement).click(); });
+        await expect(page.getByRole('alert')).toBeVisible();
+        expect(posts).toHaveLength(1);
+        await page.getByLabel('Deine Erkenntnis', { exact: true }).fill(insightText);
+        await page.getByRole('button', { name: 'Im Space teilen', exact: true }).click();
+        await expect(page.getByText('Dein Beitrag ist im Space sichtbar.', { exact: true })).toBeVisible();
+        expect(posts).toHaveLength(2);
+        expect(posts[1]).toBe(posts[0]);
+        await page.unroute(`**${base}/contributions`);
+      } else {
+        await page.getByLabel('Deine Erkenntnis', { exact: true }).fill(insightText);
+        await page.getByRole('button', { name: 'Im Space teilen', exact: true }).click();
+        await expect(page.getByText('Dein Beitrag ist im Space sichtbar.', { exact: true })).toBeVisible();
+      }
+      expect(await page.getByText('Dein Beitrag ist im Space sichtbar.', { exact: true }).evaluate(element => getComputedStyle(element).animationName)).toBe('none');
     }
     // Test-only disposable fixture: move the immutable stored week into the past.
     // Production has no schedule-edit route; the next read must keep consent/evidence.
@@ -144,16 +186,24 @@ test('two learners use a soft learning week, teach back after its end, reverse c
     await expect(alicePage.getByText('Lernwoche vorbei · Mission bleibt offen', { exact: true })).toBeVisible();
     await expect(alicePage.getByText(/sie belegen keine Teilnahme innerhalb der Lernwoche/)).toBeVisible();
     await alicePage.getByRole('radio', { name: /Darauf aufbauen/ }).check();
-    const target = alicePage.getByRole('radio', { name: /^Mission QA Bob:/ });
+    const target = alicePage.getByRole('radio', { name: /^Jonas Weber:/ });
     await target.scrollIntoViewIfNeeded();
     const scrollBefore = await alicePage.locator('#page-content').evaluate(element => element.scrollTop);
     await target.check();
     expect(await alicePage.locator('#page-content').evaluate(element => element.scrollTop)).toBe(scrollBefore);
+    await alicePage.getByRole('button', { name: 'Animationen einschalten' }).click();
     await alicePage.getByLabel('Dein weiterführender Gedanke').fill('Das Gegenbeispiel kann nach dem ersten Beispiel helfen, die Erklärung genauer abzugrenzen.');
     await alicePage.getByRole('button', { name: 'Im Space teilen', exact: true }).click();
     await expect(alicePage.getByText('Gemeinsam weitergedacht. Das aktuelle Ziel ist erreicht.')).toBeVisible();
+    const confirmedMotion = await alicePage.getByText('Dein Beitrag ist im Space sichtbar.', { exact: true }).evaluate(element => { const css = getComputedStyle(element); return { name: css.animationName, iterations: css.animationIterationCount, duration: css.animationDuration }; });
+    expect(confirmedMotion.name).not.toBe('none');
+    expect(confirmedMotion.iterations).toBe('1');
+    expect(Number.parseFloat(confirmedMotion.duration)).toBeLessThanOrEqual(.5);
+    await alicePage.emulateMedia({ reducedMotion: 'reduce' });
+    await expect(alicePage.getByRole('button', { name: 'Animationen durch Systemeinstellung ausgeschaltet' })).toBeDisabled();
+    expect(await alicePage.getByText('Dein Beitrag ist im Space sichtbar.', { exact: true }).evaluate(element => getComputedStyle(element).animationName)).toBe('none');
     await expect(alicePage.getByText('Lernwoche vorbei · Mission bleibt offen', { exact: true })).toBeVisible();
-    await expect(alicePage.getByText('Mission QA Bobs Erkenntnis')).toBeVisible();
+    await expect(alicePage.getByText('Jonas Webers Erkenntnis')).toBeVisible();
 
     for (const theme of ['Hell', 'Dunkel']) {
       await alicePage.getByRole('button', { name: 'Farbschema auswählen' }).click();
@@ -205,6 +255,27 @@ test('two learners use a soft learning week, teach back after its end, reverse c
     await expect(alicePage.getByRole('heading', { level: 1, name: title })).toHaveCount(0);
     await expect(alicePage.getByRole('textbox')).toHaveCount(0);
     expect((await contexts[1].request.get(base)).status()).toBe(404);
+    const stressSpace = await contexts[0].request.post('/api/spaces', { headers: { origin }, data: {
+      name: 'Titeltest', description: 'Disposable long-title mission fixture.', visibility: 'PRIVATE',
+    } });
+    expect(stressSpace.status(), await stressSpace.text()).toBe(201);
+    const stressSpaceId = (await stressSpace.json() as { id: string }).id;
+    const stressMission = await contexts[0].request.post(`/api/spaces/${stressSpaceId}/missions`, { headers: { origin }, data: {
+      title: stressTitle, prompt: `Lange Wörter müssen umbrechen. ${'Lernzusammenhang'.repeat(15)}`, requestId: randomUUID(),
+    } });
+    expect(stressMission.status(), await stressMission.text()).toBe(201);
+    const stressMissionId = (await stressMission.json() as { id: string }).id;
+    await adminPage.goto(`/community/spaces/${stressSpaceId}/missions/${stressMissionId}`);
+    await expect(adminPage.getByRole('heading', { level: 1, name: stressTitle })).toBeVisible();
+    for (const theme of ['Hell', 'Dunkel']) {
+      await adminPage.getByRole('button', { name: 'Farbschema auswählen' }).click();
+      await adminPage.getByRole('menuitem', { name: theme, exact: true }).click();
+      for (const width of [320, 768]) {
+        await adminPage.setViewportSize({ width, height: 900 });
+        await checkReflow(adminPage);
+        await adminPage.screenshot({ path: testInfo.outputPath(`mission-stress-${theme}-${width}.png`), animations: 'disabled' });
+      }
+    }
     expect(errors).toEqual([]);
   } finally { for (const context of contexts) await context.close(); }
 });

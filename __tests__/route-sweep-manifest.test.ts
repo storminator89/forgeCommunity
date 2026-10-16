@@ -13,7 +13,7 @@ function pages(root: string): string[] {
 describe('route-by-route browser review inventory', () => {
   it('accounts for every page.tsx independently', () => {
     const sources = routeSweepCases.map(item => item.source);
-    expect(sources).toHaveLength(48);
+    expect(sources).toHaveLength(49);
     expect(sources).not.toContain('app/projects/[id]test/page.tsx');
     expect(new Set(sources).size).toBe(sources.length);
     expect(sources.sort()).toEqual(pages(join(process.cwd(), 'app')).sort());
@@ -57,6 +57,14 @@ describe('route-by-route browser review inventory', () => {
       source: 'app/courses/journey/page.tsx', persona: 'member', outcome: 'render',
       heading: 'Mein Lernweg', evidence: 'synthetic-api',
       settledApi: '/api/courses/qa-route-course/progress', settledText: 'Route QA offener Lernschritt',
+    });
+  });
+
+  it('checks the mission overview with a real private-Space membership and mission', () => {
+    expect(routeSweepCases.find(item => item.url === '/community/missions')).toMatchObject({
+      source: 'app/community/missions/page.tsx', persona: 'member', outcome: 'render',
+      heading: 'Space-Missionen', evidence: 'disposable-db', settledApi: '/api/space-missions',
+      settledText: 'Route QA overview mission', loadingText: 'Missionen werden geprüft',
     });
   });
 

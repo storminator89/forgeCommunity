@@ -23,8 +23,8 @@ beforeEach(() => { jest.clearAllMocks(); let n = 0; Object.defineProperty(global
 test('discloses voluntary voting and inference risk, renders aggregate counts and native grouped choices', async () => {
   setup(async () => page());
   expect(await screen.findByRole('heading', { name: poll().question })).toBeVisible();
-  expect(screen.getByText(/In kleinen Gruppen können Antworten trotzdem erkennbar sein/)).toBeVisible();
-  expect(screen.getByText(/Bitte keine sensiblen Fragen stellen/)).toBeVisible();
+  expect(screen.getByText(/In kleinen Gruppen können Antworten erkennbar sein/)).toBeVisible();
+  expect(screen.getByText(/Keine sensiblen Fragen/)).toBeVisible();
   expect(screen.getByRole('group', { name: `Deine Auswahl zu: ${poll().question}` })).toBeVisible();
   expect(screen.getAllByRole('radio')).toHaveLength(2);
   expect(screen.getByRole('button', { name: 'Abstimmen' })).toBeDisabled();
@@ -104,12 +104,16 @@ test('admin close/hide sends monotonic close or current moderation revision', as
     if (init?.method === 'PATCH') { const data = JSON.parse(init.body as string); current = data.closed ? { ...current, closedAt: '2026-10-16T01:00:00Z', canVote: false } : { ...current, hiddenAt: '2026-10-16T01:00:00Z', moderationRevision: 1 }; return current; }
     return page([current]);
   }, true);
-  await userEvent.click(await screen.findByRole('button', { name: 'Umfrage schließen' }));
+  await userEvent.click(await screen.findByText('Umfrage verwalten'));
+  await userEvent.click(screen.getByRole('button', { name: 'Umfrage schließen' }));
   await screen.findByRole('heading', { name: poll().question });
   expect(JSON.parse(mutationCalls(request)[0][1].body)).toEqual({ closed: true });
+  await userEvent.click(screen.getByText('Umfrage verwalten'));
   await userEvent.click(screen.getByRole('button', { name: 'Umfrage ausblenden' }));
   expect(JSON.parse(mutationCalls(request)[1][1].body)).toEqual({ hidden: true, expectedRevision: 0 });
-  expect(await screen.findByRole('button', { name: 'Umfrage einblenden' })).toBeVisible();
+  await screen.findByRole('heading', { name: poll().question });
+  await userEvent.click(screen.getByText('Umfrage verwalten'));
+  expect(screen.getByRole('button', { name: 'Umfrage einblenden' })).toBeVisible();
 });
 
 test('focus revalidation clears content and ignores stale pagination even if transport ignores abort', async () => {
@@ -134,4 +138,99 @@ test('revoked access clears poll text before notifying parent, and stale mutatio
   await waitFor(() => expect(unavailable).toHaveBeenCalled());
   expect(screen.queryByText(poll().question)).not.toBeInTheDocument();
   await act(async () => finish(poll())); expect(screen.queryByText(poll().question)).not.toBeInTheDocument();
+});
+
+
+test('visual choices expose honest percentages, counts and a non-color choice cue before saving', async () => {
+  setup(async () => page());
+  const first = await screen.findByRole('radio', { name: /Zugänglichkeit/ });
+  expect(screen.getByText('67%')).toBeVisible();
+  expect(screen.getByText('33%')).toBeVisible();
+  const label = first.closest('label')!;
+  expect(label.querySelector('[aria-hidden="true"] svg')).toBeNull();
+  await userEvent.click(first);
+  expect(first).toBeChecked();
+  expect(label.querySelector('[aria-hidden="true"] svg')).not.toBeNull();
+  expect(screen.queryByText('Deine gespeicherte Auswahl')).not.toBeInTheDocument();
+  expect(screen.getByText(/In kleinen Gruppen/)).toBeVisible();
+  await userEvent.click(screen.getByText('So wird gezählt'));
+  expect(screen.getByText(/Angezeigt werden nur Summen und deine eigene Auswahl/)).toBeVisible();
+});
+
+test('an empty result shows zero percentages and reduced-motion disables optional animation controls', async () => {
+  setup(async () => page([poll({ totalVotes: 0, options: poll().options.map(option => ({ ...option, votes: 0 })) })]));
+  await screen.findByRole('heading', { name: poll().question });
+  expect(screen.getAllByText('0%')).toHaveLength(2);
+  expect(screen.getByText('0 Stimmen insgesamt')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Animationen durch Systemeinstellung ausgeschaltet' })).toBeDisabled();
+  expect(document.querySelector('[data-confirmed]')).toBeNull();
+});
+
+
+test.each([false, true])('vote refresh restores a useful checked choice without stealing moved focus (%s)', async moved => {
+  let reads = 0;
+  let finish!: (value: unknown) => void;
+  const saved = poll({ ownVote: { optionId: 'two', revision: 1 }, totalVotes: 4 });
+  const request = jest.fn(async (_path: string, init?: RequestInit) => {
+    if (init?.method) return saved;
+    if (++reads === 1) return page();
+    return new Promise(resolve => { finish = resolve; });
+  });
+  render(<><SpacePolls spaceId="secret" canManage={false} request={request as PollRequest} onUnavailable={jest.fn()} /><button>Andere Aktion</button></>);
+  await userEvent.click(await screen.findByRole('radio', { name: /Testen/ }));
+  await userEvent.click(screen.getByRole('button', { name: 'Abstimmen' }));
+  await screen.findByText('Umfragen werden geladen…');
+  if (moved) screen.getByRole('button', { name: 'Andere Aktion' }).focus();
+  await act(async () => finish(page([saved])));
+  expect(await screen.findByRole('radio', { name: /Testen/ })).toBeChecked();
+  expect(moved ? screen.getByRole('button', { name: 'Andere Aktion' }) : screen.getByRole('radio', { name: /Testen/ })).toHaveFocus();
+});
+
+test.each([false, true])('captures focus before the browser blurs a pending-disabled action, without stealing an outside control (%s)', async moved => {
+  let finish!: (value: unknown) => void;
+  let current = poll();
+  const saved = poll({ ownVote: { optionId: 'two', revision: 1 }, totalVotes: 4 });
+  const request = jest.fn(async (_path: string, init?: RequestInit) => init?.method
+    ? new Promise(resolve => { finish = resolve; }) : page([current]));
+  render(<><SpacePolls spaceId="secret" canManage={false} request={request as PollRequest} onUnavailable={jest.fn()} /><button>Andere Aktion</button></>);
+  await userEvent.click(await screen.findByRole('radio', { name: /Testen/ }));
+  const submit = screen.getByRole('button', { name: 'Abstimmen' });
+  await userEvent.click(submit);
+  expect(submit).toBeDisabled();
+  // JSDOM retains focus on disabled buttons and ignores their blur(); model
+  // Chromium's native focus loss explicitly before the response arrives.
+  document.body.setAttribute('tabindex', '-1'); document.body.focus(); document.body.removeAttribute('tabindex');
+  expect(document.activeElement).toBe(document.body);
+  if (moved) screen.getByRole('button', { name: 'Andere Aktion' }).focus();
+  current = saved;
+  await act(async () => finish(saved));
+  expect(await screen.findByRole('radio', { name: /Testen/ })).toBeChecked();
+  expect(moved ? screen.getByRole('button', { name: 'Andere Aktion' }) : screen.getByRole('radio', { name: /Testen/ })).toHaveFocus();
+});
+
+test.each([false, true])('a lost-response retry restores the re-enabled action and keeps its receipt without stealing moved focus (%s)', async moved => {
+  let fail!: (error: Error) => void;
+  let current = poll();
+  let attempts = 0;
+  const request = jest.fn(async (_path: string, init?: RequestInit) => {
+    if (!init?.method) return page([current]);
+    if (++attempts === 1) return new Promise((_resolve, reject) => { fail = reject; });
+    current = poll({ ownVote: { optionId: 'one', revision: 1 }, totalVotes: 4 });
+    return current;
+  });
+  render(<><SpacePolls spaceId="secret" canManage={false} request={request as PollRequest} onUnavailable={jest.fn()} /><button>Andere Aktion</button></>);
+  await userEvent.click(await screen.findByRole('radio', { name: /Zugänglichkeit/ }));
+  const submit = screen.getByRole('button', { name: 'Abstimmen' });
+  await userEvent.click(submit);
+  document.body.setAttribute('tabindex', '-1'); document.body.focus(); document.body.removeAttribute('tabindex');
+  if (moved) screen.getByRole('button', { name: 'Andere Aktion' }).focus();
+  await act(async () => fail(new Error('Response lost')));
+  expect(screen.getByRole('alert')).toHaveTextContent('Response lost');
+  expect(submit).toBeEnabled();
+  expect(moved ? screen.getByRole('button', { name: 'Andere Aktion' }) : submit).toHaveFocus();
+  fireEvent.click(submit);
+  expect(await screen.findByText('Deine gespeicherte Auswahl')).toBeVisible();
+  expect(mutationCalls(request)).toHaveLength(2);
+  expect(JSON.parse(mutationCalls(request)[0][1].body)).toEqual(JSON.parse(mutationCalls(request)[1][1].body));
+  expect(moved ? screen.getByRole('button', { name: 'Andere Aktion' }) : screen.getByRole('radio', { name: /Zugänglichkeit/ })).toHaveFocus();
 });

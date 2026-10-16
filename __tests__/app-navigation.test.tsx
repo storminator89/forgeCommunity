@@ -24,6 +24,8 @@ it('marks nested routes active without activating knowledge twice for drafts', (
   expect(isNavigationActive('/knowledgebase/drafts', '/knowledgebase')).toBe(false);
   expect(isNavigationActive('/knowledgebase/drafts', '/knowledgebase/drafts')).toBe(true);
   expect(isNavigationActive('/projects/a', '/showcases', ['/projects'])).toBe(true);
+  expect(isNavigationActive('/community/missions', '/community')).toBe(false);
+  expect(isNavigationActive('/community/missions', '/community/missions')).toBe(true);
 });
 
 it('mobile navigation opens from the page header and closes after selection', () => {
@@ -123,6 +125,17 @@ it('offers the learner pathway in quick search for a member', async () => {
   const results = within(screen.getByRole('navigation', { name: 'Suchergebnisse' }));
   await user.click(results.getByRole('button', { name: /Lernpfade/ }));
   expect(push).toHaveBeenCalledWith('/courses/pathways');
+});
+
+it.each(['USER', 'ADMIN', 'INSTRUCTOR', 'MODERATOR'])('offers Space missions in personal navigation and quick search for %s', async role => {
+  jest.mocked(useSession).mockReturnValue({ data: { user: { id: 'viewer', role } }, status: 'authenticated', update: jest.fn() } as any);
+  const user = userEvent.setup();
+  render(<AppShell><Sidebar /></AppShell>);
+  expect(screen.getByRole('link', { name: 'Space-Missionen' })).toHaveAttribute('href', '/community/missions');
+  await user.click(screen.getByRole('button', { name: 'Schnellsuche öffnen' }));
+  await user.type(screen.getByRole('textbox', { name: 'Bereich oder Inhalt suchen' }), 'Space-Missionen');
+  await user.click(within(screen.getByRole('navigation', { name: 'Suchergebnisse' })).getByRole('button', { name: 'Space-Missionen' }));
+  expect(push).toHaveBeenCalledWith('/community/missions');
 });
 
 it('hides a stale learner-pathway entry after the API denies access', async () => {

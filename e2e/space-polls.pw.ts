@@ -59,7 +59,7 @@ test('members make voluntary Space decisions, retry safely, reflow, close, and l
     }
     const [adminPage, alicePage, bobPage] = pages;
     const createdSpace = await contexts[0].request.post('/api/spaces', { headers: { origin }, data: {
-      name: `Poll QA ${nonce.slice(0, 8)}`, description: 'Disposable private Space decision.', visibility: 'PRIVATE',
+      name: `Lernwerkstatt ${nonce.slice(0, 4)}`, description: 'Gemeinsam lernen. Kleine Schritte ausprobieren.', visibility: 'PRIVATE',
     } });
     expect(createdSpace.status(), await createdSpace.text()).toBe(201);
     const spaceId = (await createdSpace.json() as { id: string }).id;
@@ -75,7 +75,7 @@ test('members make voluntary Space decisions, retry safely, reflow, close, and l
     await open.click(); await expect(adminPage.getByRole('textbox', { name: 'Frage', exact: true })).toBeFocused();
     await adminPage.keyboard.press('Escape'); await expect(open).toBeFocused();
     await open.click();
-    const question = `Welche gemeinsame Aufgabe folgt? ${'ZusammenarbeitVerständlichPlanen'.repeat(3)}`;
+    const question = 'Was wollen wir gemeinsam ausprobieren?';
     const options = ['Zugänglichkeit gemeinsam prüfen', 'Tests gemeinsam verbessern'];
     await adminPage.getByRole('textbox', { name: 'Frage', exact: true }).fill(question);
     for (let i = 0; i < options.length; i++) await adminPage.getByRole('textbox', { name: `Antwort ${i + 1}`, exact: true }).fill(options[i]);
@@ -84,18 +84,52 @@ test('members make voluntary Space decisions, retry safely, reflow, close, and l
     const response = await creation; expect(response.status(), await response.text()).toBe(201);
     const item = await response.json() as { id: string; options: Array<{ id: string; label: string }> };
     await expect(adminPage.getByRole('heading', { level: 3, name: question })).toBeVisible();
-    await expect(adminPage.getByText(/In kleinen Gruppen können Antworten trotzdem erkennbar sein/)).toBeVisible();
+    await expect(adminPage.getByText(/In kleinen Gruppen können Antworten erkennbar sein/)).toBeVisible();
     await alicePage.goto(url);
+    const pollSection = alicePage.getByRole('region', { name: 'Umfragen', exact: true });
+    await alicePage.emulateMedia({ reducedMotion: 'no-preference' });
+    await expect(pollSection.getByRole('button', { name: 'Animationen ausschalten', exact: true })).toBeEnabled();
+    await alicePage.evaluate(() => {
+      const state = window as typeof window & { friendlyAnimations: string[] };
+      state.friendlyAnimations = [];
+      document.addEventListener('animationstart', event => { if (event.target instanceof Element && event.target.closest('[data-poll-id]')) state.friendlyAnimations.push((event as AnimationEvent).animationName); });
+    });
+    // The first real server write succeeds, but its browser response is lost.
+    // The explicit retry must replay the same receipt, with no optimistic vote.
+    let interruptedBody: unknown;
+    let interrupted = false;
+    let voteAttempts = 0;
+    const votePath = `${api}/polls/${item.id}/vote`;
+    await alicePage.route(`**${votePath}`, async route => {
+      voteAttempts++;
+      if (interrupted) { await route.continue(); return; }
+      interrupted = true; interruptedBody = route.request().postDataJSON();
+      const result = await route.fetch(); expect(result.status()).toBe(200);
+      await route.abort('failed');
+    });
     const first = alicePage.getByRole('radio', { name: new RegExp(options[0]) }); await first.focus(); await alicePage.keyboard.press('Space');
-    const firstVote = alicePage.waitForResponse(result => new URL(result.url()).pathname === `${api}/polls/${item.id}/vote` && result.request().method() === 'PUT');
     await alicePage.getByRole('button', { name: 'Abstimmen', exact: true }).focus(); await alicePage.keyboard.press('Enter');
+    await expect(pollSection.getByRole('alert')).toBeVisible();
+    await expect(pollSection.getByText('Deine gespeicherte Auswahl', { exact: true })).toHaveCount(0);
+    const firstVote = alicePage.waitForResponse(result => new URL(result.url()).pathname === votePath && result.request().method() === 'PUT');
+    await alicePage.getByRole('button', { name: 'Abstimmen', exact: true }).evaluate(button => { (button as HTMLButtonElement).click(); (button as HTMLButtonElement).click(); });
     const voted = await firstVote; expect(voted.status(), await voted.text()).toBe(200);
     const originalRequest = voted.request().postDataJSON();
+    expect(originalRequest).toEqual(interruptedBody);
+    await alicePage.unroute(`**${votePath}`);
+    await expect.poll(() => alicePage.evaluate(() => (window as typeof window & { friendlyAnimations: string[] }).friendlyAnimations.length > 0)).toBe(true);
     await expect(alicePage.getByText('Deine gespeicherte Auswahl', { exact: true })).toBeVisible();
     await expect(alicePage.getByText('1 Stimme insgesamt')).toBeVisible();
+    expect(voteAttempts).toBe(2);
+    await expect(first).toBeFocused();
+    await pollSection.getByRole('button', { name: 'Animationen ausschalten', exact: true }).click();
+    expect(await alicePage.evaluate(() => localStorage.getItem('forge-community-motion-off'))).toBe('true');
+    await alicePage.evaluate(() => { (window as typeof window & { friendlyAnimations: string[] }).friendlyAnimations = []; });
     await alicePage.getByRole('radio', { name: new RegExp(options[1]) }).check();
     await alicePage.getByRole('button', { name: 'Auswahl ändern', exact: true }).click();
     await expect(alicePage.getByRole('radio', { name: new RegExp(`${options[1]}.*Deine gespeicherte Auswahl`) })).toBeChecked();
+    await expect(pollSection.locator('[data-confirmed]')).toHaveCount(0);
+    expect(await alicePage.evaluate(() => (window as typeof window & { friendlyAnimations: string[] }).friendlyAnimations)).toEqual([]);
     const replay = await contexts[1].request.put(`${api}/polls/${item.id}/vote`, { headers: { origin }, data: originalRequest });
     expect(replay.status(), await replay.text()).toBe(200);
     expect((await replay.json()).ownVote).toEqual({ optionId: item.options[1].id, revision: 2 });
@@ -106,25 +140,54 @@ test('members make voluntary Space decisions, retry safely, reflow, close, and l
     const privateView = await (await contexts[0].request.get(`${api}/polls/${item.id}`)).json();
     expect(privateView.ownVote).toEqual({ optionId: null, revision: 0 });
     expect(JSON.stringify(privateView)).not.toMatch(/userId|voters|creator|email|requestId|payloadDigest/);
+    expect((await contexts[0].request.put(`${api}/polls/${item.id}/vote`, { headers: { origin }, data: { optionId: item.options[0].id, expectedRevision: 0, requestId: `visual-${nonce}` } })).status()).toBe(200);
     await alicePage.reload();
+    await expect(pollSection.getByRole('button', { name: 'Animationen einschalten', exact: true })).toBeEnabled();
+    await alicePage.emulateMedia({ reducedMotion: 'reduce' });
+    await expect(pollSection.getByRole('button', { name: 'Animationen durch Systemeinstellung ausgeschaltet', exact: true })).toBeDisabled();
+    await expect(pollSection.getByText('3 Stimmen insgesamt')).toBeVisible();
     for (const theme of ['Hell', 'Dunkel']) {
       await alicePage.getByRole('button', { name: 'Farbschema auswählen' }).click(); await alicePage.getByRole('menuitem', { name: theme, exact: true }).click();
       for (const width of [320, 375, 414, 768]) {
         await alicePage.setViewportSize({ width, height: 900 }); await checkReflow(alicePage);
-        await alicePage.screenshot({ path: testInfo.outputPath(`poll-${theme}-${width}.png`), animations: 'disabled' });
+        await pollSection.screenshot({ path: testInfo.outputPath(`poll-${theme}-${width}.png`), animations: 'disabled' });
+        expect(await pollSection.evaluate(element => element.getAnimations({ subtree: true }).filter(animation => animation.playState === 'running').length)).toBe(0);
       }
     }
+    // Long dynamic copy is an explicit edge case, separate from the readable
+    // primary demonstration. All content still comes from the real API.
+    const longQuestion = `Welche gemeinsame Aufgabe folgt? ${'ZusammenarbeitVerständlichPlanen'.repeat(3)}`;
+    const edge = await contexts[0].request.post(`${api}/polls`, { headers: { origin }, data: {
+      question: longQuestion, options: ['ZugänglichkeitGemeinsamVerbessern'.repeat(3), 'VerständlichkeitZusammenPrüfen'.repeat(3)], requestId: `edge-${nonce}`,
+    } });
+    expect(edge.status(), await edge.text()).toBe(201); const edgeId = (await edge.json()).id;
+    await alicePage.reload();
+    const edgeCard = pollSection.getByRole('article').filter({ has: alicePage.getByRole('heading', { name: longQuestion, exact: true }) });
+    for (const width of [320, 768]) {
+      await alicePage.setViewportSize({ width, height: 900 }); await checkReflow(alicePage);
+      await edgeCard.screenshot({ path: testInfo.outputPath(`poll-long-content-${width}.png`), animations: 'disabled' });
+    }
+    expect((await contexts[0].request.patch(`${api}/polls/${edgeId}`, { headers: { origin }, data: { hidden: true, expectedRevision: 0 } })).status()).toBe(200);
+    await alicePage.reload();
     await alicePage.setViewportSize({ width: 1280, height: 900 });
     await alicePage.evaluate(() => { document.documentElement.style.zoom = '2'; }); await checkReflow(alicePage);
     await alicePage.evaluate(() => { document.documentElement.style.zoom = ''; });
-    await adminPage.getByRole('button', { name: 'Umfrage ausblenden', exact: true }).click();
-    await expect(adminPage.getByRole('button', { name: 'Umfrage einblenden', exact: true })).toBeVisible();
+    const adminPoll = adminPage.getByRole('article').filter({ has: adminPage.getByRole('heading', { name: question, exact: true }) });
+    await adminPoll.getByText('Umfrage verwalten', { exact: true }).click();
+    await adminPoll.getByRole('button', { name: 'Umfrage ausblenden', exact: true }).click();
+    await expect(adminPoll.getByText('Offen · Ausgeblendet', { exact: true })).toBeVisible();
+    await adminPoll.getByText('Umfrage verwalten', { exact: true }).click();
+    await expect(adminPoll.getByRole('button', { name: 'Umfrage einblenden', exact: true })).toBeVisible();
     expect((await contexts[1].request.get(`${api}/polls/${item.id}`)).status()).toBe(404);
     await alicePage.reload(); await expect(alicePage.getByRole('heading', { name: question, exact: true })).toHaveCount(0);
-    await adminPage.getByRole('button', { name: 'Umfrage einblenden', exact: true }).click();
-    await expect(adminPage.getByRole('button', { name: 'Umfrage schließen', exact: true })).toBeVisible();
-    await adminPage.getByRole('button', { name: 'Umfrage schließen', exact: true }).click();
-    await expect(adminPage.getByRole('button', { name: 'Umfrage schließen', exact: true })).toHaveCount(0);
+    await adminPoll.getByRole('button', { name: 'Umfrage einblenden', exact: true }).click();
+    await expect(adminPoll.getByText('Offen', { exact: true })).toBeVisible();
+    await adminPoll.getByText('Umfrage verwalten', { exact: true }).click();
+    await expect(adminPoll.getByRole('button', { name: 'Umfrage schließen', exact: true })).toBeVisible();
+    await adminPoll.getByRole('button', { name: 'Umfrage schließen', exact: true }).click();
+    await expect(adminPoll.getByText('Geschlossen', { exact: true })).toBeVisible();
+    await expect(adminPoll.getByText('Umfrage verwalten', { exact: true })).toBeFocused();
+    await expect(adminPoll.getByRole('button', { name: 'Umfrage schließen', exact: true })).toHaveCount(0);
     await alicePage.reload(); await expect(alicePage.getByRole('heading', { name: question, exact: true })).toBeVisible();
     await expect(alicePage.getByRole('button', { name: 'Auswahl ändern', exact: true })).toHaveCount(0);
     expect((await contexts[1].request.put(`${api}/polls/${item.id}/vote`, { headers: { origin }, data: { optionId: item.options[0].id, expectedRevision: 2, requestId: 'after-close' } })).status()).toBe(409);
