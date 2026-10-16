@@ -72,26 +72,63 @@ async function main() {
   }
   // accent-color alone does not prove that the native painted bar is themed.
   // Keep each engine's pseudo-element separate so unknown selectors cannot
-  // invalidate another engine's rule; leave forced-color native painting alone.
+  // invalidate another engine's rule. System colors stay user-adjustable;
+  // source/compile checks cannot establish the native painted fill's pixels.
   const nativeProgressStyles = {
     'progress.accent-progress': { '-webkit-appearance': 'none', appearance: 'none', 'background-color': 'hsl(var(--muted))', color: 'hsl(var(--progress))' },
     'progress.accent-progress::-webkit-progress-bar': { 'background-color': 'hsl(var(--muted))' },
     'progress.accent-progress::-webkit-progress-value': { 'background-color': 'hsl(var(--progress))' },
     'progress.accent-progress::-moz-progress-bar': { 'background-color': 'hsl(var(--progress))' },
   };
-  for (const [selector, declarations] of Object.entries(nativeProgressStyles)) {
-    const matchingRules = rules.filter((rule) => rule.selector === selector);
-    assert.equal(matchingRules.length, 1, `Missing or ambiguous compiled native progress rule ${selector}`);
-    const rule = matchingRules[0];
-    let unforcedOnly = false;
+  const forcedNativeProgressStyles = {
+    'progress.accent-progress': { '-webkit-appearance': 'none', appearance: 'none', 'forced-color-adjust': 'auto', 'background-color': 'Canvas', color: 'CanvasText', outline: '1px solid CanvasText', 'outline-offset': '-1px' },
+    'progress.accent-progress::-webkit-progress-bar': { 'background-color': 'Canvas' },
+    'progress.accent-progress::-webkit-progress-value': { 'background-color': 'CanvasText' },
+    'progress.accent-progress::-moz-progress-bar': { 'background-color': 'CanvasText' },
+  };
+  function mediaQueries(rule) {
+    const queries = [];
     for (let parent = rule.parent; parent; parent = parent.parent) {
-      if (parent.type === 'atrule' && parent.name === 'media' && parent.params.replace(/\s/g, '') === '(forced-colors:none)') unforcedOnly = true;
+      if (parent.type === 'atrule' && parent.name === 'media') queries.push(parent.params.replace(/\s/g, ''));
     }
-    assert.ok(unforcedOnly, `Native progress theming must not override forced colors: ${selector}`);
-    for (const [property, value] of Object.entries(declarations)) {
-      assert.ok(rule.nodes.some((node) => node.type === 'decl' && node.prop === property && node.value === value), `Missing compiled ${property}: ${value} in ${selector}`);
+    return queries;
+  }
+  for (const [mode, styles] of [['none', nativeProgressStyles], ['active', forcedNativeProgressStyles]]) {
+    for (const [selector, declarations] of Object.entries(styles)) {
+      const matchingRules = rules.filter((rule) => rule.selector === selector && mediaQueries(rule).join() === `(forced-colors:${mode})`);
+      assert.equal(matchingRules.length, 1, `Missing or ambiguous compiled native progress rule ${mode}: ${selector}`);
+      const compiled = matchingRules[0].nodes.filter(node => node.type === 'decl');
+      assert.equal(compiled.length, Object.keys(declarations).length, `Unexpected compiled native declarations ${mode}: ${selector}`);
+      assert.ok(compiled.every(node => !node.important), `Native declarations must not force priority ${mode}: ${selector}`);
+      for (const [property, value] of Object.entries(declarations)) {
+        assert.ok(compiled.some(node => node.prop === property && node.value === value), `Missing compiled ${property}: ${value} in ${mode}: ${selector}`);
+      }
     }
   }
+  // Do not permit unscoped, grouped or extra progress overrides to bypass the
+  // query-specific assertions, nor a root/container forced-color opt-out.
+  const sourceNativeRules = [];
+  postcss.parse(input).walkRules(rule => { if (rule.selector.includes('progress')) sourceNativeRules.push(rule); });
+  assert.equal(sourceNativeRules.length, 8, 'Source native progress must remain limited to the two scoped branches');
+  for (const rule of sourceNativeRules) {
+    assert.ok(Object.hasOwn(nativeProgressStyles, rule.selector), `Unexpected source progress override ${rule.selector}`);
+    assert.ok(['(forced-colors:none)', '(forced-colors:active)'].includes(mediaQueries(rule).join()), `Unscoped source progress override ${rule.selector}`);
+  }
+  // Tailwind's existing preflight progress { vertical-align: baseline } is
+  // unrelated to painting; require only our exact semantic selectors here.
+  const nativeRules = rules.filter(rule => rule.selector.includes('progress.accent-progress'));
+  assert.equal(nativeRules.length, 8, 'Native progress must have exactly four separate selectors in each color mode');
+  for (const rule of nativeRules) {
+    assert.ok(Object.hasOwn(nativeProgressStyles, rule.selector), `Unexpected compiled progress override ${rule.selector}`);
+    assert.ok(['(forced-colors:none)', '(forced-colors:active)'].includes(mediaQueries(rule).join()), `Unscoped compiled progress override ${rule.selector}`);
+  }
+  result.root.walkDecls('forced-color-adjust', declaration => {
+    assert.equal(declaration.value, 'auto', 'User color adjustment must remain enabled');
+    const rule = declaration.parent;
+    assert.equal(rule.type, 'rule', 'Color adjustment must be scoped to native progress');
+    assert.equal(rule.selector, 'progress.accent-progress', 'No document or container color-adjust override');
+    assert.equal(mediaQueries(rule).join(), '(forced-colors:active)', 'Color adjustment must be forced-color-specific');
+  });
   expectClass('text-success', 'color', 'hsl(var(--success))');
   expectClass('text-destructive', 'color', 'hsl(var(--destructive))');
   expectClass('text-reward-ink', 'color', 'hsl(var(--reward-ink))');
