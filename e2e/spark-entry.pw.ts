@@ -1,11 +1,14 @@
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { basename, isAbsolute } from 'node:path';
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
-import { inspectSparkHeroCapture, observeSparkHeroCapture } from './spark-hero-capture-evidence';
+import { inspectSparkHeroCapture, observeSparkHeroCapture, observeSparkHeroRequests, sparkHeroCaptureIdentity } from './spark-hero-capture-evidence';
 
 const origin = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3013';
 const preferenceKey = 'forge-journey-mascot-hidden';
 const preview = '[data-spark-entry-figure] img';
+const approvedHeroArtwork = readFileSync('public/images/home/forge-workbench-1440.webp');
+const heroRequests = new WeakMap<Page, ReturnType<typeof observeSparkHeroRequests>>();
 const sizes = [
   { width: 1280, height: 800 }, { width: 320, height: 700 },
   { width: 375, height: 812 }, { width: 414, height: 896 }, { width: 768, height: 900 },
@@ -128,8 +131,12 @@ async function capture(page: Page, info: TestInfo, name: string) {
   await expect(hero).toBeVisible();
   await page.evaluate(() => document.fonts.ready);
   let observation = await hero.evaluate(observeSparkHeroCapture, false);
+  let immediateAfter: typeof observation | null = null;
   let after: typeof observation | null = null;
   let pixels: Awaited<ReturnType<typeof inspectSparkHeroCapture>> | null = null;
+  const network = heroRequests.get(page);
+  expect(network, 'Passive Hero request observation must start before navigation.').toBeDefined();
+  const captureWindow: { startedAtMs: number | null; finishedAtMs: number | null } = { startedAtMs: null, finishedAtMs: null };
   try {
     await expect.poll(async () => {
       observation = await hero.evaluate(observeSparkHeroCapture, true);
@@ -138,13 +145,29 @@ async function capture(page: Page, info: TestInfo, name: string) {
     expect(observation.state.viewport).toMatchObject(page.viewportSize()!);
     // Exactly one original full-page capture. A blank result is a hard failure;
     // never recapture until a preferable frame appears or alter the saved PNG.
+    captureWindow.startedAtMs = network!.mark('capture');
     const png = await page.screenshot({ path: info.outputPath(`${name}.png`), fullPage: true, animations: 'disabled' });
-    after = await hero.evaluate(observeSparkHeroCapture, false);
-    pixels = await inspectSparkHeroCapture(png, observation.state.rect, observation.state.viewport.dpr, observation.state.viewport.width);
-    expect(after.state, 'Hero source and document geometry changed during the capture.').toEqual(observation.state);
+    captureWindow.finishedAtMs = network!.mark('post-capture');
+    immediateAfter = await hero.evaluate(observeSparkHeroCapture, false);
+    pixels = await inspectSparkHeroCapture(png, observation.state.rect, observation.state.viewport.dpr, observation.state.viewport.width, approvedHeroArtwork);
+    expect(sparkHeroCaptureIdentity(observation, immediateAfter), 'Hero geometry and the approved family must also hold immediately after capture.').toMatchObject({
+      approvedCompositionFamily: true, unchangedRenderedState: true,
+    });
+    await expect.poll(async () => {
+      after = await hero.evaluate(observeSparkHeroCapture, true);
+      return after.ready;
+    }, { timeout: 20_000, message: 'Hero must independently decode and settle after the original capture.' }).toBe(true);
+    expect(sparkHeroCaptureIdentity(observation, after!), 'Both decoded Hero observations must preserve document geometry and the approved composition family.').toEqual({
+      decodedAndStable: true, approvedCompositionFamily: true, unchangedRenderedState: true,
+    });
     expect(pixels.nonblank, 'The unchanged full-page PNG must contain visible Hero artwork, not an empty frame.').toBe(true);
+    expect(pixels.composition.matches, 'The unchanged PNG interior must preserve the approved artwork composition.').toBe(true);
   } finally {
-    console.info(`[spark-hero-capture:${name}] ${JSON.stringify({ before: observation, after, pixels })}`);
+    // A source change is not evidence of a request. Likewise transferSize=0
+    // alone does not establish cache reuse; report observed events and timings.
+    console.info(`[spark-hero-capture:${name}] ${JSON.stringify({ before: observation, immediateAfter, after, pixels,
+      network: network!.snapshot(), captureWindow })}`);
+    network!.mark('outside-capture');
   }
 }
 
@@ -180,6 +203,14 @@ async function setTheme(page: Page, value: 'light' | 'dark') {
 
 test.beforeEach(async ({}, info) => {
   test.skip(info.project.name !== 'desktop-chromium', 'Dedicated Spark entry coverage checks five viewports itself.');
+});
+
+test.beforeEach(async ({ page, context }) => {
+  const observe = (target: Page) => {
+    if (!heroRequests.has(target)) heroRequests.set(target, observeSparkHeroRequests(target, origin));
+  };
+  observe(page);
+  context.on('page', observe);
 });
 
 test('fresh public entry shows real static Spark after the primary actions in both themes', async ({ page }, info) => {
@@ -311,6 +342,8 @@ test('public and member Spark controls reflow at 200% text and remain keyboard u
       await setTheme(page, mode);
       await page.goto(state === 'public' ? '/' : '/community');
       await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+      const completedCourses = page.locator('dt').filter({ hasText: /^Mindestens einmal abgeschlossene Kurse$/ });
+      if (state === 'member') await expect(completedCourses).toBeVisible();
       await assertStaticFigure(page);
       const hide = page.getByRole('button', { name: 'Spark ausblenden' });
       await hide.focus();
@@ -319,6 +352,27 @@ test('public and member Spark controls reflow at 200% text and remain keyboard u
       expect(box.x).toBeGreaterThanOrEqual(0);
       expect(box.x + box.width).toBeLessThanOrEqual(320);
       await capture(page, info, `spark-${state}-200-percent-${mode}`);
+      if (state === 'member') {
+        // Wait for the actual loaded reward label before the main gate above,
+        // then bring this exact dt/dd pair into the real internal scrollport.
+        const metric = completedCourses.locator('..');
+        await metric.scrollIntoViewIfNeeded();
+        await expect(completedCourses).toBeInViewport({ ratio: 1 });
+        await expect(metric.locator('dd')).toBeInViewport({ ratio: 1 });
+        await expect(completedCourses).toHaveCSS('overflow-wrap', 'anywhere');
+        const geometry = await metric.evaluate(element => {
+          const rect = element.getBoundingClientRect();
+          const label = element.querySelector('dt')!;
+          return { left: rect.left, right: rect.right, overflow: element.scrollWidth - element.clientWidth,
+            labelOverflow: label.scrollWidth - label.clientWidth };
+        });
+        expect(geometry.left).toBeGreaterThanOrEqual(0);
+        expect(geometry.right).toBeLessThanOrEqual(320);
+        expect(geometry.overflow).toBeLessThanOrEqual(1);
+        expect(geometry.labelOverflow).toBeLessThanOrEqual(1);
+        await capture(page, info, `spark-member-stats-200-percent-${mode}`);
+        await hide.focus();
+      }
       await page.keyboard.press('Enter');
       await expect(page.getByRole('button', { name: 'Spark anzeigen' })).toBeFocused();
       await expect(page.locator(preview)).toHaveCount(0);
