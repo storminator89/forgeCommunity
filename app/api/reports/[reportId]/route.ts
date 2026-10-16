@@ -14,23 +14,23 @@ export async function PATCH(
   try {
     const session = await getServerSession(authOptions);
     const userId = session?.user?.id;
-    if (!userId) return NextResponse.json({ error: 'Nicht authentifiziert' }, { status: 401 });
+    if (!userId) return NextResponse.json({ error: 'Nicht authentifiziert' }, { status: 401, headers: { 'Cache-Control': 'private, no-store' } });
     const actor = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
     if (actor?.role !== 'ADMIN' && actor?.role !== 'MODERATOR') {
-      return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 403 });
+      return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 403, headers: { 'Cache-Control': 'private, no-store' } });
     }
-    if (!isSameOriginRequest(request)) return NextResponse.json({ error: 'Ungültige Anfragequelle' }, { status: 403 });
+    if (!isSameOriginRequest(request)) return NextResponse.json({ error: 'Ungültige Anfragequelle' }, { status: 403, headers: { 'Cache-Control': 'private, no-store' } });
 
     const { reportId } = await params;
     if (!/^[A-Za-z0-9_-]{1,80}$/.test(reportId)) {
-      return NextResponse.json({ error: 'Meldung nicht gefunden' }, { status: 404 });
+      return NextResponse.json({ error: 'Meldung nicht gefunden' }, { status: 404, headers: { 'Cache-Control': 'private, no-store' } });
     }
     const body = await readJsonObject(request, 2048);
     const { status, resolutionNote, actionTaken } = body;
     const note = typeof resolutionNote === 'string' ? sanitizeTextServer(resolutionNote) : '';
     if ((status !== 'DISMISSED' && status !== 'RESOLVED') || note.length < 5 || note.length > 500 ||
         (status === 'RESOLVED' && actionTaken !== true)) {
-      return NextResponse.json({ error: 'Status und Begründung (5–500 Zeichen) sind erforderlich' }, { status: 400 });
+      return NextResponse.json({ error: 'Status und Begründung (5–500 Zeichen) sind erforderlich' }, { status: 400, headers: { 'Cache-Control': 'private, no-store' } });
     }
 
     // The early role check above avoids parsing unauthorized input. The helper
@@ -39,10 +39,13 @@ export async function PATCH(
     return NextResponse.json(result,
       { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
-    if (error instanceof ReportReviewError) return NextResponse.json({ error: error.message }, { status: error.status });
+    if (error instanceof ReportReviewError) return NextResponse.json({ error: error.message }, { status: error.status, headers: { 'Cache-Control': 'private, no-store' } });
     const inputError = requestErrorResponse(error);
-    if (inputError) return inputError;
+    if (inputError) {
+      inputError.headers.set('Cache-Control', 'private, no-store');
+      return inputError;
+    }
     console.error('Report review failed:', error);
-    return NextResponse.json({ error: 'Meldung konnte nicht bearbeitet werden' }, { status: 500 });
+    return NextResponse.json({ error: 'Meldung konnte nicht bearbeitet werden' }, { status: 500, headers: { 'Cache-Control': 'private, no-store' } });
   }
 }

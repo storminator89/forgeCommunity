@@ -11,7 +11,7 @@ jest.mock('@/lib/auth', () => ({ authOptions: {} }));
 jest.mock('@/lib/prisma', () => ({
   __esModule: true,
   default: {
-    contentReport: { findUnique: jest.fn(), create: jest.fn(), count: jest.fn(), findMany: jest.fn(), updateMany: jest.fn() },
+    contentReport: { findUnique: jest.fn(), findFirst: jest.fn(), create: jest.fn(), count: jest.fn(), findMany: jest.fn(), updateMany: jest.fn() },
     post: { findUnique: jest.fn(), findMany: jest.fn() },
     comment: { findUnique: jest.fn(), findMany: jest.fn() },
     user: { findUnique: jest.fn() },
@@ -41,6 +41,7 @@ beforeEach(() => {
   (prisma.$transaction as jest.Mock).mockImplementation(async work => work(prisma));
   (getServerSession as jest.Mock).mockResolvedValue({ user: { id: 'reporter-1', role: 'USER' } });
   (reports.findUnique as jest.Mock).mockResolvedValue(null);
+  (reports.findFirst as jest.Mock).mockResolvedValue(null);
   (reports.count as jest.Mock).mockResolvedValue(0);
   (reports.create as jest.Mock).mockResolvedValue({ id: 'report-1' });
   (posts.findUnique as jest.Mock).mockResolvedValue({ authorId: 'author-1', published: true });
@@ -181,13 +182,13 @@ describe('moderator queue and review', () => {
   it('accepts a moderator decision once and preserves its reviewer/time on retries', async () => {
     (users.findUnique as jest.Mock).mockResolvedValue({ role: 'MODERATOR' });
     (reports.updateMany as jest.Mock).mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 0 });
-    (reports.findUnique as jest.Mock).mockResolvedValue({ id: 'report-1' });
+    (reports.findFirst as jest.Mock).mockResolvedValue({ id: 'report-1' });
     const body = { status: 'RESOLVED', resolutionNote: 'Removed by an admin', actionTaken: true,
       reviewedById: 'spoofed', reviewedAt: '2000-01-01' };
     const first = await reviewReport(request(body), { params: Promise.resolve({ reportId: 'report-1' }) });
     expect(first.status).toBe(200);
     expect(reports.updateMany).toHaveBeenCalledWith({
-      where: { id: 'report-1', status: 'OPEN' },
+      where: { id: 'report-1', status: 'OPEN', scopeSpaceId: null, targetType: { in: ['POST', 'COMMENT'] } },
       data: { status: 'RESOLVED', resolutionNote: 'Removed by an admin', reviewedById: 'reporter-1', reviewedAt: expect.any(Date) },
     });
     const second = await reviewReport(request(body), { params: Promise.resolve({ reportId: 'report-1' }) });
