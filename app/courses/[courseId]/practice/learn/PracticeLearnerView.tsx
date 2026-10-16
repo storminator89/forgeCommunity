@@ -9,6 +9,8 @@ import { PageState, RetryButton } from '@/components/page-state'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { UserNav } from '@/components/user-nav'
 import { Button } from '@/components/ui/button'
+import { PracticeAvailabilityNotice } from './PracticeAvailabilityNotice'
+import type { PracticeLearnerState } from './practice-learner-api'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -27,7 +29,7 @@ export type LearnerFeedback = {
   explanation?: string
   canContinue?: boolean
 }
-export type LearnerStage = 'loading' | 'error' | 'forbidden' | 'unpublished' | 'archived' | 'off' | 'available' | 'paused' | 'idle' | 'question' | 'feedback' | 'done'
+export type LearnerStage = 'loading' | 'error' | 'forbidden' | 'unpublished' | 'archived' | 'off' | 'available' | 'paused' | 'idle' | 'question' | 'feedback' | 'done' | 'unavailable'
 
 export type PracticeLearnerViewProps = {
   courseId: string
@@ -45,6 +47,8 @@ export type PracticeLearnerViewProps = {
   onReset?: () => void
   nextLabel?: string
   canCloseSession?: boolean
+  availabilityState?: PracticeLearnerState | null
+  onRefresh?: () => void
 }
 
 const confidenceChoices = ['Sicher', 'Eher sicher', 'Unsicher', 'Geraten'] as const
@@ -107,7 +111,7 @@ function PracticeQuestion({ question, busy, onAnswer }: { question: LearnerQuest
   </form>
 }
 
-function PracticeFeedback({ feedback, question, busy, onNext }: { feedback: LearnerFeedback; question: LearnerQuestion; busy: boolean; onNext?: () => void }) {
+function PracticeFeedback({ feedback, question, busy, onNext, availabilityState }: { feedback: LearnerFeedback; question: LearnerQuestion; busy: boolean; onNext?: () => void; availabilityState?: PracticeLearnerState | null }) {
   const heading = useRef<HTMLHeadingElement>(null)
   useEffect(() => { heading.current?.focus() }, [question.reservationId])
   const correctOption = typeof feedback.correctIndex === 'number' ? question.options[feedback.correctIndex] : undefined
@@ -117,7 +121,8 @@ function PracticeFeedback({ feedback, question, busy, onNext }: { feedback: Lear
     <p className="text-base leading-relaxed [overflow-wrap:anywhere]">{question.prompt}</p>
     {correctOption && <p className="border-l-2 border-border pl-4 text-base leading-relaxed [overflow-wrap:anywhere]">Vorgesehene Antwort: {correctOption}</p>}
     {feedback.explanation && <p className="text-base leading-relaxed [overflow-wrap:anywhere]">{feedback.explanation}</p>}
-    <div className="border-t pt-5">
+    <div className="space-y-3 border-t pt-5">
+      <div className="text-sm text-muted-foreground"><PracticeAvailabilityNotice state={availabilityState} /></div>
       <Button type="button" className="min-h-11" disabled={busy} onClick={onNext}>{busy ? 'Wird geladen …' : feedback.canContinue === false ? 'Für jetzt beenden' : 'Weitere Frage öffnen'}</Button>
       {feedback.canContinue !== false && <p className="mt-2 text-sm text-muted-foreground">Die nächste Frage wird erst geöffnet, wenn du fortfährst.</p>}
     </div>
@@ -133,7 +138,7 @@ function StateSection({ title, children, action }: { title: string; children: Re
 }
 
 export function PracticeLearnerView({ courseId, stage, question, feedback, error, busy = false,
-  onRetry, onEnable, onPause, onOptOut, onNext, onAnswer, onReset, nextLabel, canCloseSession = false }: PracticeLearnerViewProps) {
+  onRetry, onEnable, onPause, onOptOut, onNext, onAnswer, onReset, nextLabel, canCloseSession = false, availabilityState, onRefresh }: PracticeLearnerViewProps) {
   const [pauseOpen, setPauseOpen] = useState(false)
   const [optOutOpen, setOptOutOpen] = useState(false)
   const [resetOpen, setResetOpen] = useState(false)
@@ -171,22 +176,25 @@ export function PracticeLearnerView({ courseId, stage, question, feedback, error
                 <p>Es werden keine neuen Fragen geöffnet. Deine bisherigen Übungsdaten bleiben gespeichert.</p>
                 <PrivacyNote atDecision />
               </StateSection>}
+              {dataStage === 'unavailable' && <StateSection title="Privates Üben gerade nicht verfügbar" action={<Button type="button" variant="outline" className="h-auto min-h-11 min-w-0 max-w-full whitespace-normal [overflow-wrap:anywhere]" disabled={busy} onClick={onRefresh}>{busy ? 'Wird geprüft …' : 'Stand aktualisieren'}</Button>}><PracticeAvailabilityNotice state={availabilityState} /></StateSection>}
               {dataStage === 'idle' && <StateSection title="Bereit für eine Frage?" action={<Button type="button" className="min-h-11" disabled={busy} onClick={onNext}>{busy ? 'Frage wird geladen …' : nextLabel ?? 'Erste Frage öffnen'}</Button>}>
-                <p>Eine Frage wird erst ausgewählt, wenn du sie ausdrücklich öffnest.</p>
+                <PracticeAvailabilityNotice state={availabilityState} /><p>Eine Frage wird erst ausgewählt, wenn du sie ausdrücklich öffnest.</p>
               </StateSection>}
               {dataStage === 'done' && <StateSection title="Gerade keine weitere Frage fällig"
-                action={canCloseSession && <Button type="button" className="min-h-11" disabled={busy} onClick={onNext}>
-                  {busy ? 'Sitzung wird abgeschlossen …' : 'Sitzung abschließen und erneut prüfen'}
-                </Button>}>
-                <p>Du kannst später wiederkommen. Dein privates Üben bleibt eingeschaltet, bis du es pausierst.</p>
+                action={<div className="flex flex-wrap gap-3">
+                  {canCloseSession && <Button type="button" className="h-auto min-h-11 min-w-0 max-w-full whitespace-normal [overflow-wrap:anywhere]" disabled={busy} onClick={onNext}>{busy ? 'Sitzung wird abgeschlossen …' : 'Sitzung abschließen'}</Button>}
+                  <Button type="button" variant="outline" className="h-auto min-h-11 min-w-0 max-w-full whitespace-normal [overflow-wrap:anywhere]" disabled={busy} onClick={onRefresh}>{busy ? 'Wird geprüft …' : 'Stand aktualisieren'}</Button>
+                </div>}>
+                <PracticeAvailabilityNotice state={availabilityState} />
+                <p>Du öffnest jede Frage selbst. Privates Üben bleibt eingeschaltet, bis du es pausierst.</p>
               </StateSection>}
               {dataStage === 'question' && question && <PracticeQuestion key={question.reservationId} question={question} busy={busy} onAnswer={onAnswer} />}
-              {dataStage === 'feedback' && question && feedback && <PracticeFeedback question={question} feedback={feedback} busy={busy} onNext={onNext} />}
+              {dataStage === 'feedback' && question && feedback && <PracticeFeedback question={question} feedback={feedback} busy={busy} onNext={onNext} availabilityState={availabilityState} />}
               {dataStage !== 'loading' && dataStage !== 'error' && dataStage !== 'forbidden' && <details className="mt-10 border-t pt-6">
                 <summary className="w-fit cursor-pointer rounded-lg py-2 text-base font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">Übung verwalten</summary>
                 <div className="max-w-prose space-y-6 pt-4 text-sm leading-relaxed text-muted-foreground">
-                  {(dataStage === 'idle' || dataStage === 'question' || dataStage === 'feedback' || dataStage === 'done') && <div className="space-y-2"><h2 className="text-base font-semibold text-foreground">Vorübergehend pausieren</h2><p>Deine Zustimmung und bisherigen Übungsdaten bleiben bestehen. Es werden keine neuen Fragen geöffnet, bis du weitermachst.</p><Button type="button" variant="outline" className="min-h-11" disabled={busy} onClick={() => setPauseOpen(true)}>Üben pausieren</Button></div>}
-                  {(dataStage === 'paused' || dataStage === 'idle' || dataStage === 'question' || dataStage === 'feedback' || dataStage === 'done') && <div className="space-y-2 border-t pt-5"><h2 className="text-base font-semibold text-foreground">Privates Üben ausschalten</h2><p>Damit widerrufst du deine Zustimmung für neue Übungssitzungen. Bisherige Übungsdaten bleiben bis zum Zurücksetzen oder Ablauf der Aufbewahrungsfrist gespeichert.</p><Button type="button" variant="outline" className="min-h-11" disabled={busy} onClick={() => setOptOutOpen(true)}>Privates Üben ausschalten</Button></div>}
+                  {(dataStage === 'idle' || dataStage === 'question' || dataStage === 'feedback' || dataStage === 'done' || dataStage === 'unavailable') && <div className="space-y-2"><h2 className="text-base font-semibold text-foreground">Vorübergehend pausieren</h2><p>Deine Zustimmung und bisherigen Übungsdaten bleiben bestehen. Es werden keine neuen Fragen geöffnet, bis du weitermachst.</p><Button type="button" variant="outline" className="min-h-11" disabled={busy} onClick={() => setPauseOpen(true)}>Üben pausieren</Button></div>}
+                  {(dataStage === 'paused' || dataStage === 'idle' || dataStage === 'question' || dataStage === 'feedback' || dataStage === 'done' || dataStage === 'unavailable') && <div className="space-y-2 border-t pt-5"><h2 className="text-base font-semibold text-foreground">Privates Üben ausschalten</h2><p>Damit widerrufst du deine Zustimmung für neue Übungssitzungen. Bisherige Übungsdaten bleiben bis zum Zurücksetzen oder Ablauf der Aufbewahrungsfrist gespeichert.</p><Button type="button" variant="outline" className="min-h-11" disabled={busy} onClick={() => setOptOutOpen(true)}>Privates Üben ausschalten</Button></div>}
                   <div className="space-y-2 border-t pt-5"><h2 className="text-base font-semibold text-foreground">Übungsdaten zurücksetzen</h2><p>Das löscht deine gespeicherten Antworten und Sicherheitseinschätzungen, falls vorhanden. Pausieren oder Ausschalten lässt sie bestehen.</p><Button type="button" variant="ghost" className="min-h-11 text-destructive hover:text-destructive hover:bg-destructive/10" disabled={busy} onClick={() => setResetOpen(true)}><RotateCcw aria-hidden="true" className="mr-2 h-4 w-4" />Übungsdaten zurücksetzen</Button></div>
                 </div>
               </details>}

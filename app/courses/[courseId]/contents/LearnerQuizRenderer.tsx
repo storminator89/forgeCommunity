@@ -60,6 +60,7 @@ type LearnerQuizProps = {
   contentVersionToken?: string | null
   content: unknown
   onPassed: () => void
+  onReaderIssue?: (status: number) => void
 }
 
 export function LearnerQuizRenderer(props: LearnerQuizProps) {
@@ -69,7 +70,7 @@ export function LearnerQuizRenderer(props: LearnerQuizProps) {
   return <LearnerQuizSession key={version} {...props} />
 }
 
-function LearnerQuizSession({ courseId, contentId, publicationId, contentVersionToken, content, onPassed }: LearnerQuizProps) {
+function LearnerQuizSession({ courseId, contentId, publicationId, contentVersionToken, content, onPassed, onReaderIssue }: LearnerQuizProps) {
   const quiz = learnerQuiz(content)
   const prefix = useId()
   const [answers, setAnswers] = useState<Record<string, unknown>>({})
@@ -143,6 +144,7 @@ function LearnerQuizSession({ courseId, contentId, publicationId, contentVersion
         body: JSON.stringify({ ...submission, publicationId, contentVersionToken }),
       })
       if (!response.ok) {
+        if (active.current) onReaderIssue?.(response.status)
         if (response.status === 409 || response.status === 412) {
           if (active.current) setStaleVersion(true)
           throw new Error('Dieses Quiz wurde geändert. Deine Antworten sind hier noch sichtbar. Bitte lade den Kurs neu, bevor du erneut abgibst.')

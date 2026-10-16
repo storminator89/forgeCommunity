@@ -5,6 +5,7 @@ import { POST as optIn } from '@/app/api/courses/[courseId]/practice/learner/opt
 import { POST as optOut } from '@/app/api/courses/[courseId]/practice/learner/opt-out/route';
 import { POST as pause } from '@/app/api/courses/[courseId]/practice/learner/pause/route';
 import { POST as start } from '@/app/api/courses/[courseId]/practice/learner/start/route';
+import { POST as close } from '@/app/api/courses/[courseId]/practice/learner/close/route';
 import { POST as next } from '@/app/api/courses/[courseId]/practice/learner/next/route';
 import { POST as answer } from '@/app/api/courses/[courseId]/practice/learner/answer/route';
 import { POST as prepareReset } from '@/app/api/courses/[courseId]/practice/learner/reset/prepare/route';
@@ -111,12 +112,12 @@ test('default off, enrolled authorization, and explicit opt-in', async () => {
   expect((await due.json())).toMatchObject({ status: 'ready', dueCount: 3, snapshotId: snap1 });
 });
 
-test('missing or stale retention heartbeat blocks persistence but keeps private read and pause available', async () => {
+test('missing or stale retention heartbeat blocks practice and hides pending data but keeps pause available', async () => {
   actor(studentId);
   await prisma.practiceRetentionHealth.update({ where: { id: 'learner' },
     data: { lastSuccessAt: new Date(Date.now() - 46 * 60_000) } });
   expect((await start(request('/start', 'POST'), context)).status).toBe(503);
-  expect((await (await readLearner(request(''), context)).json()).status).toBe('ready');
+  expect(await (await readLearner(request(''), context)).json()).toMatchObject({ status: 'unavailable', availability: 'unavailable', dueCount: 0, nextAvailableAt: null });
   expect((await pause(request('/pause', 'POST'), context)).status).toBe(200);
   expect((await optIn(request('/opt-in', 'POST'), context)).status).toBe(503);
   await prisma.practiceRetentionHealth.update({ where: { id: 'learner' }, data: { lastSuccessAt: new Date() } });
@@ -142,7 +143,9 @@ test('start reserves once; GET and next never leak answers; answer and replay ar
   expect((await next(request('/next', 'POST', { sessionId: first.sessionId }), context)).status).toBe(503);
   expect((await answer(request('/answer', 'POST', body), context)).status).toBe(503);
   expect(await prisma.practiceLearnerAnswer.count()).toBe(0);
-  expect((await (await readLearner(request(''), context)).json()).session.pending.reservationId).toBe(first.pending.reservationId);
+  const unhealthyRead = await (await readLearner(request(''), context)).json();
+  expect(unhealthyRead).toMatchObject({ status: 'unavailable', dueCount: 0, nextAvailableAt: null });
+  expect(unhealthyRead.session).toBeUndefined();
   await prisma.practiceRetentionHealth.update({ where: { id: 'learner' }, data: { lastSuccessAt: new Date() } });
   const answered = await answer(request('/answer', 'POST', body), context);
   expect(answered.status).toBe(200);
@@ -187,7 +190,7 @@ test('pause and opt-out preserve evidence; republish fails closed for old sessio
   expect(await prisma.practiceLearnerAnswer.count()).toBe(2);
   await prisma.coursePublication.create({ data: { id: pub2, courseId, sequence: 2, source: 'AUTHOR', payload: '{}', digest: 'credential-digest-2', contentCount: 0 } });
   await prisma.course.update({ where: { id: courseId }, data: { activePublicationId: pub2 } });
-  expect((await (await readLearner(request(''), context)).json()).status).toBe('archived');
+  expect(await (await readLearner(request(''), context)).json()).toMatchObject({ status: 'archived', availability: 'unavailable', dueCount: 0, nextAvailableAt: null });
   expect((await answer(request('/answer', 'POST', { sessionId: staleSessionId,
     reservationId: staleReservationId, submissionId: 'stale-published-answer', optionIndex: 1 }), context)).status).toBe(409);
   expect((await optIn(request('/opt-in', 'POST'), context)).status).toBe(409);
@@ -284,6 +287,7 @@ test('selection has stable ties and stops at ten answers per session', async () 
       coursePublicationId: thirdPublication, items: [...snapshotItems(), ...extra] }),
     digest: 'digest-3', itemCount: 12, actorId: teacherId } });
   await optIn(request('/opt-in', 'POST'), context);
+  expect(await (await readLearner(request(''), context)).json()).toMatchObject({ dueCount: 10, availability: 'ready' });
   let state = await (await start(request('/start', 'POST'), context)).json();
   const sessionId = state.sessionId;
   const shown: string[] = [];
@@ -351,4 +355,108 @@ test('last item completes durably without Next, and is available in a later sess
     sessionId: restarted.sessionId, complete: true, answeredCount: 1,
   });
   expect(await prisma.practiceLearnerAnswer.count({ where: { reservationId: started.pending.reservationId } })).toBe(1);
+});
+
+
+test('effective return, session boundary and unhealthy reads are private, read-only and reversible', async () => {
+  actor(studentId);
+  const soloCourseId = 'learner-solo-course';
+  const soloContext = { params: Promise.resolve({ courseId: soloCourseId }) };
+  const call = (path: string, method = 'GET', body?: object) => request(path, method, body, soloCourseId);
+  const token = (await (await prepareReset(call('/reset/prepare', 'POST'), soloContext)).json()).token;
+  await reset(call('/reset', 'POST', { token, confirmation: 'RESET_MY_PRACTICE' }), soloContext);
+  await prisma.practiceRetentionHealth.update({ where: { id: 'learner' }, data: { lastSuccessAt: new Date() } });
+  await optIn(call('/opt-in', 'POST'), soloContext);
+  const started = await (await start(call('/start', 'POST'), soloContext)).json();
+  expect(await (await readLearner(call(''), soloContext)).json()).toMatchObject({ availability: 'resume', dueCount: 0, nextAvailableAt: null });
+  const submission = { sessionId: started.sessionId, reservationId: started.pending.reservationId,
+    submissionId: 'effective-availability-answer', optionIndex: 0, confidence: 'SURE' };
+  const feedback = await (await answer(call('/answer', 'POST', submission), soloContext)).json();
+  expect(feedback).toMatchObject({ correct: false, canContinue: false });
+  const reservation = await prisma.practiceLearnerReservation.findUniqueOrThrow({ where: { id: started.pending.reservationId } });
+  const effective = new Date(reservation.shownAt.getTime() + 86400_000 + 1).toISOString();
+  expect(new Date(effective).getTime()).toBeGreaterThan(new Date(feedback.nextDueAt).getTime());
+  const evidence = async () => ({ settings: await prisma.practiceLearnerSetting.findMany(),
+    sessions: await prisma.practiceLearnerSession.findMany(), reservations: await prisma.practiceLearnerReservation.findMany(),
+    schedules: await prisma.practiceLearnerSchedule.findMany(), answers: await prisma.practiceLearnerAnswer.count(), receipts: await prisma.practiceLearnerSubmissionReceipt.count() });
+  const before = await evidence();
+  for (let index = 0; index < 2; index++) {
+    const result = await readLearner(call(''), soloContext);
+    expect(result.headers.get('Cache-Control')).toBe('private, no-store');
+    const state = await result.json();
+    expect(state).toMatchObject({ status: 'complete', availability: 'waiting', dueCount: 0, nextAvailableAt: effective });
+    expect(state.session).toBeUndefined();
+    expect(JSON.stringify(state)).not.toMatch(/correctIndex|confidence|explanation|Question/);
+  }
+  expect(await evidence()).toEqual(before);
+  expect(await (await answer(call('/answer', 'POST', submission), soloContext)).json()).toMatchObject({ replay: true, nextDueAt: feedback.nextDueAt });
+  // Legacy exhausted/capped ACTIVE session needs an explicit close; GET cannot repair/write it.
+  await prisma.practiceLearnerSession.update({ where: { id: started.sessionId }, data: { status: 'ACTIVE', answeredCount: 10 } });
+  const cappedBefore = await evidence();
+  expect(await (await readLearner(call(''), soloContext)).json()).toMatchObject({ status: 'active', availability: 'sessionComplete', dueCount: 0, nextAvailableAt: effective });
+  expect(await evidence()).toEqual(cappedBefore);
+  // A capped legacy session can close idempotently without selecting.
+  expect((await close(call('/close', 'POST', { sessionId: started.sessionId }), soloContext)).status).toBe(200);
+  expect((await close(call('/close', 'POST', { sessionId: started.sessionId }), soloContext)).status).toBe(200);
+  expect(await prisma.practiceLearnerReservation.count({ where: { sessionId: started.sessionId } })).toBe(1);
+  for (const offset of [-46 * 60_000, 6 * 60_000]) {
+    await prisma.practiceRetentionHealth.update({ where: { id: 'learner' }, data: { lastSuccessAt: new Date(Date.now() + offset) } });
+    const state = await (await readLearner(call(''), soloContext)).json();
+    expect(state).toMatchObject({ status: 'unavailable', availability: 'unavailable', dueCount: 0, nextAvailableAt: null });
+    expect(state.session).toBeUndefined();
+  }
+  await prisma.practiceRetentionHealth.update({ where: { id: 'learner' }, data: { lastSuccessAt: new Date() } });
+  await pause(call('/pause', 'POST'), soloContext);
+  expect(await (await readLearner(call(''), soloContext)).json()).toMatchObject({ availability: 'paused', nextAvailableAt: null });
+  await optOut(call('/opt-out', 'POST'), soloContext);
+  expect(await (await readLearner(call(''), soloContext)).json()).toMatchObject({ availability: 'notOptedIn', nextAvailableAt: null });
+  await prisma.course.update({ where: { id: soloCourseId }, data: { activePublicationId: null } });
+  expect(await (await readLearner(call(''), soloContext)).json()).toMatchObject({ status: 'unpublished', availability: 'unavailable', nextAvailableAt: null });
+  await prisma.enrollment.delete({ where: { userId_courseId: { userId: studentId, courseId: soloCourseId } } });
+  expect((await readLearner(call(''), soloContext)).status).toBe(403);
+});
+
+
+test('explicit close cannot reserve: pending, ownership, concurrent close and next race are CAS protected', async () => {
+  actor(studentId);
+  await prisma.practiceRetentionHealth.update({ where: { id: 'learner' }, data: { lastSuccessAt: new Date() } });
+  const started = await (await start(request('/start', 'POST'), context)).json();
+  const closeBody = { sessionId: started.sessionId };
+  expect((await close(request('/close', 'POST', { ...closeBody, unexpected: true }), context)).status).toBe(400);
+  expect((await close(request('/close', 'POST', { sessionId: 'x'.repeat(2048) }), context)).status).toBe(413);
+  expect((await close(request('/close', 'POST', closeBody), context)).status).toBe(409);
+  await prisma.enrollment.create({ data: { userId: strangerId, courseId } });
+  actor(strangerId);
+  expect((await close(request('/close', 'POST', closeBody), context)).status).toBe(404);
+  actor(studentId);
+  expect((await answer(request('/answer', 'POST', { sessionId: started.sessionId, reservationId: started.pending.reservationId,
+    submissionId: 'close-race-answer', optionIndex: 0 }), context)).status).toBe(200);
+  const before = await prisma.practiceLearnerSession.findUniqueOrThrow({ where: { id: started.sessionId } });
+  expect(before.status).toBe('ACTIVE');
+  const reservations = await prisma.practiceLearnerReservation.count();
+  const snapshot = await prisma.practiceSnapshot.findUniqueOrThrow({ where: { id: before.snapshotId } });
+  const scheduled = await prisma.practiceLearnerSchedule.findMany({ where: { userId: studentId, courseId, snapshotId: before.snapshotId } });
+  const unseen = (JSON.parse(snapshot.payload).items as Array<{ itemId: string; itemRevision: number }>).find(item => !scheduled.some(row => row.itemId === item.itemId))!;
+  expect(unseen).toBeDefined();
+  const key = { userId: studentId, courseId, snapshotId: before.snapshotId, itemId: unseen.itemId };
+  await prisma.practiceLearnerSchedule.create({ data: { ...key, itemRevision: unseen.itemRevision,
+    dueAt: new Date(Date.now() + 6 * 3600_000), lastAnsweredAt: new Date() } });
+  expect(await (await readLearner(request(''), context)).json()).toMatchObject({ status: 'active', availability: 'sessionComplete', dueCount: 0 });
+  // The UI can still be showing the prior done state after this window opens.
+  await prisma.practiceLearnerSchedule.update({ where: { userId_courseId_snapshotId_itemId: key }, data: { dueAt: new Date(Date.now() - 1000) } });
+  expect(await (await readLearner(request(''), context)).json()).toMatchObject({ status: 'active', availability: 'ready', dueCount: 1 });
+  const closes = await Promise.all([close(request('/close', 'POST', closeBody), context), close(request('/close', 'POST', closeBody), context)]);
+  expect(closes.map(result => result.status)).toEqual([200, 200]);
+  expect(await prisma.practiceLearnerReservation.count()).toBe(reservations);
+  expect(await prisma.practiceLearnerSession.findUnique({ where: { id: started.sessionId } })).toMatchObject({ status: 'COMPLETE', version: before.version + 1 });
+  const afterClose = await (await readLearner(request(''), context)).json();
+  expect(afterClose).toMatchObject({ status: 'ready', availability: 'ready', dueCount: 1 });
+  expect(afterClose.session).toBeUndefined();
+  const snapshotId = before.snapshotId;
+  const race = await prisma.practiceLearnerSession.create({ data: { id: 'close-race-session', userId: studentId, courseId, snapshotId } });
+  const raced = await Promise.all([close(request('/close', 'POST', { sessionId: race.id }), context), next(request('/next', 'POST', { sessionId: race.id }), context)]);
+  expect(raced.map(result => result.status).sort()).toEqual([200, 409]);
+  expect(await prisma.practiceLearnerReservation.count()).toBe(reservations + (raced[1].status === 200 ? 1 : 0));
+  const final = await prisma.practiceLearnerSession.findUniqueOrThrow({ where: { id: race.id } });
+  expect(final.status === 'COMPLETE' ? final.pendingReservationId === null : Boolean(final.pendingReservationId)).toBe(true);
 });

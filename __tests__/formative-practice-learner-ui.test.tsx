@@ -173,16 +173,16 @@ test('a resumed exhausted session exposes an accessible close action before the 
     if (!init?.method || init.method === 'GET') return response(state)
     const body = JSON.parse(String(init.body)) as Record<string, unknown>
     writes.push({ path, body })
-    if (path.endsWith('/next')) state = { status: 'ready', dueCount: 1 }
+    if (path.endsWith('/close')) state = { status: 'ready', dueCount: 1 }
     return response({ complete: true })
   })
   const user = userEvent.setup()
   render(<PracticeLearnerWorkspace courseId="course-1" sessionStatus="authenticated" />)
-  const close = await screen.findByRole('button', { name: 'Sitzung abschließen und erneut prüfen' })
+  const close = await screen.findByRole('button', { name: 'Sitzung abschließen' })
   expect(screen.getByRole('heading', { name: 'Gerade keine weitere Frage fällig' })).toBeVisible()
   expect(writes).toHaveLength(0)
   await user.click(close)
-  await waitFor(() => expect(writes).toEqual([{ path: `${base}/next`, body: { sessionId: 'session-1' } }]))
+  await waitFor(() => expect(writes).toEqual([{ path: `${base}/close`, body: { sessionId: 'session-1' } }]))
   expect(await screen.findByRole('button', { name: 'Erste Frage öffnen' })).toBeVisible()
 })
 
@@ -237,4 +237,129 @@ test('course-reader entry hides unpublished pools and appears only for eligible 
   status = 'available'
   view.rerender(<PracticeEntryLink courseId="course-2" />)
   expect(await screen.findByRole('link', { name: 'Privat üben' })).toHaveAttribute('href', '/courses/course-2/practice/learn')
+})
+
+test('last answer displays fresh effective return time; finish and refresh never reserve or reuse a completed session', async () => {
+  const effective = '2026-10-17T12:00:00.001Z'
+  let state: unknown = { ...current, availability: 'resume', nextAvailableAt: null }
+  const writes: string[] = []
+  global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input)
+    if (!init?.method) return response(state)
+    writes.push(path)
+    if (path.endsWith('/answer')) {
+      state = { status: 'complete', availability: 'waiting', dueCount: 0, nextAvailableAt: effective,
+        publicationId: 'publication-1', snapshotId: 'snapshot-1' }
+      return response({ correct: false, correctIndex: 1, canContinue: false, answeredCount: 1,
+        nextDueAt: '2026-10-16T12:05:00Z' })
+    }
+    if (path.endsWith('/start')) state = { ...current, session: { ...current.session, id: 'session-2' } }
+    return response({})
+  })
+  const user = userEvent.setup()
+  render(<PracticeLearnerWorkspace courseId="course-1" sessionStatus="authenticated" />)
+  await screen.findByRole('group', { name: 'Welche Aussage stimmt?' })
+  await user.click(screen.getByRole('radio', { name: 'Erste Aussage' }))
+  await user.click(screen.getByRole('button', { name: 'Antwort prüfen' }))
+  expect(await screen.findByText(/Voraussichtlich wieder ab/)).toBeVisible()
+  expect(document.querySelector('time')).toHaveAttribute('dateTime', effective)
+  expect(screen.queryByText(/12:05/)).not.toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'Für jetzt beenden' }))
+  const refresh = await screen.findByRole('button', { name: 'Stand aktualisieren' })
+  await user.click(refresh)
+  expect(writes).toEqual([`${base}/answer`])
+  state = { status: 'ready', availability: 'ready', dueCount: 1, nextAvailableAt: null,
+    publicationId: 'publication-1', snapshotId: 'snapshot-1' }
+  await user.click(refresh)
+  expect(await screen.findByRole('button', { name: 'Erste Frage öffnen' })).toBeVisible()
+  expect(screen.queryByText(/Voraussichtlich wieder ab/)).not.toBeInTheDocument()
+  expect(writes).toEqual([`${base}/answer`])
+  await user.click(screen.getByRole('button', { name: 'Erste Frage öffnen' }))
+  await screen.findByRole('group', { name: 'Welche Aussage stimmt?' })
+  expect(writes).toEqual([`${base}/answer`, `${base}/start`])
+})
+
+test.each(['archived', 'unavailable'] as const)('live %s after answering purges question and feedback instead of showing stale return data', async status => {
+  let state: unknown = current
+  global.fetch = jest.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+    if (!init?.method) return response(state)
+    state = { status, availability: 'unavailable', dueCount: 0, nextAvailableAt: null }
+    return response({ correct: true, correctIndex: 1, explanation: 'Private stale explanation', canContinue: false, answeredCount: 1 })
+  })
+  const user = userEvent.setup()
+  render(<PracticeLearnerWorkspace courseId="course-1" sessionStatus="authenticated" />)
+  await screen.findByRole('group', { name: 'Welche Aussage stimmt?' })
+  await user.click(screen.getByRole('radio', { name: 'Erste Aussage' }))
+  await user.click(screen.getByRole('button', { name: 'Antwort prüfen' }))
+  expect(await screen.findByRole('heading', { name: status === 'archived' ? 'Bisheriger Übungspool archiviert' : 'Privates Üben gerade nicht verfügbar' })).toBeVisible()
+  expect(screen.queryByText('Private stale explanation')).not.toBeInTheDocument()
+  expect(screen.queryByText('Welche Aussage stimmt?')).not.toBeInTheDocument()
+  expect(document.querySelector('time')).toBeNull()
+})
+
+test('waiting refresh failure clears stale availability; retry can recover without writes', async () => {
+  let fail = false
+  global.fetch = jest.fn(async () => response(fail ? { error: 'Stand nicht erreichbar' } : {
+    status: 'complete', availability: 'waiting', dueCount: 0, nextAvailableAt: '2026-10-17T12:00:00Z',
+  }, fail ? 503 : 200))
+  const user = userEvent.setup()
+  render(<PracticeLearnerWorkspace courseId="course-1" sessionStatus="authenticated" />)
+  const refresh = await screen.findByRole('button', { name: 'Stand aktualisieren' })
+  fail = true
+  await user.click(refresh)
+  expect(await screen.findByRole('heading', { name: 'Übung konnte nicht geladen werden' })).toBeVisible()
+  expect(document.querySelector('time')).toBeNull()
+  expect(jest.mocked(global.fetch).mock.calls.every(([, init]) => !init?.method)).toBe(true)
+})
+
+test('a late private read is aborted and cannot restore a previous account after unmount', async () => {
+  let finish!: (value: Response) => void
+  let signal: AbortSignal | undefined
+  global.fetch = jest.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+    signal = init?.signal as AbortSignal
+    return new Promise<Response>(resolve => { finish = resolve })
+  })
+  const view = render(<PracticeLearnerWorkspace courseId="course-1" sessionStatus="authenticated" />)
+  await waitFor(() => expect(global.fetch).toHaveBeenCalled())
+  view.unmount()
+  expect(signal?.aborted).toBe(true)
+  finish(response(current))
+  await Promise.resolve()
+  expect(screen.queryByText('Welche Aussage stimmt?')).not.toBeInTheDocument()
+})
+
+test('course entry differentiates resume, pause and effective waiting; refresh is read-only', async () => {
+  let state: unknown = { status: 'active', availability: 'resume', dueCount: 0, session: current.session, nextAvailableAt: null }
+  global.fetch = jest.fn(async () => response(state))
+  const view = render(<PracticeEntryLink courseId="course-1" />)
+  expect(await screen.findByRole('link', { name: 'Übung fortsetzen' })).toBeVisible()
+  state = { status: 'complete', availability: 'waiting', dueCount: 0, nextAvailableAt: '2026-10-17T12:00:00Z' }
+  view.rerender(<PracticeEntryLink courseId="course-2" />)
+  const refresh = await screen.findByRole('button', { name: 'Stand aktualisieren' })
+  expect(document.querySelector('time')).toHaveAttribute('dateTime', '2026-10-17T12:00:00Z')
+  const user = userEvent.setup()
+  state = { status: 'ready', availability: 'ready', dueCount: 2, nextAvailableAt: null }
+  await user.click(refresh)
+  expect(await screen.findByText('2 Fragen sind jetzt verfügbar.')).toBeVisible()
+  expect(document.querySelector('time')).toBeNull()
+  expect(jest.mocked(global.fetch).mock.calls.every(([, init]) => !init?.method)).toBe(true)
+})
+
+
+test.each(['done', 'unavailable'] as const)('new %s controls have natural height and bounded wrapping at enlarged text', stage => {
+  render(<PracticeLearnerView courseId="course-1" stage={stage} canCloseSession={stage === 'done'} />)
+  const controls = [screen.getByRole('button', { name: 'Stand aktualisieren' }),
+    ...(stage === 'done' ? [screen.getByRole('button', { name: 'Sitzung abschließen' })] : [])]
+  for (const control of controls) {
+    expect(control).toHaveClass('h-auto', 'min-h-11', 'min-w-0', 'max-w-full', 'whitespace-normal', '[overflow-wrap:anywhere]')
+    expect(control).not.toHaveClass('h-11', 'whitespace-nowrap')
+  }
+})
+
+test('course-entry refresh uses the same bounded enlarged-text control treatment', async () => {
+  global.fetch = jest.fn(async () => response({ status: 'complete', availability: 'waiting', dueCount: 0, nextAvailableAt: '2026-10-17T12:00:00Z' }))
+  render(<PracticeEntryLink courseId="course-1" />)
+  const refresh = await screen.findByRole('button', { name: 'Stand aktualisieren' })
+  expect(refresh).toHaveClass('h-auto', 'min-w-0', 'max-w-full', 'whitespace-normal', '[overflow-wrap:anywhere]')
+  expect(refresh).not.toHaveClass('h-11', 'whitespace-nowrap')
 })

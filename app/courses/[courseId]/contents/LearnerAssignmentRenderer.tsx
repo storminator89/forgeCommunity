@@ -13,10 +13,17 @@ type Decision = { id: string; action: 'GRADED' | 'WITHDRAWN'; score: number | nu
 type Submission = { id: string; response: string; attemptNumber: number; submittedAt: string; currentRevision: boolean; decisions: Decision[] }
 type Status = { maySubmit: boolean; passingScore: number; submissions: Submission[] }
 
-export function LearnerAssignmentRenderer({ courseId, contentId, publicationId, contentVersionToken, content, onChanged }: {
+type LearnerAssignmentProps = {
   courseId: string; contentId: string; publicationId?: string | null; contentVersionToken?: string | null;
-  content: unknown; onChanged?: () => void
-}) {
+  content: unknown; refreshKey?: number; onChanged?: () => void; onReaderIssue?: (status: number) => void
+}
+
+export function LearnerAssignmentRenderer(props: LearnerAssignmentProps) {
+  const version = JSON.stringify([props.courseId, props.contentId, props.publicationId, props.contentVersionToken])
+  return <LearnerAssignmentSession key={version} {...props} />
+}
+
+function LearnerAssignmentSession({ courseId, contentId, publicationId, contentVersionToken, content, refreshKey = 0, onChanged, onReaderIssue }: LearnerAssignmentProps) {
   const assignment = parseAssignmentContent(content)
   const [status, setStatus] = useState<Status | null>(null)
   const [answer, setAnswer] = useState('')
@@ -26,24 +33,42 @@ export function LearnerAssignmentRenderer({ courseId, contentId, publicationId, 
   const [notice, setNotice] = useState<string | null>(null)
   const pendingId = useRef<string | null>(null)
   const sending = useRef(false)
+  const active = useRef(true)
+  const readerIssue = useRef(onReaderIssue)
+  useEffect(() => { readerIssue.current = onReaderIssue }, [onReaderIssue])
+  useEffect(() => {
+    active.current = true
+    return () => { active.current = false }
+  }, [])
   const url = `/api/courses/${encodeURIComponent(courseId)}/contents/${encodeURIComponent(contentId)}/assignment`
+  const statusUrl = useRef(url)
+  const statusRequest = useRef(0)
   const refresh = useCallback(async (signal?: AbortSignal) => {
-    const response = await fetch(url, { cache: 'no-store', signal })
-    const body = await response.json().catch(() => null) as Status | null
-    if (!response.ok || !body) throw new Error(response.status === 423 ? 'Diese Aufgabe ist noch gesperrt.' : 'Deine Abgaben konnten nicht geladen werden.')
-    setStatus(body)
+    const request = ++statusRequest.current
+    const current = () => active.current && !signal?.aborted && request === statusRequest.current
+    try {
+      const response = await fetch(url, { cache: 'no-store', signal })
+      const body = await response.json().catch(() => null) as Status | null
+      if (!current()) return
+      if (!response.ok) readerIssue.current?.(response.status)
+      if (!response.ok || !body) throw new Error(response.status === 423 ? 'Diese Aufgabe ist noch gesperrt.' : 'Deine Abgaben konnten nicht geladen werden.')
+      setStatus(body)
+    } catch (error) { if (current()) throw error }
   }, [url])
 
   useEffect(() => {
     const controller = new AbortController()
     void Promise.resolve().then(() => {
       if (controller.signal.aborted) return
-      setLoading(true); setStatus(null); setError(null)
+      setLoading(true); setError(null)
+      // A same-lesson reader refresh keeps the answer field mounted, including
+      // any unsent text and focus acquired while the parent read was pending.
+      if (statusUrl.current !== url) { statusUrl.current = url; setStatus(null) }
       return refresh(controller.signal)
-    }).catch(cause => { if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Abgaben konnten nicht geladen werden.') })
+    }).catch(cause => { if (!controller.signal.aborted) { setStatus(null); setError(cause instanceof Error ? cause.message : 'Abgaben konnten nicht geladen werden.') } })
       .finally(() => { if (!controller.signal.aborted) setLoading(false) })
     return () => controller.abort()
-  }, [refresh])
+  }, [refresh, refreshKey, url])
 
   if (!assignment?.prompt.trim()) return <p role="alert">Diese Aufgabe ist noch nicht verfügbar.</p>
   const current = status?.submissions.find(row => row.currentRevision)
@@ -58,14 +83,17 @@ export function LearnerAssignmentRenderer({ courseId, contentId, publicationId, 
     try {
       const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ requestId, response: answer, publicationId, contentVersionToken }) })
+      if (!active.current) return
       if (!response.ok) {
         const data = await response.json().catch(() => null) as { error?: string } | null
+        if (!active.current) return
+        readerIssue.current?.(response.status)
         throw new Error(response.status === 412 ? 'Die Aufgabe wurde geändert. Bitte lade den Kurs neu.' : response.status === 423 ? 'Diese Aufgabe ist noch gesperrt.' : data?.error || 'Die Abgabe konnte nicht gespeichert werden.')
       }
       pendingId.current = null; setAnswer(''); setNotice('Abgabe gespeichert. Die Bewertung folgt durch die Kursleitung.')
-      await refresh(); onChanged?.()
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Die Abgabe konnte nicht gespeichert werden.') }
-    finally { sending.current = false; setSaving(false) }
+      await refresh(); if (active.current) onChanged?.()
+    } catch (cause) { if (active.current) setError(cause instanceof Error ? cause.message : 'Die Abgabe konnte nicht gespeichert werden.') }
+    finally { sending.current = false; if (active.current) setSaving(false) }
   }
 
   return <section aria-label="Aufgabe" className="mx-auto max-w-[72ch] space-y-6">

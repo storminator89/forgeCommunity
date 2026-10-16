@@ -260,9 +260,15 @@ async function main() {
   assert.equal((await (await learner(learnerPractice)).json()).status, 'available');
   await learner(`${learnerPractice}/start`, { method: 'POST', status: 409 });
   await learner(`${learnerPractice}/opt-in`, { method: 'POST' });
-  assert.equal((await (await learner(learnerPractice)).json()).status, 'ready');
+  const readyPractice = await (await learner(learnerPractice)).json();
+  assert.equal(readyPractice.status, 'ready');
+  assert.equal(readyPractice.availability, 'ready');
+  assert.equal(readyPractice.dueCount, 1);
+  assert.equal(readyPractice.nextAvailableAt, null);
   const startedPractice = await (await learner(`${learnerPractice}/start`, { method: 'POST' })).json();
   assert.equal(startedPractice.pending.item.itemId, item.id);
+  await learner(`${learnerPractice}/close`, { method: 'POST', status: 409, body: { sessionId: startedPractice.sessionId } });
+  await learner(`${learnerPractice}/close`, { method: 'POST', status: 403, headers: { origin: 'https://hostile.example' }, body: { sessionId: startedPractice.sessionId } });
   assert.deepEqual(startedPractice.pending.item.options, ['First', 'Second']);
   assert.ok(!JSON.stringify(startedPractice).includes('correctIndex') &&
     !JSON.stringify(startedPractice).includes('Only the second synthetic answer'), 'Reservation exposed the answer key.');
@@ -275,6 +281,7 @@ async function main() {
   assert.equal(peerView.status, 'ready');
   assert.ok(!JSON.stringify(peerView).includes(startedPractice.sessionId) &&
     !JSON.stringify(peerView).includes(startedPractice.pending.reservationId), 'Another account saw private practice state.');
+  await peer(`${learnerPractice}/close`, { method: 'POST', status: 404, body: { sessionId: startedPractice.sessionId } });
   await peer(`${learnerPractice}/next`, { method: 'POST', status: 404, body: { sessionId: startedPractice.sessionId } });
   const practiceAnswer = { sessionId: startedPractice.sessionId,
     reservationId: startedPractice.pending.reservationId, submissionId: randomUUID(), optionIndex: 1, confidence: 'SURE' };
@@ -297,6 +304,39 @@ async function main() {
     WHERE r."sessionId" = $1`, [startedPractice.sessionId])).rows[0].count, 1,
   'Replay or conflict duplicated the private answer.');
   assert.deepEqual(await credentialState(), beforePractice, 'Formative answer changed credential state.');
+  const privateReadEvidence = async () => (await database.query(`SELECT
+    (SELECT row_to_json(s) FROM "${schema}"."PracticeLearnerSetting" s WHERE "userId" = $1 AND "courseId" = $2) AS setting,
+    (SELECT COUNT(*)::integer FROM "${schema}"."PracticeLearnerSession" WHERE "userId" = $1 AND "courseId" = $2) AS sessions,
+    (SELECT COUNT(*)::integer FROM "${schema}"."PracticeLearnerReservation" WHERE "sessionId" = $3) AS reservations`,
+  [learnerRegistration.userId, courseId, startedPractice.sessionId])).rows[0];
+  // The one-item disposable pool's wrong/short raw due window must still obey
+  // the unchanged inclusive last-two/24h exclusion, in the real PG HTTP path.
+  const shortDue = new Date(Date.now() + 5 * 60_000);
+  await database.query(`UPDATE "${schema}"."PracticeLearnerSchedule" SET "dueAt" = $1 WHERE "userId" = $2 AND "courseId" = $3`,
+    [shortDue, learnerRegistration.userId, courseId]);
+  const shownAt = (await database.query(`SELECT "shownAt" FROM "${schema}"."PracticeLearnerReservation" WHERE "id" = $1`,
+    [startedPractice.pending.reservationId])).rows[0].shownAt;
+  await learner(`${learnerPractice}/close`, { method: 'POST', body: { sessionId: startedPractice.sessionId } });
+  await learner(`${learnerPractice}/close`, { method: 'POST', body: { sessionId: startedPractice.sessionId } });
+  const beforeRead = await privateReadEvidence();
+  const waitingPractice = await (await learner(learnerPractice)).json();
+  assert.equal(waitingPractice.availability, 'waiting');
+  assert.equal(waitingPractice.dueCount, 0);
+  assert.equal(waitingPractice.nextAvailableAt, new Date(shownAt.getTime() + 86400_000 + 1).toISOString());
+  assert.ok(!waitingPractice.session && !JSON.stringify(waitingPractice).includes('correctIndex'));
+  await learner(learnerPractice);
+  assert.deepEqual(await privateReadEvidence(), beforeRead, 'Practice GET changed settings/activity or reserved a question.');
+  const healthBefore = (await database.query(`SELECT "lastSuccessAt" FROM "${schema}"."PracticeRetentionHealth" WHERE "id" = 'learner'`)).rows[0].lastSuccessAt;
+  for (const offset of [-46 * 60_000, 6 * 60_000]) {
+    await database.query(`UPDATE "${schema}"."PracticeRetentionHealth" SET "lastSuccessAt" = $1 WHERE "id" = 'learner'`, [new Date(Date.now() + offset)]);
+    const unavailablePractice = await (await learner(learnerPractice)).json();
+    assert.equal(unavailablePractice.status, 'unavailable');
+    assert.equal(unavailablePractice.dueCount, 0);
+    assert.equal(unavailablePractice.nextAvailableAt, null);
+    assert.ok(!unavailablePractice.session);
+  }
+  await database.query(`UPDATE "${schema}"."PracticeRetentionHealth" SET "lastSuccessAt" = $1 WHERE "id" = 'learner'`, [healthBefore]);
+
   const resetToken = (await (await learner(`${learnerPractice}/reset/prepare`, { method: 'POST' })).json()).token;
   await learner(`${learnerPractice}/reset`, { method: 'POST', status: 428,
     body: { token: resetToken, confirmation: 'no' } });

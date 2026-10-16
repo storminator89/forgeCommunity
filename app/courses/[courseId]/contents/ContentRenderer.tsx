@@ -25,6 +25,8 @@ interface ContentRendererProps {
   onSave?: (contentId: string, newContent: string) => Promise<void>;
   onEditToggle?: (isEditing: boolean) => void;
   learnerQuiz?: boolean;
+  learnerRefreshKey?: number;
+  onReaderIssue?: (status: number) => void;
   onQuizPassed?: () => void;
 }
 
@@ -32,7 +34,7 @@ export function ContentRenderer(props: ContentRendererProps) {
   return <ContentRendererState key={props.content.id} {...props} />;
 }
 
-function ContentRendererState({ content, isEditing: externalIsEditing, onSave, onEditToggle, learnerQuiz, onQuizPassed }: ContentRendererProps) {
+function ContentRendererState({ content, isEditing: externalIsEditing, onSave, onEditToggle, learnerQuiz, learnerRefreshKey, onReaderIssue, onQuizPassed }: ContentRendererProps) {
   const [internalIsEditing, setInternalIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -126,11 +128,11 @@ function ContentRendererState({ content, isEditing: externalIsEditing, onSave, o
     );
   }
 
-  if (learnerQuiz && content.type === 'QUIZ') return <LearnerQuizRenderer key={`${content.publicationId ?? ''}:${content.contentVersionToken ?? content.updatedAt ?? ''}:${JSON.stringify(content.content)}`} courseId={content.courseId} contentId={content.id} updatedAt={content.updatedAt} publicationId={content.publicationId} contentVersionToken={content.contentVersionToken} content={content.content} onPassed={() => onQuizPassed?.()} />;
+  if (learnerQuiz && content.type === 'QUIZ') return <LearnerQuizRenderer key={`${content.publicationId ?? ''}:${content.contentVersionToken ?? content.updatedAt ?? ''}:${JSON.stringify(content.content)}`} courseId={content.courseId} contentId={content.id} updatedAt={content.updatedAt} publicationId={content.publicationId} contentVersionToken={content.contentVersionToken} content={content.content} onReaderIssue={onReaderIssue} onPassed={() => onQuizPassed?.()} />;
   if (content.type === 'ASSIGNMENT') {
     const assignment = parseAssignmentContent(content.content);
     if (!assignment) return <p role="alert">Die Aufgabe ist ungültig.</p>;
-    if (learnerQuiz) return <LearnerAssignmentRenderer key={`${content.publicationId ?? ''}:${content.contentVersionToken ?? ''}`} courseId={content.courseId} contentId={content.id} publicationId={content.publicationId} contentVersionToken={content.contentVersionToken} content={content.content} onChanged={onQuizPassed} />;
+    if (learnerQuiz) return <LearnerAssignmentRenderer key={`${content.publicationId ?? ''}:${content.contentVersionToken ?? ''}`} courseId={content.courseId} contentId={content.id} publicationId={content.publicationId} contentVersionToken={content.contentVersionToken} content={content.content} refreshKey={learnerRefreshKey} onReaderIssue={onReaderIssue} onChanged={onQuizPassed} />;
     return <section className="max-w-[72ch] space-y-3"><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Manuell bewertete Aufgabe</p><p className="whitespace-pre-wrap break-words text-base leading-relaxed">{assignment.prompt || 'Der Aufgabentext fehlt noch.'}</p><p className="text-sm text-muted-foreground">Bestehensgrenze: {assignment.passingScore} von 100 Punkten · Textabgabe</p></section>;
   }
   if (quizContent || content.type === 'QUIZ') return <QuizRenderer content={quizContent ?? content.content} />;
