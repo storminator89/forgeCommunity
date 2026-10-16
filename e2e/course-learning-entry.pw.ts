@@ -146,7 +146,7 @@ test('catalog loading, empty, filtered and failed states stay distinct; long lab
       state = current;
       await page.reload();
       if (current === 'empty') await expect(page.getByRole('heading', { name: 'Noch keine Kurse' })).toBeVisible();
-      if (current === 'error') await expect(page.getByRole('alert')).toContainText('Kurse konnten nicht geladen werden');
+      if (current === 'error') await expect(page.locator('#page-content').getByRole('alert')).toContainText('Kurse konnten nicht geladen werden');
       if (current === 'stress') await expect(page.getByRole('heading', { name: longTitle })).toBeVisible();
       await capture(page, info, `catalog-${current}-${mode}-320x700`);
     }
@@ -176,7 +176,7 @@ test('journey locked, empty, error and long-content states keep honest actions a
       state = current;
       await page.setViewportSize({ width: 320, height: 700 });
       await page.goto('/courses/journey');
-      if (current === 'error') await expect(page.getByRole('alert')).toContainText('Der Kursstand konnte nicht geladen werden');
+      if (current === 'error') await expect(page.locator('#page-content').getByRole('alert')).toContainText('Der Kursstand konnte nicht geladen werden');
       else if (current === 'stress') await expect(page.getByRole('link', { name: 'Lernschritt öffnen' })).toBeVisible();
       else {
         await expect(page.getByRole('link', { name: 'Kurs ansehen' })).toBeVisible();
