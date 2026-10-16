@@ -56,7 +56,7 @@ function poll(fixture: Fixture): SpacePoll {
 const mission: SpaceMission = {
   id: 'synthetic-mission', spaceId: 'qa-task-space', title: 'Eine gute Frage gemeinsam erklären',
   prompt: 'Zwei Erkenntnisse teilen und einen Gedanken weiterdenken.', creator: author, createdAt: now, closedAt: null,
-  week: null, windowState: 'self-paced', participants: [{ ...author, joinedAt: now }], participantLimit: 5,
+  week: null, windowState: 'self-paced', ownBookmark: { saved: false, revision: 0, accessEpoch: 0 }, participants: [{ ...author, joinedAt: now }], participantLimit: 5,
   participation: { epoch: 1, active: true, joinedAt: now, optedOutAt: null }, canManage: true, canJoin: false,
   contributions: [], ownContributions: [], progress: { insightAuthors: 0, hasCrossPersonBuildOn: false, complete: false },
 };

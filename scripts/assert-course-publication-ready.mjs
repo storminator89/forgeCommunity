@@ -17,7 +17,7 @@ const reviewedSqlite = [
   '0017_chat_message_cursor_index.sql', '0018_chat_read_cursor.sql',
   '0019_course_qa.sql', '0020_spaces.sql', '0021_space_report_targets.sql',
   '0022_space_mission_foundation.sql', '0023_space_mission_contributions.sql',
-  '0024_event_waitlist.sql', '0025_space_polls.sql', '0026_space_mission_week.sql',
+  '0024_event_waitlist.sql', '0025_space_polls.sql', '0026_space_mission_week.sql', '0027_space_mission_bookmarks.sql',
 ];
 const reviewedPostgresql = [
   '0001_skill_endorsements.sql', '0002_course_progress.sql', '0003_reports.sql',
@@ -30,7 +30,7 @@ const reviewedPostgresql = [
   '0016_chat_message_cursor_index.sql', '0017_chat_read_cursor.sql',
   '0018_course_qa.sql', '0019_spaces.sql', '0020_space_report_targets.sql',
   '0021_space_mission_foundation.sql', '0022_space_mission_contributions.sql',
-  '0023_event_waitlist.sql', '0024_space_polls.sql', '0025_space_mission_week.sql',
+  '0023_event_waitlist.sql', '0024_space_polls.sql', '0025_space_mission_week.sql', '0026_space_mission_bookmarks.sql',
 ];
 
 function expectedHistory(provider) {
@@ -54,6 +54,12 @@ async function inspect(query, provider) {
   if (JSON.stringify(actual) !== JSON.stringify(expectedHistory(provider))) {
     throw new Error('Publication migration history is missing, divergent or has changed checksums; startup refused.');
   }
+  // Exact history alone cannot establish that both additive sidecars are
+  // still queryable (for example after an accidental manual table removal).
+  try {
+    await query('SELECT b."missionId", b."userId", b."savedAt", b."revision" FROM "SpaceMissionBookmarkSetting" b LIMIT 0');
+    await query('SELECT a."userId", a."epoch" FROM "SpaceMissionBookmarkAccess" a LIMIT 0');
+  } catch { throw new Error('Bookmark schema is missing or incomplete; startup refused.'); }
   const missingDraft = await query(`SELECT c."id" FROM "Course" c
     LEFT JOIN "CourseDraft" d ON d."courseId" = c."id"
     WHERE d."courseId" IS NULL LIMIT 1`);

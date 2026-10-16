@@ -2,6 +2,7 @@ import 'server-only';
 
 import { Prisma, type SpaceMissionContributionKind } from '@prisma/client';
 import { createHash } from 'node:crypto';
+import { bookmarkTransaction, readOwnMissionBookmark } from '@/lib/server/space-mission-bookmarks';
 import { getReadableSpace, type SpaceAccess } from '@/lib/server/space-access';
 import { parseSpaceRequestId, SPACE_ID_RE, spaceTransaction, SpaceApiError } from '@/lib/server/space-api';
 import { sanitizeTextServer } from '@/lib/server/sanitize-html';
@@ -114,6 +115,7 @@ async function projectMission(row: MissionRow, userId: string, access: SpaceAcce
     participantLimit: MISSION_PARTICIPANT_LIMIT,
     participation: { epoch: self?.epoch ?? 0, active, joinedAt: self?.joinedAt.toISOString() ?? null,
       optedOutAt: self?.optedOutAt?.toISOString() ?? null },
+    ownBookmark: access.isMember && account && !row.closedAt ? await readOwnMissionBookmark(row.id, userId, tx) : null,
     canManage: access.canManage,
     canJoin: !row.closedAt && !active && access.isMember && account?.role === 'USER' && reservedSlots < MISSION_PARTICIPANT_LIMIT,
     contributions: visible.map(item => serializeContribution(item, userId)),
@@ -198,11 +200,12 @@ export async function createMission(spaceId: string, userId: string, input: Retu
 }
 
 export async function closeMission(spaceId: string, id: string, userId: string) {
-  return spaceTransaction(async tx => {
+  return bookmarkTransaction(async tx => {
     const access = await privateMissionAccess(spaceId, userId, tx);
     if (!access.canManage) throw new SpaceApiError('Nicht autorisiert', 403);
     const previous = await findMission(spaceId, id, tx);
     const row = previous.closedAt ? previous : await tx.spaceMission.update({ where: { id }, data: { closedAt: new Date() }, select: missionSelect });
+    await tx.spaceMissionBookmarkSetting.deleteMany({ where: { missionId: id } });
     return projectMission(row, userId, access, tx);
   });
 }

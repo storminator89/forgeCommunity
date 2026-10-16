@@ -44,7 +44,11 @@ function fixture(beforeTail = false) {
     finally { if (previous === undefined) delete process.env.DATABASE_PROVIDER; else process.env.DATABASE_PROVIDER = previous; }
   };
   deploy();
-  return { url, migrations, deploy, addTail: () => copyFileSync(new URL(sqliteTail, sqliteDirectory), join(migrations, sqliteTail)),
+  return { url, migrations, deploy, addTail: () => {
+    for (const name of names(sqliteDirectory).filter(name => name >= sqliteTail)) {
+      copyFileSync(new URL(name, sqliteDirectory), join(migrations, name));
+    }
+  },
     open: () => { const db = new DatabaseSync(url.slice(5)); db.exec('PRAGMA foreign_keys=ON'); return db; } };
 }
 const sqliteIndexes = db => db.prepare(`SELECT name,sql FROM sqlite_master WHERE type='index'
@@ -53,8 +57,8 @@ const legacyMission = db => db.prepare(`SELECT id,"spaceId","creatorId","request
 const columns = db => db.prepare('PRAGMA table_info("SpaceMission")').all().map(row => row.name);
 
 test('paired current week tails add exactly four nullable columns and a complete positive-range check without rebuilding history', () => {
-  assert.deepEqual(names(sqliteDirectory).slice(-2), ['0025_space_polls.sql', sqliteTail]);
-  assert.deepEqual(names(postgresDirectory).slice(-2), ['0024_space_polls.sql', postgresTail]);
+  assert.deepEqual(names(sqliteDirectory).slice(-3), ['0025_space_polls.sql', sqliteTail, '0027_space_mission_bookmarks.sql']);
+  assert.deepEqual(names(postgresDirectory).slice(-3), ['0024_space_polls.sql', postgresTail, '0026_space_mission_bookmarks.sql']);
   for (const ddl of [sql(sqliteTail), sql(postgresTail, postgresDirectory)]) {
     const statements = ddl.replace(/^--.*$/gm, '');
     assert.ok(!/\b(?:DROP|DELETE|UPDATE|INSERT|CREATE|RENAME)\b/i.test(statements));
@@ -137,7 +141,7 @@ test('SQLite week tail remains checksum/order guarded and DDL failure rolls back
     db.prepare('INSERT INTO _app_migrations (name,checksum) VALUES (?,?)').run('0025_space_polls.sql', checksum(sql('0025_space_polls.sql')));
     db.prepare('DELETE FROM _app_migrations WHERE name=?').run(sqliteTail);
     await assert.rejects(assertCoursePublicationReady(f.url, 'sqlite'), /history is missing/);
-    assert.throws(f.deploy, /duplicate column/);
+    assert.throws(f.deploy, /gap before 0027_space_mission_bookmarks\.sql/);
     db.prepare('INSERT INTO _app_migrations (name,checksum) VALUES (?,?)').run(sqliteTail, expected);
     assert.equal(await assertCoursePublicationReady(f.url, 'sqlite'), true);
   } finally { db.close(); }

@@ -52,6 +52,7 @@ it('keeps an enrolled own course out of the journey', async () => {
   expect(global.fetch).toHaveBeenCalledTimes(1);
   expect(screen.queryByRole('link', { name: 'Lernschritt öffnen' })).not.toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'Space-Missionen entdecken' })).toHaveAttribute('href', '/community/missions');
+  expect(screen.getByRole('link', { name: 'Gemerkte Space-Missionen' })).toHaveAttribute('href', '/community/missions?view=saved');
 });
 
 it('keeps mission discovery available when course loading fails', async () => {
@@ -59,6 +60,7 @@ it('keeps mission discovery available when course loading fails', async () => {
   render(<JourneyClient />);
   expect(await screen.findByRole('heading', { name: 'Deine Kurse konnten nicht geladen werden' })).toBeVisible();
   expect(screen.getByRole('link', { name: 'Space-Missionen entdecken' })).toHaveAttribute('href', '/community/missions');
+  expect(screen.getByRole('link', { name: 'Gemerkte Space-Missionen' })).toHaveAttribute('href', '/community/missions?view=saved');
   expect(global.fetch).toHaveBeenCalledTimes(1);
 });
 

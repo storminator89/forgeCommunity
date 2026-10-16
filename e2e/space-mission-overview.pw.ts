@@ -71,6 +71,7 @@ test('discover a private mission without courses, navigate by keyboard and remov
     const membership = await adminRequest.post(`${spaceApi}/members`, { headers: { origin }, data: { userId: learner.id } });
     expect(membership.status(), await membership.text()).toBe(201);
     const title = 'Eine Idee, viele Perspektiven';
+    testInfo.annotations.push({ type: 'fixture', description: 'Real disposable SQLite PRIVATE Space; bookmark persistence uses live APIs and no mocked GETs.' });
     const mission = await adminRequest.post(`${spaceApi}/missions`, { headers: { origin }, data: {
       title, prompt: 'Erklärt gemeinsam einen neuen Zusammenhang und baut auf einer anderen Erklärung auf.', requestId: randomUUID(),
     } });
@@ -78,6 +79,7 @@ test('discover a private mission without courses, navigate by keyboard and remov
     const missionId = (await mission.json() as { id: string }).id;
     const detailUrl = `/community/spaces/${spaceId}/missions/${missionId}`;
     const mutations: string[] = [];
+    const bookmarkMutation = `PUT ${spaceApi}/missions/${missionId}/bookmark`;
     page.on('request', outgoing => {
       const path = new URL(outgoing.url()).pathname;
       if (/^\/api\/(space-missions|spaces\/[^/]+\/missions)/.test(path) && outgoing.method() !== 'GET') mutations.push(`${outgoing.method()} ${path}`);
@@ -108,6 +110,58 @@ test('discover a private mission without courses, navigate by keyboard and remov
         await page.screenshot({ path: testInfo.outputPath(`mission-overview-${theme}-${width}.png`), animations: 'disabled' });
       }
     }
+    // Real persistence, before voluntary participation: no intercepted mission responses.
+    await page.setViewportSize({ width: 320, height: 900 });
+    const save = page.getByRole('button', { name: `Für später merken: ${title}`, exact: true });
+    await save.focus(); await page.keyboard.press('Enter');
+    const saved = page.getByRole('button', { name: `Nicht mehr merken: ${title}`, exact: true });
+    await expect(saved).toHaveAttribute('aria-pressed', 'true');
+    await expect(saved).toBeFocused();
+    await page.screenshot({ path: testInfo.outputPath('mission-bookmark-confirmed-focus-320.png'), animations: 'disabled' });
+    await page.reload();
+    await expect(saved).toHaveAttribute('aria-pressed', 'true');
+    const savedDetail = await contexts[1].request.get(`${spaceApi}/missions/${missionId}`);
+    expect(savedDetail.status(), await savedDetail.text()).toBe(200);
+    expect(await savedDetail.json()).toMatchObject({ participation: { active: false }, ownBookmark: { saved: true, revision: 1, accessEpoch: 0 } });
+    const stateDb = new DatabaseSync(databasePath);
+    try {
+      expect(stateDb.prepare('SELECT COUNT(*) AS n FROM "SpaceMissionParticipation" WHERE "missionId" = ?').get(missionId)).toEqual({ n: 0 });
+      expect(stateDb.prepare('SELECT COUNT(*) AS n FROM "SpaceMissionContribution" WHERE "missionId" = ?').get(missionId)).toEqual({ n: 0 });
+    } finally { stateDb.close(); }
+    await page.goto('/courses/journey');
+    await page.getByRole('link', { name: 'Gemerkte Space-Missionen', exact: true }).focus();
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/\/community\/missions\?view=saved$/);
+    await expect(page.getByRole('link', { name: 'Gemerkte', exact: true })).toHaveAttribute('aria-current', 'page');
+    await expect(saved).toHaveAttribute('aria-pressed', 'true');
+    for (const theme of ['Hell', 'Dunkel']) {
+      await page.getByRole('button', { name: 'Farbschema auswählen' }).click();
+      await page.getByRole('menuitem', { name: theme, exact: true }).click();
+      for (const width of [320, 768]) {
+        await page.setViewportSize({ width, height: 900 });
+        await checkReflow(page);
+        await page.screenshot({ path: testInfo.outputPath(`mission-bookmark-saved-${theme}-${width}.png`), animations: 'disabled' });
+        if (theme === 'Hell' && width === 320) {
+          await page.setViewportSize({ width: 320, height: 700 });
+          await page.screenshot({ path: testInfo.outputPath('mission-bookmark-saved-Hell-320x700.png'), animations: 'disabled' });
+          await page.setViewportSize({ width, height: 900 });
+        }
+      }
+    }
+    await saved.focus(); await page.keyboard.press('Enter');
+    await expect(page.getByRole('heading', { name: 'Keine gemerkten Missionen' })).toBeVisible();
+    await expect(detail).toHaveCount(0);
+    await expect(page.getByText('0 Missionen geladen', { exact: true })).toBeFocused();
+    await expect(page.getByText('0 Missionen geladen', { exact: true })).toBeInViewport();
+    await page.setViewportSize({ width: 320, height: 900 });
+    await page.screenshot({ path: testInfo.outputPath('mission-bookmark-unsaved-320.png'), animations: 'disabled' });
+    await page.getByRole('link', { name: 'Alle', exact: true }).focus(); await page.keyboard.press('Enter');
+    await expect(detail).toBeVisible();
+    // Leave a real marker present for the later official membership revocation.
+    await save.focus(); await page.keyboard.press('Enter');
+    await expect(saved).toHaveAttribute('aria-pressed', 'true');
+    expect(mutations).toEqual([bookmarkMutation, bookmarkMutation, bookmarkMutation]);
+
     // A separate real fixture checks pathological titles without dominating the primary demo.
     const stressTitle = `Gemeinsam${'LernzusammenhängeVerständlichErklären'.repeat(2)}`;
     const stressSpaceResponse = await adminRequest.post('/api/spaces', { headers: { origin }, data: {
@@ -150,12 +204,16 @@ test('discover a private mission without courses, navigate by keyboard and remov
     await page.keyboard.press('Tab');
     await expect(page.getByRole('button', { name: 'Übersicht aktualisieren' })).toBeFocused();
     await page.keyboard.press('Tab');
+    await expect(page.getByRole('link', { name: 'Alle', exact: true })).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(page.getByRole('link', { name: 'Gemerkte', exact: true })).toBeFocused();
+    await page.keyboard.press('Tab');
     await expect(detail).toBeFocused();
     expect(await detail.evaluate(element => getComputedStyle(element.closest('li')!).outlineStyle)).not.toBe('none');
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(new RegExp(`${detailUrl}$`));
     await expect(page.getByRole('button', { name: 'Freiwillig teilnehmen' })).toBeVisible();
-    expect(mutations).toEqual([]);
+    expect(mutations).toEqual([bookmarkMutation, bookmarkMutation, bookmarkMutation]);
 
     // The global navigation and its quick-search projection reach the same page.
     await page.getByRole('link', { name: 'Space-Missionen', exact: true }).focus();
@@ -185,7 +243,18 @@ test('discover a private mission without courses, navigate by keyboard and remov
     await expect(page.getByRole('heading', { name: 'Keine offenen Missionen' })).toBeVisible();
     await expect(detail).toHaveCount(0);
     expect((await contexts[1].request.get(`${spaceApi}/missions/${missionId}`)).status()).toBe(404);
-    expect(mutations).toEqual([]);
+    const revokedSaved = await contexts[1].request.get('/api/space-missions?view=saved');
+    expect(revokedSaved.status(), await revokedSaved.text()).toBe(200);
+    expect(await revokedSaved.json()).toEqual({ items: [], nextCursor: null });
+    await page.setViewportSize({ width: 320, height: 900 });
+    await page.screenshot({ path: testInfo.outputPath('mission-bookmark-revoked-320.png'), animations: 'disabled' });
+    expect(mutations).toEqual([bookmarkMutation, bookmarkMutation, bookmarkMutation]);
+    await testInfo.attach('mission-bookmark-evidence-provenance', { contentType: 'application/json', body: Buffer.from(JSON.stringify({
+      fixture: 'Real disposable SQLite PRIVATE Space and registered test accounts', ordinaryTitle: title,
+      commit: process.env.GITHUB_SHA ?? null,
+      ci: process.env.GITHUB_RUN_ID ? `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}` : null,
+      browser: testInfo.project.name, journey: 'Save before participation, reload, Journey Saved link, server-filtered Saved, unsave, official membership revocation',
+    })) });
     expect(pageErrors).toEqual([]);
   } finally { for (const context of contexts) await context.close(); }
 });

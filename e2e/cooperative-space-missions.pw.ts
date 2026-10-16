@@ -80,7 +80,8 @@ test('two learners use a soft learning week, teach back after its end, reverse c
 
     await adminPage.goto(`/community/spaces/${spaceId}`);
     await adminPage.getByRole('button', { name: 'Mission starten', exact: true }).click();
-    const title = 'Aha! So wird eine Idee klar';
+    const title = 'Eine Idee weiterdenken';
+    testInfo.annotations.push({ type: 'fixture', description: 'Real disposable SQLite accounts and PRIVATE Space; readable ordinary title/prompt; long-content stress is separate.' });
     await adminPage.getByRole('textbox', { name: 'Thema', exact: true }).fill(title);
     await adminPage.getByRole('textbox', { name: 'Aufgabe', exact: true }).fill('Erklärt eine neue Idee und entwickelt den Gedanken einer anderen Person weiter.');
     await adminPage.getByRole('checkbox', { name: 'Diese Lernwoche' }).check();
@@ -134,9 +135,30 @@ test('two learners use a soft learning week, teach back after its end, reverse c
       await page.getByText('So funktioniert das Ziel', { exact: true }).click();
       await expect(page.getByText(/Bereits Gesehenes lässt sich nicht zurückholen/)).toBeVisible();
       await expect(page.getByRole('button', { name: 'Freiwillig teilnehmen' })).toBeVisible();
+      if (page === alicePage) {
+        await page.setViewportSize({ width: 320, height: 700 });
+        for (const theme of ['Hell', 'Dunkel']) {
+          await page.getByRole('button', { name: 'Farbschema auswählen' }).click();
+          await page.getByRole('menuitem', { name: theme, exact: true }).click();
+          await page.locator('#page-content').evaluate(element => { element.scrollTop = 0; });
+          const task = page.getByRole('button', { name: 'Zur Teilnahme', exact: true });
+          await expect(task).toBeInViewport();
+          await checkReflow(page);
+          await page.screenshot({ path: testInfo.outputPath(`mission-task-unjoined-${theme}-320x700.png`), animations: 'disabled' });
+          await task.focus(); await page.keyboard.press('Enter');
+          const decision = page.getByRole('heading', { name: 'Deine Teilnahme', exact: true });
+          await expect(decision).toBeFocused(); await expect(decision).toBeInViewport();
+          expect(await page.evaluate(() => window.scrollY)).toBe(0);
+          await page.screenshot({ path: testInfo.outputPath(`mission-task-consent-focus-${theme}-320x700.png`), animations: 'disabled' });
+        }
+      }
       await page.getByRole('button', { name: 'Freiwillig teilnehmen' }).focus();
       await page.keyboard.press('Enter');
       await expect(page.getByRole('button', { name: 'Teilnahme beenden', exact: true })).toBeVisible();
+      await page.getByRole('button', { name: 'Zum Beitrag', exact: true }).focus(); await page.keyboard.press('Enter');
+      await expect(page.getByRole('heading', { name: 'Dein Beitrag', exact: true })).toBeFocused();
+      await expect(page.getByRole('heading', { name: 'Dein Beitrag', exact: true })).toBeInViewport();
+      if (page === alicePage) await page.screenshot({ path: testInfo.outputPath('mission-task-joined-focus-Dunkel-320.png'), animations: 'disabled' });
       const insightText = page === alicePage
         ? 'Eine Erklärung wird klarer, wenn ein konkretes Beispiel den Zusammenhang zeigt.'
         : 'Ein Gegenbeispiel zeigt die Grenze eines Gedankens.';
@@ -157,6 +179,13 @@ test('two learners use a soft learning week, teach back after its end, reverse c
           await route.continue();
         });
         await page.getByLabel('Deine Erkenntnis', { exact: true }).fill(insightText);
+        const marker = page.getByRole('button', { name: `Für später merken: ${title}`, exact: true });
+        await marker.focus(); await page.keyboard.press('Enter');
+        const marked = page.getByRole('button', { name: `Nicht mehr merken: ${title}`, exact: true });
+        await expect(marked).toHaveAttribute('aria-pressed', 'true'); await expect(marked).toBeFocused();
+        await expect(page.getByLabel('Deine Erkenntnis', { exact: true })).toHaveValue(insightText);
+        await page.screenshot({ path: testInfo.outputPath('mission-detail-bookmark-focus-draft-320.png'), animations: 'disabled' });
+        await page.getByRole('button', { name: 'Zum Beitrag', exact: true }).focus(); await page.keyboard.press('Enter');
         await page.getByRole('button', { name: 'Im Space teilen', exact: true }).evaluate(element => { (element as HTMLButtonElement).click(); (element as HTMLButtonElement).click(); });
         await expect(page.getByRole('alert')).toBeVisible();
         expect(posts).toHaveLength(1);
@@ -276,6 +305,12 @@ test('two learners use a soft learning week, teach back after its end, reverse c
         await adminPage.screenshot({ path: testInfo.outputPath(`mission-stress-${theme}-${width}.png`), animations: 'disabled' });
       }
     }
+    await testInfo.attach('mission-task-evidence-provenance', { contentType: 'application/json', body: Buffer.from(JSON.stringify({
+      fixture: 'Real disposable SQLite PRIVATE Space and registered test accounts', ordinaryTitle: title,
+      commit: process.env.GITHUB_SHA ?? null,
+      ci: process.env.GITHUB_RUN_ID ? `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}` : null,
+      browser: testInfo.project.name, note: 'Task and bookmark captures are real API-backed UI. Long-title stress captures are separate.',
+    })) });
     expect(errors).toEqual([]);
   } finally { for (const context of contexts) await context.close(); }
 });
