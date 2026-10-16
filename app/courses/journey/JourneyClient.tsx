@@ -22,6 +22,10 @@ const motionPreferenceKey = 'forge-journey-motion-off';
 const mascotPreferenceKey = 'forge-journey-mascot-hidden';
 let fallbackMotionEnabled = true;
 let fallbackMascotVisible = true;
+// Document-local only: no account, course or time information is sent in the
+// playback URL. Keep it outside the learner scope so role/navigation remounts
+// cannot accidentally reuse an ended native image resource in this document.
+let nextCelebrationId = 0;
 
 function subscribeMotion(callback: () => void) {
   window.addEventListener('storage', callback);
@@ -103,12 +107,27 @@ function ScopedJourney() {
   const mascotVisible = useSyncExternalStore(subscribeMascot, mascotSnapshot, () => false);
   const motionEnabled = useSyncExternalStore(subscribeMotion, motionSnapshot, () => false);
   const reducedMotion = useSyncExternalStore(subscribeReducedMotion, reducedMotionSnapshot, () => true);
-  const [celebrating, setCelebrating] = useState(false);
+  const [celebration, setCelebration] = useState<{ id: number; courseId: string; publicationId: string } | null>(null);
   const completionBefore = useRef(new Map<string, boolean>());
-  const celebrationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const detailSequence = useRef(0);
 
-  useEffect(() => () => { if (celebrationTimer.current) clearTimeout(celebrationTimer.current); }, []);
+  useEffect(() => {
+    // A preference change consumes the current celebration, including changes
+    // from another tab or the operating system. Re-enabling motion never
+    // replays an earlier completion.
+    const cancel = () => setCelebration(null);
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    window.addEventListener('storage', cancel);
+    window.addEventListener('forge-journey-motion-change', cancel);
+    window.addEventListener('forge-journey-mascot-visibility-change', cancel);
+    media.addEventListener('change', cancel);
+    return () => {
+      window.removeEventListener('storage', cancel);
+      window.removeEventListener('forge-journey-motion-change', cancel);
+      window.removeEventListener('forge-journey-mascot-visibility-change', cancel);
+      media.removeEventListener('change', cancel);
+    };
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -142,13 +161,15 @@ function ScopedJourney() {
       if (controller.signal.aborted || sequence !== detailSequence.current) return;
       if (!progress.canTrack) throw new Error('Enrollment changed');
       if (!progress.publicationId || contents.some(content => content.publicationId !== progress.publicationId)) throw new Error('Publication changed');
-      const before = completionBefore.current.get(selectedId);
-      completionBefore.current.set(selectedId, progress.complete);
+      const completionKey = JSON.stringify([selectedId, progress.publicationId]);
+      const before = completionBefore.current.get(completionKey);
+      completionBefore.current.set(completionKey, progress.complete);
       setDetail({ kind: 'ready', courseId: selectedId, contents, progress });
-      if (before === false && progress.complete) {
-        setCelebrating(true);
-        if (celebrationTimer.current) clearTimeout(celebrationTimer.current);
-        celebrationTimer.current = setTimeout(() => setCelebrating(false), 2000);
+      // Read the current preferences when the response settles, rather than
+      // capturing the values from before a slow request. An initially complete
+      // course (or a new publication) is never a new completion event.
+      if (before === false && progress.complete && mascotSnapshot() && motionSnapshot() && !reducedMotionSnapshot()) {
+        setCelebration({ id: ++nextCelebrationId, courseId: selectedId, publicationId: progress.publicationId });
       }
     }).catch(() => { if (!controller.signal.aborted && sequence === detailSequence.current) setDetail({ kind: 'error' }); });
     return () => controller.abort();
@@ -156,7 +177,7 @@ function ScopedJourney() {
 
   const selectCourse = useCallback((id: string) => {
     detailSequence.current++;
-    setCelebrating(false);
+    setCelebration(null);
     setDetail({ kind: 'loading' });
     setSelectedId(id);
   }, []);
@@ -175,8 +196,8 @@ function ScopedJourney() {
     window.dispatchEvent(new Event('forge-journey-mascot-visibility-change'));
   };
 
-  const retryCourses = () => { detailSequence.current++; setCourses(null); setCourseError(false); setDetail({ kind: 'idle' }); setCourseRetry(value => value + 1); };
-  const retryDetail = () => { detailSequence.current++; setDetail({ kind: 'loading' }); setDetailRetry(value => value + 1); };
+  const retryCourses = () => { detailSequence.current++; setCelebration(null); setCourses(null); setCourseError(false); setDetail({ kind: 'idle' }); setCourseRetry(value => value + 1); };
+  const retryDetail = () => { detailSequence.current++; setCelebration(null); setDetail({ kind: 'loading' }); setDetailRetry(value => value + 1); };
 
   const selectedCourse = courses?.find(course => course.id === selectedId);
   const projection = detail.kind === 'ready' && detail.courseId === selectedId ? projectJourney(detail.contents, detail.progress.completedContentIds) : null;
@@ -211,7 +232,7 @@ function ScopedJourney() {
               <section aria-labelledby="journey-progress-title" className="rounded-2xl border bg-card p-5 sm:p-7">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="min-w-0 flex-1"><p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Dein Kurs</p><h2 id="journey-progress-title" className="mt-2 break-words text-xl font-semibold tracking-tight sm:text-2xl">{selectedCourse.title}</h2><p className="mt-3 text-sm font-medium" role="status" aria-live="polite">{complete ? 'Alle aktuellen Kursinhalte bestätigt' : projection.leaves.length ? `${projection.completedCount} von ${projection.leaves.length} Inhalten aktuell bestätigt` : 'Noch keine Kursinhalte verfügbar'}</p></div>
-                  {mascotVisible && <JourneyMascot complete={complete} animating={celebrating && motionEnabled && !reducedMotion} ambientMotion={motionEnabled && !reducedMotion} />}
+                  {mascotVisible && <JourneyMascot complete={complete} celebrationId={motionEnabled && !reducedMotion && celebration?.courseId === selectedId && celebration.publicationId === detail.progress.publicationId ? celebration.id : null} ambientMotion={motionEnabled && !reducedMotion} />}
                 </div>
                 {projection.leaves.length > 0 && <progress className="mt-5 h-3 w-full accent-primary" value={projection.completedCount} max={projection.leaves.length} aria-label={`${projection.completedCount} von ${projection.leaves.length} Kursinhalten aktuell bestätigt`}>{projection.completedCount} von {projection.leaves.length}</progress>}
                 <div className="mt-5 border-t pt-5">
