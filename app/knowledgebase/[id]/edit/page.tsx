@@ -20,7 +20,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CategorySelect } from "@/components/CategorySelect";
 import { TagSelect } from "@/components/TagSelect";
 import Image from 'next/image';
-import { Image as ImageIcon, Trash2, Save, Loader2 } from 'lucide-react';
+import { Trash2, Save, Loader2 } from 'lucide-react';
 import { Editor } from "@/components/Editor";
 import Link from 'next/link';
 
@@ -225,13 +225,9 @@ function AccountEditArticle({ id, accountId, status }: { id: string; accountId: 
         </AppHeader>
 
         <main id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto w-full max-w-[1440px] px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
-            <div className="flex flex-wrap items-end justify-between gap-4 border-b pb-6">
-              <div>
-                <Button type="button" variant="ghost" size="sm" onClick={() => router.push('/knowledgebase/' + id)}><ArrowLeft className="h-4 w-4" aria-hidden="true" />Zum Artikel</Button>
-                <p className="mt-4 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Wissen / Bearbeiten</p>
-                <p className="mt-2 max-w-[55ch] text-base leading-relaxed text-muted-foreground">Änderungen am Artikel prüfen und speichern.</p>
-              </div>
+          <div className="mx-auto w-full max-w-[1440px] px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
+              <Button type="button" variant="ghost" size="sm" onClick={() => router.push('/knowledgebase/' + id)}><ArrowLeft className="h-4 w-4" aria-hidden="true" />Zum Artikel</Button>
               {!loadError && <Button type="submit" form="editForm" disabled={isSubmitting}>{isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Save className="h-4 w-4" aria-hidden="true" />}{isSubmitting ? 'Speichern…' : 'Speichern'}</Button>}
             </div>
 
@@ -242,49 +238,43 @@ function AccountEditArticle({ id, accountId, status }: { id: string; accountId: 
             ) : (
               <>
                 {error && <Alert variant="destructive" role="alert" className="my-6"><AlertCircle className="h-4 w-4" aria-hidden="true" /><AlertDescription>{error}</AlertDescription></Alert>}
-                <form id="editForm" method="post" onSubmit={handleSubmit} className="grid min-w-0 items-start gap-10 pt-8 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-12">
-                  <section aria-labelledby="edit-article-content-title" className="min-w-0 border-t pt-5">
-                    <h2 id="edit-article-content-title" className="text-lg font-semibold tracking-tight">Artikelinhalt</h2>
-                    <div className="mt-6 space-y-8">
-                      <div className="border-b pb-7">
-                        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                          <Label htmlFor="title">Titel <span className="text-destructive">*</span></Label>
-                          <span className="text-xs tabular-nums text-muted-foreground">{title.length}/100 Zeichen</span>
-                        </div>
-                        <Input id="title" value={title} onChange={event => setTitle(event.target.value)} placeholder="Gib einen aussagekräftigen Titel ein" maxLength={100} required className="text-base" />
+                <form id="editForm" method="post" onSubmit={handleSubmit} className="min-w-0 pt-4">
+                  <p id="edit-article-required-fields" className="text-sm text-muted-foreground">Pflichtangaben: Titel, Inhalt und Kategorie.</p>
+                  <div className="mt-5 grid min-w-0 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-8" role="group" aria-label="Pflichtangaben" aria-describedby="edit-article-required-fields">
+                    <div className="min-w-0">
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                        <Label htmlFor="title">Titel <span className="text-destructive">*</span></Label>
+                        <span className="text-xs tabular-nums text-muted-foreground">{title.length}/100 Zeichen</span>
                       </div>
-
-                      <div className="border-b pb-7">
-                        <p className="mb-2 text-sm font-medium">Beitragsbild <span className="font-normal text-muted-foreground">(optional)</span></p>
-                        <div className="flex flex-wrap items-start gap-4">
-                          <div>
-                            <input type="file" id="featuredImage" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
-                            <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}><Upload className="h-4 w-4" aria-hidden="true" />Bild auswählen</Button>
-                            <p className="mt-2 text-xs text-muted-foreground">Empfohlene Größe: 1200 × 630 px, max. 5 MB</p>
-                          </div>
-                          {featuredImagePreview ? <div className="relative aspect-video w-full max-w-sm overflow-hidden rounded-[10px] border bg-muted">
-                            <Image src={featuredImagePreview} alt="Beitragsbildvorschau" fill className="object-cover" />
-                            <Button type="button" variant="destructive" size="sm" className="absolute right-2 top-2" onClick={() => { setFeaturedImage(null); setFeaturedImagePreview(''); setIsImageDeleted(true); }}><Trash2 className="h-4 w-4" aria-hidden="true" />Entfernen</Button>
-                          </div> : <div className="flex aspect-video w-full max-w-sm items-center justify-center rounded-[10px] border border-dashed text-sm text-muted-foreground"><ImageIcon className="mr-2 h-4 w-4" aria-hidden="true" />Noch kein Bild ausgewählt</div>}
+                      <Input id="title" value={title} onChange={event => setTitle(event.target.value)} placeholder="Gib einen aussagekräftigen Titel ein" maxLength={100} required className="text-base" />
+                    </div>
+                    <div className="min-w-0">
+                      <CategorySelect categories={existingCategories} selectedCategory={category} setSelectedCategory={setCategory} onAddCategory={handleAddNewCategory} />
+                    </div>
+                  </div>
+                  <section aria-labelledby="edit-article-content-title" aria-describedby="edit-article-required-fields" className="mt-6 min-w-0">
+                    <h2 id="edit-article-content-title" className="mb-2 text-sm font-medium">Inhalt <span className="text-destructive">*</span></h2>
+                    <div className="overflow-hidden rounded-[10px] focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"><Editor content={content} onChange={setContent} className="min-h-[400px]" /></div>
+                  </section>
+                  <aside aria-label="Optionale Artikelangaben" className="mt-6 grid min-w-0 items-start gap-6 border-t pt-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-8">
+                    <div className="min-w-0">
+                      <Label htmlFor="featuredImage" className="mb-2 block text-sm font-medium">Beitragsbild <span className="font-normal text-muted-foreground">(optional)</span></Label>
+                      <div className="flex flex-wrap items-start gap-4">
+                        <div>
+                          <input type="file" id="featuredImage" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
+                          <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}><Upload className="h-4 w-4" aria-hidden="true" />Bild auswählen</Button>
+                          <p className="mt-2 text-xs text-muted-foreground">Empfohlene Größe: 1200 × 630 px, max. 5 MB</p>
                         </div>
-                      </div>
-
-                      <div>
-                        <p className="mb-2 text-sm font-medium">Inhalt <span className="text-destructive">*</span></p>
-                        <div className="overflow-hidden rounded-[10px] focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"><Editor content={content} onChange={setContent} className="min-h-[400px]" /></div>
+                        {featuredImagePreview ? <div className="relative aspect-video w-full max-w-sm overflow-hidden rounded-[10px] border bg-muted">
+                          <Image src={featuredImagePreview} alt="Beitragsbildvorschau" fill className="object-cover" />
+                          <Button type="button" variant="destructive" size="sm" className="absolute right-2 top-2" aria-label="Beitragsbild entfernen" onClick={() => { setFeaturedImage(null); setFeaturedImagePreview(''); setIsImageDeleted(true); }}><Trash2 className="h-4 w-4" aria-hidden="true" />Entfernen</Button>
+                        </div> : null}
                       </div>
                     </div>
-                  </section>
-
-                  <aside aria-label="Artikeloptionen" className="min-w-0 space-y-7">
-                    <section className="border-t pt-5">
-                      <h2 className="text-base font-semibold tracking-tight">Kategorie <span className="text-xs font-normal text-muted-foreground">(erforderlich)</span></h2>
-                      <div className="mt-4"><CategorySelect categories={existingCategories} selectedCategory={category} setSelectedCategory={setCategory} onAddCategory={handleAddNewCategory} /></div>
-                    </section>
-                    <section className="border-t pt-5">
-                      <h2 className="text-base font-semibold tracking-tight">Tags <span className="text-xs font-normal tabular-nums text-muted-foreground">{tags.length}/5</span></h2>
-                      <div className="mt-4"><TagSelect availableTags={existingTags} selectedTags={tags} onTagSelect={handleAddTag} onTagRemove={handleRemoveTag} onAddTag={handleAddNewTag} maxTags={5} /></div>
-                    </section>
+                    <div className="min-w-0">
+                      <TagSelect availableTags={existingTags} selectedTags={tags} onTagSelect={handleAddTag} onTagRemove={handleRemoveTag} onAddTag={handleAddNewTag} maxTags={5} />
+                      <p className="mt-2 text-xs text-muted-foreground">Optional, {tags.length}/5 ausgewählt</p>
+                    </div>
                   </aside>
                 </form>
               </>

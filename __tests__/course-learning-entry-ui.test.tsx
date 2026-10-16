@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { useSession } from 'next-auth/react';
 import CourseClient from '@/app/courses/CourseClient';
 import JourneyClient from '@/app/courses/journey/JourneyClient';
@@ -57,6 +58,7 @@ beforeEach(() => {
 });
 
 it('prioritizes catalog controls and real course results while preserving all secondary destinations', async () => {
+  const user = userEvent.setup();
   global.fetch = jest.fn().mockImplementation(() => response([course]));
   render(<CourseClient />);
   const title = await screen.findByRole('heading', { name: course.title });
@@ -66,20 +68,89 @@ it('prioritizes catalog controls and real course results while preserving all se
   comesBefore(search, navigation);
   comesBefore(navigation, title);
   expect(screen.queryByText('Wissen teilen. Gemeinsam weiterkommen.')).not.toBeInTheDocument();
-  for (const [name, href] of [
-    ['Mein Lernweg', '/courses/journey'], ['Lernpfade', '/courses/pathways'], ['Mein Lernziel', '/courses/goals'],
+  expect(within(navigation).getByRole('link', { name: 'Mein Lernweg' })).toHaveAttribute('href', '/courses/journey');
+  const trigger = within(navigation).getByRole('button', { name: 'Kursbereiche' });
+  expect(trigger).toHaveAttribute('aria-haspopup', 'menu');
+  expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  trigger.focus();
+  await user.keyboard('{Enter}');
+  const menu = await screen.findByRole('menu', { name: 'Kursbereiche' });
+  const destinations = [
+    ['Lernpfade', '/courses/pathways'], ['Mein Lernziel', '/courses/goals'],
     ['Meine Kursentwürfe', '/courses/authoring'], ['Neuer Kurs', '/courses/new'],
-  ]) expect(within(navigation).getByRole('link', { name })).toHaveAttribute('href', href);
+  ];
+  expect(within(menu).getAllByRole('menuitem')).toHaveLength(destinations.length);
+  for (const [index, [name, href]] of destinations.entries()) {
+    const item = within(menu).getByRole('menuitem', { name });
+    expect(item).toHaveAttribute('href', href);
+    expect(item).toBeVisible();
+    if (index > 0) await user.keyboard('{ArrowDown}');
+    await waitFor(() => expect(item).toHaveFocus());
+  }
+  await user.keyboard('{Home}');
+  expect(within(menu).getByRole('menuitem', { name: 'Lernpfade' })).toHaveFocus();
+  await user.keyboard('{End}');
+  expect(within(menu).getByRole('menuitem', { name: 'Neuer Kurs' })).toHaveFocus();
+  await user.keyboard('{Escape}');
+  await waitFor(() => expect(trigger).toHaveFocus());
+  expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Kurs öffnen' })).toBeEnabled();
+  expect(global.fetch).toHaveBeenCalledTimes(1);
 });
 
-it.each(['USER', 'MODERATOR', 'INSTRUCTOR', 'ADMIN'])('keeps one new-course route for %s without changing access', async role => {
+it.each(['USER', 'COMPANY', 'MODERATOR', 'INSTRUCTOR', 'ADMIN'])('keeps every authorized destination and one new-course route for %s', async role => {
+  const user = userEvent.setup();
   setSession(role);
   global.fetch = jest.fn().mockImplementation(() => response([course]));
   render(<CourseClient />);
   await screen.findByRole('heading', { name: course.title });
-  expect(screen.getAllByRole('link', { name: 'Neuer Kurs' })).toHaveLength(1);
-  expect(screen.getByRole('link', { name: 'Meine Kursentwürfe' })).toHaveAttribute('href', '/courses/authoring');
+  const creator = role === 'INSTRUCTOR' || role === 'ADMIN';
+  const search = screen.getByRole('searchbox', { name: 'Suche nach Kursen oder Dozenten' });
+  if (creator) {
+    const create = screen.getByRole('link', { name: 'Neuer Kurs' });
+    expect(create).toHaveAttribute('href', '/courses/new');
+    comesBefore(create, search);
+  } else expect(screen.queryByRole('link', { name: 'Neuer Kurs' })).not.toBeInTheDocument();
+  expect(screen.queryAllByRole('link', { name: 'Mein Lernweg' })).toHaveLength(role === 'USER' ? 1 : 0);
+  await user.click(screen.getByRole('button', { name: 'Kursbereiche' }));
+  const menu = await screen.findByRole('menu', { name: 'Kursbereiche' });
+  expect(within(menu).queryAllByRole('menuitem', { name: 'Lernpfade' })).toHaveLength(role === 'USER' ? 1 : 0);
+  expect(within(menu).getByRole('menuitem', { name: 'Mein Lernziel' })).toHaveAttribute('href', '/courses/goals');
+  expect(within(menu).getByRole('menuitem', { name: 'Meine Kursentwürfe' })).toHaveAttribute('href', '/courses/authoring');
+  expect(within(menu).queryAllByRole('menuitem', { name: 'Neuer Kurs' })).toHaveLength(creator ? 0 : 1);
+  if (!creator) expect(within(menu).getByRole('menuitem', { name: 'Neuer Kurs' })).toHaveAttribute('href', '/courses/new');
+  expect(screen.getAllByRole(creator ? 'link' : 'menuitem', { name: 'Neuer Kurs' })).toHaveLength(1);
+});
+
+it('dismisses course areas on outside interaction and discards an open menu on account perspective changes', async () => {
+  const user = userEvent.setup();
+  global.fetch = jest.fn().mockImplementation(() => response([course]));
+  const view = render(<CourseClient />);
+  await screen.findByRole('heading', { name: course.title });
+  const trigger = screen.getByRole('button', { name: 'Kursbereiche' });
+  trigger.focus();
+  await user.keyboard('{ArrowDown}');
+  await waitFor(() => expect(screen.getByRole('menuitem', { name: 'Lernpfade' })).toHaveFocus());
+  const search = screen.getByRole('searchbox', { name: 'Suche nach Kursen oder Dozenten' });
+  await user.click(search);
+  expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  expect(search).toHaveFocus();
+  expect(global.fetch).toHaveBeenCalledTimes(1);
+
+  await user.click(trigger);
+  expect(await screen.findByRole('menuitem', { name: 'Lernpfade' })).toBeVisible();
+  setSession('COMPANY');
+  view.rerender(<CourseClient />);
+  expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  await screen.findByRole('heading', { name: course.title });
+  await user.click(screen.getByRole('button', { name: 'Kursbereiche' }));
+  expect(await screen.findByRole('menu', { name: 'Kursbereiche' })).toBeVisible();
+  expect(screen.queryByRole('menuitem', { name: 'Lernpfade' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: 'Mein Lernweg' })).not.toBeInTheDocument();
+  expect(screen.getByRole('menuitem', { name: 'Neuer Kurs' })).toHaveAttribute('href', '/courses/new');
+  expect(global.fetch).toHaveBeenCalledTimes(2);
 });
 
 it('places the selected course and unlocked next action before figure controls and mission discovery', async () => {

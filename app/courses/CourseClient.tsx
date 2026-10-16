@@ -13,11 +13,12 @@ import { Sidebar } from "@/components/Sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowRight, BookOpen, CalendarDays, Clock3, Plus, Search, Trash2, Users } from 'lucide-react';
+import { ArrowRight, BookOpen, CalendarDays, ChevronDown, Clock3, Plus, Search, Trash2, Users } from 'lucide-react';
 import { Badge } from "@/components/ui/badge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
 import { canSeeLearnerPathways } from '@/lib/pathway-visibility';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 interface Course {
   id: string;
@@ -211,12 +212,19 @@ function ScopedCourseClient({ session }: { session: NonNullable<ReturnType<typeo
                   </Select>
                 </div>
               </div>
-              <nav aria-label="Weitere Kursbereiche" className="mt-3 flex flex-wrap items-center gap-x-5 border-b pb-2 text-sm">
+              <nav aria-label="Weitere Kursbereiche" className="mt-3 flex flex-wrap items-center gap-3 text-sm">
                 {session.user.role === 'USER' && <Link href="/courses/journey" className="inline-flex min-h-11 items-center rounded-sm text-sm text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Mein Lernweg</Link>}
-                {canSeeLearnerPathways(session.user.role) && <Link href="/courses/pathways" className="inline-flex min-h-11 items-center rounded-sm text-sm text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Lernpfade</Link>}
-                <Link href="/courses/goals" className="inline-flex min-h-11 items-center rounded-sm text-sm text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Mein Lernziel</Link>
-                <Link href="/courses/authoring" className="inline-flex min-h-11 items-center rounded-sm text-sm text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Meine Kursentwürfe</Link>
-                {!creatorPerspective && <Link href="/courses/new" className="inline-flex min-h-11 items-center gap-1.5 rounded-sm text-sm text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"><Plus aria-hidden="true" className="h-4 w-4" />Neuer Kurs</Link>}
+                <DropdownMenu modal={false}>
+                  <DropdownMenuTrigger asChild>
+                    <Button type="button" variant="ghost" className="px-2">Kursbereiche<ChevronDown aria-hidden="true" className="h-4 w-4" /></Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent aria-label="Kursbereiche" align="end" collisionPadding={16} className="max-h-[var(--radix-dropdown-menu-content-available-height)] w-56 max-w-[calc(100vw-2rem)] overflow-y-auto motion-reduce:animate-none">
+                    {canSeeLearnerPathways(session.user.role) && <DropdownMenuItem asChild className="min-h-11"><Link href="/courses/pathways">Lernpfade</Link></DropdownMenuItem>}
+                    <DropdownMenuItem asChild className="min-h-11"><Link href="/courses/goals">Mein Lernziel</Link></DropdownMenuItem>
+                    <DropdownMenuItem asChild className="min-h-11"><Link href="/courses/authoring">Meine Kursentwürfe</Link></DropdownMenuItem>
+                    {!creatorPerspective && <DropdownMenuItem asChild className="min-h-11"><Link href="/courses/new">Neuer Kurs</Link></DropdownMenuItem>}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </nav>
               <div className="mt-5">
                 {isLoading && <PageState kind="loading" title="Kurse werden geladen" />}

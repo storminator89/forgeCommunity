@@ -1,6 +1,6 @@
 'use client'
 
-import { useEditor, EditorContent } from '@tiptap/react'
+import { useEditor, EditorContent, useEditorState, type Editor as TiptapEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
 import Image from '@tiptap/extension-image'
@@ -32,7 +32,26 @@ interface EditorProps {
   uploadImage?: (file: File) => Promise<string>
 }
 
-const MenuBar = ({ editor, uploadImage }: { editor: any; uploadImage?: (file: File) => Promise<string> }) => {
+const MenuBar = ({ editor, uploadImage }: { editor: TiptapEditor | null; uploadImage?: (file: File) => Promise<string> }) => {
+  // Tiptap transactions do not re-render useEditor by default. Subscribe to
+  // selection/stored marks too, which can change without a content update.
+  const toolbarState = useEditorState({
+    editor,
+    selector: ({ editor }) => editor ? {
+      bold: editor.isActive('bold'),
+      italic: editor.isActive('italic'),
+      underline: editor.isActive('underline'),
+      strike: editor.isActive('strike'),
+      heading: editor.isActive('heading', { level: 2 }),
+      bulletList: editor.isActive('bulletList'),
+      orderedList: editor.isActive('orderedList'),
+      blockquote: editor.isActive('blockquote'),
+      code: editor.isActive('code'),
+      link: editor.isActive('link'),
+      canUndo: editor.can().undo(),
+      canRedo: editor.can().redo(),
+    } : null,
+  })
   const uploadInput = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
@@ -77,7 +96,7 @@ const MenuBar = ({ editor, uploadImage }: { editor: any; uploadImage?: (file: Fi
     }
   }
 
-  if (!editor) {
+  if (!editor || !toolbarState) {
     return null
   }
 
@@ -85,7 +104,7 @@ const MenuBar = ({ editor, uploadImage }: { editor: any; uploadImage?: (file: Fi
     <div className="border-b border-input bg-transparent p-1 flex flex-wrap gap-1">
       <Toggle aria-label="Fett"
         size="sm"
-        pressed={editor.isActive('bold')}
+        pressed={toolbarState.bold}
         onPressedChange={() => editor.chain().focus().toggleBold().run()}
         data-testid="toggle-button"
       >
@@ -93,7 +112,7 @@ const MenuBar = ({ editor, uploadImage }: { editor: any; uploadImage?: (file: Fi
       </Toggle>
       <Toggle aria-label="Kursiv"
         size="sm"
-        pressed={editor.isActive('italic')}
+        pressed={toolbarState.italic}
         onPressedChange={() => editor.chain().focus().toggleItalic().run()}
         data-testid="toggle-button"
       >
@@ -101,7 +120,7 @@ const MenuBar = ({ editor, uploadImage }: { editor: any; uploadImage?: (file: Fi
       </Toggle>
       <Toggle aria-label="Unterstrichen"
         size="sm"
-        pressed={editor.isActive('underline')}
+        pressed={toolbarState.underline}
         onPressedChange={() => editor.chain().focus().toggleUnderline().run()}
         data-testid="toggle-button"
       >
@@ -109,7 +128,7 @@ const MenuBar = ({ editor, uploadImage }: { editor: any; uploadImage?: (file: Fi
       </Toggle>
       <Toggle aria-label="Durchgestrichen"
         size="sm"
-        pressed={editor.isActive('strike')}
+        pressed={toolbarState.strike}
         onPressedChange={() => editor.chain().focus().toggleStrike().run()}
         data-testid="toggle-button"
       >
@@ -117,7 +136,7 @@ const MenuBar = ({ editor, uploadImage }: { editor: any; uploadImage?: (file: Fi
       </Toggle>
       <Toggle aria-label="Überschrift"
         size="sm"
-        pressed={editor.isActive('heading', { level: 2 })}
+        pressed={toolbarState.heading}
         onPressedChange={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
         data-testid="toggle-button"
       >
@@ -125,7 +144,7 @@ const MenuBar = ({ editor, uploadImage }: { editor: any; uploadImage?: (file: Fi
       </Toggle>
       <Toggle aria-label="Aufzählung"
         size="sm"
-        pressed={editor.isActive('bulletList')}
+        pressed={toolbarState.bulletList}
         onPressedChange={() => editor.chain().focus().toggleBulletList().run()}
         data-testid="toggle-button"
       >
@@ -133,7 +152,7 @@ const MenuBar = ({ editor, uploadImage }: { editor: any; uploadImage?: (file: Fi
       </Toggle>
       <Toggle aria-label="Nummerierte Liste"
         size="sm"
-        pressed={editor.isActive('orderedList')}
+        pressed={toolbarState.orderedList}
         onPressedChange={() => editor.chain().focus().toggleOrderedList().run()}
         data-testid="toggle-button"
       >
@@ -141,7 +160,7 @@ const MenuBar = ({ editor, uploadImage }: { editor: any; uploadImage?: (file: Fi
       </Toggle>
       <Toggle aria-label="Zitat"
         size="sm"
-        pressed={editor.isActive('blockquote')}
+        pressed={toolbarState.blockquote}
         onPressedChange={() => editor.chain().focus().toggleBlockquote().run()}
         data-testid="toggle-button"
       >
@@ -149,7 +168,7 @@ const MenuBar = ({ editor, uploadImage }: { editor: any; uploadImage?: (file: Fi
       </Toggle>
       <Toggle aria-label="Code"
         size="sm"
-        pressed={editor.isActive('code')}
+        pressed={toolbarState.code}
         onPressedChange={() => editor.chain().focus().toggleCode().run()}
         data-testid="toggle-button"
       >
@@ -157,7 +176,7 @@ const MenuBar = ({ editor, uploadImage }: { editor: any; uploadImage?: (file: Fi
       </Toggle>
       <Toggle aria-label="Link einfügen"
         size="sm"
-        pressed={editor.isActive('link')}
+        pressed={toolbarState.link}
         onPressedChange={setLink}
         data-testid="toggle-button"
       >
@@ -175,7 +194,7 @@ const MenuBar = ({ editor, uploadImage }: { editor: any; uploadImage?: (file: Fi
       <Toggle aria-label="Rückgängig"
         size="sm"
         onPressedChange={() => editor.chain().focus().undo().run()}
-        disabled={!editor.can().undo()}
+        disabled={!toolbarState.canUndo}
         data-testid="toggle-button"
       >
         <Undo className="h-4 w-4" data-testid="undo-icon" />
@@ -183,7 +202,7 @@ const MenuBar = ({ editor, uploadImage }: { editor: any; uploadImage?: (file: Fi
       <Toggle aria-label="Wiederholen"
         size="sm"
         onPressedChange={() => editor.chain().focus().redo().run()}
-        disabled={!editor.can().redo()}
+        disabled={!toolbarState.canRedo}
         data-testid="toggle-button"
       >
         <Redo className="h-4 w-4" data-testid="redo-icon" />

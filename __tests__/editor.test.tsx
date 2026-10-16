@@ -57,6 +57,10 @@ const mockEditor = {
 
 jest.mock('@tiptap/react', () => ({
   useEditor: () => mockEditor,
+  useEditorState: ({ editor, selector }: {
+    editor: typeof mockEditor;
+    selector: (snapshot: { editor: typeof mockEditor }) => unknown;
+  }) => selector({ editor }),
   EditorContent: ({ editor }: { editor: any }) => (
     <div data-testid="editor-content">
       <div contentEditable dangerouslySetInnerHTML={{ __html: editor?.getHTML() }} />

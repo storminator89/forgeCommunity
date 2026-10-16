@@ -52,6 +52,16 @@ describe('route-by-route browser review inventory', () => {
     });
   });
 
+  it.each([
+    ['/knowledgebase/qa-route-article/edit', 'Artikel bearbeiten'],
+    ['/knowledgebase/edit/qa-route-article', 'Entwurf bearbeiten'],
+  ])('waits for the loaded article form at %s', (url, heading) => {
+    expect(routeSweepCases.find(item => item.url === url)).toMatchObject({
+      persona: 'member', outcome: 'render', heading, evidence: 'synthetic-api',
+      settledText: 'Pflichtangaben: Titel, Inhalt und Kategorie.',
+    });
+  });
+
   it('checks the personal journey with a synthetic enrolled course', () => {
     expect(routeSweepCases.find(item => item.url === '/courses/journey')).toMatchObject({
       source: 'app/courses/journey/page.tsx', persona: 'member', outcome: 'render',
