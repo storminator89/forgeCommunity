@@ -39,9 +39,8 @@ async function expectArtwork(page: Page, delivery: { requests: string[]; respons
     const rect = image.getBoundingClientRect();
     const style = getComputedStyle(image);
     const picture = image.closest('picture');
-    const responsiveSource = picture?.querySelector('source') ?? null;
-    const sizes = responsiveSource?.sizes ?? image.sizes;
-    const srcSet = responsiveSource?.srcset ?? image.srcset;
+    const sizes = image.sizes;
+    const srcSet = image.srcset;
     let resolvedSize: { media: string; length: string; width: number } | null = null;
     for (const clause of sizes.split(',').map(value => value.trim())) {
       const conditional = clause.match(/^(\([^)]+\))\s+(.+)$/);
@@ -77,7 +76,7 @@ async function expectArtwork(page: Page, delivery: { requests: string[]; respons
       slot: { width: rect.width, height: rect.height, x: rect.x, y: rect.y },
       computed: { width: style.width, height: style.height, fit: style.objectFit },
       sizes, srcSet, resolvedSize,
-      picture: picture ? { sourceCount: picture.querySelectorAll('source').length, sourceType: responsiveSource?.type ?? null } : null,
+      picture: picture ? { sourceCount: picture.querySelectorAll('source').length } : null,
       imageAttributes: { src: image.getAttribute('src'), srcSet: image.getAttribute('srcset'), sizes: image.getAttribute('sizes') },
       resourceTimings: performance.getEntriesByType('resource')
         .filter(entry => /^\/images\/home\/forge-workbench-(480|768|1440)\.webp$/.test(new URL(entry.name).pathname))
@@ -111,15 +110,15 @@ async function expectArtwork(page: Page, delivery: { requests: string[]; respons
   await expect(image).toHaveAttribute('decoding', 'async');
   expect(state.dpr).toBe(expectedDpr);
   expect(state.heroPreloads).toEqual([]);
-  expect(state.picture).toEqual({ sourceCount: 1, sourceType: 'image/webp' });
+  expect(state.picture).toEqual({ sourceCount: 0 });
   expect(state.imageAttributes.src).not.toBeNull();
   const fallbackUrl = new URL(state.imageAttributes.src!, origin);
   expect(fallbackUrl.origin).toBe(new URL(origin).origin);
   expect(fallbackUrl.pathname).toBe('/images/home/forge-workbench-768.webp');
   expect(fallbackUrl.search).toBe('');
   expect(fallbackUrl.hash).toBe('');
-  expect(state.imageAttributes.srcSet).toBeNull();
-  expect(state.imageAttributes.sizes).toBeNull();
+  expect(state.imageAttributes.srcSet).toBe(state.srcSet);
+  expect(state.imageAttributes.sizes).toBe('(max-width: 30rem) calc(100vw - 3.125rem), (max-width: 34.5rem) calc(100vw - 3.625rem), (max-width: 46rem) 30.875rem, (max-width: 82.5rem) calc(55vw - 3.05rem), 42.325rem');
   const declaredCandidates = state.srcSet.split(',').map(entry => {
     const [src, descriptor] = entry.trim().split(/\s+/);
     return { url: new URL(src, origin).href, descriptor };

@@ -2,6 +2,8 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useSession } from 'next-auth/react';
 import Home from '@/app/page';
+import { renderToString } from 'react-dom/server.node';
+import { ForgeWorkbench } from '@/components/landing/ForgeWorkbench';
 
 jest.mock('next-auth/react', () => ({ useSession: jest.fn() }));
 jest.mock('@/components/theme-toggle', () => ({ ThemeToggle: () => <button aria-label="Farbschema auswählen" /> }));
@@ -80,13 +82,9 @@ it('provides one optimized local illustration that stays still until keyboard ac
   expect(illustration).toHaveAttribute('src', '/images/home/forge-workbench-768.webp');
   const picture = illustration.closest('picture')!;
   expect(picture).not.toBeNull();
-  expect(picture.querySelectorAll('source')).toHaveLength(1);
-  const responsiveSource = picture.querySelector('source')!;
-  expect(responsiveSource).toHaveAttribute('type', 'image/webp');
-  expect(responsiveSource).toHaveAttribute('srcset', '/images/home/forge-workbench-480.webp 480w, /images/home/forge-workbench-768.webp 768w, /images/home/forge-workbench-1440.webp 1440w');
-  expect(responsiveSource).toHaveAttribute('sizes', expect.stringContaining('(max-width: 30rem)'));
-  expect(illustration).not.toHaveAttribute('srcset');
-  expect(illustration).not.toHaveAttribute('sizes');
+  expect(picture.querySelectorAll('source')).toHaveLength(0);
+  expect(illustration).toHaveAttribute('srcset', '/images/home/forge-workbench-480.webp 480w, /images/home/forge-workbench-768.webp 768w, /images/home/forge-workbench-1440.webp 1440w');
+  expect(illustration).toHaveAttribute('sizes', '(max-width: 30rem) calc(100vw - 3.125rem), (max-width: 34.5rem) calc(100vw - 3.625rem), (max-width: 46rem) 30.875rem, (max-width: 82.5rem) calc(55vw - 3.05rem), 42.325rem');
   expect(illustration).toHaveAttribute('width', '1440');
   expect(illustration).toHaveAttribute('height', '960');
   expect(illustration).toHaveAttribute('loading', 'eager');
@@ -126,4 +124,40 @@ it('uses native disabled semantics for reduced motion and cancels live animation
   expect(frame()).not.toHaveClass('illustrationPlaying');
   unmount();
   expect(listeners.size).toBe(0);
+});
+
+
+it('hydrates the server image in place without rewriting responsive attributes during preference updates', () => {
+  const container = document.createElement('div');
+  container.innerHTML = renderToString(<ForgeWorkbench />);
+  const serverImage = container.querySelector('img')!;
+  const serverPicture = serverImage.closest('picture')!;
+  const serverFrame = container.querySelector('[data-motion="forge-workbench"]')!;
+  const attributes = () => Array.from(serverImage.attributes, ({ name, value }) => [name, value]);
+  const serverAttributes = attributes();
+  const mutations: MutationRecord[] = [];
+  const observer = new MutationObserver(records => mutations.push(...records));
+  observer.observe(container, { attributes: true, childList: true, subtree: true });
+  const onRecoverableError = jest.fn();
+  const view = render(<ForgeWorkbench />, { container, hydrate: true, onRecoverableError });
+  try {
+    expect(within(container).getByRole('button', { name: 'Illustration bewegen' })).toBeEnabled();
+    changeReduced(true);
+    expect(within(container).getByRole('button', { name: 'Illustration bewegen (reduzierte Bewegung aktiv)' })).toBeDisabled();
+    changeReduced(false);
+    view.rerender(<ForgeWorkbench />);
+    mutations.push(...observer.takeRecords());
+    expect(onRecoverableError).not.toHaveBeenCalled();
+    expect(container.querySelector('img')).toBe(serverImage);
+    expect(container.querySelector('picture')).toBe(serverPicture);
+    expect(container.querySelector('[data-motion="forge-workbench"]')).toBe(serverFrame);
+    expect(attributes()).toEqual(serverAttributes);
+    expect(serverPicture.querySelectorAll('source')).toHaveLength(0);
+    expect(container.querySelectorAll('link[rel="preload"][as="image"]')).toHaveLength(0);
+    expect(mutations.filter(record => record.target === serverImage || record.target === serverPicture)).toEqual([]);
+    // JSDOM establishes DOM ownership, not image requests, decoding or paint.
+  } finally {
+    observer.disconnect();
+    view.unmount();
+  }
 });

@@ -3,8 +3,9 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import sharp from 'sharp';
 import path from 'node:path';
-import { createElement } from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
+import { createElement, type ReactElement } from 'react';
+import { Writable } from 'node:stream';
+import { renderToPipeableStream, renderToStaticMarkup } from 'react-dom/server';
 import { ForgeWorkbench } from '../components/landing/ForgeWorkbench';
 import { artworkCandidates, artworkCandidateBounds } from '../e2e/landing-artwork-contract';
 
@@ -126,22 +127,43 @@ it('bounds browser over-delivery by measured slot and DPR without declaring the 
   }
 });
 
-it('keeps eager high-priority SSR picture loading without the duplicate automatic head preload', () => {
-  const markup = renderToStaticMarkup(createElement(ForgeWorkbench));
-  const sizes = markup.match(/<source\b[^>]*sizes="([^"]+)"/)![1];
-  const srcSet = markup.match(/<source\b[^>]*srcSet="([^"]+)"/i)![1];
-  // The installed renderer hoists an otherwise identical standalone shape.
-  const standalone = renderToStaticMarkup(createElement('img', {
+const expectedArtworkSizes = '(max-width: 30rem) calc(100vw - 3.125rem), (max-width: 34.5rem) calc(100vw - 3.625rem), (max-width: 46rem) 30.875rem, (max-width: 82.5rem) calc(55vw - 3.05rem), 42.325rem';
+const expectedArtworkSrcSet = '/images/home/forge-workbench-480.webp 480w, /images/home/forge-workbench-768.webp 768w, /images/home/forge-workbench-1440.webp 1440w';
+
+function renderStreamingMarkup(element: ReactElement): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    const output = new Writable({ write(chunk, _encoding, done) { chunks.push(Buffer.from(chunk)); done(); } });
+    output.on('error', reject);
+    output.on('finish', () => resolve(Buffer.concat(chunks).toString()));
+    const stream = renderToPipeableStream(element, {
+      onAllReady() { stream.pipe(output); },
+      onError: reject,
+    });
+  });
+}
+
+it.each([
+  ['static', (element: ReactElement) => Promise.resolve(renderToStaticMarkup(element))],
+  ['streaming', renderStreamingMarkup],
+] as const)('keeps one responsive image owner and no automatic head hint in %s SSR', async (_name, renderMarkup) => {
+  const markup = await renderMarkup(createElement(ForgeWorkbench));
+  const standalone = await renderMarkup(createElement('img', {
     src: '/images/home/forge-workbench-768.webp',
-    srcSet, sizes,
+    srcSet: expectedArtworkSrcSet, sizes: expectedArtworkSizes,
     alt: '', loading: 'eager', fetchPriority: 'high',
   }));
+  // The installed renderer hoists a standalone image, including in streaming SSR.
   expect(standalone).toMatch(/<link\b[^>]*rel="preload"[^>]*as="image"/);
   expect(markup).not.toMatch(/<link\b[^>]*rel="preload"/);
-  expect(markup).toMatch(/<picture\b[^>]*><source\b[^>]*type="image\/webp"/);
-  expect(markup).toContain('480w');
-  expect(markup).toContain('768w');
-  expect(markup).toContain('1440w');
-  expect(markup).toContain('sizes="(max-width: 30rem)');
-  expect(markup).toMatch(/<img\b[^>]*loading="eager"[^>]*fetchPriority="high"[^>]*decoding="async"/);
+  expect(markup).toMatch(/<picture\b[^>]*><img\b/);
+  expect(markup).not.toMatch(/<source\b/);
+  expect(markup.match(/<img\b/g)).toHaveLength(1);
+  const imageMarkup = markup.match(/<img\b[^>]*\/>/)![0];
+  expect(imageMarkup).toContain(`sizes="${expectedArtworkSizes}"`);
+  expect(imageMarkup).toContain(`srcSet="${expectedArtworkSrcSet}"`);
+  expect(imageMarkup).toContain('src="/images/home/forge-workbench-768.webp"');
+  expect(imageMarkup).toContain('width="1440" height="960"');
+  expect(imageMarkup).toContain('alt="Illustration: Zwei Erwachsene teilen einen goldenen Ideenfunken über einem offenen Buch, umgeben von farbigen Bausteinen."');
+  expect(imageMarkup).toMatch(/loading="eager"[^>]*fetchPriority="high"[^>]*decoding="async"/);
 });
