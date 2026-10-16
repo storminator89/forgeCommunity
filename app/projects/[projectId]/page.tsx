@@ -397,7 +397,7 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
                       {session?.user?.id === project.author.id && (
                         <>
                           <Button variant="outline" size="sm" onClick={handleOpenEditDialog}><Edit className="mr-2 h-4 w-4" />Bearbeiten</Button>
-                          <Button variant="outline" size="sm" className="text-destructive" onClick={handleOpenDeleteDialog}><Trash className="mr-2 h-4 w-4" />Löschen</Button>
+                          <Button variant="outline" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={handleOpenDeleteDialog}><Trash className="mr-2 h-4 w-4" />Löschen</Button>
                         </>
                       )}
                       <Button

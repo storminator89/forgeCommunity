@@ -45,5 +45,5 @@ function H5PFrame({ src, title }: { src: string; title: string }) {
     return () => { window.removeEventListener('message', resize); window.removeEventListener('resize', requestResize); };
   }, []);
 
-  return <iframe ref={frame} src={src} title={title} style={{ height }} className="w-full rounded-md border border-border bg-background" sandbox={local ? 'allow-scripts allow-forms allow-downloads' : 'allow-scripts allow-forms allow-downloads allow-same-origin'} allow="fullscreen; autoplay" allowFullScreen referrerPolicy="no-referrer" onLoad={() => frame.current?.contentWindow?.postMessage({ context: 'h5p', action: 'ready' }, '*')} />;
+  return <iframe ref={frame} src={src} title={title} style={{ height }} className={`w-full rounded-md border border-border ${local ? 'bg-white [color-scheme:light]' : 'bg-background'}`} sandbox={local ? 'allow-scripts allow-forms allow-downloads' : 'allow-scripts allow-forms allow-downloads allow-same-origin'} allow="fullscreen; autoplay" allowFullScreen referrerPolicy="no-referrer" onLoad={() => frame.current?.contentWindow?.postMessage({ context: 'h5p', action: 'ready' }, '*')} />;
 }

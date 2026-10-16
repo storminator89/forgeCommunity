@@ -240,11 +240,11 @@ function PollCard({ poll, base, request, onChange, onUnavailable, confirmed }: {
 
 function BallotIllustration() {
   return <svg aria-hidden="true" className={styles.illustration} viewBox="0 0 88 76" fill="none">
-    <rect x="17" y="12" width="48" height="53" rx="12" transform="rotate(-10 17 12)" fill="hsl(var(--muted))" stroke="hsl(var(--border))" />
+    <rect x="17" y="12" width="48" height="53" rx="12" transform="rotate(-10 17 12)" fill="hsl(var(--secondary))" stroke="hsl(var(--coral))" />
     <rect x="27" y="7" width="47" height="57" rx="12" fill="hsl(var(--card))" stroke="hsl(var(--foreground))" strokeWidth="1.6" />
     <path d="M39 24h23M39 44h13" stroke="hsl(var(--border))" strokeWidth="3" strokeLinecap="round" />
-    <rect x="35" y="31" width="31" height="22" rx="7" fill="hsl(var(--accent))" />
-    <path d="m43 42 5 5 11-12" stroke="hsl(var(--primary))" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+    <rect x="35" y="31" width="31" height="22" rx="7" fill="hsl(var(--coral-highlight))" />
+    <path d="m43 42 5 5 11-12" stroke="hsl(var(--coral-highlight-foreground))" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
     <path d="m12 26 3 3-3 3-3-3 3-3ZM77 15v7m-3-3h6" stroke="hsl(var(--muted-foreground))" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
   </svg>;
 }

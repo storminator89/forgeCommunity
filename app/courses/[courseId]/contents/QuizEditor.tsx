@@ -432,7 +432,7 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
                     size="icon"
                     aria-label={`Frage ${questionIndex + 1} löschen`}
                     onClick={() => removeQuestion(questionIndex)}
-                    className="text-destructive hover:bg-destructive/10"
+                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>

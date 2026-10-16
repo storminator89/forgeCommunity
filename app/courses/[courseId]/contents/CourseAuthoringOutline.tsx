@@ -90,7 +90,7 @@ export function CourseAuthoringOutline({ contents, selectedContentId, onContentS
                   <DropdownMenuItem disabled={entry.siblingIndex === 0} onSelect={() => request(() => { void run(() => onReorder(content.id, 'up', content.parentId), 'Reihenfolge gespeichert.') })}><ArrowUp className="mr-2 h-4 w-4" aria-hidden="true" />Nach oben</DropdownMenuItem>
                   <DropdownMenuItem disabled={entry.siblingIndex === entry.siblingCount - 1} onSelect={() => request(() => { void run(() => onReorder(content.id, 'down', content.parentId), 'Reihenfolge gespeichert.') })}><ArrowDown className="mr-2 h-4 w-4" aria-hidden="true" />Nach unten</DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => request(() => { returnFocus.current = `outline-actions-${content.id}`; setError(null); setDeleteTarget(content) })}><Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />Löschen …</DropdownMenuItem>
+                  <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onSelect={() => request(() => { returnFocus.current = `outline-actions-${content.id}`; setError(null); setDeleteTarget(content) })}><Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />Löschen …</DropdownMenuItem>
                 </DropdownMenuContent></DropdownMenu>
               </div>
             </div>

@@ -70,15 +70,15 @@ export function StatsCard({ stats, activityLoading = false, activityError = fals
             : <><dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-5">
                 <div>
                   <dt className="text-sm text-muted-foreground">Meine Punkte</dt>
-                  <dd className="mt-1 text-2xl font-semibold tabular-nums">{rewards.points}</dd>
+                  <dd className={`mt-1 text-2xl font-semibold tabular-nums ${rewards.points > 0 ? "text-reward-ink" : "text-foreground"}`}>{rewards.points}</dd>
                 </div>
                 <div>
                   <dt className="text-sm text-muted-foreground">Mindestens einmal abgeschlossene Kurse</dt>
-                  <dd className="mt-1 text-2xl font-semibold tabular-nums">{rewards.completedCourses}</dd>
+                  <dd className={`mt-1 text-2xl font-semibold tabular-nums ${rewards.completedCourses > 0 ? "text-reward-ink" : "text-foreground"}`}>{rewards.completedCourses}</dd>
                 </div>
                 <div className="col-span-2">
                   <dt className="text-sm text-muted-foreground">Meilenstein: Erster abgeschlossener Kurs</dt>
-                  <dd className="mt-1 text-sm font-medium">{rewards.firstCourseCompleted ? 'Erreicht' : 'Noch nicht erreicht'}</dd>
+                  <dd className={`mt-1 text-sm font-medium ${rewards.firstCourseCompleted ? "text-reward-ink" : "text-muted-foreground"}`}>{rewards.firstCourseCompleted ? 'Erreicht' : 'Noch nicht erreicht'}</dd>
                 </div>
               </dl>
               <LearningMilestoneProgress completedCourses={rewards.completedCourses} />
@@ -86,7 +86,7 @@ export function StatsCard({ stats, activityLoading = false, activityError = fals
                 <h4 className="text-sm font-medium">Punkteverlauf</h4>
                 <ol className="mt-2 space-y-3">
                   {rewards.history.map((change, index) => <li key={`${change.at}-${index}`} className="text-xs">
-                    <div className="flex justify-between gap-3"><span className="font-medium">{change.courseTitle}</span><span className="tabular-nums">{change.pointsDelta > 0 ? '+' : ''}{change.pointsDelta} Punkte</span></div>
+                    <div className="flex justify-between gap-3"><span className="font-medium">{change.courseTitle}</span><span className={change.pointsDelta > 0 ? "tabular-nums text-reward-ink" : "tabular-nums text-muted-foreground"}>{change.pointsDelta > 0 ? '+' : ''}{change.pointsDelta} Punkte</span></div>
                     <p className="text-muted-foreground">{change.type === 'REVOKED' && change.reason ? changeReason[change.reason] : change.type === 'REINSTATED' ? 'Punkte nach erneuter Prüfung wiederhergestellt.' : 'Kursbelohnung erworben.'}</p>
                     <time dateTime={change.at} className="text-muted-foreground">{new Date(change.at).toLocaleDateString('de-DE')}</time>
                   </li>)}
@@ -114,9 +114,9 @@ function LearningMilestoneProgress({ completedCourses }: { completedCourses: num
         value={completedCourses}
         max={nextTarget}
         aria-label={`Lernmeilenstein: ${completedCourses} von ${nextTarget} ${courseNoun} abgeschlossen`}
-        className="mt-2 h-2 w-full accent-primary"
+        className="mt-2 h-2 w-full accent-progress"
       >{completedCourses} von {nextTarget}</progress>
-    </> : <p className="mt-1 text-sm text-muted-foreground">Alle derzeitigen Lernmeilensteine erreicht.</p>}
+    </> : <p className="mt-1 text-sm text-reward-ink">Alle derzeitigen Lernmeilensteine erreicht.</p>}
     <Link href="/courses" className="mt-3 inline-block text-sm text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Kurse entdecken</Link>
   </div>
 }

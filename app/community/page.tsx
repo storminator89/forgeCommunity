@@ -338,7 +338,7 @@ function Community({ session, topic, onSelectTopic }: { session: Session | null;
                   <Link href="/community/spaces" className="inline-flex min-h-11 items-center text-sm font-semibold text-primary underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Spaces entdecken</Link>
                 </div>
                 {notification && (
-                  <div className={`sticky top-0 z-10 mb-3 rounded-lg border bg-card px-4 py-3 text-sm font-medium ${notification.type === 'success' ? 'border-border text-foreground' : 'border-destructive/30 text-destructive'}`}
+                  <div className={`sticky top-0 z-10 mb-3 rounded-lg border bg-card px-4 py-3 text-sm font-medium ${notification.type === 'success' ? 'border-success/30 text-success' : 'border-destructive/30 text-destructive'}`}
                     role={notification.type === 'error' ? 'alert' : 'status'}>
                     {notification.message}
                   </div>
@@ -353,11 +353,11 @@ function Community({ session, topic, onSelectTopic }: { session: Session | null;
                       aria-label="Neuen Beitrag erstellen"
                       onClick={openComposer}
                     >
-                      <Avatar className="h-10 w-10 shrink-0"><AvatarImage src={session?.user?.image || ''} alt="" /><AvatarFallback className="bg-accent text-primary">{session?.user?.name?.[0] || 'F'}</AvatarFallback></Avatar>
+                      <Avatar className="h-10 w-10 shrink-0"><AvatarImage src={session?.user?.image || ''} alt="" /><AvatarFallback className="bg-coral-highlight text-coral-highlight-foreground">{session?.user?.name?.[0] || 'F'}</AvatarFallback></Avatar>
                       <span className="min-w-0 flex-[1_1_8rem] text-sm font-medium text-foreground [overflow-wrap:anywhere]">
                         Beitrag schreiben{session?.user?.name ? `, ${session.user.name.split(' ')[0]}` : ''}
                       </span>
-                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-accent text-primary"><PlusCircle className="h-5 w-5" aria-hidden="true" /></span>
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-coral-highlight text-coral-highlight-foreground"><PlusCircle className="h-5 w-5" aria-hidden="true" /></span>
                     </motion.button>
                   ) : (
                     <PostForm

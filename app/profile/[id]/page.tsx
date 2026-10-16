@@ -245,7 +245,7 @@ function AccountProfilePage({ profileId, accountId, status }: { profileId: strin
                         <ul className="mt-4 divide-y border-y">{visibleProfile.badges.map(badge => {
                           const awardedAt = new Date(badge.awardedAt);
                           return <li key={badge.id} className="flex min-w-0 items-start gap-3 py-4">
-                            <Award aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+                            <Award aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-reward-ink" />
                             <div className="min-w-0">
                               <p className="break-words font-medium">{badge.name}</p>
                               <p className="mt-1 break-words text-sm text-muted-foreground">{badge.description}</p>

@@ -17,7 +17,17 @@ async function main() {
   assert.ok(buttonSource.includes('cursor-pointer') && buttonSource.includes('disabled:cursor-not-allowed'), 'Shared buttons must preserve active and disabled cursor states');
   const dialogSource = fs.readFileSync(path.join(root, 'components/ui/dialog.tsx'), 'utf8');
   assert.ok(dialogSource.includes('backdrop-blur-xs'), 'Dialog backdrop must preserve the v3 blur amount');
-  const result = await postcss([tailwind()]).process(input, { from });
+  const semanticRoles = ['progress', 'coral', 'coral-highlight', 'reward', 'info', 'warning', 'success'];
+  for (const role of semanticRoles) {
+    for (const token of [role, `${role}-foreground`]) {
+      assert.ok(input.includes(`--color-${token}: hsl(var(--${token}));`), `Missing public semantic mapping ${token}`);
+    }
+  }
+  assert.ok(input.includes('--color-reward-ink: hsl(var(--reward-ink));'), 'Small reward text/icons need their dedicated text-only role');
+  // Compile reserved roles as an explicit test input too. This creates no
+  // production classes/page or claim that an app warning/chart consumer exists.
+  const roleUtilities = [...semanticRoles.flatMap(role => [`bg-${role}`, `text-${role}-foreground`]), 'text-reward-ink', 'text-success', 'text-destructive', ...[1, 2, 3, 4, 5].map(index => `stroke-chart-${index}`)];
+  const result = await postcss([tailwind()]).process(`${input}\n@source inline("${roleUtilities.join(' ')}");`, { from });
   const rules = [];
   result.root.walkRules((rule) => rules.push(rule));
 
@@ -37,6 +47,8 @@ async function main() {
 
   expectClass('bg-background', 'background-color', 'hsl(var(--background))');
   expectClass('text-foreground', 'color', 'hsl(var(--foreground))');
+  expectClass('bg-white', 'background-color');
+  expectClass('[color-scheme:light]', 'color-scheme', 'light');
   expectClass('bg-primary/10', 'background-color', 'color-mix');
   expectClass('bg-(--color-bg)', 'background-color', 'var(--color-bg)');
   expectClass('border-(--color-border)', 'border-color', 'var(--color-border)');
@@ -51,7 +63,17 @@ async function main() {
   expectClass('ring-offset-background', '--tw-ring-offset-color', 'hsl(var(--background))');
   expectClass('outline-hidden', 'outline-style', 'none');
   expectClass('focus-visible:ring-2', '--tw-ring-shadow');
-  expectClass('dark:text-green-400', 'color');
+  expectClass('focus-visible:ring-ring', '--tw-ring-color', 'hsl(var(--ring))');
+  expectClass('focus-visible:ring-offset-2', '--tw-ring-offset-width', '2px');
+  assert.ok(input.includes('outline-offset: 3px'), 'Global keyboard outlines must keep their real external 3px offset');
+  for (const role of semanticRoles) {
+    expectClass(`bg-${role}`, 'background-color', `hsl(var(--${role}))`);
+    expectClass(`text-${role}-foreground`, 'color', `hsl(var(--${role}-foreground))`);
+  }
+  expectClass('text-success', 'color', 'hsl(var(--success))');
+  expectClass('text-destructive', 'color', 'hsl(var(--destructive))');
+  expectClass('text-reward-ink', 'color', 'hsl(var(--reward-ink))');
+  for (let index = 1; index <= 5; index++) expectClass(`stroke-chart-${index}`, 'stroke', `hsl(var(--chart-${index}))`);
   expectClass('animate-caret-blink', 'animation');
   expectClass('data-[state=open]:animate-accordion-down', 'animation');
   expectClass('data-[state=open]:animate-in', 'animation');

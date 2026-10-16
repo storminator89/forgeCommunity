@@ -45,9 +45,9 @@ export function CourseProgress({ contents, courseId }: CourseProgressProps) {
                 <Tooltip>
                   <TooltipTrigger className="flex items-center space-x-2 w-full text-left">
                     {status.completed ? (
-                      <CheckCircle2 className="h-4 w-4 text-green-500" />
+                      <CheckCircle2 className="h-4 w-4 text-progress" />
                     ) : status.partiallyCompleted ? (
-                      <AlertCircle className="h-4 w-4 text-yellow-500" />
+                      <AlertCircle className="h-4 w-4 text-progress" />
                     ) : (
                       <Circle className="h-4 w-4 text-muted-foreground" />
                     )}
@@ -79,7 +79,7 @@ export function CourseProgress({ contents, courseId }: CourseProgressProps) {
                       <Tooltip>
                         <TooltipTrigger className="flex items-center space-x-2 w-full text-left">
                           {isPageVisited(courseId, subTopic.id) ? (
-                            <CheckCircle2 className="h-3 w-3 text-green-500" />
+                            <CheckCircle2 className="h-3 w-3 text-progress" />
                           ) : (
                             <Circle className="h-3 w-3 text-muted-foreground" />
                           )}

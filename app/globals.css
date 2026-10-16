@@ -27,6 +27,21 @@
   --color-accent-foreground: hsl(var(--accent-foreground));
   --color-destructive: hsl(var(--destructive));
   --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-progress: hsl(var(--progress));
+  --color-progress-foreground: hsl(var(--progress-foreground));
+  --color-coral: hsl(var(--coral));
+  --color-coral-foreground: hsl(var(--coral-foreground));
+  --color-coral-highlight: hsl(var(--coral-highlight));
+  --color-coral-highlight-foreground: hsl(var(--coral-highlight-foreground));
+  --color-reward: hsl(var(--reward));
+  --color-reward-foreground: hsl(var(--reward-foreground));
+  --color-reward-ink: hsl(var(--reward-ink));
+  --color-info: hsl(var(--info));
+  --color-info-foreground: hsl(var(--info-foreground));
+  --color-warning: hsl(var(--warning));
+  --color-warning-foreground: hsl(var(--warning-foreground));
+  --color-success: hsl(var(--success));
+  --color-success-foreground: hsl(var(--success-foreground));
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
@@ -50,62 +65,93 @@
 
 @layer base {
   :root {
-    --background: 42 31% 97%;
-    --foreground: 218 23% 17%;
-    --card: 40 33% 99%;
-    --card-foreground: 218 23% 17%;
-    --popover: 40 33% 99%;
-    --popover-foreground: 218 23% 17%;
-    --primary: 225 75% 43%;
+    --background: 166.667 39.13% 95.49%;
+    --foreground: 193.171 50.617% 15.882%;
+    --card: 0 0% 100%;
+    --card-foreground: 193.171 50.617% 15.882%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 193.171 50.617% 15.882%;
+    /* Petrol carries action and actual progress; coral carries cooperation. */
+    --primary: 185.745 87.037% 21.176%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 42 21% 93%;
-    --secondary-foreground: 218 23% 17%;
-    --muted: 42 21% 93%;
-    --muted-foreground: 218 12% 39%;
-    --accent: 225 66% 93%;
-    --accent-foreground: 225 75% 34%;
-    --destructive: 0 76% 44%;
+    --progress: 185.745 87.037% 21.176%;
+    --progress-foreground: 0 0% 100%;
+    --secondary: 13.548 79.487% 92.353%;
+    --secondary-foreground: 9.677 37.805% 32.157%;
+    --muted: 170 26.087% 90.98%;
+    --muted-foreground: 190.588 18.681% 35.686%;
+    --accent: 171.429 38.182% 89.216%;
+    --accent-foreground: 185.745 87.037% 21.176%;
+    --coral: 8.718 54.93% 41.765%;
+    --coral-foreground: 0 0% 100%;
+    --coral-highlight: 11.803 79.221% 69.804%;
+    --coral-highlight-foreground: 193.171 50.617% 15.882%;
+    /* Earned reward fill uses its foreground; small text/icons use reward-ink. */
+    --reward: 42.8 85.227% 65.49%;
+    --reward-foreground: 193.171 50.617% 15.882%;
+    --reward-ink: 41.579 76% 29.412%;
+    --info: 189.231 74.286% 27.451%;
+    --info-foreground: 0 0% 100%;
+    --warning: 37.209 86.577% 29.216%;
+    --warning-foreground: 0 0% 100%;
+    --destructive: 347.737 59.825% 44.902%;
     --destructive-foreground: 0 0% 100%;
-    --success: 151 60% 28%;
+    --success: 160.714 58.333% 28.235%;
     --success-foreground: 0 0% 100%;
-    --border: 42 16% 83%;
-    /* Input boundaries retain a 3.2:1 reserve against --background and --card. */
-    --input: 42 12% 52%;
-    --ring: 225 75% 43%;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
+    --border: 171.818 24.444% 82.353%;
+    /* Control boundaries retain a 3.2:1 reserve on all five theme surfaces. */
+    --input: 186.154 16.456% 46.471%;
+    --ring: 185.745 87.037% 21.176%;
+    --chart-1: 185.745 87.037% 21.176%;
+    --chart-2: 8.718 54.93% 41.765%;
+    --chart-3: 44.409 84.106% 29.608%;
+    --chart-4: 171.667 40.449% 34.902%;
+    --chart-5: 204 13.228% 37.059%;
     --radius: 0.875rem;
   }
   .dark {
-    --background: 220 21% 10%;
-    --foreground: 42 22% 94%;
-    --card: 220 19% 14%;
-    --card-foreground: 42 22% 94%;
-    --popover: 220 19% 14%;
-    --popover-foreground: 42 22% 94%;
-    --primary: 224 88% 76%;
-    --primary-foreground: 220 24% 10%;
-    --secondary: 220 16% 19%;
-    --secondary-foreground: 42 22% 94%;
-    --muted: 220 16% 19%;
-    --muted-foreground: 220 13% 71%;
-    --accent: 225 28% 23%;
-    --accent-foreground: 224 88% 87%;
-    --destructive: 0 80% 70%;
-    --destructive-foreground: 220 24% 10%;
-    --success: 151 61% 70%;
-    --success-foreground: 220 24% 10%;
-    --border: 220 15% 29%;
-    --input: 220 14% 46%;
-    --ring: 224 88% 76%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
+    --background: 195.385 70.909% 10.784%;
+    --foreground: 166.154 39.394% 93.529%;
+    --card: 193.333 58.442% 15.098%;
+    --card-foreground: 166.154 39.394% 93.529%;
+    --popover: 193.333 58.442% 15.098%;
+    --popover-foreground: 166.154 39.394% 93.529%;
+    /* Petrol carries action and actual progress; coral carries cooperation. */
+    --primary: 177.447 50% 63.137%;
+    --primary-foreground: 195.385 70.909% 10.784%;
+    --progress: 177.447 50% 63.137%;
+    --progress-foreground: 195.385 70.909% 10.784%;
+    --secondary: 9.677 37.805% 32.157%;
+    --secondary-foreground: 16 100% 94.118%;
+    --muted: 191.489 49.474% 18.627%;
+    --muted-foreground: 184.138 21.481% 73.529%;
+    --accent: 189.524 58.879% 20.98%;
+    --accent-foreground: 173.438 57.143% 78.039%;
+    --coral: 11.765 80.952% 75.294%;
+    --coral-foreground: 195.385 70.909% 10.784%;
+    --coral-highlight: 11.765 80.952% 75.294%;
+    --coral-highlight-foreground: 195.385 70.909% 10.784%;
+    /* Earned reward fill uses its foreground; small text/icons use reward-ink. */
+    --reward: 42.8 85.227% 65.49%;
+    --reward-foreground: 195.385 70.909% 10.784%;
+    --reward-ink: 42.8 85.227% 65.49%;
+    --info: 189.184 64.474% 70.196%;
+    --info-foreground: 195.385 70.909% 10.784%;
+    --warning: 38.438 81.013% 69.02%;
+    --warning-foreground: 195.385 70.909% 10.784%;
+    --destructive: 346.667 100% 77.059%;
+    --destructive-foreground: 195.385 70.909% 10.784%;
+    --success: 148.052 49.677% 69.608%;
+    --success-foreground: 195.385 70.909% 10.784%;
+    --border: 192 31.646% 30.98%;
+    /* Control boundaries retain a 3.2:1 reserve on all five theme surfaces. */
+    --input: 186 19.231% 59.216%;
+    --ring: 177.447 50% 63.137%;
+    --chart-1: 177.447 50% 63.137%;
+    --chart-2: 11.765 80.952% 75.294%;
+    --chart-3: 42.8 85.227% 65.49%;
+    --chart-4: 148 29.032% 69.608%;
+    --chart-5: 207.857 24.138% 77.255%;
   }
 }
 

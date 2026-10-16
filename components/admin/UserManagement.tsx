@@ -342,7 +342,7 @@ function ScopedUserManagement({ viewerId }: { viewerId: string }) {
                 <td className="px-4 py-3"><div className="flex flex-wrap gap-1"><Badge variant={user.role === 'ADMIN' ? 'secondary' : 'outline'}>{roleLabels[user.role] ?? user.role}</Badge>{user.isTestAccount && <Badge variant="outline">Testkonto</Badge>}</div></td>
                 <td className="px-4 py-3 text-muted-foreground"><span className="block">{activityLabel(user.lastLogin)}</span><span className="mt-1 block text-xs">Seit {formatDate(user.createdAt)}</span></td>
                 <td className="px-4 py-3 text-right"><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" aria-label={`Aktionen für ${displayName(user)}`} className="h-11 w-11"><MoreHorizontal aria-hidden="true" className="h-4 w-4" /></Button></DropdownMenuTrigger>
-                  <DropdownMenuContent align="end"><DropdownMenuLabel>{displayName(user)}</DropdownMenuLabel><DropdownMenuItem onSelect={() => void handleEditUser(user)}>Bearbeiten</DropdownMenuItem><DropdownMenuSeparator /><DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => void handleDeleteUser(user)}>Löschen</DropdownMenuItem></DropdownMenuContent>
+                  <DropdownMenuContent align="end"><DropdownMenuLabel>{displayName(user)}</DropdownMenuLabel><DropdownMenuItem onSelect={() => void handleEditUser(user)}>Bearbeiten</DropdownMenuItem><DropdownMenuSeparator /><DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onSelect={() => void handleDeleteUser(user)}>Löschen</DropdownMenuItem></DropdownMenuContent>
                 </DropdownMenu></td>
               </tr>)}</tbody>
             </table>
