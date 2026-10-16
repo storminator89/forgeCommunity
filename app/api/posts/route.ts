@@ -63,12 +63,14 @@ export async function GET(req: NextRequest) {
     const posts = await prisma.post.findMany({
       where: { AND: [communityVisibility(userId, isAdmin), afterCommunityCursor(cursor), ...(tag ? [{ tags: { some: { name: tag } } }] : [])] },
       ...page,
-      include: communityPostInclude(userId),
+      // The feed renders discussions collapsed. Defer comment previews until
+      // one is opened; detail and legacy responses keep their full contract.
+      include: communityPostInclude(userId, feed ? 0 : undefined),
       orderBy: COMMUNITY_ORDER,
     })
     if (!feed) return NextResponse.json(posts.map(post => normalizeCommunityPost(post, userId)), { headers: { 'Cache-Control': 'private, no-store' } })
     const result = communityPage(posts, 'posts', undefined, tag)
-    return NextResponse.json({ posts: result.items.map(post => normalizeCommunityPost(post, userId)), nextCursor: result.nextCursor }, { headers: { 'Cache-Control': 'private, no-store' } })
+    return NextResponse.json({ posts: result.items.map(post => normalizeCommunityPost(post, userId, true)), nextCursor: result.nextCursor }, { headers: { 'Cache-Control': 'private, no-store' } })
   } catch (error) {
     console.error(error)
     const inputError = requestErrorResponse(error)

@@ -4,7 +4,7 @@ import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import { sanitizeTextServer } from '@/lib/server/sanitize-html'
 import { readJsonObject, readPage, requestErrorResponse } from '@/lib/server/api-input'
-import { afterCommunityCursor, COMMUNITY_ORDER, COMMUNITY_PAGE_SIZE, communityCommentInclude, communityPage, isCurrentCommunityAdmin, normalizeCommunityComment, readCommunityCursor } from '@/lib/server/community-feed'
+import { afterCommunityCursor, COMMUNITY_COMMENT_PREVIEW_SIZE, COMMUNITY_ORDER, COMMUNITY_PAGE_SIZE, communityCommentInclude, communityPage, isCurrentCommunityAdmin, normalizeCommunityComment, readCommunityCursor } from '@/lib/server/community-feed'
 
 export async function POST(req: NextRequest, props: { params: Promise<{ postId: string }> }) {
   const params = await props.params;
@@ -67,9 +67,12 @@ export async function POST(req: NextRequest, props: { params: Promise<{ postId: 
 export async function GET(req: NextRequest, props: { params: Promise<{ postId: string }> }) {
   const { postId } = await props.params
   try {
-    const feed = new URL(req.url).searchParams.get('feed') === '1'
+    const searchParams = new URL(req.url).searchParams
+    const feed = searchParams.get('feed') === '1'
     const cursor = feed ? readCommunityCursor(req, 'comments', postId) : null
-    const page = feed ? { take: COMMUNITY_PAGE_SIZE + 1 } : readPage(req)
+    const preview = feed && searchParams.get('preview') === '1'
+    const pageSize = preview ? COMMUNITY_COMMENT_PREVIEW_SIZE : COMMUNITY_PAGE_SIZE
+    const page = feed ? { take: pageSize + 1 } : readPage(req)
     const session = await getServerSession(authOptions)
     const userId = session?.user?.id
     const post = await prisma.post.findUnique({ where: { id: postId }, select: { authorId: true, published: true } })
@@ -83,7 +86,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ postId: s
       orderBy: COMMUNITY_ORDER,
     })
     if (!feed) return NextResponse.json(comments.map(comment => normalizeCommunityComment(comment, post.published && post.authorId === userId)), { headers: { 'Cache-Control': 'private, no-store' } })
-    const result = communityPage(comments, 'comments', postId)
+    const result = communityPage(comments, 'comments', postId, undefined, pageSize)
     return NextResponse.json({ comments: result.items.map(comment => normalizeCommunityComment(comment, post.published && post.authorId === userId)), nextCursor: result.nextCursor }, { headers: { 'Cache-Control': 'private, no-store' } })
   } catch (error) {
     console.error('Fehler beim Abrufen der Kommentare:', error)

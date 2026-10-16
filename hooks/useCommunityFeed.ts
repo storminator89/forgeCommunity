@@ -70,7 +70,14 @@ export function useCommunityFeed(tag: string | null = null) {
         }
         setPosts(previous => {
           const existing = previous.find(row => row.id === post.id)
-          const linkedPost = existing ? { ...post, ...existing, comments: mergeCommunityRows(existing.comments, post.comments) } : post
+          const linkedPost = existing ? {
+            ...post, ...existing,
+            comments: mergeCommunityRows(existing.comments, post.comments),
+            // A detail/link read contains the real preview. Do not leave an
+            // already hydrated discussion marked as deferred.
+            commentsDeferred: false,
+            commentsNextCursor: existing.commentsDeferred ? post.commentsNextCursor : existing.commentsNextCursor,
+          } : post
           return mergeCommunityRows([linkedPost], previous)
         })
       })
@@ -116,17 +123,18 @@ export function useCommunityFeed(tag: string | null = null) {
 
   const loadComments = async (postId: string) => {
     const post = posts.find(row => row.id === postId)
-    if (!post?.commentsNextCursor || commentRequests.current.has(postId) || !mounted.current) return
+    if (!post || (!post.commentsDeferred && !post.commentsNextCursor) || commentRequests.current.has(postId) || !mounted.current) return
     const controller = new AbortController()
     commentRequests.current.set(postId, controller)
     setCommentsLoading(previous => ({ ...previous, [postId]: true }))
     setCommentsError(previous => ({ ...previous, [postId]: false }))
     try {
-      const page = await fetchCommunityJson<CommentsPage>(`/api/posts/${postId}/comments?feed=1&cursor=${encodeURIComponent(post.commentsNextCursor)}`, { signal: controller.signal, cache: 'no-store' })
+      const page = await fetchCommunityJson<CommentsPage>(`/api/posts/${encodeURIComponent(postId)}/comments?feed=1${post.commentsDeferred ? '&preview=1' : `&cursor=${encodeURIComponent(post.commentsNextCursor!)}`}`, { signal: controller.signal, cache: 'no-store' })
       if (!Array.isArray(page.comments) || !(page.nextCursor === null || typeof page.nextCursor === 'string')) throw new Error('Ungültige Antwort')
       if (controller.signal.aborted || !mounted.current || commentRequests.current.get(postId) !== controller) return
       setPosts(previous => previous.map(row => row.id === postId ? {
         ...row, comments: mergeCommunityRows(row.comments, page.comments), commentsNextCursor: page.nextCursor,
+        commentsDeferred: false,
       } : row))
     } catch (error) {
       if (mounted.current && !controller.signal.aborted && !isAbortError(error)) setCommentsError(previous => ({ ...previous, [postId]: true }))
