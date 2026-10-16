@@ -3,6 +3,9 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import sharp from 'sharp';
 import path from 'node:path';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { ForgeWorkbench } from '../components/landing/ForgeWorkbench';
 import { artworkCandidates, artworkCandidateBounds } from '../e2e/landing-artwork-contract';
 
 const source = (name: string) => readFileSync(path.join(process.cwd(), name), 'utf8');
@@ -52,6 +55,9 @@ it('adds real CI screenshots alongside the exact accessible landing heading cont
   expect(browser).toContain('deviceScaleFactor: 2');
   expect(browser).toContain('response.body()');
   expect(browser).toContain('expect(delivery.requests).toEqual([state.currentSrc])');
+  expect(browser).toContain('expect(state.heroPreloads).toEqual([])');
+  expect(browser).toContain('resource.initiatorType');
+  expect(browser).toContain('response.fromServiceWorker()');
   expect(browser).toContain("testInfo.attach('home-artwork-delivery.json'");
   expect(browser).toContain("testInfo.outputPath('home-artwork-delivery.json')");
   expect(browser).toContain('writeFile(evidencePath, JSON.stringify(');
@@ -118,4 +124,24 @@ it('bounds browser over-delivery by measured slot and DPR without declaring the 
   for (const [slot, dpr] of [[0, 1], [100, 0], [NaN, 1], [100, Infinity]]) {
     expect(() => artworkCandidateBounds(slot, dpr)).toThrow('finite and positive');
   }
+});
+
+it('keeps eager high-priority SSR picture loading without the duplicate automatic head preload', () => {
+  const markup = renderToStaticMarkup(createElement(ForgeWorkbench));
+  const sizes = markup.match(/<source\b[^>]*sizes="([^"]+)"/)![1];
+  const srcSet = markup.match(/<source\b[^>]*srcSet="([^"]+)"/i)![1];
+  // The installed renderer hoists an otherwise identical standalone shape.
+  const standalone = renderToStaticMarkup(createElement('img', {
+    src: '/images/home/forge-workbench-768.webp',
+    srcSet, sizes,
+    alt: '', loading: 'eager', fetchPriority: 'high',
+  }));
+  expect(standalone).toMatch(/<link\b[^>]*rel="preload"[^>]*as="image"/);
+  expect(markup).not.toMatch(/<link\b[^>]*rel="preload"/);
+  expect(markup).toMatch(/<picture\b[^>]*><source\b[^>]*type="image\/webp"/);
+  expect(markup).toContain('480w');
+  expect(markup).toContain('768w');
+  expect(markup).toContain('1440w');
+  expect(markup).toContain('sizes="(max-width: 30rem)');
+  expect(markup).toMatch(/<img\b[^>]*loading="eager"[^>]*fetchPriority="high"[^>]*decoding="async"/);
 });

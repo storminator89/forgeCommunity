@@ -225,7 +225,12 @@ test('private learner practice stays opt-in and advances only on explicit action
   readFailure = false
   let releaseRead!: () => void
   pendingRead = new Promise<void>(resolve => { releaseRead = resolve })
-  await page.reload({ waitUntil: 'domcontentloaded' })
+  // The loading shell precedes authentication; its account-key remount also
+  // replaces ThemeToggle. Wait for the authenticated workspace's held GET.
+  await Promise.all([
+    page.waitForRequest(request => request.method() === 'GET' && new URL(request.url()).pathname === endpoint),
+    page.reload({ waitUntil: 'domcontentloaded' }),
+  ])
   await expect(page.getByRole('heading', { name: 'Übungen werden geladen' })).toBeVisible()
   await captureState(page, testInfo, 'loading')
   releaseRead()

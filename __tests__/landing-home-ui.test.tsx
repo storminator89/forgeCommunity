@@ -78,8 +78,15 @@ it('provides one optimized local illustration that stays still until keyboard ac
   const illustration = screen.getByRole('img', { name: /Illustration: Zwei Erwachsene.*Ideenfunken.*Buch.*Bausteinen/ });
   expect(illustration.tagName.toLowerCase()).toBe('img');
   expect(illustration).toHaveAttribute('src', '/images/home/forge-workbench-768.webp');
-  expect(illustration).toHaveAttribute('srcset', '/images/home/forge-workbench-480.webp 480w, /images/home/forge-workbench-768.webp 768w, /images/home/forge-workbench-1440.webp 1440w');
-  expect(illustration).toHaveAttribute('sizes', expect.stringContaining('(max-width: 30rem)'));
+  const picture = illustration.closest('picture')!;
+  expect(picture).not.toBeNull();
+  expect(picture.querySelectorAll('source')).toHaveLength(1);
+  const responsiveSource = picture.querySelector('source')!;
+  expect(responsiveSource).toHaveAttribute('type', 'image/webp');
+  expect(responsiveSource).toHaveAttribute('srcset', '/images/home/forge-workbench-480.webp 480w, /images/home/forge-workbench-768.webp 768w, /images/home/forge-workbench-1440.webp 1440w');
+  expect(responsiveSource).toHaveAttribute('sizes', expect.stringContaining('(max-width: 30rem)'));
+  expect(illustration).not.toHaveAttribute('srcset');
+  expect(illustration).not.toHaveAttribute('sizes');
   expect(illustration).toHaveAttribute('width', '1440');
   expect(illustration).toHaveAttribute('height', '960');
   expect(illustration).toHaveAttribute('loading', 'eager');

@@ -38,8 +38,12 @@ async function expectArtwork(page: Page, delivery: { requests: string[]; respons
     const image = element as HTMLImageElement;
     const rect = image.getBoundingClientRect();
     const style = getComputedStyle(image);
+    const picture = image.closest('picture');
+    const responsiveSource = picture?.querySelector('source') ?? null;
+    const sizes = responsiveSource?.sizes ?? image.sizes;
+    const srcSet = responsiveSource?.srcset ?? image.srcset;
     let resolvedSize: { media: string; length: string; width: number } | null = null;
-    for (const clause of image.sizes.split(',').map(value => value.trim())) {
+    for (const clause of sizes.split(',').map(value => value.trim())) {
       const conditional = clause.match(/^(\([^)]+\))\s+(.+)$/);
       const media = conditional?.[1] ?? 'all';
       const length = conditional?.[2] ?? clause;
@@ -72,7 +76,15 @@ async function expectArtwork(page: Page, delivery: { requests: string[]; respons
       dpr: window.devicePixelRatio,
       slot: { width: rect.width, height: rect.height, x: rect.x, y: rect.y },
       computed: { width: style.width, height: style.height, fit: style.objectFit },
-      sizes: image.sizes, srcSet: image.srcset, resolvedSize,
+      sizes, srcSet, resolvedSize,
+      picture: picture ? { sourceCount: picture.querySelectorAll('source').length, sourceType: responsiveSource?.type ?? null } : null,
+      imageAttributes: { src: image.getAttribute('src'), srcSet: image.getAttribute('srcset'), sizes: image.getAttribute('sizes') },
+      resourceTimings: performance.getEntriesByType('resource')
+        .filter(entry => /^\/images\/home\/forge-workbench-(480|768|1440)\.webp$/.test(new URL(entry.name).pathname))
+        .map(entry => {
+          const resource = entry as PerformanceResourceTiming;
+          return { url: resource.name, initiatorType: resource.initiatorType, startTime: resource.startTime, fetchStart: resource.fetchStart, responseStart: resource.responseStart, responseEnd: resource.responseEnd, transferSize: resource.transferSize, encodedBodySize: resource.encodedBodySize, decodedBodySize: resource.decodedBodySize, deliveryType: (resource as PerformanceResourceTiming & { deliveryType?: string }).deliveryType ?? null };
+        }),
       currentSrc: image.currentSrc,
       naturalWidth: image.naturalWidth, naturalHeight: image.naturalHeight,
     };
@@ -89,7 +101,7 @@ async function expectArtwork(page: Page, delivery: { requests: string[]; respons
       configuredViewport: page.viewportSize(), expectedDpr, ...state,
       candidate: { width: selectedWidth, ...bounds, deliveredToDemandRatio: selectedWidth / bounds.uncappedDemand, fullyCoversDprDemand: selectedWidth >= bounds.uncappedDemand },
       policy: 'Rendered CSS slot × actual DPR; permit the smallest adequate srcSet candidate or one larger discrete candidate as bounded browser over-delivery. This does not establish optimal selection. visualViewport.scale is recorded separately, not multiplied into DPR demand or treated as a cause.',
-      delivery: { requests: delivery.requests, requestCount: delivery.requests.length, status: response.status(), contentType: response.headers()['content-type'], bytes: bytes.length, maximumBytes: 100 * 1024 },
+      delivery: { requests: delivery.requests, requestCount: delivery.requests.length, status: response.status(), contentType: response.headers()['content-type'], cacheControl: response.headers()['cache-control'], fromServiceWorker: response.fromServiceWorker(), requestTiming: response.request().timing(), bytes: bytes.length, maximumBytes: 100 * 1024 },
   }, null, 2));
   await testInfo.attach('home-artwork-delivery.json', { path: evidencePath, contentType: 'application/json' });
   await expect(image).toHaveAttribute('width', '1440');
@@ -98,6 +110,16 @@ async function expectArtwork(page: Page, delivery: { requests: string[]; respons
   await expect(image).toHaveAttribute('fetchpriority', 'high');
   await expect(image).toHaveAttribute('decoding', 'async');
   expect(state.dpr).toBe(expectedDpr);
+  expect(state.heroPreloads).toEqual([]);
+  expect(state.picture).toEqual({ sourceCount: 1, sourceType: 'image/webp' });
+  expect(state.imageAttributes.src).not.toBeNull();
+  const fallbackUrl = new URL(state.imageAttributes.src!, origin);
+  expect(fallbackUrl.origin).toBe(new URL(origin).origin);
+  expect(fallbackUrl.pathname).toBe('/images/home/forge-workbench-768.webp');
+  expect(fallbackUrl.search).toBe('');
+  expect(fallbackUrl.hash).toBe('');
+  expect(state.imageAttributes.srcSet).toBeNull();
+  expect(state.imageAttributes.sizes).toBeNull();
   const declaredCandidates = state.srcSet.split(',').map(entry => {
     const [src, descriptor] = entry.trim().split(/\s+/);
     return { url: new URL(src, origin).href, descriptor };

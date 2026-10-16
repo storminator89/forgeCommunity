@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { format } from 'date-fns';
 import ChatPage from '@/app/chat/page';
 import Events from '@/app/events/page';
 import NotificationsPage from '@/app/notifications/page';
@@ -164,24 +165,43 @@ it('offers retry instead of claiming the inbox is empty after a load error', () 
   expect(retry).toHaveBeenCalledTimes(1);
 });
 
-it('includes events at the start of today and exposes calendar days as keyboard accessible buttons', async () => {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const event = { id: 'today', title: 'Heute dabei', date: today.toISOString(), description: 'Details', location: 'Community', timezone: 'Europe/Berlin', maxAttendees: null, attendeeCount: 0, isAttending: false, canCancelRsvp: false };
-  global.fetch = eventApiFixture([event]);
-  render(<Events />);
-  const dayButton = await screen.findByRole('button', { name: /1 Event$/ });
-  expect(dayButton).toHaveAttribute('aria-current', 'date');
-  const monthScroller = screen.getByRole('group', { name: 'Monatskalender horizontal verschieben' });
-  expect(monthScroller).toHaveClass('overflow-x-auto');
-  expect(monthScroller.firstElementChild).toHaveClass('min-w-[314px]');
-  fireEvent.click(screen.getByRole('button', { name: 'Liste' }));
-  expect(screen.getByRole('region', { name: 'Listenansicht' })).toBeInTheDocument();
-  expect(screen.getByRole('article')).toHaveTextContent('Heute dabei');
-  expect(screen.getByRole('heading', { name: 'Heute dabei' })).toBeVisible();
-  fireEvent.click(screen.getByRole('button', { name: 'Woche' }));
-  expect(screen.getByRole('region', { name: 'Wochenkalender' })).toBeVisible();
-  expect(screen.getAllByRole('button', { name: /\d+ Events?$/ })).toHaveLength(7);
+it.each([
+  { now: '2026-10-16T21:59:00Z', eventDate: '2026-10-16T00:00:00+02:00' },
+  { now: '2026-10-16T22:01:00Z', eventDate: '2026-10-17T00:00:00+02:00' },
+  { now: '2026-10-17T00:01:00Z', eventDate: '2026-10-17T00:00:00+02:00' },
+])('includes events at the start of today and exposes calendar days as keyboard accessible buttons at $now', async ({ now, eventDate }) => {
+  jest.useFakeTimers({ now: new Date(now) });
+  try {
+    // Upcoming uses the event's local day, including when Berlin is already tomorrow for the viewer.
+    const event = { id: 'today', title: 'Heute dabei', date: eventDate, description: 'Details', location: 'Community', timezone: 'Europe/Berlin', maxAttendees: null, attendeeCount: 0, isAttending: false, canCancelRsvp: false };
+    global.fetch = eventApiFixture([event]);
+    render(<Events />);
+    const dayButton = await screen.findByRole('button', { name: /1 Event$/ });
+    const eventDay = eventDate.slice(0, 10);
+    expect(dayButton.querySelector('time')).toHaveAttribute('dateTime', eventDay);
+    // The calendar's current-day marker belongs to the viewer's local day.
+    const viewerToday = format(new Date(), 'yyyy-MM-dd');
+    const todayButton = screen.getByRole('button', { current: 'date' });
+    expect(todayButton).toHaveAttribute('aria-current', 'date');
+    expect(todayButton.querySelector('time')).toHaveAttribute('dateTime', viewerToday);
+    if (eventDay === viewerToday) {
+      expect(dayButton).toHaveAttribute('aria-current', 'date');
+    } else {
+      expect(dayButton).not.toHaveAttribute('aria-current');
+    }
+    const monthScroller = screen.getByRole('group', { name: 'Monatskalender horizontal verschieben' });
+    expect(monthScroller).toHaveClass('overflow-x-auto');
+    expect(monthScroller.firstElementChild).toHaveClass('min-w-[314px]');
+    fireEvent.click(screen.getByRole('button', { name: 'Liste' }));
+    expect(screen.getByRole('region', { name: 'Listenansicht' })).toBeInTheDocument();
+    expect(screen.getByRole('article')).toHaveTextContent('Heute dabei');
+    expect(screen.getByRole('heading', { name: 'Heute dabei' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Woche' }));
+    expect(screen.getByRole('region', { name: 'Wochenkalender' })).toBeVisible();
+    expect(screen.getAllByRole('button', { name: /\d+ Events?$/ })).toHaveLength(7);
+  } finally {
+    jest.useRealTimers();
+  }
 });
 
 it('lets a signed-in member RSVP and cancel from the event list', async () => {

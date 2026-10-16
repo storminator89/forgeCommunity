@@ -5,6 +5,8 @@ import { RotateCw } from 'lucide-react';
 import styles from '@/app/home.module.css';
 
 const motionQuery = '(prefers-reduced-motion: reduce)';
+const artworkSizes = '(max-width: 30rem) calc(100vw - 3.125rem), (max-width: 34.5rem) calc(100vw - 3.625rem), (max-width: 46rem) 30.875rem, (max-width: 82.5rem) calc(55vw - 3.05rem), 42.325rem';
+const artworkSrcSet = '/images/home/forge-workbench-480.webp 480w, /images/home/forge-workbench-768.webp 768w, /images/home/forge-workbench-1440.webp 1440w';
 function subscribeToMotion(onChange: () => void) {
   const query = window.matchMedia(motionQuery);
   query.addEventListener('change', onChange);
@@ -28,20 +30,20 @@ export function ForgeWorkbench() {
   return (
     <div className={styles.workbench}>
       <div key={replay} data-motion="forge-workbench" className={replay > 0 ? `${styles.artFrame} ${styles.illustrationPlaying}` : styles.artFrame} onAnimationEnd={() => setReplay(0)}>
-        {/* Pre-encoded local srcSet: the app deliberately disables Next's runtime image optimizer. */}
-        {/* eslint-disable-next-line @next/next/no-img-element -- Responsive WebP files are optimized once, without a new runtime service. */}
-        <img
-          className={styles.illustration}
-          alt="Illustration: Zwei Erwachsene teilen einen goldenen Ideenfunken über einem offenen Buch, umgeben von farbigen Bausteinen."
-          width={1440}
-          height={960}
-          loading="eager"
-          fetchPriority="high"
-          decoding="async"
-          sizes="(max-width: 30rem) calc(100vw - 3.125rem), (max-width: 34.5rem) calc(100vw - 3.625rem), (max-width: 46rem) 30.875rem, (max-width: 82.5rem) calc(55vw - 3.05rem), 42.325rem"
-          srcSet="/images/home/forge-workbench-480.webp 480w, /images/home/forge-workbench-768.webp 768w, /images/home/forge-workbench-1440.webp 1440w"
-          src="/images/home/forge-workbench-768.webp"
-        />
+        {/* One native responsive source avoids React's additional standalone-image head hint. */}
+        <picture className={styles.illustration}>
+          <source type="image/webp" sizes={artworkSizes} srcSet={artworkSrcSet} />
+          <img
+            className={styles.illustration}
+            alt="Illustration: Zwei Erwachsene teilen einen goldenen Ideenfunken über einem offenen Buch, umgeben von farbigen Bausteinen."
+            width={1440}
+            height={960}
+            loading="eager"
+            fetchPriority="high"
+            decoding="async"
+            src="/images/home/forge-workbench-768.webp"
+          />
+        </picture>
       </div>
       <button type="button" className={styles.motionButton} disabled={reducedMotion} onClick={() => setReplay(value => value + 1)} aria-label={reducedMotion ? 'Illustration bewegen (reduzierte Bewegung aktiv)' : 'Illustration bewegen'}>
         <RotateCw size={15} aria-hidden="true" />

@@ -45,7 +45,84 @@ async function signIn(page: Page, freshRegistration = false) {
 
 async function capture(page: Page, info: TestInfo, name: string) {
   await expect.poll(() => page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - innerWidth)).toBeLessThanOrEqual(1);
-  expect(await page.locator('#page-content').evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
+  const main = page.locator('#page-content');
+  const overflow = await main.evaluate(element => element.scrollWidth - element.clientWidth);
+  if (overflow > 1) {
+    // Only report geometry on failure. Never include account/post text, URLs,
+    // arbitrary IDs, attributes or screenshots changed for diagnostic purposes.
+    const geometry = await main.evaluate(root => {
+      const boundary = root.getBoundingClientRect();
+      const knownSections = new Map([
+        ['community-feed-title', 'Aktuelle Beiträge'], ['community-stats-title', 'Deine Aktivität'],
+        ['contribution-milestones-title', 'Meine Diskussionsmeilensteine'], ['community-leaderboard-title', 'Rangliste'],
+      ]);
+      const knownLabels = new Set(['Beiträge', 'Likes', 'Kommentare', 'Meine Punkte', 'Mindestens einmal abgeschlossene Kurse', 'Meilenstein: Erster abgeschlossener Kurs']);
+      const round = (value: number) => Math.round(value * 100) / 100;
+      const path = (element: Element) => {
+        const parts: string[] = [];
+        let current: Element | null = element;
+        while (current && current !== root && parts.length < 6) {
+          const tag = current.tagName.toLowerCase();
+          const siblings = current.parentElement ? Array.from(current.parentElement.children).filter(sibling => sibling.tagName === current!.tagName) : [];
+          parts.unshift(`${tag}:nth-of-type(${siblings.indexOf(current) + 1})`);
+          current = current.parentElement;
+        }
+        return parts.join(' > ');
+      };
+      const describe = (element: Element) => {
+        const rect = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        const section = element.closest('section[aria-labelledby]')?.getAttribute('aria-labelledby') ?? '';
+        return {
+          path: path(element), section: knownSections.get(section) ?? null,
+          left: round(rect.left), right: round(rect.right), width: round(rect.width),
+          clientWidth: element.clientWidth, scrollWidth: element.scrollWidth,
+          display: style.display, minWidth: style.minWidth, maxWidth: style.maxWidth,
+          whiteSpace: style.whiteSpace, overflowWrap: style.overflowWrap,
+          overflowX: style.overflowX, overflowY: style.overflowY, position: style.position,
+          gridTemplateColumns: style.gridTemplateColumns, columnGap: style.columnGap,
+          flexBasis: style.flexBasis, flexShrink: style.flexShrink, flexWrap: style.flexWrap, fontSize: style.fontSize,
+        };
+      };
+      const offenders = Array.from(root.querySelectorAll('*')).flatMap(element => {
+        const rect = element.getBoundingClientRect();
+        if (!rect.width || !rect.height) return [];
+        const textRects = Array.from(element.childNodes).flatMap(node => {
+          if (node.nodeType !== Node.TEXT_NODE || !node.textContent?.trim()) return [];
+          const range = document.createRange();
+          range.selectNodeContents(node);
+          return Array.from(range.getClientRects());
+        });
+        let right = Math.max(rect.right, ...textRects.map(rect => rect.right));
+        let left = Math.min(rect.left, ...textRects.map(rect => rect.left));
+        // A card's intentionally clipped descendants do not create main's
+        // scroll extent. Keep them out of the bounded offender list.
+        for (let ancestor: Element | null = element; ancestor && ancestor !== root; ancestor = ancestor.parentElement) {
+          if (getComputedStyle(ancestor).overflowX !== 'visible') {
+            const clip = ancestor.getBoundingClientRect();
+            right = Math.min(right, clip.right);
+            left = Math.max(left, clip.left);
+          }
+        }
+        if (right <= boundary.right + 1 && left >= boundary.left - 1) return [];
+        const label = element.textContent?.trim() ?? '';
+        return [{
+          ...describe(element), textRight: round(right), textLeft: round(left),
+          knownLabel: knownLabels.has(label) ? label : null,
+          ancestors: [element.parentElement, element.parentElement?.parentElement].filter((ancestor): ancestor is HTMLElement => !!ancestor && ancestor !== root).map(describe),
+        }];
+      }).sort((a, b) => b.textRight - a.textRight).slice(0, 24);
+      return { viewportWidth: innerWidth, rootFontSize: getComputedStyle(document.documentElement).fontSize, main: describe(root), offenders };
+    });
+    console.info(`[spark-entry-overflow:${name}] ${JSON.stringify(geometry)}`);
+  }
+  expect(overflow).toBeLessThanOrEqual(1);
+  const hero = main.locator('[data-motion="forge-workbench"] img');
+  if (await hero.count()) {
+    await expect(hero).toHaveCount(1);
+    await expect.poll(() => hero.evaluate(element => (element as HTMLImageElement).complete && (element as HTMLImageElement).naturalWidth > 0)).toBe(true);
+    await hero.evaluate(element => (element as HTMLImageElement).decode());
+  }
   await page.screenshot({ path: info.outputPath(`${name}.png`), fullPage: true, animations: 'disabled' });
 }
 
