@@ -41,6 +41,7 @@ import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import EventForm from '@/components/EventForm';
+import { EventParticipation } from '@/components/events/EventParticipation';
 import { useToast } from '@/hooks/use-toast';
 import { sanitizeRichHtml } from '@/lib/sanitize-html';
 import { useSession } from 'next-auth/react';
@@ -88,7 +89,6 @@ function ScopedEvents({ session, sessionStatus }: {
   const [error, setError] = useState<string | null>(null);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [pendingEventId, setPendingEventId] = useState<string | null>(null);
   const { toast } = useToast();
   const isAdmin = session?.user?.role === 'ADMIN';
   const [view, setView] = useState<ViewType>('month');
@@ -353,44 +353,7 @@ function ScopedEvents({ session, sessionStatus }: {
     }
   };
 
-  const handleRsvp = async (event: Event) => {
-    if (!session?.user?.id) {
-      toast({ title: 'Bitte melde dich an', description: 'Für eine Zusage benötigst du ein Konto.', variant: 'destructive' });
-      return;
-    }
-    setPendingEventId(event.id);
-    try {
-      const response = await fetch(`/api/events/${event.id}/rsvp`, { method: event.isAttending ? 'DELETE' : 'POST' });
-      const result = await response.json();
-      if (!activeRef.current) return;
-      if (!response.ok) throw new Error(result.error || 'Die Zusage konnte nicht geändert werden.');
-      setEventsData(current => current.map(item => item.id === event.id
-        ? { ...item, isAttending: result.isAttending, canCancelRsvp: result.canCancelRsvp, attendeeCount: result.attendeeCount }
-        : item));
-      toast({ title: result.isAttending ? 'Du bist dabei' : 'Zusage zurückgenommen' });
-    } catch (error) {
-      if (activeRef.current) toast({ title: 'Fehler', description: error instanceof Error ? error.message : 'Bitte erneut versuchen.', variant: 'destructive' });
-    } finally {
-      if (activeRef.current) setPendingEventId(null);
-    }
-  };
-
-  const renderRsvp = (event: Event) => {
-    const full = event.maxAttendees !== null && event.attendeeCount >= event.maxAttendees;
-    const past = new Date(event.date) <= new Date();
-    return (
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <span className="text-xs text-muted-foreground">
-          {event.attendeeCount} {event.maxAttendees !== null ? `/ ${event.maxAttendees}` : ''} Zusagen
-        </span>
-        <Button size="sm" variant={event.isAttending ? 'outline' : 'default'}
-          disabled={pendingEventId === event.id || (event.isAttending && !event.canCancelRsvp) || (!event.isAttending && (full || past))}
-          onClick={() => void handleRsvp(event)}>
-          {pendingEventId === event.id ? 'Wird verarbeitet …' : event.isAttending ? event.canCancelRsvp ? 'Zusage zurücknehmen' : 'Teilgenommen' : past ? 'Anmeldung geschlossen' : full ? 'Ausgebucht' : 'Teilnehmen'}
-        </Button>
-      </div>
-    );
-  };
+  const renderRsvp = (event: Event) => <EventParticipation event={event} viewerId={session?.user?.id ?? null} />;
 
   if (loading || error) {
     return (

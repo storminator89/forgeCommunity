@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import ChatPage from '@/app/chat/page';
 import Events from '@/app/events/page';
 import NotificationsPage from '@/app/notifications/page';
+import { eventApiFixture, participationFixture } from '@/test-utils/event-participation';
 
 const mockPush = jest.fn();
 jest.mock('next/navigation', () => ({
@@ -128,6 +129,23 @@ it('opens an actionable notification with a labeled keyboard-accessible control'
   await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/community#comment-reply1'));
 });
 
+it('labels a promotion as an event and opens its verified event anchor from the inbox', async () => {
+  const user = userEvent.setup();
+  const openNotification = jest.fn().mockResolvedValue('/events#event-workshop');
+  mockNotifications.mockReturnValue({
+    notifications: [{ id: 'promotion', type: 'EVENT', content: 'Ein Platz ist frei geworden.',
+      createdAt: '2026-10-16T00:00:00Z', isRead: false, targetState: 'available', actionLabel: 'Event ansehen' }],
+    unreadCount: 1, isLoading: false, loadError: null, retry: jest.fn(), openNotification,
+    markAsRead: jest.fn(), deleteNotification: jest.fn(), markAllAsRead: jest.fn(),
+  });
+  render(<NotificationsPage />);
+  expect(screen.getByText('Event', { exact: true })).toBeVisible();
+  screen.getByRole('button', { name: 'Event ansehen' }).focus();
+  await user.keyboard('{Enter}');
+  await waitFor(() => expect(openNotification).toHaveBeenCalledWith('promotion'));
+  await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/events#event-workshop'));
+});
+
 it('disables mark-all when there are no unread notifications', () => {
   mockNotifications.mockReturnValue({ notifications: [], unreadCount: 0, isLoading: false, loadError: null, retry: jest.fn(), markAsRead: jest.fn(), deleteNotification: jest.fn(), markAllAsRead: jest.fn() });
   render(<NotificationsPage />);
@@ -150,7 +168,7 @@ it('includes events at the start of today and exposes calendar days as keyboard 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const event = { id: 'today', title: 'Heute dabei', date: today.toISOString(), description: 'Details', location: 'Community', timezone: 'Europe/Berlin', maxAttendees: null, attendeeCount: 0, isAttending: false, canCancelRsvp: false };
-  global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => [event] });
+  global.fetch = eventApiFixture([event]);
   render(<Events />);
   const dayButton = await screen.findByRole('button', { name: /1 Event$/ });
   expect(dayButton).toHaveAttribute('aria-current', 'date');
@@ -171,15 +189,13 @@ it('lets a signed-in member RSVP and cancel from the event list', async () => {
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   const event = { id: 'workshop', title: 'Workshop', date: tomorrow.toISOString(), description: 'Details', location: 'Community', timezone: 'Europe/Berlin', maxAttendees: 1, attendeeCount: 0, isAttending: false, canCancelRsvp: false };
-  global.fetch = jest.fn().mockImplementation(async (_url: string, init?: RequestInit) => {
-    if (init?.method === 'POST') return { ok: true, json: async () => ({ isAttending: true, canCancelRsvp: true, attendeeCount: 1 }) };
-    if (init?.method === 'DELETE') return { ok: true, json: async () => ({ isAttending: false, canCancelRsvp: false, attendeeCount: 0 }) };
-    return { ok: true, json: async () => [event] };
-  });
+  global.fetch = eventApiFixture([event], async (_id, init) => init?.method === 'POST'
+    ? { ...participationFixture(event), registrationState: 'REGISTERED', isAttending: true, canCancelRsvp: true, attendeeCount: 1 }
+    : participationFixture(event));
   render(<Events />);
   await user.click(await screen.findByRole('button', { name: 'Liste' }));
-  await user.click(screen.getByRole('button', { name: 'Teilnehmen' }));
-  expect(global.fetch).toHaveBeenCalledWith('/api/events/workshop/rsvp', { method: 'POST' });
+  await user.click(await screen.findByRole('button', { name: 'Teilnehmen' }));
+  expect(global.fetch).toHaveBeenCalledWith('/api/events/workshop/rsvp', expect.objectContaining({ method: 'POST' }));
   await user.click(await screen.findByRole('button', { name: 'Zusage zurücknehmen' }));
-  expect(global.fetch).toHaveBeenCalledWith('/api/events/workshop/rsvp', { method: 'DELETE' });
+  expect(global.fetch).toHaveBeenCalledWith('/api/events/workshop/rsvp', expect.objectContaining({ method: 'DELETE' }));
 });

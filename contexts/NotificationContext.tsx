@@ -310,7 +310,7 @@ function SessionNotifications({ children, userId }: { children: ReactNode; userI
       }
       const action = await response.json() as { href?: unknown };
       if (mutationController.current?.signal.aborted || typeof action.href !== 'string' ||
-          !/^(\/profile\/[A-Za-z0-9_-]+|\/community#comment-[A-Za-z0-9_-]+|\/chat\?channelId=[A-Za-z0-9_-]+&messageId=[A-Za-z0-9_-]+)$/.test(action.href)) {
+          !/^(\/profile\/[A-Za-z0-9_-]+|\/events#event-[A-Za-z0-9_-]+|\/community#comment-[A-Za-z0-9_-]+|\/chat\?channelId=[A-Za-z0-9_-]+&messageId=[A-Za-z0-9_-]+)$/.test(action.href)) {
         throw new Error('Invalid notification destination');
       }
       const wasUnread = notificationsRef.current.some(item => item.id === id && !item.isRead);

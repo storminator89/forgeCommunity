@@ -1,0 +1,201 @@
+'use client';
+
+import Link from 'next/link';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { parseEventParticipation, type EventParticipationState } from './participation-state';
+
+type EventSummary = { id: string; title: string; date: string; attendeeCount: number; maxAttendees: number | null };
+type Props = { event: EventSummary; viewerId: string | null };
+type Phase = 'loading' | 'ready' | 'saving' | 'error' | 'unauthorized' | 'unavailable';
+type Action = 'join' | 'queue' | 'leave';
+const changedEvent = 'forge:event-participation-changed';
+class ReadFailure extends Error {
+  constructor(public readonly phase: Phase, message: string) { super(message); }
+}
+
+async function responseState(response: Response) {
+  if (response.status === 401) throw new ReadFailure('unauthorized', 'Deine Anmeldung ist nicht mehr gültig. Bitte melde dich erneut an.');
+  if (response.status === 404) throw new ReadFailure('unavailable', 'Dieses Event ist nicht mehr verfügbar.');
+  if (!response.ok) throw new ReadFailure('error', 'Der Teilnahmestatus konnte nicht bestätigt werden. Bitte lade ihn erneut.');
+  return parseEventParticipation(await response.json());
+}
+
+export function EventParticipation(props: Props) {
+  return <ParticipationPanel key={`${props.viewerId ?? 'guest'}:${props.event.id}`} {...props} />;
+}
+
+function ParticipationPanel({ event, viewerId }: Props) {
+  const [state, setState] = useState<EventParticipationState | null>(null);
+  const [phase, setPhase] = useState<Phase>('loading');
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const root = useRef<HTMLDivElement>(null);
+  const active = useRef(false);
+  const visible = useRef(false);
+  const writing = useRef(false);
+  const revalidateAfterWrite = useRef(false);
+  const sequence = useRef(0);
+  const reading = useRef<AbortController | null>(null);
+  const mutation = useRef<AbortController | null>(null);
+  const lastState = useRef<EventParticipationState | null>(null);
+  const focusAfterRead = useRef<'action' | 'refresh' | null>(null);
+  const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
+  const helpId = useId();
+  const url = `/api/events/${encodeURIComponent(event.id)}/rsvp`;
+
+  const refresh = useCallback(async (message: string | null = null) => {
+    if (!viewerId || !active.current || writing.current || document.visibilityState === 'hidden') return;
+    reading.current?.abort();
+    const controller = new AbortController();
+    reading.current = controller;
+    const requestSequence = ++sequence.current;
+    let timedOut = false;
+    const timer = setTimeout(() => { timedOut = true; controller.abort(); }, 15000);
+    timers.current.add(timer);
+    const focused = document.activeElement;
+    if (focused instanceof HTMLElement && root.current?.contains(focused)) {
+      focusAfterRead.current = focused.hasAttribute('data-participation-refresh') ? 'refresh' : 'action';
+    } else if (focused !== document.body) focusAfterRead.current = null;
+    setState(null); setPhase('loading'); setFeedback(message);
+    try {
+      const result = await responseState(await fetch(url, { signal: controller.signal, cache: 'no-store' }));
+      if (!active.current || controller.signal.aborted || requestSequence !== sequence.current) return;
+      const promoted = lastState.current?.isWaitlisted && result.isAttending;
+      lastState.current = result;
+      setState(result); setPhase('ready');
+      if (promoted && !message) setFeedback('Du bist jetzt für das Event angemeldet.');
+    } catch (error) {
+      if (!active.current || controller.signal.aborted && !timedOut || requestSequence !== sequence.current) return;
+      lastState.current = null;
+      setState(null); setPhase(error instanceof ReadFailure ? error.phase : 'error');
+      setFeedback(error instanceof ReadFailure ? error.message : 'Der Teilnahmestatus konnte nicht geladen werden. Bitte versuche es erneut.');
+    } finally { clearTimeout(timer); timers.current.delete(timer); }
+  }, [url, viewerId]);
+
+  useLayoutEffect(() => {
+    if (phase === 'loading' || phase === 'saving') return;
+    const target = focusAfterRead.current;
+    focusAfterRead.current = null;
+    // Clearing stale private data removes controls. Restore the nearest action
+    // only if the caller has not moved focus elsewhere during the request.
+    const focused = document.activeElement;
+    const dialog = root.current?.closest('[role="dialog"]');
+    // Radix moves focus to its dialog container when a focused child vanishes.
+    if (target && (focused === document.body || focused === dialog)) {
+      const control = root.current?.querySelector<HTMLElement>(target === 'refresh'
+        ? '[data-participation-refresh]' : '[data-participation-action]') ?? root.current?.querySelector<HTMLElement>('button, a');
+      control?.focus();
+    }
+  }, [phase, state]);
+
+  useEffect(() => {
+    active.current = true;
+    // Long event lists read private state only as a panel enters the viewport.
+    const observer = typeof IntersectionObserver === 'function' ? new IntersectionObserver(entries => {
+      const shown = entries.some(entry => entry.isIntersecting);
+      const entered = shown && !visible.current;
+      visible.current = shown;
+      if (entered) void refresh();
+    }, { rootMargin: '100px' }) : null;
+    if (observer && root.current) observer.observe(root.current);
+    else { visible.current = true; void refresh(); }
+    const focus = () => { if (visible.current) void refresh(); };
+    const visibility = () => {
+      if (document.visibilityState === 'hidden') {
+        reading.current?.abort(); sequence.current++;
+        setState(null); setPhase('loading'); setFeedback(null);
+      } else focus();
+    };
+    const synchronize = (e: globalThis.Event) => {
+      const detail = (e as CustomEvent<{ eventId: string; source?: string }>).detail;
+      if (!visible.current || detail?.eventId !== event.id || detail.source === helpId) return;
+      if (writing.current) revalidateAfterWrite.current = true;
+      else void refresh();
+    };
+    const requestTimers = timers.current;
+    window.addEventListener('focus', focus);
+    document.addEventListener('visibilitychange', visibility);
+    window.addEventListener(changedEvent, synchronize);
+    return () => {
+      active.current = false;
+      observer?.disconnect(); reading.current?.abort(); mutation.current?.abort();
+      for (const timer of requestTimers) clearTimeout(timer);
+      requestTimers.clear();
+      window.removeEventListener('focus', focus);
+      document.removeEventListener('visibilitychange', visibility);
+      window.removeEventListener(changedEvent, synchronize);
+    };
+  }, [event.id, helpId, refresh]);
+
+  const change = async (action: Action) => {
+    if (!viewerId || !state || phase !== 'ready' || writing.current) return;
+    writing.current = true;
+    reading.current?.abort(); sequence.current++;
+    const controller = new AbortController(); mutation.current = controller;
+    let timedOut = false;
+    const timer = setTimeout(() => { timedOut = true; controller.abort(); }, 15000);
+    timers.current.add(timer);
+    setPhase('saving'); setFeedback(null);
+    try {
+      const response = await fetch(url, { method: action === 'leave' ? 'DELETE' : 'POST', signal: controller.signal,
+        ...(action === 'queue' ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ waitlist: true }) } : {}) });
+      if (!active.current || controller.signal.aborted) return;
+      if (response.status === 409) {
+        writing.current = false;
+        await refresh('Die Änderung konnte nicht bestätigt werden. Bitte prüfe den aktuellen Status und versuche es erneut.');
+        return;
+      }
+      const result = await responseState(response);
+      if (!active.current || controller.signal.aborted) return;
+      if (document.visibilityState === 'hidden') {
+        lastState.current = null; setState(null); setPhase('loading'); setFeedback(null); return;
+      }
+      lastState.current = result; setState(result); setPhase('ready');
+      setFeedback(result.isWaitlisted ? 'Du stehst auf der Warteliste.' : result.isAttending ? 'Deine Anmeldung ist bestätigt.' : 'Deine Teilnahme wurde zurückgenommen.');
+      // Other visible instances (list + deep-link dialog) must revalidate too.
+      window.dispatchEvent(new CustomEvent(changedEvent, { detail: { eventId: event.id, source: helpId } }));
+    } catch (error) {
+      if (!active.current || controller.signal.aborted && !timedOut) return;
+      lastState.current = null; setState(null);
+      setPhase(error instanceof ReadFailure ? error.phase : 'error');
+      setFeedback(error instanceof ReadFailure ? error.message : 'Die Änderung konnte nicht bestätigt werden. Lade vor einem weiteren Versuch den Teilnahmestatus erneut.');
+    } finally {
+      clearTimeout(timer); timers.current.delete(timer);
+      if (active.current) {
+        writing.current = false; mutation.current = null;
+        if (revalidateAfterWrite.current) { revalidateAfterWrite.current = false; void refresh(); }
+      }
+    }
+  };
+
+  if (!viewerId) return <div className="mt-3 space-y-2 rounded-lg border p-3 text-sm">
+    <p>Melde dich an, um teilzunehmen oder die Warteliste zu nutzen.</p>
+    <Button size="sm" variant="outline" asChild><Link href="/login">Anmelden</Link></Button>
+  </div>;
+
+  const full = Boolean(state && state.maxAttendees !== null && state.attendeeCount >= state.maxAttendees);
+  const closed = state?.registrationClosed || new Date(event.date) <= new Date();
+  const action: Action = state?.isWaitlisted || state?.canCancelRsvp ? 'leave' : full ? 'queue' : 'join';
+  const label = state?.isWaitlisted ? 'Warteliste verlassen' : state?.canCancelRsvp ? 'Zusage zurücknehmen'
+    : state?.registrationState === 'ATTENDED' ? 'Teilgenommen' : closed ? 'Anmeldung geschlossen' : full ? 'Auf Warteliste setzen' : 'Teilnehmen';
+  const disabled = phase !== 'ready' || state?.registrationState === 'ATTENDED' || closed && !state?.isWaitlisted && !state?.canCancelRsvp;
+  return <div ref={root} role="region" aria-label={`Teilnahme: ${event.title}`} aria-busy={phase === 'loading' || phase === 'saving'} className="mt-3 space-y-2 rounded-lg border bg-muted/20 p-3 text-sm">
+    {state && <p className="text-xs text-muted-foreground">{state.attendeeCount}{state.maxAttendees !== null ? ` / ${state.maxAttendees}` : ''} Zusagen</p>}
+    <p role="status" aria-live="polite" className="font-medium">
+      {phase === 'loading' ? 'Teilnahmestatus wird geladen …' : phase === 'saving' ? 'Änderung wird gespeichert …'
+        : state?.isWaitlisted ? `Warteliste · Platz ${state.waitlistPosition}` : state?.isAttending ? state.registrationState === 'ATTENDED' ? 'Teilgenommen' : 'Du bist angemeldet' : state ? closed ? 'Anmeldung geschlossen' : full ? 'Ausgebucht' : 'Noch keine Zusage' : ''}
+    </p>
+    {feedback && <p role={phase === 'error' || phase === 'unauthorized' || phase === 'unavailable' ? 'alert' : 'status'} aria-live="polite" className="text-sm">{feedback}</p>}
+    {state && <>
+      {(state.isWaitlisted || full && !state.isAttending && !closed) && <p id={helpId} className="text-xs leading-relaxed text-muted-foreground">{closed ? 'Die Anmeldung ist geschlossen. Für dieses gestartete Event werden keine Plätze mehr vergeben.' : 'Sobald ein Platz frei wird, wirst du automatisch angemeldet. Du kannst die Warteliste jederzeit verlassen.'}</p>}
+      <Button type="button" size="sm" variant={action === 'leave' ? 'outline' : 'default'} className="max-w-full whitespace-normal" disabled={disabled}
+        data-participation-action=""
+        aria-describedby={state.isWaitlisted || full && !state.isAttending && !closed ? helpId : undefined} onClick={() => void change(action)}>
+        {phase === 'saving' ? 'Wird verarbeitet …' : label}
+      </Button>
+      {state.isWaitlisted && phase === 'ready' && <Button type="button" size="sm" variant="ghost" data-participation-refresh="" className="ml-1 max-w-full whitespace-normal" onClick={() => void refresh()}>Status aktualisieren</Button>}
+    </>}
+    {(phase === 'error' || phase === 'unavailable') && <Button type="button" variant="outline" size="sm" className="max-w-full whitespace-normal" onClick={() => void refresh()}>Teilnahmestatus erneut laden</Button>}
+    {phase === 'unauthorized' && <Button size="sm" variant="outline" asChild><Link href="/login">Erneut anmelden</Link></Button>}
+  </div>;
+}

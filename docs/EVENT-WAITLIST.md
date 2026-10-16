@@ -1,6 +1,6 @@
-# Event waitlist backend contract
+# Event waitlist contract
 
-This optional FIFO waitlist is separate from attendance. The current UI remains unchanged; a later UI must deliberately expose and label this opt-in.
+This optional FIFO waitlist is separate from attendance. The event participation panel deliberately exposes and labels this opt-in.
 
 ## API
 
@@ -21,7 +21,15 @@ State fields:
 - waitlistCount: total queued; waitlistPosition: own 1-based FIFO position or null
 - maxAttendees: capacity or null for unlimited; registrationClosed: start instant has passed
 
-The event list retains its existing attendance-only shape. A later UI can read the RSVP endpoint on demand and must not infer queue state from isAttending. Closing registration forbids new registrations and promotions; existing participation can still be read/replayed or withdrawn.
+The event list retains its existing attendance-only shape. The UI reads the RSVP endpoint on demand and never infers queue state from the list's isAttending. Closing registration forbids new registrations and promotions; existing participation can still be read/replayed or withdrawn.
+
+## Attendee UI
+
+Visible participation panels fetch the caller's private state without caching. A full event offers a separate “Auf Warteliste setzen” action and explains automatic registration when a seat opens. Viewing an event never joins its queue. Ordinary joins remain bodyless. A queued caller sees their own position and a withdrawal action; registered callers see cancellation, while ATTENDED cannot be cancelled. No queue identities are displayed.
+
+Writes are single-flight and never retried automatically. A 409 triggers a fresh read and asks the caller to check the result before another deliberate action. An uncertain write, failed read, expired authorization or missing event clears stale private state. Account changes remount the state owner and abort prior requests. Focus, visibility and a manual queue refresh revalidate promotion and position changes. The existing inbox opens a promotion only through its recipient-checked API and an exact internal event-anchor allowlist.
+
+Source/UI tests cover these states plus keyboard focus and late responses. `e2e/events-waitlist.pw.ts` contains a guarded disposable SQLite/API/browser journey for FIFO leave/rejoin, cancellation/capacity promotion and the real inbox action, plus clearly labeled response fixtures for races and failures. Screenshots and responsive checks are authored at 320, 390 and desktop widths; actual browser/visual evidence requires the matching exact-head CI production build.
 
 ## Atomicity and notices
 
