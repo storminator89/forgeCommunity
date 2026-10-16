@@ -1,8 +1,20 @@
 /** @jest-environment node */
 import { DateTime, Settings } from 'luxon';
 import { eventCalendarDate, eventDateKey, eventIsTodayOrLater, eventStartTime, parseEventSchedule } from '@/lib/event-time';
+import { waitlistEventFixture } from '../e2e/events-waitlist-fixture';
 
 const input = { date: '2030-05-21', startTime: '00:30', endTime: '01:30', timezone: 'Europe/Berlin' };
+
+test.each(['2030-01-07', '2030-06-07', '2030-03-17', '2030-10-13'])('the browser fixture is valid in the supported event zone across seasons from %s', date => {
+  const now = Date.parse(`${date}T00:00:00Z`);
+  const fixture = waitlistEventFixture('schedule-regression', now);
+  const { start, end } = parseEventSchedule(fixture);
+  expect(start.zoneName).toBe('Europe/Berlin');
+  expect(start.toISODate()).toBe(fixture.date);
+  expect(start.toFormat('HH:mm')).toBe('12:00');
+  expect(start.toMillis()).toBeGreaterThan(now);
+  expect(end.toMillis() - start.toMillis()).toBe(60 * 60 * 1000);
+});
 
 test('resolves one event-zone schedule to UTC without changing its calendar date', () => {
   const { start, end } = parseEventSchedule(input);

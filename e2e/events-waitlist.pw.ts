@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { expect, test, type APIRequestContext, type APIResponse, type BrowserContext, type Locator, type Page } from '@playwright/test';
 import { crossEngineFixtureOrigin } from './cross-engine-fixture';
+import { waitlistEventFixture } from './events-waitlist-fixture';
 
 type Account = { id: string; name: string; email: string };
 type Participation = {
@@ -118,9 +119,7 @@ test('real FIFO opt-in, leave/rejoin and seat promotions reach the existing inbo
       pages.push(page);
     }
     const [adminPage, alicePage, bobPage] = pages;
-    const date = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    const event = { title: `Waitlist QA ${nonce}`, date, startTime: '12:00', endTime: '13:00', timezone: 'UTC',
-      description: '<p>Disposable waitlist browser fixture.</p>', location: 'Online QA', category: 'Workshop', maxAttendees: 1 };
+    const event = waitlistEventFixture(nonce);
     const created = await json<{ id: string }>(await contexts[0].request.post('/api/events', { headers: { origin }, data: event }), 201);
     const id = created.id;
     const rsvp = `/api/events/${encodeURIComponent(id)}/rsvp`;

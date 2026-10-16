@@ -253,10 +253,26 @@ jobs:
         id: browser_install
         run: npx playwright install --with-deps chromium firefox webkit
 
-      - name: Exercise desktop and mobile browser flows
-        run: npm run test:browser
+      - name: Verify browser project isolation
+        run: node --test scripts/browser-project-isolation.node-tests.mjs
 
-      # Run afterward because the full Chromium suite clears test-results/.
+      # Each CLI owns and tears down its Next server. The real authentication
+      # limiter stays unchanged; one project cannot exhaust the next one's
+      # process-local aggregate bucket. Keep separate output roots because
+      # Playwright clears its selected output directory at the start of a run.
+      - name: Exercise desktop Chromium browser flows
+        if: ${{ !cancelled() && steps.browser_build.outcome == 'success' && steps.browser_install.outcome == 'success' }}
+        run: npx playwright test --project=desktop-chromium --output=test-results/desktop-chromium
+
+      - name: Exercise 320px Chromium browser flows
+        if: ${{ !cancelled() && steps.browser_build.outcome == 'success' && steps.browser_install.outcome == 'success' }}
+        run: npx playwright test --project=mobile-320-chromium --output=test-results/mobile-320-chromium
+
+      - name: Exercise 390px Chromium browser flows
+        if: ${{ !cancelled() && steps.browser_build.outcome == 'success' && steps.browser_install.outcome == 'success' }}
+        run: npx playwright test --project=mobile-390-chromium --output=test-results/mobile-390-chromium
+
+      # Run afterward with its own output root.
       # A Chromium assertion failure must not hide the other engine results.
       - name: Exercise four desktop Firefox and WebKit critical journeys
         if: ${{ !cancelled() && steps.browser_build.outcome == 'success' && steps.browser_install.outcome == 'success' }}

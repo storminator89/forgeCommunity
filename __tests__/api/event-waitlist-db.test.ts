@@ -8,6 +8,8 @@ import { PUT, DELETE as deleteEvent } from '@/app/api/events/[id]/route';
 import { POST as openNotice } from '@/app/api/notifications/[id]/open/route';
 import { GET as inbox } from '@/app/api/notifications/route';
 import { joinEvent, leaveEvent, readEventParticipation } from '@/lib/server/event-participation';
+import { POST as createEvent } from '@/app/api/events/route';
+import { waitlistEventFixture } from '../../e2e/events-waitlist-fixture';
 
 jest.setTimeout(30000);
 jest.mock('next/server', () => ({ NextResponse: class extends Response {
@@ -85,6 +87,25 @@ beforeEach(async () => {
   session();
 });
 afterAll(async () => { await prisma.$disconnect(); await jest.requireMock('@/lib/prisma').__finalize?.(); });
+
+test('the exact real-browser fixture creates and resizes through the supported event-zone contract', async () => {
+  session('admin', 'ADMIN');
+  const fixture = waitlistEventFixture('route-regression', Date.UTC(2035, 4, 7));
+  const before = await prisma.event.count();
+  const rejected = await createEvent(request('POST', { ...fixture, timezone: 'UTC' }));
+  expect(rejected.status).toBe(400);
+  expect(await rejected.json()).toEqual({ error: 'Invalid timezone selected' });
+  expect(await prisma.event.count()).toBe(before);
+
+  const created = await createEvent(request('POST', fixture));
+  expect(created.status).toBe(201);
+  const body = await created.json();
+  expect(body).toMatchObject({ title: fixture.title, timezone: 'Europe/Berlin', startTime: '12:00', endTime: '13:00', maxAttendees: 1 });
+  expect((await prisma.event.findUniqueOrThrow({ where: { id: body.id } })).date.toISOString()).toBe('2035-05-21T10:00:00.000Z');
+  const resized = await PUT(request('PUT', { ...fixture, maxAttendees: 2 }), { params: Promise.resolve({ id: body.id }) });
+  expect(resized.status).toBe(200);
+  expect(await resized.json()).toMatchObject({ timezone: 'Europe/Berlin', maxAttendees: 2 });
+});
 
 test('legacy direct registration/full behavior survives and queue entry needs explicit caller-only opt-in', async () => {
   expect((await join()).status).toBe(201);
