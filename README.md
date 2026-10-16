@@ -145,6 +145,10 @@ every App Router page, including redirects.
   depend on local permission and settings. See [notifications](docs/ACTIONABLE-NOTIFICATION-INBOX.md).
 - Public course-reward ranking is opt-in. Private goals and contribution
   milestones do not award posting points or streaks. See [reward rules](docs/RESPONSIBLE-REWARDS.md).
+- Voluntary Space polls let current members choose one option and change their
+  vote; admins create, close and hide questions. Results show totals and your
+  own choice, without a voter list. Small-group choices may still be inferred.
+  See [Space polls](docs/SPACE-POLLS.md).
 - The member directory is not server-paginated. Unicode/collation and freshness
   semantics need an explicit decision before changing that contract.
 

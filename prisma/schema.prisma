@@ -132,6 +132,9 @@ model User {
   spaceDiscussions   SpaceDiscussion[]
   spaceReplies       SpaceReply[]
   createdSpaceMissions SpaceMission[]
+  spacePolls SpacePoll[]
+  spacePollVotes SpacePollVote[]
+  spacePollVoteRequests SpacePollVoteRequest[]
   spaceMissionParticipations SpaceMissionParticipation[]
   spaceMissionContributions SpaceMissionContribution[]
   likePosts          LikePost[]
@@ -270,6 +273,74 @@ model Space {
   members     SpaceMember[]
   discussions SpaceDiscussion[]
   missions    SpaceMission[]
+  polls       SpacePoll[]
+}
+
+// Voluntary Space decisions. API projections expose totals and the caller's
+// choice only; small groups can still infer choices from changing totals.
+model SpacePoll {
+  id            String @id @default(cuid())
+  spaceId       String
+  space         Space @relation(fields: [spaceId], references: [id], onDelete: Restrict)
+  creatorId     String?
+  creator       User? @relation(fields: [creatorId], references: [id], onDelete: SetNull)
+  requestId     String
+  payloadDigest String
+  question      String
+  createdAt     DateTime @default(now())
+  closedAt      DateTime?
+  hiddenAt      DateTime?
+  moderationRevision Int @default(0)
+  options       SpacePollOption[]
+  votes         SpacePollVote[]
+  requests      SpacePollVoteRequest[]
+
+  @@unique([spaceId, requestId])
+  @@index([spaceId, createdAt, id])
+  @@index([creatorId, createdAt])
+}
+
+model SpacePollOption {
+  id       String @id @default(cuid())
+  pollId   String
+  poll     SpacePoll @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  position Int
+  label    String
+  votes    SpacePollVote[]
+
+  @@unique([pollId, id])
+  @@unique([pollId, position])
+}
+
+// Composite option FK makes cross-poll votes impossible in both providers.
+model SpacePollVote {
+  pollId   String
+  userId   String
+  optionId String
+  revision Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  poll     SpacePoll @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  option   SpacePollOption @relation(fields: [pollId, optionId], references: [pollId, id], onDelete: Cascade)
+  user     User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([pollId, userId])
+  @@index([pollId, optionId])
+  @@index([userId])
+}
+
+// Bounded durable receipts make replay a no-op even after later choice changes.
+model SpacePollVoteRequest {
+  pollId        String
+  userId        String
+  requestId     String
+  payloadDigest String
+  createdAt     DateTime @default(now())
+  poll          SpacePoll @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  user          User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([pollId, userId, requestId])
+  @@index([userId, createdAt])
 }
 
 // Private-Space cooperative activity. This is not course or mastery evidence.
