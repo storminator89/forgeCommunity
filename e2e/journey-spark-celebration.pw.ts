@@ -95,8 +95,13 @@ async function captureChangingFrames(page: Page, testInfo: TestInfo, label: stri
   await session.send('Page.startScreencast', { format: 'png', everyNthFrame: 1 });
   try {
     await begin();
-    await expect(page.locator(clipSelector)).toHaveAttribute('data-spark-celebration', 'playing');
-    await expect(page.locator(clipSelector)).toHaveCount(0);
+    const clip = page.locator(clipSelector);
+    await expect(clip).toHaveAttribute('data-spark-celebration', 'playing');
+    // currentSrc becomes available only once the deliberately delayed request
+    // loads. Verify the selected native resource during playback, not loading.
+    expect(await clip.evaluate(image => (image as HTMLImageElement).currentSrc)).toBe(`${origin}${clipPath}`);
+    await expect(clip).not.toHaveAttribute('srcset', /.+/);
+    await expect(clip).toHaveCount(0);
   } finally {
     interval = await page.evaluate(() => {
       const capture = (window as typeof window & { __sparkCapture?: {
@@ -195,10 +200,11 @@ test('the real Blender clip waits for load, changes frames once, settles to stat
   const fixture = await journeyFixture(page);
   let release!: () => void;
   let fail = false;
+  let failedRequests = 0;
   let delayed = true;
   const pending = new Promise<void>(resolve => { release = resolve; });
   await page.route(`**${clipPath}`, async route => {
-    if (fail) return route.abort('failed');
+    if (fail) { failedRequests++; return route.abort('failed'); }
     if (delayed) await pending;
     await route.continue();
   });
@@ -216,7 +222,6 @@ test('the real Blender clip waits for load, changes frames once, settles to stat
   // error handler. Compare the actual resource, independent of serialization.
   expect(new URL((await clip.getAttribute('src'))!, origin).href).toBe(`${origin}${clipPath}`);
   await expect(clip).not.toHaveAttribute('srcset', /.+/);
-  expect(await clip.evaluate(image => (image as HTMLImageElement).currentSrc)).toBe(`${origin}${clipPath}`);
   await captureChangingFrames(page, testInfo, 'first-completion', () => { release(); delayed = false; });
   const mascot = page.locator('[data-journey-mascot]');
   await expect(page.getByRole('status')).toContainText('Alle aktuellen Kursinhalte bestätigt');
@@ -231,6 +236,7 @@ test('the real Blender clip waits for load, changes frames once, settles to stat
   fail = true;
   fixture.setComplete(true);
   await refresh(page);
+  await expect.poll(() => failedRequests).toBe(1);
   await expect(clip).toHaveCount(0);
   await expect(page.getByRole('status')).toContainText('Alle aktuellen Kursinhalte bestätigt');
   await expect(page.getByRole('link', { name: 'Kurs ansehen' })).toBeVisible();
