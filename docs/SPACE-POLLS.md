@@ -117,6 +117,10 @@ The real disposable SQLite browser journey is `e2e/space-polls.pw.ts`, included
 in `browser-qa`. It covers keyboard composition/vote/change, no voter-list
 projection, stale replay, hide/close, revoked access, PUBLIC join/leave,
 light/dark 320/375/414/768px, 200% zoom and document/control reflow. It requires
-the repository's guarded loopback `forge-browser-qa.db` fixture. Browser and
-PostgreSQL runtime remain unverified until their actual CI jobs pass; unit and
-SQLite route tests are not substitutes for those gates.
+the repository's guarded loopback `forge-browser-qa.db` fixture. CI runs
+each Chromium viewport in a separate Playwright invocation with a fresh app
+server. The production login limit is unchanged; synthetic sign-ins from one
+viewport cannot consume the next viewport's process-local budget. Screenshot
+directories remain separate, followed by the four-case Firefox/WebKit smoke.
+Inspect exact-head `browser-qa` and `postgresql-release-gate` results before
+merging; unit and SQLite route tests are not substitutes for runtime gates.
