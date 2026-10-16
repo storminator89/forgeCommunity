@@ -13,6 +13,11 @@ export async function resolveNotificationTarget(target: Target, viewerId: string
   const { type, targetType, targetId } = target;
   if (!targetType || !targetId || !safeId(targetId)) return null;
 
+  if (type === 'EVENT' && targetType === 'EVENT') {
+    const event = await prisma.event.findFirst({ where: { id: targetId,
+      attendees: { some: { userId: viewerId, status: { not: 'CANCELLED' } } } }, select: { id: true } });
+    return event ? { href: `/events#event-${encodeURIComponent(event.id)}`, label: 'Event ansehen' } : null;
+  }
   if (type === 'FOLLOW' && targetType === 'USER') {
     const user = await prisma.user.findUnique({ where: { id: targetId }, select: { id: true } });
     return user ? { href: `/profile/${encodeURIComponent(user.id)}`, label: 'Profil ansehen' } : null;
@@ -40,13 +45,14 @@ export async function resolveNotificationTarget(target: Target, viewerId: string
   return null;
 }
 
-/** Resolve one inbox page in at most three visibility-filtered queries. */
+/** Resolve one inbox page in at most four visibility-filtered queries. */
 export async function resolveNotificationTargets(targets: Target[], viewerId: string): Promise<Array<NotificationAction | null>> {
   const userIds = [...new Set(targets.filter(target => target.type === 'FOLLOW' && target.targetType === 'USER' && target.targetId && safeId(target.targetId)).map(target => target.targetId!))];
   const commentIds = [...new Set(targets.filter(target => target.type === 'COMMENT' && target.targetType === 'COMMENT' && target.targetId && safeId(target.targetId)).map(target => target.targetId!))];
   const messageIds = [...new Set(targets.filter(target => (target.type === 'CHAT_MESSAGE' || target.type === 'MENTION') && target.targetType === 'CHAT_MESSAGE' && target.targetId && safeId(target.targetId)).map(target => target.targetId!))];
 
-  const [users, comments, messages] = await Promise.all([
+  const eventIds = [...new Set(targets.filter(target => target.type === 'EVENT' && target.targetType === 'EVENT' && target.targetId && safeId(target.targetId)).map(target => target.targetId!))];
+  const [users, comments, messages, events] = await Promise.all([
     userIds.length ? prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true } }) : [],
     commentIds.length ? prisma.comment.findMany({
       where: { id: { in: commentIds }, post: { OR: [{ published: true }, { authorId: viewerId }] } },
@@ -58,12 +64,18 @@ export async function resolveNotificationTargets(targets: Target[], viewerId: st
       ] } },
       select: { id: true, channelId: true },
     }) : [],
+    eventIds.length ? prisma.event.findMany({ where: { id: { in: eventIds },
+      attendees: { some: { userId: viewerId, status: { not: 'CANCELLED' } } } }, select: { id: true } }) : [],
   ]);
+  const visibleEvents = new Set(events.map(event => event.id));
   const visibleUsers = new Set(users.map(user => user.id));
   const visibleComments = new Set(comments.map(comment => comment.id));
   const visibleMessages = new Map(messages.map(message => [message.id, message.channelId]));
   return targets.map(({ type, targetType, targetId }) => {
     if (!targetId || !safeId(targetId)) return null;
+    if (type === 'EVENT' && targetType === 'EVENT' && visibleEvents.has(targetId)) {
+      return { href: `/events#event-${encodeURIComponent(targetId)}`, label: 'Event ansehen' };
+    }
     if (type === 'FOLLOW' && targetType === 'USER' && visibleUsers.has(targetId)) {
       return { href: `/profile/${encodeURIComponent(targetId)}`, label: 'Profil ansehen' };
     }

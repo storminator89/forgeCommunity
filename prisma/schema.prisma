@@ -140,6 +140,7 @@ model User {
   projectComments    ProjectComment[]
   courses            Course[]
   eventAttendees     EventAttendee[]
+  eventWaitlist      EventWaitlist[]
   chatMessages       ChatMessage[]
   chatReadCursors    ChatReadCursor[]
   notifications      Notification[]
@@ -1129,6 +1130,7 @@ model Event {
   location     String
   maxAttendees Int?
   attendees    EventAttendee[]
+  waitlist     EventWaitlist[]
   category     String
   timezone     String          @default("Europe/Berlin")
   startTime    String
@@ -1146,6 +1148,21 @@ model EventAttendee {
   status  AttendeeStatus @default(REGISTERED)
 
   @@unique([eventId, userId])
+}
+
+// Increasing, non-reused IDs define FIFO order; leaving and rejoining creates
+// a fresh queue entry and promotion-notification identity.
+model EventWaitlist {
+  id        Int      @id @default(autoincrement())
+  eventId   String
+  userId    String
+  createdAt DateTime @default(now())
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([eventId, id])
+  @@index([userId])
 }
 
 model ChatChannel {

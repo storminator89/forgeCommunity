@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
-import { ParticipationError, participationTransaction } from '@/lib/server/participation';
+import { ParticipationError } from '@/lib/server/participation';
+import { EVENT_PARTICIPATION_HEADERS, joinEvent, leaveEvent, readEventParticipation } from '@/lib/server/event-participation';
+import { requestErrorResponse } from '@/lib/server/api-input';
+import { requestWithBodyLimit } from '@/lib/server/request-body';
 
 type Context = { params: Promise<{ id: string }> };
-const active = { status: { not: 'CANCELLED' as const } };
+const json = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: EVENT_PARTICIPATION_HEADERS });
 
 async function currentUserId() {
   const session = await getServerSession(authOptions);
@@ -12,58 +15,44 @@ async function currentUserId() {
 }
 
 function failure(error: unknown) {
-  if (error instanceof ParticipationError) return NextResponse.json({ error: error.message }, { status: error.status });
+  if (error instanceof ParticipationError) return json({ error: error.message }, error.status);
+  const input = requestErrorResponse(error);
+  if (input) { input.headers.set('Cache-Control', EVENT_PARTICIPATION_HEADERS['Cache-Control']); return input; }
   console.error('Event RSVP failed:', error);
-  return NextResponse.json({ error: 'Event RSVP failed' }, { status: 500 });
+  return json({ error: 'Event RSVP failed' }, 500);
 }
 
-export async function POST(_request: Request, { params }: Context) {
+export async function GET(_request: Request, { params }: Context) {
   const userId = await currentUserId();
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const { id: eventId } = await params;
+  if (!userId) return json({ error: 'Unauthorized' }, 401);
+  try { return json(await readEventParticipation((await params).id, userId)); }
+  catch (error) { return failure(error); }
+}
+
+export async function POST(request: Request, { params }: Context) {
+  const userId = await currentUserId();
+  if (!userId) return json({ error: 'Unauthorized' }, 401);
   try {
-    const result = await participationTransaction(async tx => {
-      const event = await tx.event.findUnique({ where: { id: eventId }, select: { date: true, maxAttendees: true } });
-      if (!event) throw new ParticipationError('Event not found', 404);
-      const existing = await tx.eventAttendee.findUnique({
-        where: { eventId_userId: { eventId, userId } }, select: { id: true, status: true },
-      });
-      const attendeeCount = await tx.eventAttendee.count({ where: { eventId, ...active } });
-      if (existing && existing.status !== 'CANCELLED') return { attendeeCount, created: false, canCancelRsvp: existing.status !== 'ATTENDED' };
-      if (event.date <= new Date()) throw new ParticipationError('Registration for this event has closed', 409);
-      if (event.maxAttendees !== null && attendeeCount >= event.maxAttendees) throw new ParticipationError('Event is full', 409);
-      if (existing) {
-        await tx.eventAttendee.update({ where: { id: existing.id }, data: { status: 'REGISTERED' } });
-      } else {
-        await tx.eventAttendee.create({ data: { eventId, userId, status: 'REGISTERED' } });
+    // Bodyless requests retain the old direct-registration/full-event contract.
+    let allowWaitlist = false;
+    const text = await (await requestWithBodyLimit(request, 1024)).text();
+    if (text.length > 0) {
+      let body: unknown;
+      try { body = JSON.parse(text); } catch { throw new ParticipationError('Invalid JSON object', 400); }
+      if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length !== 1 ||
+          !('waitlist' in body) || typeof body.waitlist !== 'boolean') {
+        throw new ParticipationError('Expected only a waitlist boolean', 400);
       }
-      return { attendeeCount: attendeeCount + 1, created: true, canCancelRsvp: true };
-    });
-    return NextResponse.json({ isAttending: true, canCancelRsvp: result.canCancelRsvp, attendeeCount: result.attendeeCount }, { status: result.created ? 201 : 200 });
-  } catch (error) {
-    return failure(error);
-  }
+      allowWaitlist = body.waitlist;
+    }
+    const result = await joinEvent((await params).id, userId, allowWaitlist);
+    return json(result.state, result.created ? 201 : 200);
+  } catch (error) { return failure(error); }
 }
 
 export async function DELETE(_request: Request, { params }: Context) {
   const userId = await currentUserId();
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const { id: eventId } = await params;
-  try {
-    const attendeeCount = await participationTransaction(async tx => {
-      const event = await tx.event.findUnique({ where: { id: eventId }, select: { id: true } });
-      if (!event) throw new ParticipationError('Event not found', 404);
-      const existing = await tx.eventAttendee.findUnique({
-        where: { eventId_userId: { eventId, userId } }, select: { id: true, status: true },
-      });
-      if (existing?.status === 'ATTENDED') throw new ParticipationError('Recorded attendance cannot be cancelled', 409);
-      if (existing && existing.status !== 'CANCELLED') {
-        await tx.eventAttendee.update({ where: { id: existing.id }, data: { status: 'CANCELLED' } });
-      }
-      return tx.eventAttendee.count({ where: { eventId, ...active } });
-    });
-    return NextResponse.json({ isAttending: false, canCancelRsvp: false, attendeeCount });
-  } catch (error) {
-    return failure(error);
-  }
+  if (!userId) return json({ error: 'Unauthorized' }, 401);
+  try { return json(await leaveEvent((await params).id, userId)); }
+  catch (error) { return failure(error); }
 }

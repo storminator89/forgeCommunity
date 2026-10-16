@@ -43,6 +43,7 @@ const reviewedUpgradeNames = [
   '0020_space_report_targets.sql',
   '0021_space_mission_foundation.sql',
   '0022_space_mission_contributions.sql',
+  '0023_event_waitlist.sql',
 ];
 // A release image must carry the exact reviewed sequence, including the tail.
 assert.deepEqual(upgradeNames, reviewedUpgradeNames);

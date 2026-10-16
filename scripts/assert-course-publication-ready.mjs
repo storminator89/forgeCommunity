@@ -17,6 +17,7 @@ const reviewedSqlite = [
   '0017_chat_message_cursor_index.sql', '0018_chat_read_cursor.sql',
   '0019_course_qa.sql', '0020_spaces.sql', '0021_space_report_targets.sql',
   '0022_space_mission_foundation.sql', '0023_space_mission_contributions.sql',
+  '0024_event_waitlist.sql',
 ];
 const reviewedPostgresql = [
   '0001_skill_endorsements.sql', '0002_course_progress.sql', '0003_reports.sql',
@@ -29,6 +30,7 @@ const reviewedPostgresql = [
   '0016_chat_message_cursor_index.sql', '0017_chat_read_cursor.sql',
   '0018_course_qa.sql', '0019_spaces.sql', '0020_space_report_targets.sql',
   '0021_space_mission_foundation.sql', '0022_space_mission_contributions.sql',
+  '0023_event_waitlist.sql',
 ];
 
 function expectedHistory(provider) {

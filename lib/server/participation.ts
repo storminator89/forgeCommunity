@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { DriverAdapterError } from '@prisma/driver-adapter-utils';
 import prisma from '@/lib/prisma';
 
 export class ParticipationError extends Error {
@@ -24,7 +25,9 @@ export async function participationTransaction<T>(work: (tx: Prisma.TransactionC
       return await prisma.$transaction(work, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
       const code = error instanceof Prisma.PrismaClientKnownRequestError ? error.code : null;
-      if (code !== 'P2034' && code !== 'P2002') throw error;
+      const adapterConflict = error instanceof DriverAdapterError && error.cause.kind === 'TransactionWriteConflict' &&
+        (error.cause.originalCode === '40001' || error.cause.originalCode === '40P01');
+      if (code !== 'P2034' && code !== 'P2002' && !adapterConflict) throw error;
       if (attempt === 3) throw new ParticipationError('Gleichzeitige Änderung. Bitte erneut versuchen.', 409);
     }
   }
