@@ -138,7 +138,11 @@ test('two learners voluntarily teach back, reverse consent and moderate within a
     await alicePage.getByRole('dialog').getByRole('button', { name: 'Teilnahme beenden', exact: true }).click();
     await expect(alicePage.getByText('Das gemeinsame Ziel ist noch offen.')).toBeVisible();
     await expect(alicePage.getByText('Eine Erklärung wird klarer, wenn ein konkretes Beispiel den Zusammenhang zeigt.', { exact: true })).toHaveCount(0);
+    const rejoinResponse = alicePage.waitForResponse(response => new URL(response.url()).pathname === `${base}/participation` && response.request().method() === 'POST');
     await alicePage.getByRole('button', { name: 'Freiwillig teilnehmen' }).click();
+    const rejoinResult = await rejoinResponse;
+    expect(rejoinResult.status(), await rejoinResult.text()).toBe(200);
+    expect(await rejoinResult.json()).toMatchObject({ participation: { epoch: 2, active: true }, ownContributions: [] });
     await expect(alicePage.getByLabel('Deine Erkenntnis', { exact: true })).toBeVisible();
     const afterRejoin = await contexts[1].request.get(base);
     const rejoined = await afterRejoin.json();

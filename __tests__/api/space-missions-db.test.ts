@@ -2,6 +2,9 @@
 
 import prisma from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
+import { DriverAdapterError } from '@prisma/driver-adapter-utils';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { Pool } from 'pg';
 import { getServerSession } from 'next-auth';
 import { GET as listMissions, POST as createMission } from '@/app/api/spaces/[spaceId]/missions/route';
 import { GET as readMission, PATCH as closeMission } from '@/app/api/spaces/[spaceId]/missions/[missionId]/route';
@@ -302,8 +305,15 @@ test('parallel joins never exceed five active participants', async () => {
     jest.mocked(getServerSession).mockResolvedValueOnce({ user: { id: `learner${i}`, role: 'ADMIN' } } as never);
     return join(item.id);
   }));
-  expect(results.every(r => [200, 409].includes(r.status))).toBe(true);
+  const responses = await Promise.all(results.map(async response => ({ status: response.status, body: await response.json() })));
+  // Check persisted capacity even if response handling regresses; retain the
+  // strict public status contract and show unexpected status/body/error cause.
   expect(await prisma.spaceMissionParticipation.count({ where: { optedOutAt: null } })).toBeLessThanOrEqual(5);
+  const unexpected = responses.filter(response => ![200, 409].includes(response.status));
+  const errors = unexpected.length ? jest.mocked(console.error).mock.calls.map(([, error]) => ({
+    name: error?.name, code: error?.code, cause: error?.cause,
+  })) : [];
+  expect({ unexpected, errors }).toEqual({ unexpected: [], errors: [] });
 });
 
 test('real database constraints reject a second open mission and invalid participation epochs', async () => {
@@ -528,4 +538,91 @@ test('parallel contribution retries converge and duplicate live phases are datab
   expect(await prisma.spaceMissionContribution.count()).toBe(1);
   await expect(prisma.spaceMissionContribution.create({ data: { missionId: item.id, authorId: 'learner0', epoch: 1, kind: 'INSIGHT',
     content: 'Competing direct contribution', requestId: 'direct', payloadDigest: 'direct' } })).rejects.toMatchObject({ code: 'P2002' });
+});
+
+/** Exercise the installed PostgreSQL adapter's real SQLSTATE mapping without
+ * opening a socket. The fake pool returns a client that fails only at COMMIT.
+ * This reproduces the adapter error that Prisma 7 can propagate unwrapped. */
+async function postgresCommitConflict(code = '40001') {
+  const pool = new Pool({ host: '127.0.0.1', database: 'forge_test' });
+  const client = {
+    on: jest.fn(), removeListener: jest.fn(), release: jest.fn(),
+    query: jest.fn(async (query: { text: string }) => {
+      if (query.text === 'COMMIT') throw Object.assign(new Error('could not serialize access'), { code, severity: 'ERROR' });
+      return { rowCount: 0, rows: [], fields: [] };
+    }),
+  };
+  const connect = jest.spyOn(pool, 'connect').mockResolvedValue(client as never);
+  const adapter = await new PrismaPg(pool).connect();
+  const tx = await adapter.startTransaction('SERIALIZABLE');
+  try {
+    await tx.executeRaw({ sql: 'COMMIT', args: [], argTypes: [] });
+    throw new Error('Expected the fake COMMIT to fail');
+  } catch (error) {
+    expect(error).toBeInstanceOf(DriverAdapterError);
+    expect(error).toMatchObject({ cause: { originalCode: code, kind: 'TransactionWriteConflict' } });
+    expect(client.query.mock.calls.map(([query]) => query.text)).toEqual(['BEGIN', 'SET TRANSACTION ISOLATION LEVEL SERIALIZABLE', 'COMMIT']);
+    return error;
+  } finally { await tx.rollback(); await adapter.dispose(); connect.mockRestore(); }
+}
+
+test.each(['40001', '40P01'])('real PostgreSQL adapter COMMIT conflict %s rolls back and retries a fresh authorized join', async code => {
+  const item = await create();
+  session('learner0');
+  const adapterConflict = await postgresCommitConflict(code);
+  const transact = prisma.$transaction.bind(prisma);
+  let attempts = 0;
+  const transactions = jest.spyOn(prisma, '$transaction').mockImplementation((async (work: Work, options: unknown) =>
+    transact(async tx => { const result = await work(tx); if (++attempts === 1) throw adapterConflict; return result; }, options as never)) as never);
+  expect((await join(item.id)).status).toBe(200);
+  expect(transactions).toHaveBeenCalledTimes(2);
+  expect(await prisma.spaceMissionParticipation.count({ where: { missionId: item.id, userId: 'learner0', epoch: 1, optedOutAt: null } })).toBe(1);
+});
+
+test('repeated PostgreSQL adapter COMMIT conflicts exhaust at four attempts with 409 and no partial participation', async () => {
+  const item = await create();
+  session('learner0');
+  const adapterConflict = await postgresCommitConflict();
+  const transact = prisma.$transaction.bind(prisma);
+  const transactions = jest.spyOn(prisma, '$transaction').mockImplementation((async (work: Work, options: unknown) =>
+    transact(async tx => { await work(tx); throw adapterConflict; }, options as never)) as never);
+  const response = await join(item.id);
+  expect(response.status).toBe(409);
+  expect(response.headers.get('Cache-Control')).toBe('private, no-store');
+  expect(transactions).toHaveBeenCalledTimes(4);
+  expect(await prisma.spaceMissionParticipation.count()).toBe(0);
+});
+
+test('a PostgreSQL adapter conflict retry cannot revive membership revoked after rollback', async () => {
+  const item = await create();
+  session('learner0');
+  const adapterConflict = await postgresCommitConflict();
+  const transact = prisma.$transaction.bind(prisma);
+  let attempts = 0;
+  const transactions = jest.spyOn(prisma, '$transaction').mockImplementation((async (work: Work, options: unknown) => {
+    if (++attempts !== 1) return transact(work, options as never);
+    try { return await transact(async tx => { await work(tx); throw adapterConflict; }, options as never); }
+    catch (error) {
+      await prisma.spaceMember.delete({ where: { spaceId_userId: { spaceId: 'private', userId: 'learner0' } } });
+      throw error;
+    }
+  }) as never);
+  expect((await join(item.id)).status).toBe(404);
+  expect(transactions).toHaveBeenCalledTimes(2);
+  expect(await prisma.spaceMissionParticipation.count()).toBe(0);
+});
+
+test.each([
+  { name: 'DriverAdapterError', cause: { originalCode: '40001', kind: 'TransactionWriteConflict' } },
+  new DriverAdapterError({ originalCode: '08006', kind: 'TransactionWriteConflict' }),
+  new DriverAdapterError({ originalCode: '40001', kind: 'ConnectionClosed' }),
+])('does not retry an unverified or unrelated adapter conflict: %j', async error => {
+  const item = await create();
+  session('learner0');
+  const transact = prisma.$transaction.bind(prisma);
+  const transactions = jest.spyOn(prisma, '$transaction').mockImplementation((async (work: Work, options: unknown) =>
+    transact(async tx => { await work(tx); throw error; }, options as never)) as never);
+  expect((await join(item.id)).status).toBe(500);
+  expect(transactions).toHaveBeenCalledTimes(1);
+  expect(await prisma.spaceMissionParticipation.count()).toBe(0);
 });

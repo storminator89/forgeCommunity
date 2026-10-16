@@ -37,8 +37,10 @@ export function SpaceMissionDetail({ spaceId, missionId, viewerId }: { spaceId: 
   const feedbackRef = useRef<HTMLParagraphElement>(null);
   const focusAfterReadRef = useRef(false);
   const requestIdRef = useRef<{ payload: string; id: string } | null>(null);
+  const participationRef = useRef<{ epoch: number; active: boolean } | null>(null);
   const { request: accessRequest, invalidate, accessLost } = useSpaceAccess(() => {
-    setSnapshot(null); setContent(''); setTargetId(''); requestIdRef.current = null;
+    setSnapshot(null); setContent(''); setTargetId(''); setKind('INSIGHT');
+    requestIdRef.current = null; participationRef.current = null;
   });
   const request = useCallback(async <T,>(path: string, init?: RequestInit) => {
     try { return await accessRequest<T>(path, init); }
@@ -59,6 +61,12 @@ export function SpaceMissionDetail({ spaceId, missionId, viewerId }: { spaceId: 
       ]);
       if (!read.isCurrent()) return;
       if (space.visibility !== 'PRIVATE' || mission.spaceId !== spaceId || mission.id !== missionId) { invalidate(); return; }
+      // Composer choices belong to this consent epoch, including changes in another tab.
+      const participation = participationRef.current;
+      if (!participation || participation.epoch !== mission.participation.epoch || participation.active !== mission.participation.active) {
+        setKind('INSIGHT');
+      }
+      participationRef.current = { epoch: mission.participation.epoch, active: mission.participation.active };
       setSnapshot({ space, mission });
     } catch (caught) {
       if (read.isCurrent() && !isSpaceAbort(caught) && !missionAccessDenied(caught)) setError('Mission konnte nicht geladen werden.');

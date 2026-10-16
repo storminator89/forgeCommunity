@@ -129,6 +129,9 @@ test('leaving requires confirmation, purges content while pending, and rejoining
   });
   render(<SpaceMissionPage />);
   expect(await screen.findByText(ownInsight.content)).toBeVisible();
+  await userEvent.click(screen.getByRole('radio', { name: 'Darauf aufbauen' }));
+  await userEvent.click(screen.getByRole('radio', { name: `Jonas: ${insight.content}` }));
+  await userEvent.type(screen.getByRole('textbox', { name: 'Dein weiterführender Gedanke' }), 'Ein privater Entwurf aus der alten Teilnahme.');
   await userEvent.click(screen.getByRole('button', { name: 'Teilnahme beenden' }));
   const dialog = await screen.findByRole('dialog', { name: 'Teilnahme beenden?' });
   expect(within(dialog).getByText(/Erneutes Beitreten macht alte Beiträge nicht wieder sichtbar/)).toBeVisible();
@@ -144,6 +147,8 @@ test('leaving requires confirmation, purges content while pending, and rejoining
   await act(async () => { finishLeave(json(mission({ contributions: [ownInsight, insight] }))); });
   await userEvent.click(await screen.findByRole('button', { name: 'Freiwillig teilnehmen' }));
   await screen.findByRole('textbox', { name: 'Deine Erkenntnis' });
+  expect(screen.getByRole('radio', { name: 'Eine Erkenntnis' })).toBeChecked();
+  expect(screen.queryByDisplayValue('Ein privater Entwurf aus der alten Teilnahme.')).not.toBeInTheDocument();
   expect(JSON.parse(mutationCalls(`${base}/participation`, 'POST')[0][1]!.body as string)).toEqual({ expectedEpoch: 8 });
   expect(screen.queryByText(ownInsight.content)).not.toBeInTheDocument();
 });
@@ -269,6 +274,22 @@ test('focus revalidation purges draft and private material immediately and ignor
   await act(async () => { finishOldRead(json(mission())); });
   expect(screen.queryByText(insight.content)).not.toBeInTheDocument();
   expect(screen.getByText('0/2')).toBeVisible();
+});
+
+test('focus preserves the selected kind within consent and resets it when a different participation epoch is observed', async () => {
+  let current = mission();
+  serveMission(() => current);
+  render(<SpaceMissionPage />);
+  await screen.findByRole('textbox', { name: 'Deine Erkenntnis' });
+  await userEvent.click(screen.getByRole('radio', { name: 'Darauf aufbauen' }));
+  await userEvent.type(screen.getByRole('textbox', { name: 'Dein weiterführender Gedanke' }), 'Privater Entwurf der bisherigen Teilnahme.');
+  await act(async () => { fireEvent.focus(window); });
+  expect(await screen.findByRole('textbox', { name: 'Dein weiterführender Gedanke' })).toHaveValue('');
+  current = mission({ participation: { epoch: 8, active: true, joinedAt: now, optedOutAt: null }, ownContributions: [] });
+  await act(async () => { fireEvent.focus(window); });
+  expect(await screen.findByRole('textbox', { name: 'Deine Erkenntnis' })).toHaveValue('');
+  expect(screen.getByRole('radio', { name: 'Eine Erkenntnis' })).toBeChecked();
+  expect(screen.queryByRole('textbox', { name: 'Dein weiterführender Gedanke' })).not.toBeInTheDocument();
 });
 
 test.each([401, 403, 404])('a %i focus permission rejection clears the snapshot and prevents a late old read from restoring it', async status => {

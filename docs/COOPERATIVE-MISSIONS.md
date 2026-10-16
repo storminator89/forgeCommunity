@@ -101,6 +101,14 @@ sanitized payload replays return current authorized state, changed payloads
 under the same key return 409. Withdrawn/hidden/inactive contribution replays
 cannot return retained text.
 
+The four-attempt retry boundary recognizes Prisma P2034 and actual PostgreSQL
+DriverAdapterError instances with mapped TransactionWriteConflict plus original
+SQLSTATE 40001 or 40P01. Prisma 7.10 can propagate that adapter error unwrapped
+when serialization fails at COMMIT. Every retry takes a fresh authorization
+snapshot; exhaustion returns 409. Lookalikes, other mapped kinds and unrelated
+SQLSTATEs are not retried. The adapter error class is an explicitly declared,
+locked direct dependency, aligned with the installed Prisma 7.10 adapters.
+
 ## Storage and checks
 
 PostgreSQL upgrades 0021/0022 and SQLite migrations 0022/0023 follow the merged
@@ -113,12 +121,15 @@ resolution invariants and indexes. Publication readiness and PostgreSQL release
 gate allowlists include the exact new tails.
 
 Local validation used a private schema-generated SQLite client without changing
-shared dependencies: 36 mission API tests plus 46 adjacent account, Space and
+shared dependencies: 43 mission API tests plus 46 adjacent account, Space and
 report regressions passed; eight Space/mission migration/readiness/fixture-boundary tests passed. Both Prisma
 schemas, generated SQLite synchronization, changed-source zero-warning ESLint
 and whitespace checks passed. Full-project typecheck was resource-killed and
 is not a pass. No local PostgreSQL server/runtime, build or browser validation
-was performed for this backend-only change.
+was performed for this backend-only change. The actual PostgreSQL adapter's
+COMMIT-error mapping was reproduced with a fake in-memory pg pool and no socket.
+Regressions cover successful retry, four-attempt rollback/409, membership
+revocation between retries and rejection of lookalikes/unrelated adapter errors.
 
 CI runs the identical mission API suite through the PostgreSQL adapter in the
 existing disposable PostgreSQL service. The opt-in fixture requires
