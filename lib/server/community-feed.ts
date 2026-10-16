@@ -65,7 +65,7 @@ export function communityCommentInclude(userId?: string) {
   } satisfies Prisma.CommentInclude;
 }
 
-export function communityPostInclude(userId?: string) {
+export function communityPostInclude(userId?: string, commentPreviewSize = COMMUNITY_COMMENT_PREVIEW_SIZE) {
   return {
     author,
     tags: { select: { id: true, name: true }, orderBy: { name: 'asc' } },
@@ -74,7 +74,7 @@ export function communityPostInclude(userId?: string) {
     // Independent bounded include: never expand or shift the comment preview.
     acceptedSolution: { include: { comment: { include: communityCommentInclude(userId) } } },
     comments: {
-      take: COMMUNITY_COMMENT_PREVIEW_SIZE,
+      take: commentPreviewSize,
       orderBy: COMMUNITY_ORDER,
       include: communityCommentInclude(userId),
     },
@@ -92,7 +92,7 @@ export function normalizeCommunityComment(comment: CommentRecord, canSelectSolut
     votes: _count.likeComments, isLiked: likeComments.length > 0 };
 }
 
-export function normalizeCommunityPost(post: PostRecord, viewerId?: string) {
+export function normalizeCommunityPost(post: PostRecord, viewerId?: string, commentsDeferred = false) {
   const { _count, likePosts, comments, acceptedSolution, ...fields } = post;
   const visibleSolution = post.published && acceptedSolution &&
     acceptedSolution.comment.authorId !== post.authorId && !acceptedSolution.comment.author.isTestAccount
@@ -109,17 +109,18 @@ export function normalizeCommunityPost(post: PostRecord, viewerId?: string) {
     isLiked: likePosts.length > 0,
     comments: comments.map(comment => normalizeCommunityComment(comment, post.published && post.authorId === viewerId)),
     commentCount: _count.comments,
+    ...(commentsDeferred && _count.comments > 0 ? { commentsDeferred: true } : {}),
     commentsNextCursor: comments.length > 0 && _count.comments > comments.length
       ? encodeCommunityCursor(comments[comments.length - 1], 'comments', post.id)
       : null,
   };
 }
 
-export function communityPage<T extends CommunityCursor>(rows: T[], scope: CursorScope, postId?: string, tag?: string | null) {
-  const items = rows.slice(0, COMMUNITY_PAGE_SIZE);
+export function communityPage<T extends CommunityCursor>(rows: T[], scope: CursorScope, postId?: string, tag?: string | null, pageSize = COMMUNITY_PAGE_SIZE) {
+  const items = rows.slice(0, pageSize);
   return {
     items,
-    nextCursor: rows.length > COMMUNITY_PAGE_SIZE
+    nextCursor: rows.length > pageSize
       ? encodeCommunityCursor(items[items.length - 1], scope, postId, tag)
       : null,
   };
