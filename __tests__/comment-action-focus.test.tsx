@@ -104,6 +104,26 @@ test.each(['comment', 'like'] as const)('restores %s only after the owner has re
 })
 
 for (const kind of ['comment', 'like'] as const) {
+  test.each(['pointer', 'tab'])(`${kind} cancels on %s even when native disabled focus stays put, then leaves body alone`, async movement => {
+    render(<Harness />)
+    const target = await start(kind)
+    expect(target).toBeDisabled()
+    expect(target).toHaveFocus()
+    if (movement === 'pointer') fireEvent.pointerDown(screen.getByTestId('outside'))
+    else expect(fireEvent.keyDown(target, { key: 'Tab', cancelable: true })).toBe(true)
+    // Neither synthetic navigation event performs a default browser blur.
+    // Body focus itself cannot cancel this intent: the positive pendingBlur
+    // restoration tests exercise the same focus event without navigation.
+    expect(target).toHaveFocus()
+    pendingBlur()
+    const focus = jest.spyOn(target, 'focus')
+    await finish(true)
+    expect(target).toBeEnabled()
+    expect(document.activeElement).toBe(document.body)
+    expect(focus).not.toHaveBeenCalled()
+    expect(requests).toHaveLength(1)
+  })
+
   test.each(['focus', 'focus-then-body', 'pointer', 'tab', 'window-blur'])(`${kind} never steals focus after %s during a slow response`, async movement => {
     render(<Harness />)
     const target = await start(kind)

@@ -120,18 +120,65 @@ test('comment actions restore only their own pending-disabled focus across repea
     await expect(input).toHaveValue('')
 
     for (const kind of ['comment', 'like'] as const) {
-      for (const movement of ['tab', 'pointer-control', 'pointer-text']) {
-        const action = await begin(kind, false)
-        if (movement === 'tab') await page.keyboard.press('Tab')
-        if (movement === 'pointer-control') await page.getByRole('searchbox', { name: 'Thema suchen', exact: true }).click()
-        if (movement === 'pointer-text') await card.getByText(peer.content, { exact: true }).click()
-        const outside = await page.evaluateHandle(() => document.activeElement)
-        expect(await action.target.evaluate(element => element === document.activeElement)).toBe(false)
-        action.pending.release({ status: 503 })
-        await expect(action.target).toBeEnabled()
-        await expect.poll(() => outside.evaluate(element => element === document.activeElement)).toBe(true)
-        expect(mutations).toHaveLength(action.count)
-        await outside.dispose()
+      for (const movement of ['tab', 'pointer-control', 'pointer-control-then-body', 'pointer-text', 'pointer-text-then-body']) {
+        await test.step(`${theme}: ${kind} / ${movement}`, async () => {
+          const action = await begin(kind, false)
+          if (movement === 'tab') {
+            await action.target.evaluate(element => {
+              const observed = (event: KeyboardEvent) => {
+                if (event.key !== 'Tab') return
+                window.removeEventListener('keydown', observed)
+                element.setAttribute('data-comment-focus-tab', event.defaultPrevented ? 'prevented' : 'observed')
+              }
+              // Observe after the component/document handlers, without changing
+              // the event's propagation or native default navigation.
+              window.addEventListener('keydown', observed)
+            })
+            await page.keyboard.press('Tab')
+            await expect(action.target, 'The real Tab keydown must arrive without cancellation of its native default.').toHaveAttribute('data-comment-focus-tab', 'observed')
+            await action.target.evaluate(element => element.removeAttribute('data-comment-focus-tab'))
+          } else {
+            const destination = movement.startsWith('pointer-control')
+              ? page.getByRole('searchbox', { name: 'Thema suchen', exact: true })
+              : card.getByText(peer.content, { exact: true })
+            await destination.evaluate(element => {
+              element.addEventListener('pointerdown', () => element.setAttribute('data-comment-focus-pointer', 'observed'), { once: true })
+            })
+            await destination.click()
+            await expect(destination, 'The outside destination must receive a real pointerdown.').toHaveAttribute('data-comment-focus-pointer', 'observed')
+            await destination.evaluate(element => element.removeAttribute('data-comment-focus-pointer'))
+            if (movement.startsWith('pointer-control')) await expect(destination).toBeFocused()
+          }
+
+          const tabReachedOutsideControl = movement === 'tab' && await action.target.evaluate(element =>
+            document.activeElement !== element && document.activeElement !== document.body)
+          if (movement.endsWith('then-body') || (movement === 'tab' && !tabReachedOutsideControl)) {
+            // Mobile can retain a disabled active node after Tab or a text tap.
+            // Establish a negative target only AFTER the real navigation event:
+            // the action must not restore focus when that intent later reaches
+            // body. In the product, body focus on a disabled origin does not
+            // itself cancel an intent; missing key/pointer cancellation fails.
+            await page.evaluate(() => {
+              const previous = document.body.getAttribute('tabindex')
+              document.body.setAttribute('tabindex', '-1')
+              document.body.focus({ preventScroll: true })
+              if (previous === null) document.body.removeAttribute('tabindex')
+              else document.body.setAttribute('tabindex', previous)
+            })
+            expect(await page.evaluate(() => document.activeElement === document.body), 'The negative target must be body before the response.').toBe(true)
+          }
+          // A plain text tap may retain its original control. Preserve the
+          // actual native result here; its separate then-body case above proves
+          // pointer cancellation even when no native focus change occurred.
+          const expectedFocus = await page.evaluateHandle(() => document.activeElement)
+          action.pending.release({ status: 503 })
+          await expect(action.target).toBeEnabled()
+          await expect.poll(() => expectedFocus.evaluate(element => element === document.activeElement), {
+            message: `${theme}: ${kind} / ${movement} must preserve the chosen external/native focus after completion.`,
+          }).toBe(true)
+          expect(mutations).toHaveLength(action.count)
+          await expectedFocus.dispose()
+        })
       }
     }
     await capture(page, info, `comment-action-synthetic-external-navigation-${theme}`)

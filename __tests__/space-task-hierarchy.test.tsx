@@ -1,4 +1,4 @@
-import { createEvent, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, createEvent, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useSession } from 'next-auth/react';
 import { useParams, useRouter } from 'next/navigation';
@@ -158,20 +158,53 @@ test.each([{ button: 1 }, { button: 0, ctrlKey: true }, { button: 0, metaKey: tr
   const target = screen.getByRole('group', { name: 'Umfragen' });
   const focus = jest.spyOn(target, 'focus');
   const history = jest.spyOn(window.history, 'pushState');
+  const navigated = new Promise<void>(resolve => window.addEventListener('hashchange', () => resolve(), { once: true }));
   const click = createEvent.click(link, options);
   fireEvent(link, click);
   expect(click.defaultPrevented).toBe(false);
   expect(focus).not.toHaveBeenCalled();
   expect(history).not.toHaveBeenCalled();
+  // JSDOM follows even modified clicks in this window. Complete its queued
+  // hash/popstate navigation and our fragment RAF within the originating test.
+  await act(async () => { await navigated; });
+  await waitFor(() => expect(target).toHaveFocus());
 });
 
 test('an initial local fragment focuses once after loading, without refocusing on access revalidation', async () => {
   window.history.replaceState(null, '', '/community/spaces/secret#space-polls');
+  const focus = jest.spyOn(HTMLElement.prototype, 'focus');
+  const fragmentFocusCount = () => focus.mock.contexts.filter(element => element instanceof HTMLElement && element.id === 'space-polls').length;
+  render(<button type="button">Andere Aufgabe</button>);
   setup();
   await waitFor(() => expect(screen.getByRole('group', { name: 'Umfragen' })).toHaveFocus());
-  const reads = jest.mocked(global.fetch).mock.calls.length;
+  expect(fragmentFocusCount()).toBe(1);
+
+  // This separate render root survives the page's loading branch. Explicitly
+  // move focus before revalidation, then hold its summary read until the
+  // loading state is observable, independent of React's batching choices.
+  const external = screen.getByRole('button', { name: 'Andere Aufgabe' });
+  external.focus();
+  expect(external).toHaveFocus();
+  const fetch = jest.mocked(global.fetch);
+  const initialRead = fetch.getMockImplementation()!;
+  let finishRevalidation: ((response: Response) => void) | undefined;
+  fetch.mockImplementation((input, init) => {
+    const source = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    if (new URL(source, 'http://localhost').pathname === '/api/spaces/secret') {
+      return new Promise<Response>(resolve => { finishRevalidation = resolve; });
+    }
+    return initialRead(input, init);
+  });
   fireEvent(window, new Event('focus'));
-  await waitFor(() => expect(jest.mocked(global.fetch).mock.calls.length).toBeGreaterThan(reads));
+  await waitFor(() => expect(finishRevalidation).toBeDefined());
+  expect(screen.getByRole('heading', { name: 'Space wird geladen' })).toBeVisible();
+  expect(external).toHaveFocus();
+  await act(async () => {
+    finishRevalidation!(new Response(JSON.stringify(space), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+  });
   await screen.findByRole('heading', { level: 1, name: space.name });
-  expect(screen.getByRole('group', { name: 'Umfragen' })).not.toHaveFocus();
+  expect(screen.queryByRole('heading', { name: 'Space wird geladen' })).not.toBeInTheDocument();
+  expect(external).toHaveFocus();
+  // A prototype spy includes both the old and any remounted fragment node.
+  expect(fragmentFocusCount()).toBe(1);
 });
