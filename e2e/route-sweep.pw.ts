@@ -401,6 +401,9 @@ test.describe('every App Router page, one at a time', () => {
       }
 
       if (item.url === '/profile/:memberId') {
+        await page.getByRole('button', { name: 'Profil bearbeiten', exact: true }).click();
+        await expect(page.getByRole('button', { name: 'Bearbeitung schließen', exact: true })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Profil verwalten', exact: true })).toBeVisible();
         await page.getByRole('button', { name: 'Stammdaten bearbeiten', exact: true }).click();
         const dialog = page.getByRole('dialog', { name: 'Profil bearbeiten', exact: true });
         await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('');
