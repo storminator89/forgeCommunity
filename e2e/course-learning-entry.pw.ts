@@ -53,7 +53,7 @@ async function capture(page: Page, info: TestInfo, name: string) {
   await page.locator('#page-content').evaluate(element => { element.scrollTop = 0; });
   await expect.poll(() => page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - innerWidth)).toBeLessThanOrEqual(1);
   expect(await page.locator('#page-content').evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
-  await page.screenshot({ path: info.outputPath(`${name}.png`), fullPage: true });
+  await page.screenshot({ path: info.outputPath(`${name}.png`), fullPage: true, animations: 'disabled' });
 }
 
 async function theme(page: Page, value: 'light' | 'dark') {
@@ -86,16 +86,42 @@ test('catalog and journey bring the real task into the comparable first viewport
       await search.focus();
       await page.keyboard.press('Tab');
       await expect(page.getByRole('combobox', { name: 'Kategorie' })).toBeFocused();
-      await page.screenshot({ path: info.outputPath(`catalog-keyboard-${mode}-${size.width}.png`), fullPage: true });
-      for (const [name, href] of [
-        ['Mein Lernweg', '/courses/journey'], ['Lernpfade', '/courses/pathways'], ['Mein Lernziel', '/courses/goals'],
+      await page.screenshot({ path: info.outputPath(`catalog-keyboard-${mode}-${size.width}.png`), fullPage: true, animations: 'disabled' });
+      const navigation = page.getByRole('navigation', { name: 'Weitere Kursbereiche' });
+      await page.keyboard.press('Tab');
+      await expect(navigation.getByRole('link', { name: 'Mein Lernweg' })).toBeFocused();
+      await expect(navigation.getByRole('link', { name: 'Mein Lernweg' })).toHaveAttribute('href', '/courses/journey');
+      await page.keyboard.press('Tab');
+      const trigger = navigation.getByRole('button', { name: 'Kursbereiche' });
+      await expect(trigger).toBeFocused();
+      await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+      await page.keyboard.press('Enter');
+      const menu = page.getByRole('menu', { name: 'Kursbereiche' });
+      await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+      await expect(menu.getByRole('menuitem')).toHaveCount(4);
+      for (const [index, [name, href]] of [
+        ['Lernpfade', '/courses/pathways'], ['Mein Lernziel', '/courses/goals'],
         ['Meine Kursentwürfe', '/courses/authoring'], ['Neuer Kurs', '/courses/new'],
-      ]) {
-        const link = page.getByRole('navigation', { name: 'Weitere Kursbereiche' }).getByRole('link', { name });
-        await expect(link).toHaveAttribute('href', href);
-        await link.focus();
-        await expect(link).toBeFocused();
+      ].entries()) {
+        const item = menu.getByRole('menuitem', { name });
+        await expect(item).toHaveAttribute('href', href);
+        if (index > 0) await page.keyboard.press('ArrowDown');
+        await expect(item).toBeFocused();
+        await expect(item).toBeInViewport({ ratio: 1 });
       }
+      await capture(page, info, `catalog-menu-open-${mode}-${size.width}x${size.height}`);
+      await page.keyboard.press('Home');
+      await expect(menu.getByRole('menuitem', { name: 'Lernpfade' })).toBeFocused();
+      await page.keyboard.press('End');
+      await expect(menu.getByRole('menuitem', { name: 'Neuer Kurs' })).toBeFocused();
+      await page.keyboard.press('Escape');
+      await expect(menu).toHaveCount(0);
+      await expect(trigger).toBeFocused();
+      await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+      await expect.poll(() => trigger.evaluate(element => element.matches(':focus-visible'))).toBe(true);
+      await page.screenshot({ path: info.outputPath(`catalog-menu-trigger-focus-${mode}-${size.width}.png`), fullPage: true, animations: 'disabled' });
+      await page.keyboard.press('Tab');
+      await expect(page.getByRole('list', { name: 'Kurse' }).getByRole('listitem').first().getByRole('button', { name: 'Kurs beitreten' })).toBeFocused();
       route = 'journey';
       await page.goto('/courses/journey');
       await expect(page.getByRole('heading', { name: course.title })).toBeInViewport({ ratio: 1 });
@@ -115,6 +141,89 @@ test('catalog and journey bring the real task into the comparable first viewport
       await page.keyboard.press('Enter');
       await expect(page.locator('[data-journey-mascot]')).toHaveCount(1);
       await expect(page.getByRole('button', { name: 'Figurenanimationen aus' })).toBeDisabled();
+    }
+  }
+});
+
+test('catalog menu links activate their existing destinations with the keyboard', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  await page.route('**/api/courses', request => request.fulfill({ json: catalog }));
+  const destinations = [
+    ['Mein Lernweg', '/courses/journey'], ['Lernpfade', '/courses/pathways'], ['Mein Lernziel', '/courses/goals'],
+    ['Meine Kursentwürfe', '/courses/authoring'], ['Neuer Kurs', '/courses/new'],
+  ];
+  for (const [index, [name, href]] of destinations.entries()) {
+    await page.goto('/courses');
+    await expect(page.getByRole('heading', { name: catalog[0].title })).toBeVisible();
+    const navigation = page.getByRole('navigation', { name: 'Weitere Kursbereiche' });
+    if (name === 'Mein Lernweg') await navigation.getByRole('link', { name }).focus();
+    else {
+      await navigation.getByRole('button', { name: 'Kursbereiche' }).focus();
+      await page.keyboard.press('Enter');
+      const menu = page.getByRole('menu', { name: 'Kursbereiche' });
+      await expect(menu.getByRole('menuitem')).toHaveCount(4);
+      // Roving focus is deferred: confirm entry and each move before the next key.
+      await expect(menu.getByRole('menuitem', { name: destinations[1][0], exact: true })).toBeFocused();
+      for (let position = 1; position < index; position++) {
+        await page.keyboard.press('ArrowDown');
+        await expect(menu.getByRole('menuitem', { name: destinations[position + 1][0], exact: true })).toBeFocused();
+      }
+      await expect(menu.getByRole('menuitem', { name })).toBeFocused();
+    }
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(url => url.pathname === href);
+  }
+});
+
+test('catalog secondary navigation preserves creator and other account perspectives at all review sizes', async ({ page }, info) => {
+  const sessionResponse = await page.request.get(`${origin}/api/auth/session`);
+  expect(sessionResponse.ok()).toBeTruthy();
+  const session = await sessionResponse.json();
+  expect(session.user.id).toBeTruthy();
+  // Synthetic session roles exercise navigation presentation only, not server authorization.
+  let role = 'ADMIN';
+  await page.route('**/api/auth/session', request => request.fulfill({ json: { ...session, user: { ...session.user, role } } }));
+  await page.route('**/api/courses', request => request.fulfill({ json: catalog }));
+  for (const currentRole of ['ADMIN', 'INSTRUCTOR', 'COMPANY', 'MODERATOR']) {
+    role = currentRole;
+    const creator = role === 'ADMIN' || role === 'INSTRUCTOR';
+    for (const mode of ['light', 'dark'] as const) {
+      await theme(page, mode);
+      for (const size of sizes) {
+        await page.setViewportSize(size);
+        await page.goto('/courses');
+        await expect(page.getByRole('heading', { name: catalog[0].title })).toBeInViewport({ ratio: 1 });
+        const main = page.locator('#page-content');
+        const navigation = main.getByRole('navigation', { name: 'Weitere Kursbereiche' });
+        await expect(navigation.getByRole('link', { name: 'Mein Lernweg' })).toHaveCount(0);
+        const create = main.getByRole('link', { name: 'Neuer Kurs', exact: true });
+        if (creator) {
+          await expect(create).toHaveAttribute('href', '/courses/new');
+          await expect(create).toBeInViewport({ ratio: 1 });
+        } else await expect(create).toHaveCount(0);
+        await capture(page, info, `catalog-role-${role.toLowerCase()}-${mode}-${size.width}x${size.height}`);
+        const trigger = navigation.getByRole('button', { name: 'Kursbereiche' });
+        await trigger.focus();
+        await page.keyboard.press('Space');
+        const menu = page.getByRole('menu', { name: 'Kursbereiche' });
+        const expected = [
+          ['Mein Lernziel', '/courses/goals'], ['Meine Kursentwürfe', '/courses/authoring'],
+          ...(!creator ? [['Neuer Kurs', '/courses/new']] : []),
+        ];
+        await expect(menu.getByRole('menuitem')).toHaveCount(expected.length);
+        await expect(menu.getByRole('menuitem', { name: 'Lernpfade' })).toHaveCount(0);
+        for (const [index, [name, href]] of expected.entries()) {
+          const item = menu.getByRole('menuitem', { name });
+          await expect(item).toHaveAttribute('href', href);
+          if (index > 0) await page.keyboard.press('ArrowDown');
+          await expect(item).toBeFocused();
+          await expect(item).toBeInViewport({ ratio: 1 });
+        }
+        await capture(page, info, `catalog-role-${role.toLowerCase()}-menu-${mode}-${size.width}x${size.height}`);
+        await page.keyboard.press('Escape');
+        await expect(menu).toHaveCount(0);
+        await expect(trigger).toBeFocused();
+      }
     }
   }
 });

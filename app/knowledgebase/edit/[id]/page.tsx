@@ -19,6 +19,7 @@ import { ArrowLeft, Upload, Loader2, Bookmark, Send, Trash2 } from 'lucide-react
 import { CategorySelect } from "@/components/CategorySelect";
 import { TagSelect } from "@/components/TagSelect";
 import { toast } from 'sonner';
+import { Toaster } from '@/components/ui/sonner';
 import { Editor } from "@/components/Editor";
 import Link from 'next/link';
 
@@ -171,14 +172,10 @@ function AccountDraftEditor({ id, accountId, status }: { id: string; accountId: 
         </AppHeader>
 
         <main id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto w-full max-w-[1440px] px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
-            <div className="flex flex-wrap items-end justify-between gap-4 border-b pb-6">
-              <div>
-                <Button type="button" variant="ghost" size="sm" onClick={() => router.push('/knowledgebase/drafts')}><ArrowLeft className="h-4 w-4" aria-hidden="true" />Zu den Entwürfen</Button>
-                <p className="mt-4 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Wissen / Entwurf</p>
-                <p className="mt-2 max-w-[55ch] text-base leading-relaxed text-muted-foreground">Arbeite weiter und entscheide, wann dein Artikel bereit ist.</p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
+          <div className="mx-auto w-full max-w-[1440px] px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
+            <div className="flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
+              <Button type="button" variant="ghost" size="sm" className="self-start" onClick={() => router.push('/knowledgebase/drafts')}><ArrowLeft className="h-4 w-4" aria-hidden="true" />Zu den Entwürfen</Button>
+              <div role="group" aria-label="Entwurf speichern oder veröffentlichen" className="grid gap-2 sm:flex sm:gap-3">
                 <Button type="button" variant="outline" onClick={() => handleSubmit(true)} disabled={isSubmitting}>
                   {isSubmitting && submittingAsDraft ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Bookmark className="h-4 w-4" aria-hidden="true" />}{isSubmitting && submittingAsDraft ? 'Speichere Entwurf…' : 'Als Entwurf speichern'}
                 </Button>
@@ -188,55 +185,50 @@ function AccountDraftEditor({ id, accountId, status }: { id: string; accountId: 
               </div>
             </div>
 
-            {!accountId ? <div className="pt-8"><PageState kind="error" title="Anmeldung erforderlich" description="Melde dich an, um deinen Entwurf zu bearbeiten." action={<Button asChild variant="outline"><Link href="/login">Zur Anmeldung</Link></Button>} /></div> : loadError ? <div className="pt-8"><PageState kind="error" title="Entwurf konnte nicht geladen werden" description="Bitte versuche es erneut." action={<Button type="button" variant="outline" onClick={() => { setIsLoading(true); setRetryKey(value => value + 1); }}>Erneut versuchen</Button>} /></div> : <div className="grid min-w-0 items-start gap-10 pt-8 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-12">
-              <section aria-labelledby="draft-editor-content-title" className="min-w-0 border-t pt-5">
-                <h2 id="draft-editor-content-title" className="text-lg font-semibold tracking-tight">Artikelinhalt</h2>
-                <div className="mt-6 space-y-8">
-                  <div className="border-b pb-7">
-                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                      <Label htmlFor="title">Titel <span className="text-destructive">*</span></Label>
-                      <span className="text-xs tabular-nums text-muted-foreground">{title.length}/{maxTitleLength}</span>
-                    </div>
-                    <Input id="title" value={title} onChange={event => setTitle(event.target.value.slice(0, maxTitleLength))} placeholder="Gib einen aussagekräftigen Titel ein" maxLength={maxTitleLength} required className="text-base" />
+            {!accountId ? <div className="pt-8"><PageState kind="error" title="Anmeldung erforderlich" description="Melde dich an, um deinen Entwurf zu bearbeiten." action={<Button asChild variant="outline"><Link href="/login">Zur Anmeldung</Link></Button>} /></div> : loadError ? <div className="pt-8"><PageState kind="error" title="Entwurf konnte nicht geladen werden" description="Bitte versuche es erneut." action={<Button type="button" variant="outline" onClick={() => { setIsLoading(true); setRetryKey(value => value + 1); }}>Erneut versuchen</Button>} /></div> : <div className="min-w-0 pt-4">
+              <p id="draft-editor-required-fields" className="text-sm text-muted-foreground">Pflichtangaben: Titel, Inhalt und Kategorie.</p>
+              <div className="mt-5 grid min-w-0 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-8" role="group" aria-label="Pflichtangaben" aria-describedby="draft-editor-required-fields">
+                <div className="min-w-0">
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <Label htmlFor="title">Titel <span className="text-destructive">*</span></Label>
+                    <span className="text-xs tabular-nums text-muted-foreground">{title.length}/{maxTitleLength}</span>
                   </div>
-
-                  <div className="border-b pb-7">
-                    <p className="mb-2 text-sm font-medium">Beitragsbild <span className="font-normal text-muted-foreground">(optional)</span></p>
-                    <div className="flex flex-wrap items-start gap-4">
-                      <input type="file" ref={fileInputRef} accept="image/*" className="hidden" onChange={event => {
-                        const file = event.target.files?.[0];
-                        if (!file) return;
-                        setFeaturedImage(file);
-                        setIsImageDeleted(false);
-                        const reader = new FileReader();
-                        reader.onloadend = () => setFeaturedImagePreview(reader.result as string);
-                        reader.readAsDataURL(file);
-                      }} />
-                      <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}><Upload className="h-4 w-4" aria-hidden="true" />Bild auswählen</Button>
-                      {featuredImagePreview && <div className="relative aspect-video w-full max-w-sm overflow-hidden rounded-[10px] border bg-muted">
-                        <Image src={featuredImagePreview} alt="Beitragsbildvorschau" fill className="object-cover" />
-                        <Button type="button" variant="destructive" size="sm" className="absolute right-2 top-2" aria-label="Beitragsbild entfernen" onClick={() => { setFeaturedImage(null); setFeaturedImagePreview(''); setIsImageDeleted(true); }}><Trash2 className="h-4 w-4" aria-hidden="true" />Entfernen</Button>
-                      </div>}
-                    </div>
-                  </div>
-
-                  <div>
-                    <p className="mb-2 text-sm font-medium">Inhalt <span className="text-destructive">*</span></p>
-                    <div className="overflow-hidden rounded-[10px] focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"><Editor content={content} onChange={setContent} className="min-h-[400px]" /></div>
+                  <Input id="title" value={title} onChange={event => setTitle(event.target.value.slice(0, maxTitleLength))} placeholder="Gib einen aussagekräftigen Titel ein" maxLength={maxTitleLength} required className="text-base" />
+                </div>
+                <div className="min-w-0">
+                  <CategorySelect categories={existingCategories} selectedCategory={category} setSelectedCategory={setCategory} onAddCategory={newCategory => { setExistingCategories([...existingCategories, newCategory]); setCategory(newCategory); }} />
+                </div>
+              </div>
+              <section aria-labelledby="draft-editor-content-title" aria-describedby="draft-editor-required-fields" className="mt-6 min-w-0">
+                <h2 id="draft-editor-content-title" className="mb-2 text-sm font-medium">Inhalt <span className="text-destructive">*</span></h2>
+                <div className="overflow-hidden rounded-[10px] focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"><Editor content={content} onChange={setContent} className="min-h-[400px]" /></div>
+              </section>
+              <aside aria-label="Optionale Artikelangaben" className="mt-6 grid min-w-0 items-start gap-6 border-t pt-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-8">
+                <div className="min-w-0">
+                  <Label htmlFor="featuredImage" className="mb-2 block text-sm font-medium">Beitragsbild <span className="font-normal text-muted-foreground">(optional)</span></Label>
+                  <div className="flex flex-wrap items-start gap-4">
+                    <input type="file" id="featuredImage" ref={fileInputRef} accept="image/*" className="hidden" onChange={event => {
+                      const file = event.target.files?.[0];
+                      if (!file) return;
+                      setFeaturedImage(file);
+                      setIsImageDeleted(false);
+                      const reader = new FileReader();
+                      reader.onloadend = () => setFeaturedImagePreview(reader.result as string);
+                      reader.readAsDataURL(file);
+                    }} />
+                    <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}><Upload className="h-4 w-4" aria-hidden="true" />Bild auswählen</Button>
+                    {featuredImagePreview && <div className="relative aspect-video w-full max-w-sm overflow-hidden rounded-[10px] border bg-muted">
+                      <Image src={featuredImagePreview} alt="Beitragsbildvorschau" fill className="object-cover" />
+                      <Button type="button" variant="destructive" size="sm" className="absolute right-2 top-2" aria-label="Beitragsbild entfernen" onClick={() => { setFeaturedImage(null); setFeaturedImagePreview(''); setIsImageDeleted(true); }}><Trash2 className="h-4 w-4" aria-hidden="true" />Entfernen</Button>
+                    </div>}
                   </div>
                 </div>
-              </section>
-
-              <aside aria-label="Artikeloptionen" className="min-w-0 space-y-7">
-                <section className="border-t pt-5">
-                  <h2 className="text-base font-semibold tracking-tight">Kategorie <span className="text-xs font-normal text-muted-foreground">(erforderlich)</span></h2>
-                  <div className="mt-4"><CategorySelect categories={existingCategories} selectedCategory={category} setSelectedCategory={setCategory} onAddCategory={newCategory => { setExistingCategories([...existingCategories, newCategory]); setCategory(newCategory); }} /></div>
-                </section>
-                <section className="border-t pt-5">
-                  <h2 className="text-base font-semibold tracking-tight">Tags</h2>
-                  <div className="mt-4"><TagSelect availableTags={existingTags} selectedTags={tags} onTagSelect={tag => { if (!tags.includes(tag)) setTags([...tags, tag]); }} onTagRemove={tag => setTags(tags.filter(value => value !== tag))} onAddTag={newTag => { setExistingTags([...existingTags, newTag]); setTags([...tags, newTag]); }} /></div>
-                </section>
+                <div className="min-w-0">
+                  <TagSelect availableTags={existingTags} selectedTags={tags} onTagSelect={tag => { if (!tags.includes(tag)) setTags([...tags, tag]); }} onTagRemove={tag => setTags(tags.filter(value => value !== tag))} onAddTag={newTag => { setExistingTags([...existingTags, newTag]); setTags([...tags, newTag]); }} />
+                  <p className="mt-2 text-xs text-muted-foreground">Optional, {tags.length}/5 ausgewählt</p>
+                </div>
               </aside>
+              <Toaster />
             </div>}
           </div>
         </main>
