@@ -10,7 +10,7 @@ jest.mock('next/image', () => ({
   },
 }));
 
-const clipSelector = 'img[src="/images/forge-spark-celebrate-once.webp"]';
+const clipSelector = 'img[src^="/images/forge-spark-celebrate-once.webp?play="]';
 const staticSelector = 'img[src="/images/forge-spark-celebrate-final.webp"]';
 
 beforeEach(() => jest.useFakeTimers());

@@ -18,7 +18,7 @@ jest.mock('next/image', () => ({
   },
 }));
 
-const clipSelector = 'img[src="/images/forge-spark-celebrate-once.webp"]';
+const clipSelector = 'img[src^="/images/forge-spark-celebrate-once.webp?play="]';
 let complete: boolean;
 let publicationId: string;
 let reduced: boolean;
@@ -105,6 +105,38 @@ it('never animates an initially complete course or an already complete new publi
   publicationId = 'pub-2';
   await refresh();
   expect(view.container.querySelector(clipSelector)).toBeNull();
+});
+
+it('allocates only a local counter URL for eligible events and restarts the native resource for the next event', async () => {
+  const view = render(<JourneyClient />);
+  await screen.findByRole('link', { name: 'Lernschritt öffnen' });
+  complete = true;
+  await refresh();
+  const first = new URL(view.container.querySelector(clipSelector)!.getAttribute('src')!, 'http://localhost');
+  expect([...first.searchParams.keys()]).toEqual(['play']);
+  expect(first.searchParams.get('play')).toMatch(/^[1-9]\d*$/);
+  view.rerender(<JourneyClient />);
+  expect(view.container.querySelector(clipSelector)).toHaveAttribute('src', first.pathname + first.search);
+  await refresh();
+  expect(view.container.querySelector(clipSelector)).toBeNull();
+
+  // Completion while motion is disabled consumes no playback token and must
+  // not be revived by re-enabling motion.
+  fireEvent.click(screen.getByRole('button', { name: 'Figurenanimationen an' }));
+  complete = false;
+  await refresh();
+  complete = true;
+  await refresh();
+  fireEvent.click(screen.getByRole('button', { name: 'Figurenanimationen aus' }));
+  expect(view.container.querySelector(clipSelector)).toBeNull();
+  complete = false;
+  await refresh();
+  complete = true;
+  await refresh();
+  const later = new URL(view.container.querySelector(clipSelector)!.getAttribute('src')!, 'http://localhost');
+  expect([...later.searchParams.keys()]).toEqual(['play']);
+  expect(Number(later.searchParams.get('play'))).toBe(Number(first.searchParams.get('play')) + 1);
+  expect(later.href).not.toBe(first.href);
 });
 
 it.each(['visibility', 'motion', 'reduced', 'storage'])('consumes a celebration when %s changes, without replay on re-enable', async kind => {

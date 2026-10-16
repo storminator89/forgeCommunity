@@ -8,7 +8,7 @@ const celebrationLoadTimeout = 8000;
 /** A one-shot Blender render, mounted only for an eligible new completion.
  * The static pose stays underneath while loading or if the request fails.
  */
-function CelebrationClip() {
+function CelebrationClip({ playbackId }: { playbackId: number }) {
   const [phase, setPhase] = useState<'loading' | 'playing' | 'finished'>('loading');
   const active = useRef(true);
   const finished = useRef(false);
@@ -56,7 +56,10 @@ function CelebrationClip() {
   return <>
     <span className={phase === 'playing' ? 'invisible' : ''} data-spark-static=""><MascotPose complete /></span>
     {phase !== 'finished' && <Image
-      src="/images/forge-spark-celebrate-once.webp" width={112} height={112} alt=""
+      // A new DOM key alone can reuse an ended once-loop WebP's decoded clock.
+      // A document-local event token gives each genuine completion a fresh
+      // native animation resource, requested only when this clip is mounted.
+      src={`/images/forge-spark-celebrate-once.webp?play=${playbackId}`} width={112} height={112} alt=""
       unoptimized loading="eager" onLoad={start} onError={finish}
       data-spark-celebration={phase}
       className={`absolute inset-0 size-28 object-contain ${phase === 'loading' ? 'invisible' : ''}`}
@@ -75,7 +78,7 @@ function MascotPose({ complete }: { complete: boolean }) {
 export function JourneyMascot({ complete, celebrationId, ambientMotion }: { complete: boolean; celebrationId: number | null; ambientMotion: boolean }) {
   return <span className="relative block size-28 shrink-0" aria-hidden="true" data-journey-mascot="">
     {complete && ambientMotion && celebrationId !== null
-      ? <CelebrationClip key={celebrationId} />
+      ? <CelebrationClip key={celebrationId} playbackId={celebrationId} />
       : <MascotPose complete={complete} />}
     {!complete && ambientMotion && <Image
       src="/images/forge-spark-blink.webp" width={112} height={112} alt=""

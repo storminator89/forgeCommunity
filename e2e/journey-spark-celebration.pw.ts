@@ -86,6 +86,7 @@ async function captureChangingFrames(page: Page, testInfo: TestInfo, label: stri
   const session = await page.context().newCDPSession(page);
   const frames: Array<{ data: string; timestamp: number }> = [];
   let interval: { start: number | null; end: number | null } = { start: null, end: null };
+  let playbackUrl = '';
   session.on('Page.screencastFrame', frame => {
     void session.send('Page.screencastFrameAck', { sessionId: frame.sessionId }).catch(() => {});
     if (frame.metadata.timestamp !== undefined && frames.length < 200) {
@@ -99,7 +100,12 @@ async function captureChangingFrames(page: Page, testInfo: TestInfo, label: stri
     await expect(clip).toHaveAttribute('data-spark-celebration', 'playing');
     // currentSrc becomes available only once the deliberately delayed request
     // loads. Verify the selected native resource during playback, not loading.
-    expect(await clip.evaluate(image => (image as HTMLImageElement).currentSrc)).toBe(`${origin}${clipPath}`);
+    playbackUrl = await clip.evaluate(image => (image as HTMLImageElement).currentSrc);
+    const resource = new URL(playbackUrl);
+    expect(resource.origin).toBe(origin);
+    expect(resource.pathname).toBe(clipPath);
+    expect(resource.searchParams.get('play')).toMatch(/^[1-9]\d*$/);
+    expect([...resource.searchParams.keys()]).toEqual(['play']);
     await expect(clip).not.toHaveAttribute('srcset', /.+/);
     await expect(clip).toHaveCount(0);
   } finally {
@@ -130,6 +136,7 @@ async function captureChangingFrames(page: Page, testInfo: TestInfo, label: stri
   for (const [index, pixels] of [...distinct.values()].slice(0, 3).entries()) {
     await writeFile(testInfo.outputPath(`spark-real-animation-${label}-frame-${index + 1}.png`), pixels);
   }
+  return playbackUrl;
 }
 
 test.beforeEach(() => assertDisposableFixture());
@@ -201,7 +208,7 @@ test('the real Blender clip waits for load, changes frames once and replays only
   let release!: () => void;
   let delayed = true;
   const pending = new Promise<void>(resolve => { release = resolve; });
-  await page.route(`**${clipPath}`, async route => {
+  await page.route(url => url.pathname === clipPath, async route => {
     if (delayed) await pending;
     await route.continue();
   });
@@ -217,20 +224,25 @@ test('the real Blender clip waits for load, changes frames once and replays only
   await expect(clip).toHaveAttribute('data-spark-celebration', 'loading');
   // Next Image can normalize img.src to an absolute URL when attaching its
   // error handler. Compare the actual resource, independent of serialization.
-  expect(new URL((await clip.getAttribute('src'))!, origin).href).toBe(`${origin}${clipPath}`);
+  const pendingResource = new URL((await clip.getAttribute('src'))!, origin);
+  expect(pendingResource.origin).toBe(origin);
+  expect(pendingResource.pathname).toBe(clipPath);
+  expect(pendingResource.searchParams.get('play')).toMatch(/^[1-9]\d*$/);
   await expect(clip).not.toHaveAttribute('srcset', /.+/);
-  await captureChangingFrames(page, testInfo, 'first-completion', () => { release(); delayed = false; });
+  const firstPlaybackUrl = await captureChangingFrames(page, testInfo, 'first-completion', () => { release(); delayed = false; });
   const mascot = page.locator('[data-journey-mascot]');
   await expect(page.getByRole('status')).toContainText('Alle aktuellen Kursinhalte bestätigt');
   await screenshotWidths(page, testInfo, 'completion-static');
   await refresh(page);
   await expect(clip).toHaveCount(0);
 
-  // Reusing the decoded resource still has to produce a new genuine playback.
+  // A fresh event URL must restart native playback after an earlier completed
+  // once-loop resource, while a repeated read of the same completion stays idle.
   fixture.setComplete(false);
   await refresh(page);
   fixture.setComplete(true);
-  await captureChangingFrames(page, testInfo, 'later-completion', () => refresh(page));
+  const laterPlaybackUrl = await captureChangingFrames(page, testInfo, 'later-completion', () => refresh(page));
+  expect(laterPlaybackUrl).not.toBe(firstPlaybackUrl);
   fixture.setComplete(false);
   await refresh(page);
   fixture.setComplete(true);
@@ -256,7 +268,7 @@ test('a failed first clip request preserves the static completion and course con
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   const fixture = await journeyFixture(page);
   let failedRequests = 0;
-  await page.route(`**${clipPath}`, route => { failedRequests++; return route.abort('failed'); });
+  await page.route(url => url.pathname === clipPath, route => { failedRequests++; return route.abort('failed'); });
   await page.goto('/courses/journey');
   await expect(page.getByRole('link', { name: 'Lernschritt öffnen' })).toBeVisible();
   fixture.setComplete(true);

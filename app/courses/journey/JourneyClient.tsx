@@ -22,6 +22,10 @@ const motionPreferenceKey = 'forge-journey-motion-off';
 const mascotPreferenceKey = 'forge-journey-mascot-hidden';
 let fallbackMotionEnabled = true;
 let fallbackMascotVisible = true;
+// Document-local only: no account, course or time information is sent in the
+// playback URL. Keep it outside the learner scope so role/navigation remounts
+// cannot accidentally reuse an ended native image resource in this document.
+let nextCelebrationId = 0;
 
 function subscribeMotion(callback: () => void) {
   window.addEventListener('storage', callback);
@@ -105,7 +109,6 @@ function ScopedJourney() {
   const reducedMotion = useSyncExternalStore(subscribeReducedMotion, reducedMotionSnapshot, () => true);
   const [celebration, setCelebration] = useState<{ id: number; courseId: string; publicationId: string } | null>(null);
   const completionBefore = useRef(new Map<string, boolean>());
-  const celebrationSequence = useRef(0);
   const detailSequence = useRef(0);
 
   useEffect(() => {
@@ -166,7 +169,7 @@ function ScopedJourney() {
       // capturing the values from before a slow request. An initially complete
       // course (or a new publication) is never a new completion event.
       if (before === false && progress.complete && mascotSnapshot() && motionSnapshot() && !reducedMotionSnapshot()) {
-        setCelebration({ id: ++celebrationSequence.current, courseId: selectedId, publicationId: progress.publicationId });
+        setCelebration({ id: ++nextCelebrationId, courseId: selectedId, publicationId: progress.publicationId });
       }
     }).catch(() => { if (!controller.signal.aborted && sequence === detailSequence.current) setDetail({ kind: 'error' }); });
     return () => controller.abort();

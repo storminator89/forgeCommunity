@@ -16,6 +16,7 @@ const reviewedSqlite = [
   '0015_formative_practice_authoring.sql', '0016_formative_practice_learner.sql',
   '0017_chat_message_cursor_index.sql', '0018_chat_read_cursor.sql',
   '0019_course_qa.sql', '0020_spaces.sql', '0021_space_report_targets.sql',
+  '0022_space_mission_foundation.sql', '0023_space_mission_contributions.sql',
 ];
 const reviewedPostgresql = [
   '0001_skill_endorsements.sql', '0002_course_progress.sql', '0003_reports.sql',
@@ -27,6 +28,7 @@ const reviewedPostgresql = [
   '0014_formative_practice_authoring.sql', '0015_formative_practice_learner.sql',
   '0016_chat_message_cursor_index.sql', '0017_chat_read_cursor.sql',
   '0018_course_qa.sql', '0019_spaces.sql', '0020_space_report_targets.sql',
+  '0021_space_mission_foundation.sql', '0022_space_mission_contributions.sql',
 ];
 
 function expectedHistory(provider) {

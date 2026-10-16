@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { Prisma, SpaceVisibility } from '@prisma/client';
+import { DriverAdapterError } from '@prisma/driver-adapter-utils';
 import { createHash } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
@@ -140,7 +141,14 @@ export async function spaceTransaction<T>(work: (tx: Prisma.TransactionClient) =
     try {
       return await prisma.$transaction(work, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
-      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2034') throw error;
+      // Prisma 7 maps query-time write conflicts to P2034, but PostgreSQL
+      // COMMIT-time serialization/deadlock failures can escape as the actual
+      // adapter error. Match its class, mapped kind and original SQLSTATE;
+      // never retry similarly shaped objects or unrelated adapter failures.
+      const conflict = error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034' ||
+        error instanceof DriverAdapterError && error.cause.kind === 'TransactionWriteConflict' &&
+        (error.cause.originalCode === '40001' || error.cause.originalCode === '40P01');
+      if (!conflict) throw error;
       if (attempt === 3) throw new SpaceApiError('Gleichzeitige Änderung. Bitte erneut versuchen.', 409);
     }
   }

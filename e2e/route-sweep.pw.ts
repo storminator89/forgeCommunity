@@ -61,6 +61,19 @@ async function usePersona(page: Page, persona: Persona) {
 async function installSyntheticApi(page: Page, item?: RouteSweepCase) {
   // Only these exact QA IDs are intercepted. Every other request reaches the
   // disposable CI server; no private real-world records are fetched or saved.
+  if (item?.url === '/community/spaces/qa-route-space/missions/qa-route-mission') {
+    await page.route('**/api/spaces/qa-route-space', route => route.fulfill({ status: 200, json: {
+      id: 'qa-route-space', name: 'Route QA private space', description: 'Synthetic mission UI fixture.', visibility: 'PRIVATE',
+      createdAt: '2026-10-01T12:00:00.000Z', updatedAt: '2026-10-01T12:00:00.000Z',
+      memberCount: 1, discussionCount: 0, isMember: true, canManage: false,
+    } }));
+    await page.route('**/api/spaces/qa-route-space/missions/qa-route-mission', route => route.fulfill({ status: 200, json: {
+      id: 'qa-route-mission', spaceId: 'qa-route-space', title: 'Route QA teach-back', prompt: 'A synthetic, voluntary teach-back prompt.',
+      creator: null, createdAt: '2026-10-01T12:00:00.000Z', closedAt: null, participants: [], participantLimit: 5,
+      participation: { epoch: 0, active: false, joinedAt: null, optedOutAt: null }, canManage: false, canJoin: true,
+      contributions: [], ownContributions: [], progress: { insightAuthors: 0, hasCrossPersonBuildOn: false, complete: false },
+    } }));
+  }
   const article = {
     id: 'qa-route-article', title: 'Route QA article', content: '<p>Synthetic article fixture.</p>',
     category: 'QA', featuredImage: null,
