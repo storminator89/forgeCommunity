@@ -7,7 +7,7 @@ import SpaceMissionPage from '@/app/community/spaces/[spaceId]/missions/[mission
 import { SpaceMissionIndex } from '@/components/spaces/SpaceMissionIndex';
 import { ModerationQueue } from '@/app/moderation/ModerationQueue';
 import { spaceJson, type SpaceSummary } from '@/components/spaces/space-api';
-import { missionCurrentMonday, missionWeekDates, missionWeekPreview, type MissionAuditContribution, type MissionContribution, type SpaceMission } from '@/components/spaces/mission-api';
+import { isOwnBookmark, missionCurrentMonday, missionWeekDates, missionWeekPreview, type MissionAuditContribution, type MissionContribution, type SpaceMission } from '@/components/spaces/mission-api';
 
 jest.mock('next-auth/react', () => ({ useSession: jest.fn() }));
 jest.mock('next/navigation', () => ({ useParams: jest.fn(), useRouter: jest.fn() }));
@@ -33,7 +33,7 @@ const ownInsight: MissionContribution = {
 const mission = (overrides: Partial<SpaceMission> = {}): SpaceMission => ({
   id: 'mission-1', spaceId: 'secret', title: 'Gemeinsam Zusammenhänge erklären', prompt: 'Welche Verbindung hilft euch beim Verstehen?',
   creator: { id: 'admin', name: 'Ada', image: null }, createdAt: now, closedAt: null,
-  week: null, windowState: 'self-paced',
+  week: null, windowState: 'self-paced', ownBookmark: { saved: false, revision: 0, accessEpoch: 0 },
   participants: [{ ...member, joinedAt: now }, { ...peer, joinedAt: now }], participantLimit: 5,
   participation: { epoch: 7, active: true, joinedAt: now, optedOutAt: null },
   canManage: false, canJoin: false, contributions: [insight], ownContributions: [],
@@ -690,4 +690,189 @@ test('the mission list shows stored weekly dates and an open past-week state wit
   expect(screen.getByText('19. Oktober – 25. Oktober 2026 · Europe/Berlin')).toBeVisible();
   expect(screen.getByRole('link', { name: 'Zeitlich offener Austausch' })).toBeVisible();
   expect(screen.queryByRole('button', { name: 'Mission starten' })).not.toBeInTheDocument();
+});
+
+test.each([false, true])('offers local keyboard task access for active participation=%s without mutating consent', async active => {
+  const scroll = jest.fn();
+  Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: scroll });
+  serveMission(() => mission({ participation: { epoch: 1, active, joinedAt: active ? now : null, optedOutAt: null }, canJoin: !active }));
+  render(<SpaceMissionPage />);
+  const jump = await screen.findByRole('button', { name: active ? 'Zum Beitrag' : 'Zur Teilnahme' });
+  jump.focus(); await userEvent.keyboard('{Enter}');
+  expect(screen.getByRole('heading', { name: active ? /^Dein Beitrag$/ : /^Deine Teilnahme$/ })).toHaveFocus();
+  expect(scroll).toHaveBeenCalledWith({ block: 'start', behavior: 'instant' });
+  if (!active) expect(screen.getByText(/Bereits Gesehenes lässt sich nicht zurückholen/)).toBeVisible();
+  expect((global.fetch as jest.Mock).mock.calls.every(([, init]) => !init.method)).toBe(true);
+});
+
+test.each(['full', 'closed', 'done', 'waiting'] as const)('does not invent an unavailable next task for %s', async state => {
+  serveMission(() => mission({
+    closedAt: state === 'closed' ? now : null,
+    participation: { epoch: 1, active: state === 'done' || state === 'waiting', joinedAt: null, optedOutAt: null }, canJoin: false,
+    contributions: [], ownContributions: state === 'done' ? [
+      { id: 'a', kind: 'INSIGHT', hidden: false, targetUnavailable: false, canWithdraw: true },
+      { id: 'b', kind: 'BUILD_ON', hidden: false, targetUnavailable: false, canWithdraw: true },
+    ] : state === 'waiting' ? [{ id: 'a', kind: 'INSIGHT', hidden: false, targetUnavailable: false, canWithdraw: true }] : [],
+  }));
+  render(<SpaceMissionPage />);
+  await screen.findByRole('heading', { level: 1, name: 'Gemeinsam Zusammenhänge erklären' });
+  expect(screen.queryByRole('button', { name: /^(Zur Teilnahme|Zum Beitrag)$/ })).not.toBeInTheDocument();
+});
+
+test('a personal bookmark preserves an in-progress contribution, choice and target at the same fresh consent epoch', async () => {
+  let current = mission();
+  let finish!: (value: JsonResponse) => void;
+  serveMission(() => current, (path, init) => path === `${base}/bookmark` && init?.method === 'PUT' ? new Promise(resolve => { finish = resolve; }) : undefined);
+  render(<SpaceMissionPage />);
+  await screen.findByRole('textbox', { name: 'Deine Erkenntnis' });
+  await userEvent.click(screen.getByRole('radio', { name: 'Darauf aufbauen' }));
+  await userEvent.click(screen.getByRole('radio', { name: `Jonas: ${insight.content}` }));
+  await userEvent.type(screen.getByRole('textbox', { name: 'Dein weiterführender Gedanke' }), 'Ein noch nicht geteilter Gedanke.');
+  const save = screen.getByRole('button', { name: /^Für später merken:/ });
+  save.focus(); fireEvent.click(save); fireEvent.click(save);
+  expect(save).toBeDisabled(); expect(save).toHaveAttribute('aria-pressed', 'false');
+  expect(screen.getByDisplayValue('Ein noch nicht geteilter Gedanke.')).toBeVisible();
+  expect(mutationCalls(`${base}/bookmark`, 'PUT')).toHaveLength(1);
+  expect(JSON.parse(mutationCalls(`${base}/bookmark`, 'PUT')[0][1]!.body as string)).toEqual({ saved: true, expectedRevision: 0, accessEpoch: 0 });
+  current = mission({ ownBookmark: { saved: true, revision: 1, accessEpoch: 0 } });
+  await act(async () => finish(json(current.ownBookmark)));
+  expect(await screen.findByRole('button', { name: /^Nicht mehr merken:/ })).toHaveFocus();
+  expect(screen.getByDisplayValue('Ein noch nicht geteilter Gedanke.')).toBeVisible();
+  expect(screen.getByRole('radio', { name: 'Darauf aufbauen' })).toBeChecked();
+  expect(screen.getByRole('radio', { name: `Jonas: ${insight.content}` })).toBeChecked();
+  expect(mutationCalls(`${base}/participation`, 'POST')).toHaveLength(0);
+  expect(mutationCalls(`${base}/contributions`, 'POST')).toHaveLength(0);
+});
+
+test('a bookmark reload clears a draft if the fresh consent epoch changed', async () => {
+  let current = mission();
+  serveMission(() => current, (path, init) => {
+    if (path !== `${base}/bookmark` || init?.method !== 'PUT') return undefined;
+    current = mission({ ownBookmark: { saved: true, revision: 1, accessEpoch: 0 }, participation: { epoch: 8, active: true, joinedAt: now, optedOutAt: null } });
+    return Promise.resolve(json(current.ownBookmark));
+  });
+  render(<SpaceMissionPage />);
+  await userEvent.type(await screen.findByRole('textbox', { name: 'Deine Erkenntnis' }), 'Alter Teilnahmeentwurf');
+  await userEvent.click(screen.getByRole('button', { name: /^Für später merken:/ }));
+  expect(await screen.findByRole('textbox', { name: 'Deine Erkenntnis' })).toHaveValue('');
+});
+
+test('a bookmark result respects focus moved to an external control', async () => {
+  let current = mission(); let finish!: (value: JsonResponse) => void;
+  serveMission(() => current, (path, init) => path === `${base}/bookmark` && init?.method === 'PUT' ? new Promise(resolve => { finish = resolve; }) : undefined);
+  render(<SpaceMissionPage />);
+  await userEvent.click(await screen.findByRole('button', { name: /^Für später merken:/ }));
+  const external = screen.getAllByRole('link', { name: /^Spaces$/ })[0]; external.focus();
+  current = mission({ ownBookmark: { saved: true, revision: 1, accessEpoch: 0 } });
+  await act(async () => finish(json(current.ownBookmark)));
+  await screen.findByRole('button', { name: /^Nicht mehr merken:/ });
+  // The revalidated page replaces its breadcrumb, too. It must never focus the marker.
+  expect(screen.getByRole('button', { name: /^Nicht mehr merken:/ })).not.toHaveFocus();
+});
+
+test('bookmark conflict reloads without automatic resubmission or discarding the independent draft', async () => {
+  let current = mission(); let attempts = 0;
+  serveMission(() => current, (path, init) => {
+    if (path !== `${base}/bookmark` || init?.method !== 'PUT') return undefined;
+    if (++attempts === 1) { current = mission({ ownBookmark: { saved: false, revision: 4, accessEpoch: 2 } }); return Promise.resolve(json({ error: 'conflict' }, 409)); }
+    current = mission({ ownBookmark: { saved: true, revision: 5, accessEpoch: 2 } });
+    return Promise.resolve(json(current.ownBookmark));
+  });
+  render(<SpaceMissionPage />);
+  await userEvent.type(await screen.findByRole('textbox', { name: 'Deine Erkenntnis' }), 'Bleibt mein Entwurf');
+  await userEvent.click(screen.getByRole('button', { name: /^Für später merken:/ }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('wähle erneut');
+  expect(attempts).toBe(1); expect(screen.getByDisplayValue('Bleibt mein Entwurf')).toBeVisible();
+  await userEvent.click(screen.getByRole('button', { name: /^Für später merken:/ }));
+  await screen.findByRole('button', { name: /^Nicht mehr merken:/ });
+  expect(JSON.parse(mutationCalls(`${base}/bookmark`, 'PUT')[1][1]!.body as string)).toEqual({ saved: true, expectedRevision: 4, accessEpoch: 2 });
+});
+
+test.each([401, 404])('bookmark status %s removes all mission content and does not restore focus', async status => {
+  serveMission(() => mission(), (path, init) => path === `${base}/bookmark` && init?.method === 'PUT' ? Promise.resolve(json({ error: 'unavailable' }, status)) : undefined);
+  render(<SpaceMissionPage />);
+  await userEvent.click(await screen.findByRole('button', { name: /^Für später merken:/ }));
+  await screen.findByRole('heading', { level: 2, name: 'Mission nicht verfügbar' });
+  expect(screen.queryByText(insight.content)).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /merken:/i })).not.toBeInTheDocument();
+});
+
+test.each(['account', 'role', 'focus'] as const)('ignores a bookmark response after newer %s state even when transport ignores abort', async change => {
+  let finish!: (value: JsonResponse) => void; let denied = false;
+  serveMission(() => mission(), (path, init) => {
+    if (path === `${base}/bookmark` && init?.method === 'PUT') return new Promise(resolve => { finish = resolve; });
+    if (denied && path === base && !init?.method) return Promise.resolve(json({ error: 'unavailable' }, 404));
+    return undefined;
+  });
+  const view = render(<SpaceMissionPage />);
+  await userEvent.click(await screen.findByRole('button', { name: /^Für später merken:/ }));
+  const signal = mutationCalls(`${base}/bookmark`, 'PUT')[0][1]!.signal as AbortSignal;
+  denied = true;
+  if (change === 'focus') fireEvent.focus(window);
+  else { jest.mocked(useSession).mockReturnValue(session(change === 'account' ? 'other' : 'member', change === 'role' ? 'ADMIN' : 'USER')); view.rerender(<SpaceMissionPage />); }
+  await screen.findByRole('heading', { level: 2, name: 'Mission nicht verfügbar' });
+  expect(signal.aborted).toBe(true);
+  await act(async () => finish(json({ saved: true, revision: 1, accessEpoch: 0 })));
+  expect(screen.queryByText('Für später gemerkt.')).not.toBeInTheDocument();
+});
+
+test.each([false, true])('allows full/past open mission bookmarks independently of participation (past=%s)', async past => {
+  serveMission(() => mission({ canJoin: false, participation: { epoch: 0, active: false, joinedAt: null, optedOutAt: null }, week: past ? autumnWeek : null, windowState: past ? 'past' : 'self-paced', participantLimit: 2 }));
+  render(<SpaceMissionPage />);
+  expect(await screen.findByRole('button', { name: /^Für später merken:/ })).toBeEnabled();
+  expect(screen.queryByRole('button', { name: 'Freiwillig teilnehmen' })).not.toBeInTheDocument();
+});
+
+test.each(['admin-bypass', 'closed'] as const)('hides the personal bookmark for %s', async state => {
+  jest.mocked(useSession).mockReturnValue(session('member', 'ADMIN'));
+  serveMission(() => mission({ ownBookmark: null, canManage: true, closedAt: state === 'closed' ? now : null }));
+  render(<SpaceMissionPage />);
+  await screen.findByRole('heading', { level: 1, name: 'Gemeinsam Zusammenhänge erklären' });
+  expect(screen.queryByRole('button', { name: /merken:/i })).not.toBeInTheDocument();
+});
+
+
+test.each([null, {}, { saved: true, revision: 0 }, { saved: 'true', revision: 0, accessEpoch: 0 },
+  { saved: true, revision: -1, accessEpoch: 0 }, { saved: true, revision: 1.5, accessEpoch: 0 },
+  { saved: true, revision: 2147483648, accessEpoch: 0 }, { saved: true, revision: 1, accessEpoch: 2147483648 },
+  { saved: true, revision: 1, accessEpoch: 0, userId: 'other' },
+])('rejects malformed or non-provider-safe own bookmark projection %#', value => {
+  expect(isOwnBookmark(value)).toBe(false);
+});
+
+test('accepts the exact provider-safe own bookmark endpoints', () => {
+  expect(isOwnBookmark({ saved: false, revision: 0, accessEpoch: 0 })).toBe(true);
+  expect(isOwnBookmark({ saved: true, revision: 2147483647, accessEpoch: 2147483647 })).toBe(true);
+});
+
+test('a transient bookmark failure remains visible and preserves the independently authorized draft', async () => {
+  serveMission(() => mission(), (path, init) => path === `${base}/bookmark` && init?.method === 'PUT' ? Promise.resolve(json({ error: 'failed' }, 500)) : undefined);
+  render(<SpaceMissionPage />);
+  await userEvent.type(await screen.findByRole('textbox', { name: 'Deine Erkenntnis' }), 'Mein unabhängiger Entwurf');
+  await userEvent.click(screen.getByRole('button', { name: /^Für später merken:/ }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('nicht gespeichert');
+  expect(screen.getByDisplayValue('Mein unabhängiger Entwurf')).toBeVisible();
+  expect(screen.getByRole('button', { name: /^Für später merken:/ })).toHaveAttribute('aria-pressed', 'false');
+});
+
+
+test('successive focus and visibility reads during bookmarking preserve a same-consent draft and reject both older responses', async () => {
+  let finishMutation!: (value: JsonResponse) => void;
+  let finishOldRead!: (value: JsonResponse) => void;
+  let reads = 0;
+  serveMission(() => mission(), (path, init) => {
+    if (path === `${base}/bookmark` && init?.method === 'PUT') return new Promise(resolve => { finishMutation = resolve; });
+    if (path === base && !init?.method && ++reads === 2) return new Promise(resolve => { finishOldRead = resolve; });
+    return undefined;
+  });
+  render(<SpaceMissionPage />);
+  await userEvent.type(await screen.findByRole('textbox', { name: 'Deine Erkenntnis' }), 'Unabhängiger Entwurf beim Merken');
+  await userEvent.click(screen.getByRole('button', { name: /^Für später merken:/ }));
+  await act(async () => { fireEvent.focus(window); });
+  await act(async () => { fireEvent(document, new Event('visibilitychange')); });
+  expect(await screen.findByDisplayValue('Unabhängiger Entwurf beim Merken')).toBeVisible();
+  await act(async () => { finishOldRead(json(mission({ title: 'Obsolete private response' }))); finishMutation(json({ saved: true, revision: 1, accessEpoch: 0 })); });
+  expect(screen.queryByText('Obsolete private response')).not.toBeInTheDocument();
+  expect(screen.queryByText('Für später gemerkt.')).not.toBeInTheDocument();
+  expect(screen.getByDisplayValue('Unabhängiger Entwurf beim Merken')).toBeVisible();
 });

@@ -137,6 +137,8 @@ model User {
   spacePollVoteRequests SpacePollVoteRequest[]
   spaceMissionParticipations SpaceMissionParticipation[]
   spaceMissionContributions SpaceMissionContribution[]
+  spaceMissionBookmarkSettings SpaceMissionBookmarkSetting[]
+  spaceMissionBookmarkAccess SpaceMissionBookmarkAccess?
   likePosts          LikePost[]
   likeComments       LikeComment[]
   likeProjects       LikeProject[]
@@ -364,9 +366,32 @@ model SpaceMission {
   weekEndsAt    DateTime?
   participations SpaceMissionParticipation[]
   contributions SpaceMissionContribution[]
+  bookmarkSettings SpaceMissionBookmarkSetting[]
 
   @@index([spaceId, createdAt, id])
   @@unique([spaceId, requestId])
+}
+
+// Self-only intent, independent from voluntary group participation. Unsave
+// retains a revision tombstone; official membership revocation clears scope.
+model SpaceMissionBookmarkSetting {
+  missionId String
+  userId    String
+  savedAt   DateTime?
+  revision  Int
+  mission   SpaceMission @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([missionId, userId])
+  @@index([userId, savedAt])
+}
+
+// A bookmark-only user fence also invalidates an old first save across rejoin.
+// Missing rows mean zero; GET never materializes them. Never reset the epoch.
+model SpaceMissionBookmarkAccess {
+  userId String @id
+  epoch  Int
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 // A new explicit self-join advances the epoch; old posts can never be revived

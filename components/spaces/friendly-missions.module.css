@@ -78,3 +78,13 @@
   .goalTrail h3 { font-size: 12px; }
 }
 @media (prefers-reduced-motion: reduce) { .motion .confirmed[data-feedback=true], .motion[data-confirmed=true] .goalTrail .goalIcon, .motion[data-confirmed=true] .spark { animation: none; } }
+
+/* Personal markers stay quiet; no reward or progress semantics. */
+.bookmarkButton { position: relative; z-index: 1; display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 44px; max-width: 100%; padding: 8px 11px; border: 1px solid hsl(var(--input)); border-radius: 12px; color: hsl(var(--primary)); background: hsl(var(--card)); font-size: 13px; line-height: 1.45; font-weight: 500; overflow-wrap: anywhere; cursor: pointer; }
+.bookmarkButton:hover:not(:disabled) { background: hsl(var(--accent)); }
+.bookmarkButton[aria-pressed=true] { background: hsl(var(--accent)); border-color: hsl(var(--primary)); }
+.bookmarkButton:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 3px; }
+.bookmarkButton:disabled { opacity: .6; cursor: default; }
+.bookmarkMark { width: 21px; height: 21px; flex: 0 0 21px; }
+.taskTarget { scroll-margin-block: 20px; border-radius: 4px; }
+.taskTarget:focus { outline: 2px solid hsl(var(--ring)); outline-offset: 4px; }

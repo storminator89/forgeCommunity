@@ -8,7 +8,24 @@ export interface MissionWeek {
   endsAt: string;
 }
 
-/** Minimal, read-only discovery projection. Participation stays on the detail page. */
+export interface OwnBookmark {
+  saved: boolean;
+  revision: number;
+  accessEpoch: number;
+}
+
+/** Fail closed on incomplete or malformed private bookmark projections. */
+export function isOwnBookmark(value: unknown): value is OwnBookmark {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const state = value as Record<string, unknown>;
+  return Object.keys(state).length === 3 && typeof state.saved === 'boolean'
+    && Number.isInteger(state.revision) && (state.revision as number) >= 0 && (state.revision as number) <= 2147483647
+    && Number.isInteger(state.accessEpoch) && (state.accessEpoch as number) >= 0 && (state.accessEpoch as number) <= 2147483647;
+}
+
+export const missionBookmarkPrivacy = 'Nur für dich. Du findest die Mission hier wieder. Es wird keine Erinnerung verschickt.';
+
+/** Minimal self-only discovery projection. Participation stays on the detail page. */
 export interface SpaceMissionOverview {
   id: string;
   title: string;
@@ -16,6 +33,7 @@ export interface SpaceMissionOverview {
   week: MissionWeek | null;
   windowState: 'self-paced' | 'current' | 'past';
   participationActive: boolean;
+  ownBookmark: OwnBookmark;
 }
 
 export interface SpaceMission {
@@ -26,6 +44,7 @@ export interface SpaceMission {
   creator: SpaceAuthor | null;
   createdAt: string;
   closedAt: string | null;
+  ownBookmark: OwnBookmark | null;
   week: MissionWeek | null;
   windowState: 'self-paced' | 'current' | 'past';
   participants: (SpaceAuthor & { joinedAt: string })[];

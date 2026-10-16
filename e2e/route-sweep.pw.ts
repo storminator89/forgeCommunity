@@ -71,7 +71,7 @@ async function installSyntheticApi(page: Page, item?: RouteSweepCase) {
     } }));
     await page.route('**/api/spaces/qa-route-space/missions/qa-route-mission', route => route.fulfill({ status: 200, json: {
       id: 'qa-route-mission', spaceId: 'qa-route-space', title: 'Route QA teach-back', prompt: 'A synthetic, voluntary teach-back prompt.',
-      creator: null, createdAt: '2026-10-01T12:00:00.000Z', closedAt: null, participants: [], participantLimit: 5,
+      creator: null, createdAt: '2026-10-01T12:00:00.000Z', closedAt: null, ownBookmark: { saved: false, revision: 0, accessEpoch: 0 }, participants: [], participantLimit: 5,
       participation: { epoch: 0, active: false, joinedAt: null, optedOutAt: null }, canManage: false, canJoin: true,
       contributions: [], ownContributions: [], progress: { insightAuthors: 0, hasCrossPersonBuildOn: false, complete: false },
     } }));

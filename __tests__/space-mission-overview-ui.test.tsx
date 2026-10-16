@@ -2,10 +2,12 @@ import { StrictMode, type ComponentProps, type ReactNode } from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useSession } from 'next-auth/react';
+import { useSearchParams } from 'next/navigation';
 import MissionOverviewPage from '@/app/community/missions/page';
 import type { SpaceMissionOverview } from '@/components/spaces/mission-api';
 
 jest.mock('next-auth/react', () => ({ useSession: jest.fn() }));
+jest.mock('next/navigation', () => ({ useSearchParams: jest.fn() }));
 jest.mock('next/link', () => ({ __esModule: true, default: function MockLink({ prefetch, ...props }: ComponentProps<'a'> & { prefetch?: boolean }) {
   return <a data-prefetch={String(prefetch)} {...props} />;
 } }));
@@ -15,7 +17,7 @@ const json = (body: unknown, status = 200) => ({ ok: status >= 200 && status < 3
 const page = (items: SpaceMissionOverview[], nextCursor: string | null = null) => json({ items, nextCursor });
 const mission = (id = 'mission', extras: Partial<SpaceMissionOverview> = {}): SpaceMissionOverview => ({
   id, title: `Mission ${id}`, space: { id: 'private space', name: 'Privater Lernraum' }, week: null,
-  windowState: 'self-paced', participationActive: false, ...extras,
+  windowState: 'self-paced', participationActive: false, ownBookmark: { saved: false, revision: 0, accessEpoch: 0 }, ...extras,
 });
 const week = { startDate: '2026-10-12', timezone: 'Europe/Berlin', startsAt: '2026-10-11T22:00:00.000Z', endsAt: '2026-10-18T22:00:00.000Z' };
 
@@ -30,6 +32,7 @@ function deferred() {
 
 beforeEach(() => {
   jest.clearAllMocks(); session();
+  jest.mocked(useSearchParams).mockReturnValue(new URLSearchParams() as ReturnType<typeof useSearchParams>);
   Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
 });
 
@@ -225,4 +228,128 @@ it('revalidates all loaded pages on focus and safely handles StrictMode effect r
   fireEvent.focus(window);
   await screen.findByRole('link', { name: 'Mission second' });
   expect((global.fetch as jest.Mock).mock.calls.map(([path]) => path)).toEqual(['/api/space-missions', '/api/space-missions?cursor=next']);
+});
+
+it('saves privately before participation, locks double actions and returns focus after authorized reload', async () => {
+  const pending = deferred();
+  global.fetch = jest.fn().mockResolvedValueOnce(page([mission()])).mockReturnValueOnce(pending.promise)
+    .mockResolvedValueOnce(page([mission('mission', { ownBookmark: { saved: true, revision: 1, accessEpoch: 0 } })]));
+  render(<MissionOverviewPage />);
+  const save = await screen.findByRole('button', { name: 'Für später merken: Mission mission' });
+  expect(save).toHaveAccessibleDescription(/Nur für dich.*keine Erinnerung/);
+  save.focus(); fireEvent.click(save); fireEvent.click(save);
+  expect(save).toBeDisabled(); expect(save).toHaveAttribute('aria-pressed', 'false');
+  expect((global.fetch as jest.Mock).mock.calls.filter(([, init]) => init.method)).toHaveLength(1);
+  expect((global.fetch as jest.Mock).mock.calls[1]).toEqual(['/api/spaces/private%20space/missions/mission/bookmark', expect.objectContaining({
+    method: 'PUT', cache: 'no-store', signal: expect.any(AbortSignal), body: JSON.stringify({ saved: true, expectedRevision: 0, accessEpoch: 0 }),
+  })]);
+  await act(async () => pending.resolve(json({ saved: true, revision: 1, accessEpoch: 0 })));
+  const saved = await screen.findByRole('button', { name: 'Nicht mehr merken: Mission mission' });
+  expect(saved).toHaveAttribute('aria-pressed', 'true'); expect(saved).toHaveFocus();
+  expect(screen.getByText('Für später gemerkt.')).toBeVisible();
+  expect(screen.queryByText('Du nimmst teil', { exact: true })).not.toBeInTheDocument();
+});
+
+it('reloads a conflict and requires a deliberate second action using the fresh revision and epoch', async () => {
+  global.fetch = jest.fn().mockResolvedValueOnce(page([mission()])).mockResolvedValueOnce(json({ error: 'conflict' }, 409))
+    .mockResolvedValueOnce(page([mission('mission', { ownBookmark: { saved: false, revision: 8, accessEpoch: 4 } })]))
+    .mockResolvedValueOnce(json({ saved: true, revision: 9, accessEpoch: 4 }))
+    .mockResolvedValueOnce(page([mission('mission', { ownBookmark: { saved: true, revision: 9, accessEpoch: 4 } })]));
+  render(<MissionOverviewPage />);
+  await userEvent.click(await screen.findByRole('button', { name: 'Für später merken: Mission mission' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('wähle erneut');
+  expect((global.fetch as jest.Mock).mock.calls.filter(([, init]) => init.method)).toHaveLength(1);
+  await userEvent.click(screen.getByRole('button', { name: 'Für später merken: Mission mission' }));
+  await screen.findByRole('button', { name: 'Nicht mehr merken: Mission mission' });
+  expect(JSON.parse((global.fetch as jest.Mock).mock.calls[3][1].body)).toEqual({ saved: true, expectedRevision: 8, accessEpoch: 4 });
+});
+
+it('requests Saved on the server before pagination and moves leased focus to results after deliberate row removal', async () => {
+  jest.mocked(useSearchParams).mockReturnValue(new URLSearchParams('view=saved') as ReturnType<typeof useSearchParams>);
+  const saved = mission('kept', { ownBookmark: { saved: true, revision: 2, accessEpoch: 3 } });
+  global.fetch = jest.fn().mockResolvedValueOnce(page([saved], 'old'))
+    .mockResolvedValueOnce(page([saved], 'fresh')).mockResolvedValueOnce(page([mission('next', { ownBookmark: { saved: true, revision: 1, accessEpoch: 3 } })]))
+    .mockResolvedValueOnce(json({ saved: false, revision: 3, accessEpoch: 3 }))
+    .mockResolvedValueOnce(page([]));
+  render(<MissionOverviewPage />);
+  await screen.findByRole('link', { name: 'Mission kept' });
+  expect(screen.getByRole('link', { name: /^Gemerkte$/ })).toHaveAttribute('aria-current', 'page');
+  await userEvent.click(screen.getByRole('button', { name: 'Weitere Missionen laden' }));
+  await screen.findByRole('link', { name: 'Mission next' });
+  expect((global.fetch as jest.Mock).mock.calls.slice(0, 3).map(([path]) => path)).toEqual([
+    '/api/space-missions?view=saved', '/api/space-missions?view=saved', '/api/space-missions?view=saved&cursor=fresh',
+  ]);
+  await userEvent.click(screen.getByRole('button', { name: 'Nicht mehr merken: Mission kept' }));
+  await screen.findByRole('heading', { name: 'Keine gemerkten Missionen' });
+  expect(screen.queryByRole('link', { name: 'Mission kept' })).not.toBeInTheDocument();
+  expect(screen.getByText('0 Missionen geladen')).toHaveFocus();
+});
+
+it('does not steal external focus when a bookmark settles', async () => {
+  const pending = deferred();
+  global.fetch = jest.fn().mockResolvedValueOnce(page([mission()])).mockReturnValueOnce(pending.promise)
+    .mockResolvedValueOnce(page([mission('mission', { ownBookmark: { saved: true, revision: 1, accessEpoch: 0 } })]));
+  render(<MissionOverviewPage />);
+  await userEvent.click(await screen.findByRole('button', { name: 'Für später merken: Mission mission' }));
+  const other = screen.getByRole('link', { name: /^Alle$/ }); other.focus();
+  await act(async () => pending.resolve(json({ saved: true, revision: 1, accessEpoch: 0 })));
+  await screen.findByRole('button', { name: 'Nicht mehr merken: Mission mission' });
+  expect(other).toHaveFocus();
+});
+
+it.each(['account', 'role', 'filter', 'focus'])('discards an old bookmark result after a newer %s generation', async change => {
+  const pending = deferred();
+  global.fetch = jest.fn().mockResolvedValueOnce(page([mission()])).mockReturnValueOnce(pending.promise).mockResolvedValueOnce(page([]));
+  const view = render(<MissionOverviewPage />);
+  await userEvent.click(await screen.findByRole('button', { name: 'Für später merken: Mission mission' }));
+  const signal = (global.fetch as jest.Mock).mock.calls[1][1].signal as AbortSignal;
+  if (change === 'account' || change === 'role') { session(change === 'account' ? 'other' : 'viewer', change === 'role' ? 'ADMIN' : 'USER'); view.rerender(<MissionOverviewPage />); }
+  else if (change === 'filter') { jest.mocked(useSearchParams).mockReturnValue(new URLSearchParams('view=saved') as ReturnType<typeof useSearchParams>); view.rerender(<MissionOverviewPage />); }
+  else fireEvent.focus(window);
+  await screen.findByRole('heading', { name: change === 'filter' ? 'Keine gemerkten Missionen' : 'Keine offenen Missionen' });
+  expect(signal.aborted).toBe(true);
+  await act(async () => pending.resolve(json({ saved: true, revision: 1, accessEpoch: 0 })));
+  expect(screen.queryByText('Für später gemerkt.')).not.toBeInTheDocument();
+  expect(global.fetch).toHaveBeenCalledTimes(3);
+});
+
+it.each([401, 404, 500])('shows a visible bookmark failure and only authorized rows after status %s', async status => {
+  global.fetch = jest.fn().mockResolvedValueOnce(page([mission()])).mockResolvedValueOnce(json({ error: 'failure' }, status)).mockResolvedValueOnce(page([]));
+  render(<MissionOverviewPage />);
+  await userEvent.click(await screen.findByRole('button', { name: 'Für später merken: Mission mission' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent(status === 500 ? 'nicht gespeichert' : 'nicht mehr verfügbar');
+  expect(screen.queryByRole('link', { name: 'Mission mission' })).not.toBeInTheDocument();
+});
+
+it('rejects malformed private bookmark state rather than rendering actionable guesses', async () => {
+  global.fetch = jest.fn().mockResolvedValue(page([{ ...mission(), ownBookmark: null } as unknown as SpaceMissionOverview]));
+  render(<MissionOverviewPage />);
+  await screen.findByRole('heading', { name: 'Missionen nicht verfügbar' });
+  expect(screen.queryByRole('button', { name: /Für später merken/ })).not.toBeInTheDocument();
+});
+
+
+it('does not take external focus back when deliberate Saved removal completes', async () => {
+  jest.mocked(useSearchParams).mockReturnValue(new URLSearchParams('view=saved') as ReturnType<typeof useSearchParams>);
+  const pending = deferred();
+  global.fetch = jest.fn().mockResolvedValueOnce(page([mission('saved', { ownBookmark: { saved: true, revision: 1, accessEpoch: 0 } })]))
+    .mockReturnValueOnce(pending.promise).mockResolvedValueOnce(page([]));
+  render(<MissionOverviewPage />);
+  await userEvent.click(await screen.findByRole('button', { name: 'Nicht mehr merken: Mission saved' }));
+  const other = screen.getByRole('link', { name: /^Alle$/ }); other.focus();
+  await act(async () => pending.resolve(json({ saved: false, revision: 2, accessEpoch: 0 })));
+  await screen.findByRole('heading', { name: 'Keine gemerkten Missionen' });
+  expect(other).toHaveFocus();
+  expect(screen.getByText('0 Missionen geladen')).not.toHaveFocus();
+});
+
+
+it('does not use the removed-row focus fallback when reauthorization fails after confirmed unsave', async () => {
+  jest.mocked(useSearchParams).mockReturnValue(new URLSearchParams('view=saved') as ReturnType<typeof useSearchParams>);
+  global.fetch = jest.fn().mockResolvedValueOnce(page([mission('saved', { ownBookmark: { saved: true, revision: 1, accessEpoch: 0 } })]))
+    .mockResolvedValueOnce(json({ saved: false, revision: 2, accessEpoch: 0 })).mockResolvedValueOnce(json({ error: 'unavailable' }, 500));
+  render(<MissionOverviewPage />);
+  await userEvent.click(await screen.findByRole('button', { name: 'Nicht mehr merken: Mission saved' }));
+  await screen.findByRole('heading', { name: 'Missionen nicht verfügbar' });
+  expect(screen.getByText('Keine Missionsdaten angezeigt.')).not.toHaveFocus();
 });

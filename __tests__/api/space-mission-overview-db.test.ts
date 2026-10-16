@@ -65,7 +65,7 @@ const session = (id: string | null = 'learner', role = 'USER') =>
 const request = (query = '') => new Request(`http://localhost/api/space-missions${query}`) as never;
 const list = (cursor?: string) => GET(request(cursor === undefined ? '' : `?cursor=${encodeURIComponent(cursor)}`));
 const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url');
-const validCursor = { v: 1, kind: 'space-mission-overview', viewerId: 'learner', role: 'USER',
+const validCursor = { v: 2, kind: 'space-mission-overview', viewerId: 'learner', role: 'USER', view: 'all', accessEpoch: 0,
   createdAt: '2026-10-12T12:00:00.000Z', id: 'mission-001' };
 const timestamp = new Date(validCursor.createdAt);
 const queries = (): string[] => jest.requireMock('@/lib/prisma').__queries;
@@ -140,7 +140,7 @@ test('omits public, closed and foreign missions before projecting any private de
   const response = await list();
   expect(await response.json()).toEqual({ items: [{ id: 'included', title: 'Mission included',
     space: { id: 'space-included', name: 'Space included' }, week: null,
-    windowState: 'self-paced', participationActive: false }], nextCursor: null });
+    windowState: 'self-paced', participationActive: false, ownBookmark: { saved: false, revision: 0, accessEpoch: 0 } }], nextCursor: null });
 });
 
 test('past soft weeks stay open and use stored window metadata at the exact end boundary', async () => {
@@ -155,7 +155,7 @@ test('past soft weeks stay open and use stored window metadata at the exact end 
     expect(body.items.find((item: { id: string }) => item.id === 'weekly')).toEqual({ id: 'weekly', title: 'Mission weekly',
       space: { id: 'space-weekly', name: 'Space weekly' },
       week: { startDate: '2026-10-12', timezone: 'Europe/Berlin', startsAt: '2026-10-11T22:00:00.000Z', endsAt: '2026-10-18T22:00:00.000Z' },
-      windowState: 'past', participationActive: false });
+      windowState: 'past', participationActive: false, ownBookmark: { saved: false, revision: 0, accessEpoch: 0 } });
     jest.setSystemTime(new Date(week.weekEndsAt.getTime() - 1));
     const before = await (await list()).json();
     expect(before.items.find((item: { id: string }) => item.id === 'weekly').windowState).toBe('current');
@@ -250,7 +250,7 @@ test('a valid cursor cannot be reused by a different viewer', async () => {
 
 test.each([
   '', 'bad!', 'x'.repeat(1025), 'a', encode(null), encode([]), encode({}),
-  encode({ ...validCursor, v: 2 }), encode({ ...validCursor, kind: 'space-missions' }),
+  encode({ ...validCursor, v: 1 }), encode({ ...validCursor, kind: 'space-missions' }),
   encode({ ...validCursor, viewerId: 'other' }), encode({ ...validCursor, role: 'ADMIN' }),
   encode({ ...validCursor, extra: true }), encode({ ...validCursor, id: 'invalid/id' }),
   encode({ ...validCursor, createdAt: '2026-10-12' }), encode({ ...validCursor, createdAt: 'not-a-date' }),
@@ -297,14 +297,14 @@ test('projection is bounded, read-only, and reads live authority and missions in
   expect(missionArgs).toMatchObject({ take: 21, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], where: {
     closedAt: null, space: { visibility: 'PRIVATE', members: { some: { userId: 'learner' } } },
   }, select: { participations: { where: { userId: 'learner', optedOutAt: null }, take: 1, select: { missionId: true } } } });
-  expect(Object.keys(missionArgs!.select!).sort()).toEqual(['createdAt', 'id', 'participations', 'space', 'title', 'weekEndsAt', 'weekStartsAt', 'weekStartsOn', 'weekTimezone'].sort());
+  expect(Object.keys(missionArgs!.select!).sort()).toEqual(['createdAt', 'id', 'bookmarkSettings', 'participations', 'space', 'title', 'weekEndsAt', 'weekStartsAt', 'weekStartsOn', 'weekTimezone'].sort());
   expect(Object.keys(body).sort()).toEqual(['items', 'nextCursor']);
   for (const item of body.items) {
-    expect(Object.keys(item).sort()).toEqual(['id', 'title', 'space', 'week', 'windowState', 'participationActive'].sort());
+    expect(Object.keys(item).sort()).toEqual(['id', 'title', 'space', 'week', 'windowState', 'participationActive', 'ownBookmark'].sort());
     expect(Object.keys(item.space).sort()).toEqual(['id', 'name']);
   }
   expect(JSON.stringify(body)).not.toMatch(/private-digest|Private mission prompt|Private contribution body|email|password|creator|participants|canJoin|progress/);
-  expect(queries().filter(query => /^\s*SELECT/i.test(query)).length).toBeLessThanOrEqual(4);
+  expect(queries().filter(query => /^\s*SELECT/i.test(query)).length).toBeLessThanOrEqual(6);
   expect(queries().some(query => /\b(?:INSERT|UPDATE|DELETE|REPLACE|CREATE|ALTER|DROP)\b/i.test(query))).toBe(false);
   expect(queries().some(query => /SpaceMissionContribution|Notification|RewardLedger|CompletionRecord/.test(query))).toBe(false);
 });

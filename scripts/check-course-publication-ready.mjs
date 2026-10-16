@@ -13,7 +13,7 @@ import testDatabase from './space-mission-test-database.cjs';
 
 const sqliteNames = readdirSync(new URL('../prisma/sqlite-migrations/', import.meta.url))
   .filter(name => /^\d+_[\w-]+\.sql$/.test(name)).sort();
-assert.equal(sqliteNames.at(-1), '0026_space_mission_week.sql');
+assert.equal(sqliteNames.at(-1), '0027_space_mission_bookmarks.sql');
 const publicationIndex = sqliteNames.indexOf('0010_staged_course_publication.sql');
 assert.ok(publicationIndex >= 0);
 
@@ -139,8 +139,10 @@ test('SQLite migration still rolls back an injected DDL failure', () => {
   db.close();
 });
 
-test('SQLite readiness refuses missing, changed, gapped and divergent migration history through mission weeks', async () => {
+test('SQLite readiness refuses missing, changed, gapped and divergent migration history through private mission bookmarks', async () => {
   for (const mutate of [
+    db => db.prepare(`DELETE FROM _app_migrations WHERE name='0027_space_mission_bookmarks.sql'`).run(),
+    db => db.prepare(`UPDATE _app_migrations SET checksum='changed' WHERE name='0027_space_mission_bookmarks.sql'`).run(),
     db => db.prepare(`DELETE FROM _app_migrations WHERE name='0026_space_mission_week.sql'`).run(),
     db => db.prepare(`UPDATE _app_migrations SET checksum='changed' WHERE name='0026_space_mission_week.sql'`).run(),
     db => db.prepare(`DELETE FROM _app_migrations WHERE name='0025_space_polls.sql'`).run(),
@@ -245,6 +247,8 @@ if (pgUrl) {
       assert.equal(await assertCoursePublicationReady(freshUrl.toString(), 'postgresql'), true);
       await db.query(`SET search_path TO "${fresh}"`);
       for (const [name, sql, file] of [
+        ['missing mission bookmark tail', `DELETE FROM "_app_schema_upgrades" WHERE name='0026_space_mission_bookmarks.sql'`, '0026_space_mission_bookmarks.sql'],
+        ['tampered mission bookmark tail', `UPDATE "_app_schema_upgrades" SET checksum='changed' WHERE name='0026_space_mission_bookmarks.sql'`, '0026_space_mission_bookmarks.sql'],
         ['missing mission week tail', `DELETE FROM "_app_schema_upgrades" WHERE name='0025_space_mission_week.sql'`, '0025_space_mission_week.sql'],
         ['tampered mission week tail', `UPDATE "_app_schema_upgrades" SET checksum='changed' WHERE name='0025_space_mission_week.sql'`, '0025_space_mission_week.sql'],
         ['missing polls tail', `DELETE FROM "_app_schema_upgrades" WHERE name='0024_space_polls.sql'`, '0024_space_polls.sql'],
