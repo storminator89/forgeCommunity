@@ -193,18 +193,15 @@ test('Spark image requests respect visibility, independent motion preference, re
   await screenshotWidths(page, testInfo, 'dark-static');
 });
 
-test('the real Blender clip waits for load, changes frames once, settles to static and tolerates failures', async ({ page }, testInfo) => {
+test('the real Blender clip waits for load, changes frames once and replays only for a later new completion', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop-chromium', 'One desktop run captures real animated frames and failure timing.');
   await signIn(page);
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   const fixture = await journeyFixture(page);
   let release!: () => void;
-  let fail = false;
-  let failedRequests = 0;
   let delayed = true;
   const pending = new Promise<void>(resolve => { release = resolve; });
   await page.route(`**${clipPath}`, async route => {
-    if (fail) { failedRequests++; return route.abort('failed'); }
     if (delayed) await pending;
     await route.continue();
   });
@@ -229,20 +226,7 @@ test('the real Blender clip waits for load, changes frames once, settles to stat
   await refresh(page);
   await expect(clip).toHaveCount(0);
 
-  // A later genuinely new observation can try again, but an image error leaves
-  // the course status, controls and static final pose fully usable.
-  fixture.setComplete(false);
-  await refresh(page);
-  fail = true;
-  fixture.setComplete(true);
-  await refresh(page);
-  await expect.poll(() => failedRequests).toBe(1);
-  await expect(clip).toHaveCount(0);
-  await expect(page.getByRole('status')).toContainText('Alle aktuellen Kursinhalte bestätigt');
-  await expect(page.getByRole('link', { name: 'Kurs ansehen' })).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath('spark-image-failure-static.png'), fullPage: true });
-
-  fail = false;
+  // Reusing the decoded resource still has to produce a new genuine playback.
   fixture.setComplete(false);
   await refresh(page);
   fixture.setComplete(true);
@@ -263,4 +247,24 @@ test('the real Blender clip waits for load, changes frames once, settles to stat
   await page.keyboard.press('Enter');
   await expect(mascot).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath('spark-hidden-completion.png'), fullPage: true });
+});
+
+
+test('a failed first clip request preserves the static completion and course controls', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-chromium', 'A fresh browser context keeps this image-failure fixture independent of decoded-image caching.');
+  await signIn(page);
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  const fixture = await journeyFixture(page);
+  let failedRequests = 0;
+  await page.route(`**${clipPath}`, route => { failedRequests++; return route.abort('failed'); });
+  await page.goto('/courses/journey');
+  await expect(page.getByRole('link', { name: 'Lernschritt öffnen' })).toBeVisible();
+  fixture.setComplete(true);
+  await refresh(page);
+  await expect.poll(() => failedRequests).toBe(1);
+  await expect(page.locator(clipSelector)).toHaveCount(0);
+  await expect(page.getByRole('status')).toContainText('Alle aktuellen Kursinhalte bestätigt');
+  await expect(page.getByRole('link', { name: 'Kurs ansehen' })).toBeVisible();
+  await expect(page.locator('[data-journey-mascot] img').first()).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('spark-image-failure-static.png'), fullPage: true });
 });
