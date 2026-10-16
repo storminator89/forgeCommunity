@@ -23,6 +23,7 @@ const notificationLabels: Record<string, string> = {
   CHANNEL_DELETED: 'Channel gelöscht',
   FOLLOW: 'Neuer Follower',
   COMMENT: 'Neuer Kommentar',
+  EVENT: 'Event',
 };
 
 export default function NotificationsPage() {

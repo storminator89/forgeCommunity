@@ -13,7 +13,7 @@ import testDatabase from './space-mission-test-database.cjs';
 
 const sqliteNames = readdirSync(new URL('../prisma/sqlite-migrations/', import.meta.url))
   .filter(name => /^\d+_[\w-]+\.sql$/.test(name)).sort();
-assert.equal(sqliteNames.at(-1), '0023_space_mission_contributions.sql');
+assert.equal(sqliteNames.at(-1), '0024_event_waitlist.sql');
 const publicationIndex = sqliteNames.indexOf('0010_staged_course_publication.sql');
 assert.ok(publicationIndex >= 0);
 
@@ -139,8 +139,10 @@ test('SQLite migration still rolls back an injected DDL failure', () => {
   db.close();
 });
 
-test('SQLite readiness refuses missing, changed, gapped and divergent migration history through mission contributions', async () => {
+test('SQLite readiness refuses missing, changed, gapped and divergent migration history through the event waitlist', async () => {
   for (const mutate of [
+    db => db.prepare(`DELETE FROM _app_migrations WHERE name='0024_event_waitlist.sql'`).run(),
+    db => db.prepare(`UPDATE _app_migrations SET checksum='changed' WHERE name='0024_event_waitlist.sql'`).run(),
     db => db.prepare(`DELETE FROM _app_migrations WHERE name='0023_space_mission_contributions.sql'`).run(),
     db => db.prepare(`UPDATE _app_migrations SET checksum='changed' WHERE name='0023_space_mission_contributions.sql'`).run(),
     db => db.prepare(`DELETE FROM _app_migrations WHERE name='0022_space_mission_foundation.sql'`).run(),
@@ -239,6 +241,8 @@ if (pgUrl) {
       assert.equal(await assertCoursePublicationReady(freshUrl.toString(), 'postgresql'), true);
       await db.query(`SET search_path TO "${fresh}"`);
       for (const [name, sql, file] of [
+        ['missing event waitlist tail', `DELETE FROM "_app_schema_upgrades" WHERE name='0023_event_waitlist.sql'`, '0023_event_waitlist.sql'],
+        ['tampered event waitlist tail', `UPDATE "_app_schema_upgrades" SET checksum='changed' WHERE name='0023_event_waitlist.sql'`, '0023_event_waitlist.sql'],
         ['missing mission contribution tail', `DELETE FROM "_app_schema_upgrades" WHERE name='0022_space_mission_contributions.sql'`, '0022_space_mission_contributions.sql'],
         ['tampered mission contribution tail', `UPDATE "_app_schema_upgrades" SET checksum='changed' WHERE name='0022_space_mission_contributions.sql'`, '0022_space_mission_contributions.sql'],
         ['missing mission foundation tail', `DELETE FROM "_app_schema_upgrades" WHERE name='0021_space_mission_foundation.sql'`, '0021_space_mission_foundation.sql'],

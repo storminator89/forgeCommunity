@@ -10,6 +10,7 @@ import { sanitizeRichHtmlServer, sanitizeTextServer } from '@/lib/server/sanitiz
 import { generateICS } from '@/lib/icsGenerator';
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
 import { parseEventCapacity, ParticipationError, participationTransaction } from '@/lib/server/participation';
+import { lockEventParticipation, promoteEventWaitlist, requireEventAccount } from '@/lib/server/event-participation';
 
 export async function GET(
   request: Request,
@@ -66,14 +67,14 @@ export async function PUT(
     const { start: eventStartDateTime, end: eventEndDateTime } = parseEventSchedule({ date, startTime, endTime, timezone });
 
     const updatedEvent = await participationTransaction(async tx => {
-      const event = await tx.event.findUnique({ where: { id: params.id }, select: { maxAttendees: true } });
-      if (!event) throw new ParticipationError('Event not found', 404);
+      await requireEventAccount(tx, session.user.id, true);
+      const event = await lockEventParticipation(tx, params.id);
       const capacity = maxAttendees === undefined ? event.maxAttendees : maxAttendees;
       if (capacity !== null) {
         const registeredCount = await tx.eventAttendee.count({ where: { eventId: params.id, status: { not: 'CANCELLED' } } });
         if (registeredCount > capacity) throw new ParticipationError('Capacity is below current registrations', 409);
       }
-      return tx.event.update({
+      const updated = await tx.event.update({
         where: { id: params.id },
         data: {
           title,
@@ -87,6 +88,8 @@ export async function PUT(
           ...(maxAttendees === undefined ? {} : { maxAttendees }),
         },
       });
+      await promoteEventWaitlist(tx, updated);
+      return updated;
     });
 
     const formattedZonedStartDate = DateTime.fromJSDate(updatedEvent.date, { zone: 'utc' }).setZone(updatedEvent.timezone);
@@ -125,20 +128,15 @@ export async function DELETE(
   }
 
   try {
-    const event = await prisma.event.findUnique({
-      where: { id: params.id },
-    });
-
-    if (!event) {
-      return NextResponse.json({ error: 'Event not found' }, { status: 404 });
-    }
-
-    await prisma.event.delete({
-      where: { id: params.id },
+    await participationTransaction(async tx => {
+      await requireEventAccount(tx, session.user.id, true);
+      await lockEventParticipation(tx, params.id);
+      await tx.event.delete({ where: { id: params.id } });
     });
 
     return NextResponse.json({ message: 'Event deleted successfully' }, { status: 200 });
   } catch (error) {
+    if (error instanceof ParticipationError) return NextResponse.json({ error: error.message }, { status: error.status });
     console.error('Error deleting event:', error);
     return NextResponse.json({ error: 'Error deleting event' }, { status: 500 });
   }

@@ -37,6 +37,25 @@ test('future events are discoverable, searchable, and keyboard accessible across
   await page.route('**/api/events', async route => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(events) });
   });
+  // Discovery uses synthetic event IDs. Their lazy authenticated RSVP reads
+  // need matching complete caller states, rather than real missing-ID 404s.
+  // This fixture never intercepts or permits a participation mutation.
+  await page.route('**/api/events/*/rsvp', async route => {
+    expect(route.request().method()).toBe('GET');
+    const eventId = decodeURIComponent(new URL(route.request().url()).pathname.split('/')[3]);
+    const event = events.find(item => item.id === eventId);
+    if (!event) {
+      await route.fulfill({ status: 404, json: { error: 'Synthetic event not found' } });
+      return;
+    }
+    await route.fulfill({ json: {
+      registrationState: 'NONE', isAttending: false, isWaitlisted: false,
+      canCancelRsvp: false, canLeaveWaitlist: false,
+      attendeeCount: event.attendeeCount, maxAttendees: event.maxAttendees,
+      waitlistCount: 0, waitlistPosition: null,
+      registrationClosed: new Date(event.date).getTime() <= Date.now(),
+    } });
+  });
 
   await page.goto('/login');
   await page.getByRole('textbox', { name: 'E-Mail-Adresse' }).fill(email);

@@ -18,24 +18,28 @@ jest.mock('@/lib/server/sanitize-html', () => ({
 }));
 jest.mock('@/lib/prisma', () => ({ __esModule: true, default: {
   $transaction: jest.fn(),
+  user: { findUnique: jest.fn() },
+  eventWaitlist: { findUnique: jest.fn(), findFirst: jest.fn(), count: jest.fn(), deleteMany: jest.fn() },
   course: { findUnique: jest.fn(), findMany: jest.fn() },
   courseContent: { findMany: jest.fn() },
   courseContentProgress: { findMany: jest.fn() },
   coursePublication: { findMany: jest.fn() },
   enrollment: { findUnique: jest.fn(), count: jest.fn(), create: jest.fn(), deleteMany: jest.fn() },
   event: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn() },
-  eventAttendee: { findUnique: jest.fn(), count: jest.fn(), create: jest.fn(), update: jest.fn() },
+  eventAttendee: { findUnique: jest.fn(), count: jest.fn(), create: jest.fn(), update: jest.fn(), upsert: jest.fn() },
 } }));
 
 type MockDb = {
   $transaction: jest.Mock;
+  user: { findUnique: jest.Mock };
+  eventWaitlist: { findUnique: jest.Mock; findFirst: jest.Mock; count: jest.Mock; deleteMany: jest.Mock };
   course: { findUnique: jest.Mock; findMany: jest.Mock };
   courseContent: { findMany: jest.Mock };
   courseContentProgress: { findMany: jest.Mock };
   coursePublication: { findMany: jest.Mock };
   enrollment: { findUnique: jest.Mock; count: jest.Mock; create: jest.Mock; deleteMany: jest.Mock };
   event: { findUnique: jest.Mock; findMany: jest.Mock; create: jest.Mock; update: jest.Mock };
-  eventAttendee: { findUnique: jest.Mock; count: jest.Mock; create: jest.Mock; update: jest.Mock };
+  eventAttendee: { findUnique: jest.Mock; count: jest.Mock; create: jest.Mock; update: jest.Mock; upsert: jest.Mock };
 };
 
 const db = prisma as unknown as MockDb;
@@ -54,6 +58,16 @@ beforeEach(() => {
   enrollments = new Map();
   attendees = new Map();
   db.$transaction.mockImplementation((work: (tx: MockDb) => Promise<unknown>) => work(db));
+  db.user.findUnique.mockResolvedValue({ role: 'ADMIN' });
+  db.eventWaitlist.findUnique.mockResolvedValue(null);
+  db.eventWaitlist.findFirst.mockResolvedValue(null);
+  db.eventWaitlist.count.mockResolvedValue(0);
+  db.eventWaitlist.deleteMany.mockResolvedValue({ count: 0 });
+  db.eventAttendee.upsert.mockImplementation(async ({ create }: { create: { userId: string; status: string } }) => {
+    const row = { id: `rsvp-${create.userId}`, status: create.status };
+    attendees.set(create.userId, row);
+    return row;
+  });
   db.course.findUnique.mockImplementation(async () => course);
   db.courseContent.findMany.mockResolvedValue([]);
   db.courseContentProgress.findMany.mockResolvedValue([]);
@@ -78,9 +92,9 @@ beforeEach(() => {
     attendees.set(data.userId, row);
     return row;
   });
-  db.eventAttendee.update.mockImplementation(async ({ where, data }: { where: { id: string }; data: { status: string } }) => {
-    const userId = where.id.slice('rsvp-'.length);
-    const row = { id: where.id, status: data.status };
+  db.eventAttendee.update.mockImplementation(async ({ where, data }: { where: { id?: string; eventId_userId?: { userId: string } }; data: { status: string } }) => {
+    const userId = where.eventId_userId?.userId ?? where.id!.slice('rsvp-'.length);
+    const row = { id: `rsvp-${userId}`, status: data.status };
     attendees.set(userId, row);
     return row;
   });
@@ -237,5 +251,7 @@ test('create and edit persist the same UTC instant and event-zone clock across m
   const edited = await updateEvent(request(), eventParams);
   expect(edited.status).toBe(200);
   expect(await edited.json()).toMatchObject({ date: '2030-05-21T00:30:00.000+02:00', startTime: '00:30', endTime: '01:30' });
-  expect(db.event.update.mock.calls[0][0].data.date.toISOString()).toBe('2030-05-20T22:30:00.000Z');
+  expect(db.event.update).toHaveBeenCalledTimes(2);
+  expect(db.event.update.mock.calls[0][0].data).toEqual({ updatedAt: expect.any(Date) });
+  expect(db.event.update.mock.calls[1][0].data.date.toISOString()).toBe('2030-05-20T22:30:00.000Z');
 });

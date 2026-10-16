@@ -111,7 +111,7 @@ jobs:
           DATABASE_PROVIDER=postgresql npm run db:generate
 
       - name: Verify SQLite migration safety
-        run: DATABASE_PROVIDER=sqlite node --test scripts/check-sqlite-migrations.mjs scripts/check-notification-migrations.mjs scripts/check-course-publication-ready.mjs scripts/check-course-qa-sqlite.mjs scripts/spaces-foundation.node-tests.mjs scripts/space-missions.node-tests.mjs
+        run: DATABASE_PROVIDER=sqlite node --test scripts/check-sqlite-migrations.mjs scripts/check-notification-migrations.mjs scripts/check-course-publication-ready.mjs scripts/check-course-qa-sqlite.mjs scripts/spaces-foundation.node-tests.mjs scripts/space-missions.node-tests.mjs scripts/event-waitlist.node-tests.mjs
 
       - name: Verify PostgreSQL upgrade safety
         run: node --test scripts/check-postgresql-upgrades.mjs
@@ -160,10 +160,13 @@ jobs:
         run: npm ci --no-audit --no-fund
 
       - name: Exercise empty install and populated PostgreSQL upgrades
-        run: node --test --test-concurrency=1 scripts/check-postgresql-upgrades.mjs scripts/check-postgresql-release-gate.mjs scripts/check-course-publication-ready.mjs scripts/check-course-qa-postgresql.mjs
+        run: node --test --test-concurrency=1 scripts/check-postgresql-upgrades.mjs scripts/check-postgresql-release-gate.mjs scripts/check-course-publication-ready.mjs scripts/check-course-qa-postgresql.mjs scripts/event-waitlist.node-tests.mjs
 
       - name: Exercise private mission API contracts on PostgreSQL
         run: SPACE_MISSIONS_POSTGRESQL_DISPOSABLE=1 npm test -- --runInBand __tests__/api/space-missions-db.test.ts
+
+      - name: Exercise event waitlist concurrency on PostgreSQL
+        run: EVENT_WAITLIST_POSTGRESQL_DISPOSABLE=1 npm test -- --runInBand __tests__/api/event-waitlist-db.test.ts
 
   # Runs the production startup wrapper and PostgreSQL adapter against a
   # unique schema in the disposable local forge_test service. The script
@@ -250,10 +253,26 @@ jobs:
         id: browser_install
         run: npx playwright install --with-deps chromium firefox webkit
 
-      - name: Exercise desktop and mobile browser flows
-        run: npm run test:browser
+      - name: Verify browser project isolation
+        run: node --test scripts/browser-project-isolation.node-tests.mjs
 
-      # Run afterward because the full Chromium suite clears test-results/.
+      # Each CLI owns and tears down its Next server. The real authentication
+      # limiter stays unchanged; one project cannot exhaust the next one's
+      # process-local aggregate bucket. Keep separate output roots because
+      # Playwright clears its selected output directory at the start of a run.
+      - name: Exercise desktop Chromium browser flows
+        if: ${{ !cancelled() && steps.browser_build.outcome == 'success' && steps.browser_install.outcome == 'success' }}
+        run: npx playwright test --project=desktop-chromium --output=test-results/desktop-chromium
+
+      - name: Exercise 320px Chromium browser flows
+        if: ${{ !cancelled() && steps.browser_build.outcome == 'success' && steps.browser_install.outcome == 'success' }}
+        run: npx playwright test --project=mobile-320-chromium --output=test-results/mobile-320-chromium
+
+      - name: Exercise 390px Chromium browser flows
+        if: ${{ !cancelled() && steps.browser_build.outcome == 'success' && steps.browser_install.outcome == 'success' }}
+        run: npx playwright test --project=mobile-390-chromium --output=test-results/mobile-390-chromium
+
+      # Run afterward with its own output root.
       # A Chromium assertion failure must not hide the other engine results.
       - name: Exercise four desktop Firefox and WebKit critical journeys
         if: ${{ !cancelled() && steps.browser_build.outcome == 'success' && steps.browser_install.outcome == 'success' }}
