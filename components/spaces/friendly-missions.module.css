@@ -1,0 +1,80 @@
+/* All colors reuse the workbench's warm paper / ink semantic tokens. */
+.surface { min-width: 0; border: 1px solid hsl(var(--border)); border-radius: 24px; background: hsl(var(--card)); }
+.hero { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 24px; }
+.heroCopy { min-width: 0; flex: 1; }
+.eyebrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; color: hsl(var(--muted-foreground)); }
+.eyebrow svg { flex-shrink: 0; }
+.illustration { width: 164px; flex: 0 0 164px; color: hsl(var(--foreground)); }
+.illustrationCompact { width: 92px; flex: 0 0 92px; color: hsl(var(--foreground)); }
+.paperBack { fill: hsl(var(--muted)); }
+.paperFront { fill: hsl(var(--card)); }
+.spark { fill: hsl(var(--primary)); }
+.pill { display: inline-flex; align-items: center; gap: 6px; width: fit-content; max-width: 100%; padding: 5px 9px; border-radius: 99px; font-size: 12px; line-height: 1.4; font-weight: 500; background: hsl(var(--muted)); }
+.utility { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.disclosure { min-width: 0; font-size: 13px; line-height: 1.65; color: hsl(var(--muted-foreground)); }
+.disclosure summary { min-height: 44px; display: flex; align-items: center; gap: 8px; cursor: pointer; width: fit-content; max-width: 100%; color: hsl(var(--foreground)); border-radius: 8px; }
+.disclosure summary::before { content: '+'; width: 20px; height: 20px; display: inline-grid; place-items: center; flex-shrink: 0; border: 1px solid hsl(var(--border)); border-radius: 50%; line-height: 1; }
+.disclosure[open] > summary::before { content: '−'; }
+.disclosure summary:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 3px; }
+.disclosure[open] > :not(summary) { margin-bottom: 12px; }
+.goalTrail { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 20px 0 16px; padding: 0; list-style: none; }
+.goalTrail li { position: relative; min-width: 0; display: flex; align-items: center; flex-direction: column; text-align: center; gap: 8px; }
+.goalTrail li:not(:last-child)::after { content: ''; position: absolute; height: 1px; background: hsl(var(--border)); left: calc(50% + 31px); width: calc(100% - 54px); top: 26px; }
+.goalIcon { display: grid; place-items: center; width: 54px; height: 54px; border: 1px solid hsl(var(--border)); background: hsl(var(--background)); border-radius: 18px; color: hsl(var(--muted-foreground)); }
+.goalTrail [data-done=true] .goalIcon { background: hsl(var(--accent)); border-color: hsl(var(--primary) / .3); color: hsl(var(--primary)); }
+.goalTrail h3 { font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+.goalCount { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.untracked { font-size: 12px; color: hsl(var(--muted-foreground)); }
+.goalPanel { padding: 20px 24px 12px; }
+.goalStatus { display: flex; align-items: flex-start; gap: 8px; font-size: 14px; font-weight: 500; }
+.goalStatus svg { flex: 0 0 18px; margin-top: 2px; }
+.people { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 10px; color: hsl(var(--muted-foreground)); font-size: 12px; }
+.peopleDots { display: flex; padding-left: 3px; }
+.peopleDots > span { display: grid; place-items: center; margin-left: -3px; width: 24px; height: 24px; border: 2px solid hsl(var(--card)); border-radius: 50%; background: hsl(var(--muted)); color: hsl(var(--muted-foreground)); }
+.peopleDots [data-filled=true] { background: hsl(var(--accent)); color: hsl(var(--primary)); }
+.participants { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.participants li { display: flex; align-items: center; gap: 8px; max-width: 100%; padding: 6px 12px 6px 6px; border-radius: 99px; background: hsl(var(--muted)); font-size: 13px; overflow-wrap: anywhere; }
+.initial { display: grid; place-items: center; width: 28px; height: 28px; flex-shrink: 0; border-radius: 50%; background: hsl(var(--card)); font-weight: 600; }
+.list { display: grid; gap: 12px; list-style: none; padding: 0; }
+.listItem { position: relative; min-width: 0; display: flex; align-items: flex-start; gap: 16px; border: 1px solid hsl(var(--border)); border-radius: 20px; padding: 20px; background: hsl(var(--card)); }
+.listArt { display: grid; place-items: center; flex: 0 0 48px; width: 48px; height: 48px; border-radius: 16px; background: hsl(var(--muted)); color: hsl(var(--foreground)); }
+.listContent { min-width: 0; flex: 1; }
+.missionLink { overflow-wrap: anywhere; text-decoration: none; }
+.missionLink::after { content: ''; position: absolute; inset: 0; border-radius: 20px; }
+.missionLink:hover { color: hsl(var(--primary)); }
+.missionLink:focus-visible { outline: none; }
+.listItem:has(.missionLink:focus-visible) { outline: 2px solid hsl(var(--ring)); outline-offset: 3px; }
+.arrow { flex: 0 0 20px; margin-top: 3px; color: hsl(var(--muted-foreground)); }
+.week { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: 14px; background: hsl(var(--muted)); font-size: 13px; line-height: 1.6; }
+.week > svg { flex-shrink: 0; margin-top: 2px; }
+.form { margin-top: 20px; padding: 20px; }
+.formIntro { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+.formIntro svg { flex: 0 0 24px; }
+.weekChoice { min-width: 0; border: 1px solid hsl(var(--border)); border-radius: 16px; padding: 16px; }
+.weekChoice legend { padding: 0 6px; }
+.contribution { min-width: 0; padding: 20px; border: 1px solid hsl(var(--border)); border-radius: 20px; background: hsl(var(--card)); scroll-margin-top: 24px; }
+.contribution[data-kind=BUILD_ON] { border-left: 3px solid hsl(var(--primary) / .45); }
+.kindChoices { display: flex; flex-wrap: wrap; gap: 8px; }
+.kindChoices label { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 12px; border: 1px solid hsl(var(--border)); border-radius: 12px; font-size: 13px; cursor: pointer; }
+.kindChoices label:has(input:checked) { border-color: hsl(var(--primary)); background: hsl(var(--accent)); }
+.kindChoices label:has(input:disabled) { opacity: .6; cursor: default; }
+.confirmed { border-radius: 12px; }
+.motion .confirmed[data-feedback=true] { animation: confirmed .38s ease-out; }
+.motion[data-confirmed=true] .goalTrail [data-done=true] .goalIcon { animation: settle .4s ease-out; }
+.motion[data-confirmed=true] .spark { transform-box: fill-box; transform-origin: center; animation: settle .4s ease-out; }
+@keyframes settle { from { transform: scale(.85); } to { transform: scale(1); } }
+@keyframes confirmed { from { opacity: .6; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+@media (max-width: 480px) {
+  .hero { padding: 20px; gap: 8px; align-items: flex-start; flex-wrap: wrap; }
+  .hero > .illustration { position: absolute; width: 72px; top: 12px; right: 14px; }
+  .heroCopy { flex-basis: 100%; }
+  .hero .eyebrow { min-height: 38px; margin-right: 64px; }
+  .goalPanel { padding: 20px 16px 10px; }
+  .listItem { padding: 16px; gap: 12px; flex-wrap: wrap; }
+  .listArt { flex-basis: 40px; width: 40px; height: 40px; border-radius: 13px; }
+  .listContent { flex-basis: calc(100% - 52px); }
+  .arrow { display: none; }
+  .form { padding: 16px; }
+  .goalTrail h3 { font-size: 12px; }
+}
+@media (prefers-reduced-motion: reduce) { .motion .confirmed[data-feedback=true], .motion[data-confirmed=true] .goalTrail .goalIcon, .motion[data-confirmed=true] .spark { animation: none; } }

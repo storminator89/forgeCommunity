@@ -1,0 +1,19 @@
+.panel { min-width: 0; margin-top: 1rem; border: 1px solid hsl(var(--border)); border-radius: 1.25rem; padding: 1rem; background: hsl(var(--background)); font-size: .875rem; }
+.statusRow { display: flex; align-items: center; gap: .875rem; min-width: 0; }
+.seat { width: 68px; height: 68px; flex-shrink: 0; }
+.statusBody { min-width: 0; }
+.eyebrow { font-size: .75rem; color: hsl(var(--muted-foreground)); margin-bottom: .25rem; }
+.status { font-size: 1rem; font-weight: 650; line-height: 1.4; letter-spacing: -.015em; overflow-wrap: anywhere; }
+.capacity { color: hsl(var(--muted-foreground)); font-size: .8125rem; margin-top: .25rem; font-variant-numeric: tabular-nums; }
+.help { color: hsl(var(--muted-foreground)); font-size: .8125rem; line-height: 1.65; margin-top: .875rem; max-width: 58ch; }
+.feedback { font-size: .875rem; line-height: 1.6; margin-top: .75rem; overflow-wrap: anywhere; }
+.actions { display: flex; align-items: center; flex-wrap: wrap; gap: .375rem .5rem; margin-top: 1rem; }
+.action { border-radius: 999px; min-height: 40px; max-width: 100%; white-space: normal; height: auto; padding-block: .5rem; }
+.refresh { border-radius: 999px; min-height: 40px; max-width: 100%; height: auto; white-space: normal; }
+.motion { display: flex; justify-content: flex-end; margin-top: .5rem; }
+.panel[data-confirmed] .seat { animation: seatConfirmed 360ms ease-out both; }
+.panel[data-confirmed] .confirmationMark { animation: markConfirmed 340ms ease-out both; transform-origin: 58px 23px; }
+@keyframes seatConfirmed { from { transform: translateY(3px); } to { transform: translateY(0); } }
+@keyframes markConfirmed { from { transform: scale(.8); } to { transform: scale(1); } }
+@media (max-width: 420px) { .panel { padding: .875rem; } .seat { width: 54px; height: 60px; } .statusRow { gap: .625rem; } .status { font-size: .9375rem; } .actions { align-items: stretch; flex-direction: column; } .refresh { align-self: center; } }
+@media (prefers-reduced-motion: reduce) { .panel[data-confirmed] .seat, .panel[data-confirmed] .confirmationMark { animation: none; } }

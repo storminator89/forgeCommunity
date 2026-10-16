@@ -1,9 +1,13 @@
 'use client';
 
-/* Quiet, read-only directory · design.md semantic tokens and responsive list rhythm. */
+/* A friendly, read-only invitation; participation remains on the mission detail. */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { ArrowUpRight, CalendarDays, Lightbulb, LockKeyhole, RefreshCw } from 'lucide-react';
+import { FriendlyMotionToggle } from '@/components/community/FriendlyMotion';
+import { MissionIllustration } from '@/components/spaces/MissionVisuals';
+import styles from '@/components/spaces/friendly-missions.module.css';
 import { useSession } from 'next-auth/react';
 import { PageState } from '@/components/page-state';
 import { Button } from '@/components/ui/button';
@@ -83,26 +87,31 @@ function MissionOverview() {
   }, [loading]);
 
   return <SpaceShell>
-    <div className="flex flex-wrap items-end justify-between gap-4 border-b pb-6">
-      <div className="min-w-0">
-        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Deine privaten Spaces</p>
+    <header className={`${styles.surface} ${styles.hero}`}>
+      <div className={styles.heroCopy}>
+        <p className={styles.eyebrow}><LockKeyhole size={14} aria-hidden="true" /> Deine privaten Spaces</p>
         <h1 className="mt-2 text-[clamp(1.65rem,1.1rem+2vw,2.35rem)] font-semibold tracking-tight [overflow-wrap:anywhere]">Space-Missionen</h1>
-        <p className="mt-2 max-w-[65ch] text-sm leading-relaxed text-muted-foreground">Offene Missionen aus privaten Spaces, in denen du Mitglied bist. Öffne eine Mission, um mehr zu erfahren und freiwillig teilzunehmen.</p>
+        <p className="mt-2 text-sm text-muted-foreground">Eine Idee teilen. Gemeinsam weiterdenken.</p>
       </div>
-      <Button type="button" variant="outline" onClick={() => void load(depthRef.current)}>Übersicht aktualisieren</Button>
+      <MissionIllustration />
+    </header>
+    <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+      <p className="text-xs text-muted-foreground">Entdecken & freiwillig mitmachen</p>
+      <div className={styles.utility}><Button type="button" variant="ghost" size="icon" aria-label="Übersicht aktualisieren" title="Übersicht aktualisieren" onClick={() => void load(depthRef.current)}><RefreshCw size={18} aria-hidden="true" /></Button><FriendlyMotionToggle /></div>
     </div>
-    <div className="mt-6" aria-busy={loading}>
+    <div className="mt-2" aria-busy={loading}>
       {loading ? <PageState kind="loading" title="Missionen werden geprüft" description="Deine aktuellen Space-Mitgliedschaften werden erneut berücksichtigt." />
         : error ? <PageState kind="error" title="Missionen nicht verfügbar" description={error} action={<Button type="button" variant="outline" onClick={() => void load(depthRef.current)}>Erneut versuchen</Button>} />
           : items.length === 0 ? <PageState title="Keine offenen Missionen" description="In deinen privaten Spaces sind gerade keine offenen Missionen verfügbar." action={<Button asChild variant="outline"><Link href="/community/spaces">Zu den Spaces</Link></Button>} />
-            : <ul className="divide-y border-y">{items.map(item => <li key={item.id} className="min-w-0 py-5 sm:py-6">
-              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <h2 className="min-w-0 text-lg font-semibold"><Link prefetch={false} href={missionUrl(item.space.id, item.id)} className="rounded-sm underline-offset-4 [overflow-wrap:anywhere] hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{item.title}</Link></h2>
-                {item.participationActive && <p className="text-sm font-medium">Du nimmst teil</p>}
-              </div>
-              <p className="mt-2 text-sm text-muted-foreground [overflow-wrap:anywhere]">Space: {item.space.name}</p>
-              <p className="mt-3 text-sm leading-relaxed">{!item.week ? 'Ohne feste Lernwoche · In deinem Tempo' : item.windowState === 'past' ? 'Lernwoche vorbei · Mission bleibt offen' : 'Diese Lernwoche · Ohne verpflichtende Frist'}</p>
-              {item.week && <p className="mt-1 text-sm leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">{missionWeekDates(item.week)}</p>}
+            : <ul className={styles.list}>{items.map(item => <li key={item.id} className={styles.listItem}>
+              <span className={styles.listArt} aria-hidden="true"><Lightbulb size={22} /></span>
+              <div className={styles.listContent}>
+                <p className="mb-2 text-xs text-muted-foreground [overflow-wrap:anywhere]">{item.space.name}</p>
+                <h2 className="min-w-0 text-lg font-semibold leading-snug"><Link prefetch={false} href={missionUrl(item.space.id, item.id)} className={styles.missionLink}>{item.title}</Link></h2>
+                {item.participationActive && <p className={`${styles.pill} mt-2`}>Du nimmst teil</p>}
+                <p className="mt-3 flex items-start gap-2 text-xs leading-relaxed"><CalendarDays size={14} className="mt-0.5 shrink-0" aria-hidden="true" /><span>{!item.week ? 'Ohne feste Lernwoche · In deinem Tempo' : item.windowState === 'past' ? 'Lernwoche vorbei · Mission bleibt offen' : 'Diese Lernwoche · Ohne verpflichtende Frist'}</span></p>
+                {item.week && <p className="mt-1 text-xs leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">{missionWeekDates(item.week)}</p>}
+              </div><ArrowUpRight size={20} className={styles.arrow} aria-hidden="true" />
             </li>)}</ul>}
       <p ref={resultRef} tabIndex={-1} role="status" className="mt-4 rounded-sm text-sm text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{loading ? 'Aktueller Stand wird geladen…' : error ? 'Keine Missionsdaten angezeigt.' : `${items.length} ${items.length === 1 ? 'Mission' : 'Missionen'} ${cursor ? 'bisher geladen' : 'geladen'}`}</p>
       {(cursor || loadingMore) && <Button type="button" variant="outline" className="mt-4" disabled={loading} onClick={() => void load(depthRef.current + 1, true)}>{loadingMore ? 'Wird geprüft…' : 'Weitere Missionen laden'}</Button>}

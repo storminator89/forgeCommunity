@@ -119,7 +119,8 @@ test('real FIFO opt-in, leave/rejoin and seat promotions reach the existing inbo
       pages.push(page);
     }
     const [adminPage, alicePage, bobPage] = pages;
-    const event = waitlistEventFixture(nonce);
+    const event = { ...waitlistEventFixture(nonce), title: `Offene Lernwerkstatt ${nonce.slice(0, 4)}`,
+      description: '<p>Eine Stunde für Fragen, Ideen und gemeinsames Ausprobieren.</p>', location: 'Online · Community-Werkstatt' };
     const created = await json<{ id: string }>(await contexts[0].request.post('/api/events', { headers: { origin }, data: event }), 201);
     const id = created.id;
     const rsvp = `/api/events/${encodeURIComponent(id)}/rsvp`;
@@ -148,6 +149,14 @@ test('real FIFO opt-in, leave/rejoin and seat promotions reach the existing inbo
     expect(aliceReads).toBe(0);
     await activate(alicePage, trigger);
     const alicePanel = panel(alicePage, id);
+    const participationPanel = alicePanel.getByRole('region', { name: `Teilnahme: ${event.title}`, exact: true });
+    await alicePage.emulateMedia({ reducedMotion: 'no-preference' });
+    await expect(participationPanel.getByRole('button', { name: 'Animationen ausschalten', exact: true })).toBeEnabled();
+    await alicePage.evaluate(() => {
+      const state = window as typeof window & { friendlyAnimations: string[] };
+      state.friendlyAnimations = [];
+      document.addEventListener('animationstart', event => { if (event.target instanceof Element && event.target.closest('[role="region"][aria-label^="Teilnahme:"]')) state.friendlyAnimations.push((event as AnimationEvent).animationName); });
+    });
     const optIn = alicePanel.getByRole('button', { name: 'Auf Warteliste setzen', exact: true });
     await expect(optIn).toBeEnabled();
     await expect(alicePanel).toContainText(/automatisch/i);
@@ -159,13 +168,27 @@ test('real FIFO opt-in, leave/rejoin and seat promotions reach the existing inbo
     expect(queued.request().postDataJSON()).toEqual({ waitlist: true });
     expect(queued.status()).toBe(201);
     await expect(alicePanel.getByText('Warteliste · Platz 1', { exact: true })).toBeVisible();
+    await expect.poll(() => alicePage.evaluate(() => (window as typeof window & { friendlyAnimations: string[] }).friendlyAnimations.length > 0)).toBe(true);
+    await participationPanel.getByRole('button', { name: 'Animationen ausschalten', exact: true }).click();
+    expect(await alicePage.evaluate(() => localStorage.getItem('forge-community-motion-off'))).toBe('true');
+    await alicePage.emulateMedia({ reducedMotion: 'reduce' });
+    await expect(participationPanel.getByRole('button', { name: 'Animationen durch Systemeinstellung ausgeschaltet', exact: true })).toBeDisabled();
     expect(await json<Participation>(await contexts[1].request.get(rsvp))).toMatchObject({ isAttending: false, attendeeCount: 1, waitlistPosition: 1 });
     await expect(alicePanel.getByText(bob.name, { exact: true })).toHaveCount(0);
 
-    for (const width of [320, 390, 1280]) {
-      await alicePage.setViewportSize({ width, height: 900 });
-      await checkReflow(alicePage);
-      await alicePage.screenshot({ path: testInfo.outputPath(`waitlist-queue-${width}.png`), animations: 'disabled' });
+    for (const theme of ['Hell', 'Dunkel']) {
+      await alicePage.keyboard.press('Escape');
+      await alicePage.getByRole('button', { name: 'Farbschema auswählen' }).click();
+      await alicePage.getByRole('menuitem', { name: theme, exact: true }).click();
+      await activate(alicePage, trigger);
+      await expect(alicePanel.getByText('Warteliste · Platz 1', { exact: true })).toBeVisible();
+      await expect(alicePanel.getByText(/12:00.*13:00.*Europe\/Berlin/)).toBeVisible();
+      for (const width of [320, 375, 414, 768, 1280]) {
+        await alicePage.setViewportSize({ width, height: 900 });
+        await checkReflow(alicePage);
+        await alicePage.getByRole('dialog').screenshot({ path: testInfo.outputPath(`waitlist-queue-${theme}-${width}.png`), animations: 'disabled' });
+        expect(await participationPanel.evaluate(element => element.getAnimations({ subtree: true }).filter(animation => animation.playState === 'running').length)).toBe(0);
+      }
     }
     await alicePage.keyboard.press('Escape');
     await expect(alicePage.getByRole('dialog')).toBeHidden();
@@ -176,12 +199,17 @@ test('real FIFO opt-in, leave/rejoin and seat promotions reach the existing inbo
     const bobPanel = await openEvent(bobPage, id);
     await bobPanel.getByRole('button', { name: 'Auf Warteliste setzen', exact: true }).click();
     await expect(bobPanel.getByText('Warteliste · Platz 2', { exact: true })).toBeVisible();
+    await alicePage.emulateMedia({ reducedMotion: 'no-preference' });
+    await expect(participationPanel.getByRole('button', { name: 'Animationen einschalten', exact: true })).toBeEnabled();
+    await alicePage.evaluate(() => { (window as typeof window & { friendlyAnimations: string[] }).friendlyAnimations = []; });
     await alicePanel.getByRole('button', { name: 'Warteliste verlassen', exact: true }).click();
     await expect(alicePanel.getByRole('button', { name: 'Auf Warteliste setzen', exact: true })).toBeEnabled();
     await bobPage.evaluate(() => window.dispatchEvent(new Event('focus')));
     await expect(bobPanel.getByText('Warteliste · Platz 1', { exact: true })).toBeVisible();
     await alicePanel.getByRole('button', { name: 'Auf Warteliste setzen', exact: true }).click();
     await expect(alicePanel.getByText('Warteliste · Platz 2', { exact: true })).toBeVisible();
+    await expect(participationPanel.locator('[data-confirmed]')).toHaveCount(0);
+    expect(await alicePage.evaluate(() => (window as typeof window & { friendlyAnimations: string[] }).friendlyAnimations)).toEqual([]);
 
     // The old seat-holder cancels through the existing UI; the oldest remaining
     // ticket is promoted by the server, not by a client-side optimistic guess.
@@ -201,6 +229,22 @@ test('real FIFO opt-in, leave/rejoin and seat promotions reach the existing inbo
       registrationState: 'REGISTERED', attendeeCount: 2, waitlistCount: 0, waitlistPosition: null,
     });
     await openPromotion(alicePage, id);
+    // Keep the deliberately long text case separate from the primary demo.
+    const longTitle = 'GemeinsamLernenUndErfahrungenTeilen'.repeat(5);
+    await json(await contexts[0].request.put(`/api/events/${encodeURIComponent(id)}`, { headers: { origin }, data: {
+      ...event, maxAttendees: 2, title: longTitle,
+      description: `<p>${'Gemeinsam können wir komplexe Fragen verständlich machen. '.repeat(5)}</p>`,
+      location: 'OnlineCommunityWerkstattMitOffenemAustausch'.repeat(2),
+    } }));
+    await openEvent(alicePage, id);
+    await expect(alicePanel.getByRole('heading', { name: longTitle, exact: true })).toBeVisible();
+    for (const width of [320, 768]) {
+      await alicePage.setViewportSize({ width, height: 900 }); await checkReflow(alicePage);
+      await alicePage.getByRole('dialog').screenshot({ path: testInfo.outputPath(`waitlist-long-content-${width}.png`), animations: 'disabled' });
+    }
+    await alicePage.setViewportSize({ width: 1280, height: 900 });
+    await alicePage.evaluate(() => { document.documentElement.style.zoom = '2'; }); await checkReflow(alicePage);
+    await alicePage.evaluate(() => { document.documentElement.style.zoom = ''; });
     expect(errors).toEqual([]);
   } finally { for (const context of contexts) await context.close(); }
 });

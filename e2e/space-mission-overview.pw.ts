@@ -63,14 +63,14 @@ test('discover a private mission without courses, navigate by keyboard and remov
     const pageErrors: string[] = [];
     page.on('pageerror', error => pageErrors.push(error.message));
     const space = await adminRequest.post('/api/spaces', { headers: { origin }, data: {
-      name: `Privater Lernraum ${nonce.slice(0, 8)}`, description: 'Disposable overview acceptance fixture.', visibility: 'PRIVATE',
+      name: 'Lernwerkstatt', description: 'Disposable overview acceptance fixture.', visibility: 'PRIVATE',
     } });
     expect(space.status(), await space.text()).toBe(201);
     const spaceId = (await space.json() as { id: string }).id;
     const spaceApi = `/api/spaces/${spaceId}`;
     const membership = await adminRequest.post(`${spaceApi}/members`, { headers: { origin }, data: { userId: learner.id } });
     expect(membership.status(), await membership.text()).toBe(201);
-    const title = `Gemeinsam${'LernzusammenhängeVerständlichErklären'.repeat(2)}`;
+    const title = 'Eine Idee, viele Perspektiven';
     const mission = await adminRequest.post(`${spaceApi}/missions`, { headers: { origin }, data: {
       title, prompt: 'Erklärt gemeinsam einen neuen Zusammenhang und baut auf einer anderen Erklärung auf.', requestId: randomUUID(),
     } });
@@ -108,6 +108,34 @@ test('discover a private mission without courses, navigate by keyboard and remov
         await page.screenshot({ path: testInfo.outputPath(`mission-overview-${theme}-${width}.png`), animations: 'disabled' });
       }
     }
+    // A separate real fixture checks pathological titles without dominating the primary demo.
+    const stressTitle = `Gemeinsam${'LernzusammenhängeVerständlichErklären'.repeat(2)}`;
+    const stressSpaceResponse = await adminRequest.post('/api/spaces', { headers: { origin }, data: {
+      name: 'Titeltest', description: 'Disposable long-title reflow fixture.', visibility: 'PRIVATE',
+    } });
+    expect(stressSpaceResponse.status(), await stressSpaceResponse.text()).toBe(201);
+    const stressSpaceId = (await stressSpaceResponse.json() as { id: string }).id;
+    expect((await adminRequest.post(`/api/spaces/${stressSpaceId}/members`, { headers: { origin }, data: { userId: learner.id } })).status()).toBe(201);
+    const stressMissionResponse = await adminRequest.post(`/api/spaces/${stressSpaceId}/missions`, { headers: { origin }, data: {
+      title: stressTitle, prompt: 'Ein separater Titeltest prüft lange deutsche Wörter.', requestId: randomUUID(),
+    } });
+    expect(stressMissionResponse.status(), await stressMissionResponse.text()).toBe(201);
+    const stressMissionId = (await stressMissionResponse.json() as { id: string }).id;
+    await page.reload();
+    for (const theme of ['Hell', 'Dunkel']) {
+      await page.getByRole('button', { name: 'Farbschema auswählen' }).click();
+      await page.getByRole('menuitem', { name: theme, exact: true }).click();
+      for (const width of [320, 768]) {
+        await page.setViewportSize({ width, height: 900 });
+        await page.getByRole('link', { name: stressTitle, exact: true }).scrollIntoViewIfNeeded();
+        await checkReflow(page);
+        await page.screenshot({ path: testInfo.outputPath(`mission-overview-stress-${theme}-${width}.png`), animations: 'disabled' });
+      }
+    }
+    expect((await adminRequest.patch(`/api/spaces/${stressSpaceId}/missions/${stressMissionId}`, { headers: { origin }, data: { closed: true } })).status()).toBe(200);
+    await page.goto('/community/missions');
+    await expect(page.getByRole('link', { name: stressTitle, exact: true })).toHaveCount(0);
+
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.evaluate(() => { document.documentElement.style.zoom = '2'; });
     await checkReflow(page);
@@ -123,7 +151,7 @@ test('discover a private mission without courses, navigate by keyboard and remov
     await expect(page.getByRole('button', { name: 'Übersicht aktualisieren' })).toBeFocused();
     await page.keyboard.press('Tab');
     await expect(detail).toBeFocused();
-    expect(await detail.evaluate(element => getComputedStyle(element).outlineStyle)).not.toBe('none');
+    expect(await detail.evaluate(element => getComputedStyle(element.closest('li')!).outlineStyle)).not.toBe('none');
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(new RegExp(`${detailUrl}$`));
     await expect(page.getByRole('button', { name: 'Freiwillig teilnehmen' })).toBeVisible();
@@ -140,6 +168,15 @@ test('discover a private mission without courses, navigate by keyboard and remov
     await page.keyboard.press('Enter');
     await expect(search).toBeHidden();
     await expect(page).toHaveURL(/\/community\/missions$/);
+
+    // Device-local off survives navigation; system reduced motion remains authoritative.
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await expect(page.getByRole('button', { name: 'Animationen ausschalten' })).toHaveAttribute('aria-pressed', 'true');
+    await page.getByRole('button', { name: 'Animationen ausschalten' }).click();
+    await page.reload();
+    await expect(page.getByRole('button', { name: 'Animationen einschalten' })).toHaveAttribute('aria-pressed', 'false');
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await expect(page.getByRole('button', { name: 'Animationen durch Systemeinstellung ausgeschaltet' })).toBeDisabled();
 
     const removed = await adminRequest.delete(`${spaceApi}/members/${learner.id}`, { headers: { origin } });
     expect(removed.status(), await removed.text()).toBe(200);

@@ -306,3 +306,16 @@ test('offscreen list panels defer private reads and ignore focus until they ente
     view.unmount(); expect(disconnect).toHaveBeenCalledTimes(1);
   } finally { global.IntersectionObserver = original; }
 });
+
+
+test('queue decisions disclose order, automatic signup and no guarantee without repeating the saved success visually', async () => {
+  jest.mocked(fetch).mockResolvedValueOnce(response(none())).mockResolvedValueOnce(response(waiting(1)));
+  render(panel());
+  const queue = await screen.findByRole('button', { name: 'Auf Warteliste setzen' });
+  expect(queue).toHaveAccessibleDescription(/der Reihe nach.*automatisch angemeldet.*Jederzeit verlassen.*kein Platz garantiert/);
+  await userEvent.click(queue);
+  expect(await screen.findByText('Warteliste · Platz 1')).toBeVisible();
+  expect(screen.getByText('Du stehst auf der Warteliste.')).toHaveClass('sr-only');
+  expect(screen.getByRole('button', { name: 'Animationen durch Systemeinstellung ausgeschaltet' })).toBeDisabled();
+  expect(document.querySelector('[data-confirmed]')).toBeNull();
+});

@@ -1,9 +1,11 @@
 'use client';
 
-/* Editorial workbench · voluntary Space decisions · design.md tokens */
-import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 'react';
+/* Friendly ballot choices; all vote and access decisions stay server-owned. */
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { FriendlyMotionToggle, useFriendlyMotion } from '@/components/community/FriendlyMotion';
+import styles from './SpacePolls.module.css';
 import { useSpaceListGeneration } from '@/hooks/useSpaceAccess';
 import { apiSpaceUrl, isSpaceAbort, revalidateSpacePages, spaceDate, SpaceHttpError, type SpacePage } from './space-api';
 import type { PollRequest, SpacePoll } from './poll-api';
@@ -22,11 +24,15 @@ export function SpacePolls({ spaceId, canManage, request, onUnavailable }: {
   const [options, setOptions] = useState(['', '']);
   const [pending, setPending] = useState(false);
   const [createError, setCreateError] = useState('');
+  const [confirmedPoll, setConfirmedPoll] = useState<string | null>(null);
+  const motion = useFriendlyMotion();
   const beginRead = useSpaceListGeneration();
   const countRef = useRef(0);
   const alive = useRef(true);
   const lock = useRef(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const rootRef = useRef<HTMLElement>(null);
+  const restorePollFocus = useRef<{ id: string; manage: boolean } | null>(null);
   const questionRef = useRef<HTMLInputElement>(null);
   const lastOptionRef = useRef<HTMLInputElement>(null);
   const focusOptionRef = useRef(false);
@@ -42,7 +48,7 @@ export function SpacePolls({ spaceId, canManage, request, onUnavailable }: {
 
   const load = useCallback(async () => {
     const read = beginRead();
-    setLoading(true); setItems([]); setCursor(null); setError('');
+    setLoading(true); setItems([]); setCursor(null); setError(''); setConfirmedPoll(null);
     try {
       const page = await revalidateSpacePages<SpacePoll>(base, countRef.current,
         <T,>(path: string) => request<T>(path, { signal: read.signal }));
@@ -60,6 +66,23 @@ export function SpacePolls({ spaceId, canManage, request, onUnavailable }: {
     return () => { active = false; window.removeEventListener('focus', recheck); document.removeEventListener('visibilitychange', recheck); };
   }, [load]);
   useEffect(() => { if (formOpen) questionRef.current?.focus(); }, [formOpen]);
+  useEffect(() => {
+    if (!confirmedPoll) return;
+    const timer = setTimeout(() => setConfirmedPoll(null), 450);
+    return () => clearTimeout(timer);
+  }, [confirmedPoll]);
+  useLayoutEffect(() => {
+    if (loading || !restorePollFocus.current) return;
+    const target = restorePollFocus.current;
+    restorePollFocus.current = null;
+    if (document.activeElement !== document.body) return;
+    const card = Array.from(rootRef.current?.querySelectorAll<HTMLElement>('[data-poll-id]') ?? []).find(item => item.dataset.pollId === target.id);
+    const control = target.manage ? card?.querySelector<HTMLElement>('[data-poll-manage]')
+      : card?.querySelector<HTMLElement>('[data-poll-vote]:not(:disabled)')
+        ?? card?.querySelector<HTMLElement>('input:checked:not(:disabled)')
+        ?? card?.querySelector<HTMLElement>('input:not(:disabled)');
+    (control ?? card)?.focus();
+  }, [items, loading]);
   useEffect(() => { if (focusOptionRef.current) { focusOptionRef.current = false; lastOptionRef.current?.focus(); } }, [options.length]);
 
   async function more() {
@@ -75,6 +98,15 @@ export function SpacePolls({ spaceId, canManage, request, onUnavailable }: {
       setCursor(page.nextCursor);
     } catch (caught) { if (read.isCurrent()) handleError(caught, 'Weitere Umfragen konnten nicht geladen werden.'); }
     finally { if (read.isCurrent()) setLoading(false); }
+  }
+
+  async function recheckPoll(pollId: string, confirmed = false) {
+    const focused = document.activeElement;
+    if (focused instanceof HTMLElement && focused.closest('[data-poll-id]')?.getAttribute('data-poll-id') === pollId) {
+      restorePollFocus.current = { id: pollId, manage: Boolean(focused.closest('details')) };
+    }
+    await load();
+    if (alive.current && confirmed) setConfirmedPoll(pollId);
   }
 
   function closeForm() {
@@ -100,11 +132,20 @@ export function SpacePolls({ spaceId, canManage, request, onUnavailable }: {
     } finally { lock.current = false; if (alive.current) setPending(false); }
   }
 
-  return <section aria-labelledby={headingId} className="mt-8 border-b pb-8">
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div className="min-w-0 max-w-[68ch]"><h2 id={headingId} className="flex items-center gap-2 text-xl font-semibold"><svg aria-hidden="true" className="h-5 w-5 shrink-0" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M3 17h14M5 13V9m5 4V4m5 9V7" /></svg>Umfragen</h2>
-        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Freiwillig abstimmen, mit einer Stimme pro Person. Angezeigt werden Summen und deine eigene Auswahl. In kleinen Gruppen können Antworten trotzdem erkennbar sein. Bitte keine sensiblen Fragen stellen.</p></div>
-      {canManage && <Button ref={buttonRef} type="button" variant="outline" disabled={pending} aria-expanded={formOpen} aria-controls={formId} onClick={() => formOpen ? closeForm() : setFormOpen(true)}>{formOpen ? 'Schließen' : 'Umfrage erstellen'}</Button>}
+  return <section ref={rootRef} aria-labelledby={headingId} className={styles.section}>
+    <div className={styles.sectionHeader}>
+      <div className={styles.intro}>
+        <BallotIllustration />
+        <div className="min-w-0"><p className={styles.eyebrow}>Gemeinsam entscheiden</p><h2 id={headingId} className={styles.sectionTitle}>Umfragen</h2><p className="mt-1 text-sm text-muted-foreground">Eine Frage. Deine Perspektive.</p></div>
+      </div>
+      <div className={styles.headerActions}><FriendlyMotionToggle />
+        {canManage && <Button ref={buttonRef} type="button" variant="outline" disabled={pending} aria-expanded={formOpen} aria-controls={formId} onClick={() => formOpen ? closeForm() : setFormOpen(true)}>{formOpen ? 'Schließen' : 'Umfrage erstellen'}</Button>}
+      </div>
+    </div>
+    <div className={styles.privacy}>
+      <p>Freiwillig · Eine Stimme pro Person</p>
+      <p>In kleinen Gruppen können Antworten erkennbar sein. Keine sensiblen Fragen.</p>
+      <details className={styles.details}><summary>So wird gezählt</summary><p>Angezeigt werden nur Summen und deine eigene Auswahl. Solange die Umfrage offen ist, kannst du deine Auswahl ändern.</p></details>
     </div>
     {canManage && formOpen && <form id={formId} onSubmit={create} onKeyDown={event => { if (event.key === 'Escape' && !pending) { event.preventDefault(); closeForm(); } }} className="mt-5 max-w-3xl space-y-4 rounded-2xl border bg-card p-4 sm:p-6">
       <div className="space-y-2"><label htmlFor={questionId} className="text-sm font-medium">Frage</label><Input ref={questionRef} id={questionId} value={question} onChange={event => setQuestion(event.target.value)} minLength={5} maxLength={200} required disabled={pending} /></div>
@@ -114,7 +155,7 @@ export function SpacePolls({ spaceId, canManage, request, onUnavailable }: {
       {createError && <p role="alert" className="text-sm text-destructive">{createError}</p>}
       <div className="flex flex-wrap gap-2"><Button type="submit" disabled={pending} aria-busy={pending}>{pending ? 'Wird erstellt…' : 'Umfrage veröffentlichen'}</Button><Button type="button" variant="ghost" disabled={pending} onClick={closeForm}>Abbrechen</Button></div>
     </form>}
-    {items.length > 0 && <ul className="mt-5 divide-y border-t">{items.map(item => <li key={`${item.id}:${item.ownVote.revision}:${item.moderationRevision}:${item.closedAt}`} className="min-w-0 py-5"><PollCard poll={item} base={base} request={request} onChange={load} onUnavailable={onUnavailable} /></li>)}</ul>}
+    {items.length > 0 && <ul className={styles.pollList}>{items.map(item => <li key={`${item.id}:${item.ownVote.revision}:${item.moderationRevision}:${item.closedAt}`} className="min-w-0"><PollCard poll={item} base={base} request={request} confirmed={motion.enabled && confirmedPoll === item.id} onChange={confirmed => recheckPoll(item.id, confirmed)} onUnavailable={onUnavailable} /></li>)}</ul>}
     {loading && <p role="status" className="mt-4 text-sm text-muted-foreground">Umfragen werden geladen…</p>}
     {!loading && !error && items.length === 0 && <p className="mt-4 text-sm text-muted-foreground">Noch keine Umfragen. Admins können eine Frage zur gemeinsamen Entscheidung stellen.</p>}
     {error && <div className="mt-4"><p role="alert" className="text-sm text-destructive">{error}</p><Button type="button" variant="outline" className="mt-3" onClick={() => void load()}>Umfragen erneut laden</Button></div>}
@@ -122,8 +163,8 @@ export function SpacePolls({ spaceId, canManage, request, onUnavailable }: {
   </section>;
 }
 
-function PollCard({ poll, base, request, onChange, onUnavailable }: {
-  poll: SpacePoll; base: string; request: PollRequest; onChange: () => Promise<void>; onUnavailable: () => void;
+function PollCard({ poll, base, request, onChange, onUnavailable, confirmed }: {
+  poll: SpacePoll; base: string; request: PollRequest; onChange: (confirmed?: boolean) => Promise<void>; onUnavailable: () => void; confirmed: boolean;
 }) {
   const id = useId();
   const [choice, setChoice] = useState(poll.ownVote.optionId ?? '');
@@ -143,7 +184,7 @@ function PollCard({ poll, base, request, onChange, onUnavailable }: {
         method: vote ? 'PUT' : 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(vote ? { ...body, requestId: receipt.current!.id } : body),
       });
-      if (alive.current) await onChange();
+      if (alive.current) await onChange(true);
     } catch (caught) {
       if (!alive.current || isSpaceAbort(caught)) return;
       if (caught instanceof SpaceHttpError && [401, 403, 404].includes(caught.status)) { onUnavailable(); return; }
@@ -151,16 +192,39 @@ function PollCard({ poll, base, request, onChange, onUnavailable }: {
     } finally { lock.current = false; if (alive.current) setPending(false); }
   }
 
-  return <article aria-labelledby={`${id}-question`} className="max-w-3xl">
-    <h3 id={`${id}-question`} className="break-words text-lg font-semibold [overflow-wrap:anywhere]">{poll.question}</h3>
-    <p className="mt-1 text-xs text-muted-foreground"><time dateTime={poll.createdAt}>{spaceDate(poll.createdAt)}</time> · {poll.closedAt ? 'Geschlossen' : 'Offen'}{poll.hiddenAt ? ' · Ausgeblendet' : ''}</p>
-    <form className="mt-3" onSubmit={event => { event.preventDefault(); if (poll.canVote && choice) void write({ optionId: choice, expectedRevision: poll.ownVote.revision }, true); }}>
-      <fieldset disabled={!poll.canVote || pending} className="min-w-0 space-y-2"><legend className="sr-only">Deine Auswahl zu: {poll.question}</legend>{poll.options.map(option => <label key={option.id} className="flex min-w-0 cursor-pointer items-start gap-3 rounded-lg border px-3 py-3 text-sm has-[:checked]:border-primary has-[:checked]:bg-accent has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-ring"><input className="mt-0.5 h-4 w-4 shrink-0 accent-primary" type="radio" name={id} value={option.id} checked={choice === option.id} onChange={() => setChoice(option.id)} /><span className="min-w-0 flex-1 break-words [overflow-wrap:anywhere]">{option.label}{poll.ownVote.optionId === option.id && <span className="block text-xs font-medium">Deine gespeicherte Auswahl</span>}</span><span className="shrink-0 tabular-nums">{option.votes} <span className="sr-only">Stimmen</span></span></label>)}</fieldset>
-      <p className="mt-3 text-sm text-muted-foreground" role="status">{poll.totalVotes} Stimme{poll.totalVotes === 1 ? '' : 'n'} insgesamt</p>
-      {poll.canVote && <Button type="submit" variant="outline" className="mt-3" disabled={pending || !choice || choice === poll.ownVote.optionId} aria-busy={pending}>{pending ? 'Wird gespeichert…' : poll.ownVote.optionId ? 'Auswahl ändern' : 'Abstimmen'}</Button>}
+  return <article aria-labelledby={`${id}-question`} className={styles.pollCard} tabIndex={-1} data-poll-id={poll.id} data-confirmed={confirmed || undefined}>
+    <div className={styles.pollMeta}><span className={styles.state}>{poll.closedAt ? 'Geschlossen' : 'Offen'}{poll.hiddenAt ? ' · Ausgeblendet' : ''}</span><time dateTime={poll.createdAt}>{spaceDate(poll.createdAt)}</time></div>
+    <h3 id={`${id}-question`} className={styles.question}>{poll.question}</h3>
+    <form className="mt-4" onSubmit={event => { event.preventDefault(); if (poll.canVote && choice) void write({ optionId: choice, expectedRevision: poll.ownVote.revision }, true); }}>
+      <fieldset disabled={!poll.canVote || pending} className={styles.choices}><legend className="sr-only">Deine Auswahl zu: {poll.question}</legend>{poll.options.map((option, index) => {
+        const percentage = poll.totalVotes > 0 ? Math.round(option.votes / poll.totalVotes * 100) : 0;
+        const saved = poll.ownVote.optionId === option.id;
+        return <label key={option.id} className={styles.choice} data-saved={saved || undefined}>
+          <span aria-hidden="true" className={styles.choiceLetter}>{choice === option.id ? <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="m3 8 3 3 7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg> : String.fromCharCode(65 + index)}</span>
+          <input className={styles.radio} type="radio" name={id} value={option.id} checked={choice === option.id} onChange={() => setChoice(option.id)} />
+          <span className={styles.choiceBody}><span className={styles.choiceTop}><span className={styles.choiceLabel}>{option.label}</span><span className={styles.percentage}>{percentage}%</span></span>
+            <span className={styles.track} aria-hidden="true"><span className={styles.bar} style={{ width: `${percentage}%` }} /></span>
+            <span className={styles.choiceBottom}><span>{option.votes} Stimme{option.votes === 1 ? '' : 'n'}</span>{saved && <span className={styles.saved}><svg aria-hidden="true" width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="m3 8 3 3 7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>Deine gespeicherte Auswahl</span>}</span>
+          </span>
+        </label>;
+      })}</fieldset>
+      <div className={styles.voteFooter}><p className="text-sm text-muted-foreground" role="status">{poll.totalVotes} Stimme{poll.totalVotes === 1 ? '' : 'n'} insgesamt</p>
+        {poll.canVote && <Button type="submit" data-poll-vote="" className={styles.voteButton} disabled={pending || !choice || choice === poll.ownVote.optionId} aria-busy={pending}>{pending ? 'Wird gespeichert…' : poll.ownVote.optionId ? 'Auswahl ändern' : 'Abstimmen'}</Button>}
+      </div>
       {!poll.canVote && !poll.closedAt && !poll.hiddenAt && <p className="mt-3 text-sm text-muted-foreground">Tritt dem Space bei, um abzustimmen.</p>}
     </form>
-    {poll.canManage && <div className="mt-4 flex flex-wrap gap-2">{!poll.closedAt && <Button type="button" variant="ghost" disabled={pending} onClick={() => void write({ closed: true })}>Umfrage schließen</Button>}<Button type="button" variant="ghost" disabled={pending} onClick={() => void write({ hidden: !poll.hiddenAt, expectedRevision: poll.moderationRevision })}>{poll.hiddenAt ? 'Umfrage einblenden' : 'Umfrage ausblenden'}</Button></div>}
+    {poll.canManage && <details className={styles.manage}><summary data-poll-manage="">Umfrage verwalten</summary><div className="mt-2 flex flex-wrap gap-2">{!poll.closedAt && <Button type="button" variant="ghost" disabled={pending} onClick={() => void write({ closed: true })}>Umfrage schließen</Button>}<Button type="button" variant="ghost" disabled={pending} onClick={() => void write({ hidden: !poll.hiddenAt, expectedRevision: poll.moderationRevision })}>{poll.hiddenAt ? 'Umfrage einblenden' : 'Umfrage ausblenden'}</Button></div></details>}
     {error && <div className="mt-3"><p role="alert" className="text-sm text-destructive">{error}</p><Button type="button" variant="ghost" onClick={() => void onChange()}>Aktuellen Stand laden</Button></div>}
   </article>;
+}
+
+function BallotIllustration() {
+  return <svg aria-hidden="true" className={styles.illustration} viewBox="0 0 88 76" fill="none">
+    <rect x="17" y="12" width="48" height="53" rx="12" transform="rotate(-10 17 12)" fill="hsl(var(--muted))" stroke="hsl(var(--border))" />
+    <rect x="27" y="7" width="47" height="57" rx="12" fill="hsl(var(--card))" stroke="hsl(var(--foreground))" strokeWidth="1.6" />
+    <path d="M39 24h23M39 44h13" stroke="hsl(var(--border))" strokeWidth="3" strokeLinecap="round" />
+    <rect x="35" y="31" width="31" height="22" rx="7" fill="hsl(var(--accent))" />
+    <path d="m43 42 5 5 11-12" stroke="hsl(var(--primary))" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="m12 26 3 3-3 3-3-3 3-3ZM77 15v7m-3-3h6" stroke="hsl(var(--muted-foreground))" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>;
 }
