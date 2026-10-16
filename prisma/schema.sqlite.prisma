@@ -358,6 +358,11 @@ model SpaceMission {
   prompt        String
   createdAt     DateTime @default(now())
   closedAt      DateTime?
+  // Optional immutable soft-week metadata; existing missions remain self-paced.
+  weekStartsOn  String?
+  weekTimezone  String?
+  weekStartsAt  DateTime?
+  weekEndsAt    DateTime?
   participations SpaceMissionParticipation[]
   contributions SpaceMissionContribution[]
 

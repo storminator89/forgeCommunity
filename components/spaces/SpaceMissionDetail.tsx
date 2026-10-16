@@ -15,7 +15,7 @@ import { SpaceAuthorLine } from './SpaceAuthorLine';
 import { SpaceMissionConfirm } from './SpaceMissionConfirm';
 import { SpaceMissionModeration } from './SpaceMissionModeration';
 import { apiSpaceUrl, isSpaceAbort, spaceUrl, type SpaceSummary } from './space-api';
-import { missionAccessDenied, missionApiUrl, missionPrivacy, type MissionContribution, type SpaceMission } from './mission-api';
+import { missionAccessDenied, missionApiUrl, missionPrivacy, missionWeekDates, missionWindowLabel, type MissionContribution, type SpaceMission } from './mission-api';
 
 type Snapshot = { space: SpaceSummary; mission: SpaceMission };
 
@@ -136,6 +136,11 @@ export function SpaceMissionDetail({ spaceId, missionId, viewerId }: { spaceId: 
       <p className="text-sm font-medium text-muted-foreground">Freiwillige Mission · Privater Space · {mission.closedAt ? 'Geschlossen' : 'Offen'}</p>
       <h1 className="mt-2 min-w-0 text-[clamp(1.65rem,1.1rem+2vw,2.35rem)] font-semibold tracking-tight [overflow-wrap:anywhere]">{mission.title}</h1>
       <p className="mt-4 whitespace-pre-wrap break-words text-base leading-relaxed">{mission.prompt}</p>
+      {mission.week && <div className="mt-4 space-y-2 text-sm leading-relaxed">
+        <p className="font-medium">{missionWindowLabel(mission)}</p>
+        <p className="text-muted-foreground [overflow-wrap:anywhere]">{missionWeekDates(mission.week)}</p>
+        <p className="text-muted-foreground">Der Zeitraum endet am folgenden Montag um 00:00 Uhr in dieser Zeitzone. {mission.windowState === 'past' ? 'Spätere Beiträge gehören zum aktuellen gemeinsamen Stand dieser Mission; sie belegen keine Teilnahme innerhalb der Lernwoche.' : 'Die Lernwoche ist ein freiwilliger Zeitrahmen. Die Mission bleibt danach offen, bis ein Admin sie schließt.'}</p>
+      </div>}
       {mission.creator && <div className="mt-4"><SpaceAuthorLine author={mission.creator} date={mission.createdAt} /></div>}
     </header>
 
@@ -143,9 +148,13 @@ export function SpaceMissionDetail({ spaceId, missionId, viewerId }: { spaceId: 
       <p ref={feedbackRef} id={feedbackId} tabIndex={-1} role={actionError ? 'alert' : 'status'} className={`text-sm leading-relaxed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${actionError ? 'text-destructive' : 'text-muted-foreground'}`}>{actionError || feedback}</p>
       <section aria-labelledby="mission-goal" className="mt-4 border-b pb-6">
         <h2 id="mission-goal" className="text-lg font-semibold">Das gemeinsame Ziel</h2>
-        <ol className="mt-3 space-y-2 text-sm leading-relaxed"><li><span aria-hidden="true" className="mr-2">{mission.progress.insightAuthors >= 2 ? '●' : '○'}</span>Zwei verschiedene Personen teilen je eine Erkenntnis. <span className="text-muted-foreground">{Math.min(mission.progress.insightAuthors, 2)}/2</span></li><li><span aria-hidden="true" className="mr-2">{mission.progress.hasCrossPersonBuildOn ? '●' : '○'}</span>Eine Person baut auf der Erkenntnis einer anderen auf. <span className="text-muted-foreground">{mission.progress.hasCrossPersonBuildOn ? '1/1' : '0/1'}</span></li></ol>
+        <ol className="mt-3 divide-y border-y text-sm leading-relaxed">
+          <li className="py-3"><h3 className="font-medium">1. In eigenen Worten erklären</h3><p className="mt-1"><span aria-hidden="true" className="mr-2">{mission.progress.insightAuthors >= 2 ? '●' : '○'}</span>Zwei verschiedene Personen teilen je eine Erkenntnis. <span className="text-muted-foreground">{Math.min(mission.progress.insightAuthors, 2)}/2</span></p></li>
+          <li className="py-3"><h3 className="font-medium">2. Eine andere Erklärung lesen</h3><p className="mt-1 text-muted-foreground">Lies eine Erkenntnis im Abschnitt „Erkenntnisse und Gedanken“. Lesen wird nicht erfasst oder abgehakt.</p></li>
+          <li className="py-3"><h3 className="font-medium">3. Darauf aufbauen</h3><p className="mt-1"><span aria-hidden="true" className="mr-2">{mission.progress.hasCrossPersonBuildOn ? '●' : '○'}</span>Eine Person baut auf der Erkenntnis einer anderen auf. <span className="text-muted-foreground">{mission.progress.hasCrossPersonBuildOn ? '1/1' : '0/1'}</span></p></li>
+        </ol>
         <p className="mt-3 text-sm font-medium" role="status">{mission.progress.complete ? 'Gemeinsam weitergedacht. Das aktuelle Ziel ist erreicht.' : 'Das gemeinsame Ziel ist noch offen.'}</p>
-        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Gezählt werden nur aktuell sichtbare Beiträge aktiver Teilnehmender. Das kann sich ändern. Diese Mission bewertet kein Wissen und verändert deinen Kursfortschritt nicht.</p>
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Gezählt werden nur aktuell sichtbare Beiträge aktiver Teilnehmender. Das kann sich ändern. Diese Mission bewertet kein Wissen und verändert deinen Kursfortschritt nicht. Sie belegt keine Qualifikation.</p>
       </section>
 
       <section aria-labelledby="mission-participation" className="border-b py-6">

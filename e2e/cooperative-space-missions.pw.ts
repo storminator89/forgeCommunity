@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { lstatSync, realpathSync } from 'node:fs';
 import { basename, isAbsolute, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { DateTime } from 'luxon';
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 
 const origin = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3013';
@@ -34,7 +35,7 @@ async function checkReflow(page: Page) {
   expect(clipped).toEqual([]);
 }
 
-test('two learners voluntarily teach back, reverse consent and moderate within a real private Space', async ({ browser, request }, testInfo) => {
+test('two learners use a soft learning week, teach back after its end, reverse consent and moderate in a real private Space', async ({ browser, request }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop-chromium', 'One real journey checks all four responsive widths.');
   test.setTimeout(240_000);
   const databasePath = disposableDatabasePath();
@@ -82,12 +83,35 @@ test('two learners voluntarily teach back, reverse consent and moderate within a
     const title = `Zusammenhänge${'VerständlichErklären'.repeat(3)}`;
     await adminPage.getByRole('textbox', { name: 'Thema', exact: true }).fill(title);
     await adminPage.getByRole('textbox', { name: 'Aufgabe', exact: true }).fill('Erklärt eine neue Idee und entwickelt den Gedanken einer anderen Person weiter.');
+    await adminPage.getByRole('checkbox', { name: 'Diese Lernwoche' }).check();
+    await adminPage.getByRole('combobox', { name: 'IANA-Zeitzone' }).fill('Europe/Berlin');
+    const localWeek = DateTime.now().setZone('Europe/Berlin').startOf('week');
+    await adminPage.getByLabel('Wochenbeginn (Montag)').fill(localWeek.toISODate()!);
+    const weekPreview = `${localWeek.setLocale('de').toFormat('d. MMMM')} – ${localWeek.plus({ days: 6 }).setLocale('de').toFormat('d. MMMM yyyy')} · Europe/Berlin`;
+    await expect(adminPage.getByText(weekPreview, { exact: true })).toBeVisible();
+    for (const theme of ['Hell', 'Dunkel']) {
+      await adminPage.getByRole('button', { name: 'Farbschema auswählen' }).click();
+      await adminPage.getByRole('menuitem', { name: theme, exact: true }).click();
+      for (const width of [320, 375, 414, 768]) {
+        await adminPage.setViewportSize({ width, height: 900 });
+        await checkReflow(adminPage);
+        await adminPage.screenshot({ path: testInfo.outputPath(`mission-week-form-${theme}-${width}.png`), animations: 'disabled' });
+      }
+    }
+    await adminPage.setViewportSize({ width: 1280, height: 900 });
+    await adminPage.evaluate(() => { document.documentElement.style.zoom = '2'; });
+    await checkReflow(adminPage);
+    await adminPage.evaluate(() => { document.documentElement.style.zoom = ''; });
     const creation = adminPage.waitForResponse(response => new URL(response.url()).pathname === `${spaceApi}/missions` && response.request().method() === 'POST');
     await adminPage.getByRole('button', { name: 'Mission erstellen', exact: true }).focus();
     await adminPage.keyboard.press('Enter');
     const response = await creation;
     expect(response.status(), await response.text()).toBe(201);
-    const missionId = (await response.json() as { id: string }).id;
+    const createdMission = await response.json() as { id: string; week: { startDate: string; timezone: string; startsAt: string; endsAt: string }; windowState: string };
+    expect(createdMission).toMatchObject({ week: { startDate: localWeek.toISODate(), timezone: 'Europe/Berlin' }, windowState: 'current' });
+    expect(createdMission.week.startsAt).toBe(localWeek.toUTC().toISO());
+    expect(createdMission.week.endsAt).toBe(localWeek.plus({ weeks: 1 }).toUTC().toISO());
+    const missionId = createdMission.id;
     const url = `/community/spaces/${spaceId}/missions/${missionId}`;
     const base = `${spaceApi}/missions/${missionId}`;
     await expect(adminPage).toHaveURL(new RegExp(`${url}$`));
@@ -95,6 +119,8 @@ test('two learners voluntarily teach back, reverse consent and moderate within a
     for (const page of [alicePage, bobPage]) {
       await page.goto(url);
       await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
+      await expect(page.getByRole('heading', { name: '2. Eine andere Erklärung lesen' })).toBeVisible();
+      await expect(page.getByText(/Lesen wird nicht erfasst oder abgehakt/)).toBeVisible();
       await expect(page.getByRole('button', { name: 'Freiwillig teilnehmen' })).toBeVisible();
       await page.getByRole('button', { name: 'Freiwillig teilnehmen' }).focus();
       await page.keyboard.press('Enter');
@@ -105,7 +131,18 @@ test('two learners voluntarily teach back, reverse consent and moderate within a
       await page.getByRole('button', { name: 'Im Space teilen', exact: true }).click();
       await expect(page.getByText('Dein Beitrag ist im Space sichtbar.', { exact: true })).toBeVisible();
     }
+    // Test-only disposable fixture: move the immutable stored week into the past.
+    // Production has no schedule-edit route; the next read must keep consent/evidence.
+    const pastWeek = localWeek.minus({ weeks: 1 });
+    const clockFixture = new DatabaseSync(databasePath);
+    try {
+      const moved = clockFixture.prepare('UPDATE "SpaceMission" SET "weekStartsOn" = ?, "weekStartsAt" = ?, "weekEndsAt" = ? WHERE "id" = ? AND "weekTimezone" = ?')
+        .run(pastWeek.toISODate(), pastWeek.toUTC().toISO(), localWeek.toUTC().toISO(), missionId, 'Europe/Berlin');
+      expect(moved.changes).toBe(1);
+    } finally { clockFixture.close(); }
     await alicePage.reload();
+    await expect(alicePage.getByText('Lernwoche vorbei · Mission bleibt offen', { exact: true })).toBeVisible();
+    await expect(alicePage.getByText(/sie belegen keine Teilnahme innerhalb der Lernwoche/)).toBeVisible();
     await alicePage.getByRole('radio', { name: /Darauf aufbauen/ }).check();
     const target = alicePage.getByRole('radio', { name: /^Mission QA Bob:/ });
     await target.scrollIntoViewIfNeeded();
@@ -115,6 +152,7 @@ test('two learners voluntarily teach back, reverse consent and moderate within a
     await alicePage.getByLabel('Dein weiterführender Gedanke').fill('Das Gegenbeispiel kann nach dem ersten Beispiel helfen, die Erklärung genauer abzugrenzen.');
     await alicePage.getByRole('button', { name: 'Im Space teilen', exact: true }).click();
     await expect(alicePage.getByText('Gemeinsam weitergedacht. Das aktuelle Ziel ist erreicht.')).toBeVisible();
+    await expect(alicePage.getByText('Lernwoche vorbei · Mission bleibt offen', { exact: true })).toBeVisible();
     await expect(alicePage.getByText('Mission QA Bobs Erkenntnis')).toBeVisible();
 
     for (const theme of ['Hell', 'Dunkel']) {
