@@ -46,10 +46,10 @@ export function TopicNavigation({ selected, onSelect, disabled = false }: { sele
   return <section className="mt-4 min-w-0" aria-labelledby="community-topic-heading">
     <h3 id="community-topic-heading" className="sr-only">Themenfilter</h3>
     <div className="flex min-w-0 flex-wrap items-center gap-3">
-      <Label htmlFor="community-topic-search" className="shrink-0 text-sm">Thema suchen</Label>
+      <Label htmlFor="community-topic-search" className="min-w-0 text-sm">Thema suchen</Label>
       <Input id="community-topic-search" type="search" value={query} maxLength={MAX_TOPIC_LENGTH} disabled={disabled} onFocus={() => setOpen(true)}
         onKeyDown={event => { if (event.key === 'Escape') setOpen(false) }}
-        onChange={event => { setQuery(event.target.value); setOpen(true) }} placeholder="z. B. Design" className="min-w-32 max-w-full flex-1" />
+        onChange={event => { setQuery(event.target.value); setOpen(true) }} placeholder="z. B. Design" className="min-w-0 max-w-full flex-[1_1_8rem]" />
     </div>
     {selected && <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
       <p className="min-w-0 rounded-md bg-accent px-2 py-1 text-sm text-accent-foreground [overflow-wrap:anywhere]">Aktives Thema: <strong>{selected}</strong></p>

@@ -42,10 +42,44 @@ async function login(page: Page) {
   return userId as string;
 }
 
+async function reflowReport(page: Page, selector: string) {
+  await page.evaluate(async () => { await document.fonts.ready; });
+  return page.evaluate(rootSelector => {
+    const root = document.querySelector<HTMLElement>(rootSelector);
+    if (!root) throw new Error(`Missing reflow target: ${rootSelector}`);
+    const bounds = root.getBoundingClientRect();
+    const candidates = Array.from(root.querySelectorAll<HTMLElement>('*')).map(element => {
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      return {
+        tag: element.tagName.toLowerCase(), id: element.id, label: element.getAttribute('aria-label'),
+        labelledBy: element.getAttribute('aria-labelledby'), text: element.textContent?.trim().slice(0, 100),
+        clientWidth: element.clientWidth, scrollWidth: element.scrollWidth, left: rect.left, right: rect.right,
+        display: style.display, flexBasis: style.flexBasis, gridColumns: style.gridTemplateColumns,
+        minWidth: style.minWidth, maxWidth: style.maxWidth, whiteSpace: style.whiteSpace,
+        overflowWrap: style.overflowWrap, overflowX: style.overflowX, position: style.position, clipPath: style.clipPath,
+        excess: Math.max(element.scrollWidth - element.clientWidth, rect.right - bounds.right, bounds.left - rect.left),
+      };
+    }).filter(element => element.clientWidth > 0 && element.excess > 0)
+      .sort((left, right) => right.excess - left.excess).slice(0, 24);
+    return {
+      document: { clientWidth: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth },
+      root: { selector: rootSelector, clientWidth: root.clientWidth, scrollWidth: root.scrollWidth,
+        left: bounds.left, right: bounds.right, scrollTop: root.scrollTop },
+      // Include clipped/screen-reader-only nodes with their styles rather than
+      // silently treating every internal scrollWidth as the page's cause.
+      candidates,
+    };
+  }, selector);
+}
+
 async function capture(page: Page, info: TestInfo, name: string) {
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
-  expect(await page.locator('main').evaluate(main => main.scrollWidth <= main.clientWidth)).toBe(true);
+  const report = await reflowReport(page, 'main');
+  // Save the actual state before a strict failure, including offscreen overflow
+  // diagnostics in the CI error text. The existing width gates are unchanged.
   await page.screenshot({ path: info.outputPath(`${name}.png`), fullPage: true, animations: 'disabled' });
+  expect(report.document.scrollWidth <= report.document.clientWidth, `${name}: document reflow ${JSON.stringify(report)}`).toBe(true);
+  expect(report.root.scrollWidth <= report.root.clientWidth, `${name}: main reflow ${JSON.stringify(report)}`).toBe(true);
 }
 
 async function theme(page: Page, value: string) {
@@ -181,11 +215,11 @@ test('community entry keeps long content, loading, empty, error and result-end f
     await capture(page, info, `community-entry-synthetic-long-filter-${value}`);
     // 200% text size exercises reflow separately from the normal viewport.
     await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
-    const filters = page.getByRole('region', { name: 'Themenfilter', exact: true });
-    expect(await filters.evaluate(region => region.scrollWidth <= region.clientWidth)).toBe(true);
+    const filters = await reflowReport(page, 'section[aria-labelledby="community-topic-heading"]');
     // Capture surrounding chrome too, but do not turn untouched sidebar/header
     // zoom behavior into a claim or a new gate for this owned filter slice.
     await page.screenshot({ path: info.outputPath(`community-entry-synthetic-large-text-${value}.png`), fullPage: true, animations: 'disabled' });
+    expect(filters.root.scrollWidth <= filters.root.clientWidth, `200% topic-filter reflow ${JSON.stringify(filters)}`).toBe(true);
     await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
     await page.unroute(feedEndpoint); await page.unroute(topicEndpoint);
 

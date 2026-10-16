@@ -3,7 +3,7 @@
 /* Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V4 */
 /* Hallmark · genre: editorial workbench · structure: discussion index · design-system: design.md */
 
-import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent, type MouseEvent } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
@@ -19,6 +19,21 @@ import { SpacePolls } from '@/components/spaces/SpacePolls';
 import { SpaceMissionIndex } from '@/components/spaces/SpaceMissionIndex';
 import { apiSpaceUrl, discussionUrl, isSpaceAbort, revalidateSpacePages, type SpaceDiscussion, type SpacePage, type SpaceSummary } from '@/components/spaces/space-api';
 import { useSpaceAccess, useSpaceListGeneration } from '@/hooks/useSpaceAccess';
+
+const localSections = new Set(['space-discussions', 'space-missions', 'space-polls', 'space-management']);
+
+function scrollToSection(id: string) {
+  if (!localSections.has(id)) return false;
+  const target = document.getElementById(id);
+  const main = target?.closest<HTMLElement>('#page-content');
+  if (!target || !main) return false;
+  // Native focus/hash scrolling can also move the viewport-height app frame.
+  // Keep the header in place and scroll only this page's content container.
+  target.focus({ preventScroll: true });
+  const margin = Number.parseFloat(window.getComputedStyle(target).scrollMarginTop) || 0;
+  main.scrollTop += target.getBoundingClientRect().top - main.getBoundingClientRect().top - margin;
+  return true;
+}
 
 export default function SpacePage() {
   const params = useParams();
@@ -73,9 +88,32 @@ function SpaceOverview({ spaceId }: { spaceId: string }) {
     composerButtonRef.current?.focus();
   }
 
-  function focusSection(id: string) {
-    document.getElementById(id)?.focus();
+  function focusSection(event: MouseEvent<HTMLAnchorElement>, id: string) {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (!scrollToSection(id)) return;
+    event.preventDefault();
+    const hash = event.currentTarget.hash;
+    if (window.location.hash !== hash) window.history.pushState(null, '', hash);
   }
+
+  const initialFragmentHandledRef = useRef(false);
+  useEffect(() => {
+    if (loading || !spaceLoaded || initialFragmentHandledRef.current) return;
+    initialFragmentHandledRef.current = true;
+    scrollToSection(window.location.hash.slice(1));
+  }, [loading, spaceLoaded]);
+
+  useEffect(() => {
+    let frame: number | undefined;
+    const restoreFragment = () => {
+      if (frame !== undefined) cancelAnimationFrame(frame);
+      // History restores its saved scroll after popstate. Then align only our
+      // four local destinations; unrelated URLs and revalidations do not focus.
+      frame = requestAnimationFrame(() => { scrollToSection(window.location.hash.slice(1)); });
+    };
+    window.addEventListener('popstate', restoreFragment);
+    return () => { window.removeEventListener('popstate', restoreFragment); if (frame !== undefined) cancelAnimationFrame(frame); };
+  }, []);
 
   useEffect(() => {
     const read = beginListRead();
@@ -219,10 +257,10 @@ function SpaceOverview({ spaceId }: { spaceId: string }) {
       {membershipError && <p role="alert" className="mt-4 text-sm text-destructive">{membershipError}</p>}
 
       <nav aria-label="Aufgaben im Space" className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm">
-        <a href="#space-discussions" onClick={() => focusSection('space-discussions')} className="inline-flex min-h-11 items-center rounded-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Diskussionen</a>
-        {space.visibility === 'PRIVATE' && <a href="#space-missions" onClick={() => focusSection('space-missions')} className="inline-flex min-h-11 items-center rounded-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Missionen</a>}
-        <a href="#space-polls" onClick={() => focusSection('space-polls')} className="inline-flex min-h-11 items-center rounded-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Umfragen</a>
-        {space.canManage && space.visibility === 'PRIVATE' && <a href="#space-management" onClick={() => focusSection('space-management')} className="inline-flex min-h-11 items-center rounded-sm text-muted-foreground underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Verwaltung</a>}
+        <a href="#space-discussions" onClick={event => focusSection(event, 'space-discussions')} className="inline-flex min-h-11 items-center rounded-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Diskussionen</a>
+        {space.visibility === 'PRIVATE' && <a href="#space-missions" onClick={event => focusSection(event, 'space-missions')} className="inline-flex min-h-11 items-center rounded-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Missionen</a>}
+        <a href="#space-polls" onClick={event => focusSection(event, 'space-polls')} className="inline-flex min-h-11 items-center rounded-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Umfragen</a>
+        {space.canManage && space.visibility === 'PRIVATE' && <a href="#space-management" onClick={event => focusSection(event, 'space-management')} className="inline-flex min-h-11 items-center rounded-sm text-muted-foreground underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Verwaltung</a>}
       </nav>
 
       <section id="space-discussions" tabIndex={-1} aria-labelledby="space-discussions-title" className="mt-5 scroll-mt-6 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring">

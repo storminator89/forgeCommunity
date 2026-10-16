@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { createEvent, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useSession } from 'next-auth/react';
 import { useParams, useRouter } from 'next/navigation';
@@ -37,6 +37,7 @@ function setup(current = space, polls: SpacePoll[] = []) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  window.history.replaceState(null, '', '/community/spaces/secret');
   jest.mocked(useParams).mockReturnValue({ spaceId: 'secret' });
   jest.mocked(useRouter).mockReturnValue({ push: jest.fn() } as unknown as ReturnType<typeof useRouter>);
   jest.mocked(useSession).mockReturnValue({ data: { user: { id: 'member', role: 'USER' }, expires: '2099-01-01' }, status: 'authenticated', update: jest.fn() } as ReturnType<typeof useSession>);
@@ -124,4 +125,53 @@ test('existing poll decisions retain voluntary and inference facts, saved choice
   expect(screen.getByRole('button', { name: 'Auswahl ändern' })).toBeDisabled();
   await userEvent.click(screen.getByText('So wird gezählt'));
   expect(screen.getByText('Angezeigt werden nur Summen und deine eigene Auswahl. Solange die Umfrage offen ist, kannst du deine Auswahl ändern.')).toBeVisible();
+});
+
+
+afterEach(() => { jest.restoreAllMocks(); });
+
+test('local jumps cancel native ancestor scrolling, keep hash history and scroll only main', async () => {
+  setup();
+  const link = await screen.findByRole('link', { name: 'Umfragen' });
+  const target = screen.getByRole('group', { name: 'Umfragen' });
+  const main = document.getElementById('page-content')!;
+  main.scrollTop = 125;
+  target.style.scrollMarginTop = '24px';
+  jest.spyOn(main, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 80, 1000, 720));
+  jest.spyOn(target, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 600, 1000, 400));
+  const focus = jest.spyOn(target, 'focus');
+  const outerScroll = jest.spyOn(window, 'scrollTo').mockImplementation(() => {});
+  const history = jest.spyOn(window.history, 'pushState');
+  const click = createEvent.click(link, { button: 0 });
+  fireEvent(link, click);
+  expect(click.defaultPrevented).toBe(true);
+  expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+  expect(main.scrollTop).toBe(621);
+  expect(outerScroll).not.toHaveBeenCalled();
+  expect(history).toHaveBeenCalledWith(null, '', '#space-polls');
+  expect(window.location.hash).toBe('#space-polls');
+});
+
+test.each([{ button: 1 }, { button: 0, ctrlKey: true }, { button: 0, metaKey: true }])('local jumps leave modified/middle navigation to the browser: %j', async options => {
+  setup();
+  const link = await screen.findByRole('link', { name: 'Umfragen' });
+  const target = screen.getByRole('group', { name: 'Umfragen' });
+  const focus = jest.spyOn(target, 'focus');
+  const history = jest.spyOn(window.history, 'pushState');
+  const click = createEvent.click(link, options);
+  fireEvent(link, click);
+  expect(click.defaultPrevented).toBe(false);
+  expect(focus).not.toHaveBeenCalled();
+  expect(history).not.toHaveBeenCalled();
+});
+
+test('an initial local fragment focuses once after loading, without refocusing on access revalidation', async () => {
+  window.history.replaceState(null, '', '/community/spaces/secret#space-polls');
+  setup();
+  await waitFor(() => expect(screen.getByRole('group', { name: 'Umfragen' })).toHaveFocus());
+  const reads = jest.mocked(global.fetch).mock.calls.length;
+  fireEvent(window, new Event('focus'));
+  await waitFor(() => expect(jest.mocked(global.fetch).mock.calls.length).toBeGreaterThan(reads));
+  await screen.findByRole('heading', { level: 1, name: space.name });
+  expect(screen.getByRole('group', { name: 'Umfragen' })).not.toHaveFocus();
 });

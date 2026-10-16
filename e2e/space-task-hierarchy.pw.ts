@@ -113,20 +113,32 @@ async function capture(page: Page, info: TestInfo, name: string) {
   await page.screenshot({ path: info.outputPath(`${name}.png`), fullPage: true });
 }
 
-async function jump(page: Page, label: string, id: string) {
-  const link = page.getByRole('navigation', { name: 'Aufgaben im Space' }).getByRole('link', { name: label, exact: true });
-  await link.focus();
-  await page.keyboard.press('Enter');
+async function assertSectionPosition(page: Page, id: string) {
   const target = page.locator(`#${id}`);
   await expect(target).toBeFocused();
   await expect(page).toHaveURL(new RegExp(`#${id}$`));
-  // The app owns an inner scroll container. The destination's start must stay
-  // below the app header and in that container, including its focus outline.
+  await expect(page.locator('.app-header')).toBeInViewport({ ratio: 1 });
+  // Verify the actual app frame and the destination, rather than accepting a
+  // correctly focused target inside an offscreen main after an ancestor scroll.
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
   await expect.poll(async () => {
     const box = await target.boundingBox(); const main = await page.locator('#page-content').boundingBox();
     return Boolean(box && main && box.y >= main.y - 1 && box.y < main.y + main.height - 20);
   }).toBe(true);
-  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  await expect.poll(() => target.evaluate(element => {
+    const main = element.closest<HTMLElement>('#page-content')!;
+    const margin = Number.parseFloat(getComputedStyle(element).scrollMarginTop) || 0;
+    const intended = main.scrollTop + element.getBoundingClientRect().top - main.getBoundingClientRect().top - margin;
+    const clamped = Math.max(0, Math.min(main.scrollHeight - main.clientHeight, intended));
+    return Math.abs(main.scrollTop - clamped);
+  })).toBeLessThanOrEqual(1);
+}
+
+async function jump(page: Page, label: string, id: string) {
+  const link = page.getByRole('navigation', { name: 'Aufgaben im Space' }).getByRole('link', { name: label, exact: true });
+  await link.focus();
+  await page.keyboard.press('Enter');
+  await assertSectionPosition(page, id);
 }
 
 async function theme(page: Page, mode: 'light' | 'dark') {
@@ -174,9 +186,22 @@ test('synthetic public member and nonmember tasks are early and empty polls stay
         await page.keyboard.press('Escape'); await expect(page.getByRole('button', { name: 'Diskussion starten' })).toBeFocused();
         await page.keyboard.press('Enter'); await expect(page.getByRole('textbox', { name: 'Titel', exact: true })).toHaveValue('Ein noch unveröffentlichter Entwurf');
         await page.keyboard.press('Escape');
+        await page.goBack(); await assertSectionPosition(page, 'space-polls');
+        await page.goForward(); await assertSectionPosition(page, 'space-discussions');
+        // A normal pointer click uses the same bounded local navigation.
+        await page.getByRole('navigation', { name: 'Aufgaben im Space' }).getByRole('link', { name: 'Umfragen', exact: true }).click();
+        await assertSectionPosition(page, 'space-polls');
+        await capture(page, info, `space-synthetic-local-history-${mode}-${size.width}`);
       }
     }
   }
+  fixture = { persona: 'member', polls: 'empty' };
+  await page.goto('/community/spaces');
+  await page.goto(`${url}#space-polls`); await expect(page.getByText('Noch keine Umfragen.', { exact: true })).toBeVisible();
+  await assertSectionPosition(page, 'space-polls');
+  await page.reload(); await expect(page.getByText('Noch keine Umfragen.', { exact: true })).toBeVisible();
+  await assertSectionPosition(page, 'space-polls');
+  await capture(page, info, 'space-synthetic-direct-fragment-reload-dark-320');
 });
 
 test('synthetic private admin tasks separate member management and expose poll creation safeguards', async ({ page }, info) => {
