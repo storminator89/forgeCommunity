@@ -212,7 +212,9 @@ test('the real Blender clip waits for load, changes frames once, settles to stat
   // Deliberately longer than playback: the window starts when the asset loads.
   await page.waitForTimeout(2200);
   await expect(clip).toHaveAttribute('data-spark-celebration', 'loading');
-  await expect(clip).toHaveAttribute('src', clipPath);
+  // Next Image can normalize img.src to an absolute URL when attaching its
+  // error handler. Compare the actual resource, independent of serialization.
+  expect(new URL((await clip.getAttribute('src'))!, origin).href).toBe(`${origin}${clipPath}`);
   await expect(clip).not.toHaveAttribute('srcset', /.+/);
   expect(await clip.evaluate(image => (image as HTMLImageElement).currentSrc)).toBe(`${origin}${clipPath}`);
   await captureChangingFrames(page, testInfo, 'first-completion', () => { release(); delayed = false; });
