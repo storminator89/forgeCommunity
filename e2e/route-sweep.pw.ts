@@ -178,7 +178,11 @@ function screenshotName(item: RouteSweepCase, theme: 'light' | 'dark') {
 test.describe('every App Router page, one at a time', () => {
   // The existing 390px journey suite remains unchanged. This sweep adds the
   // two requested review widths without tripling CI time.
-  test.skip(({ viewport }) => viewport?.width === 390, 'The route sweep runs at desktop and 320px.');
+  // Only the bounded native-progress scenes also run in the existing 390px
+  // project; the general route sweep still runs at desktop and 320px.
+  test.beforeEach(({ viewport }, testInfo) => {
+    test.skip(viewport?.width === 390 && !testInfo.title.startsWith('synthetic rendering only:'), 'The general route sweep runs at desktop and 320px.');
+  });
 
   test.beforeAll(async ({ browser, request }) => {
     const path = disposableDatabasePath();
@@ -445,78 +449,189 @@ test.describe('every App Router page, one at a time', () => {
   }
 
   for (const paletteTheme of ['light', 'dark'] as const) {
-    test(`synthetic rendering only: existing private active pathway reward [${paletteTheme}]`, async ({ page }, testInfo) => {
-      // Additional render evidence only. The original unstarted route fixture,
-      // real consent/exit journey and award/persistence tests are unchanged.
-      const fixture: MemberPathway = {
-        id: 'qa-palette-active-pathway', title: 'Route QA private Anerkennung',
-        description: 'Synthetische Darstellung einer privaten Anerkennung mit zwei aktuell angerechneten Kursen.',
-        badgeLabel: 'QA Kursanerkennung', unavailable: false, creditedCount: 2, requiredCount: 2,
-        courses: [
-          { courseId: 'qa-palette-course-one', title: 'Erster angerechneter QA Kurs', order: 0, creditActive: true, available: true, isEnrolled: true },
-          { courseId: 'qa-palette-course-two', title: 'Zweiter angerechneter QA Kurs', order: 1, creditActive: true, available: true, isEnrolled: true },
-        ],
-        participation: { joinedAt: '2026-10-01T08:00:00.000Z', optedOutAt: null, badgeActive: true, badgeFirstAwardedAt: '2026-10-02T08:00:00.000Z' },
-        history: [{ type: 'AWARDED', reason: null, at: '2026-10-02T08:00:00.000Z' }],
-      };
-      const mutations: string[] = [];
-      const errors: string[] = [];
-      page.on('pageerror', error => errors.push(error.message));
-      page.on('request', request => {
-        const path = new URL(request.url()).pathname;
-        if (request.method() !== 'GET' && (path.startsWith('/api/learning-pathways/') || /^\/api\/courses\/[^/]+\/enrollment$/.test(path))) {
-          mutations.push(`${request.method()} ${path}`);
+    for (const creditedCount of [0, 1, 2]) {
+      const complete = creditedCount === 2;
+      const stateLabel = `${creditedCount}-of-2`;
+      test(complete ? `synthetic rendering only: existing private active pathway reward [${paletteTheme}]`
+        : `synthetic rendering only: native pathway progress ${creditedCount}/2 [${paletteTheme}]`, async ({ page }, testInfo) => {
+        // Additional render evidence only. The original unstarted route fixture,
+        // real consent/exit journey and award/persistence tests are unchanged.
+        const fixture: MemberPathway = {
+          id: 'qa-palette-active-pathway', title: 'Route QA private Anerkennung',
+          description: complete ? 'Synthetische Darstellung einer privaten Anerkennung mit zwei aktuell angerechneten Kursen.'
+            : `Synthetische Darstellung eines privaten Lernpfads mit ${creditedCount} von 2 aktuell angerechneten Kursen.`,
+          badgeLabel: 'QA Kursanerkennung', unavailable: false, creditedCount, requiredCount: 2,
+          courses: [
+            { courseId: 'qa-palette-course-one', title: complete ? 'Erster angerechneter QA Kurs' : 'Erster QA Kurs', order: 0, creditActive: creditedCount >= 1, available: true, isEnrolled: true },
+            { courseId: 'qa-palette-course-two', title: complete ? 'Zweiter angerechneter QA Kurs' : 'Zweiter QA Kurs', order: 1, creditActive: complete, available: true, isEnrolled: true },
+          ],
+          participation: { joinedAt: '2026-10-01T08:00:00.000Z', optedOutAt: null, badgeActive: complete, badgeFirstAwardedAt: complete ? '2026-10-02T08:00:00.000Z' : null },
+          history: complete ? [{ type: 'AWARDED', reason: null, at: '2026-10-02T08:00:00.000Z' }] : [],
+        };
+        const mutations: string[] = [];
+        const errors: string[] = [];
+        page.on('pageerror', error => errors.push(error.message));
+        page.on('console', message => { if (message.type() === 'error') errors.push(`console: ${message.text()}`); });
+        page.on('request', request => {
+          const path = new URL(request.url()).pathname;
+          if (request.method() !== 'GET' && (path.startsWith('/api/learning-pathways/') || /^\/api\/courses\/[^/]+\/enrollment$/.test(path))) {
+            mutations.push(`${request.method()} ${path}`);
+          }
+        });
+        await page.addInitScript(theme => localStorage.setItem('theme', theme), paletteTheme);
+        await page.emulateMedia({ colorScheme: paletteTheme, forcedColors: 'none' });
+        await usePersona(page, 'member');
+        await page.route('**/api/learning-pathways/me', route => route.fulfill({ status: 200, json: { pathways: [fixture] } }));
+        const appliedResponse = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname === '/api/learning-pathways/me');
+        await page.goto(`/courses/pathways/${fixture.id}`);
+        expect((await appliedResponse).status()).toBe(200);
+        if (paletteTheme === 'dark') await expect(page.locator('html')).toHaveClass(/\bdark\b/);
+        else await expect(page.locator('html')).not.toHaveClass(/\bdark\b/);
+        const main = page.locator('#page-content');
+        await expect(main.getByRole('heading', { name: complete ? 'Abzeichen aktiv' : 'In Arbeit', exact: true })).toBeVisible();
+        await expect(main.getByText(`${creditedCount} von 2 Kursen aktuell bestätigt`, { exact: true })).toBeVisible();
+        await expect(main.getByText('Aktuell bestätigt', { exact: true })).toHaveCount(creditedCount);
+        await expect(main.getByText('Noch nicht bestätigt', { exact: true })).toHaveCount(2 - creditedCount);
+        const progress = main.getByRole('progressbar', { name: `Lernpfad: ${creditedCount} von 2 Kursen aktuell bestätigt`, exact: true });
+        await expect(progress).toHaveAttribute('value', String(creditedCount));
+        await expect(progress).toHaveAttribute('max', '2');
+        await expect(progress).toHaveClass(/\baccent-progress\b/);
+        await expect(progress).toHaveCSS('accent-color', paletteTheme === 'dark' ? 'rgb(114, 208, 204)' : 'rgb(7, 92, 101)');
+        if (complete) {
+          const label = main.getByText(`Privates Abzeichen aktiv: ${fixture.badgeLabel}`, { exact: true });
+          await expect(label).toBeVisible();
+          const badge = label.locator('..');
+          await expect(badge).toHaveClass(/\bbg-reward\b/);
+          await expect(badge).toHaveClass(/\btext-reward-foreground\b/);
+          await expect(badge).toHaveCSS('background-color', 'rgb(242, 199, 92)');
+          await expect(badge).toHaveCSS('color', paletteTheme === 'dark' ? 'rgb(8, 37, 47)' : 'rgb(20, 52, 61)');
+          await expect(badge.getByText('Diese Anerkennung ist nur in deinem Lernpfad sichtbar. Sie ist kein Zertifikat.', { exact: true })).toBeVisible();
+          await expect(main.getByRole('button', { name: 'Teilnahme beenden', exact: true })).toBeVisible();
+          await expect(main.getByRole('button', { name: 'Privat teilnehmen', exact: true })).toHaveCount(0);
+          await expect(main.getByText('Abzeichen erstmals aktiv', { exact: true })).toBeVisible();
+        } else {
+          await expect(main.getByText(`Privates Abzeichen aktiv: ${fixture.badgeLabel}`, { exact: true })).toHaveCount(0);
+          await expect(main.getByText('Abzeichen erstmals aktiv', { exact: true })).toHaveCount(0);
+          await expect(main.getByRole('button', { name: 'Teilnahme beenden', exact: true })).toBeVisible();
+          await expect(main.getByRole('button', { name: 'Privat teilnehmen', exact: true })).toHaveCount(0);
         }
+        const overflow = await page.evaluate(() => ({ viewport: innerWidth, html: document.documentElement.scrollWidth, body: document.body.scrollWidth }));
+        expect(overflow.html).toBeLessThanOrEqual(overflow.viewport + 1);
+        expect(overflow.body).toBeLessThanOrEqual(overflow.viewport + 1);
+        // main is a real scroll container. Ensure both the earned badge and its
+        // privacy explanation are in the image, including at the 320px width.
+        if (complete) {
+          const label = main.getByText(`Privates Abzeichen aktiv: ${fixture.badgeLabel}`, { exact: true });
+          const badge = label.locator('..');
+          await badge.scrollIntoViewIfNeeded();
+          await expect(label).toBeInViewport();
+          await expect(badge.getByText('Diese Anerkennung ist nur in deinem Lernpfad sichtbar. Sie ist kein Zertifikat.', { exact: true })).toBeInViewport();
+        }
+        // The image review must verify the painted native fill, not only the
+        // accent-color property: Chromium can paint an unrelated default green.
+        await expect(progress).toHaveCSS('appearance', 'none');
+        await progress.scrollIntoViewIfNeeded();
+        await expect(progress).toBeInViewport();
+        await page.screenshot({ path: testInfo.outputPath(complete ? `palette-synthetic-private-active-reward-${paletteTheme}.png`
+          : `palette-synthetic-private-pathway-${stateLabel}-${paletteTheme}.png`), animations: 'disabled' });
+        await progress.screenshot({ path: testInfo.outputPath(`palette-synthetic-native-progress-${stateLabel}-normal-before-${paletteTheme}.png`), animations: 'disabled' });
+        const measureGeometry = () => progress.evaluate(element => {
+          const parent = element.parentElement!.getBoundingClientRect();
+          const rect = element.getBoundingClientRect();
+          const style = getComputedStyle(element);
+          return { left: rect.left - parent.left, top: rect.top - parent.top, width: rect.width, height: rect.height,
+            parentWidth: parent.width, previousBottom: element.previousElementSibling!.getBoundingClientRect().bottom - parent.top,
+            nextTop: element.nextElementSibling ? element.nextElementSibling.getBoundingClientRect().top - parent.top : null,
+            marginTop: style.marginTop, marginBottom: style.marginBottom,
+            borderWidth: style.borderWidth, padding: style.padding };
+        });
+        const normalGeometry = await measureGeometry();
+        expect(normalGeometry.height).toBe(12);
+        expect(normalGeometry.width).toBe(normalGeometry.parentWidth);
+        const normalColors = await progress.evaluate(element => ({ color: getComputedStyle(element).color, background: getComputedStyle(element).backgroundColor }));
+        await expect(progress).toHaveCSS('background-color', paletteTheme === 'dark' ? 'rgb(24, 62, 71)' : 'rgb(226, 238, 236)');
+        await expect(progress).toHaveCSS('color', paletteTheme === 'dark' ? 'rgb(114, 208, 204)' : 'rgb(7, 92, 101)');
+        await page.emulateMedia({ colorScheme: paletteTheme, forcedColors: 'active' });
+        await expect(progress).toHaveCSS('appearance', 'none');
+        await expect(progress).toHaveCSS('forced-color-adjust', 'auto');
+        await expect(progress).toHaveCSS('outline-width', '1px');
+        await expect(progress).toHaveCSS('outline-style', 'solid');
+        await expect(progress).toHaveCSS('outline-offset', '-1px');
+        await expect(progress).toHaveAttribute('value', String(creditedCount));
+        await expect(progress).toHaveAttribute('max', '2');
+        await expect(progress).toHaveAccessibleName(`Lernpfad: ${creditedCount} von 2 Kursen aktuell bestätigt`);
+        await expect(main.getByText(`${creditedCount} von 2 Kursen aktuell bestätigt`, { exact: true })).toBeVisible();
+        const systemPalette = await progress.evaluate(element => {
+          const probe = document.createElement('span');
+          probe.hidden = true;
+          element.parentElement!.append(probe);
+          probe.style.color = 'Canvas';
+          const canvas = getComputedStyle(probe).color;
+          probe.style.color = 'CanvasText';
+          const canvasText = getComputedStyle(probe).color;
+          probe.remove();
+          const style = getComputedStyle(element);
+          return { forcedColorsActive: matchMedia('(forced-colors: active)').matches,
+            prefersDark: matchMedia('(prefers-color-scheme: dark)').matches, colorScheme: getComputedStyle(document.documentElement).colorScheme,
+            canvas, canvasText, background: style.backgroundColor, color: style.color, outline: style.outlineColor,
+            forcedColorAdjust: style.forcedColorAdjust };
+        });
+        const forcedGeometry = await measureGeometry();
+        const forcedEvidence = { syntheticRenderingOnly: true, project: testInfo.project.name, paletteTheme, creditedCount, requiredCount: 2,
+          systemPalette, normalColors, normalGeometry, forcedGeometry,
+          limitation: 'Chromium emulation only; no persisted award or Firefox/WebKit forced-color native pixel evidence.' };
+        // The current CI artifact upload retains PNGs only. Keep this bounded
+        // palette/geometry evidence in its durable job log as well.
+        console.info('Synthetic native progress forced-color evidence:', JSON.stringify(forcedEvidence));
+        await testInfo.attach(`synthetic-native-progress-${stateLabel}-${paletteTheme}-forced-evidence`, {
+          body: Buffer.from(JSON.stringify(forcedEvidence, null, 2)),
+          contentType: 'application/json',
+        });
+        expect(systemPalette.forcedColorsActive).toBe(true);
+        expect(systemPalette.prefersDark).toBe(paletteTheme === 'dark');
+        expect(systemPalette.canvas).not.toBe(systemPalette.canvasText);
+        // Establish the actual emulated light/dark system palette, rather than
+        // inferring it from the screenshot filename or the app's .dark class.
+        const brightness = (color: string) => color.match(/[\d.]+/g)!.slice(0, 3).map(Number).reduce((sum, channel) => sum + channel, 0);
+        expect(brightness(systemPalette.canvas) > brightness(systemPalette.canvasText)).toBe(paletteTheme === 'light');
+        expect(systemPalette.background).toBe(systemPalette.canvas);
+        expect(systemPalette.color).toBe(systemPalette.canvasText);
+        expect(systemPalette.outline).toBe(systemPalette.canvasText);
+        await progress.scrollIntoViewIfNeeded();
+        await expect(progress).toBeInViewport();
+        expect(forcedGeometry).toEqual(normalGeometry);
+        const forcedOverflow = await page.evaluate(() => ({ viewport: innerWidth, html: document.documentElement.scrollWidth, body: document.body.scrollWidth }));
+        expect(forcedOverflow.html).toBeLessThanOrEqual(forcedOverflow.viewport + 1);
+        expect(forcedOverflow.body).toBeLessThanOrEqual(forcedOverflow.viewport + 1);
+        // Native shadow-part rasterization is verified from these real CI
+        // images. Computed host colors cannot establish the painted fill.
+        await page.screenshot({ path: testInfo.outputPath(complete ? `palette-native-progress-forced-colors-${paletteTheme}.png`
+          : `palette-synthetic-native-progress-${stateLabel}-forced-colors-${paletteTheme}.png`), animations: 'disabled' });
+        await progress.screenshot({ path: testInfo.outputPath(`palette-synthetic-native-progress-${stateLabel}-forced-colors-crop-${paletteTheme}.png`), animations: 'disabled' });
+        await page.emulateMedia({ colorScheme: paletteTheme, forcedColors: 'none' });
+        await expect(progress).toHaveCSS('appearance', 'none');
+        await expect(progress).toHaveCSS('accent-color', paletteTheme === 'dark' ? 'rgb(114, 208, 204)' : 'rgb(7, 92, 101)');
+        await expect(progress).toHaveCSS('background-color', normalColors.background);
+        await expect(progress).toHaveCSS('color', normalColors.color);
+        await expect(progress).toHaveAttribute('value', String(creditedCount));
+        await expect(progress).toHaveAttribute('max', '2');
+        await expect(progress).toHaveAccessibleName(`Lernpfad: ${creditedCount} von 2 Kursen aktuell bestätigt`);
+        await progress.scrollIntoViewIfNeeded();
+        await expect(progress).toBeInViewport();
+        expect(await page.evaluate(() => matchMedia('(forced-colors: active)').matches)).toBe(false);
+        const restoredGeometry = await measureGeometry();
+        expect(restoredGeometry).toEqual(normalGeometry);
+        await progress.screenshot({ path: testInfo.outputPath(`palette-synthetic-native-progress-${stateLabel}-normal-after-${paletteTheme}.png`), animations: 'disabled' });
+        const restoredEvidence = { syntheticRenderingOnly: true, project: testInfo.project.name, paletteTheme, creditedCount,
+          forcedColorsActive: false, restoredGeometry, normalColors };
+        console.info('Synthetic native progress normal restoration evidence:', JSON.stringify(restoredEvidence));
+        await testInfo.attach(`synthetic-native-progress-${stateLabel}-${paletteTheme}-restored-evidence`, {
+          body: Buffer.from(JSON.stringify(restoredEvidence, null, 2)), contentType: 'application/json',
+        });
+        expect(mutations).toEqual([]);
+        expect(errors).toEqual([]);
       });
-      await page.addInitScript(theme => localStorage.setItem('theme', theme), paletteTheme);
-      await page.emulateMedia({ colorScheme: paletteTheme });
-      await usePersona(page, 'member');
-      await page.route('**/api/learning-pathways/me', route => route.fulfill({ status: 200, json: { pathways: [fixture] } }));
-      const appliedResponse = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname === '/api/learning-pathways/me');
-      await page.goto(`/courses/pathways/${fixture.id}`);
-      expect((await appliedResponse).status()).toBe(200);
-      if (paletteTheme === 'dark') await expect(page.locator('html')).toHaveClass(/\bdark\b/);
-      else await expect(page.locator('html')).not.toHaveClass(/\bdark\b/);
-      const main = page.locator('#page-content');
-      await expect(main.getByRole('heading', { name: 'Abzeichen aktiv', exact: true })).toBeVisible();
-      await expect(main.getByText('2 von 2 Kursen aktuell bestätigt', { exact: true })).toBeVisible();
-      await expect(main.getByText('Aktuell bestätigt', { exact: true })).toHaveCount(2);
-      const progress = main.getByRole('progressbar', { name: 'Lernpfad: 2 von 2 Kursen aktuell bestätigt', exact: true });
-      await expect(progress).toHaveAttribute('value', '2');
-      await expect(progress).toHaveAttribute('max', '2');
-      await expect(progress).toHaveClass(/\baccent-progress\b/);
-      await expect(progress).toHaveCSS('accent-color', paletteTheme === 'dark' ? 'rgb(114, 208, 204)' : 'rgb(7, 92, 101)');
-      const label = main.getByText(`Privates Abzeichen aktiv: ${fixture.badgeLabel}`, { exact: true });
-      await expect(label).toBeVisible();
-      const badge = label.locator('..');
-      await expect(badge).toHaveClass(/\bbg-reward\b/);
-      await expect(badge).toHaveClass(/\btext-reward-foreground\b/);
-      await expect(badge).toHaveCSS('background-color', 'rgb(242, 199, 92)');
-      await expect(badge).toHaveCSS('color', paletteTheme === 'dark' ? 'rgb(8, 37, 47)' : 'rgb(20, 52, 61)');
-      await expect(badge.getByText('Diese Anerkennung ist nur in deinem Lernpfad sichtbar. Sie ist kein Zertifikat.', { exact: true })).toBeVisible();
-      await expect(main.getByRole('button', { name: 'Teilnahme beenden', exact: true })).toBeVisible();
-      await expect(main.getByRole('button', { name: 'Privat teilnehmen', exact: true })).toHaveCount(0);
-      await expect(main.getByText('Abzeichen erstmals aktiv', { exact: true })).toBeVisible();
-      const overflow = await page.evaluate(() => ({ viewport: innerWidth, html: document.documentElement.scrollWidth, body: document.body.scrollWidth }));
-      expect(overflow.html).toBeLessThanOrEqual(overflow.viewport + 1);
-      expect(overflow.body).toBeLessThanOrEqual(overflow.viewport + 1);
-      // main is a real scroll container. Ensure both the earned badge and its
-      // privacy explanation are in the image, including at the 320px width.
-      await badge.scrollIntoViewIfNeeded();
-      await expect(label).toBeInViewport();
-      await expect(badge.getByText('Diese Anerkennung ist nur in deinem Lernpfad sichtbar. Sie ist kein Zertifikat.', { exact: true })).toBeInViewport();
-      // The image review must verify the painted native fill, not only the
-      // accent-color property: Chromium can paint an unrelated default green.
-      await expect(progress).toHaveCSS('appearance', 'none');
-      await page.screenshot({ path: testInfo.outputPath(`palette-synthetic-private-active-reward-${paletteTheme}.png`), animations: 'disabled' });
-      await page.emulateMedia({ forcedColors: 'active' });
-      await expect(progress).not.toHaveCSS('appearance', 'none');
-      await expect(progress).toHaveAttribute('value', '2');
-      await expect(progress).toHaveAttribute('max', '2');
-      await page.screenshot({ path: testInfo.outputPath(`palette-native-progress-forced-colors-${paletteTheme}.png`), animations: 'disabled' });
-      expect(mutations).toEqual([]);
-      expect(errors).toEqual([]);
-    });
+    }
   }
 
   test('private Space clears member content after access is revoked', async ({ browser, page }) => {
