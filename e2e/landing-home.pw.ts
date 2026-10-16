@@ -1,6 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { basename, isAbsolute } from 'node:path';
-import { expect, test, type BrowserContext, type Page, type Response } from '@playwright/test';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { basename, dirname, isAbsolute } from 'node:path';
+import { expect, test, type BrowserContext, type Page, type Response, type TestInfo } from '@playwright/test';
+
+import { artworkCandidates, artworkCandidateBounds } from './landing-artwork-contract';
 
 const origin = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3013';
 const destinations = [
@@ -13,7 +16,6 @@ let password: string;
 
 const artworkName = 'Illustration: Zwei Erwachsene teilen einen goldenen Ideenfunken über einem offenen Buch, umgeben von farbigen Bausteinen.';
 const artworkPath = /^\/images\/home\/forge-workbench-(480|768|1440)\.webp$/;
-const artworkBytes: Record<number, number> = { 480: 17162, 768: 34956, 1440: 93712 };
 
 function observeArtwork(page: Page) {
   const requests: string[] = [];
@@ -24,7 +26,7 @@ function observeArtwork(page: Page) {
   return { requests, response };
 }
 
-async function expectArtwork(page: Page, delivery: { requests: string[]; response: Promise<Response> }, expectedWidth: number) {
+async function expectArtwork(page: Page, delivery: { requests: string[]; response: Promise<Response> }, testInfo: TestInfo, expectedDpr: number) {
   const image = page.getByRole('img', { name: artworkName, exact: true });
   await expect(image).toBeVisible();
   await expect.poll(() => image.evaluate(element => {
@@ -32,27 +34,89 @@ async function expectArtwork(page: Page, delivery: { requests: string[]; respons
     return image.complete && image.naturalWidth > 0;
   })).toBe(true);
   await image.evaluate(element => (element as HTMLImageElement).decode());
+  const state = await image.evaluate(element => {
+    const image = element as HTMLImageElement;
+    const rect = image.getBoundingClientRect();
+    const style = getComputedStyle(image);
+    let resolvedSize: { media: string; length: string; width: number } | null = null;
+    for (const clause of image.sizes.split(',').map(value => value.trim())) {
+      const conditional = clause.match(/^(\([^)]+\))\s+(.+)$/);
+      const media = conditional?.[1] ?? 'all';
+      const length = conditional?.[2] ?? clause;
+      if (!matchMedia(media).matches) continue;
+      // Resolve the actual sizes length through CSS, without changing page layout.
+      const probe = document.createElement('span');
+      probe.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none;display:block;height:0;margin:0;padding:0;border:0;min-width:0;max-width:none;box-sizing:content-box;contain:strict';
+      probe.style.width = length;
+      document.body.append(probe);
+      try {
+        resolvedSize = { media, length, width: probe.getBoundingClientRect().width };
+      } finally {
+        probe.remove();
+      }
+      break;
+    }
+    return {
+      viewport: {
+        innerWidth: window.innerWidth, innerHeight: window.innerHeight,
+        clientWidth: document.documentElement.clientWidth,
+        screenWidth: screen.width,
+        meta: document.querySelector('meta[name="viewport"]')?.getAttribute('content') ?? null,
+        metaHeadIndex: Array.from(document.head.children).indexOf(document.querySelector('meta[name="viewport"]')!),
+        rootFontSize: getComputedStyle(document.documentElement).fontSize,
+        visual: window.visualViewport ? { width: window.visualViewport.width, height: window.visualViewport.height, scale: window.visualViewport.scale } : null,
+      },
+      heroPreloads: Array.from(document.querySelectorAll<HTMLLinkElement>('link[rel="preload"][as="image"]'))
+        .filter(link => `${link.href} ${link.imageSrcset}`.includes('/images/home/forge-workbench-'))
+        .map(link => ({ headIndex: Array.from(document.head.children).indexOf(link), href: link.getAttribute('href'), srcSet: link.imageSrcset, sizes: link.imageSizes, fetchPriority: link.fetchPriority })),
+      dpr: window.devicePixelRatio,
+      slot: { width: rect.width, height: rect.height, x: rect.x, y: rect.y },
+      computed: { width: style.width, height: style.height, fit: style.objectFit },
+      sizes: image.sizes, srcSet: image.srcset, resolvedSize,
+      currentSrc: image.currentSrc,
+      naturalWidth: image.naturalWidth, naturalHeight: image.naturalHeight,
+    };
+  });
+  const selectedUrl = new URL(state.currentSrc);
+  const selectedWidth = Number(artworkPath.exec(selectedUrl.pathname)?.[1]);
+  const candidate = artworkCandidates.find(candidate => candidate.width === selectedWidth);
+  const bounds = artworkCandidateBounds(state.slot.width, state.dpr);
+  const response = await delivery.response;
+  const bytes = await response.body();
+  const evidencePath = testInfo.outputPath('home-artwork-delivery.json');
+  await mkdir(dirname(evidencePath), { recursive: true });
+  await writeFile(evidencePath, JSON.stringify({
+      configuredViewport: page.viewportSize(), expectedDpr, ...state,
+      candidate: { width: selectedWidth, ...bounds, deliveredToDemandRatio: selectedWidth / bounds.uncappedDemand, fullyCoversDprDemand: selectedWidth >= bounds.uncappedDemand },
+      policy: 'Rendered CSS slot × actual DPR; permit the smallest adequate srcSet candidate or one larger discrete candidate as bounded browser over-delivery. This does not establish optimal selection. visualViewport.scale is recorded separately, not multiplied into DPR demand or treated as a cause.',
+      delivery: { requests: delivery.requests, requestCount: delivery.requests.length, status: response.status(), contentType: response.headers()['content-type'], bytes: bytes.length, maximumBytes: 100 * 1024 },
+  }, null, 2));
+  await testInfo.attach('home-artwork-delivery.json', { path: evidencePath, contentType: 'application/json' });
   await expect(image).toHaveAttribute('width', '1440');
   await expect(image).toHaveAttribute('height', '960');
   await expect(image).toHaveAttribute('loading', 'eager');
   await expect(image).toHaveAttribute('fetchpriority', 'high');
   await expect(image).toHaveAttribute('decoding', 'async');
-  const state = await image.evaluate(element => {
-    const image = element as HTMLImageElement;
-    const rect = image.getBoundingClientRect();
-    return { currentSrc: image.currentSrc, renderedRatio: rect.width / rect.height, naturalRatio: image.naturalWidth / image.naturalHeight, fit: getComputedStyle(image).objectFit };
+  expect(state.dpr).toBe(expectedDpr);
+  const declaredCandidates = state.srcSet.split(',').map(entry => {
+    const [src, descriptor] = entry.trim().split(/\s+/);
+    return { url: new URL(src, origin).href, descriptor };
   });
-  expect(new URL(state.currentSrc).origin).toBe(new URL(origin).origin);
-  expect(new URL(state.currentSrc).pathname).toBe(`/images/home/forge-workbench-${expectedWidth}.webp`);
-  expect(state.renderedRatio).toBeCloseTo(3 / 2, 2);
-  expect(state.naturalRatio).toBeCloseTo(3 / 2, 2);
-  expect(state.fit).not.toBe('cover');
-  const response = await delivery.response;
+  expect(declaredCandidates).toEqual(artworkCandidates.map(candidate => ({ url: new URL(`/images/home/forge-workbench-${candidate.width}.webp`, origin).href, descriptor: `${candidate.width}w` })));
+  expect(state.resolvedSize).not.toBeNull();
+  expect(Math.abs(state.resolvedSize!.width - state.slot.width)).toBeLessThanOrEqual(1);
+  expect(selectedUrl.origin).toBe(new URL(origin).origin);
+  expect(selectedUrl.search).toBe('');
+  expect(selectedUrl.hash).toBe('');
+  expect(candidate).toBeDefined();
+  expect(bounds.allowedWidths).toContain(selectedWidth);
+  expect(state.slot.width / state.slot.height).toBeCloseTo(3 / 2, 2);
+  expect(state.naturalWidth / state.naturalHeight).toBeCloseTo(3 / 2, 2);
+  expect(state.computed.fit).not.toBe('cover');
   expect(response.url()).toBe(state.currentSrc);
   expect(response.status()).toBe(200);
   expect(response.headers()['content-type']).toMatch(/^image\/webp(?:;|$)/);
-  const bytes = await response.body();
-  expect(bytes.length).toBe(artworkBytes[expectedWidth]);
+  expect(bytes.length).toBe(candidate!.bytes);
   expect(bytes.length).toBeLessThanOrEqual(100 * 1024);
   expect(bytes.subarray(0, 4).toString()).toBe('RIFF');
   expect(bytes.subarray(8, 12).toString()).toBe('WEBP');
@@ -121,7 +185,7 @@ for (const persona of ['guest', 'member'] as const) {
       if (persona === 'member') await page.context().addCookies(memberState.cookies);
       const delivery = observeArtwork(page);
       await page.goto('/');
-      await expectArtwork(page, delivery, page.viewportSize()!.width <= 390 ? 480 : 768);
+      await expectArtwork(page, delivery, testInfo, 1);
       await expect(page.getByRole('heading', { level: 1 })).toHaveText('Lernen.Machen.Weitergeben.');
       await expect(page.locator('html')).toHaveClass(new RegExp(`\\b${theme}\\b`));
       const primary = page.getByRole('link', { name: persona === 'member' ? 'Zur Community' : 'Konto erstellen', exact: true });
@@ -192,14 +256,14 @@ test('illustration motion is keyboard-requested, finite and cancelled by a live 
   expect(await running()).toBe(0);
 });
 
-test('home artwork selects and decodes one bounded local asset at real 2x device density', async ({ browser, page }) => {
+test('home artwork selects and decodes one bounded local asset at real 2x device density', async ({ browser, page }, testInfo) => {
   const viewport = page.viewportSize()!;
   const context = await browser.newContext({ baseURL: origin, viewport, deviceScaleFactor: 2, reducedMotion: 'reduce' });
   try {
     const densePage = await context.newPage();
     const delivery = observeArtwork(densePage);
     await densePage.goto('/');
-    await expectArtwork(densePage, delivery, viewport.width <= 390 ? 768 : 1440);
+    await expectArtwork(densePage, delivery, testInfo, 2);
     await expectFits(densePage);
     await expect(densePage.getByRole('link', { name: 'Konto erstellen', exact: true })).toHaveAttribute('href', '/register');
   } finally {

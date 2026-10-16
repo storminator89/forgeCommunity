@@ -53,7 +53,20 @@ async function assertStaticFigure(page: Page) {
   const image = page.locator(preview);
   await expect(image).toBeVisible();
   await expect.poll(() => image.evaluate(image => (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth > 0)).toBe(true);
-  await expect(image).toHaveAttribute('src', '/images/forge-spark-preview.webp');
+  // Next may emit either an absolute or relative local URL. Check both the
+  // declared source and the resource actually selected by the browser.
+  const sources = await image.evaluate(element => {
+    const image = element as HTMLImageElement;
+    return [image.getAttribute('src'), image.currentSrc];
+  });
+  for (const source of sources) {
+    expect(source).toBeTruthy();
+    const resource = new URL(source!, origin);
+    expect(resource.origin).toBe(new URL(origin).origin);
+    expect(resource.pathname).toBe('/images/forge-spark-preview.webp');
+    expect(resource.search).toBe('');
+    expect(resource.hash).toBe('');
+  }
   await expect(image).toHaveAttribute('alt', '');
   const box = await image.boundingBox();
   expect(box!.width).toBeLessThanOrEqual(64);

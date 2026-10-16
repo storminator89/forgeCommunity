@@ -286,7 +286,9 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: browser-qa-${{ github.run_id }}-${{ github.run_attempt }}
-          path: test-results/**/*.png
+          path: |
+            test-results/**/*.png
+            test-results/**/home-artwork-delivery.json
           if-no-files-found: warn
           retention-days: 7
 

@@ -3,6 +3,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import sharp from 'sharp';
 import path from 'node:path';
+import { artworkCandidates, artworkCandidateBounds } from '../e2e/landing-artwork-contract';
 
 const source = (name: string) => readFileSync(path.join(process.cwd(), name), 'utf8');
 const css = source('app/home.module.css');
@@ -51,6 +52,18 @@ it('adds real CI screenshots alongside the exact accessible landing heading cont
   expect(browser).toContain('deviceScaleFactor: 2');
   expect(browser).toContain('response.body()');
   expect(browser).toContain('expect(delivery.requests).toEqual([state.currentSrc])');
+  expect(browser).toContain("testInfo.attach('home-artwork-delivery.json'");
+  expect(browser).toContain("testInfo.outputPath('home-artwork-delivery.json')");
+  expect(browser).toContain('writeFile(evidencePath, JSON.stringify(');
+  expect(browser).toContain("path: evidencePath, contentType: 'application/json'");
+  const workflow = source('.github/workflows/ci.yml');
+  expect(workflow).toContain('test-results/**/*.png');
+  expect(workflow).toContain('test-results/**/home-artwork-delivery.json');
+  expect(workflow).not.toContain('test-results/**/*.json');
+  expect(browser).toContain('artworkCandidateBounds(state.slot.width, state.dpr)');
+  expect(browser).toContain('state.resolvedSize!.width - state.slot.width');
+  expect(browser).toContain('window.visualViewport.scale');
+  expect(browser).not.toMatch(/viewport(?:Size\(\)!)?\.width\s*<=\s*390/);
   // Playwright inserts spaces for BR in accessible names; textContent does not.
   const heading = 'Lernen. Machen. Weitergeben.';
   expect(source('e2e/route-sweep-manifest.ts')).toContain(`heading: '${heading}'`);
@@ -71,7 +84,7 @@ it('pins the generated original and verifies every uncropped responsive WebP aga
     format: 'png', width: 1536, height: 1024, bytes: 1805556,
     sha256: 'fce1639bdbbffc80860a84a0141add84b555ddec167d7e4aa772f32e70251ecc',
   });
-  expect(provenance.assets.map(asset => asset.width)).toEqual([480, 768, 1440]);
+  expect(provenance.assets.map(({ width, bytes }) => ({ width, bytes }))).toEqual(artworkCandidates);
   const budgets: Record<number, number> = { 480: 20 * 1024, 768: 40 * 1024, 1440: 100 * 1024 };
   let total = 0;
   for (const asset of provenance.assets) {
@@ -92,4 +105,17 @@ it('pins the generated original and verifies every uncropped responsive WebP aga
   expect(readdirSync(directory).filter(file => file.startsWith('forge-workbench-')).sort()).toEqual(
     provenance.assets.map(asset => asset.file).sort(),
   );
+});
+
+
+it('bounds browser over-delivery by measured slot and DPR without declaring the largest candidate optimal', () => {
+  expect(artworkCandidateBounds(270, 1)).toMatchObject({ uncappedDemand: 270, cappedDemand: 270, smallestAdequateWidth: 480, allowedWidths: [480, 768], sourceLimited: false });
+  expect(artworkCandidateBounds(340, 1).allowedWidths).not.toContain(1440);
+  expect(artworkCandidateBounds(340, 2)).toMatchObject({ uncappedDemand: 680, smallestAdequateWidth: 768, allowedWidths: [768, 1440] });
+  expect(artworkCandidateBounds(655.2, 1)).toMatchObject({ smallestAdequateWidth: 768, allowedWidths: [768, 1440] });
+  expect(artworkCandidateBounds(655.2, 2)).toMatchObject({ smallestAdequateWidth: 1440, allowedWidths: [1440] });
+  expect(artworkCandidateBounds(800, 2)).toMatchObject({ uncappedDemand: 1600, cappedDemand: 1440, sourceLimited: true });
+  for (const [slot, dpr] of [[0, 1], [100, 0], [NaN, 1], [100, Infinity]]) {
+    expect(() => artworkCandidateBounds(slot, dpr)).toThrow('finite and positive');
+  }
 });
