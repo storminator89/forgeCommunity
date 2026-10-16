@@ -17,29 +17,34 @@ PostgreSQL is an explicit alternative.
 ## Screenshots
 
 These unedited Playwright captures show the real app with disposable synthetic
-accounts and content. The Space learning-week and poll images come from
-[PR #65's passing CI run](https://github.com/storminator89/forgeCommunity/actions/runs/38871008041)
-on [source head `0a8cead`](https://github.com/storminator89/forgeCommunity/commit/0a8cead91c7f24609236bd516a61722d22472001),
-whose source tree matches [merged main `38a0826`](https://github.com/storminator89/forgeCommunity/commit/38a0826458387056ea079d46797b3be4b7a36b96).
-The public landing image was retrieved from that run too and is byte-identical
-to the earlier capture. See [screenshot provenance](docs/ui/README.md) for exact
-artifact paths, hashes, fixture setup, and visual QA limits.
+accounts and content. The current Space images come from
+[PR #67's passing CI run](https://github.com/storminator89/forgeCommunity/actions/runs/38884491467)
+on [source head `ad2c37e`](https://github.com/storminator89/forgeCommunity/commit/ad2c37efb1fddd62da165aea06333fd6642946ff),
+whose source tree matches [merged main `190320b`](https://github.com/storminator89/forgeCommunity/commit/190320b6c4beb3ed0dd04fb8cbba49e59c90cf8a).
+The landing and earlier learning images retain their own attribution. See
+[screenshot provenance](docs/ui/README.md) for artifact paths, hashes, fixture
+setup, and visual QA limits.
 
 ![ForgeCommunity public landing page, desktop light mode](docs/ui/readme/landing-desktop-light.png)
 
 <details>
-<summary>Private Space: optional learning week and cooperation</summary>
+<summary>Private Space: mission discovery, learning week and cooperation</summary>
+
+The mission overview lists open missions in the caller's private Spaces.
+Browsing does not join a mission.
+
+![Private-Space mission overview with one open, self-paced mission, synthetic CI test data](docs/ui/readme/space-mission-overview-light-768.png)
 
 An administrator can attach the current learning week and an explicit IANA zone
-to a new private-Space mission. The first frame shows the real scrolled creation
+to a new private-Space mission. The creation frame shows the real scrolled
 form at 768px; the submit button is below the fold.
 
 ![Private-Space mission creation with optional current learning week and Europe/Berlin zone, synthetic content](docs/ui/readme/space-learning-week-form-light-768.png)
 
-The second frame shows a completed cooperation milestone after the soft week
-ended. The disposable test deliberately moves the stored week into the past to
-exercise that state; the production app has no rescheduling control. The long
-synthetic title tests wrapping. The week ending leaves participation open.
+The mission-detail frame shows a completed cooperation milestone after the soft
+week ended. The disposable test deliberately moves the stored week into the past to
+exercise that state; the production app has no rescheduling control. The week
+ending leaves participation open. This is not evidence of learning qualification.
 
 ![Private-Space mission with an ended soft learning week and a current cooperation milestone, synthetic content](docs/ui/readme/space-mission-light-768.png)
 
@@ -57,9 +62,9 @@ page; this frame does not show a complete mobile workflow.
 <details>
 <summary>Voluntary Space poll</summary>
 
-A current member's changed choice and option totals in a private Space, at
-768px. The synthetic question is deliberately long. The lower action controls
-are below this viewport. Totals are not anonymous in a small group.
+A current member's changed choice and three synthetic members' option totals
+in a private Space. This unedited section capture uses a 768px viewport and
+includes the action control. Totals are not anonymous in a small group.
 
 ![Voluntary private-Space poll with aggregate option totals and the caller's saved choice, synthetic content](docs/ui/readme/space-poll-light-768.png)
 
@@ -425,22 +430,24 @@ server; never aim it at a production or personal database. Run
 1280px and 320px; the journey suites also run at 390px. Some dynamic route-sweep
 responses are synthetic API fixtures, as documented in [route-sweep coverage](docs/ROUTE-SWEEP-QA.md).
 
-The [PR #65 exact-head run 38871008041](https://github.com/storminator89/forgeCommunity/actions/runs/38871008041)
-passed all seven jobs on 16 October 2026 for
-`0a8cead91c7f24609236bd516a61722d22472001`: quality, strict security audit,
+The [PR #67 exact-head run 38884491467](https://github.com/storminator89/forgeCommunity/actions/runs/38884491467)
+and [post-merge main run 38885812817](https://github.com/storminator89/forgeCommunity/actions/runs/38885812817)
+passed all seven jobs on 16 October 2026: quality, strict security audit,
 Docker application flows, PostgreSQL release gate, authenticated PostgreSQL
-publication/learner runtime, browser QA, and aggregate validation. Browser QA
-completed its separate desktop, 320px and 390px Chromium invocations and four
-Firefox/WebKit critical journeys. The Space mission and poll journeys also
-check 320/375/414/768px light/dark layouts and 200% CSS zoom. Their actual
-screenshots are linked above; the suite's fixture and coverage limits still apply.
+publication/learner runtime, browser QA, and aggregate validation. Head
+`ad2c37efb1fddd62da165aea06333fd6642946ff` and merged main
+`190320b6c4beb3ed0dd04fb8cbba49e59c90cf8a` share source tree
+`aa5e95ce63348f80e0ba57bbe4a0d467a49e9fe2`. Browser QA completed separate
+desktop/320px/390px Chromium invocations and four Firefox/WebKit critical
+journeys. Mission, overview and poll journeys also check 320/375/414/768px
+light/dark reflow and 200% CSS zoom; selected actual screenshots are linked
+above with their fixture and coverage limits.
 
-That source tree `9ea80641be9e08520675503971124e76aeee0770` matches merged main
-`38a0826458387056ea079d46797b3be4b7a36b96`. Its separate
-[post-merge main run 38872143016](https://github.com/storminator89/forgeCommunity/actions/runs/38872143016)
-also passed all seven jobs on 16 October 2026. These are dated results for that
-source tree. Earlier practice, course-publication and pre-phase-2 screenshots
-retain their own source/run provenance in the [gallery](docs/ui/README.md).
+Earlier [PR #65 run 38871008041](https://github.com/storminator89/forgeCommunity/actions/runs/38871008041)
+and [main run 38872143016](https://github.com/storminator89/forgeCommunity/actions/runs/38872143016)
+also passed all seven jobs for tree `9ea80641be9e08520675503971124e76aeee0770`.
+Those dated results and earlier learning captures keep their own provenance
+in the [gallery](docs/ui/README.md); the current Space images are from #67.
 
 This is repository integration evidence. Production deployment still requires
 operational review and a backed-up migration rehearsal. Chromium viewport tests
