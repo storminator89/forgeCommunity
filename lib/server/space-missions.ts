@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { getReadableSpace, type SpaceAccess } from '@/lib/server/space-access';
 import { parseSpaceRequestId, SPACE_ID_RE, spaceTransaction, SpaceApiError } from '@/lib/server/space-api';
 import { sanitizeTextServer } from '@/lib/server/sanitize-html';
+import { MissionWeekError, parseMissionWeek, resolveMissionWeek, missionWindowState } from '@/lib/mission-week-clock';
 
 export const MISSION_PARTICIPANT_LIMIT = 5;
 export const MISSION_PAGE_SIZE = 20;
@@ -26,7 +27,8 @@ export function missionBody(body: Record<string, unknown>, keys: string[]) {
 }
 
 export function parseMissionInput(body: Record<string, unknown>) {
-  missionBody(body, ['title', 'prompt', 'requestId']);
+  const hasWeek = Object.hasOwn(body, 'week');
+  missionBody(body, hasWeek ? ['title', 'prompt', 'requestId', 'week'] : ['title', 'prompt', 'requestId']);
   if (typeof body.title !== 'string' || body.title.length > 400 ||
       typeof body.prompt !== 'string' || body.prompt.length > 8000) {
     throw new SpaceApiError('Titel oder Aufgabe ist ungültig', 400);
@@ -37,8 +39,14 @@ export function parseMissionInput(body: Record<string, unknown>) {
     throw new SpaceApiError('Titel oder Aufgabe ist ungültig', 400);
   }
   const requestId = parseSpaceRequestId(body.requestId);
-  const payloadDigest = createHash('sha256').update(JSON.stringify({ title, prompt })).digest('hex');
-  return { title, prompt, requestId, payloadDigest };
+  let week: ReturnType<typeof parseMissionWeek> | null = null;
+  try { if (hasWeek) week = parseMissionWeek(body.week); }
+  catch (error) { if (error instanceof MissionWeekError) throw new SpaceApiError(error.message, 400); throw error; }
+  // Preserve the exact legacy {title,prompt} digest. Weekly keys bind only the
+  // validated input in this fixed order, never recalculated UTC boundaries.
+  const payload = week ? { title, prompt, week: { startDate: week.startDate, timezone: week.timezone } } : { title, prompt };
+  const payloadDigest = createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+  return { title, prompt, requestId, payloadDigest, week };
 }
 
 export function parseMissionEpoch(body: Record<string, unknown>, join: boolean) {
@@ -59,6 +67,7 @@ export async function privateMissionAccess(spaceId: string, userId: string, tx: 
 
 const missionSelect = {
   id: true, spaceId: true, title: true, prompt: true, createdAt: true, closedAt: true,
+  weekStartsOn: true, weekTimezone: true, weekStartsAt: true, weekEndsAt: true,
   creator: { select: { id: true, name: true, image: true } },
 } satisfies Prisma.SpaceMissionSelect;
 type MissionRow = Prisma.SpaceMissionGetPayload<{ select: typeof missionSelect }>;
@@ -98,6 +107,9 @@ async function projectMission(row: MissionRow, userId: string, access: SpaceAcce
   return {
     id: row.id, spaceId: row.spaceId, title: row.title, prompt: row.prompt, creator: row.creator,
     createdAt: row.createdAt.toISOString(), closedAt: row.closedAt?.toISOString() ?? null,
+    week: row.weekStartsOn !== null && row.weekTimezone !== null && row.weekStartsAt !== null && row.weekEndsAt !== null
+      ? { startDate: row.weekStartsOn, timezone: row.weekTimezone, startsAt: row.weekStartsAt.toISOString(), endsAt: row.weekEndsAt.toISOString() } : null,
+    windowState: missionWindowState(row.weekEndsAt, new Date()),
     participants: participants.map(item => ({ ...item.user, joinedAt: item.joinedAt.toISOString() })),
     participantLimit: MISSION_PARTICIPANT_LIMIT,
     participation: { epoch: self?.epoch ?? 0, active, joinedAt: self?.joinedAt.toISOString() ?? null,
@@ -164,10 +176,18 @@ export async function createMission(spaceId: string, userId: string, input: Retu
       // Replays return current visibility/consent, never a stored stale response.
       return { item: await projectMission(existing, userId, access, tx), created: false };
     }
-    if (replayOnly || await tx.spaceMission.findFirst({ where: { spaceId, closedAt: null }, select: { id: true } })) {
+    const hasOpenMission = replayOnly || Boolean(await tx.spaceMission.findFirst({ where: { spaceId, closedAt: null }, select: { id: true } }));
+    // Each serializable retry rereads the clock after live authority, replay
+    // and open-mission reads, immediately before a possible new insert.
+    // Rollover never changes a stored window or accepts a stale insert.
+    let window: Partial<ReturnType<typeof resolveMissionWeek>> = {};
+    try { if (input.week) window = resolveMissionWeek(input.week, new Date()); }
+    catch (error) { if (error instanceof MissionWeekError) throw new SpaceApiError(error.message, 400); throw error; }
+    if (hasOpenMission) {
       throw new SpaceApiError('In diesem Space ist bereits eine Mission offen', 409);
     }
-    const row = await tx.spaceMission.create({ data: { spaceId, creatorId: userId, ...input }, select: missionSelect });
+    const row = await tx.spaceMission.create({ data: { spaceId, creatorId: userId, title: input.title, prompt: input.prompt,
+      requestId: input.requestId, payloadDigest: input.payloadDigest, ...window }, select: missionSelect });
     return { item: await projectMission(row, userId, access, tx), created: true };
   };
   try { return await spaceTransaction(tx => work(tx)); }

@@ -2,6 +2,7 @@
 
 import prisma from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
+import { createHash } from 'node:crypto';
 import { DriverAdapterError } from '@prisma/driver-adapter-utils';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
@@ -89,7 +90,7 @@ const postInput = (requestId = 'insight', kind: 'INSIGHT' | 'BUILD_ON' = 'INSIGH
 const post = (id: string, body = postInput()) => contribute(request('POST', body), mission(id));
 const withdrawPost = (id: string, contributionId: string, epoch = 1) => withdraw(request('DELETE', { epoch }), contribution(id, contributionId));
 const moderatePost = (id: string, contributionId: string, hidden = true) => moderate(request('PATCH', { hidden }), contribution(id, contributionId));
-const create = async (body = input()) => {
+const create = async (body: object = input()) => {
   const response = await createMission(request('POST', body), space());
   expect(response.status).toBe(201);
   return response.json();
@@ -342,8 +343,8 @@ test('serialization retry rereads membership and cannot revive revoked consent',
   expect(await prisma.spaceMissionParticipation.count()).toBe(0);
 });
 
-async function makeRelay() {
-  const item = await create();
+async function makeRelay(body: object = input()) {
+  const item = await create(body);
   session('learner0'); await join(item.id);
   const first = await (await post(item.id)).json();
   const insight0 = first.contributions.find((row: { kind: string }) => row.kind === 'INSIGHT').id;
@@ -625,4 +626,173 @@ test.each([
   expect((await join(item.id)).status).toBe(500);
   expect(transactions).toHaveBeenCalledTimes(1);
   expect(await prisma.spaceMissionParticipation.count()).toBe(0);
+});
+
+
+const weeklyInput = (requestId = 'weekly-one', startDate = '2026-10-19', timezone = 'Europe/Berlin') =>
+  ({ ...input(requestId), week: { startDate, timezone } });
+async function withMissionClock(run: () => Promise<void>, now = '2026-10-21T12:00:00Z') {
+  jest.useFakeTimers({ now: new Date(now), doNotFake: ['hrtime', 'nextTick', 'performance', 'queueMicrotask',
+    'setImmediate', 'clearImmediate', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+  try { await run(); } finally { jest.useRealTimers(); }
+}
+
+test('legacy self-paced create/replay retains the exact pre-week digest and null columns', async () => {
+  const item = await create();
+  const stored = await prisma.spaceMission.findUniqueOrThrow({ where: { id: item.id } });
+  expect(stored).toMatchObject({ weekStartsOn: null, weekTimezone: null, weekStartsAt: null, weekEndsAt: null,
+    payloadDigest: createHash('sha256').update(JSON.stringify({ title: input().title, prompt: input().prompt })).digest('hex') });
+  expect(item).toMatchObject({ week: null, windowState: 'self-paced' });
+  expect((await createMission(request('POST', input()), space())).status).toBe(200);
+  expect((await listMissions(request('GET'), space()).then(r => r.json())).items[0]).toMatchObject({ week: null, windowState: 'self-paced' });
+});
+
+test('weekly creation stores independent DST boundaries and returns only the fixed public week shape in lists, reads and mutations', async () => {
+  await withMissionClock(async () => {
+    const body = { ...weeklyInput(), title: '  <b>Teach-back</b> relay  ' };
+    const item = await create(body);
+    const week = { startDate: '2026-10-19', timezone: 'Europe/Berlin', startsAt: '2026-10-18T22:00:00.000Z', endsAt: '2026-10-25T23:00:00.000Z' };
+    expect(item).toMatchObject({ week, windowState: 'current', closedAt: null, participants: [] });
+    const stored = await prisma.spaceMission.findUniqueOrThrow({ where: { id: item.id } });
+    expect(stored).toMatchObject({ weekStartsOn: week.startDate, weekTimezone: week.timezone,
+      weekStartsAt: new Date(week.startsAt), weekEndsAt: new Date(week.endsAt) });
+    expect(stored.payloadDigest).toBe(createHash('sha256').update(JSON.stringify({ title: input().title,
+      prompt: input().prompt, week: { startDate: week.startDate, timezone: week.timezone } })).digest('hex'));
+    expect((await read(item.id).then(r => r.json()))).toMatchObject({ week, windowState: 'current' });
+    expect((await listMissions(request('GET'), space()).then(r => r.json())).items[0]).toMatchObject({ week, windowState: 'current' });
+    session('learner0');
+    expect((await join(item.id).then(r => r.json()))).toMatchObject({ week, windowState: 'current', participation: { active: true } });
+    session();
+    expect((await closeMission(request('PATCH', { closed: true, week: { startDate: '2026-10-26', timezone: 'UTC' } }), mission(item.id))).status).toBe(400);
+    expect((await closeMission(request('PATCH', { closed: true }), mission(item.id)).then(r => r.json()))).toMatchObject({ week, windowState: 'current', closedAt: expect.any(String) });
+    expect((await createMission(request('POST', weeklyInput('another')), space())).status).toBe(201);
+  });
+});
+
+test('authorized same-key weekly replay survives exact rollover without recomputing the stored window; changed inputs conflict and fresh stale weeks fail', async () => {
+  await withMissionClock(async () => {
+    const item = await create(weeklyInput());
+    const original = await prisma.spaceMission.findUniqueOrThrow({ where: { id: item.id } });
+    jest.setSystemTime(new Date('2026-10-25T22:59:59.999Z'));
+    expect((await read(item.id).then(r => r.json())).windowState).toBe('current');
+    jest.setSystemTime(new Date('2026-10-25T23:00:00Z'));
+    const replay = await createMission(request('POST', weeklyInput()), space());
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toMatchObject({ id: item.id, week: item.week, windowState: 'past', closedAt: null });
+    expect(await prisma.spaceMission.findUniqueOrThrow({ where: { id: item.id } })).toEqual(original);
+    for (const body of [weeklyInput('weekly-one', '2026-10-26'), weeklyInput('weekly-one', '2026-10-19', 'UTC'), input('weekly-one')]) {
+      expect((await createMission(request('POST', body), space())).status).toBe(409);
+    }
+    expect((await createMission(request('POST', weeklyInput('stale')), space())).status).toBe(400);
+    expect((await createMission(request('POST', weeklyInput('future', '2026-11-02')), space())).status).toBe(400);
+    expect(await prisma.spaceMission.count()).toBe(1);
+    // Role and private access are rechecked before replay eligibility.
+    await prisma.user.update({ where: { id: 'admin' }, data: { role: 'USER' } });
+    expect((await createMission(request('POST', weeklyInput()), space())).status).toBe(403);
+    await prisma.spaceMember.delete({ where: { spaceId_userId: { spaceId: 'private', userId: 'admin' } } });
+    expect((await createMission(request('POST', weeklyInput()), space())).status).toBe(404);
+    await prisma.user.update({ where: { id: 'admin' }, data: { role: 'ADMIN' } });
+    expect((await closeMission(request('PATCH', { closed: true }), mission(item.id))).status).toBe(200);
+    expect((await createMission(request('POST', weeklyInput('stale-after-close')), space())).status).toBe(400);
+    const next = await create(weeklyInput('next', '2026-10-26'));
+    expect(next.participation).toMatchObject({ epoch: 0, active: false });
+    expect(next.participants).toEqual([]);
+    expect((await createMission(request('POST', weeklyInput()), space()).then(r => r.json()))).toMatchObject({ id: item.id, week: item.week, windowState: 'past', closedAt: expect.any(String) });
+  });
+});
+
+test('weekly creation serializable retry rereads the clock at rollover and cannot silently switch or insert the old week', async () => {
+  await withMissionClock(async () => {
+    const transact = prisma.$transaction.bind(prisma);
+    let attempts = 0;
+    const spy = jest.spyOn(prisma, '$transaction').mockImplementation((async (work: Work, options: unknown) => {
+      if (++attempts !== 1) return transact(work, options as never);
+      try { return await transact(async tx => { await work(tx); throw conflict(); }, options as never); }
+      catch (error) { jest.setSystemTime(new Date('2026-10-25T23:00:00Z')); throw error; }
+    }) as never);
+    expect((await createMission(request('POST', weeklyInput()), space())).status).toBe(400);
+    expect(spy).toHaveBeenCalledTimes(2);
+    expect(await prisma.spaceMission.count()).toBe(0);
+  }, '2026-10-25T22:59:59.999Z');
+});
+
+test('a rollover during the last pre-insert database read rejects a new stale week without a retry', async () => {
+  await withMissionClock(async () => {
+    const transact = prisma.$transaction.bind(prisma);
+    const spy = jest.spyOn(prisma, '$transaction').mockImplementation((async (work: Work, options: unknown) =>
+      transact(async tx => {
+        const findFirst = tx.spaceMission.findFirst.bind(tx.spaceMission);
+        const finalRead = jest.spyOn(tx.spaceMission, 'findFirst').mockImplementation((async (args: unknown) => {
+          const result = await findFirst(args as never);
+          jest.setSystemTime(new Date('2026-10-25T23:00:00Z'));
+          return result;
+        }) as never);
+        try { return await work(tx); } finally { finalRead.mockRestore(); }
+      }, options as never)) as never);
+    expect((await createMission(request('POST', weeklyInput()), space())).status).toBe(400);
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(await prisma.spaceMission.count()).toBe(0);
+  }, '2026-10-25T22:59:59.999Z');
+});
+
+test('weekly create bodies strictly reject null, partial, unknown, client UTC, non-Monday and invalid zone fields', async () => {
+  await withMissionClock(async () => {
+    for (const week of [null, [], {}, { startDate: '2026-10-19' }, { timezone: 'UTC' },
+      { ...weeklyInput().week, startsAt: '2026-10-19T00:00:00Z' }, { ...weeklyInput().week, timezone: 'UTC+2' },
+      { ...weeklyInput().week, startDate: '2026-10-20' }, { ...weeklyInput().week, startDate: '2026-02-30' }]) {
+      expect((await createMission(request('POST', { ...input(), week }), space())).status).toBe(400);
+    }
+    expect((await createMission(request('POST', { ...weeklyInput(), actorId: 'admin' }), space())).status).toBe(400);
+    expect((await createMission(request('POST', { ...weeklyInput(), prompt: 'x'.repeat(13000) }), space())).status).toBe(413);
+    expect(await prisma.spaceMission.count()).toBe(0);
+  });
+});
+
+test('a past soft week permits late joins, insight/build-on and reversible consent; it never resets progress or awards credit', async () => {
+  await withMissionClock(async () => {
+    const item = await create(weeklyInput());
+    jest.setSystemTime(new Date(item.week.endsAt));
+    session('learner0'); expect((await join(item.id)).status).toBe(200);
+    const first = await (await post(item.id)).json();
+    const target = first.contributions[0].id;
+    session('learner1'); expect((await join(item.id)).status).toBe(200);
+    expect((await post(item.id, postInput('second-insight'))).status).toBe(201);
+    const complete = await (await post(item.id, postInput('second-build', 'BUILD_ON', target))).json();
+    expect(complete).toMatchObject({ windowState: 'past', closedAt: null,
+      progress: { insightAuthors: 2, hasCrossPersonBuildOn: true, complete: true } });
+    expect(complete.week).toEqual(item.week);
+    session('learner0'); expect((await leave(item.id)).status).toBe(200);
+    const gone = await (await read(item.id)).json();
+    expect(gone.progress).toEqual({ insightAuthors: 1, hasCrossPersonBuildOn: false, complete: false });
+    expect((await join(item.id)).status).toBe(409);
+    expect((await join(item.id, 1)).status).toBe(200);
+    expect((await read(item.id).then(r => r.json())).contributions).toHaveLength(1);
+    expect((await withdrawPost(item.id, target)).status).toBe(200);
+    session();
+    expect((await moderatePost(item.id, target, false)).status).toBe(200);
+    expect((await read(item.id).then(r => r.json())).progress.complete).toBe(false);
+    for (const table of [prisma.rewardLedger, prisma.learningGoal, prisma.enrollment, prisma.courseCompletionRecord, prisma.userBadge]) {
+      expect(await (table.count as () => Promise<number>)()).toBe(0);
+    }
+  });
+});
+
+test('weekly mission current membership/role revocations still remove evidence and require fresh self-consent after return', async () => {
+  await withMissionClock(async () => {
+    const relay = await makeRelay(weeklyInput());
+    session();
+    expect((await removeMember(request('DELETE'), { params: Promise.resolve({ spaceId: 'private', userId: 'learner0' }) })).status).toBe(200);
+    session('learner1');
+    const removed = await (await read(relay.id)).json();
+    expect(removed.progress.complete).toBe(false);
+    expect(removed.contributions.map((row: { id: string }) => row.id)).toEqual([relay.insight1]);
+    session();
+    expect((await updateAccount(request('PUT', { email: 'learner1@example.invalid', name: 'Learner 1', role: 'INSTRUCTOR' }),
+      { params: Promise.resolve({ id: 'learner1' }) })).status).toBe(200);
+    expect((await read(relay.id).then(r => r.json())).contributions).toEqual([]);
+    await prisma.user.update({ where: { id: 'learner1' }, data: { role: 'USER' } });
+    session('learner1'); expect((await join(relay.id)).status).toBe(409);
+    expect((await join(relay.id, 1)).status).toBe(200);
+    expect((await read(relay.id).then(r => r.json())).contributions).toEqual([]);
+  });
 });

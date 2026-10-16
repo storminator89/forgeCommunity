@@ -23,7 +23,7 @@ function database() {
 }
 
 test('paired poll tails are additive, scoped and have matching tables/checks/indexes', () => {
-  assert.equal(names.at(-1), tail);
+  assert.deepEqual(names.slice(-2), [tail, '0026_space_mission_week.sql']);
   const sqlite = source(`prisma/sqlite-migrations/${tail}`);
   const postgres = source('prisma/postgresql-upgrades/0024_space_polls.sql');
   assert.equal(sqlite.replaceAll('DATETIME', 'TIMESTAMP(3)'), postgres);
@@ -82,13 +82,14 @@ test('populated predecessor upgrade preserves Spaces/discussions, is replayable 
       INSERT INTO "SpaceDiscussion" (id,spaceId,authorId,requestId,payloadDigest,title,content,updatedAt) VALUES ('d','s','u','r','digest','Keep title','Keep content',CURRENT_TIMESTAMP);`);
     const spaces = db.prepare('SELECT * FROM "Space"').all(); const discussions = db.prepare('SELECT * FROM "SpaceDiscussion"').all();
     await assert.rejects(assertCoursePublicationReady(url, 'sqlite'), /history is missing/);
-    copyFileSync(new URL(tail, directory), join(migrations, tail)); initializeSqlite(url, migrations); initializeSqlite(url, migrations);
+    for (const name of names.filter(name => name >= tail)) copyFileSync(new URL(name, directory), join(migrations, name));
+    initializeSqlite(url, migrations); initializeSqlite(url, migrations);
     assert.equal(await assertCoursePublicationReady(url, 'sqlite'), true);
     assert.deepEqual(db.prepare('SELECT * FROM "Space"').all(), spaces); assert.deepEqual(db.prepare('SELECT * FROM "SpaceDiscussion"').all(), discussions);
     assert.equal(db.prepare('SELECT COUNT(*) n FROM "SpacePoll"').get().n, 0);
     db.prepare('DELETE FROM _app_migrations WHERE name=?').run(tail);
     await assert.rejects(assertCoursePublicationReady(url, 'sqlite'), /history is missing/);
-    assert.throws(() => initializeSqlite(url, migrations), /already exists/);
+    assert.throws(() => initializeSqlite(url, migrations), /gap before 0026_space_mission_week\.sql/);
   } finally { db.close(); }
 });
 

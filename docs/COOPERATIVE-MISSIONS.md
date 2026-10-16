@@ -11,7 +11,9 @@ a build-on targeting another participant's current insight. The server derives
 `progress.complete` from two distinct insight authors and at least one valid
 cross-person build-on. This records cooperation, not comprehension or mastery.
 There are no points, grades, course-progress changes, credentials, rewards,
-profile badges, leaderboard entries, notifications, deadlines or streaks.
+profile badges, leaderboard entries, notifications, hard deadlines or streaks.
+An administrator may optionally add a soft learning week to a new mission;
+self-paced missions keep their existing behavior.
 
 ## Consent, privacy and reversal
 
@@ -48,13 +50,45 @@ detail never includes it, including when read by an administrator. Account
 erasure cascades authored contributions; retained ContentReport audit records
 remain FK-free, with unavailable targets shown without a preview.
 
+## Optional soft learning week
+
+A creator explicitly supplies the current ISO Monday date and a valid IANA
+zone, including UTC. The form may suggest the browser zone; the server never
+falls back to its own or a viewer's zone. Midweek creation is allowed with no
+backfilled activity. Future scheduling, arbitrary historical windows, editing,
+rescheduling, reopening and automatic rollover are not supported.
+
+The local Monday midnight and following Monday midnight are resolved
+independently. Nonexistent or ambiguous boundaries are rejected. Persisted UTC
+instants preserve the chosen window; later viewer travel or timezone-database
+changes do not recalculate it. Berlin's 2026-03-23 week lasts 167 hours and its
+2026-10-19 week lasts 169 hours, rather than a fixed 168-hour duration.
+
+The window is [startsAt, endsAt). At the exact exclusive end, the server-derived
+`windowState` becomes `past`. It is descriptive only: the mission stays open,
+late joins and posts remain possible, consent and contributions are not reset,
+and progress is still derived from all currently eligible relay contributions.
+Late posts do not assert on-time activity. Only an explicit administrator close
+blocks new joins/posts. Screens refresh through their existing refresh, focus
+and visibility lifecycle; there is no midnight push, countdown, scheduler,
+reminder, next mission or carried-over participation.
+
+Named rosters and even small-group progress changes can reveal who acted or
+left. These aggregates are not anonymous or suitable for individual assessment.
+Leaving removes subsequent member visibility and credit, but cannot erase what
+members already saw or retained. The ordinary retained administrator moderation
+audit continues under the existing consent disclosure.
+
 ## API contract
 
 All paths below start with `/api/spaces/{spaceId}/missions`.
 
 - `GET /`: newest-first keyset list, `{items,nextCursor}`, 20 missions/page.
-- `POST /`: administrator body `{title,prompt,requestId}`. Title 3–100,
-  prompt 10–2000 sanitized plain-text characters. Raw limits 400/8000.
+- `POST /`: administrator body `{title,prompt,requestId}` or exactly
+  `{title,prompt,requestId,week:{startDate,timezone}}`. Both nested week keys
+  are required; null, partial/extra fields and client-supplied UTC boundaries
+  are rejected. Title 3–100, prompt 10–2000 sanitized plain-text characters.
+  Raw limits 400/8000 and the existing 12 KiB create body ceiling still apply.
 - `GET /{missionId}`: current detail snapshot.
 - `PATCH /{missionId}`: administrator body `{closed:true}`; close is idempotent
   and cannot reopen.
@@ -87,7 +121,11 @@ All paths below start with `/api/spaces/{spaceId}/missions`.
 Detail and successful mutation projections contain the mission's immutable
 fields, minimal creator identity, current named participants, participantLimit,
 the caller's epoch/active state, canManage/canJoin, visible contributions,
-active-current-epoch ownContributions metadata, and derived progress. Public
+active-current-epoch ownContributions metadata, and unchanged derived progress.
+Every mission also contains `week:null` or exactly
+`{startDate,timezone,startsAt,endsAt}` (UTC instants as ISO strings), plus
+`windowState:"self-paced"|"current"|"past"`. The week, close state and current
+cooperation milestone are independent. Public
 projections omit replay digests/keys and historical epochs. Own metadata has no
 text and lets authors withdraw a hidden or invalid-target current contribution.
 Hidden metadata does not block a replacement; an unhidden invalid-target
@@ -100,6 +138,17 @@ missions have indistinguishable 404s. Replay keys are scoped; identical
 sanitized payload replays return current authorized state, changed payloads
 under the same key return 409. Withdrawn/hidden/inactive contribution replays
 cannot return retained text.
+
+Self-paced creation keeps the exact existing SHA-256 digest of JSON
+`{title,prompt}` after sanitization. Weekly creation hashes JSON
+`{title,prompt,week:{startDate,timezone}}` in that fixed property order, using
+validated inputs rather than resolved instants. Each transaction attempt first
+obtains current private-Space ADMIN access and checks the scoped request key.
+An identical authorized replay after rollover returns the original stored week
+and current authorized projection. A changed date, zone or mode under the same
+key returns 409. Only a new insert must pass current-local-week eligibility;
+a fresh stale/future week returns 400. Serializable retries reread both live
+authority and the clock, rather than silently switching the requested week.
 
 The four-attempt retry boundary recognizes Prisma P2034 and actual PostgreSQL
 DriverAdapterError instances with mapped TransactionWriteConflict plus original
@@ -120,16 +169,41 @@ the existing report type/scope checks while retaining all report history,
 resolution invariants and indexes. Publication readiness and PostgreSQL release
 gate allowlists include the exact new tails.
 
-Local validation used a private schema-generated SQLite client without changing
-shared dependencies: 43 mission API tests plus 46 adjacent account, Space and
-report regressions passed; eight Space/mission migration/readiness/fixture-boundary tests passed. Both Prisma
-schemas, generated SQLite synchronization, changed-source zero-warning ESLint
-and whitespace checks passed. Full-project typecheck was resource-killed and
-is not a pass. No local PostgreSQL server/runtime, build or browser validation
-was performed for this backend-only change. The actual PostgreSQL adapter's
-COMMIT-error mapping was reproduced with a fake in-memory pg pool and no socket.
-Regressions cover successful retry, four-attempt rollback/409, membership
-revocation between retries and rejection of lookalikes/unrelated adapter errors.
+After the merged waitlist/poll tails, SQLite 0026 and PostgreSQL 0025 add only
+four nullable `SpaceMission` columns: `weekStartsOn`, `weekTimezone`,
+`weekStartsAt`, `weekEndsAt`. Both engines require all-null or all-four fields,
+a zone string of 1–100 characters and strictly increasing boundaries. The
+application additionally validates the IANA zone, local Monday/date, exact
+unambiguous boundaries and current-week eligibility. Existing missions stay
+all-null. The SQLite tail uses four additive column additions, placing its
+row-wide CHECK on the final addition; no table rebuild or previous migration
+change is needed. Existing indexes, FKs, consent epochs and history are kept.
+Strict ordered/checksummed readiness, release-gate and fixture manifests include
+the exact week tails. Deploy schema first, server second and UI last. A
+forward-compatible application rollback can hide weekly creation and ignore
+the nullable columns, but must retain the new migration files and exact
+readiness manifests. An unchanged older image refuses startup after this tail
+because its history check rejects the extra migration. Do not remove columns
+or down-migrate stored mission history.
+
+Weekly backend validation uses disposable schema-generated SQLite/PostgreSQL
+clients outside shared dependencies. The local SQLite API suite passes 51 tests,
+and the pure clock suite passes 25, including 167/169-hour DST windows and real
+historical skipped/ambiguous Monday start/end boundaries. Four new SQLite
+migration tests exercise fresh installs, all 14 partial week-field sets,
+equal/reversed boundaries, populated predecessor preservation, injected DDL
+rollback and fail-closed checksum/order history. Two corresponding guarded
+PostgreSQL migration tests are wired into the disposable CI service. The full
+local SQLite migration/readiness batch passes 43 tests with four PostgreSQL
+tests skipped; mission/clock and adjacent authorization/report regressions pass
+161 tests. Both Prisma schemas, SQLite synchronization, changed-source ESLint,
+whitespace and a full-project typecheck pass. The typecheck uses external path
+overrides to the disposable client and an already-installed Playwright package;
+no dependency, cache or installation is changed. There is no local PostgreSQL
+service or binary, and no local runtime/build/browser check was run for this
+backend slice. Those results must come from the integrated release checks; configuring a gate is not evidence that it ran. Existing API
+regressions continue to cover adapter COMMIT conflicts, bounded retries,
+member/role revocation, consent epochs, permanent withdrawal and moderation.
 
 CI runs the identical mission API suite through the PostgreSQL adapter in the
 existing disposable PostgreSQL service. The opt-in fixture requires

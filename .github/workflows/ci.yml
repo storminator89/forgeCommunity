@@ -111,7 +111,7 @@ jobs:
           DATABASE_PROVIDER=postgresql npm run db:generate
 
       - name: Verify SQLite migration safety
-        run: DATABASE_PROVIDER=sqlite node --test scripts/check-sqlite-migrations.mjs scripts/check-notification-migrations.mjs scripts/check-course-publication-ready.mjs scripts/check-course-qa-sqlite.mjs scripts/spaces-foundation.node-tests.mjs scripts/space-missions.node-tests.mjs scripts/event-waitlist.node-tests.mjs scripts/space-polls.node-tests.mjs
+        run: DATABASE_PROVIDER=sqlite node --test scripts/check-sqlite-migrations.mjs scripts/check-notification-migrations.mjs scripts/check-course-publication-ready.mjs scripts/check-course-qa-sqlite.mjs scripts/spaces-foundation.node-tests.mjs scripts/space-missions.node-tests.mjs scripts/event-waitlist.node-tests.mjs scripts/space-polls.node-tests.mjs scripts/mission-week.node-tests.mjs
 
       - name: Verify PostgreSQL upgrade safety
         run: node --test scripts/check-postgresql-upgrades.mjs
@@ -160,7 +160,7 @@ jobs:
         run: npm ci --no-audit --no-fund
 
       - name: Exercise empty install and populated PostgreSQL upgrades
-        run: node --test --test-concurrency=1 scripts/check-postgresql-upgrades.mjs scripts/check-postgresql-release-gate.mjs scripts/check-course-publication-ready.mjs scripts/check-course-qa-postgresql.mjs scripts/event-waitlist.node-tests.mjs
+        run: node --test --test-concurrency=1 scripts/check-postgresql-upgrades.mjs scripts/check-postgresql-release-gate.mjs scripts/check-course-publication-ready.mjs scripts/check-course-qa-postgresql.mjs scripts/event-waitlist.node-tests.mjs scripts/mission-week.node-tests.mjs
 
       - name: Exercise private mission API contracts on PostgreSQL
         run: SPACE_MISSIONS_POSTGRESQL_DISPOSABLE=1 npm test -- --runInBand __tests__/api/space-missions-db.test.ts

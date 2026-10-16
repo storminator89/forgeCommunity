@@ -7,7 +7,7 @@ import SpaceMissionPage from '@/app/community/spaces/[spaceId]/missions/[mission
 import { SpaceMissionIndex } from '@/components/spaces/SpaceMissionIndex';
 import { ModerationQueue } from '@/app/moderation/ModerationQueue';
 import { spaceJson, type SpaceSummary } from '@/components/spaces/space-api';
-import type { MissionAuditContribution, MissionContribution, SpaceMission } from '@/components/spaces/mission-api';
+import { missionCurrentMonday, missionWeekDates, missionWeekPreview, type MissionAuditContribution, type MissionContribution, type SpaceMission } from '@/components/spaces/mission-api';
 
 jest.mock('next-auth/react', () => ({ useSession: jest.fn() }));
 jest.mock('next/navigation', () => ({ useParams: jest.fn(), useRouter: jest.fn() }));
@@ -33,11 +33,13 @@ const ownInsight: MissionContribution = {
 const mission = (overrides: Partial<SpaceMission> = {}): SpaceMission => ({
   id: 'mission-1', spaceId: 'secret', title: 'Gemeinsam Zusammenhänge erklären', prompt: 'Welche Verbindung hilft euch beim Verstehen?',
   creator: { id: 'admin', name: 'Ada', image: null }, createdAt: now, closedAt: null,
+  week: null, windowState: 'self-paced',
   participants: [{ ...member, joinedAt: now }, { ...peer, joinedAt: now }], participantLimit: 5,
   participation: { epoch: 7, active: true, joinedAt: now, optedOutAt: null },
   canManage: false, canJoin: false, contributions: [insight], ownContributions: [],
   progress: { insightAuthors: 1, hasCrossPersonBuildOn: false, complete: false }, ...overrides,
 });
+const autumnWeek = { startDate: '2026-10-19', timezone: 'Europe/Berlin', startsAt: '2026-10-18T22:00:00.000Z', endsAt: '2026-10-25T23:00:00.000Z' };
 const json = (body: unknown, status = 200) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
 type JsonResponse = ReturnType<typeof json>;
 const session = (id: string, role = 'USER') => ({
@@ -501,4 +503,183 @@ test('mission reports link to the exact private mission and label retained withd
   expect(await screen.findByRole('link', { name: 'Inhalt öffnen' })).toHaveAttribute('href', '/community/spaces/secret/missions/mission-1#mission-contribution-retained-post');
   expect(screen.getByText('Von der Person zurückgezogen. Nur zur Moderation aufbewahrt.')).toBeVisible();
   expect(screen.getByText(/Meldungen aus privaten Spaces können nur Admins prüfen/)).toBeVisible();
+});
+
+test('the three learning steps guide reading without tracking it or inventing a third progress counter', async () => {
+  serveMission(() => mission());
+  render(<SpaceMissionPage />);
+  await screen.findByRole('heading', { name: '1. In eigenen Worten erklären' });
+  const reading = screen.getByRole('heading', { name: '2. Eine andere Erklärung lesen' }).closest('li')!;
+  expect(within(reading).getByText(/Lesen wird nicht erfasst oder abgehakt/)).toBeVisible();
+  expect(within(reading).queryByRole('checkbox')).not.toBeInTheDocument();
+  expect(within(reading).queryByText(/[●○✓]|\d\/\d/)).not.toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: '3. Darauf aufbauen' })).toBeVisible();
+  expect(screen.getByText(/Änderungen Rückschlüsse auf einzelne Personen erlauben/)).toBeVisible();
+  expect(screen.getByText(/Bereits Gesehenes lässt sich nicht zurückholen/)).toBeVisible();
+});
+
+test.each([
+  { week: { startDate: '2026-03-23', timezone: 'Europe/Berlin', startsAt: '2026-03-22T23:00:00.000Z', endsAt: '2026-03-29T22:00:00.000Z' }, expected: '23. März – 29. März 2026 · Europe/Berlin' },
+  { week: autumnWeek, expected: '19. Oktober – 25. Oktober 2026 · Europe/Berlin' },
+])('renders stored calendar dates in $week.timezone across DST', ({ week, expected }) => {
+  expect(missionWeekDates(week)).toBe(expected);
+  expect(missionWeekPreview(week.startDate, week.timezone)).toBe(expected);
+});
+
+test('suggested Mondays follow the explicitly selected IANA zone without a silent fallback', () => {
+  const boundary = Date.parse('2026-10-18T23:30:00.000Z');
+  expect(missionCurrentMonday('UTC', boundary)).toBe('2026-10-12');
+  expect(missionCurrentMonday('Europe/Berlin', boundary)).toBe('2026-10-19');
+  expect(missionCurrentMonday('Not/A_Zone', boundary)).toBe('');
+  expect(missionWeekPreview('2026-10-20', 'Europe/Berlin')).toBe('');
+  expect(missionWeekPreview('2026-02-30', 'Europe/Berlin')).toBe('');
+});
+
+test('weekly creation retains the exact failed draft key and changes it for a changed zone, week or mode', async () => {
+  const clock = jest.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-10-16T12:00:00.000Z'));
+  jest.mocked(crypto.randomUUID).mockReturnValueOnce('00000000-0000-4000-8000-000000000001').mockReturnValueOnce('00000000-0000-4000-8000-000000000002').mockReturnValueOnce('00000000-0000-4000-8000-000000000003').mockReturnValueOnce('00000000-0000-4000-8000-000000000004');
+  const request = jest.fn().mockImplementation((_path: string, init?: RequestInit) => init?.method === 'POST'
+    ? Promise.reject(new Error('Verbindung unterbrochen.')) : Promise.resolve({ items: [], nextCursor: null }));
+  try {
+    render(<SpaceMissionIndex spaceId="secret" canManage request={request} onUnavailable={jest.fn()} />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Mission starten' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Thema' }), { target: { value: 'Eine freiwillige Lernwoche' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Aufgabe' }), { target: { value: 'Erklärt eine Idee und denkt gemeinsam weiter.' } });
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Diese Lernwoche' }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'IANA-Zeitzone' }), { target: { value: 'UTC' } });
+    expect(screen.getByLabelText('Wochenbeginn (Montag)')).toHaveValue('2026-10-12');
+    expect(screen.getByText('12. Oktober – 18. Oktober 2026 · UTC')).toBeVisible();
+    await userEvent.click(screen.getByRole('button', { name: 'Mission erstellen' }));
+    await screen.findByText('Verbindung unterbrochen.');
+    await userEvent.click(screen.getByRole('button', { name: 'Mission erstellen' }));
+    await waitFor(() => expect(request.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(2));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Mission erstellen' })).toBeEnabled());
+    fireEvent.change(screen.getByRole('combobox', { name: 'IANA-Zeitzone' }), { target: { value: 'Europe/Berlin' } });
+    await userEvent.click(screen.getByRole('button', { name: 'Mission erstellen' }));
+    await waitFor(() => expect(request.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(3));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Mission erstellen' })).toBeEnabled());
+    clock.mockReturnValue(Date.parse('2026-10-19T12:00:00.000Z'));
+    fireEvent.change(screen.getByLabelText('Wochenbeginn (Montag)'), { target: { value: '2026-10-19' } });
+    await userEvent.click(screen.getByRole('button', { name: 'Mission erstellen' }));
+    await waitFor(() => expect(request.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(4));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Mission erstellen' })).toBeEnabled());
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Diese Lernwoche' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Mission erstellen' }));
+    await waitFor(() => expect(request.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(5));
+    const posted = request.mock.calls.filter(([, init]) => init?.method === 'POST').map(([, init]) => JSON.parse(init.body));
+    expect(posted[0]).toEqual({ title: 'Eine freiwillige Lernwoche', prompt: 'Erklärt eine Idee und denkt gemeinsam weiter.', week: { startDate: '2026-10-12', timezone: 'UTC' }, requestId: '00000000-0000-4000-8000-000000000001' });
+    expect(posted[1]).toEqual(posted[0]);
+    expect(posted[2]).toMatchObject({ week: { startDate: '2026-10-12', timezone: 'Europe/Berlin' }, requestId: '00000000-0000-4000-8000-000000000002' });
+    expect(posted[3]).toMatchObject({ week: { startDate: '2026-10-19', timezone: 'Europe/Berlin' }, requestId: '00000000-0000-4000-8000-000000000003' });
+    expect(posted[4]).toEqual({ title: posted[0].title, prompt: posted[0].prompt, requestId: '00000000-0000-4000-8000-000000000004' });
+  } finally { clock.mockRestore(); }
+});
+
+test('an unchanged lost creation response can be replayed after the selected week ends', async () => {
+  const clock = jest.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-10-18T23:59:59.000Z'));
+  const push = jest.fn();
+  jest.mocked(useRouter).mockReturnValue({ push } as unknown as ReturnType<typeof useRouter>);
+  let attempts = 0;
+  const request = jest.fn().mockImplementation((_path: string, init?: RequestInit) => {
+    if (init?.method !== 'POST') return Promise.resolve({ items: [], nextCursor: null });
+    return ++attempts === 1 ? Promise.reject(new Error('Antwort verloren.')) : Promise.resolve(mission({ week: { startDate: '2026-10-12', timezone: 'UTC', startsAt: '2026-10-12T00:00:00.000Z', endsAt: '2026-10-19T00:00:00.000Z' }, windowState: 'past' }));
+  });
+  try {
+    render(<SpaceMissionIndex spaceId="secret" canManage request={request} onUnavailable={jest.fn()} />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Mission starten' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Thema' }), { target: { value: 'Ein unveränderter Wochenentwurf' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Aufgabe' }), { target: { value: 'Teilt eine Erklärung und denkt gemeinsam weiter.' } });
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Diese Lernwoche' }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'IANA-Zeitzone' }), { target: { value: 'UTC' } });
+    await userEvent.click(screen.getByRole('button', { name: 'Mission erstellen' }));
+    await screen.findByText('Antwort verloren.');
+    clock.mockReturnValue(Date.parse('2026-10-19T00:00:01.000Z'));
+    await act(async () => { fireEvent.focus(window); });
+    await waitFor(() => expect(screen.queryByText('Missionen werden geladen…')).not.toBeInTheDocument());
+    expect(screen.getByLabelText('Wochenbeginn (Montag)')).not.toHaveAttribute('min');
+    await userEvent.click(screen.getByRole('button', { name: 'Mission erstellen' }));
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/community/spaces/secret/missions/mission-1'));
+    const posted = request.mock.calls.filter(([, init]) => init?.method === 'POST');
+    expect(posted).toHaveLength(2);
+    expect(posted[1][1].body).toBe(posted[0][1].body);
+    expect(crypto.randomUUID).toHaveBeenCalledTimes(1);
+  } finally { clock.mockRestore(); }
+});
+
+test.each([
+  { zone: 'Not/A_Zone', date: '2026-10-12' },
+  { zone: 'UTC', date: '2026-10-19' },
+  { zone: 'UTC', date: '2026-10-11' },
+])('an invalid week draft ($zone, $date) is explained without posting or substituting a timezone', async ({ zone, date }) => {
+  const clock = jest.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-10-16T12:00:00.000Z'));
+  const request = jest.fn().mockResolvedValue({ items: [], nextCursor: null });
+  try {
+    render(<SpaceMissionIndex spaceId="secret" canManage request={request} onUnavailable={jest.fn()} />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Mission starten' }));
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Diese Lernwoche' }));
+    const zoneInput = screen.getByRole('combobox', { name: 'IANA-Zeitzone' });
+    fireEvent.change(zoneInput, { target: { value: zone } });
+    fireEvent.change(screen.getByLabelText('Wochenbeginn (Montag)'), { target: { value: date } });
+    fireEvent.submit(screen.getByRole('button', { name: 'Mission erstellen' }).closest('form')!);
+    expect(await screen.findByRole('alert')).toHaveTextContent(/gültige IANA-Zeitzone und den Montag der dort aktuellen Woche/);
+    expect(zoneInput).toHaveValue(zone);
+    expect(zoneInput).toHaveAttribute('aria-invalid', 'true');
+    expect(zoneInput).toHaveAccessibleDescription(/gültige IANA-Zeitzone/);
+    expect(request.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
+  } finally { clock.mockRestore(); }
+});
+
+test('a past learning week remains open for an ordinary contribution and is not an on-time claim', async () => {
+  const current = mission({ week: autumnWeek, windowState: 'past' });
+  serveMission(() => current, (path, init) => path === `${base}/contributions` && init?.method === 'POST'
+    ? Promise.resolve(json(current, 201)) : undefined);
+  render(<SpaceMissionPage />);
+  expect(await screen.findByText('Lernwoche vorbei · Mission bleibt offen')).toBeVisible();
+  expect(screen.getByText('19. Oktober – 25. Oktober 2026 · Europe/Berlin')).toBeVisible();
+  expect(screen.getByText(/sie belegen keine Teilnahme innerhalb der Lernwoche/)).toBeVisible();
+  await userEvent.type(screen.getByRole('textbox', { name: 'Deine Erkenntnis' }), 'Ein später Gedanke bleibt Teil des Austauschs.');
+  await userEvent.click(screen.getByRole('button', { name: 'Im Space teilen' }));
+  expect(await screen.findByText('Dein Beitrag ist im Space sichtbar.')).toBeVisible();
+  expect(mutationCalls(`${base}/contributions`, 'POST')).toHaveLength(1);
+  expect(JSON.parse(mutationCalls(`${base}/contributions`, 'POST')[0][1]!.body as string)).not.toHaveProperty('week');
+});
+
+test('a closed past-week mission does not promise to remain open and preserves existing withdrawal', async () => {
+  serveMission(() => mission({ week: autumnWeek, windowState: 'past', closedAt: now, contributions: [ownInsight], ownContributions: [{ id: ownInsight.id, kind: 'INSIGHT', hidden: false, targetUnavailable: false, canWithdraw: true }] }));
+  render(<SpaceMissionPage />);
+  expect(await screen.findByText('Lernwoche vorbei')).toBeVisible();
+  expect(screen.queryByText('Lernwoche vorbei · Mission bleibt offen')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Beitrag zurückziehen' })).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'Teilnahme beenden' })).toBeEnabled();
+  expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+});
+
+test('focus refresh advances the server window label and a late current-week read cannot overwrite it', async () => {
+  let reads = 0;
+  let finishOldRead!: (value: JsonResponse) => void;
+  global.fetch = jest.fn().mockImplementation((path: string) => {
+    if (path === '/api/spaces/secret') return Promise.resolve(json(privateSpace));
+    if (path === base) {
+      if (++reads === 2) return new Promise(resolve => { finishOldRead = resolve; });
+      return Promise.resolve(json(mission({ week: autumnWeek, windowState: reads === 1 ? 'current' : 'past' })));
+    }
+    throw new Error(`Unexpected ${path}`);
+  });
+  render(<SpaceMissionPage />);
+  expect(await screen.findByText('Diese Lernwoche')).toBeVisible();
+  await act(async () => { fireEvent.focus(window); });
+  await act(async () => { fireEvent.focus(window); });
+  expect(await screen.findByText('Lernwoche vorbei · Mission bleibt offen')).toBeVisible();
+  await act(async () => { finishOldRead(json(mission({ week: autumnWeek, windowState: 'current' }))); });
+  expect(screen.queryByText('Diese Lernwoche')).not.toBeInTheDocument();
+  expect(screen.getByText('Lernwoche vorbei · Mission bleibt offen')).toBeVisible();
+});
+
+test('the mission list shows stored weekly dates and an open past-week state without altering self-paced missions', async () => {
+  const request = jest.fn().mockResolvedValue({ items: [mission({ week: autumnWeek, windowState: 'past' }), mission({ id: 'legacy', title: 'Zeitlich offener Austausch' })], nextCursor: null });
+  render(<SpaceMissionIndex spaceId="secret" canManage request={request} onUnavailable={jest.fn()} />);
+  expect(await screen.findByText('Lernwoche vorbei · Mission bleibt offen')).toBeVisible();
+  expect(screen.getByText('19. Oktober – 25. Oktober 2026 · Europe/Berlin')).toBeVisible();
+  expect(screen.getByRole('link', { name: 'Zeitlich offener Austausch' })).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Mission starten' })).not.toBeInTheDocument();
 });
