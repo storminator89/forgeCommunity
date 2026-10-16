@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useSession } from 'next-auth/react';
 import CourseClient from '@/app/courses/CourseClient';
@@ -31,6 +31,13 @@ function setRole(role: string | null | undefined) {
     data: { user: { id: 'viewer', role }, expires: '2099-01-01' },
     status: 'authenticated', update: jest.fn(),
   } as ReturnType<typeof useSession>);
+}
+
+async function tabThroughCourseNavigation(user: ReturnType<typeof userEvent.setup>) {
+  for (const link of within(screen.getByRole('navigation', { name: 'Weitere Kursbereiche' })).getAllByRole('link')) {
+    await user.tab();
+    expect(link).toHaveFocus();
+  }
 }
 
 beforeEach(() => {
@@ -101,6 +108,7 @@ it('makes both learner next steps reachable and activatable with the keyboard', 
 
   // Category precedes the empty-state actions in the real tab order.
   screen.getByRole('combobox', { name: 'Kategorie' }).focus();
+  await tabThroughCourseNavigation(user);
   await user.tab();
   expect(community).toHaveFocus();
   await user.keyboard('{Enter}');
@@ -129,6 +137,7 @@ it.each(['USER', 'ADMIN', 'INSTRUCTOR'])('keeps an unmatched query recoverable f
   const reset = screen.getByRole('button', { name: 'Filter zurücksetzen' });
   expect(reset).toHaveAttribute('type', 'button');
   screen.getByRole('combobox', { name: 'Kategorie' }).focus();
+  await tabThroughCourseNavigation(user);
   await user.tab();
   expect(reset).toHaveFocus();
   await user.keyboard('{Enter}');
@@ -164,6 +173,7 @@ it('resets a combined category and query filter and supports repeated keyboard u
     await user.type(search, 'Spanisch');
     expect(screen.getByRole('heading', { name: 'Keine Kurse gefunden' })).toBeVisible();
     category.focus();
+    await tabThroughCourseNavigation(user);
     await user.tab();
     await user.keyboard(' ');
     expect(search).toHaveValue('');
@@ -173,6 +183,7 @@ it('resets a combined category and query filter and supports repeated keyboard u
 
     await user.type(search, 'Wieder kein Treffer');
     category.focus();
+    await tabThroughCourseNavigation(user);
     await user.tab();
     await user.keyboard('{Enter}');
     expect(search).toHaveFocus();

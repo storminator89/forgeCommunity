@@ -183,30 +183,19 @@ function ScopedCourseClient({ session }: { session: NonNullable<ReturnType<typeo
           </div>
         </AppHeader>
         <main id="page-content" tabIndex={-1} className="min-w-0 flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-[1440px] px-4 pb-16 pt-7 sm:px-6 sm:pt-10 lg:px-8">
-            <div className="flex flex-col gap-5 border-b pb-7 sm:flex-row sm:items-end sm:justify-between">
-              <div className="max-w-2xl">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Lernen in der Community</p>
-                <h2 className="text-[clamp(1.65rem,1.2rem+2vw,2.4rem)] font-semibold leading-tight tracking-tight">Wissen teilen. Gemeinsam weiterkommen.</h2>
-                <p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:text-base">Entdecke Kurse aus der Community, lerne in deinem Tempo und teile selbst, was du kannst.</p>
-              </div>
-              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
-                {session.user.role === 'USER' && <Button asChild variant="outline" className="w-full shrink-0 sm:w-auto"><Link href="/courses/journey">Mein Lernweg</Link></Button>}
-                {canSeeLearnerPathways(session.user.role) && <Button asChild variant="outline" className="w-full shrink-0 sm:w-auto"><Link href="/courses/pathways">Lernpfade</Link></Button>}
-                <Button asChild variant="outline" className="w-full shrink-0 sm:w-auto"><Link href="/courses/goals">Mein Lernziel</Link></Button>
-                <Button asChild variant="outline" className="w-full shrink-0 sm:w-auto"><Link href="/courses/authoring">Meine Kursentwürfe</Link></Button>
-                <Button asChild variant={creatorPerspective ? 'default' : 'outline'} className="w-full shrink-0 sm:w-auto"><Link href="/courses/new"><Plus aria-hidden="true" className="h-4 w-4" />Neuer Kurs</Link></Button>
-              </div>
-            </div>
-            <section aria-labelledby="course-directory-title" className="pt-7 sm:pt-9">
+          <div className="mx-auto max-w-[1440px] px-4 pb-16 pt-5 sm:px-6 sm:pt-7 lg:px-8">
+            <section aria-labelledby="course-directory-title" className="min-w-0">
               <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                   <h2 id="course-directory-title" className="text-xl font-semibold tracking-tight">Kursübersicht</h2>
                   {!isLoading && !loadError && <p role="status" aria-live="polite" className="mt-1 text-sm text-muted-foreground">{filteredCourses.length} {filteredCourses.length === 1 ? 'Kurs' : 'Kurse'} {hasFilters ? 'gefunden' : 'verfügbar'}</p>}
                 </div>
-                {hasFilters && filteredCourses.length > 0 && <Button type="button" variant="ghost" className="self-start sm:self-auto" onClick={resetFilters}>Filter zurücksetzen</Button>}
+                <div className="flex flex-wrap items-center gap-2">
+                  {hasFilters && filteredCourses.length > 0 && <Button type="button" variant="ghost" onClick={resetFilters}>Filter zurücksetzen</Button>}
+                  {creatorPerspective && <Button asChild><Link href="/courses/new"><Plus aria-hidden="true" className="h-4 w-4" />Neuer Kurs</Link></Button>}
+                </div>
               </div>
-              <div className="mt-5 grid min-w-0 gap-3 rounded-2xl border bg-card p-3 sm:grid-cols-[minmax(0,1fr)_220px] sm:items-end sm:p-4">
+              <div className="mt-4 grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_220px] sm:items-end">
                 <div className="min-w-0">
                   <label htmlFor="course-search" className="mb-1.5 block text-sm font-medium">Kurse suchen</label>
                   <div className="relative">
@@ -222,6 +211,13 @@ function ScopedCourseClient({ session }: { session: NonNullable<ReturnType<typeo
                   </Select>
                 </div>
               </div>
+              <nav aria-label="Weitere Kursbereiche" className="mt-3 flex flex-wrap items-center gap-x-5 border-b pb-2 text-sm">
+                {session.user.role === 'USER' && <Link href="/courses/journey" className="inline-flex min-h-11 items-center rounded-sm text-sm text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Mein Lernweg</Link>}
+                {canSeeLearnerPathways(session.user.role) && <Link href="/courses/pathways" className="inline-flex min-h-11 items-center rounded-sm text-sm text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Lernpfade</Link>}
+                <Link href="/courses/goals" className="inline-flex min-h-11 items-center rounded-sm text-sm text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Mein Lernziel</Link>
+                <Link href="/courses/authoring" className="inline-flex min-h-11 items-center rounded-sm text-sm text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Meine Kursentwürfe</Link>
+                {!creatorPerspective && <Link href="/courses/new" className="inline-flex min-h-11 items-center gap-1.5 rounded-sm text-sm text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"><Plus aria-hidden="true" className="h-4 w-4" />Neuer Kurs</Link>}
+              </nav>
               <div className="mt-5">
                 {isLoading && <PageState kind="loading" title="Kurse werden geladen" />}
                 {loadError && <PageState kind="error" title="Kurse konnten nicht geladen werden" description="Prüfe deine Verbindung und versuche es erneut." action={<RetryButton onClick={() => window.location.reload()} />} />}
@@ -285,7 +281,7 @@ function CourseRow({ course, onDelete, deleting, onJoin, onLeave, pending, canMa
         <div className="min-w-0">
           <div className="flex min-w-0 items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground [overflow-wrap:anywhere]">{course.category}</p>
+              <p className="text-xs font-medium text-muted-foreground [overflow-wrap:anywhere]">{course.category}</p>
               <h3 className="mt-1 text-lg font-semibold leading-snug tracking-tight [overflow-wrap:anywhere] sm:text-xl">{course.title}</h3>
             </div>
             {course.canDelete && <AlertDialog>

@@ -115,7 +115,7 @@ it.each(['TypeScript', 'typescript', 'script'])('initializes the directory from 
   expect(screen.queryByRole('link', { name: 'Bea' })).not.toBeInTheDocument();
   expect(input).toHaveAttribute('maxlength', '120');
   expect(input).toHaveClass('h-11');
-  expect(input.closest('section')).toHaveClass('min-w-0', 'sm:grid-cols-[minmax(0,1fr)_12rem_auto]');
+  expect(input.closest('section')).toHaveClass('min-w-0', 'sm:grid-cols-[minmax(0,1fr)_15rem]');
 
   fireEvent.click(screen.getByRole('button', { name: 'Design' }));
   expect(screen.getByText('Keine passenden Mitglieder')).toBeInTheDocument();
@@ -184,21 +184,20 @@ it('ignores delayed router search parameters after a newer keystroke', async () 
   expect(screen.getByRole('link', { name: 'Bea' })).toBeInTheDocument();
 });
 
-it('offers a keyboard-accessible own-skills link and removes it at logout', async () => {
-  const view = render(<SkillDirectory />);
+it('offers the real own-skills action directly by keyboard without a competing settings handoff', async () => {
+  jest.mocked(fetch).mockImplementation(async url => ({ ok: true, json: async () =>
+    String(url) === '/api/user/skills' ? [] : directory } as Response));
+  render(<SkillDirectory />);
   await screen.findByRole('link', { name: 'Ada' });
-  const link = screen.getByRole('link', { name: 'Eigene Fähigkeiten ergänzen' });
-  expect(link).toHaveAttribute('href', '/settings?tab=skills');
-  const activate = jest.fn((event: Event) => event.preventDefault());
-  link.addEventListener('click', activate);
-  link.focus();
-  await userEvent.keyboard('{Enter}');
-  expect(activate).toHaveBeenCalledTimes(1);
-  expect(jest.mocked(global.fetch).mock.calls.every(([, options]) => !options?.method || options.method === 'GET')).toBe(true);
-
-  mockViewerId = null;
-  view.rerender(<SkillDirectory />);
+  expect(screen.queryByText('Wissen verbindet.')).not.toBeInTheDocument();
   expect(screen.queryByRole('link', { name: 'Eigene Fähigkeiten ergänzen' })).not.toBeInTheDocument();
+  const community = screen.getByRole('tab', { name: 'Community' });
+  community.focus();
+  await userEvent.keyboard('{ArrowRight}');
+  expect(screen.getByRole('tab', { name: 'Meine Fähigkeiten' })).toHaveFocus();
+  expect(await screen.findByRole('button', { name: 'Fähigkeit hinzufügen' })).toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: 'Eigene Fähigkeiten ergänzen' })).not.toBeInTheDocument();
+  expect(jest.mocked(global.fetch).mock.calls.every(([, options]) => !options?.method || options.method === 'GET')).toBe(true);
 });
 
 it('shows member details and updates endorsement state after success', async () => {
@@ -246,7 +245,14 @@ it('discovers actual catalog entries with member counts, including an unused ski
     ...directory, skills: [...directory.skills, { id: 'unused', name: 'Moderation', category: 'Zusammenarbeit' }],
   }) } as Response);
   render(<SkillDirectory />);
-  const chip = await screen.findByRole('button', { name: 'TypeScript: 1 Mitglied finden' });
+  const member = await screen.findByRole('link', { name: 'Ada' });
+  const summary = screen.getByText('Fähigkeiten entdecken', { exact: true }).closest('summary')!;
+  const catalog = summary.closest('details')!;
+  expect(catalog).not.toHaveAttribute('open');
+  expect(member.compareDocumentPosition(catalog) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(screen.getByText('Kenntnisstände sind Selbsteinschätzungen.')).toBeVisible();
+  fireEvent.click(summary);
+  const chip = screen.getByRole('button', { name: 'TypeScript: 1 Mitglied finden' });
   expect(screen.getByRole('button', { name: 'Moderation: 0 Mitglieder finden' })).toBeInTheDocument();
   chip.focus(); await userEvent.keyboard('{Enter}');
   expect(screen.getByRole('searchbox')).toHaveFocus();
@@ -339,4 +345,16 @@ it('keeps owned skills usable when the directory fails and retries the catalog f
   } finally {
     errorSpy.mockRestore();
   }
+});
+
+it('keeps sort direction beside sorting and reverses the real person order', async () => {
+  render(<SkillDirectory />);
+  await screen.findByRole('link', { name: 'Ada' });
+  const sort = screen.getByRole('combobox', { name: 'Sortieren nach' });
+  const direction = screen.getByRole('button', { name: 'Absteigend sortieren' });
+  expect(sort.parentElement).toBe(direction.parentElement);
+  expect(within(screen.getByRole('region', { name: 'Mitglieder entdecken' })).getAllByRole('listitem')[0]).toHaveTextContent('Ada');
+  await userEvent.click(direction);
+  expect(screen.getByRole('button', { name: 'Aufsteigend sortieren' })).toBeInTheDocument();
+  expect(within(screen.getByRole('region', { name: 'Mitglieder entdecken' })).getAllByRole('listitem')[0]).toHaveTextContent('Bea');
 });

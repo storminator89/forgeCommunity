@@ -38,6 +38,7 @@ test('GET remains read-only; opt-in, first reservation, answer and next each nee
   const user = userEvent.setup()
   render(<PracticeLearnerWorkspace courseId="course-1" sessionStatus="authenticated" />)
   expect(await screen.findByRole('button', { name: 'Privates Üben einschalten' })).toBeVisible()
+  expect(screen.getByText('Standardmäßig ausgeschaltet. Du öffnest jede Frage selbst.')).toBeVisible()
   expect(writes).toHaveLength(0)
   await user.click(screen.getByRole('button', { name: 'Privates Üben einschalten' }))
   expect(await screen.findByRole('button', { name: 'Erste Frage öffnen' })).toBeVisible()
@@ -62,6 +63,47 @@ test('GET remains read-only; opt-in, first reservation, answer and next each nee
   await waitFor(() => expect(writes[3]).toEqual({ path: `${base}/next`, body: { sessionId: 'session-1' } }))
   expect(await screen.findByRole('group', { name: 'Welche Aussage stimmt?' })).toBeVisible()
   expect(screen.getByRole('button', { name: 'Antwort prüfen' })).toBeDisabled()
+})
+
+test.each([
+  ['available', 'Privates Üben einschalten'],
+  ['paused', 'Üben wieder einschalten'],
+] as const)('%s shows the private storage and qualification facts before enabling', (stage, actionName) => {
+  render(<PracticeLearnerView courseId="course-1" stage={stage} />)
+  const action = screen.getByRole('button', { name: actionName })
+  const notice = screen.getByRole('complementary', { name: 'Privat und freiwillig' })
+  expect(notice).toBeVisible()
+  expect(screen.getAllByRole('complementary', { name: 'Privat und freiwillig' })).toHaveLength(1)
+  expect(document.querySelectorAll('#practice-private-heading')).toHaveLength(1)
+  expect(within(notice).getByText(/Deine Antworten und deine optionale Sicherheitseinschätzung werden für deine private Übung gespeichert/)).toBeVisible()
+  expect(within(notice).getByText(/Kein Einfluss auf Kursabschluss, Prüfungen, Zertifikate oder Belohnungen/)).toBeVisible()
+  expect(within(notice).getByText(/Keine persönliche Übungsauswertung für Lehrende/)).toBeVisible()
+  expect(notice.compareDocumentPosition(action) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  const disclosure = within(notice).getByText('Speicherung und Löschen')
+  expect(disclosure).toBeVisible()
+  expect(disclosure.compareDocumentPosition(action) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+})
+
+test.each(['available', 'paused'] as const)('%s disclosure opens without enabling, reserving or writing practice data', async status => {
+  global.fetch = jest.fn(async () => response({ status, dueCount: 1 }))
+  const user = userEvent.setup()
+  render(<PracticeLearnerWorkspace courseId="course-1" sessionStatus="authenticated" />)
+  await screen.findByRole('button', { name: status === 'available' ? 'Privates Üben einschalten' : 'Üben wieder einschalten' })
+  const disclosure = screen.getByText('Speicherung und Löschen')
+  const details = disclosure.closest('details')!
+  expect(details).not.toHaveAttribute('open')
+  screen.getByRole('link', { name: 'Zum Kursinhalt' }).focus()
+  await user.tab()
+  expect(disclosure).toHaveFocus()
+  await user.click(disclosure)
+  expect(details).toHaveAttribute('open')
+  expect(screen.getByText(/Bei Störungen oder Rückstand kann sich die Löschung verzögern/)).toBeVisible()
+  await user.click(disclosure)
+  expect(details).not.toHaveAttribute('open')
+  expect(global.fetch).toHaveBeenCalledTimes(1)
+  expect((global.fetch as jest.Mock).mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(true)
+  expect(screen.queryByRole('button', { name: /Erste Frage öffnen|Antwort prüfen/ })).not.toBeInTheDocument()
 })
 
 test('pause preserves practice; reset needs typed confirmation and the one-use token', async () => {
@@ -175,6 +217,7 @@ test('confidence can be skipped without blocking an answer', async () => {
 test('retention and reset copy describe eligibility, possible delays, and answer receipts', async () => {
   const user = userEvent.setup()
   render(<PracticeLearnerView courseId="course-1" stage="available" />)
+  await user.click(screen.getByText('Speicherung und Löschen'))
   expect(screen.getByText(/Private Übungsdaten werden nach 12 Kalendermonaten ohne Übungsaktivität zur automatischen Löschung fällig/)).toBeVisible()
   expect(screen.getByText(/Bei Störungen oder Rückstand kann sich die Löschung verzögern/)).toBeVisible()
   expect(screen.getByText(/technische Belege zur Antwortübermittlung nach 90 Tagen/)).toBeVisible()

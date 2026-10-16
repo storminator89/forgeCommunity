@@ -4,7 +4,7 @@ import { expect, test } from '@playwright/test';
 
 const origin = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3013';
 
-test('profile and skills links open skill settings by keyboard with working tab history', async ({ page, request }) => {
+test('profile links preserve settings history while Skills opens its own workbench directly', async ({ page, request }) => {
   const databasePath = process.env.DATABASE_URL?.startsWith('file:') ? process.env.DATABASE_URL.slice(5) : '';
   if (process.env.BROWSER_QA_DISPOSABLE_DB !== '1' || process.env.DATABASE_PROVIDER !== 'sqlite' ||
       !isAbsolute(databasePath) || basename(databasePath) !== 'forge-browser-qa.db') {
@@ -41,11 +41,15 @@ test('profile and skills links open skill settings by keyboard with working tab 
   await expect(page.getByRole('button', { name: 'Hinzufügen', exact: true })).toBeVisible();
 
   await page.goto('/skills');
-  const directoryLink = page.getByRole('link', { name: 'Eigene Fähigkeiten ergänzen' });
-  await expect(directoryLink).toBeVisible();
-  await directoryLink.focus();
-  await page.keyboard.press('Enter');
-  await expect(page).toHaveURL(/\/settings\?tab=skills$/);
+  await expect(page.getByRole('link', { name: 'Eigene Fähigkeiten ergänzen' })).toHaveCount(0);
+  await page.getByRole('tab', { name: 'Community', exact: true }).focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('tab', { name: 'Meine Fähigkeiten', exact: true })).toBeFocused();
+  await expect(page).toHaveURL(/\/skills\?view=mine$/);
+  await expect(page.getByRole('button', { name: 'Fähigkeit hinzufügen', exact: true })).toBeVisible();
+  await page.goBack();
+  await expect(page.getByRole('tab', { name: 'Community', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await page.goto('/settings?tab=skills');
   const skillsTab = page.getByRole('tab', { name: 'Fähigkeiten', exact: true });
   await expect(skillsTab).toHaveAttribute('aria-selected', 'true');
   await skillsTab.focus();

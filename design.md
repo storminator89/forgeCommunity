@@ -1,12 +1,19 @@
-<!-- Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V4 -->
 # ForgeCommunity design system
 
 This is the shared visual contract for the multi-page redesign. Preserve existing routes, German copy intent, authorization, data workflows, and content. The visual language should feel like a calm, useful place to work with other people, not a marketing template.
 
+## Current brief and design process
+
+The latest brief calls for less default prose, a friendly and distinctive product, and playful optional motion. Apply the [pinned frontend-design guidance](https://github.com/anthropics/skills/blob/dbd4588f9e1033efb41dad4bef2f7947c8993d44/skills/frontend-design/SKILL.md): first write a compact palette/type/layout plan, critique it against the actual task, then build and inspect real screenshots. This contract does not claim a fresh Hallmark runtime audit.
+
+Lead with the person's job: find a course, continue the next available learning step, find someone, or make a deliberate private choice. Avoid repeating the app title as an oversized slogan before the task. Decorative all-caps eyebrows, arbitrary numbered categories and single-fragment headline accents are not a default page template. A meaningful real person, learning figure, path, ballot or seat can carry the page's character; no illustration is required on every page.
+
+The existing palette and installed Inter family provide continuity. Keep their semantic dark-mode/contrast behavior rather than introduce an unrelated rebrand or new font dependency. Distinctiveness must come from real content and task-specific composition, not another decorative kit. Required consent, privacy, retention, inference, exit and publication facts remain understandable at the relevant decision; supporting detail can be disclosed on demand.
+
 ## Direction
 
-- **Genre:** editorial / utilitarian community workbench. Quiet, capable, human.
-- **Theme:** warm paper and charcoal ink with the existing blue used sparingly for active state, primary action, and focus. Avoid gradients, floating glass, mascot art, and repeated card grids.
+- **Genre:** a collaborative learning workshop. Quiet surroundings with a friendly, purposeful visual focus.
+- **Theme:** warm paper and charcoal ink with the existing blue used sparingly for active state, primary action, and focus. Avoid generic gradients, floating glass and repeated card grids. Original product-specific artwork and the existing native learning figure are welcome where they support the task; do not paste mascots onto every page.
 - **Typography:** Inter for display and body through the existing `next/font` setup. Headings are roman, not italic. Use weight, width, and spacing for distinction; no new font dependency.
 - **Macrostructure:**
   - Public pages: an editorial opening with strong typographic lead, concise proof of what a user can do, and one clear action. `/` is an introduction, not a dashboard.
@@ -26,7 +33,7 @@ This is the shared visual contract for the multi-page redesign. Preserve existin
 | `--secondary`, `--muted` | `42 21% 93%` | `220 16% 19%` | quiet controls and regions |
 | `--muted-foreground` | `218 12% 39%` | `220 13% 71%` | supporting text; check contrast in situ |
 | `--border` | `42 16% 83%` | `220 15% 29%` | separators |
-| `--input` | `42 16% 78%` | `220 15% 35%` | control boundary |
+| `--input` | `42 12% 52%` | `220 14% 46%` | tested control boundary |
 | `--primary` | `225 75% 43%` | `224 88% 76%` | sparing brand blue / action |
 | `--primary-foreground` | `0 0% 100%` | `220 24% 10%` | primary-action text |
 | `--accent` | `225 66% 93%` | `225 28% 23%` | selected surface |
@@ -49,6 +56,7 @@ Use the existing semantic destructive/chart tokens, adjusting their contrast if 
 - Keep the sidebar/navigation destinations and exact URL behavior. The current mobile Sheet, skip link, active state, and collapsed rail are good foundations.
 - Sidebar groups should be readable at 12px or larger; nav items should have 44px minimum comfortable touch height. Active destination uses a quiet accent surface plus clear ink/blue cue, not color alone.
 - A page header includes page title, optional one-line purpose, and at most one primary action. Move secondary actions into a tidy utility cluster; collapse/reflow before labels wrap on mobile.
+- Search, the first real result or the next available learning action should take priority over introductory prose and statistics. Do not invent an activity metric to decorate a directory; counts and progress labels must describe their actual data.
 - Primary buttons are solid blue, secondary buttons are quiet outlined or text. Labels use a single line. Destructive actions are explicit, visually separate, and have confirmation when irrecoverable.
 - Search and filter controls have persistent accessible names. Filter state is exposed with `aria-pressed`, native checked state, or Radix selection. Empty states explain the next useful action.
 - Every interactive row/card is a real link or button. Never use a mouse-only clickable `div`, `tr`, or card. Avoid nested interactive controls.
@@ -62,6 +70,7 @@ Use the existing semantic destructive/chart tokens, adjusting their contrast if 
 - Keyboard order matches visual order. Every screen has a functional skip target and a main landmark; dialogs manage focus; selected and loading states are announced appropriately.
 - Keep a visible two-pixel focus treatment and WCAG AA text/control contrast. Color is never the only status signal. Preserve `lang="de"`.
 - Honor `prefers-reduced-motion`: no animated entrance dependency; transitions become effectively immediate. Hover reveals also work by keyboard and touch.
+- Motion explains a person's action or confirmed change and is finite. No idle blink/float loops or new heavy 3D. Preserve explicit animation-off and figure-off controls; reduced motion wins. Existing once-only server-confirmed completion feedback must not restart on initial load, reload or account switch, and never turns reading into measured progress.
 
 ## Page-family variation
 
@@ -76,4 +85,4 @@ Use the existing semantic destructive/chart tokens, adjusting their contrast if 
 
 For each changed page, check light/dark mode at desktop and 320/375/414/768 widths, keyboard-only navigation, focus visibility, zoom to 200%, long German strings, empty/loading/error states, reduced motion, and no horizontal document scroll. Run repository lint, typecheck, focused tests, and the full test/build checks when dependencies and environment permit. Record any checks that cannot run; do not infer a pass.
 
-No production file deletions are part of this design system. Hallmark is used for the visual and interaction layer while existing product behavior stays intact.
+No production file deletions are part of this design system. Record the actual source, type, behavioral and browser checks performed; a design skill is guidance, not proof of a functional or accessibility audit. Existing product behavior stays intact.
