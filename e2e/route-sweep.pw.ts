@@ -196,6 +196,125 @@ async function expectKeyboardFocus(target: Locator) {
   expect(focus.outline >= 2 || focus.shadow !== 'none', JSON.stringify(focus)).toBe(true);
 }
 
+// BEGIN bounded header-focus diagnostics. This is observation only: no style,
+// focus, scroll, animation, assertion, timeout or retry changes.
+type HeaderFocusDiagnostics = { rows: unknown[]; [key: string]: unknown };
+type HeaderFocusWindow = Window & { __forgeHeaderFocusProbe?: {
+  sample: (reason: string) => unknown;
+  finish: () => Promise<HeaderFocusDiagnostics>;
+} };
+
+async function installHeaderFocusProbe(page: Page) {
+  await page.addInitScript(() => {
+    const limits = { maxRows: 64, maxRingBytes: 96 * 1024, maxOutputBytes: 128 * 1024, maxOwners: 16, maxLabelLength: 128, rafBurst: 3 };
+    const encoder = new TextEncoder();
+    const bytes = (value: unknown) => encoder.encode(JSON.stringify(value)).byteLength;
+    const rows: Array<{ value: unknown; bytes: number }> = [];
+    let ringBytes = 0;
+    let droppedRows = 0;
+    let raf = 0;
+    let framesLeft = 0;
+    let stopped = false;
+    const short = (value: string | null) => (value ?? '').slice(0, limits.maxLabelLength);
+    const identity = (element: Element | null) => element ? {
+      tag: element.tagName.toLowerCase(), id: short(element.id), classes: short(element.getAttribute('class')),
+      role: short(element.getAttribute('role')), ariaLabel: short(element.getAttribute('aria-label')),
+    } : null;
+    const rect = (element: Element) => {
+      const value = element.getBoundingClientRect();
+      const rounded = (number: number) => Math.round(number * 1000) / 1000;
+      return { x: rounded(value.x), y: rounded(value.y), width: rounded(value.width), height: rounded(value.height), right: rounded(value.right), bottom: rounded(value.bottom) };
+    };
+    const snapshot = (reason: string) => {
+      const owners = new Set<Element>();
+      if (document.scrollingElement) owners.add(document.scrollingElement);
+      for (const selector of ['.app-header', '#page-content']) {
+        for (let element = document.querySelector(selector); element; element = element.parentElement) owners.add(element);
+      }
+      const viewport = window.visualViewport;
+      return { reason, timestamp: performance.now(), timeOrigin: performance.timeOrigin, readyState: document.readyState,
+        window: { scrollX, scrollY, innerWidth, innerHeight },
+        visualViewport: viewport ? { offsetTop: viewport.offsetTop, offsetLeft: viewport.offsetLeft, pageTop: viewport.pageTop, pageLeft: viewport.pageLeft, width: viewport.width, height: viewport.height, scale: viewport.scale } : null,
+        rootFontSize: document.documentElement ? getComputedStyle(document.documentElement).fontSize : null,
+        scrollingElement: identity(document.scrollingElement), activeElement: { ...identity(document.activeElement), rect: document.activeElement ? rect(document.activeElement) : null },
+        ownerCount: owners.size, ownersTruncated: owners.size > limits.maxOwners,
+        owners: Array.from(owners).slice(0, limits.maxOwners).map(element => {
+          const style = getComputedStyle(element);
+          return { ...identity(element), rect: rect(element), scrollTop: element.scrollTop, scrollLeft: element.scrollLeft,
+            scrollHeight: element.scrollHeight, clientHeight: element.clientHeight, scrollWidth: element.scrollWidth, clientWidth: element.clientWidth,
+            overflowX: style.overflowX, overflowY: style.overflowY, scrollBehavior: style.scrollBehavior, position: style.position };
+        }) };
+    };
+    const targetScene = () => innerWidth === 320 && document.documentElement?.style.fontSize === '200%';
+    const sample = (reason: string) => {
+      const value = snapshot(reason);
+      if (!stopped && targetScene()) {
+        const size = bytes(value);
+        if (size <= limits.maxRingBytes) {
+          while (rows.length && (rows.length >= limits.maxRows || ringBytes + size > limits.maxRingBytes)) {
+            ringBytes -= rows.shift()!.bytes;
+            droppedRows++;
+          }
+          rows.push({ value, bytes: size });
+          ringBytes += size;
+        } else droppedRows++;
+      }
+      return value;
+    };
+    const frame = () => {
+      raf = 0;
+      if (stopped || !targetScene()) return;
+      sample(`rAF:${limits.rafBurst - framesLeft + 1}`);
+      if (--framesLeft > 0) raf = requestAnimationFrame(frame);
+    };
+    const observe = (event: Event) => {
+      if (stopped || !targetScene()) return;
+      const key = event instanceof KeyboardEvent ? `${event.shiftKey ? 'Shift+' : ''}${event.key}` : '';
+      if (event instanceof KeyboardEvent && !['Enter', 'Tab', 'Escape'].includes(event.key)) return;
+      sample(`${event.type}${key ? `:${key}` : ''}`);
+      framesLeft = limits.rafBurst;
+      if (!raf) raf = requestAnimationFrame(frame);
+    };
+    const events = ['keydown', 'keyup', 'focusin', 'hashchange', 'scroll'] as const;
+    for (const event of events) window.addEventListener(event, observe, { capture: true, passive: true });
+    (window as HeaderFocusWindow).__forgeHeaderFocusProbe = { sample, finish: async () => {
+      // Called only from the test's finally, after its original verdict. Seal
+      // the event ring before later observations can evict the failing path.
+      const verdict = sample('original-verdict');
+      stopped = true;
+      if (raf) cancelAnimationFrame(raf);
+      for (const event of events) window.removeEventListener(event, observe, true);
+      const started = performance.now();
+      const settled: unknown[] = [];
+      for (const offset of [100, 300, 600]) {
+        await new Promise<void>(resolve => setTimeout(resolve, Math.max(0, started + offset - performance.now())));
+        settled.push(snapshot(`after-original-verdict:${offset}ms`));
+      }
+      return { limits, ringBytes, droppedRows, rows: rows.map(row => row.value), verdict, settled,
+        observation: 'Passive listeners and bounded coalesced rAF reads only before verdict; 100/300/600ms observations occur exclusively after it. No DOM text, input values, account data, URLs, cookies or storage collected.' };
+    } };
+  });
+}
+
+async function emitHeaderFocusDiagnostics(page: Page, testInfo: TestInfo, theme: string, originalCompleted: boolean) {
+  try {
+    const evidence = await page.evaluate(async () => (window as HeaderFocusWindow).__forgeHeaderFocusProbe?.finish());
+    if (!evidence) { console.info('Header focus diagnostic unavailable: no live probe.'); return; }
+    const payload = { theme, originalCompleted, ...evidence };
+    let droppedForOutputCap = 0;
+    const serialize = () => JSON.stringify({ ...payload, droppedForOutputCap });
+    while (Buffer.byteLength(serialize(), 'utf8') > 128 * 1024 && payload.rows.length) { payload.rows.shift(); droppedForOutputCap++; }
+    const json = serialize();
+    if (Buffer.byteLength(json, 'utf8') > 128 * 1024) { console.info('Header focus diagnostic exceeded bounded output; no oversized payload emitted.'); return; }
+    console.info('Header focus original-verdict diagnostic:', json);
+    await testInfo.attach(`header-focus-original-verdict-${theme}`, { body: Buffer.from(json), contentType: 'application/json' });
+  } catch (error) {
+    // Diagnostic delivery cannot replace or mask the original verdict.
+    console.info('Header focus diagnostic unavailable:', error instanceof Error ? error.name : 'unknown error');
+  }
+}
+// END bounded header-focus diagnostics.
+
 async function captureHeaderGeometry(page: Page, testInfo: TestInfo, name: string, options: { community?: boolean; courseTitle?: boolean; bare?: boolean } = {}) {
   await expect(page.locator('.app-header')).toHaveCount(1);
   await expect(page.locator('.app-header-title')).toBeVisible();
@@ -223,7 +342,8 @@ async function captureHeaderGeometry(page: Page, testInfo: TestInfo, name: strin
     return { viewport: { width: innerWidth, height: innerHeight }, rootFontSize: getComputedStyle(document.documentElement).fontSize,
       header: { ...rectangle(header), overflowX: style.overflowX, overflowY: style.overflowY },
       title: { ...rectangle(title), text, scrollWidth: title.scrollWidth, clientWidth: title.clientWidth, scrollHeight: title.scrollHeight, clientHeight: title.clientHeight },
-      controls, main: { ...rectangle(main), clientHeight: main.clientHeight, scrollHeight: main.scrollHeight, overflowY: getComputedStyle(main).overflowY } };
+      controls, main: { ...rectangle(main), clientHeight: main.clientHeight, scrollHeight: main.scrollHeight, overflowY: getComputedStyle(main).overflowY },
+      focusScroll: (window as HeaderFocusWindow).__forgeHeaderFocusProbe?.sample('existing-synchronous-geometry') };
   });
   const detail = `${name}: ${JSON.stringify(geometry)}`;
   const inside = (item: { x: number; y: number; right: number; bottom: number }, boundary: { x: number; y: number; right: number; bottom: number }) => {
@@ -357,6 +477,9 @@ test.describe('every App Router page, one at a time', () => {
       test.skip(testInfo.project.name !== 'mobile-320-chromium', 'One bounded width/text matrix; the existing broad route sweep still runs in its original projects.');
       const errors: string[] = [];
       page.on('pageerror', error => errors.push(error.message));
+      await installHeaderFocusProbe(page);
+      let originalCompleted = false;
+      try {
       for (const textScale of [100, 200]) {
         for (const width of textScale === 100 ? [320, 375, 414, 768, 1280] : [320, 768, 1280]) {
           await openHeaderScene(page, '/community', 'member', paletteTheme, width, textScale);
@@ -436,6 +559,10 @@ test.describe('every App Router page, one at a time', () => {
         }
       }
       expect(errors).toEqual([]);
+      originalCompleted = true;
+      } finally {
+        await emitHeaderFocusDiagnostics(page, testInfo, paletteTheme, originalCompleted);
+      }
     });
 
     test(`shared header reflow: real variant rendering at 320px and 200% text [${paletteTheme}]`, async ({ page }, testInfo) => {
