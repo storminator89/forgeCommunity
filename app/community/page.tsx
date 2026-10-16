@@ -319,9 +319,9 @@ function Community({ session, topic, onSelectTopic }: { session: Session | null;
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <AppHeader>
-          <div className="flex min-w-0 items-center justify-between gap-3">
-            <h1>Community</h1>
-            <div className="flex shrink-0 items-center gap-2">
+          <div className="app-header-row">
+            <h1 className="app-header-title">Community</h1>
+            <div className="app-header-actions">
               <ThemeToggle />
               <UserNav />
             </div>
@@ -493,7 +493,7 @@ export default function CommunityPage() {
     <AppShell>
       <Sidebar />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <AppHeader><h1>Community</h1></AppHeader>
+        <AppHeader><div className="app-header-row"><h1 className="app-header-title">Community</h1></div></AppHeader>
         <main id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto px-4 py-8 sm:px-6 lg:px-8">
           <PageState kind="loading" title="Community wird geladen" />
         </main>

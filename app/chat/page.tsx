@@ -291,7 +291,7 @@ function ChatPageContent() {
       <AppShell>
         <Sidebar />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <AppHeader><div className="flex min-w-0 items-center justify-between gap-3"><h1>Chat</h1><div className="flex shrink-0 items-center gap-2"><ThemeToggle /><UserNav /></div></div></AppHeader>
+          <AppHeader><div className="app-header-row"><h1 className="app-header-title">Chat</h1><div className="app-header-actions"><ThemeToggle /><UserNav /></div></div></AppHeader>
           <main id="page-content" tabIndex={-1} className="flex flex-1 items-center justify-center p-6 text-center">
             <div role="status" className="rounded-xl border bg-card p-8">
               <p className="text-muted-foreground">{!session ? 'Bitte melde dich an, um den Chat zu nutzen.' : 'Chat wird geladen …'}</p>
@@ -307,9 +307,9 @@ function ChatPageContent() {
       <Sidebar />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <AppHeader>
-          <div className="flex min-w-0 items-center justify-between gap-3">
-            <h1>Chat</h1>
-            <div className="flex shrink-0 items-center gap-2">
+          <div className="app-header-row">
+            <h1 className="app-header-title">Chat</h1>
+            <div className="app-header-actions">
               <Button type="button" variant="ghost" size="icon" className="md:hidden" aria-label={showChannelsMobile ? 'Zur Unterhaltung' : 'Channels öffnen'} aria-controls="chat-channel-list" aria-expanded={showChannelsMobile} onClick={() => setShowChannelsMobile(value => !value)}><PanelLeft className="h-5 w-5" aria-hidden="true" /></Button>
               <ThemeToggle />
               <UserNav />

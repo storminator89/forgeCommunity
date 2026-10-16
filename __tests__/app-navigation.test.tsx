@@ -33,12 +33,16 @@ it('mobile navigation opens from the page header and closes after selection', ()
   expect(screen.getByRole('link', { name: 'ForgeCommunity Start' })).toHaveClass('min-h-11');
   const trigger = screen.getByRole('button', { name: 'Navigation öffnen' });
   expect(trigger).not.toHaveAttribute('aria-controls');
+  expect(trigger).toHaveAttribute('aria-expanded', 'false');
   fireEvent.click(trigger);
   expect(screen.getByRole('dialog')).toBeInTheDocument();
   expect(trigger).toHaveAttribute('aria-controls', 'app-navigation');
+  expect(trigger).toHaveAttribute('aria-expanded', 'true');
   expect(document.getElementById('app-navigation')).toBeInTheDocument();
   fireEvent.click(screen.getAllByRole('link', { name: 'Community' }).at(-1)!);
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  expect(trigger).not.toHaveAttribute('aria-controls');
 });
 
 it('mobile navigation also closes with its visible close control', () => {
@@ -151,11 +155,12 @@ it('gives the account menu a comfortable touch target', () => {
   expect(screen.getByRole('button', { name: 'Benutzermenü öffnen' })).toHaveClass('h-11', 'w-11');
 });
 
-it('keeps the mobile admin title compact beside the menu and account controls', () => {
+it('keeps the complete Admin title and controls in the explicit shared header slots', () => {
   render(<AppShell><AdminHeader onMenuClick={() => {}} /></AppShell>);
   const title = screen.getByRole('heading', { level: 2, name: 'Administration' });
-  expect(title).toHaveClass('truncate', 'text-base', 'sm:text-xl');
-  expect(title.parentElement?.parentElement).toHaveClass('gap-2', 'sm:gap-4');
+  expect(title).toHaveClass('app-header-title', 'text-base', 'sm:text-xl');
+  expect(title).not.toHaveClass('truncate');
+  expect(title.closest('.app-header-row')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Navigation öffnen' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Farbschema auswählen' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Benutzermenü öffnen' })).toBeInTheDocument();

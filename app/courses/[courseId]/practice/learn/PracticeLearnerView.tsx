@@ -146,9 +146,9 @@ export function PracticeLearnerView({ courseId, stage, question, feedback, error
     <Sidebar />
     <div className="flex min-w-0 flex-1 flex-col">
       <AppHeader>
-        <div className="flex min-w-0 items-center justify-between gap-3">
-          <div className="min-w-0"><p className="text-sm text-muted-foreground">Kurs · freiwillige Übung</p><h1 className="[overflow-wrap:anywhere]">Privat üben</h1></div>
-          <div className="flex shrink-0 items-center gap-1"><ThemeToggle /><UserNav /></div>
+        <div className="app-header-row">
+          <div className="app-header-title"><p className="text-sm text-muted-foreground">Kurs · freiwillige Übung</p><h1 className="[overflow-wrap:anywhere]">Privat üben</h1></div>
+          <div className="app-header-actions"><ThemeToggle /><UserNav /></div>
         </div>
       </AppHeader>
       <main id="page-content" tabIndex={-1} aria-busy={busy || stage === 'loading'} className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">

@@ -505,9 +505,9 @@ function SearchPageForViewer({
       <Sidebar />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <AppHeader>
-          <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
-            <h1 className="text-[clamp(1.65rem,1.1rem+2vw,2.35rem)] font-semibold tracking-tight text-foreground">Suche</h1>
-            <div className="flex items-center space-x-4">
+          <div className="app-header-row">
+            <h1 className="app-header-title text-[clamp(1.65rem,1.1rem+2vw,2.35rem)] font-semibold tracking-tight text-foreground">Suche</h1>
+            <div className="app-header-actions">
               <ThemeToggle />
               <UserNav />
             </div>

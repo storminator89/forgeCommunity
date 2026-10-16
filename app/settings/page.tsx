@@ -352,9 +352,9 @@ function AccountSettings({ userId }: { userId: string }) {
       <Sidebar />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <AppHeader>
-          <div className="flex min-w-0 items-center justify-between gap-3">
-            <h1>Einstellungen</h1>
-            <div className="flex shrink-0 items-center gap-2">
+          <div className="app-header-row">
+            <h1 className="app-header-title">Einstellungen</h1>
+            <div className="app-header-actions">
               <ThemeToggle />
               <UserNav />
             </div>

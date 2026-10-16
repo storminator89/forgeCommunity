@@ -360,7 +360,7 @@ function ScopedEvents({ session, sessionStatus }: {
       <AppShell>
         <Sidebar />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <AppHeader><div className="flex items-center justify-between gap-3"><h1>Events</h1><div className="flex items-center gap-2"><ThemeToggle /><UserNav /></div></div></AppHeader>
+          <AppHeader><div className="app-header-row"><h1 className="app-header-title">Events</h1><div className="app-header-actions"><ThemeToggle /><UserNav /></div></div></AppHeader>
           <main id="page-content" tabIndex={-1} className="flex flex-1 items-center justify-center p-6 text-center">
             <div role={error ? 'alert' : 'status'} className="space-y-4 rounded-xl border bg-card p-8">
               <p className={error ? 'text-destructive' : 'text-muted-foreground'}>{error ? 'Die Events konnten nicht geladen werden.' : 'Events werden geladen …'}</p>
@@ -496,9 +496,9 @@ function ScopedEvents({ session, sessionStatus }: {
       <Sidebar />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <AppHeader>
-          <div className="flex min-w-0 items-center justify-between gap-3">
-            <h1 className="flex min-w-0 items-center gap-2"><CalendarIcon className="h-5 w-5 shrink-0" aria-hidden="true" />Events</h1>
-            <div className="flex shrink-0 items-center gap-2"><ThemeToggle /><UserNav /></div>
+          <div className="app-header-row">
+            <h1 className="app-header-title flex items-center gap-2"><CalendarIcon className="h-5 w-5 shrink-0" aria-hidden="true" />Events</h1>
+            <div className="app-header-actions"><ThemeToggle /><UserNav /></div>
           </div>
         </AppHeader>
         <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto p-4 lg:p-8">

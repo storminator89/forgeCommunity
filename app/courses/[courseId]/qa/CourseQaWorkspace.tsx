@@ -427,9 +427,9 @@ export function CourseQaWorkspace({ courseId, sessionStatus }: { courseId: strin
     <Sidebar />
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <AppHeader>
-        <div className="flex min-w-0 items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2"><CourseQaIcon className="h-5 w-5 shrink-0 text-muted-foreground" /><span className="truncate text-sm font-semibold">Kursfragen</span></div>
-          <div className="flex shrink-0 items-center gap-1"><ThemeToggle /><UserNav /></div>
+        <div className="app-header-row">
+          <div className="app-header-title flex items-center gap-2"><CourseQaIcon className="h-5 w-5 shrink-0 text-muted-foreground" /><span className="text-sm font-semibold min-w-0">Kursfragen</span></div>
+          <div className="app-header-actions"><ThemeToggle /><UserNav /></div>
         </div>
       </AppHeader>
       <main id="page-content" tabIndex={-1} className="min-h-0 min-w-0 flex-1 overflow-y-auto px-4 pb-10 pt-6 sm:px-6 lg:px-8">

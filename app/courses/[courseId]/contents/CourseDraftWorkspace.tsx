@@ -357,7 +357,7 @@ export function CourseDraftWorkspace({ courseId, initialState, onLiveMode, canAu
   return <AppShell>
     <Sidebar />
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      <AppHeader><div className="flex min-w-0 items-center justify-between gap-2"><div className="min-w-0"><h1 className="line-clamp-2 break-words [overflow-wrap:anywhere] max-sm:text-base" title={meta.title || 'Kurs ohne Titel'}>{meta.title || 'Kurs ohne Titel'}</h1></div><div className="flex shrink-0 items-center gap-1"><ThemeToggle /><UserNav /></div></div></AppHeader>
+      <AppHeader><div className="app-header-row"><div className="app-header-title"><h1 className="line-clamp-2 break-words [overflow-wrap:anywhere] max-sm:text-base" title={meta.title || 'Kurs ohne Titel'}>{meta.title || 'Kurs ohne Titel'}</h1></div><div className="app-header-actions"><ThemeToggle /><UserNav /></div></div></AppHeader>
       {notice && <div role={notice.kind === 'error' ? 'alert' : 'status'} className={cn('mx-4 my-2 flex items-center justify-between gap-3 rounded-xl border px-4 py-2 text-sm', notice.kind === 'error' ? 'border-destructive/40 text-destructive' : 'bg-card')}><span>{notice.text}</span><Button size="icon" variant="ghost" aria-label="Meldung schließen" onClick={() => setNotice(null)}><X className="h-4 w-4" /></Button></div>}
       <main id="page-content" tabIndex={-1} className="min-h-0 min-w-0 flex-1 overflow-y-auto">
         <div className="flex min-h-full flex-col md:h-full md:min-h-0">

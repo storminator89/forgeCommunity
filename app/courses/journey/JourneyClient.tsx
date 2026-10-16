@@ -89,7 +89,7 @@ export default function JourneyClient() {
     <Button asChild className="mt-5"><Link href="/login?callbackUrl=%2Fcourses%2Fjourney">Zur Anmeldung</Link></Button>
   </main>;
   if (session.user.role !== 'USER') return <AppShell><Sidebar /><div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-    <AppHeader><div className="flex items-center justify-between gap-3"><h1>Mein Lernweg</h1><div className="flex shrink-0 items-center gap-1 sm:gap-2"><ThemeToggle /><UserNav /></div></div></AppHeader>
+    <AppHeader><div className="app-header-row"><h1 className="app-header-title">Mein Lernweg</h1><div className="app-header-actions"><ThemeToggle /><UserNav /></div></div></AppHeader>
     <main id="page-content" tabIndex={-1} className="min-w-0 flex-1 overflow-y-auto px-4 py-8 sm:px-6"><div className="mx-auto max-w-3xl"><PageState title="Lernweg für Lernende" description="Hier siehst du angemeldete Kurse anderer Lehrkräfte mit bestätigten nächsten Schritten." action={<Button asChild variant="outline"><Link href="/courses">Zur Kursübersicht</Link></Button>} /></div></main>
   </div></AppShell>;
   // A role refresh must unmount private learner state before the next account
@@ -208,7 +208,7 @@ function ScopedJourney() {
   return <AppShell>
     <Sidebar />
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      <AppHeader><div className="flex items-center justify-between gap-3"><h1>Mein Lernweg</h1><div className="flex shrink-0 items-center gap-1 sm:gap-2"><ThemeToggle /><UserNav /></div></div></AppHeader>
+      <AppHeader><div className="app-header-row"><h1 className="app-header-title">Mein Lernweg</h1><div className="app-header-actions"><ThemeToggle /><UserNav /></div></div></AppHeader>
       <main id="page-content" tabIndex={-1} className="min-w-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-5xl px-4 pb-16 pt-5 sm:px-6 sm:pt-7 lg:px-8">
           <nav aria-label="Brotkrumen" className="text-sm text-muted-foreground"><Link href="/courses" className="inline-flex min-h-11 items-center rounded-sm underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Kurse</Link><span className="mx-2" aria-hidden="true">/</span><span aria-current="page" className="text-foreground">Mein Lernweg</span></nav>

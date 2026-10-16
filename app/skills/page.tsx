@@ -194,7 +194,7 @@ function SkillDirectoryForViewer({ viewerId, sessionLoading, queryFromUrl, viewF
   return <AppShell>
     <Sidebar />
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      <AppHeader><div className="flex min-w-0 items-center justify-between gap-3"><h1 className="min-w-0 [overflow-wrap:anywhere]">Skill-Verzeichnis</h1><div className="flex shrink-0 items-center gap-2"><ThemeToggle /><UserNav /></div></div></AppHeader>
+      <AppHeader><div className="app-header-row"><h1 className="app-header-title [overflow-wrap:anywhere]">Skill-Verzeichnis</h1><div className="app-header-actions"><ThemeToggle /><UserNav /></div></div></AppHeader>
       <main id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto">
         <ToastContainer position="top-right" />
         <div className="mx-auto w-full max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
