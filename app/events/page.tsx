@@ -599,7 +599,7 @@ function ScopedEvents({ session, sessionStatus }: {
 
       {/* Detailansicht Dialog */}
       <Dialog open={!!selectedDate} onOpenChange={handleCloseDialog}>
-        <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-[600px]" onCloseAutoFocus={event => {
+        <DialogContent className="min-w-0 grid-cols-1 max-h-[85dvh] overflow-y-auto sm:max-w-[600px]" onCloseAutoFocus={event => {
           const trigger = upcomingTriggerRef.current;
           upcomingTriggerRef.current = null;
           if (trigger?.isConnected && !isEditDialogOpen) {
@@ -612,22 +612,22 @@ function ScopedEvents({ session, sessionStatus }: {
               {selectedDate && format(selectedDate, 'dd. MMMM yyyy', { locale: de })}
             </DialogTitle>
           </DialogHeader>
-          <div className="mt-4 space-y-4">
+          <div className="mt-4 min-w-0 space-y-4">
             {selectedDate && getEventsForDate(selectedDate).map((event) => (
-              <div key={event.id} id={`event-${encodeURIComponent(event.id)}`} tabIndex={-1} className="bg-card p-4 rounded-lg border border-border">
-                <div className="flex min-w-0 flex-col items-start justify-between gap-3 sm:flex-row">
-                  <div className="min-w-0 flex-1 break-words [overflow-wrap:anywhere]">
+              <div key={event.id} id={`event-${encodeURIComponent(event.id)}`} tabIndex={-1} className="w-full min-w-0 max-w-full bg-card p-4 rounded-lg border border-border">
+                <div className="flex w-full min-w-0 flex-col items-start justify-between gap-3 sm:flex-row">
+                  <div className="w-full min-w-0 flex-1 break-words [overflow-wrap:anywhere]">
                     <h3 className="text-lg font-semibold mb-2">{event.title}</h3>
-                    <div className="space-y-2 text-sm text-muted-foreground">
+                    <div className="min-w-0 space-y-2 text-sm text-muted-foreground">
                       {event.endTime && (
-                        <div className="flex items-center">
+                        <div className="flex min-w-0 items-center">
                           <Clock className="mr-2 h-4 w-4 flex-shrink-0" />
-                          <span>{eventStartTime(event)} - {event.endTime} ({event.timezone})</span>
+                          <span className="min-w-0 flex-1">{eventStartTime(event)} - {event.endTime} ({event.timezone})</span>
                         </div>
                       )}
-                      <div className="flex items-center">
+                      <div className="flex min-w-0 items-center">
                         <MapPin className="mr-2 h-4 w-4 flex-shrink-0" />
-                        <span>{event.location}</span>
+                        <span className="min-w-0 flex-1">{event.location}</span>
                       </div>
                       <div dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(event.description) }} />
                       {event.category && <Badge variant="secondary">{event.category}</Badge>}

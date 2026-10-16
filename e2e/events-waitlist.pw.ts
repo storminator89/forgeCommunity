@@ -72,6 +72,20 @@ async function checkReflow(page: Page) {
     return box.left >= -1 && box.right <= innerWidth + 1 ? [] : [element.getAttribute('aria-label') || element.textContent];
   }));
   expect(clipped).toEqual([]);
+  const overflowingCards = await page.locator('[role="dialog"] [id^="event-"]').evaluateAll(elements => elements.flatMap(element => {
+    const dialog = element.closest('[role="dialog"]')!;
+    const bounds = dialog.getBoundingClientRect();
+    const padding = getComputedStyle(dialog);
+    const box = element.getBoundingClientRect();
+    // Check the bounded card itself, not only the document or its buttons:
+    // a dialog can clip an oversized grid/flex child without body overflow.
+    const scrollOverflow = element.scrollWidth - element.clientWidth;
+    return scrollOverflow <= 1 && box.left >= bounds.left + parseFloat(padding.paddingLeft) - 1 &&
+      box.right <= bounds.right - parseFloat(padding.paddingRight) + 1 ? [] : [{
+        id: element.id, scrollOverflow, width: box.width, left: box.left, right: box.right,
+      }];
+  }));
+  expect(overflowingCards).toEqual([]);
 }
 
 async function openPromotion(page: Page, id: string) {

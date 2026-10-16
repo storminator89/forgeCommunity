@@ -216,3 +216,26 @@ test('a western-zone event stays on the preceding local day and shows its timezo
   expect(within(dialog).getByRole('heading', { name: '31. Dezember 2029' })).toBeVisible();
   expect(within(dialog).getByText('19:30 - 20:30 (America/New_York)')).toBeVisible();
 });
+
+
+test('long detail content keeps the one-column grid and flex shrink boundaries without hiding event text or actions', async () => {
+  const longTitle = 'GemeinsamLernenUndErfahrungenTeilen'.repeat(5);
+  const longLocation = 'OnlineCommunityWerkstattMitOffenemAustausch'.repeat(2);
+  const target = { ...nextMonth(), id: 'long-detail', date: '2035-05-21T10:00:00Z', title: longTitle, location: longLocation,
+    description: `<p>${'Gemeinsam können wir komplexe Fragen verständlich machen. '.repeat(5)}</p>`,
+    isAttending: true, canCancelRsvp: true, attendeeCount: 2, maxAttendees: 2 };
+  global.fetch = eventApiFixture([target]);
+  window.history.replaceState(null, '', '/events#event-long-detail');
+  render(<Events />);
+  const dialog = await screen.findByRole('dialog');
+  expect(dialog).toHaveClass('grid-cols-1', 'min-w-0');
+  const heading = within(dialog).getByRole('heading', { name: longTitle });
+  expect(heading).toBeVisible();
+  const card = document.getElementById('event-long-detail')!;
+  expect(card).toHaveClass('w-full', 'min-w-0', 'max-w-full');
+  expect(card.parentElement).toHaveClass('min-w-0');
+  expect(heading.parentElement).toHaveClass('w-full', 'min-w-0', 'flex-1');
+  expect(within(dialog).getByText(longLocation, { exact: true })).toHaveClass('min-w-0', 'flex-1');
+  expect(await within(dialog).findByRole('button', { name: 'Zusage zurücknehmen' })).toBeEnabled();
+  expect(within(dialog).getByText('12:00 - 13:00 (Europe/Berlin)')).toBeVisible();
+});
