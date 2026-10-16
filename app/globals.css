@@ -225,6 +225,8 @@
   .fc-button[data-state="success"] { background: hsl(var(--success)); color: hsl(var(--success-foreground)); }
   .app-shell { @apply flex h-dvh min-h-0 overflow-hidden bg-background; }
   .app-shell > div:not([data-radix-popper-content-wrapper]) { min-width: 0; min-height: 0; }
+  /* Keep absolute descendants, including sr-only feed status, in the inner scrollport. */
+  .app-shell #page-content { position: relative; }
   .app-sidebar { height: 100dvh; }
   .app-header { @apply relative z-20 shrink-0 border-b bg-card; }
   .app-header-layout {

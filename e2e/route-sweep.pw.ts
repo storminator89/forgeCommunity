@@ -339,10 +339,22 @@ async function captureHeaderGeometry(page: Page, testInfo: TestInfo, name: strin
       element !== title && element.getClientRects().length && getComputedStyle(element).visibility !== 'hidden'
     ).map(element => ({ name: element.getAttribute('aria-label') || element.textContent?.trim() || '', ...rectangle(element) }));
     const style = getComputedStyle(header);
+    const scrollingElement = document.scrollingElement!;
+    // Observe the actual topic heading and far-below-feed status/count nodes.
+    // A locally positioned descendant is valid; body/null is not their main CB.
+    const absoluteSrOnly = Array.from(main.querySelectorAll<HTMLElement>('#community-topic-heading, p[role="status"][tabindex="-1"].sr-only, p[role="status"][tabindex="-1"] > span.sr-only'))
+      .filter(element => getComputedStyle(element).position === 'absolute').map(element => {
+        const parent = element.offsetParent;
+        return { tag: element.tagName.toLowerCase(), id: element.id, role: element.getAttribute('role'), rect: rectangle(element),
+          feedStatus: element.matches('p[role="status"][tabindex="-1"], p[role="status"][tabindex="-1"] > span'),
+          offsetParentInsideMain: Boolean(parent && (parent === main || main.contains(parent))),
+          offsetParent: parent ? { tag: parent.tagName.toLowerCase(), id: parent.id, classes: parent.getAttribute('class')?.slice(0, 128), position: getComputedStyle(parent).position, rect: rectangle(parent) } : null };
+      });
     return { viewport: { width: innerWidth, height: innerHeight }, rootFontSize: getComputedStyle(document.documentElement).fontSize,
       header: { ...rectangle(header), overflowX: style.overflowX, overflowY: style.overflowY },
       title: { ...rectangle(title), text, scrollWidth: title.scrollWidth, clientWidth: title.clientWidth, scrollHeight: title.scrollHeight, clientHeight: title.clientHeight },
       controls, main: { ...rectangle(main), clientHeight: main.clientHeight, scrollHeight: main.scrollHeight, overflowY: getComputedStyle(main).overflowY },
+      rootScroll: { windowY: scrollY, scrollHeight: scrollingElement.scrollHeight, clientHeight: scrollingElement.clientHeight, rangeY: scrollingElement.scrollHeight - scrollingElement.clientHeight }, absoluteSrOnly,
       focusScroll: (window as HeaderFocusWindow).__forgeHeaderFocusProbe?.sample('existing-synchronous-geometry') };
   });
   const detail = `${name}: ${JSON.stringify(geometry)}`;
@@ -380,6 +392,14 @@ async function captureHeaderGeometry(page: Page, testInfo: TestInfo, name: strin
   expect(geometry.main.y, detail).toBeGreaterThanOrEqual(geometry.header.bottom - 1);
   expect(geometry.main.clientHeight, detail).toBeGreaterThanOrEqual(140);
   expect(geometry.main.bottom, detail).toBeLessThanOrEqual(geometry.viewport.height + 1);
+  if (options.community && !options.bare) {
+    expect(geometry.rootScroll.rangeY, detail).toBeLessThanOrEqual(1);
+    expect(geometry.rootScroll.windowY, detail).toBe(0);
+    expect(geometry.main.scrollHeight, detail).toBeGreaterThan(geometry.main.clientHeight + 1);
+    expect(geometry.absoluteSrOnly.some(element => element.id === 'community-topic-heading'), detail).toBe(true);
+    expect(geometry.absoluteSrOnly.some(element => element.feedStatus), detail).toBe(true);
+    for (const element of geometry.absoluteSrOnly) expect(element.offsetParentInsideMain, detail).toBe(true);
+  }
   // Existing CI retains PNGs; keep rectangles in its durable log as well.
   console.info('Shared header render-fixture geometry:', detail);
   await testInfo.attach(name, { body: Buffer.from(JSON.stringify(geometry, null, 2)), contentType: 'application/json' });

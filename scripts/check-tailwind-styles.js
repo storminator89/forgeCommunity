@@ -71,6 +71,13 @@ async function main() {
       if (rule.selector === '.app-menu') assert.ok(!(declaration.prop === 'position' && declaration.value === 'absolute'), 'The mobile menu must participate in header reflow');
     });
   }
+  // Real absolute sr-only nodes belong to main's inner scrollport. A root
+  // overflow clamp or native-scroll override would hide this focus regression.
+  const mainContainingBlocks = rules.filter(rule => rule.selector === '.app-shell #page-content' && mediaQueries(rule).length === 0);
+  assert.equal(mainContainingBlocks.length, 1, 'Missing or ambiguous scoped main containing block');
+  const mainDeclarations = mainContainingBlocks[0].nodes.filter(node => node.type === 'decl');
+  assert.equal(mainDeclarations.length, 1, 'Main containment must remain a position-only rule');
+  assert.ok(mainDeclarations[0].prop === 'position' && mainDeclarations[0].value === 'relative' && !mainDeclarations[0].important, 'Main must contain absolute descendants without changing overflow, native scrolling or focus');
 
   expectClass('bg-background', 'background-color', 'hsl(var(--background))');
   expectClass('text-foreground', 'color', 'hsl(var(--foreground))');

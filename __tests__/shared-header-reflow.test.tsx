@@ -2,6 +2,7 @@ import React from 'react';
 import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import ts from 'typescript';
+import { parse, type Rule } from 'postcss';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AppHeader, AppShell } from '@/components/app-shell';
@@ -36,6 +37,17 @@ function classNames(node: ts.JsxElement | ts.JsxSelfClosingElement): string[] {
   if (!attribute || !ts.isJsxAttribute(attribute) || !attribute.initializer || !ts.isStringLiteral(attribute.initializer)) return [];
   return attribute.initializer.text.split(/\s+/);
 }
+
+it('contains absolute main content without changing native scrolling or focus behavior', () => {
+  // JSDOM has no scroll layout. The browser gate checks the real existing
+  // sr-only descendants, root range and native skip-link/keyboard sequence.
+  const stylesheet = parse(readFileSync(path.resolve(__dirname, '../app/globals.css'), 'utf8'));
+  const matches: Rule[] = [];
+  stylesheet.walkRules(rule => { if (rule.selector === '.app-shell #page-content') matches.push(rule); });
+  expect(matches).toHaveLength(1);
+  expect(matches[0].nodes.map(node => node.type === 'decl' ? [node.prop, node.value, Boolean(node.important)] : node.type)).toEqual([['position', 'relative', false]]);
+  expect(matches[0].parent).toMatchObject({ type: 'atrule', name: 'layer', params: 'components' });
+});
 
 it('gives every real AppHeader an explicit semantic title/row/actions contract, including fallbacks', () => {
   // JSDOM cannot prove reflow. This source contract catches omitted variants;
