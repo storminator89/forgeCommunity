@@ -4,8 +4,9 @@ import { Prisma } from '@prisma/client';
 import { NextResponse } from 'next/server';
 import { readableSpaceWhere, resolveSpaceViewer } from '@/lib/server/space-access';
 import { spaceErrorResponse, spaceTransaction, SpaceApiError } from '@/lib/server/space-api';
+import { privateMissionAccess, visibleMissionContributions } from '@/lib/server/space-missions';
 
-type SpaceTarget = 'SPACE_DISCUSSION' | 'SPACE_REPLY';
+type SpaceTarget = 'SPACE_DISCUSSION' | 'SPACE_REPLY' | 'SPACE_MISSION_CONTRIBUTION';
 
 /** Visibility is checked before duplicate lookup, including on retries. */
 export async function createSpaceContentReport(input: {
@@ -19,6 +20,20 @@ export async function createSpaceContentReport(input: {
     const viewer = await resolveSpaceViewer(userId, tx);
     if (!viewer.userId) throw new SpaceApiError('Inhalt nicht gefunden', 404);
     const visible = readableSpaceWhere(viewer);
+    const missionContribution = targetType === 'SPACE_MISSION_CONTRIBUTION'
+      ? await tx.spaceMissionContribution.findFirst({ where: { id: targetId,
+        mission: { space: { AND: [visible, { visibility: 'PRIVATE' }] } } },
+        select: { authorId: true, missionId: true, mission: { select: { spaceId: true } } } }) : null;
+    if (targetType === 'SPACE_MISSION_CONTRIBUTION') {
+      if (!missionContribution) throw new SpaceApiError('Inhalt nicht gefunden', 404);
+      await privateMissionAccess(missionContribution.mission.spaceId, userId, tx);
+      if (!viewer.isAdmin && !(await visibleMissionContributions(missionContribution.mission.spaceId, missionContribution.missionId, tx)).some(row => row.id === targetId)) {
+        throw new SpaceApiError('Inhalt nicht gefunden', 404);
+      }
+      if (missionContribution.authorId === userId) throw new SpaceApiError('Eigene Inhalte können nicht gemeldet werden', 400);
+      const existing = await tx.contentReport.findUnique({ where: key, select: { id: true } });
+      return { scopeSpaceId: missionContribution.mission.spaceId, existing };
+    }
     const target = targetType === 'SPACE_DISCUSSION'
       ? await tx.spaceDiscussion.findFirst({ where: { id: targetId, space: visible,
           ...(viewer.isAdmin ? {} : { hiddenAt: null }) },

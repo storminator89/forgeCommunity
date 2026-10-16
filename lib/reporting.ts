@@ -7,7 +7,7 @@ export const reportReasons = [
 ] as const;
 
 export type ReportReason = (typeof reportReasons)[number]['value'];
-export type ReportTargetType = 'POST' | 'COMMENT' | 'SPACE_DISCUSSION' | 'SPACE_REPLY';
+export type ReportTargetType = 'POST' | 'COMMENT' | 'SPACE_DISCUSSION' | 'SPACE_REPLY' | 'SPACE_MISSION_CONTRIBUTION';
 export type ReportStatus = 'OPEN' | 'DISMISSED' | 'RESOLVED';
 
 export function isReportReason(value: unknown): value is ReportReason {
@@ -15,7 +15,7 @@ export function isReportReason(value: unknown): value is ReportReason {
 }
 
 export function isReportTargetType(value: unknown): value is ReportTargetType {
-  return value === 'POST' || value === 'COMMENT' || value === 'SPACE_DISCUSSION' || value === 'SPACE_REPLY';
+  return value === 'POST' || value === 'COMMENT' || value === 'SPACE_DISCUSSION' || value === 'SPACE_REPLY' || value === 'SPACE_MISSION_CONTRIBUTION';
 }
 
 export function reportReasonLabel(value: string): string {

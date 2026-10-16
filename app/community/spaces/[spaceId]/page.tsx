@@ -15,6 +15,7 @@ import { SpaceShell } from '@/components/spaces/SpaceShell';
 import { SpaceVisibility } from '@/components/spaces/SpaceVisibility';
 import { SpaceAuthorLine } from '@/components/spaces/SpaceAuthorLine';
 import { SpaceMemberManager } from '@/components/spaces/SpaceMemberManager';
+import { SpaceMissionIndex } from '@/components/spaces/SpaceMissionIndex';
 import { apiSpaceUrl, discussionUrl, isSpaceAbort, revalidateSpacePages, type SpaceDiscussion, type SpacePage, type SpaceSummary } from '@/components/spaces/space-api';
 import { useSpaceAccess, useSpaceListGeneration } from '@/hooks/useSpaceAccess';
 
@@ -210,6 +211,8 @@ function SpaceOverview({ spaceId }: { spaceId: string }) {
           .then(current => { if (read.isCurrent()) setSpace(current); })
           .catch(() => { /* access guard handles permission loss */ });
       }} />}
+
+      {space.visibility === 'PRIVATE' && <SpaceMissionIndex spaceId={spaceId} canManage={space.canManage} request={request} onUnavailable={invalidate} />}
 
       <section aria-labelledby="space-discussions-title" className="mt-8">
         <div className="flex flex-wrap items-center justify-between gap-3"><h2 id="space-discussions-title" className="text-xl font-semibold">Diskussionen</h2>

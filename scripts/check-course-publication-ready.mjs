@@ -9,10 +9,11 @@ import pg from 'pg';
 import { initializeSqlite, sqlitePath } from './sqlite-init.mjs';
 import { applyPostgresqlUpgrades } from './postgresql-upgrades.mjs';
 import { assertCoursePublicationReady } from './assert-course-publication-ready.mjs';
+import testDatabase from './space-mission-test-database.cjs';
 
 const sqliteNames = readdirSync(new URL('../prisma/sqlite-migrations/', import.meta.url))
   .filter(name => /^\d+_[\w-]+\.sql$/.test(name)).sort();
-assert.equal(sqliteNames.at(-1), '0021_space_report_targets.sql');
+assert.equal(sqliteNames.at(-1), '0023_space_mission_contributions.sql');
 const publicationIndex = sqliteNames.indexOf('0010_staged_course_publication.sql');
 assert.ok(publicationIndex >= 0);
 
@@ -138,8 +139,12 @@ test('SQLite migration still rolls back an injected DDL failure', () => {
   db.close();
 });
 
-test('SQLite readiness refuses missing, changed, gapped and divergent migration history through space reports', async () => {
+test('SQLite readiness refuses missing, changed, gapped and divergent migration history through mission contributions', async () => {
   for (const mutate of [
+    db => db.prepare(`DELETE FROM _app_migrations WHERE name='0023_space_mission_contributions.sql'`).run(),
+    db => db.prepare(`UPDATE _app_migrations SET checksum='changed' WHERE name='0023_space_mission_contributions.sql'`).run(),
+    db => db.prepare(`DELETE FROM _app_migrations WHERE name='0022_space_mission_foundation.sql'`).run(),
+    db => db.prepare(`UPDATE _app_migrations SET checksum='changed' WHERE name='0022_space_mission_foundation.sql'`).run(),
     db => db.prepare(`DELETE FROM _app_migrations WHERE name='0021_space_report_targets.sql'`).run(),
     db => db.prepare(`UPDATE _app_migrations SET checksum='changed' WHERE name='0021_space_report_targets.sql'`).run(),
     db => db.prepare(`DELETE FROM _app_migrations WHERE name='0020_spaces.sql'`).run(),
@@ -218,11 +223,9 @@ test('SQLite deploy refuses space report tail after a missing spaces predecessor
   assert.throws(() => initializeSqlite(f.url, f.migrations), /gap before 0021_space_report_targets\.sql/);
 });
 
-const pgUrl = process.env.DATABASE_URL;
-const pgParsed = pgUrl && /^postgres(?:ql)?:\/\//.test(pgUrl) ? new URL(pgUrl) : null;
-if (process.env.POSTGRESQL_RELEASE_GATE_DISPOSABLE === '1' && pgParsed &&
-    ['127.0.0.1', 'localhost', '[::1]'].includes(pgParsed.hostname) &&
-    pgParsed.pathname === '/forge_test' && !pgParsed.searchParams.has('schema')) {
+const pgUrl = process.env.POSTGRESQL_RELEASE_GATE_DISPOSABLE === '1'
+  ? testDatabase.disposablePostgresqlTestUrl(process.env.DATABASE_URL) : null;
+if (pgUrl) {
   test('PostgreSQL 16 fresh custom schema is ready; populated main upgrade fails closed', async () => {
     const db = new pg.Client({ connectionString: pgUrl });
     await db.connect();
@@ -236,6 +239,10 @@ if (process.env.POSTGRESQL_RELEASE_GATE_DISPOSABLE === '1' && pgParsed &&
       assert.equal(await assertCoursePublicationReady(freshUrl.toString(), 'postgresql'), true);
       await db.query(`SET search_path TO "${fresh}"`);
       for (const [name, sql, file] of [
+        ['missing mission contribution tail', `DELETE FROM "_app_schema_upgrades" WHERE name='0022_space_mission_contributions.sql'`, '0022_space_mission_contributions.sql'],
+        ['tampered mission contribution tail', `UPDATE "_app_schema_upgrades" SET checksum='changed' WHERE name='0022_space_mission_contributions.sql'`, '0022_space_mission_contributions.sql'],
+        ['missing mission foundation tail', `DELETE FROM "_app_schema_upgrades" WHERE name='0021_space_mission_foundation.sql'`, '0021_space_mission_foundation.sql'],
+        ['tampered mission foundation tail', `UPDATE "_app_schema_upgrades" SET checksum='changed' WHERE name='0021_space_mission_foundation.sql'`, '0021_space_mission_foundation.sql'],
         ['missing space-report tail', `DELETE FROM "_app_schema_upgrades" WHERE name='0020_space_report_targets.sql'`, '0020_space_report_targets.sql'],
         ['tampered space-report tail', `UPDATE "_app_schema_upgrades" SET checksum='changed' WHERE name='0020_space_report_targets.sql'`, '0020_space_report_targets.sql'],
         ['missing spaces tail', `DELETE FROM "_app_schema_upgrades" WHERE name='0019_spaces.sql'`, '0019_spaces.sql'],

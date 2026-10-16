@@ -18,6 +18,11 @@ enum SpaceVisibility {
   PRIVATE
 }
 
+enum SpaceMissionContributionKind {
+  INSIGHT
+  BUILD_ON
+}
+
 enum RewardEventType {
   COURSE_COMPLETED
 }
@@ -126,6 +131,9 @@ model User {
   spaceMemberships   SpaceMember[]
   spaceDiscussions   SpaceDiscussion[]
   spaceReplies       SpaceReply[]
+  createdSpaceMissions SpaceMission[]
+  spaceMissionParticipations SpaceMissionParticipation[]
+  spaceMissionContributions SpaceMissionContribution[]
   likePosts          LikePost[]
   likeComments       LikeComment[]
   likeProjects       LikeProject[]
@@ -260,6 +268,72 @@ model Space {
   updatedAt   DateTime        @updatedAt
   members     SpaceMember[]
   discussions SpaceDiscussion[]
+  missions    SpaceMission[]
+}
+
+// Private-Space cooperative activity. This is not course or mastery evidence.
+// The one-open-mission partial unique index lives in both provider migrations.
+model SpaceMission {
+  id            String @id @default(cuid())
+  spaceId       String
+  space         Space @relation(fields: [spaceId], references: [id], onDelete: Restrict)
+  creatorId     String?
+  creator       User? @relation(fields: [creatorId], references: [id], onDelete: SetNull)
+  requestId     String
+  payloadDigest String
+  title         String
+  prompt        String @db.Text
+  createdAt     DateTime @default(now())
+  closedAt      DateTime?
+  participations SpaceMissionParticipation[]
+  contributions SpaceMissionContribution[]
+
+  @@index([spaceId, createdAt, id])
+  @@unique([spaceId, requestId])
+}
+
+// A new explicit self-join advances the epoch; old posts can never be revived
+// by a later join. Membership revocation opts out in the same transaction.
+model SpaceMissionParticipation {
+  missionId  String
+  userId     String
+  epoch      Int
+  joinedAt   DateTime @default(now())
+  optedOutAt DateTime?
+  mission    SpaceMission @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  user       User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([missionId, userId])
+  @@index([userId, optedOutAt])
+  @@index([missionId, optedOutAt])
+}
+
+// Named, voluntary teach-back activity, separate from all learning evidence.
+// Epoch is immutable historical consent, intentionally not a relation to the
+// mutable participation epoch. The composite target FK enforces mission scope.
+model SpaceMissionContribution {
+  id                   String @id @default(cuid())
+  missionId            String
+  mission              SpaceMission @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  authorId             String
+  author               User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  epoch                Int
+  kind                 SpaceMissionContributionKind
+  content              String @db.Text
+  targetContributionId String?
+  target               SpaceMissionContribution? @relation("MissionBuildOn", fields: [missionId, targetContributionId], references: [missionId, id], onDelete: Cascade)
+  buildOns             SpaceMissionContribution[] @relation("MissionBuildOn")
+  requestId            String
+  payloadDigest        String
+  createdAt            DateTime @default(now())
+  hiddenAt             DateTime?
+  withdrawnAt          DateTime?
+
+  @@unique([missionId, id])
+  @@unique([missionId, authorId, requestId])
+  @@index([missionId, createdAt, id])
+  @@index([missionId, authorId, epoch, kind])
+  @@index([authorId])
 }
 
 model SpaceMember {
