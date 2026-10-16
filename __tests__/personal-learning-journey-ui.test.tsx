@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useSession } from 'next-auth/react';
 import JourneyClient from '@/app/courses/journey/JourneyClient';
 
@@ -10,7 +10,7 @@ jest.mock('@/components/app-shell', () => ({
 jest.mock('@/components/Sidebar', () => ({ Sidebar: () => null }));
 jest.mock('@/components/user-nav', () => ({ UserNav: () => null }));
 jest.mock('@/components/theme-toggle', () => ({ ThemeToggle: () => null }));
-jest.mock('@/app/courses/journey/JourneyMascot', () => ({ JourneyMascot: () => null }));
+jest.mock('@/app/courses/journey/JourneyMascot', () => ({ JourneyMascot: () => <div data-testid="journey-mascot" /> }));
 
 function session(role: string, id = 'viewer') {
   jest.mocked(useSession).mockReturnValue({
@@ -75,4 +75,41 @@ it('recommends only a server-open step, then purges it on a role refresh', async
   expect(screen.getByRole('heading', { name: 'Lernweg für Lernende' })).toBeVisible();
   expect(screen.queryByRole('link', { name: 'Lernschritt öffnen' })).not.toBeInTheDocument();
   await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(3));
+});
+
+it('keeps the decorative figure hidden across visits without changing the motion preference', async () => {
+  window.localStorage.setItem('forge-journey-mascot-hidden', 'true');
+  window.localStorage.setItem('forge-journey-motion-off', 'true');
+  global.fetch = jest.fn().mockImplementation((url: string) => {
+    if (url === '/api/courses') return response([
+      { id: 'other', title: 'Anderer Kurs', isEnrolled: true, completed: false, canDelete: false },
+    ]);
+    if (url === '/api/courses/other/contents') return response([
+      { id: 'open', title: 'Freier Schritt', type: 'TEXT', order: 1, locked: false, publicationId: 'pub-1', subContents: [] },
+    ]);
+    if (url === '/api/courses/other/progress') return response({
+      completedContentIds: [], complete: false, canTrack: true, publicationId: 'pub-1',
+    });
+    throw new Error(`Unexpected request ${url}`);
+  });
+
+  const view = render(<JourneyClient />);
+  await screen.findByRole('link', { name: 'Lernschritt öffnen' });
+  const visibility = screen.getByRole('button', { name: 'Maskottchen anzeigen' });
+  expect(visibility).toHaveAttribute('aria-pressed', 'false');
+  expect(screen.queryByTestId('journey-mascot')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /Figurenanimationen/ })).not.toBeInTheDocument();
+
+  fireEvent.click(visibility);
+  expect(screen.getByTestId('journey-mascot')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /Figurenanimationen/ })).toHaveAttribute('aria-pressed', 'false');
+  fireEvent.click(visibility);
+  expect(screen.queryByTestId('journey-mascot')).not.toBeInTheDocument();
+  expect(window.localStorage.getItem('forge-journey-mascot-hidden')).toBe('true');
+  expect(window.localStorage.getItem('forge-journey-motion-off')).toBe('true');
+
+  view.unmount();
+  render(<JourneyClient />);
+  await screen.findByRole('link', { name: 'Lernschritt öffnen' });
+  expect(screen.queryByTestId('journey-mascot')).not.toBeInTheDocument();
 });
