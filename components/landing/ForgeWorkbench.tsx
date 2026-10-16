@@ -30,9 +30,8 @@ export function ForgeWorkbench() {
   return (
     <div className={styles.workbench}>
       <div key={replay} data-motion="forge-workbench" className={replay > 0 ? `${styles.artFrame} ${styles.illustrationPlaying}` : styles.artFrame} onAnimationEnd={() => setReplay(0)}>
-        {/* One native responsive source avoids React's additional standalone-image head hint. */}
+        {/* Keep React's picture SSR scope; the image owns all responsive attributes. */}
         <picture className={styles.illustration}>
-          <source type="image/webp" sizes={artworkSizes} srcSet={artworkSrcSet} />
           <img
             className={styles.illustration}
             alt="Illustration: Zwei Erwachsene teilen einen goldenen Ideenfunken über einem offenen Buch, umgeben von farbigen Bausteinen."
@@ -41,6 +40,8 @@ export function ForgeWorkbench() {
             loading="eager"
             fetchPriority="high"
             decoding="async"
+            sizes={artworkSizes}
+            srcSet={artworkSrcSet}
             src="/images/home/forge-workbench-768.webp"
           />
         </picture>
