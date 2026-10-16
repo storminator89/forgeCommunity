@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Bitte einen gültigen Hinweis eingeben (maximal 500 Zeichen)' }, { status: 400, headers: { 'Cache-Control': 'private, no-store' } });
     }
 
-    if (targetType === 'SPACE_DISCUSSION' || targetType === 'SPACE_REPLY') {
+    if (targetType === 'SPACE_DISCUSSION' || targetType === 'SPACE_REPLY' || targetType === 'SPACE_MISSION_CONTRIBUTION') {
       return createSpaceContentReport({ userId, targetType, targetId, reason,
         details: safeDetails || null, since: new Date(Date.now() - 24 * 60 * 60 * 1000), softLimit: SOFT_REPORTS_PER_DAY });
     }
@@ -125,7 +125,8 @@ export async function GET(request: NextRequest) {
       const commentIds = reports.filter(report => report.targetType === 'COMMENT').map(report => report.targetId);
       const discussionIds = actor.role === 'ADMIN' ? reports.filter(report => report.targetType === 'SPACE_DISCUSSION').map(report => report.targetId) : [];
       const replyIds = actor.role === 'ADMIN' ? reports.filter(report => report.targetType === 'SPACE_REPLY').map(report => report.targetId) : [];
-      const [posts, comments, discussions, replies] = await Promise.all([
+      const missionContributionIds = actor.role === 'ADMIN' ? reports.filter(report => report.targetType === 'SPACE_MISSION_CONTRIBUTION').map(report => report.targetId) : [];
+      const [posts, comments, discussions, replies, missionContributions] = await Promise.all([
         postIds.length ? tx.post.findMany({ where: { id: { in: postIds }, published: true },
           select: { id: true, title: true, content: true } }) : Promise.resolve([]),
         commentIds.length ? tx.comment.findMany({ where: { id: { in: commentIds }, post: { published: true } },
@@ -135,11 +136,15 @@ export async function GET(request: NextRequest) {
         replyIds.length ? tx.spaceReply.findMany({ where: { id: { in: replyIds } },
           select: { id: true, content: true, hiddenAt: true,
             discussion: { select: { id: true, spaceId: true, title: true, hiddenAt: true } } } }) : Promise.resolve([]),
+        missionContributionIds.length ? tx.spaceMissionContribution.findMany({ where: { id: { in: missionContributionIds }, mission: { space: { visibility: 'PRIVATE' } } },
+          select: { id: true, content: true, hiddenAt: true, withdrawnAt: true,
+            mission: { select: { id: true, spaceId: true, title: true } } } }) : Promise.resolve([]),
       ]);
       const availablePosts = new Map(posts.map(post => [post.id, post]));
       const availableComments = new Map(comments.map(comment => [comment.id, comment]));
       const availableDiscussions = new Map(discussions.map(discussion => [discussion.id, discussion]));
       const availableReplies = new Map(replies.map(reply => [reply.id, reply]));
+      const availableMissionContributions = new Map(missionContributions.map(item => [item.id, item]));
 
       const items = reports.map(report => {
         const post = report.targetType === 'POST' ? availablePosts.get(report.targetId) : undefined;
@@ -148,21 +153,27 @@ export async function GET(request: NextRequest) {
         const discussion = candidateDiscussion?.spaceId === report.scopeSpaceId ? candidateDiscussion : undefined;
         const candidateReply = report.targetType === 'SPACE_REPLY' ? availableReplies.get(report.targetId) : undefined;
         const reply = candidateReply?.discussion.spaceId === report.scopeSpaceId ? candidateReply : undefined;
+        const candidateMissionContribution = report.targetType === 'SPACE_MISSION_CONTRIBUTION' ? availableMissionContributions.get(report.targetId) : undefined;
+        const missionContribution = candidateMissionContribution?.mission.spaceId === report.scopeSpaceId ? candidateMissionContribution : undefined;
         return {
           id: report.id, targetType: report.targetType, targetId: report.targetId,
           scopeSpaceId: report.scopeSpaceId, targetDiscussionId: reply?.discussion.id ?? null,
+          targetMissionId: missionContribution?.mission.id ?? null,
+          targetWithdrawn: Boolean(missionContribution?.withdrawnAt),
           reason: report.reason, details: report.details, status: report.status,
           createdAt: report.createdAt, reviewedAt: report.reviewedAt,
           reviewedById: report.reviewedById, resolutionNote: report.resolutionNote,
-          targetAvailable: Boolean(post || comment || discussion || reply),
-          targetHidden: discussion ? Boolean(discussion.hiddenAt) : reply ? Boolean(reply.hiddenAt || reply.discussion.hiddenAt) : false,
+          targetAvailable: Boolean(post || comment || discussion || reply || missionContribution),
+          targetHidden: discussion ? Boolean(discussion.hiddenAt) : reply ? Boolean(reply.hiddenAt || reply.discussion.hiddenAt) : Boolean(missionContribution?.hiddenAt),
           targetTitle: post ? sanitizeTextServer(post.title).slice(0, 120) :
             discussion ? sanitizeTextServer(discussion.title).slice(0, 120) :
-            reply ? sanitizeTextServer(reply.discussion.title).slice(0, 120) : null,
+            reply ? sanitizeTextServer(reply.discussion.title).slice(0, 120) :
+            missionContribution ? sanitizeTextServer(missionContribution.mission.title).slice(0, 120) : null,
           targetPreview: post ? sanitizeHtmlPreviewServer(post.content, 240) :
             comment ? sanitizeHtmlPreviewServer(comment.content, 240) :
             discussion ? sanitizeHtmlPreviewServer(discussion.content, 240) :
-            reply ? sanitizeHtmlPreviewServer(reply.content, 240) : null,
+            reply ? sanitizeHtmlPreviewServer(reply.content, 240) :
+            missionContribution ? sanitizeHtmlPreviewServer(missionContribution.content, 240) : null,
         };
       });
       return { items, total, page: page.skip / 20 + 1, pageSize: 20 };

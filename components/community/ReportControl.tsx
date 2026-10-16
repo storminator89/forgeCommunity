@@ -10,13 +10,14 @@ import {
 } from '@/components/ui/dialog';
 import { reportReasons, type ReportReason, type ReportTargetType } from '@/lib/reporting';
 
-export function ReportControl({ targetType, targetId }: {
-  targetType: ReportTargetType | 'SPACE_DISCUSSION' | 'SPACE_REPLY';
+export function ReportControl({ targetType, targetId, request }: {
+  targetType: ReportTargetType | 'SPACE_DISCUSSION' | 'SPACE_REPLY' | 'SPACE_MISSION_CONTRIBUTION';
   targetId: string;
+  request?: <T>(path: string, init?: RequestInit) => Promise<T>;
 }) {
   const reasonId = useId();
   const detailsId = useId();
-  const targetLabel = targetType === 'POST' ? 'Beitrag' : targetType === 'COMMENT' ? 'Kommentar' : targetType === 'SPACE_DISCUSSION' ? 'Space-Diskussion' : 'Space-Antwort';
+  const targetLabel = targetType === 'POST' ? 'Beitrag' : targetType === 'COMMENT' ? 'Kommentar' : targetType === 'SPACE_DISCUSSION' ? 'Space-Diskussion' : targetType === 'SPACE_MISSION_CONTRIBUTION' ? 'Missionsbeitrag' : 'Space-Antwort';
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState<ReportReason>('SPAM');
   const [details, setDetails] = useState('');
@@ -31,13 +32,19 @@ export function ReportControl({ targetType, targetId }: {
     setPending(true);
     setError('');
     try {
-      const response = await fetch('/api/reports', {
+      const init = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ targetType, targetId, reason, details }),
-      });
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(typeof body.error === 'string' ? body.error : 'Meldung fehlgeschlagen');
+      };
+      let body: { alreadyReported?: boolean };
+      if (request) body = await request('/api/reports', init);
+      else {
+        const response = await fetch('/api/reports', init);
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(typeof result.error === 'string' ? result.error : 'Meldung fehlgeschlagen');
+        body = result;
+      }
       setReported(true);
       setFeedback(body.alreadyReported ? 'Dieser Inhalt wurde bereits von dir gemeldet.' : 'Danke. Deine Meldung wurde gespeichert.');
       setOpen(false);
@@ -60,7 +67,7 @@ export function ReportControl({ targetType, targetId }: {
         <DialogHeader>
           <DialogTitle>{targetLabel} melden</DialogTitle>
           <DialogDescription>
-            Wähle einen Grund. Dein Hinweis wird nur vom Moderationsteam gelesen.
+            {targetType === 'SPACE_MISSION_CONTRIBUTION' ? 'Wähle einen Grund. Deinen Hinweis und den Missionsbeitrag können nur Admins dieses privaten Spaces prüfen.' : 'Wähle einen Grund. Dein Hinweis wird nur vom Moderationsteam gelesen.'}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-4">

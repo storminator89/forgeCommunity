@@ -9,15 +9,13 @@ import prismaPackage from '@prisma/client';
 import { applyPostgresqlUpgrades } from './postgresql-upgrades.mjs';
 import { assertCoursePublicationReady } from './assert-course-publication-ready.mjs';
 import { createRetentionClient, runPracticeRetentionTick } from './formative-practice-retention-scheduler.mjs';
+import testDatabase from './space-mission-test-database.cjs';
 
 // This test creates and drops only random schemas in a local, disposable CI database.
-const baseUrl = process.env.DATABASE_URL;
-const parsedUrl = baseUrl && /^postgres(?:ql)?:\/\//.test(baseUrl) ? new URL(baseUrl) : null;
-if (process.env.POSTGRESQL_RELEASE_GATE_DISPOSABLE !== '1' ||
-    !parsedUrl || !['127.0.0.1', 'localhost', '[::1]'].includes(parsedUrl.hostname) ||
-    parsedUrl.pathname !== '/forge_test' || parsedUrl.searchParams.has('schema')) {
-  throw new Error('PostgreSQL release gate requires POSTGRESQL_RELEASE_GATE_DISPOSABLE=1 and a local forge_test database URL without ?schema=.');
+if (process.env.POSTGRESQL_RELEASE_GATE_DISPOSABLE !== '1') {
+  throw new Error('PostgreSQL release gate requires POSTGRESQL_RELEASE_GATE_DISPOSABLE=1.');
 }
+const baseUrl = testDatabase.disposablePostgresqlTestUrl(process.env.DATABASE_URL);
 
 const baselineSql = readFileSync(fileURLToPath(new URL('../prisma/postgresql-baselines/0000_main_7814799.sql', import.meta.url)), 'utf8');
 const upgradesDir = fileURLToPath(new URL('../prisma/postgresql-upgrades/', import.meta.url));
@@ -43,6 +41,8 @@ const reviewedUpgradeNames = [
   '0018_course_qa.sql',
   '0019_spaces.sql',
   '0020_space_report_targets.sql',
+  '0021_space_mission_foundation.sql',
+  '0022_space_mission_contributions.sql',
 ];
 // A release image must carry the exact reviewed sequence, including the tail.
 assert.deepEqual(upgradeNames, reviewedUpgradeNames);

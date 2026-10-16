@@ -14,7 +14,7 @@ import { reportReasonLabel, type ReportStatus, type ReportTargetType } from '@/l
 
 interface ReportItem {
   id: string;
-  targetType: ReportTargetType | 'SPACE_DISCUSSION' | 'SPACE_REPLY';
+  targetType: ReportTargetType | 'SPACE_DISCUSSION' | 'SPACE_REPLY' | 'SPACE_MISSION_CONTRIBUTION';
   targetId: string;
   reason: string;
   details: string | null;
@@ -28,6 +28,8 @@ interface ReportItem {
   targetPreview: string | null;
   scopeSpaceId?: string | null;
   targetDiscussionId?: string | null;
+  targetMissionId?: string | null;
+  targetWithdrawn?: boolean;
 }
 
 function targetLabel(type: ReportItem['targetType']) {
@@ -36,10 +38,12 @@ function targetLabel(type: ReportItem['targetType']) {
     case 'COMMENT': return 'Kommentar';
     case 'SPACE_DISCUSSION': return 'Space-Diskussion';
     case 'SPACE_REPLY': return 'Space-Antwort';
+    case 'SPACE_MISSION_CONTRIBUTION': return 'Missionsbeitrag';
   }
 }
 
 function reportLink(report: ReportItem) {
+  if (report.targetType === 'SPACE_MISSION_CONTRIBUTION' && report.scopeSpaceId && report.targetMissionId) return `/community/spaces/${encodeURIComponent(report.scopeSpaceId)}/missions/${encodeURIComponent(report.targetMissionId)}#mission-contribution-${encodeURIComponent(report.targetId)}`;
   if (report.targetType === 'SPACE_DISCUSSION' && report.scopeSpaceId) return `/community/spaces/${encodeURIComponent(report.scopeSpaceId)}/discussions/${encodeURIComponent(report.targetId)}#discussion-${encodeURIComponent(report.targetId)}`;
   if (report.targetType === 'SPACE_REPLY' && report.scopeSpaceId && report.targetDiscussionId) return `/community/spaces/${encodeURIComponent(report.scopeSpaceId)}/discussions/${encodeURIComponent(report.targetDiscussionId)}#reply-${encodeURIComponent(report.targetId)}`;
   if (report.targetType === 'POST' || report.targetType === 'COMMENT') return `/community#${report.targetType === 'POST' ? 'post' : 'comment'}-${encodeURIComponent(report.targetId)}`;
@@ -275,7 +279,7 @@ function ModerationQueueForViewer() {
       </AppHeader>
       <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto p-4 lg:p-8">
         <div className="mx-auto max-w-4xl space-y-5">
-          <p className="text-sm text-muted-foreground">Nur Moderation und Administration können Meldungen sehen und bearbeiten. Entscheidungen werden mit Zeit und Bearbeiter protokolliert.</p>
+          <p className="text-sm text-muted-foreground">Nur Moderation und Administration können Meldungen sehen und bearbeiten. Meldungen aus privaten Spaces können nur Admins prüfen. Entscheidungen werden mit Zeit und Bearbeiter protokolliert.</p>
           <div role="group" aria-label="Meldungsstatus" className="flex flex-wrap gap-2">
             {([['OPEN', 'Offen'], ['DISMISSED', 'Abgewiesen'], ['RESOLVED', 'Maßnahme dokumentiert']] as const).map(([value, label]) =>
               <Button key={value} type="button" variant={status === value ? 'default' : 'outline'}
@@ -295,6 +299,7 @@ function ModerationQueueForViewer() {
                     </time>
                   </div>
                   {report.targetAvailable ? <>
+                    {report.targetType === 'SPACE_MISSION_CONTRIBUTION' && report.targetWithdrawn && <p className="mt-2 text-sm font-medium">Von der Person zurückgezogen. Nur zur Moderation aufbewahrt.</p>}
                     {report.targetTitle && <p className="mt-2 font-medium">{report.targetTitle}</p>}
                     {report.targetPreview && <p className="mt-1 text-sm text-muted-foreground">{report.targetPreview}</p>}
                     {reportLink(report) && <Link href={reportLink(report)!}

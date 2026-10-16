@@ -266,6 +266,12 @@ export async function PUT(
         },
         include: { userSettings: true },
       })
+      // Role changes out of USER revoke consent. Returning to USER requires a
+      // fresh self-join; old epochs and capacity slots cannot reactivate.
+      if (target?.role === 'USER' && updated.role !== 'USER') {
+        await tx.spaceMissionParticipation.updateMany({ where: { userId: params.id, optedOutAt: null },
+          data: { optedOutAt: new Date() } })
+      }
       if (target?.role !== updated.role) await reconcileUserRewards(tx, params.id)
       return updated
     }, { isolationLevel: 'Serializable' })
