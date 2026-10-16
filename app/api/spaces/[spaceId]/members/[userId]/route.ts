@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { isSameOriginRequest } from '@/lib/server/auth-security';
 import { getReadableSpace } from '@/lib/server/space-access';
+import { revokeSpaceMissionParticipation } from '@/lib/server/space-missions';
 import { requiredUserId, SPACE_ID_RE, SPACE_NO_STORE, spaceErrorResponse, spaceTransaction, SpaceApiError, validSpaceId } from '@/lib/server/space-api';
 
 export async function DELETE(request: NextRequest,
@@ -19,6 +20,7 @@ export async function DELETE(request: NextRequest,
       if (actor?.role !== 'ADMIN') throw new SpaceApiError('Nicht autorisiert', 403);
       const access = await getReadableSpace(spaceId, actorId, tx);
       if (!access || access.space.visibility !== 'PRIVATE') throw new SpaceApiError('Space nicht gefunden', 404);
+      await revokeSpaceMissionParticipation(spaceId, userId, tx);
       await tx.spaceMember.deleteMany({ where: { spaceId, userId } });
     });
     return NextResponse.json({ spaceId, userId, removed: true }, { headers: SPACE_NO_STORE });

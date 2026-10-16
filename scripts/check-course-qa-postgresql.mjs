@@ -6,14 +6,12 @@ import prismaPackage from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { applyPostgresqlUpgrades } from './postgresql-upgrades.mjs';
 import { assertCoursePublicationReady } from './assert-course-publication-ready.mjs';
+import testDatabase from './space-mission-test-database.cjs';
 
-const baseUrl = process.env.DATABASE_URL;
-const url = baseUrl && /^postgres(?:ql)?:\/\//.test(baseUrl) ? new URL(baseUrl) : null;
-if (process.env.POSTGRESQL_RELEASE_GATE_DISPOSABLE !== '1' || !url ||
-    !['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname) ||
-    url.pathname !== '/forge_test' || url.searchParams.has('schema')) {
-  throw new Error('Course Q&A PostgreSQL gate requires a local disposable forge_test database.');
+if (process.env.POSTGRESQL_RELEASE_GATE_DISPOSABLE !== '1') {
+  throw new Error('Course Q&A PostgreSQL gate requires POSTGRESQL_RELEASE_GATE_DISPOSABLE=1.');
 }
+const baseUrl = testDatabase.disposablePostgresqlTestUrl(process.env.DATABASE_URL);
 
 const quote = name => `"${name.replaceAll('"', '""')}"`;
 const rejectCode = (promise, code) => assert.rejects(promise, error => error?.code === code);

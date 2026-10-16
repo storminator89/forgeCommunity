@@ -7,6 +7,7 @@ import { SpaceHttpError, spaceJson } from '@/components/spaces/space-api';
 export function useSpaceAccess(onAccessLost?: () => void) {
   const [accessLost, setAccessLost] = useState(false);
   const invalidRef = useRef(false);
+  const mountedRef = useRef(true);
   const epochRef = useRef(0);
   const requestsRef = useRef(new Set<AbortController>());
   const onAccessLostRef = useRef(onAccessLost);
@@ -22,15 +23,21 @@ export function useSpaceAccess(onAccessLost?: () => void) {
     setAccessLost(true);
   }, []);
 
-  useEffect(() => () => {
-    invalidRef.current = true;
-    epochRef.current += 1;
-    requestsRef.current.forEach(controller => controller.abort());
-    requestsRef.current.clear();
+  useEffect(() => {
+    // React StrictMode replays setup after cleanup. Mount state can resume;
+    // explicit permission loss in invalidRef must remain irreversible.
+    mountedRef.current = true;
+    const requests = requestsRef.current;
+    return () => {
+      mountedRef.current = false;
+      epochRef.current += 1;
+      requests.forEach(controller => controller.abort());
+      requests.clear();
+    };
   }, []);
 
   const request = useCallback(async <T,>(path: string, init: RequestInit = {}): Promise<T> => {
-    if (invalidRef.current) throw new DOMException('Access changed', 'AbortError');
+    if (invalidRef.current || !mountedRef.current) throw new DOMException('Access changed', 'AbortError');
     const epoch = epochRef.current;
     const controller = new AbortController();
     const externalSignal = init.signal;
@@ -40,12 +47,12 @@ export function useSpaceAccess(onAccessLost?: () => void) {
     requestsRef.current.add(controller);
     try {
       const data = await spaceJson<T>(path, { ...init, signal: controller.signal });
-      if (controller.signal.aborted || epoch !== epochRef.current || invalidRef.current) {
+      if (controller.signal.aborted || epoch !== epochRef.current || invalidRef.current || !mountedRef.current) {
         throw new DOMException('Access changed', 'AbortError');
       }
       return data;
     } catch (error) {
-      if (controller.signal.aborted || epoch !== epochRef.current || invalidRef.current) {
+      if (controller.signal.aborted || epoch !== epochRef.current || invalidRef.current || !mountedRef.current) {
         throw new DOMException('Access changed', 'AbortError');
       }
       if (error instanceof SpaceHttpError && (error.status === 403 || error.status === 404)) invalidate();
