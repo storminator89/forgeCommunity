@@ -16,6 +16,7 @@ export const navigationGroups = [
     { name: 'Skills', icon: Award, href: '/skills' },
   ] },
   { title: 'Dein Bereich', items: [
+    { name: 'Space-Missionen', icon: Flag, href: '/community/missions' },
     { name: 'Meine Entwürfe', icon: Bookmark, href: '/knowledgebase/drafts' },
     { name: 'Chat', icon: MessageCircle, href: '/chat' },
     { name: 'Benachrichtigungen', icon: Bell, href: '/notifications' },
@@ -39,5 +40,6 @@ export function isNavigationActive(pathname: string, href: string, aliases: stri
   // Drafts have their own menu item, so only one knowledge section is active.
   if (href === '/knowledgebase' && pathname.startsWith('/knowledgebase/drafts')) return false;
   if (href === '/courses' && pathname.startsWith('/courses/pathways')) return false;
+  if (href === '/community' && (pathname === '/community/missions' || pathname.startsWith('/community/missions/'))) return false;
   return [href, ...aliases].some(path => pathname === path || pathname.startsWith(`${path}/`));
 }

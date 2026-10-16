@@ -51,6 +51,15 @@ it('keeps an enrolled own course out of the journey', async () => {
   expect(await screen.findByRole('heading', { name: 'Dein Lernweg beginnt mit einem Kurs' })).toBeVisible();
   expect(global.fetch).toHaveBeenCalledTimes(1);
   expect(screen.queryByRole('link', { name: 'Lernschritt öffnen' })).not.toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Space-Missionen entdecken' })).toHaveAttribute('href', '/community/missions');
+});
+
+it('keeps mission discovery available when course loading fails', async () => {
+  global.fetch = jest.fn().mockRejectedValue(new Error('offline'));
+  render(<JourneyClient />);
+  expect(await screen.findByRole('heading', { name: 'Deine Kurse konnten nicht geladen werden' })).toBeVisible();
+  expect(screen.getByRole('link', { name: 'Space-Missionen entdecken' })).toHaveAttribute('href', '/community/missions');
+  expect(global.fetch).toHaveBeenCalledTimes(1);
 });
 
 it('recommends only a server-open step, then purges it on a role refresh', async () => {

@@ -217,6 +217,8 @@ function ScopedJourney() {
             <div className="shrink-0"><div className="flex flex-wrap gap-2 sm:justify-end"><Button type="button" variant="outline" size="sm" aria-label="Maskottchen anzeigen" aria-pressed={mascotVisible} onClick={toggleMascot}>Figur {mascotVisible ? 'an' : 'aus'}</Button>{mascotVisible && <Button type="button" variant="outline" size="sm" aria-pressed={motionEnabled && !reducedMotion} onClick={toggleMotion} disabled={reducedMotion}>{reducedMotion ? 'Figurenanimationen aus' : `Figurenanimationen ${motionEnabled ? 'an' : 'aus'}`}</Button>}</div>{mascotVisible && reducedMotion && <p className="mt-1 text-xs text-muted-foreground">Weniger Bewegung ist am Gerät eingestellt.</p>}</div>
           </div>
 
+          <p className="mt-5 text-sm leading-relaxed text-muted-foreground">Gemeinsam mit anderen lernen: <Link prefetch={false} href="/community/missions" className="inline-flex min-h-11 items-center rounded-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Space-Missionen entdecken</Link></p>
+
           {courses === null && !courseError && <div className="mt-8"><PageState kind="loading" title="Deine Kurse werden geladen" /></div>}
           {courseError && <div className="mt-8"><PageState kind="error" title="Deine Kurse konnten nicht geladen werden" action={<Button type="button" variant="outline" onClick={retryCourses}>Erneut versuchen</Button>} /></div>}
           {courses?.length === 0 && <div className="mt-8"><PageState title="Dein Lernweg beginnt mit einem Kurs" description="Hier erscheinen deine angemeldeten Kurse anderer Lehrkräfte." action={<Button asChild><Link href="/courses">Kurse entdecken</Link></Button>} /></div>}
