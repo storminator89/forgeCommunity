@@ -72,7 +72,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
       })).toBe(true);
     }
     await testInfo.attach(`favicon-native-sizes-${colorScheme}`, {
-      body: await page.locator('main').screenshot(),
+      body: await page.locator('main').screenshot({ path: testInfo.outputPath(`favicon-native-sizes-${colorScheme}.png`) }),
       contentType: 'image/png',
     });
   });
