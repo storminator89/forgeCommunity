@@ -318,22 +318,6 @@ function Community({ session, topic, onSelectTopic }: { session: Session | null;
       <Sidebar />
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <AnimatePresence>
-          {notification && (
-            <motion.div
-              initial={{ opacity: 0, y: -20, x: '-50%' }}
-              animate={{ opacity: 1, y: 0, x: '-50%' }}
-              exit={{ opacity: 0, y: -20, x: '-50%' }}
-              className={`fixed top-6 left-1/2 transform -translate-x-1/2 max-w-[calc(100vw-2rem)] border bg-card px-4 py-3 rounded-xl shadow-xs z-[100] flex items-center space-x-2 ${notification.type === 'success'
-                ? 'border-border text-foreground'
-                : 'border-destructive/30 text-destructive'
-                }`}
-            >
-              <span className="font-medium" role={notification.type === 'error' ? 'alert' : 'status'}>{notification.message}</span>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
         <AppHeader>
           <div className="flex min-w-0 items-center justify-between gap-3">
             <h1>Community</h1>
@@ -345,33 +329,33 @@ function Community({ session, topic, onSelectTopic }: { session: Session | null;
         </AppHeader>
 
         <main ref={mainRef} id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto scroll-smooth">
-          <div className="mx-auto w-full max-w-[1440px] px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
-            <div className="mb-8 flex flex-wrap items-end justify-between gap-4 border-b pb-6">
-              <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Austausch / Community</p>
-                <p className="mt-2 max-w-[58ch] text-base leading-relaxed text-muted-foreground">Fragen stellen, Erfahrungen teilen und gemeinsam weiterkommen.</p>
-                <Link href="/community/spaces" className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-primary underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Spaces entdecken</Link>
-              </div>
-              <p className="text-sm tabular-nums text-muted-foreground">{feedCount}</p>
-            </div>
-
-            <TopicNavigation key={isEditing ? 'composing' : 'browsing'} selected={topic} onSelect={onSelectTopic} disabled={isEditing} />
-
+          <div className="mx-auto w-full max-w-[1440px] px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
             {session?.user?.id && session.user.role === 'USER' && <FirstActionGuide userId={session.user.id} />}
             <div className="grid min-w-0 items-start gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,19rem)] lg:gap-12">
               <section aria-labelledby="community-feed-title" className="min-w-0">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+                  <h2 id="community-feed-title" tabIndex={-1} className="text-xl font-semibold tracking-tight focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Aktuelle Beiträge</h2>
+                  <Link href="/community/spaces" className="inline-flex min-h-11 items-center text-sm font-semibold text-primary underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Spaces entdecken</Link>
+                </div>
+                {notification && (
+                  <div className={`sticky top-0 z-10 mb-3 rounded-lg border bg-card px-4 py-3 text-sm font-medium ${notification.type === 'success' ? 'border-border text-foreground' : 'border-destructive/30 text-destructive'}`}
+                    role={notification.type === 'error' ? 'alert' : 'status'}>
+                    {notification.message}
+                  </div>
+                )}
+
                 <AnimatePresence mode="wait">
                   {!isEditing ? (
                     <motion.button
                       key="new-post-button"
                       type="button"
-                      className="flex min-h-20 w-full min-w-0 items-center gap-3 rounded-[14px] border border-input bg-card p-4 text-left transition-colors hover:border-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      className="flex min-h-16 w-full min-w-0 items-center gap-3 rounded-[14px] border border-input bg-card p-4 text-left transition-colors hover:border-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       aria-label="Neuen Beitrag erstellen"
                       onClick={openComposer}
                     >
                       <Avatar className="h-10 w-10 shrink-0"><AvatarImage src={session?.user?.image || ''} alt="" /><AvatarFallback className="bg-accent text-primary">{session?.user?.name?.[0] || 'F'}</AvatarFallback></Avatar>
-                      <span className="min-w-0 flex-1 text-sm text-muted-foreground">
-                        Was möchtest du teilen{session?.user?.name ? `, ${session.user.name.split(' ')[0]}` : ''}?
+                      <span className="min-w-0 flex-1 text-sm font-medium text-foreground">
+                        Beitrag schreiben{session?.user?.name ? `, ${session.user.name.split(' ')[0]}` : ''}
                       </span>
                       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-accent text-primary"><PlusCircle className="h-5 w-5" aria-hidden="true" /></span>
                     </motion.button>
@@ -391,12 +375,11 @@ function Community({ session, topic, onSelectTopic }: { session: Session | null;
                   )}
                 </AnimatePresence>
 
-                <div className="mt-9">
-                  <div className="flex flex-wrap items-baseline justify-between gap-3 border-b pb-4">
-                    <h2 id="community-feed-title" tabIndex={-1} className="text-xl font-semibold tracking-tight focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Aktuelle Beiträge</h2>
-                    <span className="text-sm tabular-nums text-muted-foreground">{feedCount}</span>
-                  </div>
-                  <div className="mt-5 space-y-5">
+                <TopicNavigation key={isEditing ? 'composing' : 'browsing'} selected={topic} onSelect={onSelectTopic} disabled={isEditing} />
+
+                <div className="mt-4">
+                  <p className="border-b pb-3 text-sm tabular-nums text-muted-foreground">{feedCount}</p>
+                  <div className="mt-4 space-y-5">
                     {linkedTargetLoading && <p className="text-sm text-muted-foreground" role="status">Verlinkter Beitrag wird geladen…</p>}
                     {linkedTargetError && <PageState kind="error" title="Verlinkter Inhalt ist nicht verfügbar" description="Der Inhalt wurde möglicherweise gelöscht oder ist für dieses Konto nicht sichtbar." action={<Button type="button" variant="outline" onClick={() => void retryLinkedTarget()}>Verlinkten Inhalt erneut laden</Button>} />}
                     {isLoading && localPosts.length === 0 && <PageState kind="loading" title="Beiträge werden geladen" />}
@@ -434,8 +417,10 @@ function Community({ session, topic, onSelectTopic }: { session: Session | null;
                         void (postsLoadError ? retryPosts() : loadMore())
                       }}>
                         {isLoadingMore ? 'Weitere Beiträge werden geladen…' : postsLoadError ? 'Weitere Beiträge erneut laden' : 'Weitere Beiträge laden'}
-                      </Button> : <p className="text-sm text-muted-foreground">Ende der Liste.</p>}
-                      <p ref={feedStatusRef} tabIndex={-1} className="mt-3 text-sm text-muted-foreground" role="status" aria-live="polite">{isLoadingMore ? 'Weitere Beiträge werden geladen…' : feedCount}</p>
+                      </Button> : null}
+                      <p ref={feedStatusRef} tabIndex={-1} className={nextCursor || !initialLoaded ? 'sr-only' : 'mt-3 text-sm text-muted-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring'} role="status" aria-live="polite">
+                        {isLoadingMore ? 'Weitere Beiträge werden geladen…' : <><span className="sr-only">{feedCount}. </span>{nextCursor || !initialLoaded ? 'Weitere Beiträge verfügbar.' : 'Ende der Liste.'}</>}
+                      </p>
                     </div>}
 
                     {localPosts.length === 0 && !isLoading && !postsLoadError && (

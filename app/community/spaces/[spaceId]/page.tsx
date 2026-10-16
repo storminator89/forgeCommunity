@@ -63,6 +63,19 @@ function SpaceOverview({ spaceId }: { spaceId: string }) {
   const focusAfterPageRef = useRef(false);
   const resultRef = useRef<HTMLParagraphElement>(null);
   const titleId = useId(); const contentId = useId();
+  const composerTitleRef = useRef<HTMLInputElement>(null);
+  const composerButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => { if (showComposer) composerTitleRef.current?.focus(); }, [showComposer]);
+
+  function closeComposer() {
+    setShowComposer(false);
+    composerButtonRef.current?.focus();
+  }
+
+  function focusSection(id: string) {
+    document.getElementById(id)?.focus();
+  }
 
   useEffect(() => {
     const read = beginListRead();
@@ -194,45 +207,60 @@ function SpaceOverview({ spaceId }: { spaceId: string }) {
   return <SpaceShell>
     {loading ? <><h1 className="sr-only">Space</h1><PageState kind="loading" title="Space wird geladen" /></> : !space ? <><h1 className="sr-only">Space nicht verfügbar</h1><PageState kind="error" title="Space nicht verfügbar" description={error} action={<Button variant="outline" onClick={retryLoad}>Erneut versuchen</Button>} /></> : <>
       <nav aria-label="Pfad" className="mb-6 text-sm text-muted-foreground"><Link href="/community" className="underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring">Community</Link><span aria-hidden="true"> / </span><Link href="/community/spaces" className="underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring">Spaces</Link></nav>
-      <header className="flex min-w-0 flex-col gap-4 border-b pb-8 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0 max-w-[72ch]"><SpaceVisibility visibility={space.visibility} explanatory={space.visibility === 'PRIVATE'} />
-          <h1 className="mt-2 break-words text-[clamp(1.65rem,1.1rem+2vw,2.35rem)] font-semibold tracking-tight">{space.name}</h1>
-          <p className="mt-3 whitespace-pre-wrap break-words text-base leading-relaxed text-muted-foreground">{space.description}</p>
-          <p className="mt-3 text-xs text-muted-foreground">{space.memberCount} Mitglieder · {space.discussionCount} Diskussionen</p>
+      <header className="min-w-0 border-b pb-5">
+        <SpaceVisibility visibility={space.visibility} explanatory={space.visibility === 'PRIVATE'} />
+        <h1 className="mt-2 max-w-[72ch] break-words text-[clamp(1.65rem,1.1rem+2vw,2.35rem)] font-semibold tracking-tight [overflow-wrap:anywhere]">{space.name}</h1>
+        <p className="mt-2 max-w-[72ch] whitespace-pre-wrap break-words text-base leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">{space.description}</p>
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+          <p className="text-xs text-muted-foreground">{space.memberCount} Mitglied{space.memberCount === 1 ? '' : 'er'} · {space.discussionCount} Diskussion{space.discussionCount === 1 ? '' : 'en'}</p>
+          {space.visibility === 'PUBLIC' && <Button type="button" size="sm" variant={space.isMember ? 'ghost' : 'default'} disabled={pendingMembership} onClick={changeMembership}>{pendingMembership ? 'Wird gespeichert…' : space.isMember ? 'Verlassen' : 'Beitreten'}</Button>}
         </div>
-        {space.visibility === 'PUBLIC' && <Button type="button" variant={space.isMember ? 'outline' : 'default'} disabled={pendingMembership} onClick={changeMembership}>{pendingMembership ? 'Wird gespeichert…' : space.isMember ? 'Verlassen' : 'Beitreten'}</Button>}
       </header>
       {membershipError && <p role="alert" className="mt-4 text-sm text-destructive">{membershipError}</p>}
 
-      {space.canManage && space.visibility === 'PRIVATE' && <SpaceMemberManager spaceId={spaceId} request={request} onChange={() => {
-        if (revalidatingRef.current) { refreshAfterRevalidateRef.current = true; return; }
-        const read = beginListRead();
-        setLoadingMore(false);
-        void request<SpaceSummary>(base, { signal: read.signal })
-          .then(current => { if (read.isCurrent()) setSpace(current); })
-          .catch(() => { /* access guard handles permission loss */ });
-      }} />}
+      <nav aria-label="Aufgaben im Space" className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm">
+        <a href="#space-discussions" onClick={() => focusSection('space-discussions')} className="inline-flex min-h-11 items-center rounded-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Diskussionen</a>
+        {space.visibility === 'PRIVATE' && <a href="#space-missions" onClick={() => focusSection('space-missions')} className="inline-flex min-h-11 items-center rounded-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Missionen</a>}
+        <a href="#space-polls" onClick={() => focusSection('space-polls')} className="inline-flex min-h-11 items-center rounded-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Umfragen</a>
+        {space.canManage && space.visibility === 'PRIVATE' && <a href="#space-management" onClick={() => focusSection('space-management')} className="inline-flex min-h-11 items-center rounded-sm text-muted-foreground underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Verwaltung</a>}
+      </nav>
 
-      {space.visibility === 'PRIVATE' && <SpaceMissionIndex spaceId={spaceId} canManage={space.canManage} request={request} onUnavailable={invalidate} />}
-
-      <SpacePolls key={`${space.isMember}:${space.canManage}`} spaceId={spaceId} canManage={space.canManage} request={request} onUnavailable={invalidate} />
-
-      <section aria-labelledby="space-discussions-title" className="mt-8">
+      <section id="space-discussions" tabIndex={-1} aria-labelledby="space-discussions-title" className="mt-5 scroll-mt-6 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring">
         <div className="flex flex-wrap items-center justify-between gap-3"><h2 id="space-discussions-title" className="text-xl font-semibold">Diskussionen</h2>
-          {space.isMember && <Button type="button" onClick={() => setShowComposer(value => !value)} aria-expanded={showComposer} aria-controls="space-discussion-form">{showComposer ? 'Schließen' : 'Diskussion starten'}</Button>}</div>
+          {space.isMember && <Button ref={composerButtonRef} type="button" onClick={() => showComposer ? closeComposer() : setShowComposer(true)} aria-expanded={showComposer} aria-controls="space-discussion-form">{showComposer ? 'Schließen' : 'Diskussion starten'}</Button>}</div>
         {!space.isMember && <p className="mt-3 text-sm text-muted-foreground">{space.visibility === 'PUBLIC' ? 'Tritt bei, um eine Diskussion zu starten oder zu antworten.' : 'Zum Schreiben ist eine Mitgliedschaft erforderlich.'}</p>}
-        {showComposer && space.isMember && <form id="space-discussion-form" onSubmit={createDiscussion} className="mt-5 max-w-3xl space-y-4 rounded-2xl border bg-card p-4 sm:p-6">
-          <div className="space-y-1"><label htmlFor={titleId} className="text-sm font-medium">Titel</label><Input id={titleId} value={title} onChange={event => setTitle(event.target.value)} minLength={5} maxLength={140} required disabled={posting} /></div>
+        {showComposer && space.isMember && <form id="space-discussion-form" onSubmit={createDiscussion} onKeyDown={event => { if (event.key === 'Escape' && !posting) { event.preventDefault(); closeComposer(); } }} className="mt-5 max-w-3xl space-y-4 rounded-2xl border bg-card p-4 sm:p-6">
+          <div className="space-y-1"><label htmlFor={titleId} className="text-sm font-medium">Titel</label><Input ref={composerTitleRef} id={titleId} value={title} onChange={event => setTitle(event.target.value)} minLength={5} maxLength={140} required disabled={posting} /></div>
           <div className="space-y-1"><label htmlFor={contentId} className="text-sm font-medium">Dein Beitrag</label><Textarea id={contentId} value={content} onChange={event => setContent(event.target.value)} minLength={10} maxLength={4000} required disabled={posting} rows={6} /></div>
           {postError && <p role="alert" className="text-sm text-destructive">{postError}</p>}
           <Button type="submit" disabled={posting || title.trim().length < 5 || content.trim().length < 10}>{posting ? 'Wird veröffentlicht…' : 'Veröffentlichen'}</Button>
         </form>}
-        {discussions.length === 0 ? <div className="mt-6"><PageState title="Noch keine Diskussionen" description={space.isMember ? 'Starte die erste Diskussion in diesem Space.' : 'Hier wurde noch keine Diskussion begonnen.'} /></div> : <ul className="mt-5 divide-y border-y">{discussions.map(discussion => <li key={discussion.id} className="min-w-0 py-5"><div className="flex flex-wrap items-start justify-between gap-2"><Link href={discussionUrl(spaceId, discussion.id)} className="block min-w-0 rounded-sm underline-offset-4 hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"><h3 className="break-words text-lg font-semibold">{discussion.title}</h3></Link>{space.canManage && <Button type="button" size="sm" variant="ghost" disabled={!!moderatingId} onClick={() => toggleDiscussion(discussion)}>{moderatingId === discussion.id ? 'Wird gespeichert…' : discussion.hiddenAt ? 'Wieder einblenden' : 'Ausblenden'}</Button>}</div>{discussion.hiddenAt && <p className="mt-1 text-xs font-medium text-destructive">Ausgeblendet</p>}<div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1"><SpaceAuthorLine author={discussion.author} date={discussion.createdAt} /><span className="text-xs text-muted-foreground">{discussion.replyCount} Antworten</span></div><p className="mt-2 line-clamp-2 whitespace-pre-wrap break-words text-sm leading-relaxed text-muted-foreground">{discussion.content}</p></li>)}</ul>}
+        {discussions.length === 0 ? <div className="mt-6"><PageState title="Noch keine Diskussionen" description={space.isMember ? 'Starte die erste Diskussion in diesem Space.' : 'Hier wurde noch keine Diskussion begonnen.'} /></div> : <ul className="mt-5 divide-y border-y">{discussions.map(discussion => <li key={discussion.id} className="min-w-0 py-5"><div className="flex flex-wrap items-start justify-between gap-2"><Link href={discussionUrl(spaceId, discussion.id)} className="block min-w-0 rounded-sm underline-offset-4 hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"><h3 className="break-words text-lg font-semibold [overflow-wrap:anywhere]">{discussion.title}</h3></Link>{space.canManage && <Button type="button" size="sm" variant="ghost" disabled={!!moderatingId} onClick={() => toggleDiscussion(discussion)}>{moderatingId === discussion.id ? 'Wird gespeichert…' : discussion.hiddenAt ? 'Wieder einblenden' : 'Ausblenden'}</Button>}</div>{discussion.hiddenAt && <p className="mt-1 text-xs font-medium text-destructive">Ausgeblendet</p>}<div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 [overflow-wrap:anywhere] [&>p]:min-w-0"><SpaceAuthorLine author={discussion.author} date={discussion.createdAt} /><span className="text-xs text-muted-foreground">{discussion.replyCount} Antworten</span></div><p className="mt-2 line-clamp-2 whitespace-pre-wrap break-words text-sm leading-relaxed text-muted-foreground">{discussion.content}</p></li>)}</ul>}
         {moderationError && <p role="alert" className="mt-3 text-sm text-destructive">{moderationError}</p>}
         <p ref={resultRef} tabIndex={-1} className="mt-4 text-xs text-muted-foreground" aria-live="polite">{discussions.length} Diskussionen geladen</p>
         {moreError && <p role="alert" className="mt-2 text-sm text-destructive">{moreError}</p>}
         {cursor && <Button type="button" className="mt-4" variant="outline" disabled={loadingMore} onClick={loadMore}>{loadingMore ? 'Wird geladen…' : 'Weitere Diskussionen laden'}</Button>}
       </section>
+
+      {space.visibility === 'PRIVATE' && <div id="space-missions" tabIndex={-1} role="group" aria-label="Missionen" className="scroll-mt-6 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring">
+        <SpaceMissionIndex spaceId={spaceId} canManage={space.canManage} request={request} onUnavailable={invalidate} />
+      </div>}
+
+      <div id="space-polls" tabIndex={-1} role="group" aria-label="Umfragen" className="scroll-mt-6 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring">
+        <SpacePolls key={`${space.isMember}:${space.canManage}`} spaceId={spaceId} canManage={space.canManage} request={request} onUnavailable={invalidate} />
+      </div>
+
+      {space.canManage && space.visibility === 'PRIVATE' && <section id="space-management" tabIndex={-1} aria-labelledby="space-management-title" className="mt-8 scroll-mt-6 rounded-sm border-t pt-6 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring">
+        <h2 id="space-management-title" className="text-xl font-semibold">Space verwalten</h2>
+        <SpaceMemberManager spaceId={spaceId} request={request} onChange={() => {
+          if (revalidatingRef.current) { refreshAfterRevalidateRef.current = true; return; }
+          const read = beginListRead();
+          setLoadingMore(false);
+          void request<SpaceSummary>(base, { signal: read.signal })
+            .then(current => { if (read.isCurrent()) setSpace(current); })
+            .catch(() => { /* access guard handles permission loss */ });
+        }} />
+      </section>}
     </>}
   </SpaceShell>;
 }

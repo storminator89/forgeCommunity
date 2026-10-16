@@ -11,7 +11,7 @@ import { UserNav } from "@/components/user-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Plus, ArrowUpRight } from 'lucide-react';
+import { Search, Plus, ArrowUpRight, SlidersHorizontal, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import { Badge } from "@/components/ui/badge";
 
@@ -50,6 +50,7 @@ export default function KnowledgeBase() {
   const [articles, setArticles] = useState<Article[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -114,58 +115,66 @@ export default function KnowledgeBase() {
         </AppHeader>
 
         <main id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto w-full max-w-[1440px] px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
-            <div className="flex flex-wrap items-end justify-between gap-5 border-b pb-7">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Wissen / Entdecken</p>
-                <p className="mt-2 max-w-[55ch] text-base leading-relaxed text-muted-foreground">Entdecke Anleitungen und Antworten aus der Community.</p>
-              </div>
-              <Button asChild><Link href="/knowledgebase/new-article"><Plus className="h-4 w-4" aria-hidden="true" />Neuer Artikel</Link></Button>
-            </div>
-
-            <div className="grid min-w-0 gap-8 pt-8 lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-10">
-              <aside aria-labelledby="kb-filter-title" className="min-w-0 border-b pb-7 lg:border-b-0 lg:border-r lg:pr-8">
-                <h2 id="kb-filter-title" className="text-base font-semibold tracking-tight">Filter</h2>
-                <div className="mt-5">
-                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Kategorien</h3>
-                  <div role="group" aria-label="Kategorie wählen" className="flex max-w-full gap-1 overflow-x-auto pb-2 lg:block lg:space-y-1 lg:overflow-visible">
-                    {categories.map(category => (
-                      <button type="button" key={category} aria-pressed={selectedCategory === category} onClick={() => setSelectedCategory(category)}
-                        className={'flex min-h-11 shrink-0 items-center justify-between gap-3 whitespace-nowrap rounded-[10px] px-3 text-left text-sm transition-colors hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring lg:w-full lg:min-w-0 lg:whitespace-normal ' + (selectedCategory === category ? 'bg-accent/70 font-semibold text-foreground' : 'text-muted-foreground')}>
-                        <span className="min-w-0 break-words [overflow-wrap:anywhere]">{category === 'All' ? 'Alle Kategorien' : category}</span>
-                        <span className="tabular-nums text-xs text-muted-foreground">{category === 'All' ? articles.length : articles.filter(article => article.category === category).length}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="mt-6 border-t pt-5">
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Tags</h3>
-                    {selectedTag !== 'All' && <button type="button" onClick={() => setSelectedTag('All')} className="min-h-11 text-xs font-medium text-primary hover:underline">Zurücksetzen</button>}
-                  </div>
-                  <div role="group" aria-label="Tag wählen" className="mt-2 flex flex-wrap gap-2">
-                    {tags.slice(1).map(tag => (
-                      <button type="button" key={tag} aria-pressed={selectedTag === tag} onClick={() => setSelectedTag(selectedTag === tag ? 'All' : tag)}
-                        className={'inline-flex min-h-9 max-w-full items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring ' + (selectedTag === tag ? 'border-primary bg-accent text-foreground' : 'border-border text-muted-foreground hover:bg-muted')}>
-                        <span className="truncate">{tag}</span><span className="tabular-nums">{articles.filter(article => article.tags.some(item => item.name === tag)).length}</span>
-                      </button>
-                    ))}
-                    {tags.length === 1 && <p className="text-sm text-muted-foreground">Noch keine Tags.</p>}
-                  </div>
-                </div>
-              </aside>
-
-              <section aria-labelledby="kb-results-title" className="min-w-0">
+          <div className="mx-auto w-full max-w-[1440px] px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
+            <div className="flex flex-col gap-3 border-b pb-5 sm:flex-row sm:items-end sm:gap-5">
+              <div className="min-w-0 flex-1">
                 <label htmlFor="kb-search" className="mb-2 block text-sm font-medium">Artikel suchen</label>
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
                   <Input id="kb-search" type="search" placeholder="Titel, Inhalt oder Tag" value={searchTerm} onChange={event => setSearchTerm(event.target.value)} className="pl-10" />
                 </div>
+              </div>
+              <Button asChild className="self-start sm:shrink-0"><Link href="/knowledgebase/new-article"><Plus className="h-4 w-4" aria-hidden="true" />Neuer Artikel</Link></Button>
+            </div>
 
-                <div className="mt-9 flex flex-wrap items-baseline justify-between gap-2 border-b pb-4">
-                  <h2 id="kb-results-title" className="text-xl font-semibold tracking-tight">Artikel entdecken</h2>
-                  <p role="status" className="text-sm tabular-nums text-muted-foreground">{filteredArticles.length} Artikel</p>
+            {hasFilters && <div aria-label="Aktive Suche und Filter" className="flex min-w-0 flex-wrap items-center gap-2 pt-3 text-sm">
+              {selectedCategory !== 'All' && <span className="max-w-full break-words rounded-md bg-accent px-2 py-1 [overflow-wrap:anywhere]">Kategorie: {selectedCategory}</span>}
+              {selectedTag !== 'All' && <span className="max-w-full break-words rounded-md bg-accent px-2 py-1 [overflow-wrap:anywhere]">Tag: {selectedTag}</span>}
+              <Button type="button" variant="ghost" onClick={clearFilters} className="text-primary">Filter zurücksetzen</Button>
+            </div>}
+
+            <div className="grid min-w-0 gap-4 pt-4 lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-10 lg:pt-6">
+              <aside aria-label="Artikelfilter" className="min-w-0 lg:border-r lg:pr-8">
+                <h2 className="hidden text-base font-semibold tracking-tight lg:block">Filter</h2>
+                <Button type="button" variant="outline" aria-expanded={filtersOpen} aria-controls="kb-filter-options" onClick={() => setFiltersOpen(!filtersOpen)} className="w-full justify-between lg:hidden">
+                  <span className="flex items-center gap-2"><SlidersHorizontal className="h-4 w-4" aria-hidden="true" />Filter</span>
+                  <ChevronDown className={'h-4 w-4 ' + (filtersOpen ? 'rotate-180' : '')} aria-hidden="true" />
+                </Button>
+                <div id="kb-filter-options" className={(filtersOpen ? 'block' : 'hidden') + ' border-b pb-4 lg:block lg:border-b-0 lg:pb-0'}>
+                  <div className="mt-4">
+                    <h3 className="mb-2 text-sm font-medium text-muted-foreground">Kategorien</h3>
+                    <div role="group" aria-label="Kategorie wählen" className="space-y-1">
+                      {categories.map(category => (
+                        <button type="button" key={category} aria-pressed={selectedCategory === category} onClick={() => setSelectedCategory(category)}
+                          className={'flex min-h-11 w-full min-w-0 items-center justify-between gap-3 rounded-[10px] px-3 py-2 text-left text-sm transition-colors hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring ' + (selectedCategory === category ? 'bg-accent/70 font-semibold text-foreground' : 'text-muted-foreground')}>
+                          <span className="min-w-0 break-words [overflow-wrap:anywhere]">{category === 'All' ? 'Alle Kategorien' : category}</span>
+                          <span className="tabular-nums text-xs text-muted-foreground">{category === 'All' ? articles.length : articles.filter(article => article.category === category).length}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {tags.length > 1 && <div className="mt-4 border-t pt-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="text-sm font-medium text-muted-foreground">Tags</h3>
+                      {selectedTag !== 'All' && <button type="button" onClick={() => setSelectedTag('All')} className="min-h-11 text-xs font-medium text-primary hover:underline">Zurücksetzen</button>}
+                    </div>
+                    <div role="group" aria-label="Tag wählen" className="mt-2 flex flex-wrap gap-2">
+                      {tags.slice(1).map(tag => (
+                        <button type="button" key={tag} aria-pressed={selectedTag === tag} onClick={() => setSelectedTag(selectedTag === tag ? 'All' : tag)}
+                          className={'inline-flex min-h-11 max-w-full items-center gap-2 rounded-full border px-3 py-2 text-left text-xs font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring ' + (selectedTag === tag ? 'border-primary bg-accent text-foreground' : 'border-border text-muted-foreground hover:bg-muted')}>
+                          <span className="min-w-0 break-words [overflow-wrap:anywhere]">{tag}</span><span className="shrink-0 tabular-nums">{articles.filter(article => article.tags.some(item => item.name === tag)).length}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>}
+                </div>
+              </aside>
+
+              <section aria-labelledby="kb-results-title" className="min-w-0">
+                <div className="flex flex-wrap items-baseline justify-between gap-2 border-b pb-3">
+                  <h2 id="kb-results-title" className="text-xl font-semibold tracking-tight">Artikel</h2>
+                  {!isLoading && !error && <p role="status" className="text-sm tabular-nums text-muted-foreground">{filteredArticles.length} Artikel</p>}
                 </div>
 
                 {isLoading ? (
@@ -173,7 +182,7 @@ export default function KnowledgeBase() {
                 ) : error ? (
                   <div className="mt-5"><PageState kind="error" title="Artikel konnten nicht geladen werden" description="Prüfe deine Verbindung und versuche es erneut." action={<RetryButton onClick={() => window.location.reload()} />} /></div>
                 ) : filteredArticles.length === 0 ? (
-                  <div className="mt-5"><PageState title={hasFilters ? 'Keine Artikel gefunden' : 'Noch keine Artikel'} description={hasFilters ? 'Versuche es mit anderen Suchbegriffen oder Filtern.' : 'Sobald Artikel veröffentlicht werden, findest du sie hier.'} action={hasFilters ? <Button type="button" variant="outline" onClick={clearFilters}>Filter zurücksetzen</Button> : undefined} /></div>
+                  <div className="mt-5"><PageState title={hasFilters ? 'Keine Artikel gefunden' : 'Noch keine Artikel'} description={hasFilters ? 'Versuche es mit anderen Suchbegriffen oder Filtern.' : 'Sobald Artikel veröffentlicht werden, findest du sie hier.'} /></div>
                 ) : (
                   <ul className="divide-y">
                     {filteredArticles.map(article => (
@@ -181,9 +190,9 @@ export default function KnowledgeBase() {
                         <Link href={'/knowledgebase/' + article.id} className={'group grid min-w-0 gap-5 py-6 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ' + (article.featuredImage ? 'sm:grid-cols-[minmax(0,1fr)_11rem]' : '')}>
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                              <span className="font-semibold uppercase tracking-[0.08em]">{article.category}</span>
+                              <span className="min-w-0 max-w-full break-words font-semibold [overflow-wrap:anywhere]">{article.category}</span>
                               <time dateTime={article.createdAt}>{new Date(article.createdAt).toLocaleDateString('de-DE')}</time>
-                              <span>{article.author.name || article.author.email}</span>
+                              <span className="min-w-0 max-w-full break-words [overflow-wrap:anywhere]">{article.author.name || article.author.email}</span>
                             </div>
                             <h3 className="mt-2 min-w-0 break-words text-lg font-semibold tracking-tight group-hover:text-primary [overflow-wrap:anywhere]">{article.title}</h3>
                             <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-muted-foreground">{sanitizeTextPreview(article.content, 150)}</p>
