@@ -9,6 +9,10 @@ type Persona = RouteSweepCase['persona'];
 type StoredSession = Awaited<ReturnType<BrowserContext['storageState']>>;
 const sessions: Partial<Record<Exclude<Persona, 'anonymous'>, StoredSession>> = {};
 let memberId = '';
+let adminId = '';
+let publicSpaceId = '';
+let privateSpaceId = '';
+let publicDiscussionId = '';
 
 function disposableDatabasePath() {
   const url = process.env.DATABASE_URL;
@@ -145,7 +149,11 @@ async function installSyntheticApi(page: Page, item?: RouteSweepCase) {
 }
 
 function caseUrl(item: RouteSweepCase) {
-  return item.url.replace(':memberId', encodeURIComponent(memberId));
+  return item.url
+    .replace(':memberId', encodeURIComponent(memberId))
+    .replace(':publicSpaceId', encodeURIComponent(publicSpaceId))
+    .replace(':privateSpaceId', encodeURIComponent(privateSpaceId))
+    .replace(':publicDiscussionId', encodeURIComponent(publicDiscussionId));
 }
 
 function screenshotName(item: RouteSweepCase) {
@@ -164,6 +172,7 @@ test.describe('every App Router page, one at a time', () => {
     const moderator = await createAccount(request, 'Route QA Moderator', password);
     const admin = await createAccount(request, 'Route QA Admin', password);
     memberId = member.id;
+    adminId = admin.id;
 
     const db = new DatabaseSync(path);
     try {
@@ -176,6 +185,34 @@ test.describe('every App Router page, one at a time', () => {
     sessions.member = await loginState(browser, member.email, password);
     sessions.moderator = await loginState(browser, moderator.email, password);
     sessions.admin = await loginState(browser, admin.email, password);
+
+    // Real disposable API state. No synthetic interception for Spaces routes.
+    const adminContext = await browser.newContext({ baseURL: origin, storageState: sessions.admin });
+    const memberContext = await browser.newContext({ baseURL: origin, storageState: sessions.member });
+    try {
+      const publicResult = await adminContext.request.post('/api/spaces', { data: {
+        name: 'Route QA public space', description: 'A disposable public space.', visibility: 'PUBLIC',
+      } });
+      expect(publicResult.status(), await publicResult.text()).toBe(201);
+      publicSpaceId = (await publicResult.json() as { id: string }).id;
+      const privateResult = await adminContext.request.post('/api/spaces', { data: {
+        name: 'Route QA private space', description: 'A disposable private space.', visibility: 'PRIVATE',
+      } });
+      expect(privateResult.status(), await privateResult.text()).toBe(201);
+      privateSpaceId = (await privateResult.json() as { id: string }).id;
+      expect(publicSpaceId).toBeTruthy(); expect(privateSpaceId).toBeTruthy();
+
+      const joined = await memberContext.request.post(`/api/spaces/${encodeURIComponent(publicSpaceId)}/join`);
+      expect(joined.ok(), await joined.text()).toBe(true);
+      const added = await adminContext.request.post(`/api/spaces/${encodeURIComponent(privateSpaceId)}/members`, { data: { userId: memberId } });
+      expect(added.ok(), await added.text()).toBe(true);
+      const discussion = await memberContext.request.post(`/api/spaces/${encodeURIComponent(publicSpaceId)}/discussions`, { data: {
+        title: 'Route QA discussion', content: 'Route QA discussion body.', requestId: randomUUID(),
+      } });
+      expect(discussion.status(), await discussion.text()).toBe(201);
+      publicDiscussionId = (await discussion.json() as { id: string }).id;
+      expect(publicDiscussionId).toBeTruthy();
+    } finally { await adminContext.close(); await memberContext.close(); }
   });
 
   for (const item of routeSweepCases) {
@@ -188,7 +225,7 @@ test.describe('every App Router page, one at a time', () => {
       // response cannot race the waiter and a heading-only loading state
       // cannot become a successful screenshot.
       const settledResponse = item.settledApi ? page.waitForResponse(response =>
-        response.request().method() === 'GET' && new URL(response.url()).pathname === item.settledApi
+        response.request().method() === 'GET' && new URL(response.url()).pathname === caseUrl({ ...item, url: item.settledApi! })
       ) : null;
       await page.goto(caseUrl(item));
 
@@ -296,6 +333,47 @@ test.describe('every App Router page, one at a time', () => {
       expect(errors).toEqual([]);
     });
   }
+
+  test('private Space clears member content after access is revoked', async ({ browser, page }) => {
+    await usePersona(page, 'member');
+    await page.goto(`/community/spaces/${encodeURIComponent(privateSpaceId)}`);
+    await expect(page.getByRole('heading', { level: 1, name: 'Route QA private space' })).toBeVisible();
+    await expect(page.getByText('Nur Mitglieder und Administratoren können Inhalte sehen.')).toBeVisible();
+
+    const outsider = await browser.newContext({ baseURL: origin, storageState: sessions.moderator });
+    try {
+      const denied = await outsider.request.get(`/api/spaces/${encodeURIComponent(privateSpaceId)}`);
+      expect(denied.status()).toBe(404);
+    } finally { await outsider.close(); }
+
+    const adminContext = await browser.newContext({ baseURL: origin, storageState: sessions.admin });
+    try {
+      const removed = await adminContext.request.delete(`/api/spaces/${encodeURIComponent(privateSpaceId)}/members/${encodeURIComponent(memberId)}`);
+      expect(removed.ok(), await removed.text()).toBe(true);
+    } finally { await adminContext.close(); }
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await expect(page.getByRole('heading', { level: 1, name: 'Space nicht verfügbar' })).toBeVisible();
+    await expect(page.getByText('Route QA private space')).toHaveCount(0);
+  });
+
+  test('private Space clears admin-only content after DB role demotion with a stale session', async ({ browser, page }) => {
+    await usePersona(page, 'admin');
+    await page.goto(`/community/spaces/${encodeURIComponent(privateSpaceId)}`);
+    await expect(page.getByRole('heading', { level: 1, name: 'Route QA private space' })).toBeVisible();
+
+    const adminContext = await browser.newContext({ baseURL: origin, storageState: sessions.admin });
+    try {
+      const removed = await adminContext.request.delete(`/api/spaces/${encodeURIComponent(privateSpaceId)}/members/${encodeURIComponent(adminId)}`);
+      expect(removed.ok(), await removed.text()).toBe(true);
+    } finally { await adminContext.close(); }
+    const db = new DatabaseSync(disposableDatabasePath());
+    try { db.prepare('UPDATE "User" SET "role" = ? WHERE "id" = ?').run('USER', adminId); }
+    finally { db.close(); }
+
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await expect(page.getByRole('heading', { level: 1, name: 'Space nicht verfügbar' })).toBeVisible();
+    await expect(page.getByText('Route QA private space')).toHaveCount(0);
+  });
 
   test('analytics page keeps controls readable from 320 to 768px with a keyboard path', async ({ page }, testInfo) => {
     await usePersona(page, 'member');

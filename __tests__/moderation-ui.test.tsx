@@ -68,7 +68,7 @@ it('shows public-target links and requires a completed action before recording r
   });
   render(<ModerationQueue />);
 
-  const target = await screen.findByRole('link', { name: 'Inhalt in der Community öffnen' });
+  const target = await screen.findByRole('link', { name: 'Inhalt öffnen' });
   expect(target).toHaveAttribute('href', '/community#comment-comment-1');
   expect(screen.getByText('Public comment')).toBeInTheDocument();
   await user.selectOptions(screen.getByLabelText('Entscheidung'), 'RESOLVED');
@@ -92,7 +92,7 @@ it('does not link to deleted or unpublished targets', async () => {
   }) });
   render(<ModerationQueue />);
   expect(await screen.findByText('Inhalt ist nicht mehr öffentlich verfügbar.')).toBeInTheDocument();
-  expect(screen.queryByRole('link', { name: 'Inhalt in der Community öffnen' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: 'Inhalt öffnen' })).not.toBeInTheDocument();
 });
 
 it('offers a retry when the moderation queue cannot load', async () => {
@@ -211,6 +211,168 @@ it.each(['ADMIN', 'MODERATOR'])('ignores an old privileged response after the sa
   expect(screen.queryByText('Late private report')).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Entscheidung speichern' })).not.toBeInTheDocument();
   expect(screen.getByText('Keine Berechtigung')).toBeInTheDocument();
+});
+
+it('purges private report details after a DB demotion even when the session still says ADMIN', async () => {
+  jest.mocked(useSession).mockReturnValue({
+    data: { user: { id: 'alice', role: 'ADMIN' }, expires: '2099-01-01' },
+    status: 'authenticated', update: jest.fn(),
+  } as ReturnType<typeof useSession>);
+  const privateReport = {
+    id: 'private-report', targetType: 'POST', targetId: 'post-1', reason: 'UNSAFE',
+    details: 'Confidential reporter details', status: 'OPEN',
+    createdAt: '2026-10-01T10:00:00.000Z', reviewedAt: null, reviewedById: null, resolutionNote: null,
+    targetAvailable: true, targetTitle: 'Private report title', targetPreview: 'Private report preview',
+  };
+  const fetchMock = global.fetch as jest.Mock;
+  fetchMock
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ items: [privateReport], total: 1, page: 1, pageSize: 20 }) })
+    .mockResolvedValueOnce({ ok: false, status: 403, json: async () => ({ error: 'Nicht autorisiert' }) });
+  render(<ModerationQueue />);
+  expect(await screen.findByText('Private report title')).toBeInTheDocument();
+  expect(screen.getByText('Private report preview')).toBeInTheDocument();
+  expect(screen.getByText('Confidential reporter details')).toBeInTheDocument();
+
+  act(() => { window.dispatchEvent(new Event('focus')); });
+  expect(await screen.findByText('Keine Berechtigung')).toBeInTheDocument();
+  expect(screen.queryByText('Private report title')).not.toBeInTheDocument();
+  expect(screen.queryByText('Private report preview')).not.toBeInTheDocument();
+  expect(screen.queryByText('Confidential reporter details')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Entscheidung speichern' })).not.toBeInTheDocument();
+  act(() => { window.dispatchEvent(new Event('focus')); });
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+});
+
+it('ignores an older queue 200 that resolves after a revalidation 403', async () => {
+  const privateReport = {
+    id: 'private-report', targetType: 'POST', targetId: 'post-1', reason: 'UNSAFE',
+    details: 'Old confidential report', status: 'OPEN',
+    createdAt: '2026-10-01T10:00:00.000Z', reviewedAt: null, reviewedById: null, resolutionNote: null,
+    targetAvailable: true, targetTitle: 'Old private title', targetPreview: 'Old private preview',
+  };
+  let finishOldRequest!: (response: unknown) => void;
+  const oldRequest = new Promise((resolve) => { finishOldRequest = resolve; });
+  const fetchMock = global.fetch as jest.Mock;
+  fetchMock
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ items: [privateReport], total: 1, page: 1, pageSize: 20 }) })
+    .mockReturnValueOnce(oldRequest)
+    .mockResolvedValueOnce({ ok: false, status: 403, json: async () => ({ error: 'Nicht autorisiert' }) });
+  render(<ModerationQueue />);
+  expect(await screen.findByText('Old private title')).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Abgewiesen' }));
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  const oldSignal = fetchMock.mock.calls[1][1].signal as AbortSignal;
+  act(() => { window.dispatchEvent(new Event('focus')); });
+  expect(oldSignal.aborted).toBe(true);
+  expect(await screen.findByText('Keine Berechtigung')).toBeInTheDocument();
+
+  await act(async () => {
+    finishOldRequest({ ok: true, json: async () => ({ items: [privateReport], total: 1, page: 1, pageSize: 20 }) });
+    await oldRequest;
+  });
+  expect(screen.queryByText('Old private title')).not.toBeInTheDocument();
+  expect(screen.queryByText('Old private preview')).not.toBeInTheDocument();
+  expect(screen.queryByText('Old confidential report')).not.toBeInTheDocument();
+  expect(screen.getByText('Keine Berechtigung')).toBeInTheDocument();
+});
+
+it('coalesces focus bursts while queue revalidation is pending', async () => {
+  let finishRevalidation!: (response: unknown) => void;
+  const revalidation = new Promise((resolve) => { finishRevalidation = resolve; });
+  const fetchMock = global.fetch as jest.Mock;
+  const emptyQueue = { items: [], total: 0, page: 1, pageSize: 20 };
+  fetchMock
+    .mockResolvedValueOnce({ ok: true, json: async () => emptyQueue })
+    .mockReturnValueOnce(revalidation)
+    .mockResolvedValueOnce({ ok: true, json: async () => emptyQueue });
+  render(<ModerationQueue />);
+  expect(await screen.findByText('Keine Meldungen in diesem Status.')).toBeInTheDocument();
+
+  act(() => { window.dispatchEvent(new Event('focus')); });
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  const pendingSignal = fetchMock.mock.calls[1][1].signal as AbortSignal;
+  act(() => {
+    window.dispatchEvent(new Event('focus'));
+    document.dispatchEvent(new Event('visibilitychange'));
+    window.dispatchEvent(new Event('focus'));
+  });
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+  expect(pendingSignal.aborted).toBe(false);
+
+  await act(async () => {
+    finishRevalidation({ ok: true, json: async () => emptyQueue });
+    await revalidation;
+  });
+  expect(await screen.findByText('Keine Meldungen in diesem Status.')).toBeInTheDocument();
+  act(() => { window.dispatchEvent(new Event('focus')); });
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+});
+
+it('purges the queue immediately when saving a review returns 403', async () => {
+  const privateReport = {
+    id: 'private-report', targetType: 'POST', targetId: 'post-1', reason: 'UNSAFE',
+    details: 'Private review details', status: 'OPEN',
+    createdAt: '2026-10-01T10:00:00.000Z', reviewedAt: null, reviewedById: null, resolutionNote: null,
+    targetAvailable: true, targetTitle: 'Private review title', targetPreview: null,
+  };
+  (global.fetch as jest.Mock).mockImplementation(async (_url: string, options?: RequestInit) =>
+    options?.method === 'PATCH'
+      ? { ok: false, status: 403, json: async () => ({ error: 'Nicht autorisiert' }) }
+      : { ok: true, json: async () => ({ items: [privateReport], total: 1, page: 1, pageSize: 20 }) });
+  render(<ModerationQueue />);
+  expect(await screen.findByText('Private review title')).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('Begründung oder durchgeführte Maßnahme'),
+    { target: { value: 'A sufficiently detailed decision' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Entscheidung speichern' }));
+  expect(await screen.findByText('Keine Berechtigung')).toBeInTheDocument();
+  expect(screen.queryByText('Private review title')).not.toBeInTheDocument();
+  expect(screen.queryByText('Private review details')).not.toBeInTheDocument();
+});
+
+it('revalidates the current status and page on focus', async () => {
+  const fetchMock = global.fetch as jest.Mock;
+  fetchMock.mockImplementation(async (url: string) => ({
+    ok: true,
+    json: async () => ({ items: [], total: 41, page: Number(new URL(url, 'http://localhost').searchParams.get('page')), pageSize: 20 }),
+  }));
+  render(<ModerationQueue />);
+  expect(await screen.findByText('41 Meldungen, Seite 1')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Abgewiesen' }));
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/reports?status=DISMISSED&page=1', expect.anything()));
+  fireEvent.click(await screen.findByRole('button', { name: 'Nächste Seite' }));
+  expect(await screen.findByText('41 Meldungen, Seite 2')).toBeInTheDocument();
+  act(() => { window.dispatchEvent(new Event('focus')); });
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+  expect(fetchMock.mock.calls[3][0]).toBe('/api/reports?status=DISMISSED&page=2');
+  expect(await screen.findByText('41 Meldungen, Seite 2')).toBeInTheDocument();
+});
+
+it('checks the queue every minute only while the tab is visible', async () => {
+  const originalVisibility = Object.getOwnPropertyDescriptor(document, 'visibilityState');
+  let visibility = 'visible';
+  Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => visibility });
+  const intervalSpy = jest.spyOn(window, 'setInterval');
+  try {
+    const fetchMock = global.fetch as jest.Mock;
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ items: [], total: 0, page: 1, pageSize: 20 }) });
+    const view = render(<ModerationQueue />);
+    expect(await screen.findByText('Keine Meldungen in diesem Status.')).toBeInTheDocument();
+    const minuteTick = intervalSpy.mock.calls.find(([, delay]) => delay === 60_000)?.[0];
+    expect(typeof minuteTick).toBe('function');
+
+    visibility = 'hidden';
+    act(() => { (minuteTick as () => void)(); });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    visibility = 'visible';
+    act(() => { (minuteTick as () => void)(); });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    view.unmount();
+  } finally {
+    intervalSpy.mockRestore();
+    if (originalVisibility) Object.defineProperty(document, 'visibilityState', originalVisibility);
+  }
 });
 
 it('leaves authorization to the server when the client session role is stale', async () => {
