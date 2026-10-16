@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { basename, isAbsolute } from 'node:path';
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
+import { inspectSparkHeroCapture, observeSparkHeroCapture } from './spark-hero-capture-evidence';
 
 const origin = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3013';
 const preferenceKey = 'forge-journey-mascot-hidden';
@@ -118,12 +119,33 @@ async function capture(page: Page, info: TestInfo, name: string) {
   }
   expect(overflow).toBeLessThanOrEqual(1);
   const hero = main.locator('[data-motion="forge-workbench"] img');
-  if (await hero.count()) {
-    await expect(hero).toHaveCount(1);
-    await expect.poll(() => hero.evaluate(element => (element as HTMLImageElement).complete && (element as HTMLImageElement).naturalWidth > 0)).toBe(true);
-    await hero.evaluate(element => (element as HTMLImageElement).decode());
+  if (new URL(page.url()).pathname === '/') await expect(hero).toHaveCount(1);
+  if (!await hero.count()) {
+    await page.screenshot({ path: info.outputPath(`${name}.png`), fullPage: true, animations: 'disabled' });
+    return;
   }
-  await page.screenshot({ path: info.outputPath(`${name}.png`), fullPage: true, animations: 'disabled' });
+  await expect(hero).toHaveCount(1);
+  await expect(hero).toBeVisible();
+  await page.evaluate(() => document.fonts.ready);
+  let observation = await hero.evaluate(observeSparkHeroCapture, false);
+  let after: typeof observation | null = null;
+  let pixels: Awaited<ReturnType<typeof inspectSparkHeroCapture>> | null = null;
+  try {
+    await expect.poll(async () => {
+      observation = await hero.evaluate(observeSparkHeroCapture, true);
+      return observation.ready;
+    }, { timeout: 20_000, message: 'Hero currentSrc, decode and geometry must settle across rendering frames.' }).toBe(true);
+    expect(observation.state.viewport).toMatchObject(page.viewportSize()!);
+    // Exactly one original full-page capture. A blank result is a hard failure;
+    // never recapture until a preferable frame appears or alter the saved PNG.
+    const png = await page.screenshot({ path: info.outputPath(`${name}.png`), fullPage: true, animations: 'disabled' });
+    after = await hero.evaluate(observeSparkHeroCapture, false);
+    pixels = await inspectSparkHeroCapture(png, observation.state.rect, observation.state.viewport.dpr, observation.state.viewport.width);
+    expect(after.state, 'Hero source and document geometry changed during the capture.').toEqual(observation.state);
+    expect(pixels.nonblank, 'The unchanged full-page PNG must contain visible Hero artwork, not an empty frame.').toBe(true);
+  } finally {
+    console.info(`[spark-hero-capture:${name}] ${JSON.stringify({ before: observation, after, pixels })}`);
+  }
 }
 
 async function assertStaticFigure(page: Page) {

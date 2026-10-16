@@ -54,7 +54,7 @@ export function StatsCard({ stats, activityLoading = false, activityError = fals
         <p className="mb-4 text-xs text-muted-foreground">Alle deine Beiträge. Likes auf deine Beiträge, einschließlich eigener Likes. Kommentare in veröffentlichten und deinen eigenen Beiträgen.</p>
         <dl className="grid grid-cols-2 gap-x-6 gap-y-5">
           {values.map(({ label, value }) => (
-            <div key={label} className="min-w-0">
+            <div key={label} className="min-w-0 [overflow-wrap:anywhere]">
               <dt className="text-sm text-muted-foreground">{label}</dt>
               <dd className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{value}</dd>
             </div>
@@ -68,15 +68,15 @@ export function StatsCard({ stats, activityLoading = false, activityError = fals
             : rewardsLoading ? <p className="mt-3 text-sm" role="status">Belohnungen werden geladen…</p>
             : rewardsError || !rewards ? <p className="mt-3 text-sm text-destructive" role="alert">Belohnungen konnten nicht geladen werden.</p>
             : <><dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-5">
-                <div>
+                <div className="min-w-0 [overflow-wrap:anywhere]">
                   <dt className="text-sm text-muted-foreground">Meine Punkte</dt>
                   <dd className={`mt-1 text-2xl font-semibold tabular-nums ${rewards.points > 0 ? "text-reward-ink" : "text-foreground"}`}>{rewards.points}</dd>
                 </div>
-                <div>
+                <div className="min-w-0 [overflow-wrap:anywhere]">
                   <dt className="text-sm text-muted-foreground">Mindestens einmal abgeschlossene Kurse</dt>
                   <dd className={`mt-1 text-2xl font-semibold tabular-nums ${rewards.completedCourses > 0 ? "text-reward-ink" : "text-foreground"}`}>{rewards.completedCourses}</dd>
                 </div>
-                <div className="col-span-2">
+                <div className="col-span-2 min-w-0 [overflow-wrap:anywhere]">
                   <dt className="text-sm text-muted-foreground">Meilenstein: Erster abgeschlossener Kurs</dt>
                   <dd className={`mt-1 text-sm font-medium ${rewards.firstCourseCompleted ? "text-reward-ink" : "text-muted-foreground"}`}>{rewards.firstCourseCompleted ? 'Erreicht' : 'Noch nicht erreicht'}</dd>
                 </div>

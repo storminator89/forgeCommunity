@@ -52,6 +52,32 @@ it('shows private rewards and milestone independently of leaderboard placement',
   expect(screen.getByText(/Was zählt: Ein von Admins freigegebener Kurs/)).toBeInTheDocument()
 })
 
+it('lets metric labels and values wrap within their existing grid cells at enlarged text sizes', () => {
+  render(<StatsCard stats={{ posts: 1234567890123456, receivedLikes: 2345678901234567, comments: 3456789012345678 }}
+    rewards={{ points: 987654321012345, completedCourses: 3, firstCourseCompleted: true }}
+    rewardsLoading={false} rewardsError={false} isSignedIn />)
+
+  // DOM/class coverage is a reflow guard. The actual 320px/200% layout remains
+  // checked by the strict Spark entry browser scenario and its geometry gate.
+  for (const [label, value] of [
+    ['Beiträge', '1234567890123456'], ['Likes', '2345678901234567'], ['Kommentare', '3456789012345678'],
+    ['Meine Punkte', '987654321012345'], ['Mindestens einmal abgeschlossene Kurse', '3'],
+    ['Meilenstein: Erster abgeschlossener Kurs', 'Erreicht'],
+  ]) {
+    const term = screen.getByText(label)
+    const cell = term.parentElement!
+    expect(term.tagName).toBe('DT')
+    expect(term.nextElementSibling?.tagName).toBe('DD')
+    expect(term.nextElementSibling?.textContent).toBe(value)
+    expect(cell).toHaveClass('min-w-0', '[overflow-wrap:anywhere]')
+    expect(cell).not.toHaveClass('overflow-hidden', 'truncate')
+    expect(cell.parentElement).toHaveClass('grid-cols-2', 'gap-x-6')
+  }
+  const progress = screen.getByRole('progressbar', { name: 'Lernmeilenstein: 3 von 5 Kursen abgeschlossen' })
+  expect(progress).toHaveAttribute('value', '3')
+  expect(progress).toHaveAttribute('max', '5')
+})
+
 it('shows reachable private learning milestones without streak pressure or public ranking', () => {
   const view = render(<StatsCard stats={{ posts: 0, receivedLikes: 0, comments: 0 }} rewards={{ points: 0, completedCourses: 0, firstCourseCompleted: false }} rewardsLoading={false} rewardsError={false} isSignedIn />)
   expect(screen.getByRole('progressbar', { name: 'Lernmeilenstein: 0 von 1 Kurs abgeschlossen' })).toBeInTheDocument()
