@@ -34,10 +34,13 @@ function setRole(role: string | null | undefined) {
 }
 
 async function tabThroughCourseNavigation(user: ReturnType<typeof userEvent.setup>) {
-  for (const link of within(screen.getByRole('navigation', { name: 'Weitere Kursbereiche' })).getAllByRole('link')) {
+  const navigation = within(screen.getByRole('navigation', { name: 'Weitere Kursbereiche' }));
+  for (const link of navigation.queryAllByRole('link')) {
     await user.tab();
     expect(link).toHaveFocus();
   }
+  await user.tab();
+  expect(navigation.getByRole('button', { name: 'Kursbereiche' })).toHaveFocus();
 }
 
 beforeEach(() => {
@@ -46,15 +49,22 @@ beforeEach(() => {
   global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => [] });
 });
 
-it.each(['ADMIN', 'INSTRUCTOR', 'MODERATOR', null, undefined])('does not suggest private pathways to %s', role => {
+it.each(['ADMIN', 'INSTRUCTOR', 'COMPANY', 'MODERATOR', null, undefined])('does not suggest private pathways to %s even inside the opened menu', async role => {
+  const user = userEvent.setup();
   setRole(role);
   render(<CourseClient />);
-  expect(screen.queryByRole('link', { name: 'Lernpfade' })).not.toBeInTheDocument();
+  await screen.findByRole('heading', { name: 'Noch keine Kurse' });
+  await user.click(screen.getByRole('button', { name: 'Kursbereiche' }));
+  expect(await screen.findByRole('menu', { name: 'Kursbereiche' })).toBeVisible();
+  expect(screen.queryByRole('menuitem', { name: 'Lernpfade' })).not.toBeInTheDocument();
 });
 
-it('suggests private pathways to a member', () => {
+it('suggests private pathways to a member in the opened menu', async () => {
+  const user = userEvent.setup();
   render(<CourseClient />);
-  expect(screen.getByRole('link', { name: 'Lernpfade' })).toHaveAttribute('href', '/courses/pathways');
+  await screen.findByRole('heading', { name: 'Noch keine Kurse' });
+  await user.click(screen.getByRole('button', { name: 'Kursbereiche' }));
+  expect(await screen.findByRole('menuitem', { name: 'Lernpfade' })).toHaveAttribute('href', '/courses/pathways');
 });
 
 it.each(['ADMIN', 'INSTRUCTOR', 'MODERATOR', null, undefined])('hides the learner journey entry from %s', async role => {
@@ -70,7 +80,8 @@ it('links a USER to the private learner journey', async () => {
   expect(screen.getByRole('link', { name: 'Mein Lernweg' })).toHaveAttribute('href', '/courses/journey');
 });
 
-it.each(['USER', 'MODERATOR', null, undefined, 'UNKNOWN'])('gives %s a truthful learner next step for an empty catalog', async role => {
+it.each(['USER', 'COMPANY', 'MODERATOR', null, undefined, 'UNKNOWN'])('gives %s a truthful learner next step for an empty catalog', async role => {
+  const user = userEvent.setup();
   setRole(role);
   render(<CourseClient />);
 
@@ -82,7 +93,8 @@ it.each(['USER', 'MODERATOR', null, undefined, 'UNKNOWN'])('gives %s a truthful 
   expect(screen.queryByText(/Erstelle den ersten Kurs/)).not.toBeInTheDocument();
   expect(screen.queryByRole('link', { name: 'Kurs erstellen' })).not.toBeInTheDocument();
   // The existing API permits creation by every authenticated account.
-  expect(screen.getByRole('link', { name: 'Neuer Kurs' })).toHaveAttribute('href', '/courses/new');
+  await user.click(screen.getByRole('button', { name: 'Kursbereiche' }));
+  expect(await screen.findByRole('menuitem', { name: 'Neuer Kurs' })).toHaveAttribute('href', '/courses/new');
 });
 
 it.each(['ADMIN', 'INSTRUCTOR'])('keeps the %s creator-first empty state and creation route', async role => {
