@@ -1,13 +1,77 @@
 # App screenshot provenance
 
-All PNGs in this README gallery show actual ForgeCommunity rendering with no image
-generation, API-response substitution, compositing, hidden/rewritten UI, or
-added browser or phone chrome. The two **current real-learner practice**
-captures, two earlier **course-publication** captures, and four **historical
-pre-phase-2** captures were copied byte-for-byte from their respective GitHub
-Actions artifacts and inspected at original dimensions.
+All PNGs in this README gallery show actual ForgeCommunity rendering without
+image generation, API-response substitution, compositing, hidden/rewritten UI,
+or added browser/phone chrome. Selected files were copied byte-for-byte from
+their named GitHub Actions artifacts and inspected at original dimensions.
+All authenticated content is disposable synthetic test data. A browser journey
+can set up database fixtures directly; the soft-week fixture is disclosed below.
 
-## Current practice captures
+## Current Space captures
+
+- Capture date: 16 October 2026
+- PR head: [`0a8cead91c7f24609236bd516a61722d22472001`](https://github.com/storminator89/forgeCommunity/commit/0a8cead91c7f24609236bd516a61722d22472001), source tree `9ea80641be9e08520675503971124e76aeee0770`
+- CI checkout: [`0596795d17ddbd3018737519c7072c1540b9397b`](https://github.com/storminator89/forgeCommunity/commit/0596795d17ddbd3018737519c7072c1540b9397b), the PR merge ref recorded in the browser-job checkout log, with the same Git tree as the PR head and merged main
+- Merged main: [`38a0826458387056ea079d46797b3be4b7a36b96`](https://github.com/storminator89/forgeCommunity/commit/38a0826458387056ea079d46797b3be4b7a36b96), with the same source tree as the PR head
+- Workflow: [exact-head PR run 38871008041](https://github.com/storminator89/forgeCommunity/actions/runs/38871008041), **all seven jobs passed**. The browser job completed separate desktop/320px/390px Chromium invocations and four Firefox/WebKit critical journeys. The PostgreSQL release job completed the mission, poll and waitlist API contracts.
+- Artifact: [`browser-qa-38871008041-1`, ID 12033810360](https://github.com/storminator89/forgeCommunity/actions/runs/38871008041/artifacts/12033810360), archive SHA-256 `853f2b8cd14131f529f4a9ab90e1285a3d519f4283277e79dda092ccdef7c259`
+
+The artifact paths below include the per-project output directory.
+
+| Repository image | Artifact path | Viewport / PNG dimensions | State |
+| --- | --- | --- | --- |
+| `readme/space-learning-week-form-light-768.png` | `desktop-chromium/cooperative-space-missions-351b2-ate-in-a-real-private-Space-desktop-chromium/mission-week-form-Hell-768.png` | 768×900 / 768×900 | Scrolled admin creation form, optional current Monday/week and Europe/Berlin zone selected; submit is below the fold |
+| `readme/space-mission-light-768.png` | `desktop-chromium/cooperative-space-missions-351b2-ate-in-a-real-private-Space-desktop-chromium/mission-Hell-768.png` | 768×900 / 768×900 | Joined learner, soft week ended but mission open, two current insights and one valid cross-person build-on; lower detail is below the fold |
+| `readme/space-mission-dark-320.png` | `desktop-chromium/cooperative-space-missions-351b2-ate-in-a-real-private-Space-desktop-chromium/mission-Dunkel-320.png` | 320×900 / 320×900 | Same mission in dark mode, top viewport; the long fixture title wraps and contribution controls are lower down |
+| `readme/space-poll-light-768.png` | `desktop-chromium/space-polls.pw.ts-members--f283b-ose-and-lose-revoked-access-desktop-chromium/poll-Hell-768.png` | 768×900 / 768×900 | Private-Space member's changed choice and option totals; lower action controls are outside this viewport |
+
+SHA-256 of the four new committed PNGs:
+
+```text
+405888aace2b4b164dbc8f70d392b3c1966db5677cc8f56b4287328c47de1342  readme/space-learning-week-form-light-768.png
+77fea2b33a2778d220264d13153ed79bc10ff45724d7466a8c8f320471d188c2  readme/space-mission-light-768.png
+ec5da3c772545eba1dd6c07b3b7a3324c2db26fd567da893df87ef4f34a4b2ab  readme/space-mission-dark-320.png
+8dd7775b1e51f62a34983cd4173d806aec5c5f552b787476892dd7f151d1a9bd  readme/space-poll-light-768.png
+```
+
+The [mission journey](../../e2e/cooperative-space-missions.pw.ts) registers
+synthetic accounts, promotes its synthetic admin directly in the guarded
+SQLite fixture, and creates the private Space and mission through real APIs/UI.
+The administrator creates the current week through the actual form. After two
+real participant insights, the test directly moves that disposable mission's
+immutable stored window back one week, then reloads and submits the cross-person
+build-on through the real UI. This deliberate fixture enables an ended-week
+state without waiting a week. **Production has no schedule-edit or time-travel
+control.** The visible cooperation total includes the late build-on; it is not
+a claim of on-time participation or measured learning.
+
+The [poll journey](../../e2e/space-polls.pw.ts) creates a private Space and poll,
+then casts/changes two members' choices through the real app. The displayed
+options, totals and caller's saved choice come from its actual server responses.
+No voter identities are projected. Small-group choices can still be inferred;
+the visible privacy notice is preserved. Long questions/titles and short random
+Space-name suffixes are intentional synthetic reflow fixtures.
+
+The separate [post-merge main run 38872143016](https://github.com/storminator89/forgeCommunity/actions/runs/38872143016)
+also passed all seven jobs on 16 October. It is additional integration evidence;
+these PNGs still come from the PR artifact above.
+
+The public `readme/landing-desktop-light.png` was also retrieved and checked
+from `desktop-chromium/browser-qa.pw.ts-landing-a-79ba0--work-on-desktop-and-mobile-desktop-chromium/landing.png`
+in this artifact. Its 1280×1471 bytes/hash are identical to the historical
+landing image recorded below, so no duplicate PNG was added. The source
+viewport was 1280×800 and the capture covers the full document.
+
+The selected new pixels show synthetic names and content, with no email,
+password, token, real member record, or production activity. They preserve
+actual focus outlines, scroll positions and viewport clipping. Mission/poll
+journeys check 320/375/414/768px light/dark reflow and 200% CSS zoom, but these
+four frames are a narrower visual sample. They do not establish complete mobile
+workflows, assistive-technology compatibility, WCAG conformance, or broad
+Firefox/WebKit visual coverage. Earlier learning captures retain their own
+source attribution below; the new run does not relabel those earlier bytes.
+
+## Earlier practice captures
 
 - Capture date: 15 October 2026
 - PR head: [`a4cc101a1b3a905dcc8645e37d093836d3d1e326`](https://github.com/storminator89/forgeCommunity/commit/a4cc101a1b3a905dcc8645e37d093836d3d1e326), source tree `c7db611cb0dcb5a141aef5014296990b7ed97fcf`
@@ -20,7 +84,7 @@ Actions artifacts and inspected at original dimensions.
 | `readme/practice-question-desktop.png` | `formative-practice-real-le-115cc-ession-and-private-evidence-desktop-chromium/real-learner-question-desktop-a9caf4d5a84e.png` | 1280×800 / 1280×800 | Enrolled, opted-in learner's reserved question with optional confidence; answer not yet submitted |
 | `readme/practice-feedback-mobile-320.png` | `formative-practice-real-le-115cc-ession-and-private-evidence-desktop-chromium/real-learner-feedback-320-a9caf4d5a84e.png` | 320×700 / 320×700 | Scrolled corrective feedback after a real submitted answer; next question waits for an explicit action |
 
-SHA-256 of new committed PNGs:
+SHA-256 of the earlier practice PNGs:
 
 ```text
 398abbd80345d6dbc117376bdcd1b7a2bd5ff7b04ae8c72cbabeb912cfa4ceaf  readme/practice-question-desktop.png
@@ -129,19 +193,19 @@ claim that a data-loss defect was reproduced. Future text-editor captures must
 wait for the actual “Text bearbeiten” textbox to contain the persisted lesson
 text; a failure to reach that state must be investigated rather than hidden.
 
-This gallery does not claim complete mobile editor, dark-mode, all-field,
+These historical frames do not claim complete mobile editor, dark-mode, all-field,
 all-content-type, Safari/Firefox, assistive-technology, or WCAG coverage. The
-mobile image is explicitly the public landing page. Independently scrollable
-panels also mean one viewport PNG cannot show every control. The underlying
+historical mobile image is explicitly the public landing page. Independently
+scrollable panels also mean one viewport PNG cannot show every control. The underlying
 browser journey and API/database evidence have their own scope in the
 [course editor guide](../COURSE-EDITOR.md).
 
 ## Refresh instructions
 
-The saved course draft, publication review, and real learner practice/feedback
-now have reviewed captures above. Further targets are an actual-data opt-in
-screen, the practice author workspace with controls in view, the private course
-author worklist, and version-restore-as-draft state. Include a narrow viewport
+The Space mission/week, poll, saved course draft, publication review, and real
+learner practice/feedback have reviewed captures above. Further targets are an
+actual-data opt-in screen, the practice author workspace with controls in view,
+the private course author worklist, and version-restore-as-draft state. Include a narrow viewport
 with the relevant controls in view; inspect scrolled panels and distinguish a
 local unsaved change from a saved private draft. Existing historical files
 remain labeled and are not overwritten.
@@ -153,10 +217,11 @@ remain labeled and are not overwritten.
 2. The historical gallery came from `e2e/browser-qa.pw.ts` and the earlier
    `e2e/course-editor.pw.ts` flow. The staged-publication journey in that same
    test file generated the two course captures. The separate
-   `e2e/formative-practice-real-learner.pw.ts` journey generated the two current
-   practice captures. Inspect a new run's real artifacts before selecting any
-   further images; distinguish API-intercepted UI tests from end-to-end learner
-   evidence.
+   `e2e/formative-practice-real-learner.pw.ts` journey generated the two earlier
+   practice captures. `e2e/cooperative-space-missions.pw.ts` and
+   `e2e/space-polls.pw.ts` generated the current Space captures. Inspect a new
+   run's real artifacts before selecting any further images; distinguish
+   API-intercepted UI tests from end-to-end learner evidence.
 3. Retrieve the exact run's artifact and inspect actual pixels before copying.
    Reject blank/loading, error, credential-bearing, UUID-heavy, or stale-editor
    frames. Do not replace the app's state or composite a prettier interface.
@@ -181,5 +246,6 @@ including `skills/hallmark/SKILL.md`, the redesign guidance, and output contract
 The applicable guidance is honest content, an existing shared system, real
 screenshots without redrawn chrome, and preserving implementation boundaries.
 This does not claim an installed Hallmark runtime/tool or a fresh app-wide design
-audit. The current pixel review is limited to the two selected learner-practice
-captures, alongside the earlier scoped course-publication and historical review.
+audit. The current pixel review covers the four selected Space frames and the
+byte-identical public landing capture, alongside the earlier scoped
+learner-practice, course-publication and historical reviews.
