@@ -271,7 +271,7 @@ test.describe('every App Router page, one at a time', () => {
           if (paletteTheme === 'dark') await expect(page.locator('html')).toHaveClass(/\bdark\b/);
           else await expect(page.locator('html')).not.toHaveClass(/\bdark\b/);
           await expect(page.getByRole('status').filter({ hasText: 'Kursanalyse wird geladen' })).toBeVisible();
-          await page.screenshot({ path: testInfo.outputPath(`palette-real-loading-${paletteTheme}.png`) });
+          await page.screenshot({ path: testInfo.outputPath(`palette-real-loading-${paletteTheme}.png`), animations: 'disabled' });
         }
       } finally { releaseLoading?.(); }
 
@@ -287,7 +287,7 @@ test.describe('every App Router page, one at a time', () => {
         }
         // Capture the settled destination. The redirect-only source does not
         // claim a stable rendered state of its own.
-        await page.screenshot({ path: testInfo.outputPath(screenshotName(item, paletteTheme)), fullPage: true });
+        await page.screenshot({ path: testInfo.outputPath(screenshotName(item, paletteTheme)), fullPage: true, animations: 'disabled' });
         expect(errors).toEqual([]);
         return;
       }
@@ -350,7 +350,7 @@ test.describe('every App Router page, one at a time', () => {
       }));
       expect(overflow.html, `${item.url} document width ${JSON.stringify(overflow)}`).toBeLessThanOrEqual(overflow.viewport + 1);
       expect(overflow.body, `${item.url} body width ${JSON.stringify(overflow)}`).toBeLessThanOrEqual(overflow.viewport + 1);
-      await page.screenshot({ path: testInfo.outputPath(screenshotName(item, paletteTheme)), fullPage: true });
+      await page.screenshot({ path: testInfo.outputPath(screenshotName(item, paletteTheme)), fullPage: true, animations: 'disabled' });
 
       await page.keyboard.press('Tab');
       const skip = page.getByRole('link', { name: 'Zum Inhalt springen', exact: true });
@@ -373,7 +373,7 @@ test.describe('every App Router page, one at a time', () => {
         await expect(pagination.getByRole('button', { name: 'Vorherige Seite', exact: true })).toBeDisabled();
         await expect(pagination.getByRole('button', { name: 'Nächste Seite', exact: true })).toBeDisabled();
         await pagination.scrollIntoViewIfNeeded();
-        await page.screenshot({ path: testInfo.outputPath(`palette-disabled-pagination-${paletteTheme}.png`) });
+        await page.screenshot({ path: testInfo.outputPath(`palette-disabled-pagination-${paletteTheme}.png`), animations: 'disabled' });
       }
 
       if (item.url === '/login') {
@@ -382,12 +382,16 @@ test.describe('every App Router page, one at a time', () => {
         await expect(email).toBeFocused();
         expect(await email.evaluate(element => element.matches(':focus-visible'))).toBe(true);
         expect(await email.evaluate(element => getComputedStyle(element).boxShadow)).not.toBe('none');
-        await page.screenshot({ path: testInfo.outputPath(`palette-input-keyboard-focus-${paletteTheme}.png`) });
+        await page.screenshot({ path: testInfo.outputPath(`palette-input-keyboard-focus-${paletteTheme}.png`), animations: 'disabled' });
         const submit = main.getByRole('button', { name: 'Anmelden', exact: true });
         await expect(submit).toBeEnabled();
-        await submit.hover();
-        expect(await submit.evaluate(element => element.matches(':hover'))).toBe(true);
-        await page.screenshot({ path: testInfo.outputPath(`palette-primary-hover-${paletteTheme}.png`) });
+        // Tailwind v4 deliberately does not apply hover colors on touch-only
+        // devices, even when the automation can position a pointer there.
+        if (await page.evaluate(() => matchMedia('(hover: hover)').matches)) {
+          await submit.hover();
+          expect(await submit.evaluate(element => element.matches(':hover'))).toBe(true);
+          await page.screenshot({ path: testInfo.outputPath(`palette-primary-hover-${paletteTheme}.png`), animations: 'disabled' });
+        }
       }
 
       if (item.url === '/settings') {
@@ -397,7 +401,7 @@ test.describe('every App Router page, one at a time', () => {
         await expect(privacy).toHaveAttribute('aria-selected', 'true');
         await expect(privacy).toHaveAttribute('data-state', 'active');
         await expect(main.getByLabel('In der öffentlichen Rangliste erscheinen', { exact: true })).toBeVisible();
-        await page.screenshot({ path: testInfo.outputPath(`palette-selected-tab-${paletteTheme}.png`) });
+        await page.screenshot({ path: testInfo.outputPath(`palette-selected-tab-${paletteTheme}.png`), animations: 'disabled' });
       }
 
       if (item.url === '/profile/:memberId') {
@@ -413,7 +417,7 @@ test.describe('every App Router page, one at a time', () => {
         await expect(dialog.getByText('Ungültiges Kontaktformat', { exact: true })).toBeVisible();
         // Existing client validation stops before saving; no API replacement
         // or private-data/authorization shortcut is introduced by this state.
-        await page.screenshot({ path: testInfo.outputPath(`palette-profile-validation-${paletteTheme}.png`) });
+        await page.screenshot({ path: testInfo.outputPath(`palette-profile-validation-${paletteTheme}.png`), animations: 'disabled' });
       }
 
       // These pages scroll inside <main>, so a document-level fullPage PNG
@@ -433,7 +437,7 @@ test.describe('every App Router page, one at a time', () => {
         await expect(lowerTarget).toBeEnabled();
         await lowerTarget.focus();
         await expect(lowerTarget).toBeFocused();
-        await page.screenshot({ path: testInfo.outputPath(screenshotName(item, paletteTheme).replace(/\.png$/, '-lower.png')) });
+        await page.screenshot({ path: testInfo.outputPath(screenshotName(item, paletteTheme).replace(/\.png$/, '-lower.png')), animations: 'disabled' });
       }
       expect(errors).toEqual([]);
     });
@@ -501,7 +505,15 @@ test.describe('every App Router page, one at a time', () => {
       await badge.scrollIntoViewIfNeeded();
       await expect(label).toBeInViewport();
       await expect(badge.getByText('Diese Anerkennung ist nur in deinem Lernpfad sichtbar. Sie ist kein Zertifikat.', { exact: true })).toBeInViewport();
+      // The image review must verify the painted native fill, not only the
+      // accent-color property: Chromium can paint an unrelated default green.
+      await expect(progress).toHaveCSS('appearance', 'none');
       await page.screenshot({ path: testInfo.outputPath(`palette-synthetic-private-active-reward-${paletteTheme}.png`), animations: 'disabled' });
+      await page.emulateMedia({ forcedColors: 'active' });
+      await expect(progress).not.toHaveCSS('appearance', 'none');
+      await expect(progress).toHaveAttribute('value', '2');
+      await expect(progress).toHaveAttribute('max', '2');
+      await page.screenshot({ path: testInfo.outputPath(`palette-native-progress-forced-colors-${paletteTheme}.png`), animations: 'disabled' });
       expect(mutations).toEqual([]);
       expect(errors).toEqual([]);
     });
@@ -566,7 +578,7 @@ test.describe('every App Router page, one at a time', () => {
         expect(control.whiteSpace, `${name} at ${width}px`).toBe('nowrap');
         expect(control.scrollWidth, `${name} at ${width}px`).toBeLessThanOrEqual(control.clientWidth + 1);
       }
-      if (width === 320) await page.screenshot({ path: testInfo.outputPath('course-analytics-320.png'), fullPage: true });
+      if (width === 320) await page.screenshot({ path: testInfo.outputPath('course-analytics-320.png'), fullPage: true, animations: 'disabled' });
     }
     const search = page.getByRole('textbox', { name: 'Name suchen' });
     await search.focus();

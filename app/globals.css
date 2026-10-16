@@ -180,6 +180,24 @@
   a:focus-visible, button:focus-visible, [tabindex="0"]:focus-visible {
     outline: 2px solid hsl(var(--ring)); outline-offset: 3px;
   }
+  /* Native progress can ignore accent-color when painting its internal bar. */
+  @media (forced-colors: none) {
+    progress.accent-progress {
+      -webkit-appearance: none;
+      appearance: none;
+      background-color: hsl(var(--muted));
+      color: hsl(var(--progress));
+    }
+    progress.accent-progress::-webkit-progress-bar {
+      background-color: hsl(var(--muted));
+    }
+    progress.accent-progress::-webkit-progress-value {
+      background-color: hsl(var(--progress));
+    }
+    progress.accent-progress::-moz-progress-bar {
+      background-color: hsl(var(--progress));
+    }
+  }
 }
 @layer components {
   .fc-button[data-state="error"] { background: hsl(var(--destructive)); color: hsl(var(--destructive-foreground)); }
