@@ -54,7 +54,7 @@ function CelebrationClip({ playbackId }: { playbackId: number }) {
   };
 
   return <>
-    <span className={phase === 'playing' ? 'invisible' : ''} data-spark-static=""><MascotPose complete /></span>
+    <span className={`${styles.restingPose} ${phase === 'playing' ? 'invisible' : ''}`} data-spark-static=""><MascotPose complete /></span>
     {phase !== 'finished' && <Image
       // A new DOM key alone can reuse an ended once-loop WebP's decoded clock.
       // A document-local event token gives each genuine completion a fresh
@@ -62,7 +62,7 @@ function CelebrationClip({ playbackId }: { playbackId: number }) {
       src={`/images/forge-spark-celebrate-once.webp?play=${playbackId}`} width={112} height={112} alt=""
       unoptimized loading="eager" onLoad={start} onError={finish}
       data-spark-celebration={phase}
-      className={`absolute inset-0 size-28 object-contain ${phase === 'loading' ? 'invisible' : ''}`}
+      className={`${styles.pose} absolute inset-0 ${phase === 'loading' ? 'invisible' : ''}`}
     />}
   </>;
 }
@@ -70,19 +70,15 @@ function CelebrationClip({ playbackId }: { playbackId: number }) {
 function MascotPose({ complete }: { complete: boolean }) {
   return <Image
     src={complete ? '/images/forge-spark-celebrate-final.webp' : '/images/forge-spark-preview.webp'}
-    width={112} height={112} alt="" className="size-28 object-contain"
+    width={112} height={112} alt="" className={styles.pose}
   />;
 }
 
 /** Decorative, replaceable slot; provenance lives with the Blender source. */
 export function JourneyMascot({ complete, celebrationId, ambientMotion }: { complete: boolean; celebrationId: number | null; ambientMotion: boolean }) {
-  return <span className="relative block size-28 shrink-0" aria-hidden="true" data-journey-mascot="">
+  return <span className={styles.mascot} aria-hidden="true" data-journey-mascot="">
     {complete && ambientMotion && celebrationId !== null
       ? <CelebrationClip key={celebrationId} playbackId={celebrationId} />
       : <MascotPose complete={complete} />}
-    {!complete && ambientMotion && <Image
-      src="/images/forge-spark-blink.webp" width={112} height={112} alt=""
-      className={`absolute inset-0 size-28 object-contain ${styles.blink}`}
-    />}
   </span>;
 }

@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import Members from '@/app/members/page'
 
 jest.mock('@/components/Sidebar', () => ({ Sidebar: () => null }))
@@ -36,4 +37,47 @@ it('offers a retry after the directory fails to load', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Erneut versuchen' }))
   expect(await screen.findByRole('link', { name: 'Profil von Ada Lovelace öffnen' })).toBeInTheDocument()
   errorSpy.mockRestore()
+})
+
+it('starts with search and truthful results without activity or location claims', async () => {
+  render(<Members />)
+  const search = screen.getByRole('searchbox', { name: 'Mitglieder suchen' })
+  expect(search).toHaveAttribute('placeholder', 'Name, Rolle oder Skill')
+  await screen.findByRole('link', { name: 'Profil von Ada Lovelace öffnen' })
+  expect(screen.queryByText('Aktive Mitglieder')).not.toBeInTheDocument()
+  expect(screen.queryByText('Neue diesen Monat')).not.toBeInTheDocument()
+  expect(screen.queryByText('Alle Mitglieder')).not.toBeInTheDocument()
+  expect(screen.queryByText('Menschen / Community')).not.toBeInTheDocument()
+  expect(screen.getByText('2 Ergebnisse')).toBeInTheDocument()
+  expect(within(screen.getByRole('link', { name: 'Profil von Ada Lovelace öffnen' })).getByText('Mitglied')).toBeInTheDocument()
+})
+
+it('uses readable existing roles in search, filters and removable selections', async () => {
+  const roles = ['USER', 'ADMIN', 'MODERATOR', 'INSTRUCTOR']
+  jest.mocked(global.fetch).mockResolvedValueOnce({ ok: true, json: async () => roles.map((role, index) => ({
+    id: role, name: `Person ${index}`, image: null, role, title: null,
+    createdAt: '2026-01-10T10:00:00Z', followers: 0, skills: [],
+  })) } as Response)
+  render(<Members />)
+  await screen.findByRole('link', { name: 'Profil von Person 0 öffnen' })
+  for (const label of ['Mitglied', 'Administration', 'Moderation', 'Lehrperson']) expect(screen.getByText(label)).toBeInTheDocument()
+  const search = screen.getByRole('searchbox', { name: 'Mitglieder suchen' })
+  fireEvent.change(search, { target: { value: 'Lehrperson' } })
+  expect(screen.getByRole('link', { name: 'Profil von Person 3 öffnen' })).toBeInTheDocument()
+  expect(screen.getByText('1 Ergebnis')).toBeInTheDocument()
+  fireEvent.change(search, { target: { value: '' } })
+  await userEvent.click(screen.getByRole('button', { name: 'Filter' }))
+  await userEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Lehrperson' }))
+  await userEvent.keyboard('{Escape}')
+  expect(screen.getByRole('button', { name: 'Filter Lehrperson entfernen' })).toBeInTheDocument()
+  expect(screen.getByText('1 Ergebnis')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Filter Lehrperson entfernen' }))
+  expect(screen.getByText('4 Ergebnisse')).toBeInTheDocument()
+})
+
+it('does not claim an empty result before the request finishes', () => {
+  jest.mocked(global.fetch).mockReturnValueOnce(new Promise(() => {}))
+  render(<Members />)
+  expect(screen.getByRole('status', { name: 'Mitglieder werden geladen' })).toBeInTheDocument()
+  expect(screen.queryByText('0 Ergebnisse')).not.toBeInTheDocument()
 })

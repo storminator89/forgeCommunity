@@ -49,12 +49,21 @@ export type PracticeLearnerViewProps = {
 
 const confidenceChoices = ['Sicher', 'Eher sicher', 'Unsicher', 'Geraten'] as const
 
-function PrivacyNote() {
-  return <aside aria-labelledby="practice-private-heading" className="min-w-0 border-t pt-5 text-sm leading-relaxed text-muted-foreground lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
-    <h2 id="practice-private-heading" className="mb-2 text-base font-semibold text-foreground">Privat und freiwillig</h2>
-    <p>Diese Fragen helfen dir beim Wiederholen. Deine Antworten und deine freiwillige Sicherheitseinschätzung sind nur für deine private Übung da.</p>
-    <p className="mt-3">Sie zählen nicht für Kursabschluss, Prüfungen, Zertifikate oder Belohnungen. Es gibt keine öffentlichen Punktestände oder persönliche Übungsauswertung für Lehrende.</p>
-    <p className="mt-3">Private Übungsdaten werden nach 12 Kalendermonaten ohne Übungsaktivität zur automatischen Löschung fällig, technische Belege zur Antwortübermittlung nach 90 Tagen. Bei Störungen oder Rückstand kann sich die Löschung verzögern. Mit „Zurücksetzen“ löschst du deine Übungsdaten samt diesen technischen Belegen sofort.</p>
+function PrivacyNote({ atDecision = false }: { atDecision?: boolean }) {
+  const Heading = atDecision ? 'h3' : 'h2'
+  return <aside aria-labelledby="practice-private-heading" className={atDecision
+    ? 'space-y-2 text-sm leading-relaxed text-muted-foreground'
+    : 'min-w-0 space-y-2 border-t pt-5 text-sm leading-relaxed text-muted-foreground lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0'}>
+    <Heading id="practice-private-heading" className="text-base font-semibold text-foreground">Privat und freiwillig</Heading>
+    <p>Deine Antworten und deine optionale Sicherheitseinschätzung werden für deine private Übung gespeichert.</p>
+    <p>Kein Einfluss auf Kursabschluss, Prüfungen, Zertifikate oder Belohnungen. Keine persönliche Übungsauswertung für Lehrende.</p>
+    <details>
+      <summary className="min-h-11 w-fit cursor-pointer rounded-lg py-2 font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">Speicherung und Löschen</summary>
+      <div className="space-y-2 pt-1">
+        <p>Es gibt keine öffentlichen Punktestände.</p>
+        <p>Private Übungsdaten werden nach 12 Kalendermonaten ohne Übungsaktivität zur automatischen Löschung fällig, technische Belege zur Antwortübermittlung nach 90 Tagen. Bei Störungen oder Rückstand kann sich die Löschung verzögern. Mit „Zurücksetzen“ löschst du deine Übungsdaten samt diesen technischen Belegen sofort.</p>
+      </div>
+    </details>
   </aside>
 }
 
@@ -131,6 +140,7 @@ export function PracticeLearnerView({ courseId, stage, question, feedback, error
   const [resetInput, setResetInput] = useState('')
   const courseHref = `/courses/${encodeURIComponent(courseId)}/contents`
   const dataStage = stage === 'question' && question ? 'question' : stage === 'feedback' && question && feedback ? 'feedback' : stage
+  const isEnableDecision = dataStage === 'available' || dataStage === 'paused'
 
   return <AppShell>
     <Sidebar />
@@ -144,7 +154,7 @@ export function PracticeLearnerView({ courseId, stage, question, feedback, error
       <main id="page-content" tabIndex={-1} aria-busy={busy || stage === 'loading'} className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
         <div className="mx-auto max-w-5xl">
           <Link href={courseHref} className="mb-8 inline-flex min-h-11 items-center gap-2 rounded-lg text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"><ArrowLeft aria-hidden="true" className="h-4 w-4" />Zum Kursinhalt</Link>
-          <div className="grid min-w-0 gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(14rem,18rem)] lg:gap-12">
+          <div className={`grid min-w-0 gap-10 ${isEnableDecision ? 'max-w-2xl' : 'lg:grid-cols-[minmax(0,1fr)_minmax(14rem,18rem)] lg:gap-12'}`}>
             <div className="min-w-0">
               {error && stage !== 'error' && <p role="alert" className="mb-5 rounded-xl border border-destructive/40 bg-card px-4 py-3 text-sm text-destructive">{error}</p>}
               {dataStage === 'loading' && <PageState kind="loading" title="Übungen werden geladen" />}
@@ -154,11 +164,12 @@ export function PracticeLearnerView({ courseId, stage, question, feedback, error
               {dataStage === 'archived' && <StateSection title="Bisheriger Übungspool archiviert"><p>Für die aktuelle Kursversion ist der frühere Übungspool nicht mehr verfügbar. Dein Kursinhalt bleibt erreichbar.</p></StateSection>}
               {dataStage === 'off' && <StateSection title="Noch keine Übung veröffentlicht"><p>Für die aktuelle Kursversion gibt es noch keinen veröffentlichten Übungspool.</p></StateSection>}
               {dataStage === 'available' && <StateSection title="In deinem Tempo wiederholen" action={<Button type="button" className="min-h-11" disabled={busy} onClick={onEnable}>{busy ? 'Wird eingeschaltet …' : 'Privates Üben einschalten'}</Button>}>
-                <p>Das Üben ist standardmäßig ausgeschaltet. Wenn du es einschaltest, kannst du einzelne Fragen zu veröffentlichten Kursinhalten beantworten. Du entscheidest bei jeder Frage, wann es weitergeht.</p>
-                <p>Erst nach dem Einschalten werden deine Antworten privat für diese Übung gespeichert.</p>
+                <p>Standardmäßig ausgeschaltet. Du öffnest jede Frage selbst.</p>
+                <PrivacyNote atDecision />
               </StateSection>}
               {dataStage === 'paused' && <StateSection title="Privates Üben ist pausiert" action={<Button type="button" className="min-h-11" disabled={busy} onClick={onEnable}>{busy ? 'Wird eingeschaltet …' : 'Üben wieder einschalten'}</Button>}>
-                <p>Es werden keine neuen Fragen geöffnet. Deine bisherigen Übungsdaten bleiben gespeichert, bis du sie zurücksetzt oder die Aufbewahrungsfrist abläuft.</p>
+                <p>Es werden keine neuen Fragen geöffnet. Deine bisherigen Übungsdaten bleiben gespeichert.</p>
+                <PrivacyNote atDecision />
               </StateSection>}
               {dataStage === 'idle' && <StateSection title="Bereit für eine Frage?" action={<Button type="button" className="min-h-11" disabled={busy} onClick={onNext}>{busy ? 'Frage wird geladen …' : nextLabel ?? 'Erste Frage öffnen'}</Button>}>
                 <p>Eine Frage wird erst ausgewählt, wenn du sie ausdrücklich öffnest.</p>
@@ -180,7 +191,7 @@ export function PracticeLearnerView({ courseId, stage, question, feedback, error
                 </div>
               </details>}
             </div>
-            <PrivacyNote />
+            {!isEnableDecision && <PrivacyNote />}
           </div>
         </div>
       </main>

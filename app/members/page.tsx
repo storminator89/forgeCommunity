@@ -1,8 +1,5 @@
 "use client";
 
-/* Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V5 */
-/* Hallmark · genre: editorial · macrostructure: member directory · design-system: design.md · designed-as-app */
-
 import { PageState } from '@/components/page-state';
 import { AppShell, AppHeader } from '@/components/app-shell';
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -16,7 +13,6 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Search,
-  MapPin,
   Briefcase,
   Calendar,
   Users,
@@ -44,7 +40,6 @@ interface Member {
   image: string;
   role: string;
   title?: string;
-  location?: string;
   joinedAt: string;
   followers: number;
   skills: string[];
@@ -61,6 +56,14 @@ interface MembersApiRecord {
   skills: string[];
 }
 
+const roleLabels: Record<string, string> = {
+  USER: 'Mitglied',
+  ADMIN: 'Administration',
+  MODERATOR: 'Moderation',
+  INSTRUCTOR: 'Lehrperson',
+};
+const roleLabel = (role: string) => roleLabels[role] ?? role;
+
 export default function Members() {
   const [searchTerm, setSearchTerm] = useState('');
   const [members, setMembers] = useState<Member[]>([]);
@@ -73,7 +76,6 @@ export default function Members() {
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
-  const [currentTime] = useState(() => Date.now());
 
   // Extrahiere einzigartige Skills und Rollen
   const uniqueSkills = [...new Set(members.flatMap(m => m.skills))].sort();
@@ -125,7 +127,7 @@ export default function Members() {
       result = result.filter(member =>
         member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         member.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        member.location?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        roleLabel(member.role).toLowerCase().includes(searchTerm.toLowerCase()) ||
         member.skills.some(skill => skill.toLowerCase().includes(searchTerm.toLowerCase()))
       );
     }
@@ -192,33 +194,14 @@ export default function Members() {
         </AppHeader>
 
         <main ref={mainRef} onScroll={event => setShowScrollTop(event.currentTarget.scrollTop > 400)} id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto w-full max-w-[1440px] px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
-            <div className="border-b pb-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Menschen / Community</p>
-              <p className="mt-2 max-w-[60ch] text-base leading-relaxed text-muted-foreground">Finde Menschen mit passenden Erfahrungen und Interessen.</p>
-            </div>
-
-            <dl className="grid grid-cols-2 gap-x-5 gap-y-6 border-b py-6 md:grid-cols-4">
-              {[
-                { label: 'Alle Mitglieder', value: members.length },
-                { label: 'Aktive Mitglieder', value: members.filter(member => member.followers > 0).length },
-                { label: 'Durchschn. Skills', value: members.length > 0 ? Math.round(members.reduce((total, member) => total + member.skills.length, 0) / members.length) : 0 },
-                { label: 'Neue diesen Monat', value: members.filter(member => new Date(member.joinedAt).getTime() > currentTime - 30 * 24 * 60 * 60 * 1000).length },
-              ].map(stat => (
-                <div key={stat.label} className="min-w-0">
-                  <dt className="text-xs leading-relaxed text-muted-foreground">{stat.label}</dt>
-                  <dd className="mt-1 text-2xl font-semibold tabular-nums tracking-tight">{stat.value}</dd>
-                </div>
-              ))}
-            </dl>
-
-            <section aria-labelledby="member-results-title" className="pt-8">
+          <div className="mx-auto w-full max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+            <section aria-labelledby="member-results-title">
               <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
                 <div className="min-w-0">
                   <label htmlFor="member-search" className="mb-2 block text-sm font-medium">Mitglieder suchen</label>
                   <div className="relative">
                     <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-                    <Input id="member-search" type="search" placeholder="Name, Rolle, Skill oder Ort" value={searchTerm} onChange={event => setSearchTerm(event.target.value)} className="pl-10" />
+                    <Input id="member-search" type="search" placeholder="Name, Rolle oder Skill" value={searchTerm} onChange={event => setSearchTerm(event.target.value)} className="pl-10" />
                   </div>
                 </div>
 
@@ -246,7 +229,7 @@ export default function Members() {
                           <DropdownMenuCheckboxItem key={role} checked={selectedRoles.includes(role)}
                             onSelect={event => event.preventDefault()}
                             onCheckedChange={checked => setSelectedRoles(previous => checked ? [...previous, role] : previous.filter(value => value !== role))}>
-                            {role}
+                            {roleLabel(role)}
                           </DropdownMenuCheckboxItem>
                         ))}
                       </div>
@@ -277,15 +260,15 @@ export default function Members() {
                     <Button type="button" key={'skill-' + skill} variant="secondary" size="sm" className="max-w-full rounded-full" aria-label={'Filter ' + skill + ' entfernen'} onClick={() => setSelectedSkills(previous => previous.filter(value => value !== skill))}><span className="truncate">{skill}</span><X className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /></Button>
                   ))}
                   {selectedRoles.map(role => (
-                    <Button type="button" key={'role-' + role} variant="secondary" size="sm" className="max-w-full rounded-full" aria-label={'Filter ' + role + ' entfernen'} onClick={() => setSelectedRoles(previous => previous.filter(value => value !== role))}><span className="truncate">{role}</span><X className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /></Button>
+                    <Button type="button" key={'role-' + role} variant="secondary" size="sm" className="max-w-full rounded-full" aria-label={'Filter ' + roleLabel(role) + ' entfernen'} onClick={() => setSelectedRoles(previous => previous.filter(value => value !== role))}><span className="truncate">{roleLabel(role)}</span><X className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /></Button>
                   ))}
                   <Button type="button" variant="ghost" size="sm" onClick={clearFilters}>Filter zurücksetzen</Button>
                 </div>
               )}
 
-              <div className="mt-9 flex flex-wrap items-baseline justify-between gap-2 border-b pb-4">
+              <div className="mt-6 flex flex-wrap items-baseline justify-between gap-2 border-b pb-4">
                 <h2 id="member-results-title" className="text-xl font-semibold tracking-tight">Mitglieder entdecken</h2>
-                <p className="text-sm tabular-nums text-muted-foreground" role="status">{filteredMembers.length} {filteredMembers.length === 1 ? 'Ergebnis' : 'Ergebnisse'}</p>
+                <p className="text-sm tabular-nums text-muted-foreground" role="status">{!isLoading && !loadError && <>{filteredMembers.length} {filteredMembers.length === 1 ? 'Ergebnis' : 'Ergebnisse'}</>}</p>
               </div>
 
               {isLoading ? (
@@ -314,11 +297,10 @@ export default function Members() {
                         <div className="min-w-0 flex-1">
                           <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
                             <h3 className="min-w-0 break-words text-base font-semibold tracking-tight [overflow-wrap:anywhere]">{member.name}</h3>
-                            <span className="text-xs text-muted-foreground">{member.role}</span>
+                            <span className="text-xs text-muted-foreground">{roleLabel(member.role)}</span>
                           </div>
                           {member.title && <p className="mt-1 break-words text-sm text-muted-foreground [overflow-wrap:anywhere]">{member.title}</p>}
                           <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                            {member.location && <span className="inline-flex items-center gap-1"><MapPin className="h-3.5 w-3.5" aria-hidden="true" />{member.location}</span>}
                             <span className="inline-flex items-center gap-1"><Calendar className="h-3.5 w-3.5" aria-hidden="true" />Seit {format(new Date(member.joinedAt), 'MMM yyyy', { locale: de })}</span>
                             <span className="inline-flex items-center gap-1"><Users className="h-3.5 w-3.5" aria-hidden="true" />{member.followers} Follower</span>
                             <span className="inline-flex items-center gap-1"><Briefcase className="h-3.5 w-3.5" aria-hidden="true" />{member.skills.length} Skills</span>

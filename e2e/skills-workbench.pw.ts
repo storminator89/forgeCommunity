@@ -92,10 +92,13 @@ test('Skills workbench persists real own CRUD, discovers people and preserves pr
 
   await communityTab.click();
   await page.getByRole('searchbox', { name: 'Name oder Fähigkeit suchen', exact: true }).fill(skillName);
+  const catalogSummary = page.locator('summary').filter({ hasText: 'Fähigkeiten entdecken' });
+  await catalogSummary.focus(); await page.keyboard.press('Enter');
   const discover = page.getByRole('button', { name: `${skillName}: 1 Mitglied finden`, exact: true });
   await expect(discover).toBeVisible();
   await discover.focus(); await page.keyboard.press('Enter');
   await expect(page.getByRole('searchbox', { name: 'Name oder Fähigkeit suchen', exact: true })).toBeFocused();
+  await catalogSummary.click();
   const member = page.getByRole('listitem').filter({ has: page.getByRole('link', { name: memberName, exact: true }) });
   await expect(member).toContainText('82%');
   await member.getByRole('button', { name: 'Details anzeigen', exact: true }).click();
