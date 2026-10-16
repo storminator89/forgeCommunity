@@ -1,5 +1,15 @@
 # Event waitlist contract
 
+> Integrated evidence, 16 October 2026: [PR #65 CI run 38871008041](https://github.com/storminator89/forgeCommunity/actions/runs/38871008041)
+> passed all seven jobs for `0a8cead91c7f24609236bd516a61722d22472001`, whose
+> source tree matches merged main `38a0826458387056ea079d46797b3be4b7a36b96`.
+> Its separate [post-merge main run 38872143016](https://github.com/storminator89/forgeCommunity/actions/runs/38872143016)
+> also passed all seven jobs.
+> This includes the PostgreSQL contract gate and disposable production-build
+> browser journeys. Local/configured checks described below retain their
+> original scope. See the [current README evidence](../README.md#testing-and-evidence)
+> and [screenshot fixture limits](ui/README.md#current-space-captures).
+
 This optional FIFO waitlist is separate from attendance. The event participation panel deliberately exposes and labels this opt-in.
 
 ## API

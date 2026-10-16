@@ -1,5 +1,15 @@
 # Voluntary Space polls
 
+> Integrated evidence, 16 October 2026: [PR #65 CI run 38871008041](https://github.com/storminator89/forgeCommunity/actions/runs/38871008041)
+> passed all seven jobs for `0a8cead91c7f24609236bd516a61722d22472001`, whose
+> source tree matches merged main `38a0826458387056ea079d46797b3be4b7a36b96`.
+> Its separate [post-merge main run 38872143016](https://github.com/storminator89/forgeCommunity/actions/runs/38872143016)
+> also passed all seven jobs.
+> This includes the PostgreSQL contract gate and disposable production-build
+> browser journeys. Local/configured checks described below retain their
+> original scope. See the [current README evidence](../README.md#testing-and-evidence)
+> and [screenshot fixture limits](ui/README.md#current-space-captures).
+
 Current administrators can create a plain-text question with 2–8 immutable
 options in either a PUBLIC or PRIVATE Space, then close or hide the poll.
 Only current Space members may cast or change their single choice. Voting is
