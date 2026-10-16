@@ -205,3 +205,37 @@ test('listing exposes counts and own state without sending another participantâ€
   expect(events[0]).toMatchObject({ attendeeCount: 2, isAttending: true, maxAttendees: 5 });
   expect(db.event.findMany.mock.calls[0][0].include.attendees.where).toEqual({ userId: 'student' });
 });
+
+
+test.each([
+  { date: '2030-03-31', startTime: '02:30', endTime: '04:00' },
+  { date: '2030-10-27', startTime: '02:30', endTime: '04:00' },
+  { date: '2030-03-31', startTime: '00:30', endTime: '02:30' },
+  { date: '2030-10-27', startTime: '00:30', endTime: '02:30' },
+  { date: '2030-02-30', startTime: '10:00', endTime: '11:00' },
+  { date: '2030-05-21', startTime: '10:00:00', endTime: '11:00' },
+])('creation and updates reject invalid or ambiguous wall time without writing: %j', async schedule => {
+  jest.mocked(getServerSession).mockResolvedValue({ user: { id: 'admin', role: 'ADMIN' } } as never);
+  const body = { title: 'Workshop', description: 'Details', location: 'Hall', timezone: 'Europe/Berlin', ...schedule };
+  const request = () => new Request('http://localhost/api/events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  expect((await createEvent(request())).status).toBe(400);
+  expect((await updateEvent(request(), eventParams)).status).toBe(400);
+  expect(db.event.create).not.toHaveBeenCalled();
+  expect(db.event.update).not.toHaveBeenCalled();
+  expect(db.$transaction).not.toHaveBeenCalled();
+});
+
+test('create and edit persist the same UTC instant and event-zone clock across midnight', async () => {
+  jest.mocked(getServerSession).mockResolvedValue({ user: { id: 'admin', role: 'ADMIN' } } as never);
+  db.event.create.mockImplementation(async ({ data }: { data: object }) => ({ id: 'event-1', ...data }));
+  const body = { title: 'Workshop', description: 'Details', location: 'Hall', timezone: 'Europe/Berlin', date: '2030-05-21', startTime: '00:30', endTime: '01:30' };
+  const request = () => new Request('http://localhost/api/events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const created = await createEvent(request());
+  expect(created.status).toBe(201);
+  expect(await created.json()).toMatchObject({ date: '2030-05-21T00:30:00.000+02:00', startTime: '00:30', endTime: '01:30' });
+  expect(db.event.create.mock.calls[0][0].data.date.toISOString()).toBe('2030-05-20T22:30:00.000Z');
+  const edited = await updateEvent(request(), eventParams);
+  expect(edited.status).toBe(200);
+  expect(await edited.json()).toMatchObject({ date: '2030-05-21T00:30:00.000+02:00', startTime: '00:30', endTime: '01:30' });
+  expect(db.event.update.mock.calls[0][0].data.date.toISOString()).toBe('2030-05-20T22:30:00.000Z');
+});
