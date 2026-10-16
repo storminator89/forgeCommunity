@@ -5,19 +5,10 @@ import prisma from '@/lib/prisma';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { DateTime } from 'luxon';
+import { EventTimeError, parseEventSchedule } from '@/lib/event-time';
 import { sanitizeRichHtmlServer, sanitizeTextServer } from '@/lib/server/sanitize-html';
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
 import { parseEventCapacity, ParticipationError } from '@/lib/server/participation';
-
-// Unterstützte Zeitzonen
-const TIMEZONES = [
-  'Europe/Berlin',
-  'America/New_York',
-  'Asia/Tokyo',
-  'Australia/Sydney',
-  'Europe/London',
-  // Weitere nach Bedarf hinzufügen
-];
 
 // GET-Handler zum Abrufen von Events
 export async function GET() {
@@ -82,31 +73,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // Überprüfen der Zeitzone
-    if (!TIMEZONES.includes(timezone)) {
-      return NextResponse.json({ error: 'Invalid timezone selected' }, { status: 400 });
-    }
-
-    // Kombinieren von Datum und Uhrzeit und Konvertierung in UTC
-    const eventStartDateTime = DateTime.fromISO(`${date}T${startTime}`, { zone: timezone });
-    const eventEndDateTime = DateTime.fromISO(`${date}T${endTime}`, { zone: timezone });
-
-    if (!eventStartDateTime.isValid || !eventEndDateTime.isValid) {
-      console.error('Invalid date format:', { date, startTime, endTime });
-      return NextResponse.json({ error: 'Invalid date format' }, { status: 400 });
-    }
-
-    if (eventEndDateTime <= eventStartDateTime) {
-      return NextResponse.json({ error: 'Endzeit muss nach der Startzeit liegen' }, { status: 400 });
-    }
-
-    const utcStartDateTime = eventStartDateTime.toUTC();
-    const utcEndDateTime = eventEndDateTime.toUTC();
+    const { start: eventStartDateTime, end: eventEndDateTime } = parseEventSchedule({ date, startTime, endTime, timezone });
 
     const newEvent = await prisma.event.create({
       data: {
         title,
-        date: utcStartDateTime.toJSDate(),
+        date: eventStartDateTime.toUTC().toJSDate(),
         description,
         location,
         startTime: eventStartDateTime.toFormat('HH:mm'),
@@ -134,6 +106,7 @@ export async function POST(request: Request) {
       isAttending: false,
     }, { status: 201 });
   } catch (error) {
+    if (error instanceof EventTimeError) return NextResponse.json({ error: error.message }, { status: 400 });
     if (error instanceof ParticipationError) return NextResponse.json({ error: error.message }, { status: error.status });
     const clientError = requestErrorResponse(error);
     if (clientError) return clientError;

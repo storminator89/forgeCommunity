@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectGroup, SelectLabel, SelectItem } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { DateTime } from 'luxon';
+import { EVENT_TIMEZONES, eventDateKey, eventStartTime, parseEventSchedule } from '@/lib/event-time';
 import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
 import { Editor } from "@/components/Editor";
@@ -29,16 +30,6 @@ interface EventFormProps {
   onClose: () => void;
 }
 
-// Unterstützte Zeitzonen
-const TIMEZONES = [
-  'Europe/Berlin',
-  'America/New_York',
-  'Asia/Tokyo',
-  'Australia/Sydney',
-  'Europe/London',
-  // Weitere nach Bedarf hinzufügen
-];
-
 export default function EventForm({ initialData, onSuccess, onClose }: EventFormProps) {
   // The form is keyed by event id so switching between edit targets remounts it
   // with the new values instead of synchronizing controlled state in an effect.
@@ -47,10 +38,10 @@ export default function EventForm({ initialData, onSuccess, onClose }: EventForm
 
 function EventFormFields({ initialData, onSuccess, onClose }: EventFormProps) {
   const [title, setTitle] = useState(() => initialData?.title || '');
-  const [date, setDate] = useState(() => initialData ? initialData.date.slice(0, 10) : DateTime.now().setZone('Europe/Berlin').toISODate() || '');
+  const [date, setDate] = useState(() => initialData ? eventDateKey(initialData) : DateTime.now().setZone('Europe/Berlin').toISODate() || '');
   const [description, setDescription] = useState(() => initialData?.description || '');
   const [location, setLocation] = useState(() => initialData?.location || '');
-  const [startTime, setStartTime] = useState(() => initialData?.startTime || '');
+  const [startTime, setStartTime] = useState(() => initialData ? eventStartTime(initialData) : '');
   const [endTime, setEndTime] = useState(() => initialData?.endTime || '');
   const [category, setCategory] = useState(() => initialData?.category || '');
   const [timezone, setTimezone] = useState(() => initialData?.timezone || 'Europe/Berlin');
@@ -69,25 +60,7 @@ function EventFormFields({ initialData, onSuccess, onClose }: EventFormProps) {
     setIsSubmitting(true);
 
     try {
-      // Kombinieren von Datum und Uhrzeit und Konvertierung in UTC
-      const eventStartDateTime = startTime
-        ? DateTime.fromISO(`${date}T${startTime}`, { zone: timezone })
-        : DateTime.fromISO(`${date}T00:00`, { zone: timezone });
-
-      const eventEndDateTime = endTime
-        ? DateTime.fromISO(`${date}T${endTime}`, { zone: timezone })
-        : eventStartDateTime.plus({ hours: 1 }); // Standardendzeit 1 Stunde nach Start
-
-      if (!eventStartDateTime.isValid || !eventEndDateTime.isValid) {
-        throw new Error('Ungültiges Datums- oder Zeitformat');
-      }
-
-      if (eventEndDateTime <= eventStartDateTime) {
-        throw new Error('Endzeit muss nach der Startzeit liegen');
-      }
-
-      const utcStartDateTime = eventStartDateTime.toUTC();
-      const utcEndDateTime = eventEndDateTime.toUTC();
+      const { start: eventStartDateTime, end: eventEndDateTime } = parseEventSchedule({ date, startTime, endTime, timezone });
 
       const eventData = {
         title,
@@ -207,7 +180,7 @@ function EventFormFields({ initialData, onSuccess, onClose }: EventFormProps) {
           <SelectContent>
             <SelectGroup>
               <SelectLabel>Zeitzonen</SelectLabel>
-              {TIMEZONES.map(tz => (
+              {EVENT_TIMEZONES.map(tz => (
                 <SelectItem key={tz} value={tz}>{tz}</SelectItem>
               ))}
             </SelectGroup>

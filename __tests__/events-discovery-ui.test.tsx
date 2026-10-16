@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
+import { DateTime } from 'luxon';
 import { useSession } from 'next-auth/react';
 import Events from '@/app/events/page';
 
@@ -133,8 +134,7 @@ test('shows at most three previews and moves keyboard focus to the complete filt
 });
 
 test('retains today’s events and their closed RSVP rather than advertising them as future registrations', async () => {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const today = DateTime.now().setZone('Europe/Berlin').startOf('day').toJSDate();
   global.fetch = jest.fn().mockResolvedValue(response([event('today', 'Heute', today)]));
   render(<Events />);
   fireEvent.click(await screen.findByRole('button', { name: /^Details öffnen: Heute/ }));
@@ -176,4 +176,41 @@ test('keeps keyboard focus on the RSVP control after joining from an upcoming pr
   const cancel = await within(dialog).findByRole('button', { name: 'Zusage zurücknehmen' });
   await waitFor(() => expect(cancel).toHaveFocus());
   expect(global.fetch).toHaveBeenCalledWith('/api/events/next-month/rsvp', { method: 'POST' });
+});
+
+test('month, week, preview, list and deep link keep an event-zone day across a UTC year boundary', async () => {
+  const user = userEvent.setup();
+  const tokyo = { ...event('tokyo-midnight', 'Tokio nach Mitternacht', new Date('2029-12-31T15:30:00Z')),
+    timezone: 'Asia/Tokyo', startTime: '00:30', endTime: '01:30' };
+  global.fetch = jest.fn().mockResolvedValue(response([tokyo]));
+  render(<Events />);
+  const preview = await screen.findByRole('button', { name: 'Details öffnen: Tokio nach Mitternacht, 01. Januar 2030' });
+  expect(within(preview).getByText('01. Jan. 2030 · 00:30 (Asia/Tokyo)')).toBeVisible();
+  await user.click(preview);
+  const dialog = await screen.findByRole('dialog');
+  expect(within(dialog).getByRole('heading', { name: '01. Januar 2030' })).toBeVisible();
+  expect(within(dialog).getByText('00:30 - 01:30 (Asia/Tokyo)')).toBeVisible();
+  await user.keyboard('{Escape}');
+  expect(screen.getByRole('button', { name: 'Dienstag, 01. Januar 2030, 1 Event' })).toBeVisible();
+  expect(within(screen.getByRole('region', { name: 'Monatskalender' })).getByRole('heading', { name: 'Januar 2030' })).toBeVisible();
+  await user.click(screen.getByRole('button', { name: 'Woche' }));
+  expect(within(screen.getByRole('region', { name: 'Wochenkalender' })).getByRole('button', { name: 'Dienstag, 01. Januar 2030, 1 Event' })).toBeVisible();
+  await user.click(screen.getByRole('button', { name: 'Liste' }));
+  expect(screen.getByText('01. Jan. 2030, 00:30 - 01:30 (Asia/Tokyo)')).toBeVisible();
+  window.history.replaceState(null, '', '/events#event-tokyo-midnight');
+  fireEvent(window, new HashChangeEvent('hashchange'));
+  expect(within(await screen.findByRole('dialog')).getByRole('heading', { name: '01. Januar 2030' })).toBeVisible();
+  await waitFor(() => expect(document.getElementById('event-tokyo-midnight')).toHaveFocus());
+});
+
+test('a western-zone event stays on the preceding local day and shows its timezone', async () => {
+  const user = userEvent.setup();
+  const newYork = { ...event('new-york-evening', 'Abend in New York', new Date('2030-01-01T00:30:00Z')),
+    timezone: 'America/New_York', startTime: '19:30', endTime: '20:30' };
+  global.fetch = jest.fn().mockResolvedValue(response([newYork]));
+  render(<Events />);
+  await user.click(await screen.findByRole('button', { name: 'Details öffnen: Abend in New York, 31. Dezember 2029' }));
+  const dialog = await screen.findByRole('dialog');
+  expect(within(dialog).getByRole('heading', { name: '31. Dezember 2029' })).toBeVisible();
+  expect(within(dialog).getByText('19:30 - 20:30 (America/New_York)')).toBeVisible();
 });

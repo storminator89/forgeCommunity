@@ -3,6 +3,9 @@ import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { expect, test } from '@playwright/test';
 
+// Exercise event-zone rendering from a browser on a different calendar day.
+test.use({ timezoneId: 'America/Los_Angeles' });
+
 const origin = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3013';
 
 test('future events are discoverable, searchable, and keyboard accessible across calendar months', async ({ page, request }, testInfo) => {
@@ -41,13 +44,14 @@ test('future events are discoverable, searchable, and keyboard accessible across
   await page.getByLabel('Passwort', { exact: true }).press('Enter');
   await expect(page).toHaveURL(/\/community$/);
   await page.goto('/events');
+  const browserMonth = await page.evaluate(() => new Intl.DateTimeFormat('de-DE', { month: 'long', year: 'numeric' }).format(new Date()));
 
   const upcoming = page.getByRole('region', { name: 'Nächste Events' });
   await expect(upcoming).toBeVisible();
   await expect(upcoming.getByText('3 von 4 Events ab heute')).toBeVisible();
   await expect(upcoming.getByRole('button', { name: /^Details öffnen:/ })).toHaveCount(3);
   await expect(page.getByRole('region', { name: 'Monatskalender' }).getByRole('heading', {
-    name: format(now, 'MMMM yyyy', { locale: de }),
+    name: browserMonth,
   })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('events-upcoming.png'), fullPage: true });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
@@ -89,6 +93,23 @@ test('future events are discoverable, searchable, and keyboard accessible across
   await page.getByRole('button', { name: 'Woche', exact: true }).click();
   await expect(upcoming).toBeVisible();
   await expect(page.getByRole('region', { name: 'Wochenkalender' })).toBeVisible();
+
+  const eventYear = now.getFullYear() + 1;
+  events = [{ ...nextMonth, id: 'tokyo-midnight', title: 'Tokio nach Mitternacht',
+    date: `${eventYear}-01-01T00:30:00+09:00`, timezone: 'Asia/Tokyo', startTime: '00:30', endTime: '01:30' }];
+  await page.reload();
+  const tokyoPreview = upcoming.getByRole('button', { name: `Details öffnen: Tokio nach Mitternacht, 01. Januar ${eventYear}` });
+  await expect(tokyoPreview).toContainText(`01. Jan. ${eventYear} · 00:30 (Asia/Tokyo)`);
+  await tokyoPreview.click();
+  await expect(dialog.getByRole('heading', { name: `01. Januar ${eventYear}`, exact: true })).toBeVisible();
+  await expect(dialog.getByText('00:30 - 01:30 (Asia/Tokyo)', { exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  const eventDay = format(new Date(eventYear, 0, 1, 12), 'EEEE, dd. MMMM yyyy', { locale: de });
+  await expect(page.getByRole('button', { name: `${eventDay}, 1 Event`, exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Woche', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Wochenkalender' }).getByRole('button', { name: `${eventDay}, 1 Event`, exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Liste', exact: true }).click();
+  await expect(page.getByText(`01. Jan. ${eventYear}, 00:30 - 01:30 (Asia/Tokyo)`, { exact: true })).toBeVisible();
 
   events = [];
   await page.reload();
