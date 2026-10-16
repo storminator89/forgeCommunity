@@ -1,0 +1,241 @@
+import { randomUUID } from 'node:crypto';
+import { basename, isAbsolute } from 'node:path';
+import { expect, test, type Page, type TestInfo } from '@playwright/test';
+
+const origin = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3013';
+const preferenceKey = 'forge-journey-mascot-hidden';
+const preview = '[data-spark-entry-figure] img';
+const sizes = [
+  { width: 1280, height: 800 }, { width: 320, height: 700 },
+  { width: 375, height: 812 }, { width: 414, height: 896 }, { width: 768, height: 900 },
+];
+
+async function signIn(page: Page, freshRegistration = false) {
+  const path = process.env.DATABASE_URL?.startsWith('file:') ? process.env.DATABASE_URL.slice(5) : '';
+  if (process.env.BROWSER_QA_DISPOSABLE_DB !== '1' || process.env.DATABASE_PROVIDER !== 'sqlite' ||
+      !isAbsolute(path) || basename(path) !== 'forge-browser-qa.db' ||
+      !['127.0.0.1', 'localhost', '[::1]'].includes(new URL(origin).hostname)) {
+    throw new Error('Spark entry QA requires the explicitly disposable local SQLite fixture.');
+  }
+  const nonce = randomUUID();
+  const email = `spark-entry-${nonce}@example.test`;
+  const password = `SparkEntryQaA1!${nonce}`;
+  if (freshRegistration) {
+    // The actual UI receipt opens the first-action guide. API-created accounts
+    // deliberately have no browser receipt and represent an existing member.
+    await page.goto('/register');
+    await page.getByRole('textbox', { name: 'Name', exact: true }).fill('Spark Entry QA Member');
+    await page.getByRole('textbox', { name: 'E-Mail-Adresse' }).fill(email);
+    await page.getByLabel('Passwort', { exact: true }).fill(password);
+    await page.getByLabel('Passwort bestätigen', { exact: true }).fill(password);
+    await page.getByRole('button', { name: 'Konto erstellen' }).click();
+    await expect(page).toHaveURL(/\/community$/);
+    return;
+  }
+  const registered = await page.request.post(`${origin}/api/register`, {
+    headers: { origin }, data: { name: 'Spark Entry QA Member', email, password },
+  });
+  expect(registered.status(), await registered.text()).toBe(201);
+  await page.goto('/login');
+  await page.getByRole('textbox', { name: 'E-Mail-Adresse' }).fill(email);
+  await page.getByLabel('Passwort', { exact: true }).fill(password);
+  await page.getByLabel('Passwort', { exact: true }).press('Enter');
+  await expect(page).toHaveURL(/\/community$/);
+}
+
+async function capture(page: Page, info: TestInfo, name: string) {
+  await expect.poll(() => page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - innerWidth)).toBeLessThanOrEqual(1);
+  expect(await page.locator('#page-content').evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: info.outputPath(`${name}.png`), fullPage: true, animations: 'disabled' });
+}
+
+async function assertStaticFigure(page: Page) {
+  const image = page.locator(preview);
+  await expect(image).toBeVisible();
+  await expect.poll(() => image.evaluate(image => (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth > 0)).toBe(true);
+  await expect(image).toHaveAttribute('src', '/images/forge-spark-preview.webp');
+  await expect(image).toHaveAttribute('alt', '');
+  const box = await image.boundingBox();
+  expect(box!.width).toBeLessThanOrEqual(64);
+  expect(box!.height).toBeLessThanOrEqual(64);
+  await expect(page.locator('[data-spark-celebration]')).toHaveCount(0);
+}
+
+async function setTheme(page: Page, value: 'light' | 'dark') {
+  await page.emulateMedia({ colorScheme: value, reducedMotion: 'reduce' });
+  await page.evaluate(value => localStorage.setItem('theme', value), value);
+}
+
+test.beforeEach(async ({}, info) => {
+  test.skip(info.project.name !== 'desktop-chromium', 'Dedicated Spark entry coverage checks five viewports itself.');
+});
+
+test('fresh public entry shows real static Spark after the primary actions in both themes', async ({ page }, info) => {
+  await page.goto('/');
+  for (const mode of ['light', 'dark'] as const) {
+    await setTheme(page, mode);
+    for (const size of sizes) {
+      await page.setViewportSize(size);
+      await page.reload();
+      await assertStaticFigure(page);
+      await expect(page.locator(preview)).toBeInViewport({ ratio: 1 });
+      await expect(page.getByRole('button', { name: 'Spark ausblenden' })).toBeInViewport({ ratio: 1 });
+      await expect(page.getByRole('link', { name: 'Konto erstellen' })).toBeInViewport({ ratio: 1 });
+      await expect(page.getByRole('banner').locator('[data-spark-entry]')).toHaveCount(0);
+      await capture(page, info, `spark-public-default-${mode}-${size.width}`);
+    }
+  }
+});
+
+test('fresh real member and successful zero-enrollment Journey show static Spark with usable actions', async ({ page }, info) => {
+  await signIn(page, true);
+  for (const mode of ['light', 'dark'] as const) {
+    await setTheme(page, mode);
+    for (const size of sizes) {
+      await page.setViewportSize(size);
+      await page.goto('/community');
+      await assertStaticFigure(page);
+      await expect(page.locator(preview)).toBeInViewport({ ratio: 1 });
+      await expect(page.getByRole('button', { name: 'Spark ausblenden' })).toBeInViewport({ ratio: 1 });
+      await expect(page.getByRole('heading', { name: 'Dein Einstieg' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Neuen Beitrag erstellen' })).toBeVisible();
+      await capture(page, info, `spark-member-default-${mode}-${size.width}`);
+
+      const courses = page.waitForResponse(response => new URL(response.url()).pathname === '/api/courses');
+      await page.goto('/courses/journey');
+      const response = await courses;
+      expect(response.status()).toBe(200);
+      const rows: Array<{ isEnrolled?: boolean; canDelete?: boolean }> = await response.json();
+      expect(rows.filter(row => row.isEnrolled && !row.canDelete)).toHaveLength(0);
+      await expect(page.getByRole('heading', { name: 'Dein Lernweg beginnt mit einem Kurs' })).toBeVisible();
+      await assertStaticFigure(page);
+      await expect(page.locator(preview)).toBeInViewport({ ratio: 1 });
+      await expect(page.getByRole('link', { name: 'Kurse entdecken', exact: true })).toBeInViewport({ ratio: 1 });
+      await capture(page, info, `spark-actual-zero-enrollment-${mode}-${size.width}`);
+    }
+  }
+});
+
+test('saved Off survives reload and public/member/Journey navigation without a preview request or flash', async ({ page }, info) => {
+  await page.goto('/');
+  await assertStaticFigure(page);
+  await page.getByRole('button', { name: 'Spark ausblenden' }).click();
+  expect(await page.evaluate(key => localStorage.getItem(key), preferenceKey)).toBe('true');
+  await page.addInitScript(() => {
+    const observation = { seen: false };
+    new MutationObserver(() => {
+      if (document.querySelector('[data-spark-entry-figure] img')) observation.seen = true;
+    }).observe(document, { childList: true, subtree: true });
+    (window as typeof window & { __sparkEntryObservation?: typeof observation }).__sparkEntryObservation = observation;
+  });
+  const requests: string[] = [];
+  page.on('request', request => { if (request.url().includes('forge-spark-preview.webp')) requests.push(request.url()); });
+  const assertNoFlash = async () => expect(await page.evaluate(() =>
+    (window as typeof window & { __sparkEntryObservation?: { seen: boolean } }).__sparkEntryObservation?.seen)).toBe(false);
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'Spark anzeigen' })).toBeVisible();
+  await assertNoFlash();
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Spark anzeigen' })).toBeVisible();
+  await assertNoFlash();
+  await signIn(page);
+  await expect(page.getByRole('button', { name: 'Spark anzeigen' })).toBeVisible();
+  await assertNoFlash();
+  await page.goto('/courses/journey');
+  await expect(page.getByRole('heading', { name: 'Dein Lernweg beginnt mit einem Kurs' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Maskottchen anzeigen' })).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator(preview)).toHaveCount(0);
+  await assertNoFlash();
+  expect(requests).toEqual([]);
+  await capture(page, info, 'spark-saved-off-actual-zero-enrollment');
+});
+
+test('native keyboard Hide and Show retain focus and synchronize a second tab', async ({ page, context }, info) => {
+  await page.goto('/');
+  const other = await context.newPage();
+  await other.goto('/');
+  await page.getByRole('button', { name: 'Spark ausblenden' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'Spark anzeigen' })).toBeFocused();
+  await expect(other.getByRole('button', { name: 'Spark anzeigen' })).toBeVisible();
+  await expect(other.locator(preview)).toHaveCount(0);
+  await capture(page, info, 'spark-keyboard-hidden');
+  await other.getByRole('button', { name: 'Spark anzeigen' }).focus();
+  await other.keyboard.press('Space');
+  await expect(other.getByRole('button', { name: 'Spark ausblenden' })).toBeFocused();
+  await assertStaticFigure(page);
+  await page.reload();
+  await assertStaticFigure(page);
+  await capture(other, info, 'spark-keyboard-shown');
+});
+
+test('denied preference writes keep Hide working through same-document app navigation', async ({ page }, info) => {
+  await page.addInitScript(key => {
+    const write = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (name: string, value: string) {
+      if (name === key) throw new DOMException('Synthetic denied preference write', 'SecurityError');
+      return write.call(this, name, value);
+    };
+  }, preferenceKey);
+  await signIn(page);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Spark ausblenden' }).click();
+  await expect(page.locator(preview)).toHaveCount(0);
+  await page.getByRole('link', { name: 'Zur Community', exact: true }).click();
+  await expect(page).toHaveURL(/\/community$/);
+  await expect(page.getByRole('button', { name: 'Spark anzeigen' })).toBeVisible();
+  await expect(page.locator(preview)).toHaveCount(0);
+  await page.getByRole('button', { name: 'Spark anzeigen' }).click();
+  await assertStaticFigure(page);
+  await capture(page, info, 'spark-storage-denied-member');
+});
+
+test('public and member Spark controls reflow at 200% text and remain keyboard usable', async ({ page }, info) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  await page.goto('/');
+  for (const state of ['public', 'member'] as const) {
+    if (state === 'member') await signIn(page);
+    for (const mode of ['light', 'dark'] as const) {
+      await setTheme(page, mode);
+      await page.goto(state === 'public' ? '/' : '/community');
+      await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+      await assertStaticFigure(page);
+      const hide = page.getByRole('button', { name: 'Spark ausblenden' });
+      await hide.focus();
+      await expect(hide).toBeFocused();
+      const box = (await hide.boundingBox())!;
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(320);
+      await capture(page, info, `spark-${state}-200-percent-${mode}`);
+      await page.keyboard.press('Enter');
+      await expect(page.getByRole('button', { name: 'Spark anzeigen' })).toBeFocused();
+      await expect(page.locator(preview)).toHaveCount(0);
+      await page.keyboard.press('Space');
+      await expect(page.getByRole('button', { name: 'Spark ausblenden' })).toBeFocused();
+      await assertStaticFigure(page);
+    }
+  }
+});
+
+test('reduced motion keeps Spark static at 200% text and a failed image leaves the actual Journey action usable', async ({ page }, info) => {
+  await signIn(page);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.evaluate(() => localStorage.setItem('forge-journey-motion-off', 'true'));
+  const clips: string[] = [];
+  page.on('request', request => { if (request.url().includes('forge-spark-celebrate-once.webp')) clips.push(request.url()); });
+  await page.setViewportSize({ width: 320, height: 700 });
+  await page.goto('/courses/journey');
+  await expect(page.getByRole('heading', { name: 'Dein Lernweg beginnt mit einem Kurs' })).toBeVisible();
+  await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+  await assertStaticFigure(page);
+  await expect(page.getByRole('button', { name: 'Figurenanimationen aus' })).toBeDisabled();
+  await expect(page.getByRole('link', { name: 'Kurse entdecken', exact: true })).toBeVisible();
+  await capture(page, info, 'spark-zero-enrollment-reduced-200-percent');
+  await page.route('**/images/forge-spark-preview.webp', route => route.abort());
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Dein Lernweg beginnt mit einem Kurs' })).toBeVisible();
+  await expect(page.locator(preview)).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Kurse entdecken', exact: true })).toBeVisible();
+  expect(clips).toEqual([]);
+  await capture(page, info, 'spark-failed-image-actual-zero-enrollment');
+});

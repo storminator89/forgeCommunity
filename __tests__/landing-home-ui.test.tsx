@@ -72,43 +72,51 @@ it('retains the deliberate signed-in community CTA and direct area destinations'
   expect(areas.getByRole('link', { name: /^Projekte/ })).toHaveAttribute('href', '/login?callbackUrl=%2Fshowcases');
 });
 
-it('provides one described, repo-native illustration that stays still until keyboard activation', async () => {
+it('provides one optimized local illustration that stays still until keyboard activation', async () => {
   const user = userEvent.setup();
   const { container } = render(<Home />);
-  const illustration = screen.getByRole('img', { name: 'Aus Lernen wird gemeinsames Machen' });
-  expect(illustration.tagName.toLowerCase()).toBe('svg');
-  expect(illustration).toHaveAccessibleDescription(/Buch.*Menschen.*Projekt/);
-  const spark = () => container.querySelector('[data-motion="forge-spark"]')!;
-  expect(spark()).not.toHaveClass('sparkPlaying');
+  const illustration = screen.getByRole('img', { name: /Illustration: Zwei Erwachsene.*Ideenfunken.*Buch.*Bausteinen/ });
+  expect(illustration.tagName.toLowerCase()).toBe('img');
+  expect(illustration).toHaveAttribute('src', '/images/home/forge-workbench-768.webp');
+  expect(illustration).toHaveAttribute('srcset', '/images/home/forge-workbench-480.webp 480w, /images/home/forge-workbench-768.webp 768w, /images/home/forge-workbench-1440.webp 1440w');
+  expect(illustration).toHaveAttribute('sizes', expect.stringContaining('(max-width: 30rem)'));
+  expect(illustration).toHaveAttribute('width', '1440');
+  expect(illustration).toHaveAttribute('height', '960');
+  expect(illustration).toHaveAttribute('loading', 'eager');
+  expect(illustration).toHaveAttribute('fetchpriority', 'high');
+  expect(illustration).toHaveAttribute('decoding', 'async');
+  const frame = () => container.querySelector<HTMLElement>('[data-motion="forge-workbench"]')!;
+  expect(within(frame()).getAllByRole('img')).toHaveLength(1);
+  expect(frame()).not.toHaveClass('illustrationPlaying');
   const replay = screen.getByRole('button', { name: 'Illustration bewegen' });
   replay.focus();
   await user.keyboard('{Enter}');
   expect(replay).toHaveFocus();
-  expect(spark()).toHaveClass('sparkPlaying');
-  fireEvent.animationEnd(spark());
-  expect(spark()).not.toHaveClass('sparkPlaying');
+  expect(frame()).toHaveClass('illustrationPlaying');
+  fireEvent.animationEnd(frame());
+  expect(frame()).not.toHaveClass('illustrationPlaying');
   await user.keyboard(' ');
-  expect(spark()).toHaveClass('sparkPlaying');
+  expect(frame()).toHaveClass('illustrationPlaying');
 });
 
 it('uses native disabled semantics for reduced motion and cancels live animation without auto-resuming', () => {
   reduced = true;
   const { container, unmount } = render(<Home />);
-  const spark = () => container.querySelector('[data-motion="forge-spark"]')!;
+  const frame = () => container.querySelector('[data-motion="forge-workbench"]')!;
   const replay = screen.getByRole('button', { name: 'Illustration bewegen (reduzierte Bewegung aktiv)' });
   expect(replay).toBeDisabled();
   fireEvent.click(replay);
-  expect(spark()).not.toHaveClass('sparkPlaying');
+  expect(frame()).not.toHaveClass('illustrationPlaying');
   changeReduced(false);
   expect(replay).toBeEnabled();
   fireEvent.click(replay);
-  expect(spark()).toHaveClass('sparkPlaying');
+  expect(frame()).toHaveClass('illustrationPlaying');
   changeReduced(true);
   expect(replay).toBeDisabled();
-  expect(spark()).not.toHaveClass('sparkPlaying');
+  expect(frame()).not.toHaveClass('illustrationPlaying');
   changeReduced(false);
   expect(replay).toBeEnabled();
-  expect(spark()).not.toHaveClass('sparkPlaying');
+  expect(frame()).not.toHaveClass('illustrationPlaying');
   unmount();
   expect(listeners.size).toBe(0);
 });

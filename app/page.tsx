@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react';
 import { ArrowUpRight, BookOpen, Briefcase, Calendar, Flame, GraduationCap, MessageSquare, Users } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { ForgeWorkbench } from '@/components/landing/ForgeWorkbench';
+import { SparkEntry } from '@/components/spark-entry';
 import styles from './home.module.css';
 
 const areas = [
@@ -50,6 +51,7 @@ export default function Home() {
               </Link>
               <a href="#bereiche" className={styles.explore}>Bereiche ansehen</a>
             </div>
+            <SparkEntry className="mt-5" />
           </div>
           <ForgeWorkbench />
         </section>

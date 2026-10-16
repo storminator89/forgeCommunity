@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { basename, isAbsolute } from 'node:path';
-import { expect, test, type BrowserContext, type Page } from '@playwright/test';
+import { expect, test, type BrowserContext, type Page, type Response } from '@playwright/test';
 
 const origin = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3013';
 const destinations = [
@@ -10,6 +10,54 @@ const destinations = [
 let memberState: Awaited<ReturnType<BrowserContext['storageState']>>;
 let email: string;
 let password: string;
+
+const artworkName = 'Illustration: Zwei Erwachsene teilen einen goldenen Ideenfunken über einem offenen Buch, umgeben von farbigen Bausteinen.';
+const artworkPath = /^\/images\/home\/forge-workbench-(480|768|1440)\.webp$/;
+const artworkBytes: Record<number, number> = { 480: 17162, 768: 34956, 1440: 93712 };
+
+function observeArtwork(page: Page) {
+  const requests: string[] = [];
+  page.on('request', request => {
+    if (request.resourceType() === 'image' && artworkPath.test(new URL(request.url()).pathname)) requests.push(request.url());
+  });
+  const response = page.waitForResponse(response => artworkPath.test(new URL(response.url()).pathname) && response.request().resourceType() === 'image');
+  return { requests, response };
+}
+
+async function expectArtwork(page: Page, delivery: { requests: string[]; response: Promise<Response> }, expectedWidth: number) {
+  const image = page.getByRole('img', { name: artworkName, exact: true });
+  await expect(image).toBeVisible();
+  await expect.poll(() => image.evaluate(element => {
+    const image = element as HTMLImageElement;
+    return image.complete && image.naturalWidth > 0;
+  })).toBe(true);
+  await image.evaluate(element => (element as HTMLImageElement).decode());
+  await expect(image).toHaveAttribute('width', '1440');
+  await expect(image).toHaveAttribute('height', '960');
+  await expect(image).toHaveAttribute('loading', 'eager');
+  await expect(image).toHaveAttribute('fetchpriority', 'high');
+  await expect(image).toHaveAttribute('decoding', 'async');
+  const state = await image.evaluate(element => {
+    const image = element as HTMLImageElement;
+    const rect = image.getBoundingClientRect();
+    return { currentSrc: image.currentSrc, renderedRatio: rect.width / rect.height, naturalRatio: image.naturalWidth / image.naturalHeight, fit: getComputedStyle(image).objectFit };
+  });
+  expect(new URL(state.currentSrc).origin).toBe(new URL(origin).origin);
+  expect(new URL(state.currentSrc).pathname).toBe(`/images/home/forge-workbench-${expectedWidth}.webp`);
+  expect(state.renderedRatio).toBeCloseTo(3 / 2, 2);
+  expect(state.naturalRatio).toBeCloseTo(3 / 2, 2);
+  expect(state.fit).not.toBe('cover');
+  const response = await delivery.response;
+  expect(response.url()).toBe(state.currentSrc);
+  expect(response.status()).toBe(200);
+  expect(response.headers()['content-type']).toMatch(/^image\/webp(?:;|$)/);
+  const bytes = await response.body();
+  expect(bytes.length).toBe(artworkBytes[expectedWidth]);
+  expect(bytes.length).toBeLessThanOrEqual(100 * 1024);
+  expect(bytes.subarray(0, 4).toString()).toBe('RIFF');
+  expect(bytes.subarray(8, 12).toString()).toBe('WEBP');
+  expect(delivery.requests).toEqual([state.currentSrc]);
+}
 
 function requireDisposableFixture() {
   const path = process.env.DATABASE_URL?.startsWith('file:') ? process.env.DATABASE_URL.slice(5) : '';
@@ -71,7 +119,9 @@ for (const persona of ['guest', 'member'] as const) {
       await page.addInitScript(value => localStorage.setItem('theme', value), theme);
       await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
       if (persona === 'member') await page.context().addCookies(memberState.cookies);
+      const delivery = observeArtwork(page);
       await page.goto('/');
+      await expectArtwork(page, delivery, page.viewportSize()!.width <= 390 ? 480 : 768);
       await expect(page.getByRole('heading', { level: 1 })).toHaveText('Lernen.Machen.Weitergeben.');
       await expect(page.locator('html')).toHaveClass(new RegExp(`\\b${theme}\\b`));
       const primary = page.getByRole('link', { name: persona === 'member' ? 'Zur Community' : 'Konto erstellen', exact: true });
@@ -83,7 +133,7 @@ for (const persona of ['guest', 'member'] as const) {
       for (const [name, href] of destinations) {
         await expect(areas.getByRole('link', { name: new RegExp(`^${name}`) })).toHaveAttribute('href', persona === 'member' ? href : `/login?callbackUrl=${encodeURIComponent(href)}`);
       }
-      await expect(page.getByRole('img', { name: 'Aus Lernen wird gemeinsames Machen' })).toBeVisible();
+      await expect(page.getByRole('img', { name: artworkName, exact: true })).toBeVisible();
       await expect(page.getByRole('button', { name: 'Illustration bewegen (reduzierte Bewegung aktiv)' })).toBeDisabled();
       await expectFits(page);
       await page.screenshot({ path: testInfo.outputPath(`landing-home-${persona}-${theme}.png`), fullPage: true });
@@ -119,16 +169,17 @@ test('guest area login preserves its callback and about remains publicly reachab
 test('illustration motion is keyboard-requested, finite and cancelled by a live reduced-motion change', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.goto('/');
-  const art = page.getByRole('img', { name: 'Aus Lernen wird gemeinsames Machen' });
-  const running = () => art.evaluate(element => element.getAnimations({ subtree: true }).filter(animation => animation.playState === 'running').length);
+  const frame = page.locator('[data-motion="forge-workbench"]');
+  const workbench = frame.locator('..');
+  const running = () => frame.evaluate(element => element.getAnimations({ subtree: true }).filter(animation => animation.playState === 'running').length);
   expect(await running()).toBe(0);
-  await art.evaluate(element => {
+  await workbench.evaluate(element => {
     element.addEventListener('animationstart', () => { element.setAttribute('data-motion-started', 'true'); });
   });
   const replay = page.getByRole('button', { name: 'Illustration bewegen', exact: true });
   await replay.focus();
   await page.keyboard.press('Enter');
-  await expect(art).toHaveAttribute('data-motion-started', 'true');
+  await expect(workbench).toHaveAttribute('data-motion-started', 'true');
   await expect.poll(running).toBe(0);
   await expect(replay).toBeFocused();
   // Start another play, then change the OS preference while it is active.
@@ -139,4 +190,19 @@ test('illustration motion is keyboard-requested, finite and cancelled by a live 
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await expect(replay).toBeEnabled();
   expect(await running()).toBe(0);
+});
+
+test('home artwork selects and decodes one bounded local asset at real 2x device density', async ({ browser, page }) => {
+  const viewport = page.viewportSize()!;
+  const context = await browser.newContext({ baseURL: origin, viewport, deviceScaleFactor: 2, reducedMotion: 'reduce' });
+  try {
+    const densePage = await context.newPage();
+    const delivery = observeArtwork(densePage);
+    await densePage.goto('/');
+    await expectArtwork(densePage, delivery, viewport.width <= 390 ? 768 : 1440);
+    await expectFits(densePage);
+    await expect(densePage.getByRole('link', { name: 'Konto erstellen', exact: true })).toHaveAttribute('href', '/register');
+  } finally {
+    await context.close();
+  }
 });

@@ -167,53 +167,19 @@
   align-items: center;
 }
 
+.artFrame {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.85rem 0.85rem 0.85rem 0.2rem;
+  background: hsl(var(--card));
+}
+
+/* Preserve the full opaque composition in both themes, without cropping. */
 .illustration {
   display: block;
   width: 100%;
   height: auto;
-  overflow: visible;
-}
-
-.artSurface,
-.artAccent {
-  fill: hsl(var(--accent));
-}
-
-.artFine {
-  stroke: hsl(var(--primary));
-  stroke-width: 2;
-}
-
-.artOutline {
-  stroke: hsl(var(--foreground));
-  stroke-width: 2.8;
-}
-
-.artCoral {
-  stroke: hsl(var(--coral-highlight-foreground));
-  fill: hsl(var(--coral-highlight));
-}
-
-.artPaper {
-  fill: hsl(var(--card));
-}
-
-.artPetrol {
-  stroke: hsl(var(--primary-foreground));
-  fill: hsl(var(--primary));
-}
-
-/* A brand/idea spark, never an earned badge, score or progress state. */
-.artSpark {
-  fill: hsl(var(--reward));
-  stroke: hsl(var(--reward-foreground));
-  stroke-width: 2.8;
-  stroke-linejoin: round;
-}
-
-.artSparkRays {
-  stroke: hsl(var(--foreground));
-  stroke-width: 2.8;
 }
 
 .motionButton {
@@ -356,17 +322,15 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .sparkPlaying {
-    transform-box: fill-box;
-    transform-origin: 50% 70%;
-    animation: forgeSpark 850ms ease-out 1;
+  .illustrationPlaying {
+    animation: forgeWorkbench 850ms ease-out 1;
   }
 }
 
-@keyframes forgeSpark {
-  0%, 100% { transform: translateY(0) rotate(0); }
-  30% { transform: translateY(-16px) rotate(-9deg); }
-  65% { transform: translateY(-5px) rotate(6deg); }
+@keyframes forgeWorkbench {
+  0%, 100% { transform: translateY(0); }
+  35% { transform: translateY(-4px); }
+  70% { transform: translateY(-1px); }
 }
 
 @media (max-width: 64rem) {

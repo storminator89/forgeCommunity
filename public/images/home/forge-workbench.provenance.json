@@ -1,0 +1,46 @@
+{
+  "generator": "OpenAI Image Tool",
+  "generatedOn": "2026-10-16",
+  "purpose": "Original fictional illustration for the public home hero; not a product screenshot or a photograph of real people.",
+  "source": {
+    "format": "png",
+    "width": 1536,
+    "height": 1024,
+    "bytes": 1805556,
+    "sha256": "fce1639bdbbffc80860a84a0141add84b555ddec167d7e4aa772f32e70251ecc"
+  },
+  "optimization": {
+    "tool": "sharp",
+    "resize": "Proportional downsampling only; no crop, recoloring, background removal or content edits.",
+    "format": "webp",
+    "quality": 84,
+    "effort": 5
+  },
+  "budget": {
+    "largestAssetBytes": 102400,
+    "totalAssetBytes": 153600
+  },
+  "assets": [
+    {
+      "file": "forge-workbench-480.webp",
+      "width": 480,
+      "height": 320,
+      "bytes": 17162,
+      "sha256": "6699894d6d8314bf1dcb768cedea1d8fb0865fc33c2dd1462f0824e47fdf0302"
+    },
+    {
+      "file": "forge-workbench-768.webp",
+      "width": 768,
+      "height": 512,
+      "bytes": 34956,
+      "sha256": "4c38877030e2971c2165517b82495fb419abdad618bba847f93be11dae896810"
+    },
+    {
+      "file": "forge-workbench-1440.webp",
+      "width": 1440,
+      "height": 960,
+      "bytes": 93712,
+      "sha256": "bb526c9e12bbc5b7d3ba516b6713964b766f12cbd00c8a98804d0774661d8520"
+    }
+  ]
+}
