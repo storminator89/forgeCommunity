@@ -13,6 +13,11 @@ enum Role {
   INSTRUCTOR
 }
 
+enum SpaceVisibility {
+  PUBLIC
+  PRIVATE
+}
+
 enum RewardEventType {
   COURSE_COMPLETED
 }
@@ -118,6 +123,9 @@ model User {
   sessions           Session[]
   posts              Post[]
   comments           Comment[]
+  spaceMemberships   SpaceMember[]
+  spaceDiscussions   SpaceDiscussion[]
+  spaceReplies       SpaceReply[]
   likePosts          LikePost[]
   likeComments       LikeComment[]
   likeProjects       LikeProject[]
@@ -241,6 +249,68 @@ model Comment {
   @@index([authorId, postId])
 }
 
+// Space discussions are deliberately separate from the public Post/Comment
+// models. Private space content cannot enter legacy feed, search or profiles.
+model Space {
+  id          String          @id @default(cuid())
+  name        String
+  description String          @db.Text
+  visibility  SpaceVisibility
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  members     SpaceMember[]
+  discussions SpaceDiscussion[]
+}
+
+model SpaceMember {
+  spaceId  String
+  userId   String
+  joinedAt DateTime @default(now())
+  space    Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([spaceId, userId])
+  @@index([userId, spaceId])
+}
+
+model SpaceDiscussion {
+  id        String       @id @default(cuid())
+  spaceId   String
+  space     Space        @relation(fields: [spaceId], references: [id], onDelete: Restrict)
+  authorId  String
+  author    User         @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  requestId String
+  payloadDigest String
+  title     String
+  content   String       @db.Text
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  hiddenAt  DateTime?
+  replies   SpaceReply[]
+
+  @@index([spaceId, createdAt, id])
+  @@index([authorId])
+  @@unique([spaceId, authorId, requestId])
+}
+
+model SpaceReply {
+  id           String          @id @default(cuid())
+  discussionId String
+  discussion   SpaceDiscussion @relation(fields: [discussionId], references: [id], onDelete: Cascade)
+  authorId     String
+  author       User            @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  requestId    String
+  payloadDigest String
+  content      String          @db.Text
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  hiddenAt     DateTime?
+
+  @@index([discussionId, createdAt, id])
+  @@index([authorId])
+  @@unique([discussionId, authorId, requestId])
+}
+
 // A single live author-selected reply; deletion removes the current signal.
 model AcceptedSolution {
   postId    String @id
@@ -278,6 +348,9 @@ model ContentReport {
   reporterId     String
   targetType     String
   targetId       String
+  // Server-derived, denormalized scope for privacy-filtered report queues.
+  // No FK: moderation history survives deletion of the target or space.
+  scopeSpaceId   String?
   reason         String
   details        String?   @db.Text
   status         String    @default("OPEN")
@@ -290,6 +363,7 @@ model ContentReport {
   @@index([reporterId, createdAt])
   @@index([status, createdAt])
   @@index([targetType, targetId])
+  @@index([scopeSpaceId, status, createdAt])
 }
 
 model LikePost {

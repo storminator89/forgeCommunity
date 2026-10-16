@@ -17,13 +17,17 @@ export async function reviewContentReport(actorId: string, reportId: string,
         if (actor?.role !== 'ADMIN' && actor?.role !== 'MODERATOR') {
           throw new ReportReviewError('Nicht autorisiert', 403);
         }
+        const visibleReport = actor.role === 'ADMIN' ? { id: reportId }
+          : { id: reportId, scopeSpaceId: null, targetType: { in: ['POST', 'COMMENT'] } };
         const reviewedAt = new Date();
         const updated = await tx.contentReport.updateMany({
-          where: { id: reportId, status: 'OPEN' },
+          where: { ...visibleReport, status: 'OPEN' },
           data: { status, resolutionNote, reviewedAt, reviewedById: actorId },
         });
         if (updated.count === 0) {
-          const existing = await tx.contentReport.findUnique({ where: { id: reportId }, select: { id: true } });
+          // A moderator sees scoped reports as missing, including already
+          // reviewed reports; do not leak their existence through 409.
+          const existing = await tx.contentReport.findFirst({ where: visibleReport, select: { id: true } });
           throw new ReportReviewError(existing ? 'Meldung wurde bereits bearbeitet' : 'Meldung nicht gefunden',
             existing ? 409 : 404);
         }

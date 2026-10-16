@@ -41,6 +41,8 @@ const reviewedUpgradeNames = [
   '0016_chat_message_cursor_index.sql',
   '0017_chat_read_cursor.sql',
   '0018_course_qa.sql',
+  '0019_spaces.sql',
+  '0020_space_report_targets.sql',
 ];
 // A release image must carry the exact reviewed sequence, including the tail.
 assert.deepEqual(upgradeNames, reviewedUpgradeNames);
@@ -419,7 +421,7 @@ async function assertCurrentSchema(db) {
   'reports should retain their review trail after account or target removal');
   const requiredChecks = [
     'ContentReport_targetType_check', 'ContentReport_reason_check',
-    'ContentReport_status_check', 'ContentReport_resolution_check',
+    'ContentReport_status_check', 'ContentReport_resolution_check', 'ContentReport_scope_check',
     'RewardLedger_points_check', 'RewardLedger_stateVersion_check',
     'RewardLedgerChange_version_check', 'RewardLedgerChange_reason_check',
   ];
@@ -554,6 +556,12 @@ test('PostgreSQL empty install and main baseline upgrades: replay, checksums and
       VALUES ('duplicate-report', 'completed', 'POST', 'removed-post', 'SPAM')`), '23505');
     await rejectsCode(db.query(`INSERT INTO "ContentReport" ("id", "reporterId", "targetType", "targetId", "reason")
       VALUES ('invalid-report', 'completed', 'USER', 'someone', 'SPAM')`), '23514');
+    await rejectsCode(db.query(`INSERT INTO "ContentReport" ("id", "reporterId", "targetType", "targetId", "reason")
+      VALUES ('missing-space-scope', 'completed', 'SPACE_REPLY', 'reply', 'SPAM')`), '23514');
+    await db.query(`INSERT INTO "ContentReport" ("id", "reporterId", "targetType", "targetId", "scopeSpaceId", "reason")
+      VALUES ('space-report', 'completed', 'SPACE_REPLY', 'reply', 'space', 'SPAM')`);
+    await rejectsCode(db.query(`INSERT INTO "ContentReport" ("id", "reporterId", "targetType", "targetId", "scopeSpaceId", "reason")
+      VALUES ('global-with-space-scope', 'completed', 'POST', 'post', 'space', 'SPAM')`), '23514');
     await rejectsCode(db.query(`UPDATE "ContentReport" SET "status" = 'RESOLVED' WHERE id = 'report'`), '23514');
     await db.query(`UPDATE "ContentReport" SET "status" = 'RESOLVED', "reviewedAt" = CURRENT_TIMESTAMP,
       "reviewedById" = 'teacher', "resolutionNote" = 'Synthetic CI review' WHERE id = 'report'`);
@@ -576,7 +584,7 @@ test('PostgreSQL empty install and main baseline upgrades: replay, checksums and
     assert.equal(await count(db, 'CourseCompletionRecord'), 0, 'account deletion must cascade the snapshot');
     assert.equal(await count(db, 'RewardLedger'), 0);
     assert.equal(await count(db, 'RewardLedgerChange'), 0);
-    assert.equal(await count(db, 'ContentReport'), 1, 'report review trail must survive account deletion');
+    assert.equal(await count(db, 'ContentReport'), 2, 'report review trail must survive account deletion');
     assert.equal(await count(db, 'Comment'), 0, 'account deletion must cascade community replies');
     assert.equal(await count(db, 'LikePost'), 0);
     assert.equal(await count(db, 'LikeComment'), 0);

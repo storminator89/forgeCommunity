@@ -12,7 +12,7 @@ import { assertCoursePublicationReady } from './assert-course-publication-ready.
 
 const sqliteNames = readdirSync(new URL('../prisma/sqlite-migrations/', import.meta.url))
   .filter(name => /^\d+_[\w-]+\.sql$/.test(name)).sort();
-assert.equal(sqliteNames.at(-1), '0019_course_qa.sql');
+assert.equal(sqliteNames.at(-1), '0021_space_report_targets.sql');
 const publicationIndex = sqliteNames.indexOf('0010_staged_course_publication.sql');
 assert.ok(publicationIndex >= 0);
 
@@ -138,8 +138,12 @@ test('SQLite migration still rolls back an injected DDL failure', () => {
   db.close();
 });
 
-test('SQLite readiness refuses missing, changed, gapped and divergent migration history through chat read cursors', async () => {
+test('SQLite readiness refuses missing, changed, gapped and divergent migration history through space reports', async () => {
   for (const mutate of [
+    db => db.prepare(`DELETE FROM _app_migrations WHERE name='0021_space_report_targets.sql'`).run(),
+    db => db.prepare(`UPDATE _app_migrations SET checksum='changed' WHERE name='0021_space_report_targets.sql'`).run(),
+    db => db.prepare(`DELETE FROM _app_migrations WHERE name='0020_spaces.sql'`).run(),
+    db => db.prepare(`UPDATE _app_migrations SET checksum='changed' WHERE name='0020_spaces.sql'`).run(),
     db => db.prepare(`DELETE FROM _app_migrations WHERE name='0019_course_qa.sql'`).run(),
     db => db.prepare(`UPDATE _app_migrations SET checksum='changed' WHERE name='0019_course_qa.sql'`).run(),
     db => db.prepare(`DELETE FROM _app_migrations WHERE name='0018_chat_read_cursor.sql'`).run(),
@@ -198,6 +202,22 @@ test('SQLite deploy refuses course Q&A tail after a missing chat read predecesso
   assert.throws(() => initializeSqlite(f.url, f.migrations), /gap before 0019_course_qa\.sql/);
 });
 
+test('SQLite deploy refuses spaces tail after a missing course Q&A predecessor', () => {
+  const f = fixture(); f.upgrade();
+  const db = f.db();
+  db.prepare(`DELETE FROM _app_migrations WHERE name='0019_course_qa.sql'`).run();
+  db.close();
+  assert.throws(() => initializeSqlite(f.url, f.migrations), /gap before 0020_spaces\.sql/);
+});
+
+test('SQLite deploy refuses space report tail after a missing spaces predecessor', () => {
+  const f = fixture(); f.upgrade();
+  const db = f.db();
+  db.prepare(`DELETE FROM _app_migrations WHERE name='0020_spaces.sql'`).run();
+  db.close();
+  assert.throws(() => initializeSqlite(f.url, f.migrations), /gap before 0021_space_report_targets\.sql/);
+});
+
 const pgUrl = process.env.DATABASE_URL;
 const pgParsed = pgUrl && /^postgres(?:ql)?:\/\//.test(pgUrl) ? new URL(pgUrl) : null;
 if (process.env.POSTGRESQL_RELEASE_GATE_DISPOSABLE === '1' && pgParsed &&
@@ -216,6 +236,10 @@ if (process.env.POSTGRESQL_RELEASE_GATE_DISPOSABLE === '1' && pgParsed &&
       assert.equal(await assertCoursePublicationReady(freshUrl.toString(), 'postgresql'), true);
       await db.query(`SET search_path TO "${fresh}"`);
       for (const [name, sql, file] of [
+        ['missing space-report tail', `DELETE FROM "_app_schema_upgrades" WHERE name='0020_space_report_targets.sql'`, '0020_space_report_targets.sql'],
+        ['tampered space-report tail', `UPDATE "_app_schema_upgrades" SET checksum='changed' WHERE name='0020_space_report_targets.sql'`, '0020_space_report_targets.sql'],
+        ['missing spaces tail', `DELETE FROM "_app_schema_upgrades" WHERE name='0019_spaces.sql'`, '0019_spaces.sql'],
+        ['tampered spaces tail', `UPDATE "_app_schema_upgrades" SET checksum='changed' WHERE name='0019_spaces.sql'`, '0019_spaces.sql'],
         ['missing course Q&A tail', `DELETE FROM "_app_schema_upgrades" WHERE name='0018_course_qa.sql'`, '0018_course_qa.sql'],
         ['tampered course Q&A tail', `UPDATE "_app_schema_upgrades" SET checksum='changed' WHERE name='0018_course_qa.sql'`, '0018_course_qa.sql'],
         ['missing chat read tail', `DELETE FROM "_app_schema_upgrades" WHERE name='0017_chat_read_cursor.sql'`, '0017_chat_read_cursor.sql'],
@@ -238,6 +262,20 @@ if (process.env.POSTGRESQL_RELEASE_GATE_DISPOSABLE === '1' && pgParsed &&
         await db.query(`INSERT INTO "_app_schema_upgrades" (name, checksum) VALUES ($1, $2)
           ON CONFLICT (name) DO UPDATE SET checksum=EXCLUDED.checksum`, [file, checksum]);
       }
+      assert.equal(await assertCoursePublicationReady(freshUrl.toString(), 'postgresql'), true);
+      await db.query(`DELETE FROM "_app_schema_upgrades" WHERE name='0019_spaces.sql'`);
+      await assert.rejects(applyPostgresqlUpgrades(freshUrl.toString()), /gap before 0020_space_report_targets\.sql/);
+      await db.query(`INSERT INTO "_app_schema_upgrades" (name, checksum) VALUES ($1, $2)`, [
+        '0019_spaces.sql',
+        createHash('sha256').update(readFileSync(new URL('../prisma/postgresql-upgrades/0019_spaces.sql', import.meta.url))).digest('hex'),
+      ]);
+      assert.equal(await assertCoursePublicationReady(freshUrl.toString(), 'postgresql'), true);
+      await db.query(`DELETE FROM "_app_schema_upgrades" WHERE name='0018_course_qa.sql'`);
+      await assert.rejects(applyPostgresqlUpgrades(freshUrl.toString()), /gap before 0019_spaces\.sql/);
+      await db.query(`INSERT INTO "_app_schema_upgrades" (name, checksum) VALUES ($1, $2)`, [
+        '0018_course_qa.sql',
+        createHash('sha256').update(readFileSync(new URL('../prisma/postgresql-upgrades/0018_course_qa.sql', import.meta.url))).digest('hex'),
+      ]);
       assert.equal(await assertCoursePublicationReady(freshUrl.toString(), 'postgresql'), true);
       await db.query(`DELETE FROM "_app_schema_upgrades" WHERE name='0015_formative_practice_learner.sql'`);
       await assert.rejects(applyPostgresqlUpgrades(freshUrl.toString()), /gap before 0016_chat_message_cursor_index\.sql/);
