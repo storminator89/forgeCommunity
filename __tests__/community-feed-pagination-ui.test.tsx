@@ -262,8 +262,9 @@ it('preserves the exact linked older comment without walking every comment page 
   window.history.replaceState({}, '', '/community#comment-comment-1')
   let attempts = 0
   global.fetch = jest.fn().mockImplementation(async (url: string) => {
-    if (url === '/api/posts?feed=1') return response({ posts: [post(2, { comments: [comment(99)], commentCount: 99, commentsNextCursor: 'older' })], nextCursor: null })
+    if (url === '/api/posts?feed=1') return response({ posts: [post(2, { comments: [], commentCount: 99, commentsDeferred: true })], nextCursor: null })
     if (url === '/api/posts/linked-comment/comment-1') return attempts++ === 0 ? response({ error: 'Unavailable' }, false) : response(post(2, { comments: [comment(99), comment(1)], commentCount: 99, commentsNextCursor: 'older' }))
+    if (url === '/api/posts/post-2/comments?feed=1&cursor=older') return response({ comments: [comment(98)], nextCursor: null })
     return fallback(url)
   })
   render(<Community />)
@@ -273,6 +274,9 @@ it('preserves the exact linked older comment without walking every comment page 
   expect(screen.getByText('Comment 99')).toBeInTheDocument()
   expect(screen.getByText('99 comments')).toBeInTheDocument()
   expect((global.fetch as jest.Mock).mock.calls.filter(([url]) => url.includes('/comments?'))).toHaveLength(0)
+  fireEvent.click(screen.getByRole('button', { name: 'More comments post-2' }))
+  await screen.findByText('Comment 98')
+  expect((global.fetch as jest.Mock).mock.calls.filter(([url]) => url.includes('/comments?')).map(([url]) => url)).toEqual(['/api/posts/post-2/comments?feed=1&cursor=older'])
 })
 
 it('ignores a previous account’s pending mutation result and clears a same-account admin draft on demotion', async () => {

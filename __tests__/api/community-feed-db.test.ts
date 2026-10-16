@@ -77,6 +77,7 @@ test('keysets 75 tied posts into stable pages with only one bounded lookahead', 
   const first = await firstResponse.json();
   expect(firstResponse.headers.get('Cache-Control')).toBe('private, no-store');
   expect(first.posts).toHaveLength(50);
+  expect(first.posts[0]).not.toHaveProperty('commentsDeferred');
   expect(first.posts.map((post: { id: string }) => post.id)).toEqual(Array.from({ length: 50 }, (_, i) => `p${String(75 - i).padStart(3, '0')}`));
   expect(first.nextCursor).toEqual(expect.any(String));
   expect(query.mock.calls[0][0]).toMatchObject({ take: 51, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
@@ -132,7 +133,7 @@ test('legacy page arrays stay bounded and use the same stable order', async () =
   expect((await getPosts(request('/api/posts?page=-1'))).status).toBe(400);
 });
 
-test('post payloads bound comment previews and return aggregate likes without exposing liker records', async () => {
+test('feed defers hidden comments but detail and legacy reads retain bounded previews', async () => {
   await makePosts(1);
   await makeComments('p001', 95);
   const likerIds = ['viewer', ...Array.from({ length: 64 }, (_, i) => `liker-${i}`)];
@@ -141,46 +142,54 @@ test('post payloads bound comment previews and return aggregate likes without ex
   const query = jest.spyOn(prisma.post, 'findMany');
   const body = await (await getPosts(request('/api/posts?feed=1'))).json();
   const post = body.posts[0];
-  expect(post).toMatchObject({ votes: 65, isLiked: true, commentCount: 95, commentsNextCursor: expect.any(String) });
-  expect(post.comments).toHaveLength(3);
-  expect(post.comments[0]).toMatchObject({ id: 'c095', votes: 65, isLiked: true });
-  expect(post.comments[2].id).toBe('c093');
+  expect(post).toMatchObject({ votes: 65, isLiked: true, commentCount: 95, commentsDeferred: true, commentsNextCursor: null });
+  expect(post.comments).toEqual([]);
   expect(post).not.toHaveProperty('likePosts');
   expect(post).not.toHaveProperty('_count');
-  expect(post.comments[0]).not.toHaveProperty('likeComments');
   expect(JSON.stringify(post)).not.toContain('liker-');
   expect(query.mock.calls[0][0]).toMatchObject({ include: {
     _count: { select: { likePosts: true, comments: true } },
     likePosts: { where: { userId: 'viewer' }, take: 1 },
-    comments: { take: 3, include: { likeComments: { where: { userId: 'viewer' }, take: 1 }, _count: { select: { likeComments: true } } } },
+    comments: { take: 0 },
   } });
+  const preview = await (await getComments(request('/api/posts/p001/comments?feed=1&preview=1'), params('p001'))).json();
+  expect(preview.comments).toHaveLength(3);
+  expect(preview.comments[0]).toMatchObject({ id: 'c095', votes: 65, isLiked: true });
+  expect(preview.comments[2].id).toBe('c093');
+  expect(preview.comments[0]).not.toHaveProperty('likeComments');
   const single = await (await getPost(request('/api/posts/p001'), params('p001'))).json();
   expect(single.comments).toHaveLength(3);
   expect(single.commentCount).toBe(95);
   const legacy = await (await getPosts(request('/api/posts?page=1'))).json();
   expect(Array.isArray(legacy)).toBe(true);
   expect(legacy[0].comments).toHaveLength(3);
-  expect(legacy[0]).toMatchObject({ commentCount: 95, commentsNextCursor: post.commentsNextCursor, votes: 65, isLiked: true });
+  expect(legacy[0]).toMatchObject({ commentCount: 95, commentsNextCursor: preview.nextCursor, votes: 65, isLiked: true });
   const older = await (await getComments(request(`/api/posts/p001/comments?feed=1&cursor=${legacy[0].commentsNextCursor}`), params('p001'))).json();
   expect(older.comments).toHaveLength(50);
   expect(older.comments[0].id).toBe('c092');
   jest.mocked(getServerSession).mockResolvedValue(null);
   const anonymous = await (await getPosts(request('/api/posts?feed=1'))).json();
-  expect(anonymous.posts[0]).toMatchObject({ votes: 65, isLiked: false });
-  expect(anonymous.posts[0].comments[0]).toMatchObject({ votes: 65, isLiked: false });
-  expect(query.mock.calls[2][0]).toMatchObject({ include: { likePosts: { take: 0 }, comments: { include: { likeComments: { take: 0 } } } } });
+  expect(anonymous.posts[0]).toMatchObject({ votes: 65, isLiked: false, commentsDeferred: true, comments: [] });
+  expect((await (await getComments(request('/api/posts/p001/comments?feed=1&preview=1'), params('p001'))).json()).comments[0]).toMatchObject({ votes: 65, isLiked: false });
+  expect(query.mock.calls[2][0]).toMatchObject({ include: { likePosts: { take: 0 }, comments: { take: 0 } } });
 });
 
 test('comment cursor continues after the 3-comment preview in bounded 50-comment pages', async () => {
   await makePosts(1);
   await makeComments('p001', 95);
-  const preview = (await (await getPosts(request('/api/posts?feed=1'))).json()).posts[0];
+  const feedPost = (await (await getPosts(request('/api/posts?feed=1'))).json()).posts[0];
+  expect(feedPost).toMatchObject({ comments: [], commentsDeferred: true, commentCount: 95, commentsNextCursor: null });
   const query = jest.spyOn(prisma.comment, 'findMany');
-  const second = await (await getComments(request(`/api/posts/p001/comments?feed=1&cursor=${preview.commentsNextCursor}`), params('p001'))).json();
+  const preview = await (await getComments(request('/api/posts/p001/comments?feed=1&preview=1'), params('p001'))).json();
+  expect(preview.comments).toHaveLength(3);
+  expect(preview.comments[0].id).toBe('c095');
+  expect(preview.nextCursor).toEqual(expect.any(String));
+  expect(query.mock.calls[0][0]).toMatchObject({ take: 4, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
+  const second = await (await getComments(request(`/api/posts/p001/comments?feed=1&cursor=${preview.nextCursor}`), params('p001'))).json();
   expect(second.comments).toHaveLength(50);
   expect(second.comments[0].id).toBe('c092');
   expect(second.comments[49].id).toBe('c043');
-  expect(query.mock.calls[0][0]).toMatchObject({ take: 51, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
+  expect(query.mock.calls[1][0]).toMatchObject({ take: 51, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
   const third = await (await getComments(request(`/api/posts/p001/comments?feed=1&cursor=${second.nextCursor}`), params('p001'))).json();
   expect(third.comments).toHaveLength(42);
   expect(third.comments[0].id).toBe('c042');
@@ -215,11 +224,11 @@ test('feed and comment routes enforce anonymous/owner/other draft visibility', a
   await prisma.post.create({ data: { id: 'published', authorId: 'author', title: 'Public', content: 'Public', published: true, createdAt: new Date('2026-01-03') } });
   jest.mocked(getServerSession).mockResolvedValue(null);
   expect((await (await getPosts(request('/api/posts?feed=1'))).json()).posts.map((post: { id: string }) => post.id)).toEqual(['published']);
-  expect((await getComments(request('/api/posts/p001/comments?feed=1'), params('p001'))).status).toBe(404);
+  expect((await getComments(request('/api/posts/p001/comments?feed=1&preview=1'), params('p001'))).status).toBe(404);
   viewer('viewer');
   expect((await (await getPosts(request('/api/posts?feed=1'))).json()).posts.map((post: { id: string }) => post.id)).toEqual(['published', 'viewer-draft']);
-  expect((await getComments(request('/api/posts/p001/comments?feed=1'), params('p001'))).status).toBe(404);
-  expect((await getComments(request('/api/posts/viewer-draft/comments?feed=1'), params('viewer-draft'))).status).toBe(200);
+  expect((await getComments(request('/api/posts/p001/comments?feed=1&preview=1'), params('p001'))).status).toBe(404);
+  expect((await getComments(request('/api/posts/viewer-draft/comments?feed=1&preview=1'), params('viewer-draft'))).status).toBe(200);
   viewer('author');
   expect((await getComments(request('/api/posts/p001/comments?feed=1'), params('p001'))).status).toBe(200);
 });
@@ -340,7 +349,7 @@ test('resolves an older comment directly in one bounded parent payload without s
   await makePosts(1);
   await makeComments('p001', 95);
   await prisma.likeComment.create({ data: { commentId: 'c001', userId: 'viewer' } });
-  const preview = (await (await getPosts(request('/api/posts?feed=1'))).json()).posts[0];
+  const preview = await (await getComments(request('/api/posts/p001/comments?feed=1&preview=1'), params('p001'))).json();
   const parentQuery = jest.spyOn(prisma.post, 'findUnique');
   const commentQuery = jest.spyOn(prisma.comment, 'findUnique');
   const scan = jest.spyOn(prisma.comment, 'findMany');
@@ -348,7 +357,7 @@ test('resolves an older comment directly in one bounded parent payload without s
   const post = await response.json();
   expect(response.status).toBe(200);
   expect(response.headers.get('Cache-Control')).toBe('private, no-store');
-  expect(post).toMatchObject({ id: 'p001', commentCount: 95, commentsNextCursor: preview.commentsNextCursor });
+  expect(post).toMatchObject({ id: 'p001', commentCount: 95, commentsNextCursor: preview.nextCursor });
   expect(post.comments).toHaveLength(4);
   expect(post.comments[3]).toMatchObject({ id: 'c001', votes: 1, isLiked: true });
   expect(post.comments[3]).not.toHaveProperty('post');

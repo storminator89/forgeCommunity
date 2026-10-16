@@ -42,6 +42,39 @@ function fallback(url: string) {
 const solutionCalls = () => (global.fetch as jest.Mock).mock.calls.filter(([url]) => url.endsWith('/solution'))
 beforeEach(() => { jest.clearAllMocks(); window.history.replaceState({}, '', '/community'); session() })
 
+it('loads only the opened discussion preview, preserves keyboard access, and retries without skipping older replies', async () => {
+  let previewAttempts = 0
+  global.fetch = jest.fn().mockImplementation(async (url: string) => {
+    if (url === '/api/posts?feed=1') return response({ posts: [post({ comments: [], commentCount: 4, commentsDeferred: true })], nextCursor: null })
+    if (url === '/api/posts/post/comments?feed=1&preview=1') return ++previewAttempts === 1
+      ? response({ error: 'Unavailable' }, false)
+      : response({ comments: [reply('d'), reply('c'), reply('b')], nextCursor: 'after-b' })
+    if (url === '/api/posts/post/comments?feed=1&cursor=after-b') return response({ comments: [reply('a')], nextCursor: null })
+    return fallback(url)
+  })
+  const user = userEvent.setup()
+  render(<Community />)
+  const expand = await screen.findByRole('button', { name: '4 Kommentare anzeigen' })
+  expect(screen.queryByText('Reply d')).not.toBeInTheDocument()
+  expect((global.fetch as jest.Mock).mock.calls.filter(([url]) => url.includes('/comments?'))).toHaveLength(0)
+  expand.focus()
+  await user.keyboard('{Enter}')
+  expect(expand).toHaveAttribute('aria-expanded', 'true')
+  expect(await screen.findByText('Weitere Kommentare konnten nicht geladen werden.')).toHaveAttribute('role', 'alert')
+  await user.click(screen.getByRole('button', { name: 'Kommentare erneut laden' }))
+  expect(await screen.findByText('Reply d')).toBeInTheDocument()
+  expect(screen.getByText('3 Kommentare geladen, 4 insgesamt.')).toHaveAttribute('role', 'status')
+  await user.click(screen.getByRole('button', { name: 'Weitere Kommentare laden' }))
+  expect(await screen.findByText('Reply a')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Weitere Kommentare laden' })).not.toBeInTheDocument()
+  expect(screen.getByText('4 Kommentare geladen, 4 insgesamt. Ende der Kommentare.')).toHaveAttribute('role', 'status')
+  expect((global.fetch as jest.Mock).mock.calls.filter(([url]) => url.includes('/comments?')).map(([url]) => url)).toEqual([
+    '/api/posts/post/comments?feed=1&preview=1',
+    '/api/posts/post/comments?feed=1&preview=1',
+    '/api/posts/post/comments?feed=1&cursor=after-b',
+  ])
+})
+
 it('owner can select eligible replies with accessible keyboard controls; self/test replies have no control', async () => {
   const choose = jest.fn().mockResolvedValue(undefined)
   render(<PostCard post={post()} currentUserId="owner" onLike={jest.fn()} onSelectSolution={choose} />)
