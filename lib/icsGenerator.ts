@@ -1,5 +1,6 @@
 import type { Event } from '@prisma/client';
 import { DateTime } from 'luxon';
+import { eventWallTime } from '@/lib/event-time';
 
 export function escapeICSText(text: string): string {
   return text.replace(/\\/g, '\\\\').replace(/\r\n|\r|\n/g, '\\n')
@@ -24,18 +25,16 @@ function foldLine(line: string): string {
 }
 
 export function generateICS(event: Event, now = new Date()): string {
-  const start = DateTime.fromJSDate(event.date, { zone: event.timezone });
+  const start = DateTime.fromJSDate(event.date, { zone: event.timezone }).reconfigure({ locale: 'en-US', numberingSystem: 'latn' });
   if (!start.isValid) throw new Error('Invalid event date or timezone');
   let end = start.plus({ hours: 1 });
   if (event.endTime) {
-    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(event.endTime)) {
-      throw new Error('Invalid event end time');
-    }
-    const [hour, minute] = event.endTime.split(':').map(Number);
-    end = start.set({ hour, minute, second: 0, millisecond: 0 });
-    if (end <= start) end = end.plus({ days: 1 });
+    // Choose the local end day before resolving its wall time. Resolving first
+    // could silently normalize a DST gap or pick one side of a repeated hour.
+    const endDay = event.endTime <= start.toFormat('HH:mm') ? start.plus({ days: 1 }) : start;
+    end = eventWallTime(endDay.toISODate()!, event.endTime, event.timezone);
   }
-  const format = (date: DateTime) => date.toUTC().toFormat("yyyyMMdd'T'HHmmss'Z'");
+  const format = (date: DateTime) => date.toUTC().toFormat("yyyyMMdd'T'HHmmss'Z'", { locale: 'en-US', numberingSystem: 'latn' });
   return [
     'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//ForgeCommunity//Events//DE',
     'CALSCALE:GREGORIAN', 'BEGIN:VEVENT', `UID:${escapeICSText(event.id)}`,

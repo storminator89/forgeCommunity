@@ -14,8 +14,7 @@ import {
   subMonths,
   getISODay, // Verwenden Sie getISODay statt getDay
   startOfWeek,
-  addDays,
-  startOfToday
+  addDays
 } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { UserNav } from "@/components/user-nav";
@@ -45,6 +44,7 @@ import EventForm from '@/components/EventForm';
 import { useToast } from '@/hooks/use-toast';
 import { sanitizeRichHtml } from '@/lib/sanitize-html';
 import { useSession } from 'next-auth/react';
+import { eventCalendarDate, eventDateKey, eventIsTodayOrLater, eventStartTime } from '@/lib/event-time';
 
 
 interface Event {
@@ -116,7 +116,7 @@ function ScopedEvents({ session, sessionStatus }: {
   };
 
   const handleOpenUpcomingEvent = (event: Event, trigger: HTMLButtonElement) => {
-    const date = new Date(event.date);
+    const date = eventCalendarDate(event);
     upcomingTriggerRef.current = trigger;
     setCurrentMonth(date);
     setSelectedDate(date);
@@ -241,7 +241,7 @@ function ScopedEvents({ session, sessionStatus }: {
       catch { return; }
       const event = eventsData.find(item => item.id === eventId);
       if (!event) return;
-      const date = new Date(event.date);
+      const date = eventCalendarDate(event);
       if (Number.isNaN(date.getTime())) return;
       upcomingTriggerRef.current = null;
       setSearchTerm('');
@@ -274,15 +274,14 @@ function ScopedEvents({ session, sessionStatus }: {
     (event.category && event.category.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  // Match the list's existing date boundary, regardless of the displayed
-  // calendar month. Events earlier today remain visible with their RSVP closed.
-  const today = startOfToday();
+  // Each event keeps its own local day, including earlier today, independently
+  // of the viewer's timezone and the displayed calendar month.
   const upcomingEvents = filteredEvents
-    .filter(event => new Date(event.date) >= today)
+    .filter(event => eventIsTodayOrLater(event))
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
   const getEventsForDate = (date: Date) => {
-    return filteredEvents.filter(event => isSameDay(new Date(event.date), date));
+    return filteredEvents.filter(event => eventDateKey(event) === format(date, 'yyyy-MM-dd'));
   };
 
   const handleDeleteEvent = async (id: string) => {
@@ -428,7 +427,7 @@ function ScopedEvents({ session, sessionStatus }: {
         </time>
         <span className={cn("mt-1 min-w-0 space-y-1", week ? "block sm:mt-2" : "hidden sm:block")}>
           {week && <span className="block text-xs text-muted-foreground sm:hidden">{format(day, 'EEEE', { locale: de })}</span>}
-          {dayEvents.slice(0, 2).map(event => <span key={event.id} className="block truncate rounded-[0.25rem] bg-primary/10 px-1.5 py-1 text-xs font-medium text-primary">{event.startTime ? `${event.startTime} · ` : ''}{event.title}</span>)}
+          {dayEvents.slice(0, 2).map(event => <span title={`${eventStartTime(event)} (${event.timezone}) · ${event.title}`} key={event.id} className="block truncate rounded-[0.25rem] bg-primary/10 px-1.5 py-1 text-xs font-medium text-primary">{`${eventStartTime(event)} · `}{event.title}</span>)}
           {dayEvents.length > 2 && <span className="block text-xs text-muted-foreground">+{dayEvents.length - 2} weitere</span>}
           {week && dayEvents.length === 0 && <span className="block text-xs text-muted-foreground sm:hidden">Keine Events</span>}
         </span>
@@ -452,7 +451,7 @@ function ScopedEvents({ session, sessionStatus }: {
           {Array.from({ length: (7 - (startingDayIndex + days.length) % 7) % 7 }).map((_, index) => <div key={`trailing-${index}`} className="h-20 bg-muted/30 sm:h-32 lg:h-40" aria-hidden="true" />)}
         </div>
       </div>
-      <p className="border-t px-4 py-3 text-xs text-muted-foreground">Wähle einen Tag, um die Events und Details zu öffnen.</p>
+      <p className="border-t px-4 py-3 text-xs text-muted-foreground">Datum und Uhrzeit gelten in der jeweiligen Event-Zeitzone. Wähle einen Tag für die Details.</p>
     </section>
   );
 
@@ -492,8 +491,8 @@ function ScopedEvents({ session, sessionStatus }: {
                   <div className="min-w-0 flex-1 break-words [overflow-wrap:anywhere]">
                     <h3 className="text-lg font-semibold mb-2">{event.title}</h3>
                     <p className="text-sm text-muted-foreground">
-                      {format(new Date(event.date), 'dd. MMM yyyy', { locale: de })}
-                      {event.startTime && event.endTime ? `, ${event.startTime} - ${event.endTime}` : ''}
+                      {format(eventCalendarDate(event), 'dd. MMM yyyy', { locale: de })}
+                      {`, ${eventStartTime(event)}${event.endTime ? ` - ${event.endTime}` : ''} (${event.timezone})`}
                     </p>
                     <div className="space-y-2 text-sm text-muted-foreground mt-2">
                       <div className="flex items-center">
@@ -570,10 +569,10 @@ function ScopedEvents({ session, sessionStatus }: {
                   <ul className="mt-2 grid gap-2 sm:grid-cols-3">
                     {upcomingEvents.slice(0, 3).map(event => (
                       <li key={event.id} className="min-w-0">
-                        <button type="button" aria-label={`Details öffnen: ${event.title}, ${format(new Date(event.date), 'dd. MMMM yyyy', { locale: de })}`}
+                        <button type="button" aria-label={`Details öffnen: ${event.title}, ${format(eventCalendarDate(event), 'dd. MMMM yyyy', { locale: de })}`}
                           onClick={e => handleOpenUpcomingEvent(event, e.currentTarget)}
                           className="h-full w-full min-w-0 rounded-lg border p-3 text-left transition-colors hover:bg-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
-                          <time dateTime={event.date} className="block text-xs text-muted-foreground">{format(new Date(event.date), 'dd. MMM yyyy', { locale: de })}{event.startTime ? ` · ${event.startTime}` : ''}</time>
+                          <time dateTime={event.date} className="block text-xs text-muted-foreground">{format(eventCalendarDate(event), 'dd. MMM yyyy', { locale: de })}{` · ${eventStartTime(event)} (${event.timezone})`}</time>
                           <span className="mt-1 block break-words font-semibold [overflow-wrap:anywhere]">{event.title}</span>
                           <span className="mt-1 block break-words text-sm text-muted-foreground [overflow-wrap:anywhere]">{event.location}</span>
                           <span className="mt-2 block text-sm font-medium text-primary">Details öffnen</span>
@@ -657,10 +656,10 @@ function ScopedEvents({ session, sessionStatus }: {
                   <div className="min-w-0 flex-1 break-words [overflow-wrap:anywhere]">
                     <h3 className="text-lg font-semibold mb-2">{event.title}</h3>
                     <div className="space-y-2 text-sm text-muted-foreground">
-                      {event.startTime && event.endTime && (
+                      {event.endTime && (
                         <div className="flex items-center">
                           <Clock className="mr-2 h-4 w-4 flex-shrink-0" />
-                          <span>{event.startTime} - {event.endTime}</span>
+                          <span>{eventStartTime(event)} - {event.endTime} ({event.timezone})</span>
                         </div>
                       )}
                       <div className="flex items-center">
