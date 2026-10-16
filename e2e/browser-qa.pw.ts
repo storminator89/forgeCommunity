@@ -48,7 +48,7 @@ test('landing, account, community, members, chat, and notifications work on desk
   seedPublicChannel(channelName);
 
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: /Wissen teilen/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Lernen. Machen. Weitergeben.', exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('landing.png'), fullPage: true });
   await page.keyboard.press('Tab');
   await expect(page.getByRole('link', { name: 'Zum Inhalt springen' })).toBeFocused();

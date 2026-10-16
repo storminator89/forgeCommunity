@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-labelledby="title description">
+  <title id="title">ForgeCommunity</title>
+  <desc id="description">Ein offenes Buch mit aufsteigendem Funken.</desc>
+  <rect x="0.5" y="0.5" width="31" height="31" rx="7.5" fill="#075C65" stroke="#EFF8F6"/>
+  <path d="M7 12 15 16V26L7 22Z" fill="#EFF8F6"/>
+  <path d="M17 16 25 10V22L17 26Z" fill="#EF8D75"/>
+  <path d="m16 4 4 5-4 5-4-5Z" fill="#F2C75C"/>
+</svg>

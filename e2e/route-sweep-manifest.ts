@@ -20,7 +20,7 @@ export type RouteSweepCase = {
 };
 
 export const routeSweepCases: readonly RouteSweepCase[] = [
-  { source: 'app/page.tsx', url: '/', persona: 'anonymous', outcome: 'render', heading: 'Wissen teilen. Projekte weiterbringen.', evidence: 'static' },
+  { source: 'app/page.tsx', url: '/', persona: 'anonymous', outcome: 'render', heading: 'Lernen. Machen. Weitergeben.', evidence: 'static' },
   { source: 'app/about/page.tsx', url: '/about', persona: 'member', outcome: 'render', heading: 'Gemeinsam lernen und Ideen weiterbringen.', evidence: 'static' },
   { source: 'app/admin/dashboard/page.tsx', url: '/admin/dashboard', persona: 'admin', outcome: 'render', heading: 'Dashboard', evidence: 'shared-disposable-db', settledApi: '/api/admin/dashboard-stats', loadingText: 'Wird geladen' },
   { source: 'app/admin/learning-pathways/page.tsx', url: '/admin/learning-pathways', persona: 'admin', outcome: 'render', heading: 'Lernpfade verwalten', evidence: 'shared-disposable-db', settledApi: '/api/admin/learning-pathways', loadingText: 'Lernpfade werden geladen', settledText: 'Bestehende Lernpfade' },
