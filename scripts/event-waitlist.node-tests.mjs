@@ -27,7 +27,7 @@ function sqliteFixture({ beforeTail = false } = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'forge-event-waitlist-'));
   const migrations = join(directory, 'migrations');
   mkdirSync(migrations);
-  for (const name of sqliteNames.filter(name => !beforeTail || name !== sqliteTail)) {
+  for (const name of sqliteNames.filter(name => !beforeTail || name < sqliteTail)) {
     copyFileSync(new URL(name, sqliteDirectory), join(migrations, name));
   }
   const path = join(directory, 'test.db');
@@ -44,7 +44,7 @@ function sqliteFixture({ beforeTail = false } = {}) {
   deploy();
   return {
     url, migrations, deploy,
-    addTail: () => copyFileSync(new URL(sqliteTail, sqliteDirectory), join(migrations, sqliteTail)),
+    addTail: () => { for (const name of sqliteNames.filter(name => name >= sqliteTail)) copyFileSync(new URL(name, sqliteDirectory), join(migrations, name)); },
     open: () => {
       const db = new DatabaseSync(path);
       db.exec('PRAGMA foreign_keys = ON');
@@ -66,8 +66,8 @@ const seedSql = `INSERT INTO "User" (id,email,"updatedAt") VALUES
   ('cancelled','e','c','CANCELLED'),('attended','e','d','ATTENDED');`;
 
 test('paired waitlist tails are strictly additive and preserve the existing attendee enum contract', () => {
-  assert.equal(sqliteNames.at(-1), sqliteTail);
-  assert.equal(postgresNames.at(-1), postgresTail);
+  assert.ok(sqliteNames.includes(sqliteTail));
+  assert.ok(postgresNames.includes(postgresTail));
   for (const [directory, name] of [[sqliteDirectory, sqliteTail], [postgresDirectory, postgresTail]]) {
     const sql = migrationSql(name, directory);
     const statements = sql.replace(/^\s*--.*$/gm, '').split(';').map(value => value.trim()).filter(Boolean);
@@ -186,7 +186,7 @@ test('SQLite readiness/deploy fail closed for absent, tampered, gapped and diver
       db.prepare('UPDATE _app_migrations SET checksum=? WHERE name=?').run(expected, name);
       db.prepare('DELETE FROM _app_migrations WHERE name=?').run(name);
       await assert.rejects(assertCoursePublicationReady(f.url, 'sqlite'), /history is missing, divergent or has changed checksums/);
-      assert.throws(f.deploy, name === sqliteTail ? /already exists/ : /gap before 0024_event_waitlist\.sql/);
+      assert.throws(f.deploy, name === sqliteTail ? /gap before 0025_space_polls\.sql/ : /gap before 0024_event_waitlist\.sql/);
       db.prepare('INSERT INTO _app_migrations (name,checksum) VALUES (?,?)').run(name, expected);
     }
     db.prepare('INSERT INTO _app_migrations (name,checksum) VALUES (?,?)').run('0025_unreviewed.sql', 'unreviewed');
@@ -291,7 +291,7 @@ test('PostgreSQL populated tracked upgrade preserves event/attendee history and 
   await withPostgresSchema(async (db, url) => {
     await db.query(source('prisma/postgresql-baselines/0000_main_7814799.sql'));
     await db.query('CREATE TABLE "_app_schema_upgrades" (name TEXT PRIMARY KEY, checksum TEXT NOT NULL, applied_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)');
-    for (const name of postgresNames.filter(name => name !== postgresTail)) {
+    for (const name of postgresNames.filter(name => name < postgresTail)) {
       const sql = migrationSql(name, postgresDirectory);
       // The reviewed main baseline already includes SkillEndorsement.
       if (name !== '0001_skill_endorsements.sql') await db.query(sql);
@@ -315,7 +315,7 @@ test('PostgreSQL populated tracked upgrade preserves event/attendee history and 
       await db.query('UPDATE "_app_schema_upgrades" SET checksum=$1 WHERE name=$2', [expected, name]);
       await db.query('DELETE FROM "_app_schema_upgrades" WHERE name=$1', [name]);
       await assert.rejects(assertCoursePublicationReady(url, 'postgresql'), /history is missing, divergent or has changed checksums/);
-      await assert.rejects(applyPostgresqlUpgrades(url), name === postgresTail ? /already exists/ : /gap before 0023_event_waitlist\.sql/);
+      await assert.rejects(applyPostgresqlUpgrades(url), name === postgresTail ? /gap before 0024_space_polls\.sql/ : /gap before 0023_event_waitlist\.sql/);
       await db.query('INSERT INTO "_app_schema_upgrades" (name,checksum) VALUES ($1,$2)', [name, expected]);
     }
     assert.equal(await assertCoursePublicationReady(url, 'postgresql'), true);
