@@ -9,10 +9,10 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up the published Version 29 source
-`82b05a00fd403889d04bc76b5555b71d7f704b92`. Version 29 deployed successfully on
-17 October 2026 at 21:40:42 UTC. Its published knowledge-base article typography
-readback is still pending; earlier release checks are documented separately.
+runtime data. This GitHub snapshot backs up the published Version 30 source
+`0bfa6a142d78b3936f929b422e420f7938b3d8c4`. Version 30 deployed successfully on
+17 October 2026 at 21:45:00 UTC. Its published knowledge-base directory URL-state
+readback is still pending; bounded Version 29 article acceptance is recorded below.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -73,8 +73,8 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 29 source includes the existing bounded ports below,
-inherited from Version 28, plus knowledge-base article typography described
+The published Version 30 source includes the existing bounded ports below,
+inherited from Version 29, plus knowledge-base directory URL-state described
 below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
@@ -116,7 +116,11 @@ all-page visual coverage.
 - Anonymous/loading navigation and Community sign-in states avoid mounting
   member navigation, private account menus and the composer; live readback pending
 - Scoped knowledge-base article-viewer typography for existing rich HTML, with
-  semantic headings, lists, spacing, links, code and images; live readback pending
+  semantic headings, lists, spacing, links, code and images; bounded article
+  acceptance is documented below
+- Local knowledge-base directory search/category/tag URL-state and native
+  history navigation, preserving existing data/filter/auth behavior; live
+  readback remains pending
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -335,9 +339,30 @@ sanitizer, editor, APIs and global styles are unchanged.
 
 Source review, production typechecking/build and static artifact checks passed.
 Deployment succeeded on 17 October 2026 at 21:40:42 UTC. Published article
-reader typography acceptance is still pending. No local functional tests,
-application/browser execution, or production article-content mutation is part
-of this source backup.
+reader typography passed a bounded normal read at 21:41:55 and 21:43 UTC.
+Four existing H2 headings rendered at 24 pixels and weight 650 with spacing;
+the six-item unordered list showed disc markers and 24-pixel padding. Paragraphs
+used a 28-pixel line height and 16-pixel separation. Both checked source links
+were underlined and showed a 2-pixel keyboard focus outline. The saved article
+was unchanged and no content edit was made. This one-article check does not
+establish all rich-content or responsive variants. No local functional tests
+or application/browser execution were performed for the source backup.
+
+## Version 30 knowledge-base directory URL-state
+
+Version 30 changes only the directory page and a pure URL-state helper. Search
+text is capped at 120 characters with control characters removed; known
+category/tag values are encoded in the same-origin directory URL. Typing
+replaces the current history entry; category/tag/reset actions push entries,
+and native popstate restores the view. Unknown or repeated parameters have safe
+defaults. Reset retains focus on the stable search input.
+
+Existing published-article fetching, filtering, data and authentication remain
+unchanged, as does Version 29 reader typography. No API fetch call or article/
+content write is added. Source review, production typechecking/build and static
+artifact checks passed. Deployment succeeded on 17 October 2026 at 21:45:00 UTC.
+Normal published search/filter/article/Back/Forward/reset readback is still
+pending; no completed Version 30 browser result is claimed by this backup.
 
 ## Keeping the branches separate
 
