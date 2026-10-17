@@ -49,11 +49,11 @@ export function pageSpaceDirectory<T extends SpaceDirectoryCursor>(rows: T[]) {
 }
 
 export class SpaceApiError extends Error {
-  constructor(message: string, public readonly status: number) { super(message); }
+  constructor(message: string, public readonly status: number, public readonly code?: string) { super(message); }
 }
 
 export function spaceErrorResponse(error: unknown, fallback: string) {
-  if (error instanceof SpaceApiError) return NextResponse.json({ error: error.message }, { status: error.status, headers: SPACE_NO_STORE });
+  if (error instanceof SpaceApiError) return NextResponse.json({ error: error.message, ...(error.code ? { code: error.code } : {}) }, { status: error.status, headers: SPACE_NO_STORE });
   const input = requestErrorResponse(error);
   if (input) {
     input.headers.set('Cache-Control', SPACE_NO_STORE['Cache-Control']);

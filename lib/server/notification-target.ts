@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { Notification } from '@prisma/client';
 import prisma from '@/lib/prisma';
+import { resolveMissionInvitationTargets } from '@/lib/server/space-mission-invitations';
 
 // This is deliberately an allowlist of domain objects, not a stored URL. A
 // target can be deleted or become private after its notification was created.
@@ -13,6 +14,9 @@ export async function resolveNotificationTarget(target: Target, viewerId: string
   const { type, targetType, targetId } = target;
   if (!targetType || !targetId || !safeId(targetId)) return null;
 
+  if (type === 'SYSTEM' && targetType === 'SPACE_MISSION_INVITATION') {
+    return (await resolveMissionInvitationTargets([targetId], viewerId)).get(targetId) ?? null;
+  }
   if (type === 'EVENT' && targetType === 'EVENT') {
     const event = await prisma.event.findFirst({ where: { id: targetId,
       attendees: { some: { userId: viewerId, status: { not: 'CANCELLED' } } } }, select: { id: true } });
@@ -45,14 +49,17 @@ export async function resolveNotificationTarget(target: Target, viewerId: string
   return null;
 }
 
-/** Resolve one inbox page in at most four visibility-filtered queries. */
+/** SQLite real-adapter evidence: a 50-row mixed page uses at most fourteen
+ * SELECTs (four legacy + ten invitation) plus invitation COMMIT. Query count
+ * is independent of page occupancy. PostgreSQL measurement remains a gate. */
 export async function resolveNotificationTargets(targets: Target[], viewerId: string): Promise<Array<NotificationAction | null>> {
   const userIds = [...new Set(targets.filter(target => target.type === 'FOLLOW' && target.targetType === 'USER' && target.targetId && safeId(target.targetId)).map(target => target.targetId!))];
   const commentIds = [...new Set(targets.filter(target => target.type === 'COMMENT' && target.targetType === 'COMMENT' && target.targetId && safeId(target.targetId)).map(target => target.targetId!))];
   const messageIds = [...new Set(targets.filter(target => (target.type === 'CHAT_MESSAGE' || target.type === 'MENTION') && target.targetType === 'CHAT_MESSAGE' && target.targetId && safeId(target.targetId)).map(target => target.targetId!))];
 
   const eventIds = [...new Set(targets.filter(target => target.type === 'EVENT' && target.targetType === 'EVENT' && target.targetId && safeId(target.targetId)).map(target => target.targetId!))];
-  const [users, comments, messages, events] = await Promise.all([
+  const invitationIds = [...new Set(targets.filter(target => target.type === 'SYSTEM' && target.targetType === 'SPACE_MISSION_INVITATION' && target.targetId && safeId(target.targetId)).map(target => target.targetId!))];
+  const [users, comments, messages, events, invitations] = await Promise.all([
     userIds.length ? prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true } }) : [],
     commentIds.length ? prisma.comment.findMany({
       where: { id: { in: commentIds }, post: { OR: [{ published: true }, { authorId: viewerId }] } },
@@ -66,6 +73,7 @@ export async function resolveNotificationTargets(targets: Target[], viewerId: st
     }) : [],
     eventIds.length ? prisma.event.findMany({ where: { id: { in: eventIds },
       attendees: { some: { userId: viewerId, status: { not: 'CANCELLED' } } } }, select: { id: true } }) : [],
+    invitationIds.length ? resolveMissionInvitationTargets(invitationIds, viewerId) : new Map<string, NotificationAction>(),
   ]);
   const visibleEvents = new Set(events.map(event => event.id));
   const visibleUsers = new Set(users.map(user => user.id));
@@ -73,6 +81,7 @@ export async function resolveNotificationTargets(targets: Target[], viewerId: st
   const visibleMessages = new Map(messages.map(message => [message.id, message.channelId]));
   return targets.map(({ type, targetType, targetId }) => {
     if (!targetId || !safeId(targetId)) return null;
+    if (type === 'SYSTEM' && targetType === 'SPACE_MISSION_INVITATION') return invitations.get(targetId) ?? null;
     if (type === 'EVENT' && targetType === 'EVENT' && visibleEvents.has(targetId)) {
       return { href: `/events#event-${encodeURIComponent(targetId)}`, label: 'Event ansehen' };
     }

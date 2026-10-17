@@ -2,10 +2,12 @@ import 'server-only';
 
 import { Prisma, type SpaceMissionContributionKind } from '@prisma/client';
 import { createHash } from 'node:crypto';
-import { bookmarkTransaction, readOwnMissionBookmark } from '@/lib/server/space-mission-bookmarks';
+import { readOwnMissionBookmark } from '@/lib/server/space-mission-bookmarks';
 import { getReadableSpace, type SpaceAccess } from '@/lib/server/space-access';
 import { parseSpaceRequestId, SPACE_ID_RE, spaceTransaction, SpaceApiError } from '@/lib/server/space-api';
 import { sanitizeTextServer } from '@/lib/server/sanitize-html';
+import type { MissionNextAction } from '@/types/space-mission-invitations';
+import { invitationTransaction, purgeMissionInvitations, revokeMissionParticipationInvitations } from '@/lib/server/space-mission-invitation-state';
 import { MissionWeekError, parseMissionWeek, resolveMissionWeek, missionWindowState } from '@/lib/mission-week-clock';
 
 export const MISSION_PARTICIPANT_LIMIT = 5;
@@ -105,6 +107,21 @@ async function projectMission(row: MissionRow, userId: string, access: SpaceAcce
   const visibleIds = new Set(visible.map(item => item.id));
   const insightAuthors = new Set(visible.filter(item => item.kind === 'INSIGHT').map(item => item.authorId)).size;
   const hasCrossPersonBuildOn = visible.some(item => item.kind === 'BUILD_ON');
+  let myNextAction: MissionNextAction | null = null;
+  if (active) {
+    const ownInsight = visible.some(item => item.authorId === userId && item.kind === 'INSIGHT');
+    const ownBuildOn = own.find(item => item.kind === 'BUILD_ON' && !item.hiddenAt);
+    const [insightAttempts, buildOnAttempts] = await Promise.all(['INSIGHT', 'BUILD_ON'].map(kind =>
+      tx.spaceMissionContribution.count({ where: { missionId: row.id, authorId: userId, kind: kind as SpaceMissionContributionKind } })));
+    const target = visible.find(item => item.kind === 'INSIGHT' && item.authorId !== userId);
+    if (row.closedAt) myNextAction = { kind: 'CLOSED' };
+    else if (insightAuthors >= 2 && hasCrossPersonBuildOn) myNextAction = { kind: 'CURRENT_GOAL_REACHED' };
+    else if (!ownInsight) myNextAction = { kind: insightAttempts < MISSION_CONTRIBUTION_LIMIT ? 'SHARE_INSIGHT' : 'LIMIT_REACHED' };
+    else if (ownBuildOn && !visibleIds.has(ownBuildOn.id)) myNextAction = { kind: 'REVIEW_BUILD_ON', contributionId: ownBuildOn.id };
+    else if (!ownBuildOn && target && buildOnAttempts < MISSION_CONTRIBUTION_LIMIT) myNextAction = { kind: 'BUILD_ON', targetContributionId: target.id };
+    else if (!ownBuildOn && buildOnAttempts >= MISSION_CONTRIBUTION_LIMIT) myNextAction = { kind: 'LIMIT_REACHED' };
+    else myNextAction = { kind: 'WAIT_FOR_PEER' };
+  }
   return {
     id: row.id, spaceId: row.spaceId, title: row.title, prompt: row.prompt, creator: row.creator,
     createdAt: row.createdAt.toISOString(), closedAt: row.closedAt?.toISOString() ?? null,
@@ -117,6 +134,7 @@ async function projectMission(row: MissionRow, userId: string, access: SpaceAcce
       optedOutAt: self?.optedOutAt?.toISOString() ?? null },
     ownBookmark: access.isMember && account && !row.closedAt ? await readOwnMissionBookmark(row.id, userId, tx) : null,
     canManage: access.canManage,
+    myNextAction,
     canJoin: !row.closedAt && !active && access.isMember && account?.role === 'USER' && reservedSlots < MISSION_PARTICIPANT_LIMIT,
     contributions: visible.map(item => serializeContribution(item, userId)),
     ownContributions: own.map(item => ({ id: item.id, kind: item.kind, hidden: Boolean(item.hiddenAt),
@@ -125,11 +143,13 @@ async function projectMission(row: MissionRow, userId: string, access: SpaceAcce
   };
 }
 
+export async function readMissionInTransaction(spaceId: string, id: string, userId: string, tx: Prisma.TransactionClient) {
+  const access = await privateMissionAccess(spaceId, userId, tx);
+  return projectMission(await findMission(spaceId, id, tx), userId, access, tx);
+}
+
 export async function readMission(spaceId: string, id: string, userId: string) {
-  return spaceTransaction(async tx => {
-    const access = await privateMissionAccess(spaceId, userId, tx);
-    return projectMission(await findMission(spaceId, id, tx), userId, access, tx);
-  });
+  return spaceTransaction(tx => readMissionInTransaction(spaceId, id, userId, tx));
 }
 
 type MissionCursor = { createdAt: Date; id: string };
@@ -200,45 +220,57 @@ export async function createMission(spaceId: string, userId: string, input: Retu
 }
 
 export async function closeMission(spaceId: string, id: string, userId: string) {
-  return bookmarkTransaction(async tx => {
+  return invitationTransaction(async tx => {
     const access = await privateMissionAccess(spaceId, userId, tx);
     if (!access.canManage) throw new SpaceApiError('Nicht autorisiert', 403);
     const previous = await findMission(spaceId, id, tx);
     const row = previous.closedAt ? previous : await tx.spaceMission.update({ where: { id }, data: { closedAt: new Date() }, select: missionSelect });
     await tx.spaceMissionBookmarkSetting.deleteMany({ where: { missionId: id } });
+    await purgeMissionInvitations(id, tx);
     return projectMission(row, userId, access, tx);
   });
 }
 
+/** Shared transaction-local join core. Invitation acceptance forbids the normal
+ * duplicate-active replay and never opens another transaction. */
+export async function joinMissionInTransaction(spaceId: string, id: string, userId: string, epoch: number,
+  tx: Prisma.TransactionClient, allowDuplicate = true) {
+  const access = await privateMissionAccess(spaceId, userId, tx);
+  const mission = await findMission(spaceId, id, tx);
+  const key = { missionId_userId: { missionId: id, userId } };
+  const [current, account] = await Promise.all([
+    tx.spaceMissionParticipation.findUnique({ where: key }),
+    tx.user.findUnique({ where: { id: userId }, select: { role: true } }),
+  ]);
+  if (!access.isMember || account?.role !== 'USER') throw notFound();
+  // Preserve ordinary join replay's existing closed-mission behavior. Invitation
+  // decisions check OPEN first and pass false, so accepted replay never joins.
+  if (allowDuplicate && current?.epoch === epoch + 1 && !current.optedOutAt) return { mission, access };
+  if (mission.closedAt) throw new SpaceApiError('Mission ist geschlossen', 409, 'MISSION_CLOSED');
+  if ((current?.epoch ?? 0) !== epoch || current && !current.optedOutAt || epoch >= MAX_EPOCH) throw conflict();
+  const count = await tx.spaceMissionParticipation.count({ where: { missionId: id, optedOutAt: null } });
+  if (count >= MISSION_PARTICIPANT_LIMIT) throw new SpaceApiError('Mission hat bereits fünf Teilnehmende', 409, 'MISSION_FULL');
+  const data = { epoch: epoch + 1, joinedAt: new Date(), optedOutAt: null };
+  await tx.spaceMissionParticipation.upsert({ where: key, update: data, create: { missionId: id, userId, ...data } });
+  return { mission, access };
+}
+
 export async function setMissionParticipation(spaceId: string, id: string, userId: string, epoch: number, join: boolean) {
-  const work = async (tx: Prisma.TransactionClient) => {
+  return invitationTransaction(async tx => {
+    if (join) {
+      const { mission, access } = await joinMissionInTransaction(spaceId, id, userId, epoch, tx);
+      await revokeMissionParticipationInvitations(id, userId, 'incoming', tx);
+      return projectMission(mission, userId, access, tx);
+    }
     const access = await privateMissionAccess(spaceId, userId, tx);
     const mission = await findMission(spaceId, id, tx);
     const key = { missionId_userId: { missionId: id, userId } };
     const current = await tx.spaceMissionParticipation.findUnique({ where: key });
-    if (join) {
-      const account = await tx.user.findUnique({ where: { id: userId }, select: { role: true } });
-      if (!access.isMember || account?.role !== 'USER') throw notFound();
-      // A duplicate action is safe only while its exact epoch is still active.
-      if (current?.epoch === epoch + 1 && !current.optedOutAt) return projectMission(mission, userId, access, tx);
-      if (mission.closedAt) throw new SpaceApiError('Mission ist geschlossen', 409);
-      if ((current?.epoch ?? 0) !== epoch || current && !current.optedOutAt || epoch >= MAX_EPOCH) throw conflict();
-      const count = await tx.spaceMissionParticipation.count({ where: { missionId: id, optedOutAt: null } });
-      if (count >= MISSION_PARTICIPANT_LIMIT) throw new SpaceApiError('Mission hat bereits fünf Teilnehmende', 409);
-      const data = { epoch: epoch + 1, joinedAt: new Date(), optedOutAt: null };
-      await tx.spaceMissionParticipation.upsert({ where: key, update: data, create: { missionId: id, userId, ...data } });
-    } else {
-      if (!current || current.epoch !== epoch) throw conflict();
-      if (!current.optedOutAt) await tx.spaceMissionParticipation.update({ where: key, data: { optedOutAt: new Date() } });
-    }
+    if (!current || current.epoch !== epoch) throw conflict();
+    if (!current.optedOutAt) await tx.spaceMissionParticipation.update({ where: key, data: { optedOutAt: new Date() } });
+    await revokeMissionParticipationInvitations(id, userId, 'outgoing', tx);
     return projectMission(mission, userId, access, tx);
-  };
-  try { return await spaceTransaction(work); }
-  catch (error) {
-    if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') throw error;
-    // Competing first joins recheck the entire authorization and epoch snapshot.
-    return spaceTransaction(work);
-  }
+  });
 }
 
 /** Must run inside the private Space member-removal transaction. */

@@ -154,9 +154,9 @@ async function assertSnapshot(db,before) {
 const history = async db => (await db.query('SELECT * FROM "_app_schema_upgrades" ORDER BY name')).rows;
 const indexes = async db => (await db.query('SELECT indexname,indexdef FROM pg_indexes WHERE schemaname=current_schema() ORDER BY indexname')).rows;
 const foreignKeys = async db => (await db.query(`SELECT c.conname,pg_get_constraintdef(c.oid) AS definition FROM pg_constraint c JOIN pg_namespace n ON n.oid=c.connamespace WHERE n.nspname=current_schema() AND c.contype='f' ORDER BY c.conrelid::regclass::text,c.conname`)).rows;
-async function shorterImageDeployer() {
+async function shorterImageDeployer(includeContextTail = false) {
   const directory = mkdtempSync(join(tmpdir(),'forge-qa-pg-old-image-')); fixtureDirectories.push(directory);
-  for (const name of upgradeNames.filter(name => name < tail)) copyFileSync(new URL(name,upgradesDirectory),join(directory,name));
+  for (const name of upgradeNames.filter(name => name < tail || (includeContextTail && name === tail))) copyFileSync(new URL(name,upgradesDirectory),join(directory,name));
   // Use the actual deployer with only its immutable image paths redirected.
   // This proves an older image refuses longer history without touching source SQL.
   const baseline = readFileSync(new URL('../prisma/postgresql-baselines/0000_main_7814799.sql',import.meta.url),'utf8');
@@ -167,10 +167,20 @@ async function shorterImageDeployer() {
   return (await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`)).applyPostgresqlUpgrades;
 }
 
+// Complete the original PR80 migration assertions before the invitation successor.
+const contextOnlyUpgrades = async url => (await shorterImageDeployer(true))(url);
+async function readyWithInvitationSuccessor(db,url) {
+  if (!(await history(db)).some(row => row.name === '0028_space_mission_invitations.sql')) {
+    await assert.rejects(assertCoursePublicationReady(url,'postgresql'),/history is missing, divergent or has changed checksums/);
+    await applyPostgresqlUpgrades(url);
+  }
+  return assertCoursePublicationReady(url,'postgresql');
+}
+
 test('PostgreSQL exact populated predecessor retains old bytes, chosen state, FKs/indexes and null legacy anchors with repeat deploy and rollback compatibility', async () => {
   await withFixture(async (db,url) => {
     const before = await snapshot(db), oldTables = await tableNames(db), oldIndexes = await indexes(db), oldFks = await foreignKeys(db), oldHistory = await history(db);
-    await applyPostgresqlUpgrades(url);
+    await contextOnlyUpgrades(url);
     await assertSnapshot(db,before); assert.deepEqual(await tableNames(db),oldTables); assert.deepEqual(await foreignKeys(db),oldFks);
     const currentIndexes = await indexes(db);
     assert.deepEqual(currentIndexes.filter(row => row.indexname !== contextIndex),oldIndexes); assert.equal(currentIndexes.length,oldIndexes.length+1);
@@ -183,19 +193,19 @@ test('PostgreSQL exact populated predecessor retains old bytes, chosen state, FK
     assert.deepEqual((await db.query('SELECT * FROM "_app_schema_upgrades" WHERE name < $1 ORDER BY name',[tail])).rows,oldHistory);
     assert.deepEqual((await db.query('SELECT "contextPublicationId","contextContentId" FROM "CourseQuestion" ORDER BY id')).rows,
       [{ contextPublicationId:null,contextContentId:null },{ contextPublicationId:null,contextContentId:null }]);
-    const deployedHistory = await history(db); await applyPostgresqlUpgrades(url); assert.deepEqual(await history(db),deployedHistory); await assertSnapshot(db,before);
-    assert.equal(await assertCoursePublicationReady(url,'postgresql'),true);
+    const deployedHistory = await history(db); await contextOnlyUpgrades(url); assert.deepEqual(await history(db),deployedHistory); await assertSnapshot(db,before);
+    assert.equal(await readyWithInvitationSuccessor(db,url),true);
     await db.query(`INSERT INTO "CourseQuestion" (id,"courseId","authorId","requestId",title,body,"updatedAt")
       VALUES ('old-shape','course','learner','old-shape-request','Question','Old shape',CURRENT_TIMESTAMP)`);
     assert.equal((await db.query(`SELECT "contextContentId" FROM "CourseQuestion" WHERE id='old-shape'`)).rows[0].contextContentId,null);
     await assert.rejects((await shorterImageDeployer())(url),/history mismatch for 0027_course_qa_lesson_context\.sql/);
-    assert.equal(await assertCoursePublicationReady(url,'postgresql'),true);
+    assert.equal(await readyWithInvitationSuccessor(db,url),true);
   });
 });
 
 test('PostgreSQL pair check rejects both half-null insert/update forms while retaining scalar historical provenance', async () => {
   await withFixture(async (db,url) => {
-    await applyPostgresqlUpgrades(url);
+    await contextOnlyUpgrades(url);
     const insert = (id,publication,content) => db.query(`INSERT INTO "CourseQuestion" (id,"courseId","authorId","requestId",title,body,"updatedAt","contextPublicationId","contextContentId")
       VALUES ($1,'course','learner',$1,'Question','Body',CURRENT_TIMESTAMP,$2,$3)`,[id,publication,content]);
     for (const pair of [[null,'content'],['publication',null]]) await rejectCode(insert('invalid',...pair),'23514');
@@ -215,38 +225,41 @@ test('PostgreSQL real new-tail index collision rolls back columns/check/history 
   await withFixture(async (db,url) => {
     await db.query(`CREATE INDEX ${quote(contextIndex)} ON "User" (id)`);
     const before = await snapshot(db), oldIndexes = await indexes(db), oldFks = await foreignKeys(db), oldHistory = await history(db);
-    await rejectCode(applyPostgresqlUpgrades(url),'42P07');
+    await rejectCode(contextOnlyUpgrades(url),'42P07');
     await assertSnapshot(db,before); assert.deepEqual(await indexes(db),oldIndexes); assert.deepEqual(await foreignKeys(db),oldFks); assert.deepEqual(await history(db),oldHistory);
     assert.equal((await db.query(`SELECT COUNT(*)::int n FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='CourseQuestion' AND column_name IN ('contextPublicationId','contextContentId')`)).rows[0].n,0);
     assert.equal((await db.query(`SELECT COUNT(*)::int n FROM pg_constraint WHERE connamespace=current_schema()::regnamespace AND conname='CourseQuestion_lesson_context_pair_check'`)).rows[0].n,0);
-    await db.query(`DROP INDEX ${quote(contextIndex)}`); await applyPostgresqlUpgrades(url); await assertSnapshot(db,before);
-    assert.equal(await assertCoursePublicationReady(url,'postgresql'),true);
+    await db.query(`DROP INDEX ${quote(contextIndex)}`); await contextOnlyUpgrades(url); await assertSnapshot(db,before);
+    assert.equal(await readyWithInvitationSuccessor(db,url),true);
   });
 });
 
 test('PostgreSQL context readiness/deploy refuses missing, modified, gapped and unknown history plus missing scalar columns', async () => {
   await withFixture(async (db,url) => {
-    await applyPostgresqlUpgrades(url); const before = await history(db);
+    await contextOnlyUpgrades(url); const before = await history(db);
     for (const name of [tail,predecessor]) {
       const saved = before.find(row => row.name === name);
       await db.query('UPDATE "_app_schema_upgrades" SET checksum=$1 WHERE name=$2',['changed',name]);
       await assert.rejects(assertCoursePublicationReady(url,'postgresql'),/history is missing, divergent or has changed checksums/);
-      await assert.rejects(applyPostgresqlUpgrades(url),/history mismatch/);
+      await assert.rejects(contextOnlyUpgrades(url),/history mismatch/);
       await db.query('DELETE FROM "_app_schema_upgrades" WHERE name=$1',[name]);
       await assert.rejects(assertCoursePublicationReady(url,'postgresql'),/history is missing, divergent or has changed checksums/);
-      if (name === predecessor) await assert.rejects(applyPostgresqlUpgrades(url),/gap before 0027_course_qa_lesson_context\.sql/);
-      else await rejectCode(applyPostgresqlUpgrades(url),'42701');
+      if (name === predecessor) await assert.rejects(contextOnlyUpgrades(url),/gap before 0027_course_qa_lesson_context\.sql/);
+      else await rejectCode(contextOnlyUpgrades(url),'42701');
       await db.query('INSERT INTO "_app_schema_upgrades" (name,checksum,applied_at) VALUES ($1,$2,$3)',[saved.name,saved.checksum,saved.applied_at]);
     }
     await db.query(`INSERT INTO "_app_schema_upgrades" (name,checksum) VALUES ('0028_unreviewed_context.sql','unknown')`);
     await assert.rejects(assertCoursePublicationReady(url,'postgresql'),/history is missing, divergent or has changed checksums/);
-    await assert.rejects(applyPostgresqlUpgrades(url),/history mismatch/);
+    await assert.rejects(contextOnlyUpgrades(url),/history mismatch/);
     await db.query(`DELETE FROM "_app_schema_upgrades" WHERE name='0028_unreviewed_context.sql'`);
+    assert.deepEqual(await history(db),before);
+    assert.equal(await readyWithInvitationSuccessor(db,url),true);
+    const currentHistory = await history(db);
     for (const field of ['contextPublicationId','contextContentId']) {
       await db.query(`ALTER TABLE "CourseQuestion" RENAME COLUMN ${quote(field)} TO ${quote(`missing_${field}`)}`);
       try { await assert.rejects(assertCoursePublicationReady(url,'postgresql'),/lesson context schema is missing or incomplete/); }
       finally { await db.query(`ALTER TABLE "CourseQuestion" RENAME COLUMN ${quote(`missing_${field}`)} TO ${quote(field)}`); }
     }
-    assert.deepEqual(await history(db),before); assert.equal(await assertCoursePublicationReady(url,'postgresql'),true);
+    assert.deepEqual(await history(db),currentHistory); assert.equal(await readyWithInvitationSuccessor(db,url),true);
   });
 });

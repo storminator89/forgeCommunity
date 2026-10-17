@@ -13,7 +13,7 @@ import testDatabase from './space-mission-test-database.cjs';
 
 const sqliteNames = readdirSync(new URL('../prisma/sqlite-migrations/', import.meta.url))
   .filter(name => /^\d+_[\w-]+\.sql$/.test(name)).sort();
-assert.equal(sqliteNames.at(-1), '0028_course_qa_lesson_context.sql');
+assert.equal(sqliteNames.at(-1), '0029_space_mission_invitations.sql');
 const publicationIndex = sqliteNames.indexOf('0010_staged_course_publication.sql');
 assert.ok(publicationIndex >= 0);
 
@@ -139,8 +139,10 @@ test('SQLite migration still rolls back an injected DDL failure', () => {
   db.close();
 });
 
-test('SQLite readiness refuses missing, changed, gapped and divergent migration history through lesson Q&A context', async () => {
+test('SQLite readiness refuses missing, changed, gapped and divergent migration history through private mission invitations', async () => {
   for (const mutate of [
+    db => db.prepare(`DELETE FROM _app_migrations WHERE name='0029_space_mission_invitations.sql'`).run(),
+    db => db.prepare(`UPDATE _app_migrations SET checksum='changed' WHERE name='0029_space_mission_invitations.sql'`).run(),
     db => db.prepare(`DELETE FROM _app_migrations WHERE name='0028_course_qa_lesson_context.sql'`).run(),
     db => db.prepare(`UPDATE _app_migrations SET checksum='changed' WHERE name='0028_course_qa_lesson_context.sql'`).run(),
     db => db.prepare(`DELETE FROM _app_migrations WHERE name='0027_space_mission_bookmarks.sql'`).run(),
@@ -269,6 +271,8 @@ if (pgUrl) {
       assert.equal(await assertCoursePublicationReady(freshUrl.toString(), 'postgresql'), true);
       await db.query(`SET search_path TO "${fresh}"`);
       for (const [name, sql, file] of [
+        ['missing mission invitation tail', `DELETE FROM "_app_schema_upgrades" WHERE name='0028_space_mission_invitations.sql'`, '0028_space_mission_invitations.sql'],
+        ['tampered mission invitation tail', `UPDATE "_app_schema_upgrades" SET checksum='changed' WHERE name='0028_space_mission_invitations.sql'`, '0028_space_mission_invitations.sql'],
         ['missing Q&A context tail', `DELETE FROM "_app_schema_upgrades" WHERE name='0027_course_qa_lesson_context.sql'`, '0027_course_qa_lesson_context.sql'],
         ['tampered Q&A context tail', `UPDATE "_app_schema_upgrades" SET checksum='changed' WHERE name='0027_course_qa_lesson_context.sql'`, '0027_course_qa_lesson_context.sql'],
         ['missing mission bookmark tail', `DELETE FROM "_app_schema_upgrades" WHERE name='0026_space_mission_bookmarks.sql'`, '0026_space_mission_bookmarks.sql'],

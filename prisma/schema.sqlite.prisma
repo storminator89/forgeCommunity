@@ -24,6 +24,14 @@ enum SpaceMissionContributionKind {
   BUILD_ON
 }
 
+enum SpaceMissionInvitationState {
+  PENDING
+  ACCEPTED
+  DECLINED
+  REVOKED
+  EXPIRED
+}
+
 enum RewardEventType {
   COURSE_COMPLETED
 }
@@ -140,6 +148,11 @@ model User {
   spaceMissionContributions SpaceMissionContribution[]
   spaceMissionBookmarkSettings SpaceMissionBookmarkSetting[]
   spaceMissionBookmarkAccess SpaceMissionBookmarkAccess?
+  spaceMissionInvitationSetting SpaceMissionInvitationSetting?
+  spaceMissionInvitationAccess SpaceMissionInvitationAccess[]
+  spaceMissionInvitationRequests SpaceMissionInvitationRequest[]
+  receivedSpaceMissionInvitations SpaceMissionInvitation[] @relation("SpaceMissionInvitationRecipient")
+  sentSpaceMissionInvitations SpaceMissionInvitation[] @relation("SpaceMissionInvitationSender")
   likePosts          LikePost[]
   likeComments       LikeComment[]
   likeProjects       LikeProject[]
@@ -368,6 +381,11 @@ model SpaceMission {
   participations SpaceMissionParticipation[]
   contributions SpaceMissionContribution[]
   bookmarkSettings SpaceMissionBookmarkSetting[]
+  // Lifetime non-personal quota; never decrement when account-bound rows vanish.
+  invitationAttemptCount Int @default(0)
+  invitationAccess SpaceMissionInvitationAccess[]
+  invitationRequests SpaceMissionInvitationRequest[]
+  invitations SpaceMissionInvitation[]
 
   @@index([spaceId, createdAt, id])
   @@unique([spaceId, requestId])
@@ -393,6 +411,68 @@ model SpaceMissionBookmarkAccess {
   userId String @id
   epoch  Int
   user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Own default-off receiving consent and live-account revocation fence. Missing
+// rows mean false/zero; authorized reads do not materialize settings.
+model SpaceMissionInvitationSetting {
+  userId       String @id
+  enabled      Boolean @default(false)
+  revision     Int @default(0)
+  accountEpoch Int @default(0)
+  user         User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Mission-scoped authority fence. Close purges it; rejoin never resets it.
+model SpaceMissionInvitationAccess {
+  missionId String
+  userId    String
+  epoch     Int @default(0)
+  mission   SpaceMission @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([missionId, userId])
+  @@index([userId])
+}
+
+// Live-sender bounded replay receipt. No target, outcome or timestamp survives.
+model SpaceMissionInvitationRequest {
+  missionId     String
+  senderId      String
+  requestId     String
+  payloadDigest String
+  mission       SpaceMission @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  sender        User @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@id([missionId, senderId, requestId])
+  @@index([senderId, missionId])
+}
+
+// Only delivered invitations. Terminal rows retain only recipient-private
+// repeat-block/decision identity; provider CHECKs require all source data gone.
+model SpaceMissionInvitation {
+  id                       String @id @default(cuid())
+  missionId                String
+  recipientId              String
+  senderId                 String?
+  state                    SpaceMissionInvitationState @default(PENDING)
+  revision                 Int @default(1)
+  createdAt                DateTime?
+  expiresAt                DateTime?
+  senderEpoch              Int?
+  senderAccessEpoch        Int?
+  senderAccountEpoch       Int?
+  recipientAccessEpoch     Int?
+  recipientAccountEpoch    Int?
+  recipientSettingRevision Int?
+  recipientEpoch           Int?
+  mission                  SpaceMission @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  recipient                User @relation("SpaceMissionInvitationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  sender                   User? @relation("SpaceMissionInvitationSender", fields: [senderId], references: [id], onDelete: SetNull)
+
+  @@unique([missionId, recipientId])
+  @@index([recipientId, state, expiresAt, createdAt, id], map: "SpaceMissionInvitation_recipient_pending_idx")
+  @@index([senderId, state])
 }
 
 // A new explicit self-join advances the epoch; old posts can never be revived

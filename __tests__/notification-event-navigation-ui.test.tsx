@@ -78,3 +78,24 @@ test('an old account pending open never supplies a destination after an account 
   expect(opened).toHaveBeenCalledWith(null);
   expect(screen.getByTestId('notices')).toBeEmptyDOMElement();
 });
+
+
+const missionInvitationHref = '/community/spaces/space_1/missions/mission-2?invitation=invite_3#mission-invitation';
+test('opens only the freshly server-resolved private mission invitation and never joins from notification reading', async () => {
+  mockDestination(missionInvitationHref); render(tree()); await screen.findByText('Ein Platz ist frei geworden.:false'); fireEvent.click(screen.getByRole('button', { name: 'Event ansehen' })); await waitFor(() => expect(opened).toHaveBeenCalledWith(missionInvitationHref));
+  const writes = jest.mocked(fetch).mock.calls.filter(([, init]) => init?.method && init.method !== 'GET'); expect(writes).toHaveLength(1); expect(writes[0][0]).toBe('/api/notifications/promotion/open');
+});
+test.each([
+  'https://evil.example' + missionInvitationHref, '//evil.example' + missionInvitationHref,
+  missionInvitationHref.replace('?invitation=', '?other=1&invitation='), missionInvitationHref.replace('#mission-invitation', '&other=1#mission-invitation'), missionInvitationHref.replace('#mission-invitation', '&invitation=other#mission-invitation'),
+  missionInvitationHref.replace('#mission-invitation', '#mission-contributions'), missionInvitationHref.replace('#mission-invitation', '#mission-invitation#extra'), missionInvitationHref + '\n', missionInvitationHref + '\r', missionInvitationHref + '\u2028', missionInvitationHref + '\u2029', missionInvitationHref + ' ',
+  missionInvitationHref.replace('space_1', '%73pace_1'), missionInvitationHref.replace('mission-2', '../mission-2'), missionInvitationHref.replace('invite_3', '%69nvite_3'), missionInvitationHref.replace('invite_3', ''),
+  missionInvitationHref.replace('space_1', 's'.repeat(101)), missionInvitationHref.replace('mission-2', 'm'.repeat(101)), missionInvitationHref.replace('invite_3', 'i'.repeat(101)),
+  '/community/spaces/space/missions/mission#mission-invitation', '/community/spaces/space/missions/mission?invitation=invite',
+])('rejects malformed private mission invitation destinations without broadening navigation: %s', async href => {
+  mockDestination(href); render(tree()); await screen.findByText('Ein Platz ist frei geworden.:false'); fireEvent.click(screen.getByRole('button', { name: 'Event ansehen' })); await waitFor(() => expect(opened).toHaveBeenCalledWith(null)); expect(screen.getByTestId('notices')).toHaveTextContent('Ein Platz ist frei geworden.:false');
+});
+test('rejects a late invitation-open response across account A→B→A without supplying old private navigation', async () => {
+  let finish!: (value: Response) => void; jest.mocked(fetch).mockImplementation(url => String(url).endsWith('/open') ? new Promise(resolve => { finish = resolve; }) : Promise.resolve(response([notice])));
+  const view = render(tree()); await screen.findByText('Ein Platz ist frei geworden.:false'); fireEvent.click(screen.getByRole('button', { name: 'Event ansehen' })); setUser('bob'); jest.mocked(fetch).mockResolvedValue(response([])); view.rerender(tree()); setUser('alice'); view.rerender(tree()); await act(async () => finish(response({ href: missionInvitationHref }))); expect(opened).toHaveBeenCalledWith(null); expect(screen.getByTestId('notices')).toBeEmptyDOMElement();
+});

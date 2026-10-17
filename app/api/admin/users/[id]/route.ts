@@ -10,6 +10,9 @@ import { deleteCourseDependencies } from '@/lib/server/course-deletion'
 import { decrementSkillEndorsementsForDeletedUser } from '@/lib/server/skill-endorsements'
 import { reconcileUserRewards } from '@/lib/server/rewards'
 import { readAsAdmin } from '@/lib/server/admin-read'
+import { SpaceApiError } from '@/lib/server/space-api'
+import { isUserEmailConflict } from '@/lib/server/database-conflicts'
+import { invitationTransaction, revokeAccountMissionInvitations, eraseAccountMissionInvitations } from '@/lib/server/space-mission-invitation-state'
 
 class LastAdminError extends Error {}
 class MissingUserError extends Error {}
@@ -28,7 +31,8 @@ function mutationError(error: unknown): NextResponse | null {
   if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2034') {
     return NextResponse.json({ error: 'Gleichzeitige Änderung. Bitte erneut versuchen.' }, { status: 409 })
   }
-  if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002') {
+  if (error instanceof SpaceApiError) return NextResponse.json({ error: error.message }, { status: error.status })
+  if (isUserEmailConflict(error)) {
     return NextResponse.json({ error: 'Diese E-Mail-Adresse wird bereits verwendet' }, { status: 409 })
   }
   return requestErrorResponse(error)
@@ -240,11 +244,12 @@ export async function PUT(
     }
 
     // Aktualisiere den Benutzer und seine Einstellungen
-    const updatedUser = await prisma.$transaction(async tx => {
+    const updatedUser = await invitationTransaction(async tx => {
       const actingAdmin = await tx.user.findUnique({ where: { id: session.user.id }, select: { role: true } })
       if (actingAdmin?.role !== 'ADMIN') throw new LastAdminError()
       const target = await tx.user.findUnique({ where: { id: params.id }, select: { role: true } })
-      if (target?.role === 'ADMIN' && data.role && data.role !== 'ADMIN') {
+      if (!target) throw new MissingUserError()
+      if (target.role === 'ADMIN' && data.role && data.role !== 'ADMIN') {
         const adminCount = await tx.user.count({ where: { role: 'ADMIN' } })
         if (adminCount <= 1) throw new LastAdminError()
       }
@@ -268,13 +273,15 @@ export async function PUT(
       })
       // Role changes out of USER revoke consent. Returning to USER requires a
       // fresh self-join; old epochs and capacity slots cannot reactivate.
-      if (target?.role === 'USER' && updated.role !== 'USER') {
+      if (target.role === 'USER' && updated.role !== 'USER') {
+        await revokeAccountMissionInvitations(params.id, tx)
         await tx.spaceMissionParticipation.updateMany({ where: { userId: params.id, optedOutAt: null },
           data: { optedOutAt: new Date() } })
       }
       if (target?.role !== updated.role) await reconcileUserRewards(tx, params.id)
       return updated
-    }, { isolationLevel: 'Serializable' })
+    })
+
 
     // Entferne sensitive Daten
     const {
@@ -336,7 +343,7 @@ export async function DELETE(
     // Every retry must re-read the owner and their certificates before any
     // destructive write. A concurrent issuance can then abort serialization
     // and the next attempt will see the newly issued proof.
-    const deleteUser = () => prisma.$transaction(async (prisma) => {
+    await invitationTransaction(async (prisma) => {
       const actingAdmin = await prisma.user.findUnique({ where: { id: session.user.id }, select: { role: true } })
       if (actingAdmin?.role !== 'ADMIN') throw new LastAdminError()
       const target = await prisma.user.findUnique({ where: { id: params.id }, select: { role: true } })
@@ -355,6 +362,8 @@ export async function DELETE(
         })
         if (otherLearnerCertificate) throw new OtherLearnersHaveCertificatesError()
       }
+
+      await eraseAccountMissionInvitations(params.id, prisma)
 
       // Lösche Benutzereinstellungen
       await prisma.userSettings.deleteMany({
@@ -484,16 +493,7 @@ export async function DELETE(
       await prisma.user.delete({
         where: { id: params.id }
       })
-    }, { isolationLevel: 'Serializable' })
-
-    for (let attempt = 0; attempt < 4; attempt++) {
-      try {
-        await deleteUser()
-        break
-      } catch (error) {
-        if (attempt === 3 || typeof error !== 'object' || error === null || !('code' in error) || error.code !== 'P2034') throw error
-      }
-    }
+    })
 
     return NextResponse.json({
       success: true,

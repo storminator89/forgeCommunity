@@ -101,6 +101,15 @@ function assertSnapshot(db, before) {
   }
 }
 const history = db => db.prepare('SELECT * FROM _app_migrations ORDER BY name').all();
+async function readyWithInvitationSuccessor(f) {
+  const successor = '0029_space_mission_invitations.sql';
+  assert.ok(!history(f.db).some(row => row.name === successor));
+  await assert.rejects(assertCoursePublicationReady(f.url,'sqlite'),/history is missing, divergent or has changed checksums/);
+  writeFileSync(join(f.migrations,successor),readFileSync(new URL(successor,directory),'utf8'));
+  f.deploy();
+  return assertCoursePublicationReady(f.url,'sqlite');
+}
+
 const indexes = db => db.prepare("SELECT name,tbl_name,sql FROM sqlite_master WHERE type='index' ORDER BY name").all();
 const foreignKeys = db => Object.fromEntries(tables(db).map(name => [name, db.prepare(`PRAGMA foreign_key_list(${quote(name)})`).all()]));
 const schema = db => db.prepare("SELECT type,name,tbl_name,sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' ORDER BY type,name").all();
@@ -119,7 +128,7 @@ test('populated exact SQLite predecessor preserves all old bytes, chosen solutio
     for (const row of db.prepare('SELECT "contextPublicationId","contextContentId" FROM "CourseQuestion"').all())
       assert.deepEqual({ ...row },{ contextPublicationId:null, contextContentId:null });
     const deployedHistory = history(db); f.deploy(); assert.deepEqual(history(db),deployedHistory); assertSnapshot(db,rows);
-    assert.equal(await assertCoursePublicationReady(f.url,'sqlite'),true);
+    assert.equal(await readyWithInvitationSuccessor(f),true);
     // Compatible rollback: old-column reads/writes continue with the longer schema retained.
     db.exec(`INSERT INTO "CourseQuestion" (id,"courseId","authorId","requestId",title,body,"updatedAt")
       VALUES ('old-image-write','course','learner','request-old-image','Course question','Old shape still works',CURRENT_TIMESTAMP)`);
@@ -183,6 +192,6 @@ test('SQLite lesson-context deploy refuses changed/missing tail, predecessor gap
     await assert.rejects(assertCoursePublicationReady(f.url,'sqlite'),/history is missing, divergent or has changed checksums/);
     assert.throws(f.deploy,/not present in the image/);
     db.exec(`DELETE FROM _app_migrations WHERE name='0029_unreviewed_context.sql'`);
-    assert.deepEqual(history(db),before); assert.equal(await assertCoursePublicationReady(f.url,'sqlite'),true);
+    assert.deepEqual(history(db),before); assert.equal(await readyWithInvitationSuccessor(f),true);
   } finally { db.close(); }
 });

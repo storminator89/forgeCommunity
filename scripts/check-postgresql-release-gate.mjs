@@ -48,6 +48,7 @@ const reviewedUpgradeNames = [
   '0025_space_mission_week.sql',
   '0026_space_mission_bookmarks.sql',
   '0027_course_qa_lesson_context.sql',
+  '0028_space_mission_invitations.sql',
 ];
 // A release image must carry the exact reviewed sequence, including the tail.
 assert.deepEqual(upgradeNames, reviewedUpgradeNames);

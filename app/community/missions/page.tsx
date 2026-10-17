@@ -6,6 +6,8 @@ import { Suspense, useCallback, useEffect, useId, useRef, useState } from 'react
 import Link from 'next/link';
 import { ArrowUpRight, CalendarDays, Lightbulb, LockKeyhole, RefreshCw } from 'lucide-react';
 import { FriendlyMotionToggle } from '@/components/community/FriendlyMotion';
+import { useInvitationAccount } from '@/components/spaces/mission-invitation-ui';
+import { MissionInvitationInbox } from '@/components/spaces/MissionInvitationInbox';
 import { MissionIllustration } from '@/components/spaces/MissionVisuals';
 import styles from '@/components/spaces/friendly-missions.module.css';
 import { useSession } from 'next-auth/react';
@@ -27,13 +29,14 @@ function MissionOverviewSession() {
   const params = useSearchParams();
   const view = params.get('view') === 'saved' ? 'saved' : 'all';
   const { data, status } = useSession();
+  useInvitationAccount(status === 'authenticated' ? data?.user?.id ?? null : status === 'unauthenticated' ? null : undefined);
   if (status === 'loading') return <SpaceShell><h1 className="sr-only">Space-Missionen</h1><PageState kind="loading" title="Space-Missionen werden geladen" /></SpaceShell>;
   if (status !== 'authenticated' || !data?.user?.id) return <SpaceShell><h1 className="sr-only">Space-Missionen</h1><PageState kind="error" title="Anmeldung erforderlich" description="Melde dich an, um Missionen deiner privaten Spaces zu sehen." action={<Button asChild variant="outline"><Link href="/login?callbackUrl=%2Fcommunity%2Fmissions">Zur Anmeldung</Link></Button>} /></SpaceShell>;
   // Account and role transitions discard every previous response and visible row.
-  return <MissionOverview key={JSON.stringify([data.user.id, data.user.role ?? '', view])} view={view} />;
+  return <MissionOverview key={JSON.stringify([data.user.id, data.user.role ?? '', view])} view={view} viewerId={data.user.id} role={data.user.role ?? undefined} />;
 }
 
-function MissionOverview({ view }: { view: 'all' | 'saved' }) {
+function MissionOverview({ view, viewerId, role }: { view: 'all' | 'saved'; viewerId: string; role?: string }) {
   const [items, setItems] = useState<SpaceMissionOverview[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -148,6 +151,7 @@ function MissionOverview({ view }: { view: 'all' | 'saved' }) {
       <p className="text-xs text-muted-foreground">Entdecken & freiwillig mitmachen</p>
       <div className={styles.utility}><Button type="button" variant="ghost" size="icon" aria-label="Übersicht aktualisieren" title="Übersicht aktualisieren" onClick={() => void load(depthRef.current)}><RefreshCw size={18} aria-hidden="true" /></Button><FriendlyMotionToggle /></div>
     </div>
+    <MissionInvitationInbox viewerId={viewerId} role={role} />
     <nav aria-label="Missionen filtern" className="mt-4 flex flex-wrap gap-2">
       <Button asChild size="sm" variant={view === 'all' ? 'default' : 'outline'}><Link prefetch={false} href="/community/missions" aria-current={view === 'all' ? 'page' : undefined}>Alle</Link></Button>
       <Button asChild size="sm" variant={view === 'saved' ? 'default' : 'outline'}><Link prefetch={false} href="/community/missions?view=saved" aria-current={view === 'saved' ? 'page' : undefined}>Gemerkte</Link></Button>
