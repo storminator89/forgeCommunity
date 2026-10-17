@@ -2,6 +2,7 @@ import 'server-only';
 
 import { Prisma } from '@/generated/prisma/client';
 import { reportInvitationFailure } from '@/lib/server/space-mission-invitation-errors';
+import { listD1MissionInvitations, readD1InvitationPreference } from '@/lib/server/d1-space-mission-invitation-reads';
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { DecideMissionInvitation, MissionInvitationAcknowledgment, MissionInvitationCandidates, MissionInvitationDetail,
   MissionInvitationList, PendingMissionInvitation, SendMissionInvitation } from '@/types/space-mission-invitations';
@@ -15,7 +16,6 @@ const INVITATION_LIFETIME = 7 * 24 * 60 * 60 * 1000;
 const SENDER_LIMIT = 4;
 const MISSION_LIMIT = 20;
 const PENDING_LIMIT = 10;
-const PAGE_SIZE = 20;
 const personSelect = { id: true, name: true, image: true } as const;
 const invalid = () => new SpaceApiError('Ungültige Einladungsdaten', 400);
 const closed = () => new SpaceApiError('Mission ist geschlossen', 409, 'MISSION_CLOSED');
@@ -100,11 +100,7 @@ function tokenMatches(tuple: Tuple, token: string, now: Date, signingSecret: str
 }
 
 export async function readInvitationPreference(userId: string) {
-  return spaceTransaction(async tx => {
-    await liveUser(userId, tx);
-    const { enabled, revision } = await invitationSetting(userId, tx);
-    return { enabled, revision };
-  });
+  return readD1InvitationPreference(userId);
 }
 export async function setInvitationPreference(userId: string, input: ReturnType<typeof parseInvitationPreference>) {
   return invitationTransaction(async tx => {
@@ -267,47 +263,8 @@ function ownPendingWhere(userId: string): Prisma.SpaceMissionInvitationWhereInpu
   return { recipientId: userId, state: 'PENDING', recipient: { role: 'USER' },
     mission: { closedAt: null, space: { visibility: 'PRIVATE', members: { some: { userId } } } } };
 }
-function cursorProof(id: string, createdAt: string, userId: string, setting: Awaited<ReturnType<typeof invitationSetting>>) {
-  return createHmac('sha256', secret()).update(JSON.stringify(['own-mission-invitations/v1', userId,
-    setting.accountEpoch, setting.revision, id, createdAt])).digest();
-}
-function readInvitationCursor(request: Request, userId: string, setting: Awaited<ReturnType<typeof invitationSetting>>) {
-  const params = new URL(request.url).searchParams;
-  if ([...params.keys()].some(key => key !== 'cursor') || params.getAll('cursor').length > 1) throw invalid();
-  const raw = params.get('cursor');
-  if (raw === null) return null;
-  try {
-    if (!raw || raw.length > 700 || !/^[A-Za-z0-9_-]+$/.test(raw)) throw new Error();
-    const bytes = Buffer.from(raw, 'base64url');
-    if (bytes.toString('base64url') !== raw) throw new Error();
-    const value = JSON.parse(bytes.toString());
-    exact(value, ['v', 'kind', 'id', 'createdAt', 'proof']);
-    if (value.v !== 1 || value.kind !== 'own-mission-invitations' ||
-        typeof value.id !== 'string' || !SPACE_ID_RE.test(value.id) || typeof value.createdAt !== 'string' ||
-        new Date(value.createdAt).toISOString() !== value.createdAt || !canonicalBytes(value.proof, 32)) throw new Error();
-    if (!timingSafeEqual(Buffer.from(value.proof, 'base64url'), cursorProof(value.id, value.createdAt, userId, setting))) throw new Error();
-    return { id: value.id, createdAt: new Date(value.createdAt) };
-  } catch (error) {
-    if (error instanceof SpaceApiError && error.status === 503) throw error;
-    throw new SpaceApiError('Ungültiger Cursor', 400);
-  }
-}
 export async function listMissionInvitations(userId: string, request: Request): Promise<MissionInvitationList> {
-  return spaceTransaction(async tx => {
-    await liveUser(userId, tx);
-    const setting = await invitationSetting(userId, tx);
-    const cursor = readInvitationCursor(request, userId, setting);
-    if (!setting.enabled) return { items: [], nextCursor: null };
-    const rows = await tx.spaceMissionInvitation.findMany({ where: { ...ownPendingWhere(userId), expiresAt: { gt: new Date() },
-      ...(cursor ? { OR: [{ createdAt: { lt: cursor.createdAt } }, { createdAt: cursor.createdAt, id: { lt: cursor.id } }] } : {}) },
-      include: pendingInclude, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
-    const entries = (await pendingSnapshot(rows, new Date(), tx)).filter(entry => entry.valid);
-    const page = entries.slice(0, PAGE_SIZE);
-    const last = page.at(-1)?.row;
-    return { items: page.map(projectPending), nextCursor: entries.length > PAGE_SIZE && last ? Buffer.from(JSON.stringify({ v: 1,
-      kind: 'own-mission-invitations', id: last.id, createdAt: last.createdAt!.toISOString(),
-      proof: cursorProof(last.id, last.createdAt!.toISOString(), userId, setting).toString('base64url') })).toString('base64url') : null };
-  });
+  return listD1MissionInvitations(userId, request);
 }
 export async function readMissionInvitation(spaceId: string, missionId: string, invitationId: string, userId: string): Promise<MissionInvitationDetail> {
   return spaceTransaction(async tx => {

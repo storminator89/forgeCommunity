@@ -10,7 +10,7 @@ Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
 runtime data. Its frozen Sites source is
-`c497b003a5db8adccc148ad552e7a9d2be3c8a7c`. It is experimental and does not
+`7b133530bec600289ea86655909c216d92f7387f`. It is experimental and does not
 claim feature parity with main.
 
 ## Requirements and setup
@@ -71,7 +71,7 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The current Version 18 source includes these bounded ports. Live QA is ongoing;
+The current Version 19 source includes these bounded ports. Live QA is ongoing;
 source implementation and publication do not establish complete runtime or
 all-page visual coverage.
 
@@ -92,6 +92,8 @@ all-page visual coverage.
 - Post/comment text formatting, multiline content and composer presentation
 - Protected Space/mission reads, privacy-scoped mission overview and personal
   learning-pathway reads
+- Own mission-invitation preference and inbox GET reads using D1, without
+  materializing missing settings or changing invitation mutation/signing setup
 - Public publication/content-ID preconditions for learner writes and
   foreground-aware polling for chat, notifications and selected directories
 - Centrally loaded notification CSS, replacing nested runtime CSS imports
@@ -133,9 +135,12 @@ fixed-class diagnostics without provider messages/data and an equivalent
 compound-query grouping correction. Version 17 passed its production source
 validation/build; basic Q&A list and revalidation reads returned 200 on the
 published Site, without establishing full Q&A coverage. Version 18 passed
-production typechecking and its build; its live chat-image/logo retest is
-still in progress. Browser compatibility, codec load/memory behavior and all
-other image workflows are not established by the build. No new local
+production typechecking and its build. The approved single-logo chat-image
+flow passed on the published Version 18 Site; this does not establish general
+browser compatibility, codec load/memory behavior or other image workflows.
+Version 19 passed production source validation and its build; live preference
+and inbox-read checking is still in progress. Invitation mutations remain
+unported, and existing cursor-signing requirements are unchanged. No new local
 test suite or GitHub CI run is
 part of this work. The inherited standard pipeline is unchanged: pushes run
 only for main/master, and no pull request is opened for this branch. Recheck
