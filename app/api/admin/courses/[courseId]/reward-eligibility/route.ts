@@ -2,12 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/sites-auth/server';
 import { authOptions } from '@/lib/auth';
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
-import { contentTransaction } from '@/app/api/courses/[courseId]/contents/content-mutations';
-import { courseApprovalFingerprint, courseHasRewardableQuiz, reconcileCourseRewards } from '@/lib/server/rewards';
-
-class ApprovalError extends Error {
-  constructor(message: string, public status: number) { super(message); }
-}
+import { CoursePathError } from '@/lib/server/course-path';
+import { updateD1CourseRewardEligibility } from '@/lib/server/d1-course-reward-eligibility';
 
 export async function PATCH(request: NextRequest, props: { params: Promise<{ courseId: string }> }) {
   const session = await getServerSession(authOptions);
@@ -20,23 +16,10 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ cou
       return NextResponse.json({ error: 'Invalid eligibility' }, { status: 400 });
     }
     const { courseId } = await props.params;
-    const result = await contentTransaction(async tx => {
-      const actor = await tx.user.findUnique({ where: { id: session.user.id }, select: { role: true } });
-      if (actor?.role !== 'ADMIN') throw new ApprovalError('Forbidden', 403);
-      const course = await tx.course.findUnique({ where: { id: courseId }, select: { id: true, activePublicationId: true } });
-      if (!course) throw new ApprovalError('Course not found', 404);
-      if (body.eligible && !course.activePublicationId) throw new ApprovalError('A published course is required for reward approval', 409);
-      if (body.eligible && !(await courseHasRewardableQuiz(tx, courseId))) {
-        throw new ApprovalError('A published valid quiz leaf is required for reward approval', 409);
-      }
-      const rewardApprovalRevision = body.eligible ? await courseApprovalFingerprint(tx, courseId) : null;
-      await tx.course.update({ where: { id: courseId }, data: { rewardEligible: body.eligible as boolean, rewardApprovalRevision } });
-      await reconcileCourseRewards(tx, courseId);
-      return { rewardEligible: body.eligible };
-    });
+    const result = await updateD1CourseRewardEligibility({ id: session.user.id, role: session.user.role }, courseId, body.eligible);
     return NextResponse.json(result, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
-    if (error instanceof ApprovalError) return NextResponse.json({ error: error.message }, { status: error.status });
+    if (error instanceof CoursePathError) return NextResponse.json({ error: error.message }, { status: error.status });
     const inputError = requestErrorResponse(error);
     if (inputError) return inputError;
     console.error('Failed to update reward eligibility', error);

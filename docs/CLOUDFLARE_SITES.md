@@ -9,9 +9,10 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up the published Version 25 source
-`cdb9761a20e602d77e52f594d57d36729abbe821`. After explicit publication
-approval, Version 25 deployed successfully on 17 October 2026 at 18:39:00 UTC.
+runtime data. This GitHub snapshot backs up the published Version 26 source
+`df292bab8a9e9a5f474286599a6af35152135ec6`. Version 26 deployed successfully on
+17 October 2026 at 20:02:01 UTC; its admin reward-approval live acceptance
+is still pending.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -72,9 +73,9 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 25 source includes the existing bounded ports below,
+The published Version 26 source includes the existing bounded ports below,
 inherited from Version 24, plus the community progress UI described separately
-below. Its bounded desktop live check does not establish complete runtime or
+below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
 - D1-backed private course creation and draft editing, authoring-list/detail
@@ -102,6 +103,9 @@ all-page visual coverage.
 - Journey waiting-for-grade projection for own valid, unlocked assignment
   leaves whose latest current-revision submission has no decisions; this
   status does not grant completion and its published acceptance remains pending
+- Native D1 admin course reward-approval/withdrawal with session and stored
+  ADMIN checks plus atomic approval and ledger/history/badge/pathway
+  reconciliation; published runtime approval acceptance remains pending
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -210,7 +214,7 @@ configuration, environment, host, or access setup.
 Version 25 source review, production typechecking/build, and static artifact
 checks passed. The exact saved source was published after explicit approval;
 deployment succeeded on 17 October 2026 at 18:39:00 UTC. This documentation
-update changes no application source or public media bytes.
+update changed no application source or public media bytes.
 
 The bounded published desktop check between 18:39 and 18:41 UTC used a
 1180-by-757 viewport. The private card appeared above the community feed and
@@ -224,6 +228,24 @@ This check does not establish mobile or reduced-motion behavior, offsetting
 reward-history cases, account-switch isolation, or error-path behavior. Those
 live scenarios remain unverified; source review and the build are not substitutes
 for their runtime acceptance.
+
+## Version 26 admin reward-approval port
+
+Version 26 changes only the existing admin reward-eligibility PATCH and a
+dedicated native D1 helper. It preserves session and stored ADMIN checks,
+requires an exact publication/content/previous-approval snapshot, and performs
+the approval update plus existing publication-mode reward, ledger, history,
+badge and pathway reconciliation within one native atomic batch. Changed-state
+retries reauthorize; unexplained unchanged failures remain errors. Withdrawal
+remains available without a valid publication. No new client fields or scoring
+rules are introduced.
+
+Source review, production typechecking/build, and static artifact checks passed.
+Deployment succeeded on 17 October 2026 at 20:02:01 UTC; PUBLIC visibility and
+environment revision 2 are unchanged. The published admin approval/write and
+readback check is still pending, so no Version 26 runtime success is claimed.
+No secrets, active hosting identity, runtime database, Storage contents or
+private QA artifacts are included in this source backup.
 
 ## Keeping the branches separate
 
