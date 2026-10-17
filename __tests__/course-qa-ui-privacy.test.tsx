@@ -300,7 +300,7 @@ test('changing the list filter rechecks and retains the selected authorized disc
   fireEvent.click(await screen.findByRole('button', { name: new RegExp(selected.title) }))
   await screen.findByRole('heading', { level: 2, name: selected.title })
   const initialReads = detailReads
-  fireEvent.click(screen.getByRole('button', { name: 'Offen', exact: true }))
+  fireEvent.click(screen.getByRole('button', { name: /^Offen$/ }))
   await screen.findByRole('heading', { level: 2, name: selected.title })
   await waitFor(() => expect(detailReads).toBeGreaterThan(initialReads))
   expect(screen.getByRole('button', { name: 'Frage ausblenden' })).toBeInTheDocument()
