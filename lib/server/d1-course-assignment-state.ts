@@ -213,6 +213,20 @@ const privateCourseSnapshotSql = `WITH viewer AS (SELECT id, name, email, role, 
       WHERE s.userId = ?1 AND s.attemptNumber = (SELECT MAX(newer.attemptNumber) FROM AssignmentSubmission newer
         WHERE newer.userId = s.userId AND newer.contentId = s.contentId AND newer.revision = s.revision)
       AND g.action = 'GRADED' AND g.score >= s.passingScore ORDER BY s.contentId))),
+    'assignmentPending', json((SELECT json_group_array(json_object('contentId', contentId)) FROM (
+      SELECT x.id AS contentId FROM CourseContent x JOIN authorized c ON c.id = x.courseId
+      JOIN Enrollment e ON e.userId = ?1 AND e.courseId = c.id
+      JOIN json_each(?4) m ON json_extract(m.value, '$.id') = x.id
+      WHERE c.activePublicationId IS NOT NULL AND x.archivedAt IS NULL AND x.type = 'ASSIGNMENT'
+        AND NOT EXISTS (SELECT 1 FROM CourseContent child WHERE child.parentId = x.id AND child.archivedAt IS NULL)
+        AND EXISTS (SELECT 1 FROM AssignmentSubmission s
+          WHERE s.userId = ?1 AND s.courseId = c.id AND s.contentId = x.id
+            AND s.revision = json_extract(m.value, '$.revision')
+            AND s.attemptNumber = (SELECT MAX(newer.attemptNumber) FROM AssignmentSubmission newer
+              WHERE newer.userId = s.userId AND newer.courseId = s.courseId
+                AND newer.contentId = s.contentId AND newer.revision = s.revision)
+            AND NOT EXISTS (SELECT 1 FROM AssignmentGradeDecision g WHERE g.submissionId = s.id))
+      ORDER BY x.id))),
     'quizPasses', json((SELECT json_group_array(json_object('contentId', contentId, 'revision', revision)) FROM (
       SELECT DISTINCT a.contentId, a.revision FROM QuizAttempt a JOIN authorized c ON c.id = a.courseId
       JOIN json_each(?4) m ON json_extract(m.value, '$.id') = a.contentId AND json_extract(m.value, '$.revision') = a.revision
@@ -299,7 +313,7 @@ const boundedCourseSnapshotSql = `WITH
       + COALESCE(b.targetQuizBytes, 0) + b.evidenceBytes + b.recentFailureBytes)
       + COALESCE((SELECT length(CAST(json_quote(p.payload) AS BLOB)) FROM Course c
         JOIN CoursePublication p ON p.id = c.activePublicationId WHERE c.id = ?2), 0)
-      + 2 * (SELECT COALESCE(SUM(length(CAST(json_quote(x.id) AS BLOB))), 0)
+      + 3 * (SELECT COALESCE(SUM(length(CAST(json_quote(x.id) AS BLOB))), 0)
         FROM CourseContent x WHERE x.courseId = ?2 AND x.archivedAt IS NULL)
       + (SELECT COALESCE(SUM(length(CAST(json_object('id', x.id, 'courseId', x.courseId, 'parentId', x.parentId,
           'title', x.title, 'type', x.type, 'content', x.content, 'order', x."order", 'createdAt', x.createdAt, 'updatedAt', x.updatedAt) AS BLOB))), 0)

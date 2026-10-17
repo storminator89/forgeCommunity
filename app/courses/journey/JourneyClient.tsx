@@ -19,7 +19,7 @@ import { SparkStaticFigure } from '@/components/spark-entry';
 import { sparkVisibilitySnapshot as mascotSnapshot, useSparkVisibility } from '@/hooks/useSparkVisibility';
 import { eligibleJourneyCourses, projectJourney, type JourneyContent, type JourneyCourse, type JourneyLeaf } from './journey-progress';
 
-type Progress = { completedContentIds: string[]; complete: boolean; canTrack: boolean; publicationId: string | null };
+type Progress = { completedContentIds: string[]; awaitingGradeContentIds: string[]; complete: boolean; canTrack: boolean; publicationId: string | null };
 type Detail = { kind: 'idle' | 'loading' | 'error' } | { kind: 'ready'; courseId: string; contents: JourneyContent[]; progress: Progress };
 
 const motionPreferenceKey = 'forge-journey-motion-off';
@@ -181,8 +181,9 @@ function ScopedJourney() {
   const retryDetail = () => { detailSequence.current++; setCelebration(null); setDetail({ kind: 'loading' }); setDetailRetry(value => value + 1); };
 
   const selectedCourse = courses?.find(course => course.id === selectedId);
-  const projection = detail.kind === 'ready' && detail.courseId === selectedId ? projectJourney(detail.contents, detail.progress.completedContentIds) : null;
+  const projection = detail.kind === 'ready' && detail.courseId === selectedId ? projectJourney(detail.contents, detail.progress.completedContentIds, detail.progress.awaitingGradeContentIds) : null;
   const next = projection?.next;
+  const awaiting = projection?.leaves.find(leaf => leaf.awaitingGrade);
   const complete = detail.kind === 'ready' && detail.progress.complete;
   const readerHref = selectedId ? `/courses/${encodeURIComponent(selectedId)}/contents` : '/courses';
 
@@ -218,12 +219,13 @@ function ScopedJourney() {
                 <div className="min-w-0 flex-1">
                   {next && !complete ? <><p className="flex items-center gap-2 text-xs font-medium text-muted-foreground"><JourneyMark className="size-5 shrink-0 text-primary" />Als Nächstes möglich</p><h3 className="mt-2 break-words text-lg font-semibold leading-snug">{next.title}</h3><p className="mt-1 text-sm text-muted-foreground">{contentLabel(next.type)}</p></>
                     : complete ? <p className="text-sm">Dein Kursabschluss ist aktuell bestätigt.</p>
-                      : projection.firstLocked ? <><p className="text-sm font-medium">Gerade ist kein weiterer Inhalt frei.</p><p className="mt-1 text-sm text-muted-foreground">{lockLabel(projection.firstLocked)}. Den aktuellen Stand siehst du im Kurs.</p></>
-                        : <p className="text-sm text-muted-foreground">Im Kurs findest du den aktuellen Stand.</p>}
+                      : awaiting ? <><p className="text-sm font-medium">Bewertung ausstehend</p><h3 className="mt-2 break-words text-lg font-semibold leading-snug">{awaiting.title}</h3></>
+                        : projection.firstLocked ? <><p className="text-sm font-medium">Gerade ist kein weiterer Inhalt frei.</p><p className="mt-1 text-sm text-muted-foreground">{lockLabel(projection.firstLocked)}. Den aktuellen Stand siehst du im Kurs.</p></>
+                          : <p className="text-sm text-muted-foreground">Im Kurs findest du den aktuellen Stand.</p>}
                 </div>
                 {mascotVisible && <JourneyMascot complete={complete} celebrationId={motionEnabled && !reducedMotion && celebration?.courseId === selectedId && celebration.publicationId === detail.progress.publicationId ? celebration.id : null} ambientMotion={motionEnabled && !reducedMotion} />}
               </div>
-              <Button asChild variant={next && !complete ? 'default' : 'outline'} className="mt-4 w-full sm:w-auto"><Link href={next && !complete ? `${readerHref}?content=${encodeURIComponent(next.id)}` : readerHref}>{next && !complete ? 'Lernschritt öffnen' : 'Kurs ansehen'}</Link></Button>
+              <Button asChild variant={next && !complete ? 'default' : 'outline'} className="mt-4 w-full sm:w-auto"><Link href={next && !complete ? `${readerHref}?content=${encodeURIComponent(next.id)}` : awaiting && !complete ? `${readerHref}?content=${encodeURIComponent(awaiting.id)}` : readerHref}>{next && !complete ? 'Lernschritt öffnen' : awaiting && !complete ? 'Abgabe ansehen' : 'Kurs ansehen'}</Link></Button>
               {projection.leaves.length > 0 && <progress className="mt-5 block h-2 w-full accent-progress" value={projection.completedCount} max={projection.leaves.length} aria-label={`${projection.completedCount} von ${projection.leaves.length} Kursinhalten aktuell bestätigt`}>{projection.completedCount} von {projection.leaves.length}</progress>}
             </section>}
           </div>}
@@ -233,7 +235,7 @@ function ScopedJourney() {
             {reducedMotion && <p className="mt-1 text-xs text-muted-foreground">Weniger Bewegung ist am Gerät eingestellt.</p>}
           </div>}
 
-          {detail.kind === 'ready' && projection && projection.leaves.length > 0 && <section aria-labelledby="journey-outline-title" className="mt-6"><div className="flex flex-wrap items-end justify-between gap-3 border-b pb-3"><h2 id="journey-outline-title" className="text-lg font-semibold">Nächste Stationen</h2><Button type="button" variant="ghost" size="sm" onClick={retryDetail}>Stand aktualisieren</Button></div><ol className="divide-y">{projection.leaves.filter(leaf => !leaf.completed).slice(0, 5).map((leaf, index) => <li key={leaf.id} className="flex min-w-0 items-start gap-4 py-3 text-sm"><span className="flex size-7 shrink-0 items-center justify-center rounded-full border font-medium tabular-nums" aria-hidden="true">{index + 1}</span><span className="min-w-0 flex-1"><span className="block break-words font-medium">{leaf.title}</span><span className="mt-0.5 block text-muted-foreground">{contentLabel(leaf.type)} · {leaf.locked ? lockLabel(leaf) : 'Jetzt möglich'}</span></span></li>)}</ol>{projection.leaves.every(leaf => leaf.completed) && <p className="py-4 text-sm text-muted-foreground">Alle aktuellen Inhalte bestätigt.</p>}<Link href={readerHref} className="mt-3 inline-flex min-h-11 items-center rounded-sm text-sm text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Vollständiges Inhaltsverzeichnis im Kurs</Link></section>}
+          {detail.kind === 'ready' && projection && projection.leaves.length > 0 && <section aria-labelledby="journey-outline-title" className="mt-6"><div className="flex flex-wrap items-end justify-between gap-3 border-b pb-3"><h2 id="journey-outline-title" className="text-lg font-semibold">Nächste Stationen</h2><Button type="button" variant="ghost" size="sm" onClick={retryDetail}>Stand aktualisieren</Button></div><ol className="divide-y">{projection.leaves.filter(leaf => !leaf.completed).slice(0, 5).map((leaf, index) => <li key={leaf.id} className="flex min-w-0 items-start gap-4 py-3 text-sm"><span className="flex size-7 shrink-0 items-center justify-center rounded-full border font-medium tabular-nums" aria-hidden="true">{index + 1}</span><span className="min-w-0 flex-1"><span className="block break-words font-medium">{leaf.title}</span><span className="mt-0.5 block text-muted-foreground">{contentLabel(leaf.type)} · {leaf.locked ? lockLabel(leaf) : leaf.awaitingGrade ? 'Bewertung ausstehend' : 'Jetzt möglich'}</span></span></li>)}</ol>{projection.leaves.every(leaf => leaf.completed) && <p className="py-4 text-sm text-muted-foreground">Alle aktuellen Inhalte bestätigt.</p>}<Link href={readerHref} className="mt-3 inline-flex min-h-11 items-center rounded-sm text-sm text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Vollständiges Inhaltsverzeichnis im Kurs</Link></section>}
 
           <p className="mt-6 text-sm leading-relaxed text-muted-foreground">Gemeinsam mit anderen lernen: <Link prefetch={false} href="/community/missions" className="inline-flex min-h-11 items-center rounded-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Space-Missionen entdecken</Link><br /><Link prefetch={false} href="/community/missions?view=saved" className="inline-flex min-h-11 items-center rounded-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Gemerkte Space-Missionen</Link></p>
         </div>

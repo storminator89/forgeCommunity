@@ -10,7 +10,7 @@ Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
 runtime data. Its frozen Sites source is
-`b8fa7429ef14fef79283d61a88eead5047ab08cb`. It is experimental and does not
+`e37e09f5e9f9ea0db7788e0bedcb082f5dfc4efe`. It is experimental and does not
 claim feature parity with main.
 
 ## Requirements and setup
@@ -71,7 +71,7 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The current Version 23 source includes these bounded ports. Live QA is ongoing;
+The current Version 24 source includes these bounded ports. Live QA is ongoing;
 source implementation and publication do not establish complete runtime or
 all-page visual coverage.
 
@@ -96,7 +96,10 @@ all-page visual coverage.
   materializing missing settings or changing invitation mutation/signing setup
 - D1 assignment own/queue reads, learner submission and staff grading, using
   publication/version checks and native atomic batches with progress/reward
-  updates; runtime assignment acceptance remains pending
+  updates; assignment grading runtime acceptance remains pending
+- Journey waiting-for-grade projection for own valid, unlocked assignment
+  leaves whose latest current-revision submission has no decisions; this
+  status does not grant completion and its published acceptance remains pending
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -173,9 +176,17 @@ GET, learner submit, and staff grade operations to D1 with publication/version
 guards, historical receipt replay, atomic write fences, and first-pass progress,
 completion and rewards. Its production typechecking/build and static artifact
 checks passed; deployment succeeded on 17 October 2026 at 17:03:19 UTC. Actual
-assignment read, submission and grading acceptance remains pending. No schema,
-configuration, host, environment, access or UI change is included. Off, archived,
-or unavailable Practice states can be
+assignment read, submission and grading acceptance was pending when that
+source was archived. That release included no schema, configuration, host,
+environment, access or UI change. Version 24 adds the bounded own-assignment
+waiting-for-grade projection to progress reads and Journey, displaying
+"Bewertung ausstehend" and "Abgabe ansehen" without granting completion or
+offering the pending assignment as the next actionable step. Failed or withdrawn
+decisions remain actionable. The private course snapshot SQL copy is synchronized
+in the assignment state reader. Version 24 production typechecking/build passed;
+deployment succeeded on 17 October 2026 at 17:50:43 UTC. The waiting label and
+existing grading regression are still awaiting published runtime acceptance.
+Off, archived, or unavailable Practice states can be
 honest results; these GET changes do not establish supported Practice writes,
 scheduling, retention maintenance, or cursor-signing repair. No new local
 functional tests or GitHub CI run are part of this work. The inherited standard pipeline is unchanged: pushes run

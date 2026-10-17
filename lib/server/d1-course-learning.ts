@@ -21,6 +21,7 @@ type SnapshotData = {
   contents: D1LearningContent[];
   progress: { contentId: string; revision: string }[];
   assignmentPasses: { contentId: string }[];
+  assignmentPending: { contentId: string }[];
   quizPasses: { contentId: string; revision: string }[];
   latestQuizAttempts: { contentId: string; publicationId: string; score: number; passed: number; submittedAt: StoredDate }[];
   certificate: { id: string } | null;
@@ -76,6 +77,20 @@ const snapshotSql = `WITH viewer AS (SELECT id, name, email, role, isTestAccount
       WHERE s.userId = ?1 AND s.attemptNumber = (SELECT MAX(newer.attemptNumber) FROM AssignmentSubmission newer
         WHERE newer.userId = s.userId AND newer.contentId = s.contentId AND newer.revision = s.revision)
       AND g.action = 'GRADED' AND g.score >= s.passingScore ORDER BY s.contentId))),
+    'assignmentPending', json((SELECT json_group_array(json_object('contentId', contentId)) FROM (
+      SELECT x.id AS contentId FROM CourseContent x JOIN authorized c ON c.id = x.courseId
+      JOIN Enrollment e ON e.userId = ?1 AND e.courseId = c.id
+      JOIN json_each(?4) m ON json_extract(m.value, '$.id') = x.id
+      WHERE c.activePublicationId IS NOT NULL AND x.archivedAt IS NULL AND x.type = 'ASSIGNMENT'
+        AND NOT EXISTS (SELECT 1 FROM CourseContent child WHERE child.parentId = x.id AND child.archivedAt IS NULL)
+        AND EXISTS (SELECT 1 FROM AssignmentSubmission s
+          WHERE s.userId = ?1 AND s.courseId = c.id AND s.contentId = x.id
+            AND s.revision = json_extract(m.value, '$.revision')
+            AND s.attemptNumber = (SELECT MAX(newer.attemptNumber) FROM AssignmentSubmission newer
+              WHERE newer.userId = s.userId AND newer.courseId = s.courseId
+                AND newer.contentId = s.contentId AND newer.revision = s.revision)
+            AND NOT EXISTS (SELECT 1 FROM AssignmentGradeDecision g WHERE g.submissionId = s.id))
+      ORDER BY x.id))),
     'quizPasses', json((SELECT json_group_array(json_object('contentId', contentId, 'revision', revision)) FROM (
       SELECT DISTINCT a.contentId, a.revision FROM QuizAttempt a JOIN authorized c ON c.id = a.courseId
       JOIN json_each(?4) m ON json_extract(m.value, '$.id') = a.contentId AND json_extract(m.value, '$.revision') = a.revision
@@ -252,6 +267,20 @@ export function d1LatestQuizAttempts(snapshot: D1CourseSnapshot) {
     return { contentId: row.contentId, publicationId: row.publicationId, score: row.score,
       passed: Boolean(row.passed), submittedAt: d1LearningDate(row.submittedAt).toISOString() };
   });
+}
+
+/** Own current-revision submissions with no decision. This is a display state,
+ * not completion proof, and never exposes an answer or grading history. */
+export function d1AwaitingGradeContentIds(snapshot: D1CourseSnapshot) {
+  if (!snapshot.enrollment || !snapshot.course?.activePublicationId) return [];
+  assertD1LearnerSnapshot(snapshot, { requireEnrollment: true, requirePublication: true });
+  const nodes = d1PublicationNodes(snapshot);
+  const gates = coursePathAccess(nodes, d1CompletionState(snapshot).completedContentIds);
+  const parents = new Set(snapshot.contents.map(row => row.parentId));
+  const pending = new Set(snapshot.assignmentPending.map(row => row.contentId));
+  return snapshot.contents.filter(row => row.type === 'ASSIGNMENT' && !parents.has(row.id) &&
+    Boolean(parseAssignmentContent(row.content)?.prompt.trim()) && pending.has(row.id) &&
+    gates.get(row.id)?.locked === false).map(row => row.id);
 }
 
 // All capacity/price/completion/account predicates are evaluated by SQLite in

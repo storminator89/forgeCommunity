@@ -14,6 +14,7 @@ export type JourneyContent = {
 export type JourneyLeaf = Pick<JourneyContent, 'id' | 'title' | 'type' | 'releaseLocked' | 'missingPrerequisites'> & {
   completed: boolean;
   locked: boolean;
+  awaitingGrade: boolean;
 };
 
 export type JourneyProjection = {
@@ -38,8 +39,9 @@ export function eligibleJourneyCourses(role: string | null | undefined, courses:
     .sort((a, b) => Number(a.completed) - Number(b.completed) || a.title.localeCompare(b.title, 'de'));
 }
 
-export function projectJourney(contents: JourneyContent[], completedContentIds: string[]): JourneyProjection {
+export function projectJourney(contents: JourneyContent[], completedContentIds: string[], awaitingGradeContentIds: string[] = []): JourneyProjection {
   const completed = new Set(completedContentIds);
+  const awaitingGrade = new Set(awaitingGradeContentIds);
   const leaves: JourneyLeaf[] = [];
   const seen = new Set<string>();
   const ordered = (items: JourneyContent[]) => [...items].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
@@ -59,13 +61,14 @@ export function projectJourney(contents: JourneyContent[], completedContentIds: 
     }
     leaves.push({ id: content.id, title: content.title, type: content.type,
       completed: completed.has(content.id), locked,
+      awaitingGrade: content.type === 'ASSIGNMENT' && !completed.has(content.id) && !locked && awaitingGrade.has(content.id),
       releaseLocked: content.releaseLocked, missingPrerequisites: content.missingPrerequisites });
   }
 
   return {
     leaves,
     completedCount: leaves.filter(leaf => leaf.completed).length,
-    next: leaves.find(leaf => !leaf.completed && !leaf.locked) ?? null,
+    next: leaves.find(leaf => !leaf.completed && !leaf.locked && !leaf.awaitingGrade) ?? null,
     firstLocked: leaves.find(leaf => !leaf.completed && leaf.locked) ?? null,
   };
 }
