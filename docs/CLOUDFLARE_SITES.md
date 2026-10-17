@@ -10,7 +10,7 @@ Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
 runtime data. Its frozen Sites source is
-`7b133530bec600289ea86655909c216d92f7387f`. It is experimental and does not
+`0e31b1b9474f4eab2e2f6e758a1d9e02bf0b32b6`. It is experimental and does not
 claim feature parity with main.
 
 ## Requirements and setup
@@ -71,7 +71,7 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The current Version 19 source includes these bounded ports. Live QA is ongoing;
+The current Version 20 source includes these bounded ports. Live QA is ongoing;
 source implementation and publication do not establish complete runtime or
 all-page visual coverage.
 
@@ -138,9 +138,14 @@ published Site, without establishing full Q&A coverage. Version 18 passed
 production typechecking and its build. The approved single-logo chat-image
 flow passed on the published Version 18 Site; this does not establish general
 browser compatibility, codec load/memory behavior or other image workflows.
-Version 19 passed production source validation and its build; live preference
-and inbox-read checking is still in progress. Invitation mutations remain
-unported, and existing cursor-signing requirements are unchanged. No new local
+Version 19 passed production source validation and its build. Its own
+preference-off/empty-inbox view passed an initial-and-reload check with both
+own GET routes returning 200. Enabled inboxes, pagination and mutations are
+not established by that check. Invitation mutations remain unported, and
+existing cursor-signing requirements are unchanged. Version 20 only adjusts
+chat-image display sizing and collapses upload details behind a disclosure.
+Its production typechecking/build passed; its published UI read-check is
+still in progress. It makes no codec or API change. No new local
 test suite or GitHub CI run is
 part of this work. The inherited standard pipeline is unchanged: pushes run
 only for main/master, and no pull request is opened for this branch. Recheck

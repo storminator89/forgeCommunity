@@ -552,14 +552,14 @@ function ChatPageContent() {
                               {message.content}
                             </p>
                             {message.imageUrl && (
-                              <button type="button" className="block min-h-11 min-w-11 max-w-lg rounded-[10px] text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" aria-label="Nachrichtenbild vergrößern" onClick={() => setSelectedImageForModal(message.imageUrl ?? null)}>
+                              <button type="button" className="block w-fit min-h-11 min-w-11 max-w-lg rounded-[10px] text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" aria-label="Nachrichtenbild vergrößern" onClick={() => setSelectedImageForModal(message.imageUrl ?? null)}>
                                   <Image
                                     src={message.imageUrl ?? ''}
                                     alt=""
                                     width={512}
                                     height={512}
                                     unoptimized
-                                    className="h-auto max-w-full rounded-[10px] border object-contain"
+                                    className="block h-auto w-auto max-w-full rounded-[10px] border object-contain"
                                   />
                               </button>
                             )}
@@ -659,7 +659,13 @@ function ChatPageContent() {
                   <Send className="h-4 w-4" />
                 </Button>
               </div>
-              <p id="chat-image-notice" className="text-xs text-muted-foreground">JPEG, PNG, WebP oder GIF bis 5 MiB. Bilder werden lokal als PNG verkleinert (max. 1 MP, 1600 px pro Seite), Animationen als Standbild. Upload erst beim Senden.</p>
+              <details className="text-xs text-muted-foreground">
+                <summary className="w-fit cursor-pointer rounded-sm py-1 leading-relaxed focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                  <span id="chat-image-notice">Bilder werden mit der Nachricht gesendet.</span>{' '}
+                  <span className="underline underline-offset-2">Details</span>
+                </summary>
+                <p className="mt-1 max-w-prose leading-relaxed">JPEG, PNG, WebP oder GIF bis 5 MiB. Bilder werden auf diesem Gerät als PNG verkleinert (max. 1 MP, 1600 px pro Seite). Animationen werden als Standbild gesendet (Standardbild bzw. erster Frame).</p>
+              </details>
             </div>
           </section>
         </div>
