@@ -11,8 +11,8 @@ D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
 runtime data. This GitHub snapshot backs up the published Version 26 source
 `df292bab8a9e9a5f474286599a6af35152135ec6`. Version 26 deployed successfully on
-17 October 2026 at 20:02:01 UTC; its admin reward-approval live acceptance
-is still pending.
+17 October 2026 at 20:02:01 UTC. A bounded single admin reward-approval and
+reload check passed, as described below.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -105,7 +105,7 @@ all-page visual coverage.
   status does not grant completion and its published acceptance remains pending
 - Native D1 admin course reward-approval/withdrawal with session and stored
   ADMIN checks plus atomic approval and ledger/history/badge/pathway
-  reconciliation; published runtime approval acceptance remains pending
+  reconciliation; a bounded single approval and reload check passed
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -242,8 +242,13 @@ rules are introduced.
 
 Source review, production typechecking/build, and static artifact checks passed.
 Deployment succeeded on 17 October 2026 at 20:02:01 UTC; PUBLIC visibility and
-environment revision 2 are unchanged. The published admin approval/write and
-readback check is still pending, so no Version 26 runtime success is claimed.
+environment revision 2 are unchanged. A single normal admin course approval
+was submitted at 20:03:04.851 UTC. The UI showed the approved state and
+withdrawal button at 20:03:14 UTC, and that state persisted after reload at
+20:03:37.924 UTC, without an observed error. No withdrawal or second submit
+was performed. Individual learner point credits were not separately proved;
+this bounded result does not establish all approval, withdrawal, or reward
+reconciliation scenarios.
 No secrets, active hosting identity, runtime database, Storage contents or
 private QA artifacts are included in this source backup.
 
