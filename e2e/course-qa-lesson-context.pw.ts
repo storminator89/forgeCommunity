@@ -6,6 +6,7 @@ import { expect, test, type Locator, type Page, type Route } from '@playwright/t
 import { createDeferredCaptureErrors } from './deferred-capture-errors'
 import { installReaderLayoutGuard, type ReaderLayoutWindow } from './reader-layout-readiness'
 import { serializeReaderEvidence } from './reader-evidence-budget'
+import { legacyQaReplyButtonClassName, probeLegacyQaReplyButton, readQaReflowEvidence } from './qa-reflow-evidence'
 
 const origin = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3013'
 const candidateSha = /^[a-f0-9]{40}$/.test(process.env.GITHUB_SHA ?? '') ? process.env.GITHUB_SHA! : 'local-unverified-sha'
@@ -155,6 +156,20 @@ test('lesson provenance survives real creation, retained pages, republish, chose
               await heading.evaluate(installReaderLayoutGuard, { kind: 'qa-capture' as const,
                 expectedRootFontPixels: captureBaseline.rootFontPixels * zoom / 100, expectedTargetFontPixels: captureBaseline.targetFontPixels * zoom / 100 })
               readinessEvidence.enlarged = await page.evaluate(() => (window as ReaderLayoutWindow).__readerLayoutGuard!.settle())
+              const replyControl = discussion.getByRole('button', { name: 'Antwort veröffentlichen' })
+              if (width === 320 && zoom === 200) {
+                // Reproduce the predecessor's exact local styling on this real
+                // control only. The probe restores its class in finally before
+                // the guard is armed, any screenshot, or any core-flow action.
+                const causal = await replyControl.evaluate(probeLegacyQaReplyButton, legacyQaReplyButtonClassName)
+                console.info('Lesson Q&A causal reply reflow:', JSON.stringify({ candidateSha, theme, width, zoom, causal }))
+                await testInfo.attach(`${captureName}-causal-reflow`, { body: Buffer.from(JSON.stringify({ candidateSha, theme, width, zoom, causal })), contentType: 'application/json' })
+                expect(causal.classRestored).toBe(true); expect(causal.restored).toEqual(causal.corrected)
+                expect(causal.legacy.reply.whiteSpace).toBe('nowrap')
+                expect(causal.legacy.reply.width).toBeGreaterThan(causal.legacy.region.clientWidth)
+                expect(causal.legacy.region.scrollWidth).toBeGreaterThan(causal.legacy.region.clientWidth)
+                expect(causal.legacy.main.scrollWidth).toBeGreaterThan(causal.legacy.main.clientWidth)
+              }
               await page.evaluate(() => (window as ReaderLayoutWindow).__readerLayoutGuard!.arm())
               await expect(heading).toBeVisible()
               const beforeScrollTop = await heading.evaluate(element => {
@@ -190,8 +205,55 @@ test('lesson provenance survives real creation, retained pages, republish, chose
               await testInfo.attach(`${candidateSha}-lesson-qa-${theme}-${width}-${zoom}-framing`, { body: Buffer.from(JSON.stringify(frameEvidence)), contentType: 'application/json' })
               expect(framing.visibleHeight).toBeGreaterThan(0); expect(framing.visibleWidth).toBeGreaterThan(0)
               const overflow = await page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - innerWidth); expect(overflow).toBeLessThanOrEqual(1)
+              const reflow = await replyControl.evaluate(readQaReflowEvidence)
+              console.info('Lesson Q&A scrollport reflow:', JSON.stringify({ candidateSha, theme, width, zoom, reflow }))
+              await testInfo.attach(`${captureName}-reflow`, { body: Buffer.from(JSON.stringify({ candidateSha, theme, width, zoom, reflow })), contentType: 'application/json' })
+              expect(reflow.main.scrollWidth - reflow.main.clientWidth).toBeLessThanOrEqual(1)
+              expect(reflow.region.scrollWidth - reflow.region.clientWidth).toBeLessThanOrEqual(1)
+              expect(reflow.reply.scrollWidth - reflow.reply.clientWidth).toBeLessThanOrEqual(1)
+              expect(reflow.reply.width).toBeGreaterThanOrEqual(44); expect(reflow.reply.height).toBeGreaterThanOrEqual(44)
               const name = `${candidateSha}-lesson-qa-${theme}-${width}-${zoom}`; const path = testInfo.outputPath(`${name}.png`)
               await page.screenshot({ path, fullPage: true }); await testInfo.attach(name, { path, contentType: 'image/png' })
+              if (width === 320 && zoom === 200) {
+                const replyTextbox = discussion.getByRole('textbox', { name: 'Deine Antwort' })
+                const originalReply = await replyTextbox.inputValue()
+                const replyHeading = discussion.getByRole('heading', { level: 3, name: 'Antwort schreiben' })
+                try {
+                  await replyHeading.scrollIntoViewIfNeeded(); await expect(replyHeading).toBeInViewport({ ratio: 1 })
+                  // One deliberate starting focus, then one real Tab. No click,
+                  // submit, index skipping, repeated focusing, or HTTP write.
+                  await replyTextbox.fill('A bounded unpublished accessibility reply.')
+                  await replyTextbox.focus(); await expect(replyTextbox).toBeFocused()
+                  await page.keyboard.press('Tab'); await expect(replyControl).toBeFocused()
+                  expect(await replyControl.evaluate(element => element.matches(':focus-visible'))).toBe(true)
+                  await replyControl.evaluate(element => element.closest('form')!.scrollIntoView({ block: 'end', inline: 'nearest', behavior: 'instant' }))
+                  const controls = await replyControl.evaluate(element => {
+                    const form = element.closest('form')!; const main = document.getElementById('page-content')!
+                    const pane = main.getBoundingClientRect()
+                    const box = (control: Element) => {
+                      const rect = control.getBoundingClientRect()
+                      return { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right, width: rect.width, height: rect.height,
+                        fullyInMain: rect.top >= Math.max(0, pane.top) && rect.bottom <= Math.min(innerHeight, pane.bottom) &&
+                          rect.left >= Math.max(0, pane.left) && rect.right <= Math.min(innerWidth, pane.right) }
+                    }
+                    return { heading: box(form.querySelector('h3')!), label: box(form.querySelector('label')!),
+                      textbox: box(form.querySelector('textarea')!), submit: box(element), submitFocused: document.activeElement === element,
+                      scrollTop: main.scrollTop, scrollLeft: main.scrollLeft }
+                  })
+                  console.info('Lesson Q&A lower controls:', JSON.stringify({ candidateSha, theme, width, zoom, controls }))
+                  await testInfo.attach(`${captureName}-reply-controls`, { body: Buffer.from(JSON.stringify({ candidateSha, theme, width, zoom, controls })), contentType: 'application/json' })
+                  // The enlarged form may exceed one viewport. Its heading was
+                  // checked above; now its label, field, and submit must fit together.
+                  for (const control of [controls.label, controls.textbox, controls.submit]) expect(control.fullyInMain).toBe(true)
+                  expect(controls.submitFocused).toBe(true); expect(controls.scrollLeft).toBe(0)
+                  for (const control of [controls.textbox, controls.submit]) {
+                    expect(control.width).toBeGreaterThanOrEqual(44); expect(control.height).toBeGreaterThanOrEqual(44)
+                  }
+                  const controlsName = `${captureName}-reply-controls`; const controlsPath = testInfo.outputPath(`${controlsName}.png`)
+                  await page.screenshot({ path: controlsPath, fullPage: true }); await testInfo.attach(controlsName, { path: controlsPath, contentType: 'image/png' })
+                } finally { await replyTextbox.fill(originalReply) }
+                await expect(replyTextbox).toHaveValue(originalReply)
+              }
               expect((await page.evaluate(() => (window as ReaderLayoutWindow).__readerLayoutGuard!.check())).unsafe).toBe(false)
             } catch (error) {
               console.error('Lesson Q&A capture failed:', captureName, error)
