@@ -220,7 +220,7 @@ test.each(['archive', 'remove', 'parent', 'title', 'body', 'type', 'topology', '
     const updated = change === 'parent' ? [...f.contents, node(`context-grandchild-${change}`, { parentId: selected.id })] : f.contents.map(row => row.id === selected.id ? { ...row,
       ...(change === 'prerequisite' ? { prerequisiteIds: [required.id] } : { releaseOn: '2099-01-01' }) } : row);
     await prisma.coursePublication.update({ where: { id: f.pair.publicationId }, data: { payload: JSON.stringify({ schemaVersion: 1, contents: updated }) } });
-    if (change === 'parent') await prisma.courseContent.create({ data: { ...node(`context-grandchild-${change}`, { parentId: selected.id }), courseId: f.id } });
+    if (change === 'parent') await prisma.courseContent.create({ data: { ...node(`context-grandchild-${change}`, { parentId: selected.id }), type: 'TEXT', courseId: f.id } });
   }
   if (change === 'archive' || change === 'remove' || change === 'parent') {
     await fail(() => createCourseQuestion(f.id, learner, input(f.pair, 'new-anchor')), 404);
