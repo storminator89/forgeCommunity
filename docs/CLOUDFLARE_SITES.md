@@ -9,10 +9,11 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up the published Version 35 source
-`520a7515d4ffe55dc72ff3dd430fdb1591c1ef11`. Version 35 deployed successfully on
-17 October 2026 at 22:37:51 UTC. Bounded one-course navigation/share/reload
-acceptance passed; genuine multiple-course and unfinished resumption remain unverified.
+runtime data. This GitHub snapshot backs up the published Version 36 source
+`f90430dcbce5f3fa2309fae9a2749538c0987ab1`. Version 36 deployed successfully on
+17 October 2026 at 22:50:53 UTC. Bounded Space discussion/reply POST source and
+the account-menu Journey fix are live. The bounded learner-menu check passed;
+positive Space POST/replay/race acceptance remains unverified.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -73,8 +74,8 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 35 source includes the existing bounded ports below,
-inherited from Version 34, plus Journey navigation/course-URL presentation described
+The published Version 36 source includes the existing bounded ports below,
+inherited from Version 35, plus Space discussion/reply POST and account-menu navigation described
 below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
@@ -136,6 +137,11 @@ all-page visual coverage.
 - USER-only Journey sidebar/quick-search navigation and eligible-course URL
   selection, with native history and account/publication guards; positive
   multiple-course/resume runtime acceptance remains unverified
+- Native D1 protected member discussion/reply POST with scoped request-row
+  replay, exact atomic snapshot guards and bounded response checks; positive
+  runtime POST/replay/race acceptance remains open
+- Account-menu learning link opens Journey for USER learners and the course
+  overview for other authenticated roles; bounded learner-menu readback passed
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -151,8 +157,10 @@ all-page visual coverage.
 This remains a partial adaptation. Course deletion, formative-practice
 mutation flows, course Q&A creation/replies/moderation/solution writes,
 course analytics, and other Space/mission mutation flows remain unported.
-Version 34 ports only ADMIN Space creation and PUBLIC own join/leave source;
-positive mutation acceptance remains open. Other workflows may still use Prisma
+Version 34 ports ADMIN Space creation and PUBLIC own join/leave source;
+Version 36 additionally ports member discussion/reply creation. Positive Space
+mutation acceptance remains open. Moderation, polls, invitations, private member
+removal and mission cleanup remain outside these ports. Other workflows may still use Prisma
 transaction patterns that D1 does not support. Do not infer full write-flow
 support from this source scope.
 
@@ -524,6 +532,41 @@ Two genuine eligible enrollments, course switching/Back/Forward, invalid or
 repeated IDs, anonymous/login return, account transitions, narrow layout and
 unfinished resumption remain unverified live. This completed single-course
 check does not establish those scenarios or complete roadmap P1-B acceptance.
+
+## Version 36 bounded Space content writes and account-menu Journey link
+
+Version 36 changes three backend files for existing discussion/reply POST
+routes and one independently reviewed account-menu file. Native D1 writes
+require a current stored account, membership and a visible reply parent. A
+scoped request row supports same-payload replay while that row exists; a changed
+payload returns conflict. Exact typed pre/post snapshot guards, atomic batches,
+bounded response projection and a fresh visible-reply count protect the write
+and its returned response. Only recognized rolled-back snapshot/request-key
+conflicts are reconsidered; an ambiguous provider result is not automatically
+retried. There is no permanent tombstone or lifetime exactly-once guarantee.
+
+The existing account menu sends authenticated USER learners to Journey; other
+authenticated roles receive the course overview destination. It reuses the
+central role guard and changes no account/role, authentication, scoring,
+endpoint or data model setup. Anonymous/loading menu behavior is unchanged.
+
+Independent backend and frontend review, exact-union verification, production
+typechecking/build and static artifact checks passed. Deployment succeeded on
+17 October 2026 at 22:50:53 UTC. Positive published POST, replay, race, private,
+hidden-parent and membership-revocation acceptance remains unverified. At
+22:51-22:52 UTC a bounded learner readback showed the account-menu Journey
+label and keyboard Enter from Community opened the canonical Journey with the
+existing 8-of-8 state. The empty Spaces directory showed no UI error. No Space
+creation, join, discussion or reply POST was performed. Other authenticated-role
+menu variants remain unverified live. No account name, course identifier or
+screenshot is included in this documentation.
+
+This is an additional bounded P1-A source stage, not complete end-to-end Space
+flow acceptance. Moderation, polls, invitation and mission mutations remain
+separate. Version 35's bounded completed single-course navigation check remains
+as documented above; this increment does not establish multiple-course or
+unfinished-course resumption. The curated roadmap remains byte-identical at
+its recorded Version 32 date/base, with findings and proposals kept distinct.
 
 ## Keeping the branches separate
 

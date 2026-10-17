@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useSession } from "@/lib/sites-auth/react"
 import type { Session } from "@/lib/sites-auth/server"
+import { canSeeLearnerJourney } from "@/lib/navigation"
 import { usePathname, useRouter } from "next/navigation"
 import {
   User,
@@ -63,6 +64,9 @@ export function UserNav() {
 
 function AccountMenu({ session }: { session: Session }) {
   const router = useRouter()
+  const learningDestination = canSeeLearnerJourney(session.user.role)
+    ? { label: 'Mein Lernweg', href: '/courses/journey' }
+    : { label: 'Kursübersicht', href: '/courses' }
 
   const handleSignOut = async () => {
     window.location.assign('/logout')
@@ -93,7 +97,7 @@ function AccountMenu({ session }: { session: Session }) {
   }
 
   const navigateToCourses = () => {
-    router.push('/courses')
+    router.push(learningDestination.href)
   }
 
   const navigateToMessages = () => {
@@ -157,7 +161,7 @@ function AccountMenu({ session }: { session: Session }) {
             className="cursor-pointer hover:bg-accent"
           >
             <BookOpen className="mr-2 h-4 w-4" />
-            <span>Meine Kurse</span>
+            <span>{learningDestination.label}</span>
           </DropdownMenuItem>
           <DropdownMenuItem
             onClick={navigateToMessages}
