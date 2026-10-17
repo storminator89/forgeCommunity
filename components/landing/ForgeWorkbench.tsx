@@ -5,8 +5,6 @@ import { RotateCw } from 'lucide-react';
 import styles from '@/app/home.module.css';
 
 const motionQuery = '(prefers-reduced-motion: reduce)';
-const artworkSizes = '(max-width: 30rem) calc(100vw - 3.125rem), (max-width: 34.5rem) calc(100vw - 3.625rem), (max-width: 46rem) 30.875rem, (max-width: 82.5rem) calc(55vw - 3.05rem), 42.325rem';
-const artworkSrcSet = '/images/home/forge-workbench-480.webp 480w, /images/home/forge-workbench-768.webp 768w, /images/home/forge-workbench-1440.webp 1440w';
 function subscribeToMotion(onChange: () => void) {
   const query = window.matchMedia(motionQuery);
   query.addEventListener('change', onChange);
@@ -30,7 +28,7 @@ export function ForgeWorkbench() {
   return (
     <div className={styles.workbench}>
       <div key={replay} data-motion="forge-workbench" className={replay > 0 ? `${styles.artFrame} ${styles.illustrationPlaying}` : styles.artFrame} onAnimationEnd={() => setReplay(0)}>
-        {/* Keep React's picture SSR scope; the image owns all responsive attributes. */}
+        {/* Keep React's picture SSR scope; CSS alone sizes the one fixed image. */}
         <picture className={styles.illustration}>
           <img
             className={styles.illustration}
@@ -40,9 +38,7 @@ export function ForgeWorkbench() {
             loading="eager"
             fetchPriority="high"
             decoding="async"
-            sizes={artworkSizes}
-            srcSet={artworkSrcSet}
-            src="/images/home/forge-workbench-768.webp"
+            src="/images/home/forge-workbench-1440.webp"
           />
         </picture>
       </div>
