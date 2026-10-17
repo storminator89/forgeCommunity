@@ -13,7 +13,7 @@ import { NavigationArtwork } from '@/components/navigation-artwork';
 import { NavigationSearch } from '@/components/navigation-search';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ForgeBrandMark } from '@/components/forge-brand-mark';
-import { navigationGroups, utilityNavigation, adminNavigation, moderationNavigation, isNavigationActive } from '@/lib/navigation';
+import { navigationGroups, utilityNavigation, adminNavigation, moderationNavigation, isNavigationActive, canSeeLearnerJourney } from '@/lib/navigation';
 import { canSeeLearnerPathways } from '@/lib/pathway-visibility';
 import { cn } from '@/lib/utils';
 import { useSignInHref } from '@/components/user-nav';
@@ -49,7 +49,8 @@ export function Sidebar({ className, isOpen: externalOpen = false, onClose, hide
 
   const renderNavigation = (compact: boolean, mobile = false) => {
     const groups = session ? [...navigationGroups.map(group => ({ ...group, items: group.items.filter(item =>
-      item.href !== '/courses/pathways' || (!hideLearnerPathways && canSeeLearnerPathways(session?.user?.role))) })), { title: 'Einstellungen', items: utilityNavigation },
+      (item.href !== '/courses/pathways' || (!hideLearnerPathways && canSeeLearnerPathways(session?.user?.role))) &&
+      (item.href !== '/courses/journey' || canSeeLearnerJourney(session?.user?.role))) })), { title: 'Einstellungen', items: utilityNavigation },
       ...(['ADMIN', 'MODERATOR'].includes(session?.user?.role ?? '') ? [{ title: 'Moderation', items: moderationNavigation }] : []),
       ...(session?.user?.role === 'ADMIN' ? [{ title: 'Administration', items: adminNavigation }] : [])]
       : status === 'loading' ? [] : [{ title: 'Entdecken', items: [

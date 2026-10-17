@@ -9,10 +9,10 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up the published Version 34 source
-`0a7d452f767b77401e424eab60bc51e17c169d1e`. Version 34 deployed successfully on
-17 October 2026 at 22:29:24 UTC. The Space-base source port is live, while positive
-Admin/create/join/leave runtime acceptance remains open.
+runtime data. This GitHub snapshot backs up the published Version 35 source
+`520a7515d4ffe55dc72ff3dd430fdb1591c1ef11`. Version 35 deployed successfully on
+17 October 2026 at 22:37:51 UTC. Bounded one-course navigation/share/reload
+acceptance passed; genuine multiple-course and unfinished resumption remain unverified.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -73,8 +73,8 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 34 source includes the existing bounded ports below,
-inherited from Version 33, plus bounded native Space-base writes described
+The published Version 35 source includes the existing bounded ports below,
+inherited from Version 34, plus Journey navigation/course-URL presentation described
 below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
@@ -133,6 +133,9 @@ all-page visual coverage.
   link; this UI change does not repair metadata fetching or its DNS/transport port
 - Native D1 atomic ADMIN Space creation with creator membership and PUBLIC
   own desired join/leave operations; positive runtime mutation acceptance open
+- USER-only Journey sidebar/quick-search navigation and eligible-course URL
+  selection, with native history and account/publication guards; positive
+  multiple-course/resume runtime acceptance remains unverified
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -490,6 +493,37 @@ empty Spaces directory without a UI error. No Space was created and no join or
 leave was performed. Positive Admin/create/join/leave, private-space, race and
 rollback acceptance remain unverified; the empty directory and passed build
 are not positive mutation acceptance.
+
+## Version 35 Journey navigation and eligible-course URL
+
+Version 35 changes five frontend files, combining independently reviewed
+navigation and course-selection patches. The sidebar and quick-search entry
+for the existing Journey route are visible only to authenticated USER learners;
+active navigation does not mark Courses and Journey simultaneously. A local
+course parameter can select only an item in the currently loaded eligible
+course list. Unknown or repeated parameters use the existing safe fallback.
+Deliberate course changes use local history and a safe fragment; native
+Back/Forward and account/publication guards retain scoped selection semantics.
+
+There is no new endpoint, data mutation, scoring rule, or shared reader/projector
+change. This is the frontend source port of roadmap P1-B, not proof of successful
+unfinished-course resumption or genuine multiple-course switching. The curated
+roadmap is retained byte-identically at its dated Version 32 base.
+
+Independent component and exact-union source review, production typechecking/
+build and static artifact checks passed. Deployment succeeded on 17 October
+2026 at 22:37:51 UTC. A bounded one-course published check at 22:39 UTC passed:
+the Journey rail link opened with Enter and only Journey carried aria-current;
+quick-search keyboard activation opened its unique Journey result. The
+UI-generated eligible course URL and reload retained the same completed course.
+Opening the exact UI share link in a temporary tab retained that course, its
+8-of-8 state and the session. No data write was performed, and account names,
+course identifiers and screenshots are excluded from this documentation.
+
+Two genuine eligible enrollments, course switching/Back/Forward, invalid or
+repeated IDs, anonymous/login return, account transitions, narrow layout and
+unfinished resumption remain unverified live. This completed single-course
+check does not establish those scenarios or complete roadmap P1-B acceptance.
 
 ## Keeping the branches separate
 
