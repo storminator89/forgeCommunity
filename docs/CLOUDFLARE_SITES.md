@@ -9,10 +9,10 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up the published Version 31 source
-`9e433ae0994bf33813cfbaf3ac036dc3f40a9c60`. Version 31 deployed successfully on
-17 October 2026 at 22:03:59 UTC. Bounded Resources disclosure/required-field
-readback passed; positive Space discussion reads still lack existing fixtures.
+runtime data. This GitHub snapshot backs up the published Version 32 source
+`00b1f61a0abced59a14896819054e3f244ccc97a`. Version 32 deployed successfully on
+17 October 2026 at 22:12:03 UTC. Guest Search UI remains source-reviewed only;
+authenticated Search regression readback is in progress.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -73,8 +73,8 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 31 source includes the existing bounded ports below,
-inherited from Version 30, plus bounded Space reads and Resources UI described
+The published Version 32 source includes the existing bounded ports below,
+inherited from Version 31, plus the Search auth-state presentation described
 below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
@@ -126,6 +126,9 @@ all-page visual coverage.
 - Resources submission disclosure, single-pending-submit guard and retained
   inline errors, with existing backend behavior unchanged; bounded disclosure/
   native validation readback passed, pending-request variants remain untested live
+- Search loading/anonymous presentation outside the private account-keyed
+  viewer, with a sign-in CTA and safe local return URL; published auth-state
+  acceptance remains incomplete as described below
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -402,6 +405,22 @@ The empty Spaces directory showed no UI error. Existing authorized discussion/
 reply fixtures are still absent, so positive detail/list/reply GET acceptance
 remains unverified. No private/hidden/revocation/pagination result is claimed,
 and no discussion or reply was created to manufacture a passing check.
+
+## Version 32 Search auth-state presentation
+
+Version 32 changes only `app/search/SearchPageClient.tsx`. Loading and anonymous
+states render in the shared Search shell before the private search viewer is
+mounted. Guests receive a sign-in CTA using the existing safe local return URL.
+The account-keyed private viewer is unmounted while the session is checked or
+when the account changes. The existing signed-in query/results/filter logic and
+API behavior are otherwise retained; no authentication or security setup changes
+are included. The loading shell honors reduced-motion styling.
+
+Source review, production typechecking/build and static artifact checks passed.
+Deployment succeeded on 17 October 2026 at 22:12:03 UTC. Guest UI behavior is
+source-reviewed only, and authenticated Search regression readback is in
+progress. No finished Version 32 guest, account-transition, reduced-motion or
+complete search-flow live acceptance is claimed by this backup.
 
 ## Keeping the branches separate
 

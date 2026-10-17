@@ -5,7 +5,7 @@ import { Search as PageBannerIcon } from 'lucide-react';
 import { AppShell, AppHeader } from '@/components/app-shell';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Sidebar } from "@/components/Sidebar";
-import { UserNav } from "@/components/user-nav";
+import { UserNav, useSignInHref } from "@/components/user-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -140,10 +140,51 @@ interface SearchPageProps {
 
 export default function SearchPageClient(props: SearchPageProps) {
   const { data: session, status } = useSession();
+  const signInHref = useSignInHref();
   const viewerId = status === 'authenticated' ? session?.user?.id ?? null : null;
-  // Clear all prior-account results immediately, including a direct switch
-  // between signed-in accounts without waiting for a route change.
-  return <SearchPageForViewer key={viewerId ?? status} {...props} viewerId={viewerId} sessionLoading={status === 'loading'} />;
+
+  return (
+    <SearchPageShell>
+      {status === 'loading' ? (
+        <div className="motion-reduce:[&_.animate-spin]:animate-none">
+          <PageState kind="loading" title="Anmeldung wird geprüft" />
+        </div>
+      ) : !viewerId ? (
+        <PageState title="Anmeldung erforderlich" description="Melde dich an, um deine Suche fortzusetzen."
+          action={<Button asChild><Link prefetch={false} href={signInHref}>Anmelden</Link></Button>} />
+      ) : (
+        // Unmount private search state while checking the session and when the
+        // account changes, including a direct switch between signed-in users.
+        <SearchPageForViewer key={viewerId} {...props} viewerId={viewerId} />
+      )}
+    </SearchPageShell>
+  );
+}
+
+function SearchPageShell({ children }: { children: React.ReactNode }) {
+  return (
+    <AppShell data-page-family="discovery">
+      <Sidebar />
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <AppHeader>
+          <div className="app-header-row">
+            <h1 className="app-header-title text-[clamp(1.65rem,1.1rem+2vw,2.35rem)] font-semibold tracking-tight text-foreground">Suche</h1>
+            <div className="app-header-actions">
+              <ThemeToggle />
+              <UserNav />
+            </div>
+          </div>
+        </AppHeader>
+
+        <main id="page-content" tabIndex={-1} className="min-w-0 flex-1 overflow-y-auto">
+          <div className="fc-page-container mx-auto max-w-4xl space-y-6">
+            <HeroBanner title="Was möchtest du entdecken?" description="Durchsuche Kurse, Wissen, Menschen und Ideen aus der Community." icon={PageBannerIcon} />
+            {children}
+          </div>
+        </main>
+      </div>
+    </AppShell>
+  );
 }
 
 function SearchPageForViewer({
@@ -151,8 +192,7 @@ function SearchPageForViewer({
   initialType = 'all',
   initialPage = 1,
   viewerId,
-  sessionLoading,
-}: SearchPageProps & { viewerId: string | null; sessionLoading: boolean }) {
+}: SearchPageProps & { viewerId: string }) {
   const { toast } = useToast();
   // A new account starts with the shareable current URL, never old result state
   // or delayed initial props from the previous account's latest keystroke.
@@ -509,23 +549,7 @@ function SearchPageForViewer({
   };
 
   return (
-    <AppShell data-page-family="discovery">
-      <Sidebar />
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <AppHeader>
-          <div className="app-header-row">
-            <h1 className="app-header-title text-[clamp(1.65rem,1.1rem+2vw,2.35rem)] font-semibold tracking-tight text-foreground">Suche</h1>
-            <div className="app-header-actions">
-              <ThemeToggle />
-              <UserNav />
-            </div>
-          </div>
-        </AppHeader>
-
-        <main id="page-content" tabIndex={-1} className="min-w-0 flex-1 overflow-y-auto">
-          <div className="fc-page-container mx-auto max-w-4xl space-y-6">
-          <HeroBanner title="Was möchtest du entdecken?" description="Durchsuche Kurse, Wissen, Menschen und Ideen aus der Community." icon={PageBannerIcon} />
-
+    <>
             <div className="relative">
               <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
               <Input ref={searchInputRef} aria-label="Suche nach Kursen, Events, Mitgliedern, Beiträgen, Ressourcen, Artikeln, Projekten oder Fähigkeiten"
@@ -563,11 +587,7 @@ function SearchPageForViewer({
               <p id="search-tabs-hint" className="mt-2 text-xs text-muted-foreground sm:sr-only">Weitere Kategorien: wischen oder Pfeiltasten.</p>
 
               <TabsContent value={activeTab} className="mt-6">
-                {sessionLoading ? (
-                  <PageState kind="loading" title="Anmeldung wird geprüft" />
-                ) : !viewerId ? (
-                  <PageState kind="error" title="Anmeldung erforderlich" description="Melde dich an, um die Suche zu verwenden." />
-                ) : isLoading ? (
+                {isLoading ? (
                   <div role="status" className="flex flex-col items-center justify-center gap-3 py-20 text-sm text-muted-foreground">
                     <Loader2 aria-hidden="true" className="h-7 w-7 animate-spin text-primary motion-reduce:animate-none" />
                     <span>Suche läuft …</span>
@@ -743,9 +763,6 @@ function SearchPageForViewer({
                     )}
                   </TabsContent>
             </Tabs>
-          </div>
-        </main>
-      </div>
-    </AppShell>
+    </>
   );
 }
