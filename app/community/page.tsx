@@ -12,7 +12,7 @@ import { PageState } from '@/components/page-state'
 import type { Session } from '@/lib/sites-auth/server'
 import { useSession } from '@/lib/sites-auth/react'
 import { Button } from "@/components/ui/button"
-import { UserNav } from "@/components/user-nav"
+import { UserNav, useSignInHref } from "@/components/user-nav"
 import { Sidebar } from "@/components/Sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { PlusCircle } from 'lucide-react'
@@ -433,6 +433,7 @@ function Community({ session, topic, onSelectTopic }: { session: Session | null;
 export default function CommunityPage() {
   const { data, status } = useSession()
   const session = status === 'authenticated' ? data : null
+  const signInHref = useSignInHref()
   const topic = useSyncExternalStore(
     callback => {
       window.addEventListener('popstate', callback)
@@ -470,6 +471,19 @@ export default function CommunityPage() {
         <AppHeader><div className="app-header-row"><h1 className="app-header-title">Community</h1></div></AppHeader>
         <main id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto px-4 py-8 sm:px-6 lg:px-8">
           <PageState kind="loading" title="Community wird geladen" />
+        </main>
+      </div>
+    </AppShell>
+  )
+
+  if (!session?.user?.id) return (
+    <AppShell>
+      <Sidebar />
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <AppHeader><div className="app-header-row"><h1 className="app-header-title">Community</h1><div className="app-header-actions"><ThemeToggle /><UserNav /></div></div></AppHeader>
+        <main id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto px-4 py-8 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-2xl"><PageState title="Melde dich für die Community an" description="Stelle Fragen, teile Wissen und setze deinen Lernweg fort."
+            action={<Button asChild><Link prefetch={false} href={signInHref}>Anmelden</Link></Button>} /></div>
         </main>
       </div>
     </AppShell>

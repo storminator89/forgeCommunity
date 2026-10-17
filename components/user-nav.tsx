@@ -1,5 +1,7 @@
 "use client"
 
+import { useSyncExternalStore } from "react"
+import Link from "next/link"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import {
@@ -12,7 +14,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useSession } from "@/lib/sites-auth/react"
-import { useRouter } from "next/navigation"
+import type { Session } from "@/lib/sites-auth/server"
+import { usePathname, useRouter } from "next/navigation"
 import {
   User,
   Settings,
@@ -22,8 +25,43 @@ import {
   MessageSquare
 } from "lucide-react"
 
+function subscribeLocation(callback: () => void) {
+  window.addEventListener('popstate', callback)
+  window.addEventListener('hashchange', callback)
+  return () => {
+    window.removeEventListener('popstate', callback)
+    window.removeEventListener('hashchange', callback)
+  }
+}
+
+/** Keep a local return destination without depending on an authenticated view. */
+export function useSignInHref() {
+  const pathname = usePathname()
+  const destination = useSyncExternalStore(subscribeLocation,
+    () => `${window.location.pathname}${window.location.search}${window.location.hash}`,
+    () => pathname || '/community')
+  const callback = destination.startsWith('/') && !destination.startsWith('//') && !destination.includes('\\')
+    ? destination : '/community'
+  return `/login?callbackUrl=${encodeURIComponent(callback)}`
+}
+
 export function UserNav() {
-  const { data: session } = useSession()
+  const { data: session, status } = useSession()
+  const signInHref = useSignInHref()
+
+  if (status === 'loading') return <span className="flex h-11 w-11 items-center justify-center" role="status">
+    <span className="h-8 w-8 rounded-full bg-muted" aria-hidden="true" />
+    <span className="sr-only">Anmeldung wird geprüft</span>
+  </span>
+  if (status !== 'authenticated' || !session?.user?.id) return <Button asChild variant="outline">
+    <Link prefetch={false} href={signInHref}>Anmelden</Link>
+  </Button>
+
+  // A different account or role must never inherit an open private menu.
+  return <AccountMenu key={JSON.stringify([session.user.id, session.user.role])} session={session} />
+}
+
+function AccountMenu({ session }: { session: Session }) {
   const router = useRouter()
 
   const handleSignOut = async () => {

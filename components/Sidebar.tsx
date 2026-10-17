@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useSyncExternalStore } from 'react';
 import { useSession } from '@/lib/sites-auth/react';
 import { usePathname } from 'next/navigation';
-import { ChevronLeft, ChevronRight, LogOut, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Home, LogIn, LogOut, X } from 'lucide-react';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -16,6 +16,7 @@ import { ForgeBrandMark } from '@/components/forge-brand-mark';
 import { navigationGroups, utilityNavigation, adminNavigation, moderationNavigation, isNavigationActive } from '@/lib/navigation';
 import { canSeeLearnerPathways } from '@/lib/pathway-visibility';
 import { cn } from '@/lib/utils';
+import { useSignInHref } from '@/components/user-nav';
 
 function subscribeCollapse(callback: () => void) {
   window.addEventListener('storage', callback);
@@ -33,7 +34,9 @@ export function Sidebar({ className, isOpen: externalOpen = false, onClose, hide
   const collapsed = useSyncExternalStore(subscribeCollapse, collapsedSnapshot, () => false);
   const navigation = useAppNavigation();
   const pathname = usePathname();
-  const { data: session } = useSession();
+  const { data, status } = useSession();
+  const session = status === 'authenticated' && data?.user?.id ? data : null;
+  const signInHref = useSignInHref();
   const { unreadCount } = useNotifications();
   const open = navigation?.open ?? externalOpen;
   const setOpen = (value: boolean) => { navigation?.setOpen(value); if (!value) onClose?.(); };
@@ -45,13 +48,18 @@ export function Sidebar({ className, isOpen: externalOpen = false, onClose, hide
   };
 
   const renderNavigation = (compact: boolean, mobile = false) => {
-    const groups = [...navigationGroups.map(group => ({ ...group, items: group.items.filter(item =>
+    const groups = session ? [...navigationGroups.map(group => ({ ...group, items: group.items.filter(item =>
       item.href !== '/courses/pathways' || (!hideLearnerPathways && canSeeLearnerPathways(session?.user?.role))) })), { title: 'Einstellungen', items: utilityNavigation },
       ...(['ADMIN', 'MODERATOR'].includes(session?.user?.role ?? '') ? [{ title: 'Moderation', items: moderationNavigation }] : []),
-      ...(session?.user?.role === 'ADMIN' ? [{ title: 'Administration', items: adminNavigation }] : [])];
+      ...(session?.user?.role === 'ADMIN' ? [{ title: 'Administration', items: adminNavigation }] : [])]
+      : status === 'loading' ? [] : [{ title: 'Entdecken', items: [
+        { name: 'Startseite', icon: Home, href: '/' },
+        ...navigationGroups.flatMap(group => group.items).filter(item => item.href === '/resources'),
+        ...utilityNavigation.filter(item => item.href === '/about'),
+      ] }];
     return <div className="flex h-full flex-col">
       <div className={cn("flex h-20 shrink-0 gap-2 px-4", compact ? "h-24 flex-col items-center justify-center gap-1" : "items-center")}>
-        <Link href="/community" aria-label="ForgeCommunity Start" className="flex min-h-11 min-w-0 items-center gap-2.5" onClick={() => setOpen(false)}>
+        <Link href={session ? '/community' : '/'} aria-label="ForgeCommunity Start" className="flex min-h-11 min-w-0 items-center gap-2.5" onClick={() => setOpen(false)}>
           <ForgeBrandMark />
           {!compact && <span className="text-[15px] font-bold tracking-tight">Forge<span className="font-normal text-muted-foreground">Community</span></span>}
         </Link>
@@ -61,7 +69,8 @@ export function Sidebar({ className, isOpen: externalOpen = false, onClose, hide
         </button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
-        <NavigationSearch collapsed={compact} keyboardShortcut={!mobile} onNavigate={() => setOpen(false)} hideLearnerPathways={hideLearnerPathways} />
+        {session && <NavigationSearch key={JSON.stringify([session.user.id, session.user.role])} collapsed={compact} keyboardShortcut={!mobile} onNavigate={() => setOpen(false)} hideLearnerPathways={hideLearnerPathways} />}
+        {status === 'loading' && <p role="status" className={compact ? 'sr-only' : 'px-3 py-3 text-sm text-muted-foreground'}>Anmeldung wird geprüft…</p>}
         <nav aria-label="Hauptnavigation" className="space-y-6">
           {groups.map(group => <div key={group.title}>
             {!compact && <p className="mb-1 px-3 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">{group.title}</p>}
@@ -86,9 +95,15 @@ export function Sidebar({ className, isOpen: externalOpen = false, onClose, hide
         </nav>
       </div>
       <div className="flex shrink-0 items-center gap-3 border-t px-4 py-4">
-        <Avatar className="h-10 w-10 shrink-0"><AvatarImage src={session?.user?.image || ''} alt="" /><AvatarFallback className="bg-primary text-primary-foreground">{session?.user?.name?.[0] || 'F'}</AvatarFallback></Avatar>
-        {!compact && <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{session?.user?.name || 'Deine Community'}</p><button type="button" onClick={() => window.location.assign('/logout')} className="min-h-7 text-xs text-muted-foreground hover:text-primary">Abmelden</button></div>}
-        {compact && <button type="button" onClick={() => window.location.assign('/logout')} aria-label="Abmelden" className="sr-only focus:not-sr-only"><LogOut className="h-4 w-4" /></button>}
+        {session ? <>
+          <Avatar className="h-10 w-10 shrink-0"><AvatarImage src={session.user.image || ''} alt="" /><AvatarFallback className="bg-primary text-primary-foreground">{session.user.name?.[0] || 'F'}</AvatarFallback></Avatar>
+          {!compact && <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{session.user.name || 'Deine Community'}</p><button type="button" onClick={() => window.location.assign('/logout')} className="min-h-7 text-xs text-muted-foreground hover:text-primary">Abmelden</button></div>}
+          {compact && <button type="button" onClick={() => window.location.assign('/logout')} aria-label="Abmelden" className="sr-only focus:not-sr-only"><LogOut className="h-4 w-4" /></button>}
+        </> : status === 'loading' ? <span className="h-11 w-full rounded-[10px] bg-muted" aria-hidden="true" />
+          : <Link prefetch={false} href={signInHref} onClick={() => setOpen(false)} aria-label="Anmelden"
+            className={cn('flex min-h-11 w-full items-center justify-center gap-2 rounded-[10px] bg-primary px-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90', compact && 'px-0')}>
+            <LogIn className="h-4 w-4 shrink-0" aria-hidden="true" /><span className={compact ? 'sr-only' : undefined}>Anmelden</span>
+          </Link>}
       </div>
     </div>;
   };

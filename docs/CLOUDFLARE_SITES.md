@@ -9,10 +9,10 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up the published Version 27 source
-`8ca09f2e3cf4199ce6bad36da38f4b7f410e07bc`. Version 27 deployed successfully on
-17 October 2026 at 20:43:01 UTC. A bounded read-only desktop Journey-trail
-check passed; its coverage and remaining gaps are documented below.
+runtime data. This GitHub snapshot backs up the published Version 28 source
+`3d61fdab7b75b4d751ac6368c82e02a31bede892`. Version 28 deployed successfully on
+17 October 2026 at 21:34:25 UTC. Accepted-solution runtime acceptance and the
+auth-state UI readback are still pending; earlier release checks are separate.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -73,8 +73,8 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 27 source includes the existing bounded ports below,
-inherited from Version 26, plus the Journey trail UI described separately
+The published Version 28 source includes the existing bounded ports below,
+inherited from Version 27, plus accepted solutions and auth-state UI described
 below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
@@ -110,6 +110,11 @@ all-page visual coverage.
   retained earned stations, the existing global next step, and non-actionable
   locked/waiting states; bounded desktop acceptance and untested variants are
   distinguished below
+- Native D1 community accepted-solution selection with owner-only authority,
+  exact snapshot/CAS fences and fixed server-authored history; live transitions
+  and reversal/concurrency acceptance remain unverified
+- Anonymous/loading navigation and Community sign-in states avoid mounting
+  member navigation, private account menus and the composer; live readback pending
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -291,6 +296,33 @@ The 320/390-pixel mobile layouts, chapter-group, next-step, pending and locked
 variants, account transitions and comprehensive accessibility have not been
 live-validated. The desktop completed-course check does not establish those
 scenarios.
+
+## Version 28 accepted solutions and auth-state UI
+
+Version 28 changes four reviewed files. Its accepted-solutions service uses a
+primary typed snapshot that fences actor/current ownership, publication, the
+requested same-post non-self/non-test reply, and the exact selected ID/revision.
+It preserves the role-neutral post-owner contract and validation/error order.
+A same-state guarded no-op writes no history. A real transition uses one native
+five-statement batch with throwing snapshot guard, CAS mutation, one-row
+assertion, fixed server-authored history, and final state/history assertion.
+Only recognized race errors with a changed freshly authorized state may retry;
+unknown or ambiguous commits are not retried. Old selection references are
+byte-bounded before transport. No points, counters, notifications, rewards,
+cleanup, or schema changes are introduced.
+
+The three disjoint UI files suppress member navigation, the private account
+menu and the Community composer while anonymous or loading, and provide a
+sign-in prompt with a safe local return path. Existing authenticated feed and
+account/role keys remain. Authentication, API, proxy and security setup are
+unchanged.
+
+Source review, production typechecking/build and static artifact checks passed.
+Deployment succeeded on 17 October 2026 at 21:34:25 UTC. Accepted-solution
+transitions, reversal and concurrency remain unverified live until a legitimate
+authorized flow occurs; no artificial selection or engagement record was made.
+Auth-state UI readback is still pending. No completed Version 28 browser result
+is claimed by this backup.
 
 ## Keeping the branches separate
 
