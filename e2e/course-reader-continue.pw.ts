@@ -4,7 +4,7 @@ import { basename, isAbsolute, resolve } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test'
 import { observeReaderRequests, type ReaderReadiness } from './reader-request-readiness'
-import { installReaderLayoutGuard, type ReaderLayoutWindow } from './reader-layout-readiness'
+import { installReaderLayoutGuard, restoreReaderTextSize, type ReaderLayoutWindow } from './reader-layout-readiness'
 import { serializeReaderEvidence } from './reader-evidence-budget'
 
 const origin = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3013'
@@ -284,6 +284,7 @@ async function captureReaderTextZoom(page: Page, info: TestInfo, state: string, 
   const originalLabelPixels = await refresh.evaluate(element => parseFloat(getComputedStyle(element).fontSize))
   await observeReaderTextZoom(refresh)
   let originalCompleted = false
+  let originalFailed = false
   let phase = 'text-enlargement'
   let overflowEvidence: unknown = null
   const reads = readerReadiness.get(page)!
@@ -354,6 +355,7 @@ async function captureReaderTextZoom(page: Page, info: TestInfo, state: string, 
     await expect(refresh).toBeEnabled()
     originalCompleted = true
   } catch (error) {
+    originalFailed = true
     // The automatic failure screenshot runs after finally restores normal text.
     // Capture the actual enlarged state without replacing the original verdict.
     try {
@@ -367,7 +369,9 @@ async function captureReaderTextZoom(page: Page, info: TestInfo, state: string, 
     if (unfinishedGuard) readinessEvidence.guard = unfinishedGuard
     readinessEvidence.finalData = reads()
     await emitReaderTextZoomEvidence(page, info, state, mode, originalCompleted, phase, overflowEvidence, readinessEvidence)
-    await page.locator('html').evaluate((element, previous) => { element.style.fontSize = previous }, originalRootSize)
+    await restoreReaderTextSize(
+      () => page.locator('html').evaluate((element, previous) => { element.style.fontSize = previous }, originalRootSize),
+      originalFailed, () => console.info('Reader text-size reset failed after retained original failure'))
   }
 }
 
@@ -385,6 +389,7 @@ async function captureActiveNoticeControls(page: Page, info: TestInfo, withNext:
   const readinessEvidence: { data?: unknown; enlarged?: unknown; guard?: unknown; finalData?: unknown; completionRetainedFocus?: boolean } = {}
   let overflowEvidence: unknown = null
   let originalCompleted = false
+  let originalFailed = false
   let phase = 'completion-notice-active-setup'
   let guard: unknown
   try {
@@ -441,6 +446,7 @@ async function captureActiveNoticeControls(page: Page, info: TestInfo, withNext:
     expect(reads().ready).toBe(true)
     originalCompleted = true
   } catch (error) {
+    originalFailed = true
     await page.screenshot({ path: info.outputPath(`reader-completion-notice-active-failure-before-text-reset-${mode}-320-${candidateSha}.png`), fullPage: true, animations: 'disabled' }).catch(() => {})
     throw error
   } finally {
@@ -453,7 +459,9 @@ async function captureActiveNoticeControls(page: Page, info: TestInfo, withNext:
       console.info('Reader active-notice text-zoom evidence:', payload)
       await info.attach(`reader-completion-notice-${withNext ? 'with-next' : 'all-complete'}-active-text200-${mode}-geometry`, { body: Buffer.from(payload), contentType: 'application/json' })
     } catch (error) { console.info('Reader active-notice evidence unavailable:', error instanceof Error ? error.name : 'unknown error') }
-    await page.locator('html').evaluate((element, previous) => { element.style.fontSize = previous }, originalRootSize)
+    await restoreReaderTextSize(
+      () => page.locator('html').evaluate((element, previous) => { element.style.fontSize = previous }, originalRootSize),
+      originalFailed, () => console.info('Reader active-notice text-size reset failed after retained original failure'))
   }
 }
 
@@ -503,12 +511,16 @@ async function captureCertificateReflow(page: Page, info: TestInfo, courseIds: s
       const originalRootSize = await capturePage.locator('html').evaluate(element => element.style.fontSize)
       const rootPixels = await capturePage.locator('html').evaluate(element => parseFloat(getComputedStyle(element).fontSize))
       const originalLabelPixels = await certificate.evaluate(element => parseFloat(getComputedStyle(element).fontSize))
+      let originalFailed = false
+      let phase = 'certificate-text-enlargement'
       try {
         await capturePage.locator('html').evaluate((element, pixels) => { element.style.fontSize = `${pixels * 2}px` }, rootPixels)
         await expect.poll(() => certificate.evaluate(element => parseFloat(getComputedStyle(element).fontSize))).toBeGreaterThanOrEqual(originalLabelPixels * 1.99)
         await capturePage.evaluate(async () => { await document.fonts.ready })
         await refresh.evaluate(installReaderLayoutGuard)
+        phase = 'certificate-whole-layout-readiness'
         await capturePage.evaluate(() => (window as ReaderLayoutWindow).__readerLayoutGuard!.settle())
+        phase = 'certificate-geometry'
         await certificate.scrollIntoViewIfNeeded()
         await expect(certificate).toBeInViewport({ ratio: 1 })
         await expect(certificate).toHaveCSS('white-space', 'normal')
@@ -533,11 +545,20 @@ async function captureCertificateReflow(page: Page, info: TestInfo, courseIds: s
         await info.attach(`reader-certificate-${state}-text200-${mode}-geometry`, { body: Buffer.from(JSON.stringify({ state, mode, candidateSha, geometry })), contentType: 'application/json' })
         await capturePage.screenshot({ path: info.outputPath(`reader-certificate-${state}-text200-${mode}-320-${candidateSha}.png`), fullPage: true, animations: 'disabled' })
       } catch (error) {
+        originalFailed = true
         await capturePage.screenshot({ path: info.outputPath(`reader-certificate-${state}-failure-before-text-reset-${mode}-320-${candidateSha}.png`), fullPage: true, animations: 'disabled' }).catch(() => {})
         throw error
       } finally {
-        await capturePage.evaluate(() => (window as ReaderLayoutWindow).__readerLayoutGuard?.finish()).catch(() => undefined)
-        await capturePage.locator('html').evaluate((element, previous) => { element.style.fontSize = previous }, originalRootSize)
+        const guard = await capturePage.evaluate(() => (window as ReaderLayoutWindow).__readerLayoutGuard?.finish()).catch(() => undefined)
+        try {
+          const payload = serializeReaderEvidence({ state, mode, candidateSha, originalFailed, phase,
+            readinessEvidence: { guard, finalData: reads() } })
+          console.info('Reader certificate readiness evidence:', payload)
+          await info.attach(`reader-certificate-${state}-text200-${mode}-readiness`, { body: Buffer.from(payload), contentType: 'application/json' })
+        } catch (error) { console.info('Reader certificate readiness evidence unavailable:', error instanceof Error ? error.name : 'unknown error') }
+        await restoreReaderTextSize(
+          () => capturePage.locator('html').evaluate((element, previous) => { element.style.fontSize = previous }, originalRootSize),
+          originalFailed, () => console.info('Reader certificate text-size reset failed after retained original failure'))
       }
     }
   } finally { await context.close() }

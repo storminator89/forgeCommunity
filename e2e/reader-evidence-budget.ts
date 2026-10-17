@@ -1,10 +1,11 @@
 type Data = Record<string, any> // Diagnostic JSON only; never external DTOs.
 
 // Keep the original 192KiB ceiling. Drop redundant event-ring samples before
-// decisive milestones, leaf geometry and the retained final layout verdict.
+// decisive milestones, leaf geometry, failed-settle first/last samples and the
+// retained final layout verdict. Never discard the failed readiness summary.
 export function serializeReaderEvidence(input: Data, maxBytes = 192 * 1024) {
   const payload: Data = JSON.parse(JSON.stringify(input))
-  const truncation = { maxBytes, eventRowsRemoved: 0, intermediateDriftsRemoved: 0, duplicateStableRemoved: false, milestoneAncestorsRemoved: 0, compactFallback: false }
+  const truncation = { maxBytes, eventRowsRemoved: 0, intermediateDriftsRemoved: 0, intermediateSettleTransitionsRemoved: 0, duplicateStableRemoved: false, milestoneAncestorsRemoved: 0, compactFallback: false }
   payload.truncation = truncation
   const encode = () => JSON.stringify(payload)
   const bytes = () => Buffer.byteLength(encode())
@@ -17,6 +18,8 @@ export function serializeReaderEvidence(input: Data, maxBytes = 192 * 1024) {
   }
   const changes = payload.readinessEvidence?.guard?.changes
   while (bytes() > maxBytes && changes?.length > 2) { changes.splice(1, 1); truncation.intermediateDriftsRemoved++ }
+  const settleTransitions = payload.readinessEvidence?.guard?.settleEvidence?.transitions
+  while (bytes() > maxBytes && settleTransitions?.length > 2) { settleTransitions.splice(1, 1); truncation.intermediateSettleTransitionsRemoved++ }
   if (bytes() > maxBytes) {
     for (const milestone of payload.evidence?.milestones || []) {
       const owners = milestone.owners || []
