@@ -5,26 +5,16 @@ import { getServerSession } from '@/lib/sites-auth/server';
 import { authOptions } from '@/lib/auth';
 import { isSameOriginRequest } from '@/lib/server/auth-security';
 import { readJsonObject } from '@/lib/server/api-input';
-import { getReadableSpace, normalizeSpaceSummary, readableSpaceWhere, resolveSpaceViewer, spaceSummarySelect } from '@/lib/server/space-access';
-import { afterSpaceDirectoryCursor, pageSpaceDirectory, parseSpaceInput, readSpaceDirectoryCursor, requiredUserId, SPACE_DIRECTORY_PAGE_SIZE, SPACE_NO_STORE, spaceErrorResponse, spaceTransaction, SpaceApiError } from '@/lib/server/space-api';
+import { getReadableSpace } from '@/lib/server/space-access';
+import { d1SpaceDirectory } from '@/lib/server/d1-space-reads';
+import { parseSpaceInput, readSpaceDirectoryCursor, requiredUserId, SPACE_NO_STORE, spaceErrorResponse, spaceTransaction, SpaceApiError } from '@/lib/server/space-api';
 
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     const userId = requiredUserId(session?.user?.id);
     const cursor = readSpaceDirectoryCursor(request);
-    const page = await spaceTransaction(async tx => {
-      const viewer = await resolveSpaceViewer(userId, tx);
-      if (!viewer.userId) throw new SpaceApiError('Nicht authentifiziert', 401);
-      const rows = await tx.space.findMany({
-        where: { AND: [readableSpaceWhere(viewer), afterSpaceDirectoryCursor(cursor)] },
-        select: spaceSummarySelect(viewer),
-        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-        take: SPACE_DIRECTORY_PAGE_SIZE + 1,
-      });
-      const result = pageSpaceDirectory(rows);
-      return { items: result.items.map(row => normalizeSpaceSummary(row, viewer)), nextCursor: result.nextCursor };
-    });
+    const page = await d1SpaceDirectory(userId, cursor);
     return NextResponse.json(page, { headers: SPACE_NO_STORE });
   } catch (error) {
     return spaceErrorResponse(error, 'Spaces konnten nicht geladen werden');

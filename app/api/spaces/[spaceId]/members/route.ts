@@ -4,9 +4,8 @@ import { authOptions } from '@/lib/auth';
 import { isSameOriginRequest } from '@/lib/server/auth-security';
 import { InvalidPaginationError, readJsonObject } from '@/lib/server/api-input';
 import { getReadableSpace } from '@/lib/server/space-access';
+import { d1SpaceMembers } from '@/lib/server/d1-space-reads';
 import { requiredUserId, SPACE_ID_RE, SPACE_NO_STORE, spaceErrorResponse, spaceTransaction, SpaceApiError, validSpaceId } from '@/lib/server/space-api';
-
-const MEMBER_PAGE_SIZE = 20;
 
 function readMemberCursor(request: Request, spaceId: string) {
   const raw = new URL(request.url).searchParams.get('cursor');
@@ -34,27 +33,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const actorId = requiredUserId(session?.user?.id);
     const { spaceId: rawId } = await params;
     const spaceId = validSpaceId(rawId);
-    const result = await spaceTransaction(async tx => {
-      const actor = await tx.user.findUnique({ where: { id: actorId }, select: { role: true } });
-      if (actor?.role !== 'ADMIN') throw new SpaceApiError('Nicht autorisiert', 403);
-      const access = await getReadableSpace(spaceId, actorId, tx);
-      if (!access || access.space.visibility !== 'PRIVATE') throw new SpaceApiError('Space nicht gefunden', 404);
-      const cursor = readMemberCursor(request, spaceId);
-      const rows = await tx.spaceMember.findMany({
-        where: { spaceId, ...(cursor ? { OR: [
-          { joinedAt: { lt: cursor.joinedAt } },
-          { joinedAt: cursor.joinedAt, userId: { lt: cursor.userId } },
-        ] } : {}) },
-        select: { userId: true, joinedAt: true, user: { select: { id: true, name: true, image: true } } },
-        orderBy: [{ joinedAt: 'desc' }, { userId: 'desc' }], take: MEMBER_PAGE_SIZE + 1,
-      });
-      const pageRows = rows.slice(0, MEMBER_PAGE_SIZE);
-      const nextCursor = rows.length > MEMBER_PAGE_SIZE ? Buffer.from(JSON.stringify({
-        v: 1, kind: 'space-members', spaceId,
-        joinedAt: pageRows[pageRows.length - 1].joinedAt.toISOString(), userId: pageRows[pageRows.length - 1].userId,
-      })).toString('base64url') : null;
-      return { items: pageRows.map(row => row.user), nextCursor };
-    });
+    let cursor: ReturnType<typeof readMemberCursor> = null;
+    let cursorError: unknown;
+    try { cursor = readMemberCursor(request, spaceId); } catch (error) { cursorError = error; }
+    const result = await d1SpaceMembers(actorId, spaceId, cursor, cursorError === undefined);
+    if (cursorError !== undefined) throw cursorError;
     return NextResponse.json(result, { headers: SPACE_NO_STORE });
   } catch (error) {
     return spaceErrorResponse(error, 'Mitglieder konnten nicht geladen werden');

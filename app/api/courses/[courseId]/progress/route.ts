@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/sites-auth/server';
 import { authOptions } from '@/lib/auth';
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
-import { contentQuiz, courseContentRevision, isQuizLikeContent, matchesContentVersionToken } from '@/lib/server/course-progress';
+import { contentQuiz, courseContentRevision, isQuizLikeContent } from '@/lib/server/course-progress';
+import { matchesD1CourseContentVersionToken } from '@/lib/server/d1-course-version';
 import { CoursePathError } from '@/lib/server/course-path';
 import { assertD1ContentAccess, assertD1LearnerSnapshot, courseLearningDatabase, d1CompletionState, d1CourseSnapshotGuard,
   d1LearningDate, isD1CourseSnapshotConflict, readD1CourseSnapshot } from '@/lib/server/d1-course-learning';
@@ -53,7 +54,7 @@ export async function PATCH(request: NextRequest, props: Params) {
       if (snapshot.contents.some(row => row.parentId === content.id) || content.type === 'ASSIGNMENT' || contentQuiz(content) || isQuizLikeContent(content)) {
         throw new CoursePathError('Only non-quiz, non-assignment leaf content can be marked complete', 409);
       }
-      if (snapshot.course!.activePublicationId !== body.publicationId || !matchesContentVersionToken(body.contentVersionToken, body.publicationId, content)) {
+      if (snapshot.course!.activePublicationId !== body.publicationId || !matchesD1CourseContentVersionToken(body.contentVersionToken, body.publicationId, content.id)) {
         throw new CoursePathError('Course publication changed; reload before updating progress', 412);
       }
       assertD1ContentAccess(snapshot, content.id, body.completed);

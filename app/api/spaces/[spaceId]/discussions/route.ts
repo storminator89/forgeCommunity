@@ -6,8 +6,9 @@ import { getServerSession } from '@/lib/sites-auth/server';
 import { authOptions } from '@/lib/auth';
 import { isSameOriginRequest } from '@/lib/server/auth-security';
 import { readJsonObject } from '@/lib/server/api-input';
-import { getReadableSpace, readableSpaceDiscussionWhere } from '@/lib/server/space-access';
-import { afterSpaceCursor, normalizeSpaceDiscussion, pageSpaceRows, readSpaceCursor, SPACE_ORDER, SPACE_PAGE_SIZE, spaceDiscussionSelect } from '@/lib/server/space-discussions';
+import { getReadableSpace } from '@/lib/server/space-access';
+import { d1SpaceDiscussions } from '@/lib/server/d1-space-reads';
+import { normalizeSpaceDiscussion, readSpaceCursor, spaceDiscussionSelect } from '@/lib/server/space-discussions';
 import { parseDiscussionInput, requiredUserId, SPACE_NO_STORE, spaceErrorResponse, spaceTransaction, SpaceApiError, validSpaceId } from '@/lib/server/space-api';
 
 type Context = { params: Promise<{ spaceId: string }> };
@@ -18,17 +19,11 @@ export async function GET(request: NextRequest, { params }: Context) {
     const userId = requiredUserId(session?.user?.id);
     const { spaceId: rawId } = await params;
     const spaceId = validSpaceId(rawId);
-    const page = await spaceTransaction(async tx => {
-      const access = await getReadableSpace(spaceId, userId, tx);
-      if (!access) throw new SpaceApiError('Space nicht gefunden', 404);
-      const cursor = readSpaceCursor(request, 'discussions', spaceId);
-      const rows = await tx.spaceDiscussion.findMany({
-        where: { AND: [readableSpaceDiscussionWhere(access), afterSpaceCursor(cursor)] },
-        select: spaceDiscussionSelect, orderBy: SPACE_ORDER, take: SPACE_PAGE_SIZE + 1,
-      });
-      const result = pageSpaceRows(rows, 'discussions', spaceId);
-      return { items: result.items.map(normalizeSpaceDiscussion), nextCursor: result.nextCursor };
-    });
+    let cursor: ReturnType<typeof readSpaceCursor> = null;
+    let cursorError: unknown;
+    try { cursor = readSpaceCursor(request, 'discussions', spaceId); } catch (error) { cursorError = error; }
+    const page = await d1SpaceDiscussions(userId, spaceId, cursor, cursorError === undefined);
+    if (cursorError !== undefined) throw cursorError;
     return NextResponse.json(page, { headers: SPACE_NO_STORE });
   } catch (error) {
     return spaceErrorResponse(error, 'Diskussionen konnten nicht geladen werden');

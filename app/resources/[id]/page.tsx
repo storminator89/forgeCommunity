@@ -20,7 +20,6 @@ import {
 import axios from 'axios';
 import { ResourceType } from '@/generated/prisma/client';
 import { toast, ToastContainer } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
 import { Sidebar } from "@/components/Sidebar";
 import { getSafeNavigationUrl } from '@/lib/security';
 import { ResourcePreview } from '@/components/ResourcePreview';

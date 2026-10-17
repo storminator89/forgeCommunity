@@ -23,7 +23,6 @@ import axios from 'axios';
 import { useSession } from '@/lib/sites-auth/react';
 import type { Session } from '@/lib/sites-auth/server';
 import { ToastContainer, toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
 import { useInView } from 'react-intersection-observer';
 import { getSafeNavigationUrl } from '@/lib/security';
 import Link from 'next/link';

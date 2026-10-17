@@ -10,7 +10,7 @@ Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
 runtime data. Its frozen Sites source is
-`dea75d5aab47c8f6b9cd56295e1ef70e2f48e9b0`. It is experimental and does not
+`63c71bde59bb33066d6f4b09af3b87ed31438ca8`. It is experimental and does not
 claim feature parity with main.
 
 ## Requirements and setup
@@ -62,7 +62,7 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The current Version 10 source includes these bounded ports. Live QA is ongoing;
+The current Version 12 source includes these bounded ports. Live QA is ongoing;
 source implementation and publication do not establish complete runtime or
 all-page visual coverage.
 
@@ -72,14 +72,18 @@ all-page visual coverage.
 - Comment reads and atomic comment-plus-notification writes for other post
   authors; comment counts are derived from stored comment rows
 - Post/comment text formatting, multiline content and composer presentation
-- Privacy-scoped mission overview and personal learning-pathway reads
+- Protected Space/mission reads, privacy-scoped mission overview and personal
+  learning-pathway reads
+- Public publication/content-ID preconditions for learner writes and
+  foreground-aware polling for chat, notifications and selected directories
+- Centrally loaded notification CSS, replacing nested runtime CSS imports
 - Article category selection and inline validation, preserved form input and
   error feedback, browser navigation, and public About content
 - Repository-owned Inter font assets with relative CSS URLs and their OFL
   license, replacing checkout-origin font references
 
 This remains a partial adaptation. Course deletion, assignments and grading,
-formative practice, course Q&A/analytics, and mission detail/mutation flows are
+formative practice, course Q&A/analytics, and Space/mission mutation flows are
 unported. Other workflows may still use Prisma transaction patterns that D1
 does not support. Do not infer support for every write flow from this scope.
 

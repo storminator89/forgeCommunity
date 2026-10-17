@@ -9,7 +9,6 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useSession } from '@/lib/sites-auth/react';
 import { toast, ToastContainer } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
 import { SkillIcon } from '@/components/skills/skill-icons';
 import { OwnSkillsWorkbench } from '@/components/skills/own-skills-workbench';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';

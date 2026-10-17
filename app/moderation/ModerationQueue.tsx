@@ -13,6 +13,7 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { reportReasonLabel, type ReportStatus, type ReportTargetType } from '@/lib/reporting';
+import { isForegroundAvailable } from '@/lib/foreground-poll';
 
 interface ReportItem {
   id: string;
@@ -210,7 +211,7 @@ function ModerationQueueForViewer() {
 
   useEffect(() => {
     const revalidate = () => {
-      if (document.visibilityState === 'hidden' || accessLostRef.current ||
+      if (!isForegroundAvailable() || accessLostRef.current ||
           refreshPendingRef.current || revalidationInFlightRef.current) return;
       refreshPendingRef.current = true;
       revalidationInFlightRef.current = true;

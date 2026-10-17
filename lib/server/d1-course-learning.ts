@@ -3,7 +3,8 @@ import 'server-only';
 import { randomUUID } from 'node:crypto';
 import { env } from 'cloudflare:workers';
 import { parseAssignmentContent } from '@/app/courses/[courseId]/contents/assignment-content';
-import { contentQuiz, contentVersionToken, courseContentRevision, courseLeaves, publicCourseContent, type ProgressContent } from '@/lib/server/course-progress';
+import { contentQuiz, courseContentRevision, courseLeaves, publicCourseContent, type ProgressContent } from '@/lib/server/course-progress';
+import { d1CourseContentVersionToken } from '@/lib/server/d1-course-version';
 import { CoursePathError, coursePathAccess, publicationPathNodes } from '@/lib/server/course-path';
 import { chapterReleaseLabel } from '@/lib/course-release';
 import { groupCourseContents } from '@/lib/server/group-course-contents';
@@ -215,7 +216,7 @@ export function d1CourseContents(snapshot: D1CourseSnapshot) {
     const presented = { ...row, type: contentQuiz(row) ? 'QUIZ' : row.type ?? 'TEXT',
       createdAt: d1LearningDate(row.createdAt), updatedAt: d1LearningDate(row.updatedAt),
       publicationId: snapshot.course!.activePublicationId,
-      contentVersionToken: snapshot.course!.activePublicationId ? contentVersionToken(snapshot.course!.activePublicationId, row) : null };
+      contentVersionToken: snapshot.course!.activePublicationId ? d1CourseContentVersionToken(snapshot.course!.activePublicationId, row.id) : null };
     if (snapshot.course!.canEdit) return { ...presented, prerequisiteIds: path?.prerequisiteIds ?? [], releaseOn: path?.releaseOn ?? null };
     if (gate?.locked) return { ...presented, content: '', contentVersionToken: null, locked: true,
       releaseOn: gate.releaseOn, releaseLocked: gate.releaseLocked, prerequisiteIds: gate.prerequisiteIds, missingPrerequisites: gate.missingPrerequisites };

@@ -3,7 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/sites-auth/server';
 import { authOptions } from '@/lib/auth';
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
-import { contentQuiz, courseContentRevision, gradeQuizWithItemEvidence, InvalidQuizAnswersError, matchesContentVersionToken } from '@/lib/server/course-progress';
+import { contentQuiz, courseContentRevision, gradeQuizWithItemEvidence, InvalidQuizAnswersError } from '@/lib/server/course-progress';
+import { matchesD1CourseContentVersionToken } from '@/lib/server/d1-course-version';
 import { assertConfidenceQuestionIds, InvalidQuizConfidenceError, parseQuizConfidence } from '@/lib/server/quiz-confidence';
 import { getQuizValidationError } from '@/app/courses/[courseId]/contents/types';
 import { CoursePathError } from '@/lib/server/course-path';
@@ -52,7 +53,7 @@ export async function POST(request: NextRequest, props: Params) {
       if (snapshot.contents.some(row => row.parentId === contentId)) throw new CoursePathError('Only leaf quizzes can be submitted', 409);
       const quiz = contentQuiz(content);
       if (!quiz || getQuizValidationError(quiz)) throw new CoursePathError('Quiz is not ready', 409);
-      if (!matchesContentVersionToken(body.contentVersionToken, body.publicationId, content)) throw new CoursePathError('Quiz changed; reload before submitting', 409);
+      if (!matchesD1CourseContentVersionToken(body.contentVersionToken, body.publicationId, content.id)) throw new CoursePathError('Quiz changed; reload before submitting', 409);
       const now = new Date();
       assertD1ContentAccess(snapshot, contentId, true, now.getTime());
       const recentFailures = snapshot.recentFailures.map(row => d1LearningDate(row.submittedAt).getTime())

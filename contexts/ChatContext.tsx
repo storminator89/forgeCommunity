@@ -2,10 +2,12 @@
 'use client'
 
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, ReactNode } from 'react';
+import { usePathname } from 'next/navigation';
 import type { Session } from '@/lib/sites-auth/server';
 import { useSession } from '@/lib/sites-auth/react';
 import { ChatMessage, ChatChannel, CreateChannelInput, EditMessageInput } from '@/types/chat';
 import { BROWSER_CHAT_ALERT_PREFERENCE_EVENT, type BrowserChatAlertPreference } from '@/lib/browser-chat-alerts';
+import { isForegroundAvailable, startForegroundPolling } from '@/lib/foreground-poll';
 
 interface ChatContextType {
   channels: ChatChannel[];
@@ -42,6 +44,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 }
 
 function AccountChatProvider({ children, session }: { children: ReactNode; session: Session | null }) {
+  const isChatPage = usePathname() === '/chat';
+  const isChatPageRef = useRef(isChatPage);
   const sessionUserId = session?.user?.id;
   const isAdmin = session?.user?.role === 'ADMIN';
   const [channels, setChannels] = useState<ChatChannel[]>([]);
@@ -69,6 +73,11 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
   const readMarkGenerationRef = useRef(new Map<string, number>());
   const channelListEpochRef = useRef(0);
   const channelListRequestSequenceRef = useRef(0);
+  const channelListInFlightRef = useRef<Promise<boolean> | null>(null);
+  const messageLoadRequestRef = useRef<symbol | null>(null);
+  const messageReadRequestRef = useRef<Promise<void> | null>(null);
+
+  useLayoutEffect(() => { isChatPageRef.current = isChatPage; }, [isChatPage]);
 
   useLayoutEffect(() => {
     // This provider is keyed by account. Cancel both upload and message requests
@@ -148,6 +157,7 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
   }, [closeDesktopNotifications, session?.user?.id]);
 
   const setActiveChannel = useCallback((channel: ChatChannel) => {
+    if (!isChatPageRef.current) return;
     if (activeChannelIdRef.current === channel.id) return;
     activeChannelIdRef.current = channel.id;
     setMessages([]);
@@ -201,14 +211,6 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
         setLastSync(new Date(0));
         setLastSyncId(null);
         setCurrentChannelState(null);
-      } else if (!background && data.length > 0) {
-        // Admins can list private rooms they have not joined. An initial
-        // auto-selection must choose a readable public room; later refreshes
-        // never re-open a room already rejected by the messages endpoint.
-        const initialRoom = isAdmin
-          ? data.find((channel: ChatChannel) => !channel.isPrivate)
-          : data[0];
-        if (initialRoom) setCurrentChannelState(previousChannel => previousChannel ?? initialRoom);
       }
       return true;
     } catch (err) {
@@ -222,9 +224,20 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
         setLoading(false);
       }
     }
-  }, [isAdmin]);
+  }, []);
+
+  useEffect(() => {
+    if (!isChatPage || !sessionUserId || currentChannel) return;
+    // The global metadata refresh must never select a conversation on another
+    // page. Admins still auto-open only public rooms they are allowed to read.
+    const initialRoom = isAdmin ? channels.find(channel => !channel.isPrivate) : channels[0];
+    if (initialRoom) setActiveChannel(initialRoom);
+  }, [channels, currentChannel, isAdmin, isChatPage, sessionUserId, setActiveChannel]);
 
   const fetchMessages = useCallback(async (channelId: string, signal?: AbortSignal) => {
+    if (signal?.aborted || !isChatPageRef.current || !isForegroundAvailable() || activeChannelIdRef.current !== channelId) return;
+    const requestToken = Symbol('chat-load');
+    messageLoadRequestRef.current = requestToken;
     try {
       initialLoadedChannelRef.current = null;
       setLoadedChannelId(null);
@@ -234,6 +247,7 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
         `/api/chat/messages?channelId=${encodeURIComponent(channelId)}&latest=true&limit=50`,
         { signal },
       );
+      if (signal?.aborted) return;
       if (response.status === 403 && activeChannelIdRef.current === channelId) {
         activeChannelIdRef.current = null;
         initialLoadedChannelRef.current = null;
@@ -291,7 +305,7 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
       setError(errorMessage);
       console.error(errorMessage);
     } finally {
-      if (activeChannelIdRef.current === channelId) {
+      if (activeChannelIdRef.current === channelId && messageLoadRequestRef.current === requestToken) {
         setLoading(false);
       }
     }
@@ -300,7 +314,7 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
   const loadOlderMessages = useCallback(async () => {
     const channelId = currentChannel?.id;
     const oldest = messages[0];
-    if (!channelId || !oldest || !hasOlderMessages || olderRequestRef.current === channelId) return;
+    if (!isChatPageRef.current || !isForegroundAvailable() || !channelId || !oldest || !hasOlderMessages || olderRequestRef.current === channelId) return;
     olderRequestRef.current = channelId;
     setLoadingOlderMessages(true);
     try {
@@ -338,7 +352,9 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
   }, [currentChannel, hasOlderMessages, messages, processedMessageIds, sessionUserId]);
 
   const syncMessages = useCallback(async (signal?: AbortSignal) => {
-    if (!currentChannel || !sessionUserId || syncingRef.current || initialLoadedChannelRef.current !== currentChannel.id) return;
+    if (signal?.aborted || !isChatPageRef.current || !isForegroundAvailable() ||
+        !currentChannel || activeChannelIdRef.current !== currentChannel.id || !sessionUserId ||
+        syncingRef.current || initialLoadedChannelRef.current !== currentChannel.id) return;
 
     const channelId = currentChannel.id;
     let cursor = lastSync;
@@ -353,10 +369,12 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
       // A burst may span several 50-message pages. Drain a bounded batch now
       // instead of waiting 10 seconds per page; the next poll resumes if needed.
       for (let page = 0; page < 4; page++) {
+        if (signal?.aborted || !isChatPageRef.current || !isForegroundAvailable()) return;
         const response = await fetch(
           `/api/chat/messages?channelId=${encodeURIComponent(channelId)}&after=${encodeURIComponent(cursor.toISOString())}${cursorId ? `&afterId=${encodeURIComponent(cursorId)}` : ''}`,
           { signal },
         );
+        if (signal?.aborted) return;
         if (response.status === 403 && activeChannelIdRef.current === channelId) {
           activeChannelIdRef.current = null;
           initialLoadedChannelRef.current = null;
@@ -411,9 +429,13 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
     }
   }, [currentChannel, isWindowFocused, lastSync, lastSyncId, processedMessageIds, sessionUserId, showDesktopNotification]);
 
+  // Cursor updates must not restart the timer or abort its own response.
+  const syncMessagesRef = useRef(syncMessages);
+  useLayoutEffect(() => { syncMessagesRef.current = syncMessages; }, [syncMessages]);
+
   const markRead = useCallback(async (channelId: string, messageId: string | null) => {
     const controller = sendControllerRef.current;
-    if (!controller || controller.signal.aborted || !sessionUserId ||
+    if (!isChatPageRef.current || !isForegroundAvailable() || !controller || controller.signal.aborted || !sessionUserId ||
         activeSessionIdRef.current !== sessionUserId || activeChannelIdRef.current !== channelId ||
         initialLoadedChannelRef.current !== channelId) return;
 
@@ -485,99 +507,52 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
       return () => clearTimeout(resetTimer);
     }
 
-    // A channel list is more expensive than one room's message cursor poll.
-    // Keep at most one request in flight, pause when hidden/offline, and let
-    // failures back off instead of adding another unconditional 10s poll.
-    const refreshMs = 30_000;
-    const maxRetryMs = 120_000;
-    let stopped = false;
-    let started = false;
-    let inFlight = false;
-    let failures = 0;
-    let nextAllowedAt = 0;
-    let requestController: AbortController | null = null;
-    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
-    const canRefresh = () => document.visibilityState === 'visible' && navigator.onLine !== false;
-    const clearRefreshTimer = () => {
-      if (refreshTimer !== null) clearTimeout(refreshTimer);
-      refreshTimer = null;
-    };
-    const scheduleRefresh = () => {
-      clearRefreshTimer();
-      if (stopped || !started || inFlight || !canRefresh()) return;
-      refreshTimer = setTimeout(() => { void refresh(true); }, Math.max(0, nextAllowedAt - Date.now()));
-    };
-    const refresh = async (background: boolean) => {
-      if (stopped || inFlight || (background && !canRefresh())) return;
-      started = true;
-      inFlight = true;
-      const controller = new AbortController();
-      requestController = controller;
-      try {
-        const success = await fetchChannels(controller.signal, sessionUserId, background);
-        if (stopped) return;
-        failures = success ? 0 : Math.min(failures + 1, 3);
-        const delay = success ? refreshMs : Math.min(refreshMs * 2 ** (failures - 1), maxRetryMs);
-        nextAllowedAt = Date.now() + delay;
-      } finally {
-        inFlight = false;
-        requestController = null;
-        scheduleRefresh();
-      }
-    };
-    const initialTimer = setTimeout(() => { void refresh(false); }, 0);
-    const onVisibilityChange = () => {
-      if (canRefresh()) scheduleRefresh();
-      else clearRefreshTimer();
-    };
-    const onOnline = () => { failures = 0; nextAllowedAt = 0; scheduleRefresh(); };
-    const onOffline = () => clearRefreshTimer();
-    document.addEventListener('visibilitychange', onVisibilityChange);
-    window.addEventListener('online', onOnline);
-    window.addEventListener('offline', onOffline);
-    return () => {
-      stopped = true;
-      clearTimeout(initialTimer);
-      clearRefreshTimer();
-      requestController?.abort();
-      document.removeEventListener('visibilitychange', onVisibilityChange);
-      window.removeEventListener('online', onOnline);
-      window.removeEventListener('offline', onOffline);
-    };
-  }, [fetchChannels, processedMessageIds, sessionUserId]);
+    // Preserve global channel/unread metadata without reading message bodies
+    // away from /chat. A foreground return performs one fresh list read.
+    let initial = true;
+    return startForegroundPolling({
+      intervalMs: isChatPage ? 30_000 : 120_000,
+      maxRetryMs: 120_000,
+      poll: async signal => {
+        if (channelListInFlightRef.current) await channelListInFlightRef.current;
+        if (signal.aborted || !isForegroundAvailable()) return;
+        const request = fetchChannels(signal, sessionUserId, !initial);
+        channelListInFlightRef.current = request;
+        try {
+          const success = await request;
+          if (success) initial = false;
+          return success;
+        } finally {
+          if (channelListInFlightRef.current === request) channelListInFlightRef.current = null;
+        }
+      },
+    });
+  }, [fetchChannels, isChatPage, processedMessageIds, sessionUserId]);
 
   const currentChannelId = currentChannel?.id;
   useEffect(() => {
-    if (!sessionUserId || !currentChannelId) return;
+    if (!isChatPage || !sessionUserId || !currentChannelId) return;
 
-    const controller = new AbortController();
-    const fetchTimer = setTimeout(() => {
-      void fetchMessages(currentChannelId, controller.signal);
-    }, 0);
-
-    return () => {
-      controller.abort();
-      clearTimeout(fetchTimer);
-    };
-  }, [currentChannelId, fetchMessages, sessionUserId]);
-
-  useEffect(() => {
-    let syncInterval: NodeJS.Timeout;
-    const controller = new AbortController();
-
-    if (currentChannel && sessionUserId) {
-      syncInterval = setInterval(async () => {
-        await syncMessages(controller.signal);
-      }, 10000); // 10 Sekunden Intervall
-    }
-
-    return () => {
-      controller.abort();
-      if (syncInterval) {
-        clearInterval(syncInterval);
-      }
-    };
-  }, [currentChannel, sessionUserId, syncMessages]);
+    return startForegroundPolling({
+      intervalMs: 10_000,
+      poll: async signal => {
+        // A route/channel change aborts the previous scheduler. Wait for its
+        // request to settle before starting this page's fresh read.
+        if (messageReadRequestRef.current) await messageReadRequestRef.current;
+        if (signal.aborted || !isChatPageRef.current || !isForegroundAvailable() ||
+            activeChannelIdRef.current !== currentChannelId) return;
+        const request = initialLoadedChannelRef.current !== currentChannelId
+          ? fetchMessages(currentChannelId, signal)
+          : syncMessagesRef.current(signal);
+        messageReadRequestRef.current = request;
+        try {
+          await request;
+        } finally {
+          if (messageReadRequestRef.current === request) messageReadRequestRef.current = null;
+        }
+      },
+    });
+  }, [currentChannelId, fetchMessages, isChatPage, sessionUserId]);
 
   useEffect(() => {
     const lastMessage = messages[messages.length - 1];
@@ -750,7 +725,7 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
 
       if (currentChannel?.id === channelId) {
         const remainingChannels = channels.filter(channel => channel.id !== channelId);
-        if (remainingChannels.length > 0) {
+        if (remainingChannels.length > 0 && isChatPageRef.current) {
           setActiveChannel(remainingChannels[0]);
         } else {
           setCurrentChannelState(null);

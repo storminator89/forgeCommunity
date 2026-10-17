@@ -3,8 +3,8 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/sites-auth/server';
 import { authOptions } from '@/lib/auth';
-import { getReadableSpace } from '@/lib/server/space-access';
-import { requiredUserId, SPACE_NO_STORE, spaceErrorResponse, spaceTransaction, SpaceApiError, validSpaceId } from '@/lib/server/space-api';
+import { d1SpaceSummary } from '@/lib/server/d1-space-reads';
+import { requiredUserId, SPACE_NO_STORE, spaceErrorResponse, SpaceApiError, validSpaceId } from '@/lib/server/space-api';
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ spaceId: string }> }) {
   try {
@@ -12,7 +12,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     const userId = requiredUserId(session?.user?.id);
     const { spaceId: rawId } = await params;
     const spaceId = validSpaceId(rawId);
-    const space = await spaceTransaction(async tx => (await getReadableSpace(spaceId, userId, tx))?.space ?? null);
+    const space = await d1SpaceSummary(userId, spaceId);
     if (!space) throw new SpaceApiError('Space nicht gefunden', 404);
     return NextResponse.json(space, { headers: SPACE_NO_STORE });
   } catch (error) {

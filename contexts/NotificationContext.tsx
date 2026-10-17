@@ -4,6 +4,7 @@
 import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import { useSession } from '@/lib/sites-auth/react';
 import { NotificationType } from '@/types/notifications';
+import { isForegroundAvailable } from '@/lib/foreground-poll';
 
 interface Notification {
   id: string;
@@ -29,7 +30,7 @@ interface NotificationContextType {
 }
 
 const NotificationContext = createContext<NotificationContextType | null>(null);
-const POLL_INTERVAL_MS = 30_000;
+const POLL_INTERVAL_MS = 120_000;
 const MIN_REQUEST_GAP_MS = 2_000;
 const RETRY_START_MS = 5_000;
 const MAX_RETRY_MS = 5 * 60_000;
@@ -73,14 +74,13 @@ function SessionNotifications({ children, userId }: { children: ReactNode; userI
     let initialized = false;
     let refreshRequested = false;
     let failures = 0;
+    let lastRequestAt = 0;
     let earliestRequestAt = 0;
     let timer: ReturnType<typeof setTimeout> | null = null;
     let controller: AbortController | null = null;
+    let available = isForegroundAvailable();
 
-    // Show the first page even if a visible tab has not received keyboard
-    // focus yet; background refreshes wait until it is focused.
-    const isAvailable = () => document.visibilityState !== 'hidden' &&
-      navigator.onLine !== false && (!initialized || document.hasFocus());
+    const isAvailable = isForegroundAvailable;
     const clearTimer = () => {
       if (timer !== null) clearTimeout(timer);
       timer = null;
@@ -95,7 +95,8 @@ function SessionNotifications({ children, userId }: { children: ReactNode; userI
       if (disposed || inFlight || !isAvailable()) return;
       inFlight = true;
       refreshRequested = false;
-      earliestRequestAt = Date.now() + MIN_REQUEST_GAP_MS;
+      lastRequestAt = Date.now();
+      earliestRequestAt = lastRequestAt + MIN_REQUEST_GAP_MS;
       const currentController = new AbortController();
       controller = currentController;
       let timedOut = false;
@@ -192,7 +193,16 @@ function SessionNotifications({ children, userId }: { children: ReactNode; userI
       if (!inFlight) schedule(0);
     };
     const onAvailabilityChange = () => {
-      if (isAvailable()) refresh();
+      const nextAvailable = isAvailable();
+      if (available === nextAvailable && nextAvailable) return;
+      available = nextAvailable;
+      if (available) {
+        // Returning to the foreground revalidates once without inheriting a
+        // long failure backoff, while preserving the minimum request gap.
+        failures = 0;
+        earliestRequestAt = lastRequestAt + MIN_REQUEST_GAP_MS;
+        refresh();
+      }
       else {
         clearTimer();
         controller?.abort();
@@ -208,7 +218,10 @@ function SessionNotifications({ children, userId }: { children: ReactNode; userI
     window.addEventListener('blur', onAvailabilityChange);
     window.addEventListener('online', onAvailabilityChange);
     window.addEventListener('offline', onAvailabilityChange);
-    if (navigator.onLine === false) onAvailabilityChange();
+    if (navigator.onLine === false) {
+      setIsLoading(false);
+      setLoadError('Du bist offline. Benachrichtigungen werden nach der Verbindung aktualisiert.');
+    }
     else void load();
     return () => {
       disposed = true;

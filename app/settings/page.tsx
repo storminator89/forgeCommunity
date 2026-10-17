@@ -21,7 +21,6 @@ import { Bell, CheckCircle, XCircle, Code, Database, Languages, Edit, Trash, Awa
 import { ImageUpload } from "@/components/ImageUpload"
 import axios from 'axios'
 import { toast } from 'react-toastify'
-import 'react-toastify/dist/ReactToastify.css'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { PageState } from '@/components/page-state'
 import { publishBrowserChatAlertPreference } from '@/lib/browser-chat-alerts'

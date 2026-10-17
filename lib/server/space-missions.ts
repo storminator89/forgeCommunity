@@ -9,6 +9,7 @@ import { sanitizeTextServer } from '@/lib/server/sanitize-html';
 import type { MissionNextAction } from '@/types/space-mission-invitations';
 import { invitationTransaction, purgeMissionInvitations, revokeMissionParticipationInvitations } from '@/lib/server/space-mission-invitation-state';
 import { MissionWeekError, parseMissionWeek, resolveMissionWeek, missionWindowState } from '@/lib/mission-week-clock';
+import { listD1MissionModeration, listD1SpaceMissions, readD1SpaceMission } from '@/lib/server/d1-space-missions';
 
 export const MISSION_PARTICIPANT_LIMIT = 5;
 export const MISSION_PAGE_SIZE = 20;
@@ -149,7 +150,7 @@ export async function readMissionInTransaction(spaceId: string, id: string, user
 }
 
 export async function readMission(spaceId: string, id: string, userId: string) {
-  return spaceTransaction(tx => readMissionInTransaction(spaceId, id, userId, tx));
+  return readD1SpaceMission(spaceId, id, userId);
 }
 
 type MissionCursor = { createdAt: Date; id: string };
@@ -170,19 +171,7 @@ function readCursor(request: Request, spaceId: string): MissionCursor | null {
 }
 
 export async function listMissions(spaceId: string, userId: string, request: Request) {
-  return spaceTransaction(async tx => {
-    const access = await privateMissionAccess(spaceId, userId, tx);
-    // Validate a cursor only after authorization so it cannot reveal a Space.
-    const cursor = readCursor(request, spaceId);
-    const rows = await tx.spaceMission.findMany({ where: { spaceId, ...(cursor ? { OR: [
-      { createdAt: { lt: cursor.createdAt } }, { createdAt: cursor.createdAt, id: { lt: cursor.id } },
-    ] } : {}) }, select: missionSelect, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: MISSION_PAGE_SIZE + 1 });
-    const page = rows.slice(0, MISSION_PAGE_SIZE);
-    const last = page[page.length - 1];
-    return { items: await Promise.all(page.map(row => projectMission(row, userId, access, tx))),
-      nextCursor: rows.length > MISSION_PAGE_SIZE ? Buffer.from(JSON.stringify({ v: 1, kind: 'space-missions', spaceId,
-        createdAt: last.createdAt.toISOString(), id: last.id })).toString('base64url') : null };
-  });
+  return listD1SpaceMissions(spaceId, userId, request);
 }
 
 export async function createMission(spaceId: string, userId: string, input: ReturnType<typeof parseMissionInput>) {
@@ -398,20 +387,5 @@ export async function moderateMissionContribution(spaceId: string, id: string, c
 }
 
 export async function listMissionModeration(spaceId: string, id: string, userId: string, request: Request) {
-  return spaceTransaction(async tx => {
-    const access = await privateMissionAccess(spaceId, userId, tx);
-    if (!access.canManage) throw new SpaceApiError('Nicht autorisiert', 403);
-    await findMission(spaceId, id, tx);
-    // Cursor scope includes the mission, preventing cross-mission reuse.
-    const cursor = readCursor(request, `${spaceId}:${id}`);
-    const rows = await tx.spaceMissionContribution.findMany({ where: { missionId: id, ...(cursor ? { OR: [
-      { createdAt: { lt: cursor.createdAt } }, { createdAt: cursor.createdAt, id: { lt: cursor.id } },
-    ] } : {}) }, select: { ...contributionSelect, hiddenAt: true, withdrawnAt: true },
-    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: MISSION_PAGE_SIZE + 1 });
-    const items = rows.slice(0, MISSION_PAGE_SIZE);
-    const last = items[items.length - 1];
-    return { items: items.map(row => ({ ...serializeContribution(row, userId), hiddenAt: row.hiddenAt?.toISOString() ?? null,
-      withdrawnAt: row.withdrawnAt?.toISOString() ?? null })), nextCursor: rows.length > MISSION_PAGE_SIZE
-      ? Buffer.from(JSON.stringify({ v: 1, kind: 'space-missions', spaceId: `${spaceId}:${id}`, createdAt: last.createdAt.toISOString(), id: last.id })).toString('base64url') : null };
-  });
+  return listD1MissionModeration(spaceId, id, userId, request);
 }
