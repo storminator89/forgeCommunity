@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { expect, test, type Locator } from '@playwright/test';
+import { expect, test, type Locator, type TestInfo } from '@playwright/test';
 import { crossEngineFixtureOrigin } from './cross-engine-fixture';
 
 async function expectArtwork(image: Locator, size: number, naturalSize: number) {
@@ -25,6 +25,13 @@ async function expectArtwork(image: Locator, size: number, naturalSize: number) 
   expect(pixels).toEqual({ width: size, height: size, naturalWidth: naturalSize, naturalHeight: naturalSize, alpha: [0, 0, 0, 0] });
 }
 
+async function captureArtwork(target: Locator, testInfo: TestInfo, name: string) {
+  // The workflow uploads output-directory PNGs; body-only attachments are not files there.
+  const path = testInfo.outputPath(`${name}.png`);
+  await target.screenshot({ path });
+  await testInfo.attach(name, { path, contentType: 'image/png' });
+}
+
 for (const colorScheme of ['light', 'dark'] as const) {
   test(`generated brand and navigation remain legible, labelled and usable in ${colorScheme} mode`, async ({ page, request }, testInfo) => {
     // Validate the real isolated loopback/disposable fixture before any account request.
@@ -35,7 +42,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
       const brand = page.getByRole('link', { name: 'ForgeCommunity Startseite', exact: true });
       await expect(brand).toContainText('ForgeCommunity');
       await expectArtwork(brand.locator('img'), 36, 128);
-      await testInfo.attach(`brand-${route === '/' ? 'landing' : route.slice(1)}-${colorScheme}`, { body: await brand.screenshot(), contentType: 'image/png' });
+      await captureArtwork(brand, testInfo, `brand-${route === '/' ? 'landing' : route.slice(1)}-${colorScheme}`);
     }
 
     const id = randomUUID();
@@ -49,6 +56,13 @@ for (const colorScheme of ['light', 'dark'] as const) {
     await page.getByLabel('Passwort', { exact: true }).press('Enter');
     await expect(page).toHaveURL(/\/community$/);
 
+    // Community first mounts a loading shell, then replaces it when the session resolves.
+    // Require the real loaded feed and its signed-in sidebar before touching either shell.
+    const main = page.locator('#page-content');
+    await expect(main.getByRole('heading', { name: 'Aktuelle Beiträge', exact: true })).toBeVisible();
+    await expect(main.getByText(/^\d+ (?:Beitrag|Beiträge) geladen$/)).toBeVisible();
+    await expect(page.locator('#app-navigation-rail').getByText('Sidebar Artwork QA', { exact: true })).toHaveCount(1);
+
     const mobile = testInfo.project.name.startsWith('mobile-');
     const menu = page.getByRole('button', { name: 'Navigation öffnen', exact: true });
     if (mobile) await menu.click();
@@ -61,14 +75,14 @@ for (const colorScheme of ['light', 'dark'] as const) {
       expect(await link.evaluate(element => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
     }
     await expect(navigation.getByRole('link', { name: 'Community', exact: true })).toHaveAttribute('aria-current', 'page');
-    await testInfo.attach(`sidebar-expanded-${colorScheme}`, { body: await shell.screenshot(), contentType: 'image/png' });
+    await captureArtwork(shell, testInfo, `sidebar-expanded-${colorScheme}`);
 
     if (!mobile) {
       await shell.getByRole('button', { name: 'Navigation einklappen' }).click();
       await expect(shell).toHaveCSS('width', '88px');
       await expect(navigation.getByRole('link', { name: 'Community', exact: true })).toHaveAttribute('aria-label', 'Community');
       await expectArtwork(navigation.getByRole('link', { name: 'Community', exact: true }).locator('img'), 28, 96);
-      await testInfo.attach(`sidebar-collapsed-${colorScheme}`, { body: await shell.screenshot(), contentType: 'image/png' });
+      await captureArtwork(shell, testInfo, `sidebar-collapsed-${colorScheme}`);
       await shell.getByRole('button', { name: 'Navigation erweitern' }).click();
       await expect(shell).toHaveCSS('width', '252px');
     }
