@@ -8,6 +8,7 @@ import { ThumbsUp, Send, Loader2, CheckCircle2 } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import { ReportControl } from './ReportControl'
+import { BookmarkButton } from './bookmarks/BookmarkButton'
 import { useCommentActionFocus } from './useCommentActionFocus'
 
 const DEFAULT_AVATAR_URL = ''
@@ -31,6 +32,7 @@ interface CommentSectionProps {
   comments: Comment[]
   currentUserId?: string
   canReport?: boolean
+  canBookmark?: boolean
   canSelectSolution?: boolean
   acceptedCommentId?: string
   onSelectSolution?: (postId: string, commentId: string | null) => Promise<void>
@@ -49,6 +51,7 @@ export function CommentSection({
   comments,
   currentUserId,
   canReport = true,
+  canBookmark = false,
   canSelectSolution = false,
   acceptedCommentId,
   onSelectSolution,
@@ -208,6 +211,7 @@ export function CommentSection({
                   <CheckCircle2 className="mr-1.5 h-4 w-4" aria-hidden="true" />
                   {acceptedCommentId === comment.id ? 'Auswahl entfernen' : 'Als Lösung auswählen'}
                 </Button>}
+              {canBookmark && currentUserId && <BookmarkButton kind="comment" targetId={comment.id} />}
               {canReport && currentUserId && currentUserId !== comment.authorId &&
                 <ReportControl targetType="COMMENT" targetId={comment.id} />}
             </div>

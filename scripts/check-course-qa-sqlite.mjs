@@ -107,6 +107,13 @@ async function readyWithInvitationSuccessor(f) {
   await assert.rejects(assertCoursePublicationReady(f.url,'sqlite'),/history is missing, divergent or has changed checksums/);
   writeFileSync(join(f.migrations,successor),readFileSync(new URL(successor,directory),'utf8'));
   f.deploy();
+  // The isolated context/invitation migration assertions above are complete.
+  // Whole-app readiness additionally requires the reviewed current successor.
+  await assert.rejects(assertCoursePublicationReady(f.url,'sqlite'),/history is missing, divergent or has changed checksums/);
+  const currentSuccessor = '0030_community_bookmarks.sql';
+  assert.ok(!history(f.db).some(row => row.name === currentSuccessor));
+  writeFileSync(join(f.migrations,currentSuccessor),readFileSync(new URL(currentSuccessor,directory),'utf8'));
+  f.deploy();
   return assertCoursePublicationReady(f.url,'sqlite');
 }
 

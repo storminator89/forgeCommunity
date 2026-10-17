@@ -22,6 +22,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 // Import our new components
 import { PostForm } from '@/components/community/PostForm'
 import { PostCard } from '@/components/community/PostCard'
+import { CommunityBookmarksProvider } from '@/components/community/bookmarks/CommunityBookmarksProvider'
 import { LeaderboardCard } from '@/components/community/LeaderboardCard'
 import { StatsCard } from '@/components/community/StatsCard'
 import { ContributionMilestonesCard } from '@/components/community/ContributionMilestonesCard'
@@ -306,6 +307,11 @@ function Community({ session, topic, onSelectTopic }: { session: Session | null;
     }
   }
 
+  const bookmarkTargets = localPosts.filter(post => post.published === true).flatMap(post => [
+    { kind: 'post' as const, targetId: post.id },
+    ...post.comments.map(comment => ({ kind: 'comment' as const, targetId: comment.id })),
+  ])
+
   const feedCount = isLoading ? 'Wird geladen…' : postsLoadError && localPosts.length === 0 ? 'Nicht verfügbar' : `${localPosts.length} ${localPosts.length === 1 ? 'Beitrag geladen' : 'Beiträge geladen'}`
 
   const openComposer = () => {
@@ -334,6 +340,7 @@ function Community({ session, topic, onSelectTopic }: { session: Session | null;
             {session?.user?.id && <SparkEntry className="mb-3" />}
             {session?.user?.id && session.user.role === 'USER' && <FirstActionGuide userId={session.user.id} />}
             <div className="flex min-w-0 flex-col items-start gap-10 lg:flex-row lg:flex-wrap lg:gap-12">
+              <CommunityBookmarksProvider accountId={session?.user?.id} targets={bookmarkTargets}>
               <section aria-labelledby="community-feed-title" className="w-full min-w-0 lg:flex-[2_1_24rem]">
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
                   <h2 id="community-feed-title" tabIndex={-1} className="text-xl font-semibold tracking-tight focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Aktuelle Beiträge</h2>
@@ -437,6 +444,7 @@ function Community({ session, topic, onSelectTopic }: { session: Session | null;
                   </div>
                 </div>
               </section>
+              </CommunityBookmarksProvider>
 
 <aside aria-label="Deine Community im Überblick" className="w-full min-w-0 space-y-9 lg:sticky lg:top-8 lg:max-w-[19rem] lg:flex-[1_1_16rem]">
                 <StatsCard stats={activity} activityLoading={activityLoading} activityError={activityError} onRetryActivity={refreshActivity} rewards={rewards} rewardsLoading={rewardsLoading} rewardsError={rewardsError} isSignedIn={!!session} />

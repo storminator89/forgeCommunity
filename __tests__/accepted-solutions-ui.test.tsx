@@ -33,6 +33,7 @@ function deferred<T>() {
   return { promise, resolve }
 }
 function fallback(url: string) {
+  if (url === '/api/community/bookmarks/state') return response({ states: [] })
   if (url === '/api/contributions/me') return response({ eligible: true, selectedByAuthors: 0, saturated: false })
   if (url === '/api/leaderboard') return response([])
   if (url === '/api/rewards/me') return response({ points: 0, completedCourses: 0, firstCourseCompleted: false })

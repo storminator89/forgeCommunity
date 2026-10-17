@@ -112,6 +112,7 @@ model Endorsement {
 }
 
 model User {
+  communityBookmarks CommunityBookmark[]
   id                 String          @id @default(cuid())
   name               String?
   email              String          @unique
@@ -233,6 +234,7 @@ model Session {
 }
 
 model Post {
+  communityBookmarks CommunityBookmark[]
   id        String     @id @default(cuid())
   title     String
   content   String
@@ -255,6 +257,7 @@ model Post {
 }
 
 model Comment {
+  communityBookmarks CommunityBookmark[]
   id           String        @id @default(cuid())
   content      String
   createdAt    DateTime      @default(now())
@@ -1571,4 +1574,25 @@ model Certificate {
   @@index([userId])
   @@index([courseId])
   @@index([publicationId])
+}
+
+// Private account-owned references to one global post or comment; no copied content.
+model CommunityBookmark {
+  id                   String   @id @default(cuid())
+  userId               String
+  postId               String?
+  commentId            String?
+  savedAt              DateTime?
+  revision             Int      @default(1)
+  lastRequestId        String
+  lastExpectedRevision Int
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post                 Post?    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  comment              Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@unique([userId, commentId])
+  @@index([userId, savedAt, id])
+  @@index([postId])
+  @@index([commentId])
 }
