@@ -6,7 +6,7 @@ import { expect, test, type Locator, type Page, type Route } from '@playwright/t
 import { createDeferredCaptureErrors } from './deferred-capture-errors'
 import { installReaderLayoutGuard, type ReaderLayoutWindow } from './reader-layout-readiness'
 import { serializeReaderEvidence } from './reader-evidence-budget'
-import { legacyQaReplyButtonClassName, probeLegacyQaReplyButton, readQaReflowEvidence } from './qa-reflow-evidence'
+import { insetQaReplyCapture, legacyQaReplyButtonClassName, probeLegacyQaReplyButton, readQaReflowEvidence } from './qa-reflow-evidence'
 
 const origin = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3013'
 const candidateSha = /^[a-f0-9]{40}$/.test(process.env.GITHUB_SHA ?? '') ? process.env.GITHUB_SHA! : 'local-unverified-sha'
@@ -227,6 +227,10 @@ test('lesson provenance survives real creation, retained pages, republish, chose
                   await page.keyboard.press('Tab'); await expect(replyControl).toBeFocused()
                   expect(await replyControl.evaluate(element => element.matches(':focus-visible'))).toBe(true)
                   await replyControl.evaluate(element => element.closest('form')!.scrollIntoView({ block: 'end', inline: 'nearest', behavior: 'instant' }))
+                  const captureInset = await replyControl.evaluate(insetQaReplyCapture)
+                  expect(captureInset.after.top).toBeGreaterThanOrEqual(captureInset.visibleBounds.top)
+                  expect(captureInset.after.bottom).toBeLessThanOrEqual(captureInset.visibleBounds.bottom)
+                  console.info('Lesson Q&A lower capture inset:', JSON.stringify({ candidateSha, theme, width, zoom, captureInset }))
                   const controls = await replyControl.evaluate(element => {
                     const form = element.closest('form')!; const main = document.getElementById('page-content')!
                     const pane = main.getBoundingClientRect()

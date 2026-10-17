@@ -46,3 +46,24 @@ export function probeLegacyQaReplyButton(reply: Element, legacyClassName: string
   finally { if (original === null) reply.removeAttribute('class'); else reply.setAttribute('class', original) }
   return { corrected, legacy, restored: measure(), classRestored: reply.getAttribute('class') === original }
 }
+
+// Native scrollIntoView(end) can leave a fractional CSS-pixel remainder because
+// scrollTop is rounded. Reserve visible focus-ring space with one measured,
+// bounded vertical scroll. This does not focus, restyle, clip, or retry anything.
+export function insetQaReplyCapture(reply: Element) {
+  const main = document.getElementById('page-content')
+  if (!(reply instanceof HTMLButtonElement) || reply.type !== 'submit' || !reply.form?.querySelector('#qa-reply') ||
+      !reply.closest('section[aria-label="Frage und Antworten"]') || !main?.contains(reply) || !reply.isConnected) {
+    throw new Error('Q&A capture inset requires the connected real reply button')
+  }
+  const inset = 8
+  const pane = main.getBoundingClientRect(); const before = reply.getBoundingClientRect()
+  const top = Math.max(0, pane.top) + inset; const bottom = Math.min(innerHeight, pane.bottom) - inset
+  if (before.height > bottom - top) throw new Error('Q&A reply control cannot fit within the capture focus inset')
+  const delta = Math.max(0, Math.ceil(before.bottom - bottom))
+  if (delta > inset + 1) throw new Error('Q&A reply capture is outside the expected native end-alignment rounding bound')
+  if (delta) main.scrollBy({ top: delta, behavior: 'instant' })
+  const after = reply.getBoundingClientRect()
+  return { inset, delta, before: { top: before.top, bottom: before.bottom }, after: { top: after.top, bottom: after.bottom },
+    visibleBounds: { top, bottom }, scrollTop: main.scrollTop, scrollLeft: main.scrollLeft }
+}

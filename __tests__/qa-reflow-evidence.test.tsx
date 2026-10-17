@@ -5,7 +5,7 @@ import ts from 'typescript'
 import { render, screen } from '@testing-library/react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { legacyQaReplyButtonClassName, probeLegacyQaReplyButton, readQaReflowEvidence } from '../e2e/qa-reflow-evidence'
+import { insetQaReplyCapture, legacyQaReplyButtonClassName, probeLegacyQaReplyButton, readQaReflowEvidence } from '../e2e/qa-reflow-evidence'
 
 const wrapping = 'h-auto min-h-11 min-w-0 max-w-full whitespace-normal [overflow-wrap:anywhere]'
 function fixture(className: string | null = wrapping) {
@@ -96,4 +96,47 @@ it.each(['detached', 'wrong-region', 'outside-main', 'not-button', 'wrong-contro
   expect(() => readQaReflowEvidence(target)).toThrow('requires')
   expect(() => probeLegacyQaReplyButton(target, legacyQaReplyButtonClassName)).toThrow('requires')
   expect(target.getAttribute('class')).toBe(original)
+})
+
+function captureFixture(bottom = 800.375, height = 152) {
+  const { main, reply } = fixture()
+  jest.replaceProperty(window, 'innerHeight', 800)
+  main.getBoundingClientRect = () => ({ top: 225, bottom: 800 }) as DOMRect
+  reply.getBoundingClientRect = () => ({ top: bottom - height - main.scrollTop, bottom: bottom - main.scrollTop, height }) as DOMRect
+  main.scrollBy = jest.fn((options?: ScrollToOptions | number) => { if (typeof options === 'object') main.scrollTop += options.top ?? 0 })
+  return { main, reply }
+}
+
+it.each([{ bottom: 800.375, delta: 9, after: 791.375 }, { bottom: 800, delta: 8, after: 792 }])('preserves strict viewport bounds with one bounded native focus inset: %j', ({ bottom, delta, after }) => {
+  const { main, reply } = captureFixture(bottom)
+  const textbox = document.querySelector('textarea')!; textbox.focus(); const before = document.body.innerHTML
+  const evidence = insetQaReplyCapture(reply)
+  expect(evidence).toMatchObject({ inset: 8, delta, before: { bottom }, after: { bottom: after }, visibleBounds: { top: 233, bottom: 792 } })
+  expect(main.scrollBy).toHaveBeenCalledTimes(1); expect(main.scrollBy).toHaveBeenCalledWith({ top: delta, behavior: 'instant' })
+  expect(evidence.after.bottom).toBeLessThanOrEqual(evidence.visibleBounds.bottom)
+  expect(document.body.innerHTML).toBe(before); expect(document.activeElement).toBe(textbox)
+})
+
+it('does not scroll a control that already has the full focus inset', () => {
+  const { main, reply } = captureFixture(790)
+  expect(insetQaReplyCapture(reply).delta).toBe(0); expect(main.scrollBy).not.toHaveBeenCalled()
+})
+
+it.each([{ bottom: 805, height: 152, error: 'rounding bound' }, { bottom: 800, height: 600, error: 'cannot fit' }])('rejects unexpected framing instead of masking it: %j', ({ bottom, height, error }) => {
+  const { main, reply } = captureFixture(bottom, height)
+  expect(() => insetQaReplyCapture(reply)).toThrow(error); expect(main.scrollBy).not.toHaveBeenCalled()
+})
+
+it('never retries or invents geometry when the native scrollport cannot move', () => {
+  const { main, reply } = captureFixture()
+  main.scrollBy = jest.fn()
+  const evidence = insetQaReplyCapture(reply)
+  expect(main.scrollBy).toHaveBeenCalledTimes(1)
+  expect(evidence.after.bottom).toBe(800.375)
+  expect(evidence.after.bottom).toBeGreaterThan(800) // The unchanged real viewport assertion must still fail.
+})
+
+it('rejects a disconnected capture target before attempting native scroll', () => {
+  const { main, reply } = captureFixture(); reply.remove()
+  expect(() => insetQaReplyCapture(reply)).toThrow('connected real reply'); expect(main.scrollBy).not.toHaveBeenCalled()
 })
