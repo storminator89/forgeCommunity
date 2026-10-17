@@ -22,6 +22,7 @@ type SnapshotData = {
   progress: { contentId: string; revision: string }[];
   assignmentPasses: { contentId: string }[];
   quizPasses: { contentId: string; revision: string }[];
+  latestQuizAttempts: { contentId: string; publicationId: string; score: number; passed: number; submittedAt: StoredDate }[];
   certificate: { id: string } | null;
   attempt: { id: string; courseId: string; publicationId: string | null; answerDigest: string; confidenceDigest: string | null;
     score: number; passed: number; questionIds: string[] } | null;
@@ -79,6 +80,15 @@ const snapshotSql = `WITH viewer AS (SELECT id, name, email, role, isTestAccount
       SELECT DISTINCT a.contentId, a.revision FROM QuizAttempt a JOIN authorized c ON c.id = a.courseId
       JOIN json_each(?4) m ON json_extract(m.value, '$.id') = a.contentId AND json_extract(m.value, '$.revision') = a.revision
       WHERE a.userId = ?1 AND a.passed = 1 ORDER BY a.contentId, a.revision))),
+    'latestQuizAttempts', json((SELECT json_group_array(json_object('contentId', contentId, 'publicationId', publicationId,
+      'score', score, 'passed', passed, 'submittedAt', submittedAt)) FROM (SELECT * FROM (
+      SELECT own.*, ROW_NUMBER() OVER (PARTITION BY own.contentId ORDER BY
+        CASE WHEN typeof(own.submittedAt) IN ('integer', 'real') THEN own.submittedAt
+          ELSE (julianday(own.submittedAt) - 2440587.5) * 86400000 END DESC, own.id DESC) AS position
+      FROM QuizAttempt own JOIN authorized c ON c.id = own.courseId AND c.activePublicationId = own.publicationId
+      JOIN Enrollment e ON e.userId = own.userId AND e.courseId = own.courseId
+      JOIN json_each(?4) m ON json_extract(m.value, '$.id') = own.contentId AND json_extract(m.value, '$.revision') = own.revision
+      WHERE own.userId = ?1) WHERE position = 1 ORDER BY contentId))),
     'certificate', (SELECT json_object('id', cert.id) FROM Certificate cert JOIN authorized c ON c.id = cert.courseId
       WHERE cert.userId = ?1 ORDER BY cert.issuedAt DESC, cert.id DESC LIMIT 1),
     'attempt', (SELECT json_object('id', a.id, 'courseId', a.courseId, 'publicationId', a.publicationId,
@@ -223,6 +233,25 @@ export function d1CourseContents(snapshot: D1CourseSnapshot) {
     return { ...publicCourseContent(presented), locked: false, releaseOn: gate?.releaseOn ?? null,
       releaseLocked: false, prerequisiteIds: gate?.prerequisiteIds ?? [], missingPrerequisites: [] };
   }));
+}
+
+/** Own, current-publication summaries only. Never project private scoring
+ * digests, raw answers, confidence or question/item evidence. This read does
+ * not submit an attempt or grant/change completion. */
+export function d1LatestQuizAttempts(snapshot: D1CourseSnapshot) {
+  if (!snapshot.enrollment || !snapshot.course?.activePublicationId) return [];
+  assertD1LearnerSnapshot(snapshot, { requireEnrollment: true, requirePublication: true });
+  const nodes = d1PublicationNodes(snapshot);
+  const gates = coursePathAccess(nodes, d1CompletionState(snapshot).completedContentIds);
+  const children = new Set(snapshot.contents.map(row => row.parentId));
+  const quizzes = new Set(snapshot.contents.filter(row => !children.has(row.id) && contentQuiz(row)).map(row => row.id));
+  return snapshot.latestQuizAttempts.filter(row => quizzes.has(row.contentId) && gates.get(row.contentId)?.locked === false).map(row => {
+    if (!Number.isFinite(row.score) || row.score < 0 || row.score > 100 || ![0, 1].includes(row.passed)) {
+      throw new Error('Invalid stored quiz attempt summary');
+    }
+    return { contentId: row.contentId, publicationId: row.publicationId, score: row.score,
+      passed: Boolean(row.passed), submittedAt: d1LearningDate(row.submittedAt).toISOString() };
+  });
 }
 
 // All capacity/price/completion/account predicates are evaluated by SQLite in

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react';
-import { CourseContent, parseQuizContent } from './types';
+import { CourseContent, parseQuizContent, type LatestQuizAttempt } from './types';
 import { Editor } from '@/components/Editor';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,13 +28,14 @@ interface ContentRendererProps {
   learnerRefreshKey?: number;
   onReaderIssue?: (status: number) => void;
   onQuizPassed?: () => void;
+  latestQuizAttempt?: LatestQuizAttempt;
 }
 
 export function ContentRenderer(props: ContentRendererProps) {
   return <ContentRendererState key={props.content.id} {...props} />;
 }
 
-function ContentRendererState({ content, isEditing: externalIsEditing, onSave, onEditToggle, learnerQuiz, learnerRefreshKey, onReaderIssue, onQuizPassed }: ContentRendererProps) {
+function ContentRendererState({ content, isEditing: externalIsEditing, onSave, onEditToggle, learnerQuiz, learnerRefreshKey, onReaderIssue, onQuizPassed, latestQuizAttempt }: ContentRendererProps) {
   const [internalIsEditing, setInternalIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -128,7 +129,7 @@ function ContentRendererState({ content, isEditing: externalIsEditing, onSave, o
     );
   }
 
-  if (learnerQuiz && content.type === 'QUIZ') return <LearnerQuizRenderer key={`${content.publicationId ?? ''}:${content.contentVersionToken ?? content.updatedAt ?? ''}:${JSON.stringify(content.content)}`} courseId={content.courseId} contentId={content.id} updatedAt={content.updatedAt} publicationId={content.publicationId} contentVersionToken={content.contentVersionToken} content={content.content} onReaderIssue={onReaderIssue} onPassed={() => onQuizPassed?.()} />;
+  if (learnerQuiz && content.type === 'QUIZ') return <LearnerQuizRenderer key={`${content.publicationId ?? ''}:${content.contentVersionToken ?? content.updatedAt ?? ''}:${JSON.stringify(content.content)}`} courseId={content.courseId} contentId={content.id} updatedAt={content.updatedAt} publicationId={content.publicationId} contentVersionToken={content.contentVersionToken} content={content.content} latestAttempt={latestQuizAttempt} onReaderIssue={onReaderIssue} onPassed={() => onQuizPassed?.()} />;
   if (content.type === 'ASSIGNMENT') {
     const assignment = parseAssignmentContent(content.content);
     if (!assignment) return <p role="alert">Die Aufgabe ist ungültig.</p>;

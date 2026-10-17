@@ -73,6 +73,14 @@ export interface LearnerQuizContent {
   passingScore: number;
 }
 
+export interface LatestQuizAttempt {
+  contentId: string;
+  publicationId: string;
+  score: number;
+  passed: boolean;
+  submittedAt: string;
+}
+
 export interface CourseProgressSnapshot {
   publicationId?: string | null;
   completedContentIds: string[];
@@ -81,6 +89,7 @@ export interface CourseProgressSnapshot {
   canTrack: boolean;
   hasCertificate: boolean;
   completedAt: string | null;
+  latestQuizAttempts?: LatestQuizAttempt[];
 }
 
 export function parseLearnerQuizContent(value: unknown): LearnerQuizContent | null {

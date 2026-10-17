@@ -10,7 +10,7 @@ Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
 runtime data. Its frozen Sites source is
-`63c71bde59bb33066d6f4b09af3b87ed31438ca8`. It is experimental and does not
+`6a6b1d7f0cedc28cec2e47e76e575ef87ec8e7a2`. It is experimental and does not
 claim feature parity with main.
 
 ## Requirements and setup
@@ -37,6 +37,14 @@ project's ID. Bind its own `DB` and `BUCKET` resources. The template contains no
 live project identity, database ID, bucket ID, credential, or saved user data.
 Do not reuse someone else's project ID or deployment credential.
 
+Certificate verification URLs and QR codes are pinned to the archived Site's
+verified canonical HTTPS origin by `CERTIFICATE_ORIGIN` in
+`lib/server/certificate-pdf.ts`. If you fork this branch, set that constant to
+your own verified Site origin before publishing your fork. Otherwise newly
+generated certificates will link to the archived Site rather than your own.
+Registering a new Sites project or editing the hosting template does not
+automatically change the certificate origin.
+
 ```sh
 npm ci
 npm run dev
@@ -62,7 +70,7 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The current Version 12 source includes these bounded ports. Live QA is ongoing;
+The current Version 13 source includes these bounded ports. Live QA is ongoing;
 source implementation and publication do not establish complete runtime or
 all-page visual coverage.
 
@@ -71,6 +79,8 @@ all-page visual coverage.
   quizzes and certificates
 - Comment reads and atomic comment-plus-notification writes for other post
   authors; comment counts are derived from stored comment rows
+- Latest own quiz-attempt display on reopening, with an explicit repeat action
+- Embedded licensed certificate fonts and bounded wrapping for names/titles
 - Post/comment text formatting, multiline content and composer presentation
 - Protected Space/mission reads, privacy-scoped mission overview and personal
   learning-pathway reads
@@ -97,7 +107,9 @@ their standalone wrapper is not part of this source snapshot. The inherited
 still import native bcrypt or NextAuth dependencies absent from this branch.
 
 Validation for this work is limited to the published Site and the exact source
-build reported with its release. No new local test suite or GitHub CI run is
+build reported with its release. Version 13 passed production typechecking
+and its build; live regression checking is still in progress. No new local
+test suite or GitHub CI run is
 part of this work. The inherited standard pipeline is unchanged: pushes run
 only for main/master, and no pull request is opened for this branch. Recheck
 workflow triggers before opening any future pull request. A passed build is

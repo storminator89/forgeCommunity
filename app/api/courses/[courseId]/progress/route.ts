@@ -6,7 +6,7 @@ import { contentQuiz, courseContentRevision, isQuizLikeContent } from '@/lib/ser
 import { matchesD1CourseContentVersionToken } from '@/lib/server/d1-course-version';
 import { CoursePathError } from '@/lib/server/course-path';
 import { assertD1ContentAccess, assertD1LearnerSnapshot, courseLearningDatabase, d1CompletionState, d1CourseSnapshotGuard,
-  d1LearningDate, isD1CourseSnapshotConflict, readD1CourseSnapshot } from '@/lib/server/d1-course-learning';
+  d1LearningDate, d1LatestQuizAttempts, isD1CourseSnapshotConflict, readD1CourseSnapshot } from '@/lib/server/d1-course-learning';
 import { d1CourseRewardStatements, d1RewardNodes } from '@/lib/server/d1-course-rewards';
 import { randomUUID } from 'node:crypto';
 
@@ -23,7 +23,8 @@ export async function GET(_request: NextRequest, props: Params) {
       : { completedContentIds: [], complete: false, canIssueCertificate: false };
     return NextResponse.json({ ...progress, canTrack: Boolean(snapshot.enrollment && snapshot.course!.activePublicationId),
       hasCertificate: Boolean(snapshot.certificate), completedAt: snapshot.enrollment?.completedAt == null ? null : d1LearningDate(snapshot.enrollment.completedAt),
-      publicationId: snapshot.course!.activePublicationId }, { headers: { 'Cache-Control': 'private, no-store' } });
+      publicationId: snapshot.course!.activePublicationId, latestQuizAttempts: d1LatestQuizAttempts(snapshot) },
+      { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     if (error instanceof CoursePathError) return NextResponse.json({ error: error.message }, { status: error.status });
     console.error('Failed to read course progress:', error);
