@@ -81,7 +81,8 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
   const router = useRouter();
   const [project, setProject] = useState<Project | null>(null);
   const [comments, setComments] = useState<ProjectComment[]>([]);
-  const [newComment, setNewComment] = useState('');
+  const [commentDraft, setCommentDraft] = useState({ text: '', revision: 0 });
+  const newComment = commentDraft.text;
   const [isLiked, setIsLiked] = useState(false);
 
   const [isLoading, setIsLoading] = useState(true);
@@ -92,6 +93,7 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
   const [isCommenting, setIsCommenting] = useState(false);
   const likeRequest = useRef(false);
   const commentRequest = useRef(false);
+  const commentViewActive = useRef(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [editProjectData, setEditProjectData] = useState<{
@@ -110,6 +112,11 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
     image: null,
   });
   const safeProjectLink = project ? getSafeHttpUrl(project.link) : null;
+
+  useEffect(() => {
+    commentViewActive.current = true;
+    return () => { commentViewActive.current = false; };
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -198,13 +205,14 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
   }
 
   const handleComment = async () => {
-    if (commentRequest.current) return;
+    if (!commentViewActive.current || commentRequest.current) return;
     if (!session || !project) {
       alert('Bitte melde dich an, um einen Kommentar hinzuzufügen.');
       return;
     }
 
-    if (!newComment.trim()) {
+    const submittedDraft = commentDraft;
+    if (!submittedDraft.text.trim()) {
       alert('Kommentar darf nicht leer sein.');
       return;
     }
@@ -217,7 +225,7 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ content: newComment }),
+        body: JSON.stringify({ content: submittedDraft.text }),
       });
 
       if (!res.ok) {
@@ -226,6 +234,7 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
       }
 
       const addedComment: ProjectComment = await res.json();
+      if (!commentViewActive.current) return;
 
       // Update both comments and project state
       setComments(prev => [...prev, addedComment]);
@@ -234,13 +243,17 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
         comments: [...prev.comments, addedComment]
       } : prev);
 
-      setNewComment('');
+      // Keep anything typed since this POST began, even if the person edited
+      // back to identical text. Only the submitted revision may be cleared.
+      setCommentDraft(current => current.revision === submittedDraft.revision
+        ? { text: '', revision: current.revision + 1 } : current);
     } catch (error: any) {
+      if (!commentViewActive.current) return;
       console.error('Error adding comment:', error);
       alert(error.message || 'Fehler beim Hinzufügen des Kommentars.');
     } finally {
       commentRequest.current = false;
-      setIsCommenting(false);
+      if (commentViewActive.current) setIsCommenting(false);
     }
   }
 
@@ -506,7 +519,10 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
                             aria-label="Dein Kommentar zum Projekt"
                             placeholder="Teile deine Gedanken…"
                             value={newComment}
-                            onChange={(e) => setNewComment(e.target.value)}
+                            onChange={(event) => {
+                              const text = event.target.value;
+                              setCommentDraft(current => ({ text, revision: current.revision + 1 }));
+                            }}
                             className="min-h-[100px] bg-background"
                           />
                           <div className="flex justify-end">

@@ -9,11 +9,11 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up the published Version 37 source
-`5808f87632fde1b6c2003f87167f3dd55ebb3886`. Version 37 deployed successfully on
-17 October 2026 at 23:02:26 UTC. The project-header layout-only fix is live;
-bounded desktop layout and keyboard-focus readback passed. Original project
-content is unchanged; positive Space POST/replay/race acceptance remains unverified.
+runtime data. This GitHub snapshot backs up the published Version 38 source
+`103c0a3a6873046fa42feb272685ca1732fcc1d0`. Version 38 deployed successfully on
+17 October 2026 at 23:12:12 UTC. The project-comment draft-revision and unmounted-
+view guard fix is live; published comment acceptance is in progress. The Version
+37 header remains byte-identical. Space POST/replay/race acceptance stays open.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -74,8 +74,8 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 37 source includes the existing bounded ports below,
-inherited from Version 36, plus the scoped project-header layout correction described
+The published Version 38 source includes the existing bounded ports below,
+inherited from Version 37, plus the project-comment draft/lifecycle guard described
 below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
@@ -145,6 +145,9 @@ all-page visual coverage.
 - Project-detail header presentation with a bounded title scale, wrapping
   metadata, separate action row and 44-pixel minimum action targets; original
   content and behavior unchanged, bounded desktop layout readback passed
+- Project-comment draft revisions preserve edits made during a pending POST;
+  unmounted views suppress late UI success/errors; source-reviewed race and
+  lifecycle guards, published acceptance pending
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -597,6 +600,32 @@ Mobile/narrow layouts and other long-content or action-behavior variants remain
 unverified live. Earlier bounded acceptance and open flow limits remain as
 documented above. The curated roadmap is retained byte-identically at its dated
 Version 32 base.
+
+## Version 38 project-comment draft revision and lifecycle guard
+
+Version 38 changes only the existing project-detail page. The comment field
+tracks text and a monotonically incremented local revision. Submission captures
+the draft, and successful completion clears only that submitted revision.
+Typing during a pending POST is preserved, including editing back to the same
+text. The existing single-pending-request guard remains. An active-view guard
+suppresses late success/error UI and state changes after the viewer unmounts.
+
+The complete Version 37 project-header block is byte-identical. Existing
+comment API, content payload field, server behavior, permissions, authentication
+and scoring are unchanged; the backup contains no comment contents, account
+names, project/comment identifiers or screenshots. The revision is local view
+state and is not a server request receipt or an exactly-once guarantee.
+
+Independent exact-path source review, production typechecking/build and static
+artifact/archive checks passed. Deployment succeeded on 17 October 2026 at
+23:12:12 UTC. Published normal-comment acceptance is in progress. Pending-edit,
+same-text edit-back, repeated-submit, late unmount response, account/view
+transition and error-path race behavior remain source-reviewed only until live
+evidence is available. A successful ordinary POST would not establish those
+races. The backup itself did not invoke a comment write.
+
+Earlier bounded acceptance and open flow limits remain as documented above.
+The curated roadmap remains byte-identical at its dated Version 32 base.
 
 ## Keeping the branches separate
 
