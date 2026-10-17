@@ -9,9 +9,11 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. Its frozen Sites source is
-`e37e09f5e9f9ea0db7788e0bedcb082f5dfc4efe`. It is experimental and does not
-claim feature parity with main.
+runtime data. This GitHub snapshot backs up the saved Version 25 candidate
+source `cdb9761a20e602d77e52f594d57d36729abbe821`. Version 25 is saved but is NOT deployed or live; public
+feature publication still awaits explicit approval. The published Site remains
+Version 24, source `e37e09f5e9f9ea0db7788e0bedcb082f5dfc4efe`.
+This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
 
@@ -71,9 +73,10 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The current Version 24 source includes these bounded ports. Live QA is ongoing;
-source implementation and publication do not establish complete runtime or
-all-page visual coverage.
+The saved Version 25 backup candidate includes the existing bounded ports
+below, inherited from the published Version 24 source. The Version 25 community
+progress UI is saved source only and has no runtime acceptance. Earlier live
+checks do not establish Version 25 behavior or all-page visual coverage.
 
 - D1-backed private course creation and draft editing, authoring-list/detail
   reads, review, publication, learner content reads, enrollment, progress,
@@ -195,6 +198,22 @@ workflow triggers before opening any future pull request. A passed build is
 not evidence that untested product flows work. Record live checks separately,
 without committing account data, cookies, screenshots containing private
 data, or database files.
+
+## Saved Version 25 candidate, not live
+
+This backup adds a private community learning-progress card using the existing
+own rewards read. It distinguishes historical distinct course-completion
+milestones at 1, 3, and 5 courses from the active points ledger, and includes
+account/revision/abort isolation plus bounded response validation. Existing
+contribution statistics remain separate. It changes no backend, API, scoring,
+configuration, environment, host, or access setup.
+
+Version 25 source review, production typechecking/build, and static artifact
+checks passed. It has been saved as a Sites candidate and backed up on this
+GitHub branch only. It has NOT been deployed; no Version 25 runtime, functional,
+or visual acceptance has been performed. Public feature publication awaits
+explicit approval. The public Site remains Version 24 at source
+`e37e09f5e9f9ea0db7788e0bedcb082f5dfc4efe`.
 
 ## Keeping the branches separate
 
