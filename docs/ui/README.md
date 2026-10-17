@@ -1,13 +1,65 @@
 # App screenshot provenance
 
-All PNGs in this README gallery show actual ForgeCommunity rendering without
-image generation, API-response substitution, compositing, hidden/rewritten UI,
-or added browser/phone chrome. Selected files were copied byte-for-byte from
-their named GitHub Actions artifacts and inspected at original dimensions.
-All authenticated content is disposable synthetic test data. A browser journey
-can set up database fixtures directly; the soft-week fixture is disclosed below.
+All PNGs in this README gallery are unedited captures of actual ForgeCommunity
+browser rendering, with no API-response substitution, compositing,
+hidden/rewritten UI, or added browser/phone chrome. The Home illustration inside
+the app is generated fictional artwork of two adults; it is not a photograph or
+a generated interface screenshot. Its [asset provenance](../../public/images/home/forge-workbench.provenance.json)
+records the original and proportional WebP derivatives. Selected screenshots
+were copied byte-for-byte from their named GitHub Actions artifacts and
+inspected at original dimensions. All authenticated content is disposable
+synthetic test data. A browser journey can set up database fixtures directly;
+the soft-week fixture is disclosed below.
 
-## Current Space captures
+## Current Home captures
+
+- Capture date: 17 October 2026 (UTC)
+- PR #77 head: [`686c029b1e0f6c2fe8f82b3afd57fbfe977db3e1`](https://github.com/storminator89/forgeCommunity/commit/686c029b1e0f6c2fe8f82b3afd57fbfe977db3e1)
+- CI checkout: [`2b36d77f7dc6b76e2ae62c54d5390f289e9c562b`](https://github.com/storminator89/forgeCommunity/commit/2b36d77f7dc6b76e2ae62c54d5390f289e9c562b)
+- Merged main: [`dfc76958365e1afc321f8f8b41aa27038f72919b`](https://github.com/storminator89/forgeCommunity/commit/dfc76958365e1afc321f8f8b41aa27038f72919b). All three commits have tree `7ae6960cadcd5c5eb6c7318bb1216f3d96a8a3c6`.
+- Workflow: [exact-head PR run 38985703183](https://github.com/storminator89/forgeCommunity/actions/runs/38985703183), **all seven jobs passed**, including the three Chromium projects and four Firefox/WebKit critical journeys
+- Artifact: [`browser-qa-38985703183-1`, ID 12083033627](https://github.com/storminator89/forgeCommunity/actions/runs/38985703183/artifacts/12083033627), archive SHA-256 `c5a10969515d509255ed5bdfae4758fd7418fdd1c105d431a103a73b220de8b3`
+
+| Repository image | Artifact path | Viewport / PNG dimensions | State |
+| --- | --- | --- | --- |
+| `readme/home-desktop-light.png` | `desktop-chromium/landing-home.pw.ts-guest-h-e3922-inations-focus-and-200-text-desktop-chromium/landing-home-guest-light.png` | 1280×800 / 1280×1206 | Anonymous Home, light, full document, static Spark visible, reduced motion enabled |
+| `readme/home-mobile-dark-320.png` | `mobile-320-chromium/landing-home.pw.ts-guest-h-bd4b4-inations-focus-and-200-text-mobile-320-chromium/landing-home-guest-dark.png` | 320×700 / 320×1843 | Anonymous Home, dark, full document, static Spark visible, reduced motion enabled |
+
+SHA-256 of the two current Home PNGs:
+
+```text
+6c4230fb2fa3671644c562d666b6789a74aeaa24c2c303c20b9a9a380efdbf49  readme/home-desktop-light.png
+d7bc0836fd6202b4eb35a73db3d0f6df757de60bc8b0265e554b7127c0ed28a3  readme/home-mobile-dark-320.png
+```
+
+The [Home journey](../../e2e/landing-home.pw.ts) opens the real public route,
+waits for the local artwork to decode, and captures the full document before
+its later focus and 200%-text checks. Neither selected frame contains an
+authenticated identity or production data. The original fictional illustration
+is visibly rendered in an uncropped 3:2 frame in both themes. These frames use
+reduced motion; the movement control is visibly disabled. Normal Home artwork
+is also static until the user explicitly requests its finite frame movement.
+
+The separate [Spark entry journey](../../e2e/spark-entry.pw.ts) verifies a fresh
+browser's default-visible static figure on Home, Community, and a genuinely
+successful zero-enrollment Journey. A saved explicit Off is checked before
+rendering/requesting the figure and survives reload/navigation when storage is
+available. Native Show/Hide retains keyboard focus and synchronizes tabs. If a
+preference write is denied, the choice remains document-local. Reduced motion
+leaves an enabled figure visible and static. These are browser-local
+presentation controls, not account-shared preferences or new learning activity.
+
+The two selected PNGs establish only those visible Home states. They do not
+show the member Community or an enrolled learning workflow, prove animation
+timing from still pixels, or establish WCAG, assistive-technology, or broad
+cross-engine visual coverage. The image uses one fixed 93,712-byte local WebP;
+the [delivery note](../hero-artwork-delivery.md) records its deliberate mobile
+bandwidth tradeoff. The earlier landing files remain unchanged and attributed
+under the historical gallery below.
+
+<a id="current-space-captures"></a>
+
+## Earlier Space captures
 
 - Capture date: 16 October 2026
 - PR #67 head: [`ad2c37efb1fddd62da165aea06333fd6642946ff`](https://github.com/storminator89/forgeCommunity/commit/ad2c37efb1fddd62da165aea06333fd6642946ff)
@@ -26,7 +78,7 @@ The artifact paths below include the per-project output directory.
 | `readme/space-mission-dark-320.png` | `desktop-chromium/cooperative-space-missions-351b2-ate-in-a-real-private-Space-desktop-chromium/mission-Dunkel-320.png` | 320×900 / 320×900 | Same mission in dark mode, top viewport; lower milestone detail and contribution controls are outside the frame |
 | `readme/space-poll-light-768.png` | `desktop-chromium/space-polls.pw.ts-members--f283b-ose-and-lose-revoked-access-desktop-chromium/poll-Hell-768.png` | 768×900 / 720×629 | Unedited poll-section capture with three synthetic members' votes, caller's changed saved choice and action control |
 
-SHA-256 of the five current committed PNGs:
+SHA-256 of the five dated Space PNGs:
 
 ```text
 da909803f80d021548954f34e2ae97572f6b0ce0eb15ba7470586115436d2f84  readme/space-mission-overview-light-768.png
@@ -226,7 +278,7 @@ remain labeled and are not overwritten.
    `e2e/formative-practice-real-learner.pw.ts` journey generated the two earlier
    practice captures. `e2e/cooperative-space-missions.pw.ts`,
    `e2e/space-polls.pw.ts` and `e2e/space-mission-overview.pw.ts` generated the
-   current Space captures. Inspect a new run's real artifacts before selecting
+   dated Space captures. Inspect a new run's real artifacts before selecting
    any further images; distinguish
    API-intercepted UI tests from end-to-end learner evidence.
 3. Retrieve the exact run's artifact and inspect actual pixels before copying.
@@ -253,6 +305,8 @@ including `skills/hallmark/SKILL.md`, the redesign guidance, and output contract
 The applicable guidance is honest content, an existing shared system, real
 screenshots without redrawn chrome, and preserving implementation boundaries.
 This does not claim an installed Hallmark runtime/tool or a fresh app-wide design
-audit. The current pixel review covers the five selected Space frames; the
-unchanged landing retains its earlier review, alongside the scoped
-learner-practice, course-publication and historical reviews.
+audit. The current refresh inspected the two selected Home PNGs. The five dated
+Space frames and earlier learner-practice, course-publication and historical
+frames retain their original scoped reviews. The current shared contract uses
+cool daylight/deep-water surfaces, petrol, coral and sunny accents, Inter, and
+the pinned frontend-design guidance linked from that contract.
