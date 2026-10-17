@@ -9,11 +9,11 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up the published Version 38 source
-`103c0a3a6873046fa42feb272685ca1732fcc1d0`. Version 38 deployed successfully on
-17 October 2026 at 23:12:12 UTC. The project-comment draft-revision and unmounted-
-view guard fix is live; published comment acceptance is in progress. The Version
-37 header remains byte-identical. Space POST/replay/race acceptance stays open.
+runtime data. This GitHub snapshot backs up the published Version 39 source
+`27726c48f47ac1c10f53acd0dc1bdf91baabdeea`. Version 39 deployed successfully on
+17 October 2026 at 23:24:43 UTC. Resources and Showcases directory URL-state
+source is live; Back/Forward and reload acceptance is in progress. The bounded
+Version 38 ordinary-comment check passed; its race variants remain unverified.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -74,8 +74,8 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 38 source includes the existing bounded ports below,
-inherited from Version 37, plus the project-comment draft/lifecycle guard described
+The published Version 39 source includes the existing bounded ports below,
+inherited from Version 38, plus Resources/Showcases directory URL-state described
 below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
@@ -147,7 +147,10 @@ all-page visual coverage.
   content and behavior unchanged, bounded desktop layout readback passed
 - Project-comment draft revisions preserve edits made during a pending POST;
   unmounted views suppress late UI success/errors; source-reviewed race and
-  lifecycle guards, published acceptance pending
+  lifecycle guards; bounded ordinary-comment acceptance passed, race proof open
+- Resources and Showcases directory query/filter/sort state in local URLs,
+  with native history and keyboard reset focus; API and existing filtering scope
+  unchanged, published Back/Forward/reload acceptance pending
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -618,14 +621,51 @@ state and is not a server request receipt or an exactly-once guarantee.
 
 Independent exact-path source review, production typechecking/build and static
 artifact/archive checks passed. Deployment succeeded on 17 October 2026 at
-23:12:12 UTC. Published normal-comment acceptance is in progress. Pending-edit,
-same-text edit-back, repeated-submit, late unmount response, account/view
-transition and error-path race behavior remain source-reviewed only until live
-evidence is available. A successful ordinary POST would not establish those
-races. The backup itself did not invoke a comment write.
+23:12:12 UTC. A bounded ordinary published comment submission at 23:12-23:13
+UTC briefly showed pending state, then exactly one new entry and an empty
+submitted composer. Reload retained the entry. It was a legitimate comment;
+its contents, account details and identifiers are excluded from this backup.
+The observable pending-edit window had already ended by the next read, so this
+check does not prove edit-during-request preservation. Pending-edit, same-text
+edit-back, repeated-submit, late unmount response, account/view transition and
+error-path races remain source-reviewed only. The backup did not invoke a
+comment write.
 
 Earlier bounded acceptance and open flow limits remain as documented above.
 The curated roadmap remains byte-identical at its dated Version 32 base.
+
+## Version 39 Resources and Showcases directory URL-state
+
+Version 39 combines two independently reviewed directory frontend changes,
+four files in total. Resources records existing search, category, type and sort
+controls in its local URL. Showcases records existing search, project-tag and
+sort controls; its tag is validated only after the complete successful project
+read. Both query strings remove control characters and cap search at 120
+characters. Known sorts/filters are allowlisted; repeated or unknown values
+use safe defaults.
+
+The URL is the read state through native popstate subscriptions. Typing replaces
+the current history entry; deliberate filter/sort/reset actions push entries.
+Updates merge with the actual current URL and preserve an accepted local
+fragment. Reset clears query/filter/sort to defaults and returns focus to the
+stable search input. No content draft or identity is serialized into a URL.
+The existing view-layout toggle remains local.
+
+Existing APIs, authentication, server data and mutations are unchanged.
+Resources category/type/sort still apply only to loaded results, with its
+existing explanatory notice; this release does not create complete server-side
+filtering or new pagination guarantees. Showcases retains existing query fields,
+tag matching and sort comparators. The complete project-detail/comment page is
+byte-identical to Version 38.
+
+Independent component and exact-union source review, production typechecking/
+build and static artifact/archive checks passed. Deployment succeeded on
+17 October 2026 at 23:24:43 UTC. Published Back/Forward, detail-return, reload,
+same-browser shared-link and keyboard-reset acceptance is in progress; no
+successful runtime result is inferred from the source review or build.
+Unknown/repeated parameters, delayed reads, error recovery, multiple pages,
+mobile and account transitions remain separate live acceptance gates.
+The dated curated roadmap remains byte-identical at its Version 32 base.
 
 ## Keeping the branches separate
 

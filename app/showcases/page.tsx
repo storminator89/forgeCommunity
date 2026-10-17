@@ -8,7 +8,7 @@
 import { HeroBanner, PageContainer } from '@/components/discovery';
 import { AppShell, AppHeader } from '@/components/app-shell';
 import { PageState } from '@/components/page-state';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Sidebar } from "@/components/Sidebar";
@@ -26,7 +26,21 @@ import { useSession } from '@/lib/sites-auth/react';
 import type { Session } from '@/lib/sites-auth/server';
 import { Editor } from "@/components/Editor";
 import { sanitizeTextPreview } from '@/lib/sanitize-html';
+import { SHOWCASE_QUERY_LIMIT, readShowcaseDirectoryState, showcaseDirectoryHref, validateShowcaseDirectoryTag, type ShowcaseDirectoryState, type ShowcaseSort } from './showcases-directory-url';
 
+const directoryUrlChange = 'forge-showcase-directory-url-change';
+
+function subscribeDirectoryUrl(callback: () => void) {
+  window.addEventListener('popstate', callback);
+  window.addEventListener(directoryUrlChange, callback);
+  return () => {
+    window.removeEventListener('popstate', callback);
+    window.removeEventListener(directoryUrlChange, callback);
+  };
+}
+
+function directorySearchSnapshot() { return window.location.search; }
+function serverDirectorySearchSnapshot() { return ''; }
 
 interface Tag {
   id: string;
@@ -91,9 +105,9 @@ export default function ProjectShowcase() {
 }
 
 function ProjectShowcaseForViewer({ session }: { session: Session | null }) {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState('all');
-  const [sortBy, setSortBy] = useState('newest');
+  const urlSearch = useSyncExternalStore(subscribeDirectoryUrl, directorySearchSnapshot, serverDirectorySearchSnapshot);
+  const requestedState = useMemo(() => readShowcaseDirectoryState(urlSearch), [urlSearch]);
+  const searchRef = useRef<HTMLInputElement>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [isSubmitDialogOpen, setIsSubmitDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -164,7 +178,33 @@ function ProjectShowcaseForViewer({ session }: { session: Session | null }) {
     };
   }, [retryKey]);
 
-  // Filter and sort projects
+  const categories = useMemo(() =>
+    ['all', ...Array.from(new Set(projects.flatMap(project => project.tags.map(tag => tag.name))))],
+    [projects]
+  );
+
+  // A shared tag stays intact until the complete project read succeeds.
+  const directoryState = !isLoading && !loadError
+    ? validateShowcaseDirectoryTag(requestedState, categories)
+    : requestedState;
+  const { query: searchTerm, tag: activeTab, sort: sortBy } = directoryState;
+
+  const updateDirectoryState = (change: Partial<ShowcaseDirectoryState>, push = false) => {
+    // Merge into the actual URL, including immediately after typing or Back.
+    const next = { ...readShowcaseDirectoryState(window.location.search), ...change };
+    const checked = !isLoading && !loadError ? validateShowcaseDirectoryTag(next, categories) : next;
+    const href = showcaseDirectoryHref(checked, window.location.hash);
+    if (href === `${window.location.pathname}${window.location.search}${window.location.hash}`) return;
+    if (push) window.history.pushState(window.history.state, '', href);
+    else window.history.replaceState(window.history.state, '', href);
+    window.dispatchEvent(new Event(directoryUrlChange));
+  };
+
+  const setSearchTerm = (query: string) => updateDirectoryState({ query });
+  const setActiveTab = (tag: string) => updateDirectoryState({ tag }, true);
+  const setSortBy = (sort: ShowcaseSort) => updateDirectoryState({ sort }, true);
+
+  // Preserve the existing search fields, tag matching and sort comparators.
   const filteredProjects = projects.filter(project =>
     (activeTab === 'all' || project.tags.some(tag => tag.name.toLowerCase() === activeTab.toLowerCase())) &&
     (project.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -175,8 +215,6 @@ function ProjectShowcaseForViewer({ session }: { session: Session | null }) {
     if (sortBy === 'mostCommented') return b.comments.length - a.comments.length;
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(); // 'newest' as default
   });
-
-  const categories = ['all', ...Array.from(new Set(projects.flatMap(project => project.tags.map(tag => tag.name))))];
 
   // Handle project submission
   const handleSubmitNewProject = async () => {
@@ -404,7 +442,11 @@ function ProjectShowcaseForViewer({ session }: { session: Session | null }) {
   }
 
   const hasFilters = Boolean(searchTerm || activeTab !== 'all');
-  const clearFilters = () => { setSearchTerm(''); setActiveTab('all'); };
+  const hasDirectoryState = hasFilters || sortBy !== 'newest';
+  const clearFilters = () => {
+    updateDirectoryState({ query: '', tag: 'all', sort: 'newest' }, true);
+    searchRef.current?.focus();
+  };
 
   return (
     <AppShell>
@@ -416,12 +458,14 @@ function ProjectShowcaseForViewer({ session }: { session: Session | null }) {
             <HeroBanner icon={Briefcase} title="Ideen werden Wirklichkeit." description="Entdecke Projekte, bring dich ein und arbeite gemeinsam mit der Community." action={session ? <Button type="button" onClick={() => setIsSubmitDialogOpen(true)}><Plus className="h-4 w-4" aria-hidden="true" />Projekt einreichen</Button> : undefined} />
 
             <section aria-label="Projekte filtern" className="fc-filter-bar grid min-w-0 gap-4 sm:grid-cols-[minmax(0,1fr)_12rem_auto] sm:items-end">
-              <div className="min-w-0"><Label htmlFor="showcase-search" className="mb-2 block">Projekte suchen</Label><div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" /><Input id="showcase-search" type="search" value={searchTerm} onChange={event => setSearchTerm(event.target.value)} placeholder="Titel, Beschreibung oder Tag" className="pl-10" /></div></div>
-              <div className="min-w-0"><Label htmlFor="showcase-sort" className="mb-2 block">Sortieren nach</Label><Select value={sortBy} onValueChange={setSortBy}><SelectTrigger id="showcase-sort"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="newest">Neueste</SelectItem><SelectItem value="mostLiked">Meiste Likes</SelectItem><SelectItem value="mostCommented">Meiste Kommentare</SelectItem></SelectContent></Select></div>
+              <div className="min-w-0"><Label htmlFor="showcase-search" className="mb-2 block">Projekte suchen</Label><div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" /><Input ref={searchRef} id="showcase-search" type="search" maxLength={SHOWCASE_QUERY_LIMIT} value={searchTerm} onChange={event => setSearchTerm(event.target.value)} placeholder="Titel, Beschreibung oder Tag" className="pl-10" /></div></div>
+              <div className="min-w-0"><Label htmlFor="showcase-sort" className="mb-2 block">Sortieren nach</Label><Select value={sortBy} onValueChange={value => setSortBy(value as ShowcaseSort)}><SelectTrigger id="showcase-sort"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="newest">Neueste</SelectItem><SelectItem value="mostLiked">Meiste Likes</SelectItem><SelectItem value="mostCommented">Meiste Kommentare</SelectItem></SelectContent></Select></div>
               <div role="group" aria-label="Ansicht wählen" className="flex items-center gap-2"><Button type="button" variant="outline" size="icon" aria-label="Rasteransicht" aria-pressed={viewMode === 'grid'} className={viewMode === 'grid' ? 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground' : undefined} onClick={() => setViewMode('grid')}><LayoutGrid className="h-4 w-4" aria-hidden="true" /></Button><Button type="button" variant="outline" size="icon" aria-label="Listenansicht" aria-pressed={viewMode === 'list'} className={viewMode === 'list' ? 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground' : undefined} onClick={() => setViewMode('list')}><List className="h-4 w-4" aria-hidden="true" /></Button></div>
             </section>
 
             <div role="group" aria-label="Projekt-Tag wählen" className="fc-tags">{categories.map(category => <button key={category} type="button" aria-pressed={activeTab === category} onClick={() => setActiveTab(category)} className={'max-w-full border text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 [overflow-wrap:anywhere] hover:brightness-95'}>{category === 'all' ? 'Alle Tags' : category}</button>)}</div>
+
+            {hasDirectoryState && <div className="pt-3"><Button type="button" variant="ghost" onClick={clearFilters} className="text-primary">Suche und Filter zurücksetzen</Button></div>}
 
             <section aria-labelledby="showcase-results-title" className="pt-7"><div className="flex flex-wrap items-baseline justify-between gap-2 border-b pb-4"><h2 id="showcase-results-title" className="text-xl font-semibold tracking-tight">Projekte entdecken</h2><p role="status" className="text-sm tabular-nums text-muted-foreground">{isLoading ? 'Wird geladen…' : loadError ? 'Nicht verfügbar' : `${filteredProjects.length} ${filteredProjects.length === 1 ? 'Projekt' : 'Projekte'}`}</p></div>
               {likeError && <p role="alert" className="mt-5 rounded-[10px] border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">{likeError} {!session && <Link href="/login?callbackUrl=%2Fshowcases" className="font-semibold underline underline-offset-2">Zur Anmeldung</Link>}</p>}

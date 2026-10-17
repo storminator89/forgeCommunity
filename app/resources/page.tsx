@@ -7,7 +7,7 @@ import { HeroBanner, PageContainer } from '@/components/discovery';
 import { FolderOpen } from 'lucide-react';
 import { AppShell, AppHeader } from '@/components/app-shell';
 import { PageState } from '@/components/page-state';
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef, useSyncExternalStore } from 'react';
 import { Sidebar } from "@/components/Sidebar";
 import { UserNav } from "@/components/user-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -26,6 +26,21 @@ import { ToastContainer, toast } from 'react-toastify';
 import { useInView } from 'react-intersection-observer';
 import { getSafeNavigationUrl } from '@/lib/security';
 import Link from 'next/link';
+import { RESOURCE_QUERY_LIMIT, readResourceDirectoryState, resourceDirectoryHref, type ResourceDirectoryState, type ResourceSort } from './resources-directory-url';
+
+const directoryUrlChange = 'forge-resource-directory-url-change';
+
+function subscribeDirectoryUrl(callback: () => void) {
+  window.addEventListener('popstate', callback);
+  window.addEventListener(directoryUrlChange, callback);
+  return () => {
+    window.removeEventListener('popstate', callback);
+    window.removeEventListener(directoryUrlChange, callback);
+  };
+}
+
+function directorySearchSnapshot() { return window.location.search; }
+function serverDirectorySearchSnapshot() { return ''; }
 
 enum ResourceType {
   ARTICLE = 'ARTICLE',
@@ -66,8 +81,11 @@ export default function ResourceLibrary() {
 }
 
 function ResourceLibraryForViewer({ session }: { session: Session | null }) {
+  const urlSearch = useSyncExternalStore(subscribeDirectoryUrl, directorySearchSnapshot, serverDirectorySearchSnapshot);
+  const directoryState = useMemo(() => readResourceDirectoryState(urlSearch, categories, types), [urlSearch]);
+  const { query: searchTerm, category: selectedCategory, type: selectedType, sort: sortBy } = directoryState;
+  const searchRef = useRef<HTMLInputElement>(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
   const [newResource, setNewResource] = useState({
     title: '',
     type: 'ARTICLE',
@@ -86,9 +104,6 @@ function ResourceLibraryForViewer({ session }: { session: Session | null }) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [selectedType, setSelectedType] = useState<string>('all');
-  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'title'>('newest');
   const [loadedSearchTerm, setLoadedSearchTerm] = useState<string | null>(null);
   const loadedPageRef = useRef(0);
   const generationRef = useRef(0);
@@ -96,6 +111,21 @@ function ResourceLibraryForViewer({ session }: { session: Session | null }) {
   const loadingRef = useRef(true);
   const pendingLoadRef = useRef(false);
   const loadMoreRef = useRef<() => void>(() => {});
+
+  const updateDirectoryState = (change: Partial<ResourceDirectoryState>, push = false) => {
+    // Merge into the actual URL, including immediately after typing or Back.
+    const next = { ...readResourceDirectoryState(window.location.search, categories, types), ...change };
+    const href = resourceDirectoryHref(next, categories, types, window.location.hash);
+    if (href === `${window.location.pathname}${window.location.search}${window.location.hash}`) return;
+    if (push) window.history.pushState(window.history.state, '', href);
+    else window.history.replaceState(window.history.state, '', href);
+    window.dispatchEvent(new Event(directoryUrlChange));
+  };
+
+  const setSearchTerm = (query: string) => updateDirectoryState({ query });
+  const setSelectedCategory = (category: string) => updateDirectoryState({ category }, true);
+  const setSelectedType = (type: string) => updateDirectoryState({ type }, true);
+  const setSortBy = (sort: ResourceSort) => updateDirectoryState({ sort }, true);
 
   useEffect(() => {
     addActiveRef.current = true;
@@ -338,7 +368,11 @@ function ResourceLibraryForViewer({ session }: { session: Session | null }) {
   const isLoadingResults = loading || loadedSearchTerm !== searchTerm;
   const isFirstPageLoading = isLoadingResults && (loadedSearchTerm !== searchTerm || displayedResources.length === 0);
   const hasFilters = Boolean(searchTerm || selectedCategory !== 'all' || selectedType !== 'all');
-  const clearFilters = () => { setSearchTerm(''); setSelectedCategory('all'); setSelectedType('all'); };
+  const hasDirectoryState = hasFilters || sortBy !== 'newest';
+  const clearFilters = () => {
+    updateDirectoryState({ query: '', category: 'all', type: 'all', sort: 'newest' }, true);
+    searchRef.current?.focus();
+  };
   const retryLoad = () => { setLoading(true); setLoadError(false); setRetryKey(value => value + 1); };
 
   return (
@@ -375,11 +409,13 @@ function ResourceLibraryForViewer({ session }: { session: Session | null }) {
             </div>}
 
             <section aria-label="Ressourcen filtern" className="fc-filter-bar fc-filter-surface grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_12rem_10rem_10rem] lg:items-end">
-              <div className="min-w-0 sm:col-span-2 lg:col-span-1"><Label htmlFor="resource-search" className="mb-2 block">Ressourcen suchen</Label><div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" /><Input id="resource-search" type="search" value={searchTerm} onChange={event => setSearchTerm(event.target.value)} placeholder="Titel, Kategorie oder Autor" className="pl-10" /></div></div>
+              <div className="min-w-0 sm:col-span-2 lg:col-span-1"><Label htmlFor="resource-search" className="mb-2 block">Ressourcen suchen</Label><div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" /><Input ref={searchRef} id="resource-search" type="search" maxLength={RESOURCE_QUERY_LIMIT} value={searchTerm} onChange={event => setSearchTerm(event.target.value)} placeholder="Titel, Kategorie oder Autor" className="pl-10" /></div></div>
               <div className="min-w-0"><Label htmlFor="resource-filter-category" className="mb-2 block">Kategorie</Label><Select value={selectedCategory} onValueChange={setSelectedCategory}><SelectTrigger id="resource-filter-category"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Alle Kategorien</SelectItem>{categories.map(category => <SelectItem key={category} value={category}>{category}</SelectItem>)}</SelectContent></Select></div>
               <div className="min-w-0"><Label htmlFor="resource-filter-type" className="mb-2 block">Typ</Label><Select value={selectedType} onValueChange={setSelectedType}><SelectTrigger id="resource-filter-type"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Alle Typen</SelectItem>{types.map(type => <SelectItem key={type} value={type}>{typeLabels[type as ResourceType]}</SelectItem>)}</SelectContent></Select></div>
-              <div className="min-w-0"><Label htmlFor="resource-sort" className="mb-2 block">Sortieren</Label><Select value={sortBy} onValueChange={value => setSortBy(value as 'newest' | 'oldest' | 'title')}><SelectTrigger id="resource-sort"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="newest">Neueste</SelectItem><SelectItem value="oldest">Älteste</SelectItem><SelectItem value="title">Titel A–Z</SelectItem></SelectContent></Select></div>
+              <div className="min-w-0"><Label htmlFor="resource-sort" className="mb-2 block">Sortieren</Label><Select value={sortBy} onValueChange={value => setSortBy(value as ResourceSort)}><SelectTrigger id="resource-sort"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="newest">Neueste</SelectItem><SelectItem value="oldest">Älteste</SelectItem><SelectItem value="title">Titel A–Z</SelectItem></SelectContent></Select></div>
             </section>
+
+            {hasDirectoryState && <div className="pt-3"><Button type="button" variant="ghost" onClick={clearFilters} className="text-primary">Suche und Filter zurücksetzen</Button></div>}
 
             <section aria-labelledby="resource-results-title" className="pt-7">
               <div className="flex flex-wrap items-baseline justify-between gap-2 border-b pb-4"><h2 id="resource-results-title" className="text-xl font-semibold tracking-tight">Ressourcen entdecken</h2><p role="status" className="text-sm tabular-nums text-muted-foreground">{filteredAndSortedResources.length} angezeigt</p></div>
