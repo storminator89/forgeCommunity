@@ -9,10 +9,10 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up the published Version 26 source
-`df292bab8a9e9a5f474286599a6af35152135ec6`. Version 26 deployed successfully on
-17 October 2026 at 20:02:01 UTC. A bounded single admin reward-approval and
-reload check passed, as described below.
+runtime data. This GitHub snapshot backs up the published Version 27 source
+`8ca09f2e3cf4199ce6bad36da38f4b7f410e07bc`. Version 27 deployed successfully on
+17 October 2026 at 20:43:01 UTC. Its published Journey-trail browser acceptance
+is still pending; earlier bounded release checks are documented separately.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -73,8 +73,8 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 26 source includes the existing bounded ports below,
-inherited from Version 24, plus the community progress UI described separately
+The published Version 27 source includes the existing bounded ports below,
+inherited from Version 26, plus the Journey trail UI described separately
 below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
@@ -106,6 +106,9 @@ all-page visual coverage.
 - Native D1 admin course reward-approval/withdrawal with session and stored
   ADMIN checks plus atomic approval and ledger/history/badge/pathway
   reconciliation; a bounded single approval and reload check passed
+- Current-course Journey station trail with real chapter/descendant counters,
+  retained earned stations, the existing global next step, and non-actionable
+  locked/waiting states; published Journey-trail acceptance remains pending
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -251,6 +254,26 @@ this bounded result does not establish all approval, withdrawal, or reward
 reconciliation scenarios.
 No secrets, active hosting identity, runtime database, Storage contents or
 private QA artifacts are included in this source backup.
+
+## Version 27 current-course Journey trail
+
+Version 27 changes four frontend files only. It displays the selected course as
+a full vertical station trail, with actual root chapters, descendant-leaf
+counters and current completion markers. Earned stations remain visible; the
+existing global next step, pending assignments and locked/non-actionable states
+retain their meanings. Native chapter disclosures keep account/course/
+publication-scoped choices across refresh. Allowlisted response validation
+checks tree, publication, gates, completion and pending-state coherence;
+conservative date/prerequisite closure cannot open a server gate or erase an
+earned completion.
+
+The shared projector/reader, Spark preferences, and same-publication
+false-to-true completion celebration are unchanged. There are no API, backend,
+scoring, configuration, host or runtime-data writes in this increment.
+Source review, production typechecking/build and static artifact checks passed.
+Deployment succeeded on 17 October 2026 at 20:43:01 UTC. Published-only browser
+acceptance is still pending; no finished Version 27 visual, mobile, locked/
+pending negative-case or account-transition result is claimed.
 
 ## Keeping the branches separate
 

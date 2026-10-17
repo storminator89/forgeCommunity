@@ -1,0 +1,347 @@
+/* One real course sequence, using the established light/dark semantic pairs. */
+.section {
+  --trail-marker: 2.75rem;
+  --trail-gap: .75rem;
+  min-width: 0;
+  margin-top: 1.5rem;
+}
+
+.heading {
+  margin: 0 0 1rem;
+  border-bottom: 1px solid hsl(var(--border));
+  padding-bottom: .75rem;
+  font-size: 1.125rem;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.trail,
+.chapterStations {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.trail {
+  position: relative;
+  isolation: isolate;
+  min-width: 0;
+}
+
+.trail::before {
+  position: absolute;
+  z-index: -1;
+  top: 1.375rem;
+  bottom: 1.375rem;
+  left: calc(var(--trail-marker) / 2 - 1px);
+  width: 2px;
+  background: hsl(var(--input));
+  content: '';
+}
+
+.station,
+.chapter {
+  min-width: 0;
+}
+
+.station {
+  padding-block: .25rem;
+}
+
+.stationRow,
+.chapterHeading,
+.finish {
+  display: grid;
+  grid-template-columns: var(--trail-marker) minmax(0, 1fr);
+  align-items: start;
+  gap: var(--trail-gap);
+  min-width: 0;
+}
+
+.stationRow {
+  min-height: 2.75rem;
+  border-radius: .75rem;
+  padding-block: .75rem;
+  color: hsl(var(--foreground));
+  text-decoration: none;
+}
+
+a.stationRow:hover {
+  background: hsl(var(--secondary));
+}
+
+a.stationRow:focus-visible,
+.chapterSummary:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 3px;
+}
+
+.stationMarker,
+.chapterMarker,
+.finishMarker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--trail-marker);
+  min-width: 0;
+  height: var(--trail-marker);
+  border: 1px solid hsl(var(--input));
+  border-radius: 50%;
+  background: hsl(var(--background));
+  color: hsl(var(--muted-foreground));
+  font-size: .875rem;
+  font-weight: 650;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.stationMarker svg,
+.chapterMarker svg,
+.finishMarker svg {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.stationCopy {
+  min-width: 0;
+  padding: .125rem .75rem .75rem 0;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.stationMeta {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: .75rem;
+  row-gap: .125rem;
+  margin: 0;
+  color: hsl(var(--muted-foreground));
+  font-size: .75rem;
+  line-height: 1.5;
+}
+
+.stationTitle {
+  margin: .25rem 0 0;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.stationStatuses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .375rem 1rem;
+  margin-top: .5rem;
+  font-size: .8125rem;
+  line-height: 1.5;
+}
+
+.stationStatuses > span,
+.chapterCount {
+  display: inline-flex;
+  align-items: center;
+  gap: .375rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.stationStatuses svg,
+.chapterCount svg {
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+}
+
+.confirmedStatus {
+  color: hsl(var(--success));
+  font-weight: 600;
+}
+
+.waitingStatus {
+  color: hsl(var(--warning));
+  font-weight: 600;
+}
+
+.lockedStatus,
+.availableStatus {
+  color: hsl(var(--muted-foreground));
+}
+
+.nextStatus {
+  color: hsl(var(--primary));
+  font-weight: 650;
+}
+
+.stationAction {
+  margin: .5rem 0 0;
+  color: hsl(var(--primary));
+  font-size: .875rem;
+  font-weight: 600;
+  line-height: 1.5;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: .2em;
+}
+
+.lockReasons {
+  margin-top: .5rem;
+  color: hsl(var(--muted-foreground));
+  font-size: .875rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.lockReasons p {
+  margin: .25rem 0 0;
+}
+
+.recommended {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: -2px;
+  background: hsl(var(--card));
+}
+
+.recommended .stationMarker {
+  border-color: hsl(var(--primary));
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+
+.confirmed .stationMarker,
+.chapterConfirmed,
+.finishConfirmed .finishMarker {
+  border-color: hsl(var(--success));
+  background: hsl(var(--success));
+  color: hsl(var(--success-foreground));
+}
+
+.chapter {
+  padding-top: .75rem;
+}
+
+.chapterSummary {
+  min-height: 2.75rem;
+  border-radius: .75rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.chapterSummary::-webkit-details-marker {
+  display: none;
+}
+
+.chapterSummary::marker {
+  content: '';
+}
+
+.chapterSummary:hover {
+  background: hsl(var(--secondary));
+}
+
+.chapterHeading {
+  grid-template-columns: var(--trail-marker) minmax(0, 1fr) 1.25rem;
+  margin: 0;
+  padding-block: .75rem;
+  padding-right: .5rem;
+  font-weight: 600;
+}
+
+.chapterMarker {
+  border-radius: .75rem;
+}
+
+.chapterCopy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: .25rem;
+}
+
+.chapterLabel {
+  color: hsl(var(--muted-foreground));
+  font-size: .75rem;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.chapterTitle {
+  color: hsl(var(--foreground));
+  font-size: 1.0625rem;
+  font-weight: 650;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.chapterCount {
+  color: hsl(var(--muted-foreground));
+  font-size: .8125rem;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.chapterChevron {
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-top: .75rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.chapterDetails[open] > .chapterSummary .chapterChevron {
+  transform: rotate(180deg);
+}
+
+.finish {
+  margin-top: 1rem;
+  padding-block: .75rem;
+}
+
+.finishMarker {
+  border-radius: .75rem;
+}
+
+.finishCopy {
+  min-width: 0;
+  padding-top: .125rem;
+  overflow-wrap: anywhere;
+}
+
+.finishTitle {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 650;
+  line-height: 1.5;
+}
+
+.finishCopy p {
+  margin: .25rem 0 0;
+  color: hsl(var(--muted-foreground));
+  font-size: .875rem;
+  line-height: 1.5;
+}
+
+.finishConfirmed .finishCopy p {
+  color: hsl(var(--success));
+  font-weight: 600;
+}
+
+@media (min-width: 640px) {
+  .section {
+    --trail-gap: 1.5rem;
+  }
+
+  .stationCopy {
+    padding-right: 1.5rem;
+  }
+}
+
+/* No motion is introduced; native disclosures remain immediate. */
+@media (prefers-reduced-motion: reduce) {
+  .section *,
+  .section *::before,
+  .section *::after {
+    animation: none;
+    transition: none;
+    scroll-behavior: auto;
+  }
+}
