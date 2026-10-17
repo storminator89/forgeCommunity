@@ -10,7 +10,7 @@ Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
 runtime data. Its frozen Sites source is
-`0e31b1b9474f4eab2e2f6e758a1d9e02bf0b32b6`. It is experimental and does not
+`ca62c2afaad423f0ae04180c5afa40c9edf1f9dd`. It is experimental and does not
 claim feature parity with main.
 
 ## Requirements and setup
@@ -71,7 +71,7 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The current Version 20 source includes these bounded ports. Live QA is ongoing;
+The current Version 21 source includes these bounded ports. Live QA is ongoing;
 source implementation and publication do not establish complete runtime or
 all-page visual coverage.
 
@@ -94,6 +94,10 @@ all-page visual coverage.
   learning-pathway reads
 - Own mission-invitation preference and inbox GET reads using D1, without
   materializing missing settings or changing invitation mutation/signing setup
+- Protected formative-practice learner GET snapshots using native D1 reads;
+  Practice opt-in, start, answer and other mutation flows remain unported
+- Scoped course rich-text reader/editor typography and repository-owned public
+  course audio/video examples with a bilingual companion transcript
 - Public publication/content-ID preconditions for learner writes and
   foreground-aware polling for chat, notifications and selected directories
 - Centrally loaded notification CSS, replacing nested runtime CSS imports
@@ -103,7 +107,7 @@ all-page visual coverage.
   license, replacing checkout-origin font references
 
 This remains a partial adaptation. Course deletion, assignments and grading,
-formative practice, course Q&A creation/replies/moderation/solution writes,
+formative-practice mutation flows, course Q&A creation/replies/moderation/solution writes,
 course analytics, and Space/mission mutation flows are unported. Other workflows may still use Prisma transaction patterns that D1
 does not support. Do not infer support for every write flow from this scope.
 
@@ -119,7 +123,11 @@ A failed later message write can leave a private orphan. The codec pins are
 `jpeg-js@0.4.4` and `pngjs@7.0.0`; retain the complete public notice at
 `public/licenses/chat-image-codecs.txt`.
 
-Avatar/profile images, post-file uploads, course assets and H5P package storage
+The checked-in examples under `public/course-media/` are deliberately public
+authored assets, separate from private user uploads and Storage. Their
+publication does not establish general course-media upload/storage support.
+
+Avatar/profile images, post-file uploads, private course assets and H5P package storage
 remain outside this repair and may still depend on Node filesystem/native
 image-processing APIs. They are not supported as durable Workers storage.
 Declaring R2 does not port those other paths or establish general upload support. No PostgreSQL or ordinary file-backed SQLite runtime is supported on
@@ -144,10 +152,16 @@ own GET routes returning 200. Enabled inboxes, pagination and mutations are
 not established by that check. Invitation mutations remain unported, and
 existing cursor-signing requirements are unchanged. Version 20 only adjusts
 chat-image display sizing and collapses upload details behind a disclosure.
-Its production typechecking/build passed; its published UI read-check is
-still in progress. It makes no codec or API change. No new local
-test suite or GitHub CI run is
-part of this work. The inherited standard pipeline is unchanged: pushes run
+Its production typechecking/build passed and its published read-check confirmed
+the existing 128-by-128 logo image and keyboard disclosure. It made no codec
+or API change. Version 21 adds image-viewer Escape focus restoration, protected
+formative-practice learner GET reads, scoped course typography, and the authored
+public course-media examples. Version 21 production typechecking/build passed;
+its deployment succeeded on 17 October 2026 at 16:26:27 UTC. Its live runtime
+checks are still pending. Off, archived, or unavailable Practice states can be
+honest results; these GET changes do not establish supported Practice writes,
+scheduling, retention maintenance, or cursor-signing repair. No new local
+functional tests or GitHub CI run are part of this work. The inherited standard pipeline is unchanged: pushes run
 only for main/master, and no pull request is opened for this branch. Recheck
 workflow triggers before opening any future pull request. A passed build is
 not evidence that untested product flows work. Record live checks separately,

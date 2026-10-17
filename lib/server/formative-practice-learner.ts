@@ -5,6 +5,7 @@ import { Prisma, QuizConfidence } from '@/generated/prisma/client';
 import prisma from '@/lib/prisma';
 import { PracticeError } from '@/lib/server/formative-practice';
 import { isPracticeRetentionHealthy, practiceReviewIntervalMs, projectPracticeSelection, PRACTICE_SESSION_LIMIT } from '@/lib/formative-practice-availability';
+import { d1ReadLearnerPractice } from '@/lib/server/d1-formative-practice-learner-read';
 
 type Tx = Prisma.TransactionClient;
 type SnapshotItem = {
@@ -133,40 +134,7 @@ async function txRun<T>(work: (tx: Tx) => Promise<T>): Promise<T> {
 }
 
 export async function readLearnerPractice(courseId: string, userId: string) {
-  return txRun(async tx => {
-    const { course, snapshot, setting } = await access(tx, courseId, userId);
-    const unavailable = { availability: 'unavailable' as const, dueCount: 0, nextAvailableAt: null };
-    if (!course.activePublicationId) return { status: 'unpublished', ...unavailable };
-    if (!snapshot) {
-      const everPublished = await tx.practiceSnapshot.count({ where: { courseId } });
-      return { status: everPublished ? 'archived' : 'off', ...unavailable };
-    }
-    const base = { publicationId: course.activePublicationId, snapshotId: snapshot.id };
-    if (!setting?.optedIn) return { ...base, status: 'available', availability: 'notOptedIn', dueCount: 0, nextAvailableAt: null };
-    if (setting.paused) return { ...base, status: 'paused', availability: 'paused', dueCount: 0, nextAvailableAt: null };
-    const now = new Date();
-    // Never expose a usable private question or a ready count during an outage.
-    if (!await retentionHealthy(tx, now)) return { ...base, status: 'unavailable', ...unavailable };
-    const session = await activeSession(tx, userId, courseId);
-    const current = session?.snapshotId === snapshot.id ? session : null;
-    const input = await selectionInput(tx, userId, courseId, snapshot, current, now);
-    const selection = projectPracticeSelection(input);
-    if (current) {
-      const pending = await pendingDto(tx, current, input.items);
-      const remaining = Math.max(0, MAX_SESSION_ITEMS - current.answeredCount - (pending ? 1 : 0));
-      const dueCount = Math.min(remaining, selection.candidates.length);
-      const availability = pending ? 'resume' : dueCount ? 'ready' : 'sessionComplete';
-      // Session exclusions last until explicit close. The return date in that
-      // state describes a new session, never an automatic reservation.
-      const nextAvailableAt = pending || dueCount ? null
-        : projectPracticeSelection({ ...input, sessionItemIds: [] }).nextAvailableAt;
-      return { ...base, status: 'active', availability, dueCount, nextAvailableAt,
-        session: { id: current.id, answeredCount: current.answeredCount, ...(pending && { pending }) } };
-    }
-    const dueCount = Math.min(MAX_SESSION_ITEMS, selection.candidates.length);
-    return { ...base, status: dueCount ? 'ready' : 'complete', availability: dueCount ? 'ready' : 'waiting',
-      dueCount, nextAvailableAt: dueCount ? null : selection.nextAvailableAt };
-  });
+  return d1ReadLearnerPractice(courseId, userId);
 }
 
 export async function optInLearnerPractice(courseId: string, userId: string) {

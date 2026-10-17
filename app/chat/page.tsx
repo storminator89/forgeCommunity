@@ -38,6 +38,11 @@ import Image from 'next/image'
 import { cn } from '@/lib/utils'
 import { ChatImagePreparationError, normalizeChatImage } from '@/lib/chat-image-normalize'
 
+interface ImageModalSelection {
+  imageUrl: string
+  opener: HTMLButtonElement
+}
+
 export default function ChatPage() {
   const { data, status } = useSession()
   const session = status === 'authenticated' ? data : null
@@ -87,7 +92,7 @@ function ChatPageContent() {
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [isPreparingImage, setIsPreparingImage] = useState(false)
   const [imageError, setImageError] = useState<string | null>(null)
-  const [selectedImageForModal, setSelectedImageForModal] = useState<string | null>(null)
+  const [selectedImageForModal, setSelectedImageForModal] = useState<ImageModalSelection | null>(null)
   const [showChannelsMobile, setShowChannelsMobile] = useState(false)
   const [linkedMessage, setLinkedMessage] = useState<ChatMessage | null>(null)
   const [linkedErrorKey, setLinkedErrorKey] = useState<string | null>(null)
@@ -102,6 +107,7 @@ function ChatPageContent() {
   const preparingImageRef = useRef(false)
   const sendingRef = useRef(false)
   const pageActiveRef = useRef(false)
+  const closingImageModalRef = useRef<ImageModalSelection | null>(null)
   const selectedImageRef = useRef<File | null>(null)
   const messageDraftRef = useRef('')
 
@@ -111,6 +117,7 @@ function ChatPageContent() {
       // Invalidate pending work during the account/unmount commit, before an
       // old bitmap promise or retained event callback can update a new draft.
       pageActiveRef.current = false
+      closingImageModalRef.current = null
       imagePreparationRef.current++
       preparingImageRef.current = false
       selectedImageRef.current = null
@@ -552,7 +559,11 @@ function ChatPageContent() {
                               {message.content}
                             </p>
                             {message.imageUrl && (
-                              <button type="button" className="block w-fit min-h-11 min-w-11 max-w-lg rounded-[10px] text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" aria-label="Nachrichtenbild vergrößern" onClick={() => setSelectedImageForModal(message.imageUrl ?? null)}>
+                              <button type="button" className="block w-fit min-h-11 min-w-11 max-w-lg rounded-[10px] text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" aria-label="Nachrichtenbild vergrößern" onClick={event => {
+                                if (!message.imageUrl || !pageActiveRef.current) return
+                                closingImageModalRef.current = null
+                                setSelectedImageForModal({ imageUrl: message.imageUrl, opener: event.currentTarget })
+                              }}>
                                   <Image
                                     src={message.imageUrl ?? ''}
                                     alt=""
@@ -675,8 +686,20 @@ function ChatPageContent() {
       {selectedImageForModal && (
         <ImageModal
           isOpen={!!selectedImageForModal}
-          onClose={() => setSelectedImageForModal(null)}
-          imageUrl={selectedImageForModal}
+          onClose={() => {
+            if (!pageActiveRef.current) return
+            closingImageModalRef.current = selectedImageForModal
+            setSelectedImageForModal(null)
+          }}
+          onCloseAutoFocus={event => {
+            event.preventDefault()
+            // Radix defers this event: a newer viewer or account must not
+            // receive focus from an older dialog's teardown.
+            if (!pageActiveRef.current || closingImageModalRef.current !== selectedImageForModal) return
+            closingImageModalRef.current = null
+            if (selectedImageForModal.opener.isConnected) selectedImageForModal.opener.focus({ preventScroll: true })
+          }}
+          imageUrl={selectedImageForModal.imageUrl}
         />
       )}
     </AppShell>

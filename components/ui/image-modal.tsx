@@ -7,13 +7,14 @@ import Image from "next/image"
 interface ImageModalProps {
   isOpen: boolean
   onClose: () => void
+  onCloseAutoFocus?: (event: Event) => void
   imageUrl: string
 }
 
-export function ImageModal({ isOpen, onClose, imageUrl }: ImageModalProps) {
+export function ImageModal({ isOpen, onClose, onCloseAutoFocus, imageUrl }: ImageModalProps) {
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-fit">
+    <Dialog open={isOpen} onOpenChange={open => { if (!open) onClose() }}>
+      <DialogContent className="max-w-fit" onCloseAutoFocus={onCloseAutoFocus}>
         <DialogTitle className="sr-only">Bild Vorschau</DialogTitle>
         <div className="relative max-h-[80vh] max-w-[80vw]">
           <Image

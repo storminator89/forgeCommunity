@@ -18,6 +18,7 @@ import { sanitizeRichHtml } from '@/lib/sanitize-html';
 import { H5PEmbed } from '@/components/h5p/H5PEmbed';
 import { LearnerAssignmentRenderer } from './LearnerAssignmentRenderer';
 import { parseAssignmentContent } from './assignment-content';
+import richTextStyles from './course-rich-text.module.css';
 
 interface ContentRendererProps {
   content: CourseContent;
@@ -82,7 +83,7 @@ function ContentRendererState({ content, isEditing: externalIsEditing, onSave, o
           {quizContent || content.type === 'QUIZ' ? (
             <QuizEditor key={content.id} initialContent={quizContent ?? content.content} disabled={isSaving || !onSave} onSave={async quiz => { await handleSave(JSON.stringify(quiz)); }} />
           ) : content.type === 'TEXT' ? (
-            <Editor content={editedContent} onChange={setEditedContent} />
+            <Editor content={editedContent} onChange={setEditedContent} className={richTextStyles.editor} />
           ) : (
             <div className="space-y-2">
               <label htmlFor={`content-url-${content.id}`} className="text-sm font-medium text-muted-foreground">
@@ -142,9 +143,7 @@ function ContentRendererState({ content, isEditing: externalIsEditing, onSave, o
     switch (content.type) {
       case 'TEXT':
         return (
-          <div className="prose prose-sm md:prose-base dark:prose-invert max-w-none break-words [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_img]:max-w-full">
-            <div dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(content.content as string) }} />
-          </div>
+          <div className={richTextStyles.body} dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(content.content as string) }} />
         );
 
       case 'VIDEO': {
