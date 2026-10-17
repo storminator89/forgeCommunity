@@ -4,12 +4,14 @@ import Link from 'next/link';
 import { useSyncExternalStore } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { usePathname } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Flame, LogOut, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, LogOut, X } from 'lucide-react';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAppNavigation } from '@/components/app-shell';
 import { NavigationSearch } from '@/components/navigation-search';
+import { NavigationArtwork } from '@/components/navigation-artwork';
+import { ForgeBrandMark } from '@/components/forge-brand-mark';
 import { navigationGroups, utilityNavigation, adminNavigation, moderationNavigation, isNavigationActive } from '@/lib/navigation';
 import { canSeeLearnerPathways } from '@/lib/pathway-visibility';
 import { cn } from '@/lib/utils';
@@ -49,7 +51,7 @@ export function Sidebar({ className, isOpen: externalOpen = false, onClose, hide
     return <div className="flex h-full flex-col">
       <div className={cn("flex h-20 shrink-0 gap-2 px-4", compact ? "h-24 flex-col items-center justify-center gap-1" : "items-center")}>
         <Link href="/community" aria-label="ForgeCommunity Start" className="flex min-h-11 min-w-0 items-center gap-2.5" onClick={() => setOpen(false)}>
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground"><Flame className="h-5 w-5" /></span>
+          <ForgeBrandMark />
           {!compact && <span className="text-[15px] font-bold tracking-tight">Forge<span className="font-normal text-muted-foreground">Community</span></span>}
         </Link>
         <button type="button" className={cn("hidden h-11 w-11 items-center justify-center rounded-[10px] text-muted-foreground hover:bg-muted hover:text-foreground lg:flex", !compact && "ml-auto")} onClick={toggleCollapse}
@@ -70,7 +72,7 @@ export function Sidebar({ className, isOpen: externalOpen = false, onClose, hide
                 const link = <Link href={item.href} aria-current={active ? 'page' : undefined} aria-label={compact ? item.name : undefined}
                   onClick={() => setOpen(false)} className={cn('relative flex min-h-11 items-center gap-3 rounded-[10px] px-3 text-sm transition-colors',
                     compact && 'justify-center px-2', active ? 'bg-accent/70 font-semibold text-foreground before:absolute before:bottom-2 before:left-0 before:top-2 before:w-0.5 before:rounded-full before:bg-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')}>
-                  <item.icon className={cn('h-[18px] w-[18px] shrink-0', active && 'text-primary')} aria-hidden="true" />
+                  <NavigationArtwork href={item.href} fallback={<item.icon className={cn('h-[18px] w-[18px] shrink-0', active && 'text-primary')} aria-hidden="true" />} />
                   {!compact && <span className="truncate">{item.name}</span>}
                   {count > 0 && <span aria-label={`${count} ungelesene Benachrichtigungen`} className={cn('flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[11px] font-semibold text-primary-foreground', compact ? 'absolute right-0 top-0' : 'ml-auto')}>
                     {count > 99 ? '99+' : count}

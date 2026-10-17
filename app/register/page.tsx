@@ -14,7 +14,8 @@ import { useClientReady } from '@/lib/use-client-ready'
 import { validatePassword } from '@/lib/security'
 import { registerNewMemberFirstAction } from '@/lib/new-member-first-action'
 import Link from 'next/link'
-import { UserPlus, Eye, EyeOff, Loader2, Flame, ArrowUpRight } from 'lucide-react'
+import { UserPlus, Eye, EyeOff, Loader2, ArrowUpRight } from 'lucide-react'
+import { ForgeBrandMark } from '@/components/forge-brand-mark'
 
 export default function RegisterPage() {
   const [name, setName] = useState('')
@@ -88,7 +89,7 @@ export default function RegisterPage() {
       <a href="#page-content" className="skip-link">Zum Inhalt springen</a>
       <header className="border-b bg-card">
         <div className="mx-auto flex min-h-20 max-w-6xl items-center justify-between gap-3 px-4 sm:px-8">
-          <Link href="/" aria-label="ForgeCommunity Startseite" className="flex min-w-0 items-center gap-2.5 whitespace-nowrap text-base font-semibold tracking-tight"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-primary text-primary-foreground"><Flame className="h-5 w-5" aria-hidden="true" /></span>ForgeCommunity</Link>
+          <Link href="/" aria-label="ForgeCommunity Startseite" className="flex min-w-0 items-center gap-2.5 whitespace-nowrap text-base font-semibold tracking-tight"><ForgeBrandMark />ForgeCommunity</Link>
           <ThemeToggle />
         </div>
       </header>

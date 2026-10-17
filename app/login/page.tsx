@@ -12,7 +12,8 @@ import { Label } from '@/components/ui/label'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { useClientReady } from '@/lib/use-client-ready'
 import Link from 'next/link'
-import { ArrowUpRight, Eye, EyeOff, Loader2, LogIn, Flame } from 'lucide-react'
+import { ArrowUpRight, Eye, EyeOff, Loader2, LogIn } from 'lucide-react'
+import { ForgeBrandMark } from '@/components/forge-brand-mark'
 
 function LoginContent() {
   const [email, setEmail] = useState('')
@@ -72,7 +73,7 @@ function LoginContent() {
       <header className="border-b bg-card">
         <div className="mx-auto flex min-h-20 max-w-6xl items-center justify-between gap-3 px-4 sm:px-8">
           <Link href="/" aria-label="ForgeCommunity Startseite" className="flex min-w-0 items-center gap-2.5 whitespace-nowrap text-base font-semibold tracking-tight">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-primary text-primary-foreground"><Flame className="h-5 w-5" aria-hidden="true" /></span>
+            <ForgeBrandMark />
             ForgeCommunity
           </Link>
           <ThemeToggle />
