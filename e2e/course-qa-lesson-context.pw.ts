@@ -128,13 +128,41 @@ test('lesson provenance survives real creation, retained pages, republish, chose
         const heading = discussion.getByRole('heading', { level: 2, name: questionTitle })
         const context = discussion.getByText(`Zu dieser Lektion: ${lessonTitle}`, { exact: true })
         const solution = discussion.getByText('Lösung', { exact: true })
-        // Loading retained pages scrolls the shared content pane; frame the actual selected discussion.
-        await heading.scrollIntoViewIfNeeded(); await expect(heading).toBeVisible(); await expect(heading).toBeInViewport()
+        // Frame oversized text in the actual content pane using native scrolling only.
+        await page.evaluate(async () => { await document.fonts.ready })
+        await expect(heading).toBeVisible()
+        const beforeScrollTop = await heading.evaluate(element => {
+          const pane = document.getElementById('page-content')!
+          const previous = pane.scrollTop
+          element.scrollIntoView({ block: 'start', inline: 'nearest', behavior: 'instant' })
+          return previous
+        })
+        const alignment = await heading.evaluate(element => {
+          const pane = document.getElementById('page-content')!
+          return { heading: element.getBoundingClientRect().toJSON(), pane: pane.getBoundingClientRect().toJSON(),
+            scrollTop: pane.scrollTop, scrollHeight: pane.scrollHeight, clientHeight: pane.clientHeight, overflowY: getComputedStyle(pane).overflowY }
+        })
+        console.info('Lesson Q&A capture alignment:', JSON.stringify({ candidateSha, theme, width, zoom, beforeScrollTop, alignment }))
+        await expect(heading).toBeInViewport()
         await expect(context).toBeVisible(); await expect(solution).toBeVisible()
         if (width === 1280) {
           await solution.scrollIntoViewIfNeeded()
           await expect(heading).toBeInViewport(); await expect(context).toBeInViewport(); await expect(solution).toBeInViewport()
         }
+        const framing = await heading.evaluate(element => {
+          const pane = document.getElementById('page-content')!
+          const target = element.getBoundingClientRect(); const surface = pane.getBoundingClientRect()
+          return { scrollTop: pane.scrollTop, scrollHeight: pane.scrollHeight, clientHeight: pane.clientHeight, overflowY: getComputedStyle(pane).overflowY,
+            heading: { top: target.top, bottom: target.bottom, left: target.left, right: target.right, height: target.height, width: target.width },
+            pane: { top: surface.top, bottom: surface.bottom, left: surface.left, right: surface.right, height: surface.height, width: surface.width },
+            viewport: { width: innerWidth, height: innerHeight },
+            visibleHeight: Math.max(0, Math.min(target.bottom, surface.bottom, innerHeight) - Math.max(target.top, surface.top, 0)),
+            visibleWidth: Math.max(0, Math.min(target.right, surface.right, innerWidth) - Math.max(target.left, surface.left, 0)) }
+        })
+        const frameEvidence = { candidateSha, theme, width, zoom, beforeScrollTop, framing }
+        console.info('Lesson Q&A capture framing:', JSON.stringify(frameEvidence))
+        await testInfo.attach(`${candidateSha}-lesson-qa-${theme}-${width}-${zoom}-framing`, { body: Buffer.from(JSON.stringify(frameEvidence)), contentType: 'application/json' })
+        expect(framing.visibleHeight).toBeGreaterThan(0); expect(framing.visibleWidth).toBeGreaterThan(0)
         const overflow = await page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - innerWidth); expect(overflow).toBeLessThanOrEqual(1)
         const name = `${candidateSha}-lesson-qa-${theme}-${width}-${zoom}`; const path = testInfo.outputPath(`${name}.png`)
         await page.screenshot({ path, fullPage: true }); await testInfo.attach(name, { path, contentType: 'image/png' })
