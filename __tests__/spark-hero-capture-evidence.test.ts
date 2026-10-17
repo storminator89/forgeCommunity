@@ -298,7 +298,7 @@ it('keeps bounded render readiness and one unmodified capture rather than screen
 
 it('requires the actual loaded long Stats label before the focused capture, then captures its in-view dt/dd pair', () => {
   const source = readFileSync('e2e/spark-entry.pw.ts', 'utf8');
-  const test = source.slice(source.indexOf("test('public and member Spark controls reflow at 200%"), source.indexOf("test('reduced motion keeps Spark static"));
+  const test = source.slice(source.indexOf("test('public and member Spark entries reflow at 200%"), source.indexOf("test('reduced motion keeps Spark static"));
   expect(test.indexOf("if (state === 'member') await expect(completedCourses).toBeVisible()")).toBeLessThan(test.indexOf('await capture(page, info, `spark-${state}'));
   expect(test).toContain("hasText: /^Mindestens einmal abgeschlossene Kurse$/");
   expect(test).toContain('await metric.scrollIntoViewIfNeeded()');
