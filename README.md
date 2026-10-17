@@ -502,12 +502,13 @@ compatibility review; see [dependency history](docs/DEPENDENCY-SECURITY-2026-10-
 
 The shared [design contract](design.md) defines cool-daylight surfaces,
 deep-water dark mode, petrol actions, coral cooperation accents, sunny earned
-rewards, Inter typography, and task-specific layouts. The redesign uses the
-inspected [Hallmark source](https://github.com/Nutlope/hallmark) and the contract's
-pinned frontend-design guidance within existing routes and product boundaries.
+rewards, Inter typography, and task-specific layouts. The redesign references
+[Hallmark](https://github.com/Nutlope/hallmark) and the contract's pinned
+frontend-design guidance within existing routes and product boundaries.
 Home adds a generated fictional learning illustration; the gallery shows actual
 browser rendering with no redrawn interface or added browser/phone chrome.
-This documentation refresh is not a new app-wide design or accessibility audit.
+A full Hallmark comparison remains open. This documentation refresh is not a
+new app-wide design or accessibility audit.
 
 - [Spaces, access, and discussion boundaries](docs/SPACES.md)
 - [Private-Space cooperative missions and soft learning weeks](docs/COOPERATIVE-MISSIONS.md)

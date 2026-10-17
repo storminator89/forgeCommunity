@@ -298,12 +298,12 @@ remain labeled and are not overwritten.
 
 ## Design reference used
 
-The shared visual contract is [`design.md`](../../design.md). For this README
-and screenshot work, the actual Hallmark 1.1.0 source checkout was inspected at
-[`Nutlope/hallmark@13ac0ec7`](https://github.com/Nutlope/hallmark/tree/13ac0ec7e148655948100b6396439e481361d690),
-including `skills/hallmark/SKILL.md`, the redesign guidance, and output contract.
-The applicable guidance is honest content, an existing shared system, real
-screenshots without redrawn chrome, and preserving implementation boundaries.
+The shared visual contract is [`design.md`](../../design.md). Hallmark 1.1.0 is
+linked as a design reference at
+[`Nutlope/hallmark@13ac0ec7`](https://github.com/Nutlope/hallmark/tree/13ac0ec7e148655948100b6396439e481361d690).
+For this gallery, the relevant principles are honest content, an existing shared
+system, real screenshots without redrawn chrome, and preserving implementation
+boundaries. A full Hallmark comparison remains open.
 This does not claim an installed Hallmark runtime/tool or a fresh app-wide design
 audit. The current refresh inspected the two selected Home PNGs. The five dated
 Space frames and earlier learner-practice, course-publication and historical
