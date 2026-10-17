@@ -206,7 +206,7 @@ test('PostgreSQL populated tracked upgrade preserves all old mission state and r
     await applyPostgresqlUpgrades(url); await applyPostgresqlUpgrades(url);
     const current = await pgRows(db, 'SpaceMission');
     for (const row of current) { for (const field of fields) { assert.equal(row[field], null); delete row[field]; } }
-    assert.deepEqual(current, before);
+    assert.deepEqual(current, before.map(row => ({ ...row, invitationAttemptCount: 0 })));
     assert.deepEqual(await pgRows(db, 'SpaceMissionParticipation'), consent);
     assert.deepEqual(await pgRows(db, 'SpaceMissionContribution'), contributions);
     assert.deepEqual((await db.query('SELECT * FROM "_app_schema_upgrades" WHERE name < $1 ORDER BY 1,2', [postgresTail])).rows, history);

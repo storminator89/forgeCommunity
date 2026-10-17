@@ -259,10 +259,38 @@ async function reflowEvidence(page: Page, region: Locator) {
       const range = document.createRange(); range.selectNodeContents(node);
       if (Array.from(range.getClientRects()).some(box => box.left < -1 || box.right > innerWidth + 1)) violations.push('text');
     }
-    const animations = [...element.getAnimations({ subtree: true })].filter(animation => animation.playState === 'running')
-      .map(animation => ({ iterations: animation.effect?.getTiming().iterations, duration: animation.effect?.getTiming().duration }));
+    const animations = [...element.getAnimations({ subtree: true })]
+      .filter(animation => animation.pending || animation.playState === 'running' || animation.playState === 'paused')
+      .map(animation => ({ pending: animation.pending, playState: animation.playState,
+        iterations: animation.effect?.getTiming().iterations, duration: animation.effect?.getTiming().duration }));
     return { viewport: { width: innerWidth, height: innerHeight }, zoom: getComputedStyle(document.documentElement).zoom,
       document: bounds(document.documentElement), main: bounds(main), region: bounds(element), violations, animations };
+  });
+}
+
+// Observe natural reduced-motion completion after the real theme, viewport,
+// zoom and focus changes. Never cancel, finish, freeze or shorten animations.
+// Three quiet rendering frames are required; stalled frames or motion fail
+// within the local deadline/frame budget instead of extending the test timeout.
+function settleCaptureMotion(element: Element): Promise<{ frames: number; quietFrames: number }> {
+  return new Promise((resolve, reject) => {
+    let frames = 0; let quietFrames = 0; let done = false;
+    const timer = setTimeout(() => {
+      done = true; reject(new Error('Invitation capture motion exceeded its 1000ms settling deadline.'));
+    }, 1000);
+    const tick = () => {
+      if (done) return;
+      frames++;
+      const active = element.getAnimations({ subtree: true })
+        .some(animation => animation.pending || animation.playState === 'running' || animation.playState === 'paused');
+      quietFrames = element.isConnected && !active ? quietFrames + 1 : 0;
+      if (quietFrames === 3) {
+        done = true; clearTimeout(timer); resolve({ frames, quietFrames });
+      } else if (frames === 60) {
+        done = true; clearTimeout(timer); reject(new Error('Invitation capture motion did not settle within 60 rendering frames.'));
+      } else requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
   });
 }
 
@@ -270,8 +298,13 @@ async function captureState(page: Page, region: Locator, focus: Locator, state: 
   for (const theme of ['Hell', 'Dunkel']) {
     await page.evaluate(() => { document.documentElement.style.zoom = ''; });
     await page.setViewportSize({ width: 1280, height: 900 });
-    await activate(page, page.getByRole('button', { name: 'Farbschema auswählen', exact: true }));
+    const themeTrigger = page.getByRole('button', { name: 'Farbschema auswählen', exact: true });
+    await activate(page, themeTrigger);
     await page.getByRole('menuitem', { name: theme, exact: true }).click();
+    // Radix keeps the closed menu mounted during its exit animation, then
+    // asynchronously restores trigger focus. Observe both before moving focus.
+    await expect(page.getByRole('menu', { includeHidden: true })).toHaveCount(0, { timeout: 2000 });
+    await expect(themeTrigger).toBeFocused({ timeout: 2000 });
     for (const { width, zoom } of [{ width: 1280, zoom: 1 }, { width: 320, zoom: 1 }, { width: 320, zoom: 2 }]) {
       await page.setViewportSize({ width, height: 900 });
       await page.evaluate(value => { document.documentElement.style.zoom = String(value); }, zoom);
@@ -279,7 +312,9 @@ async function captureState(page: Page, region: Locator, focus: Locator, state: 
       await page.evaluate(async () => { await document.fonts.ready; });
       await focus.scrollIntoViewIfNeeded(); await focus.focus();
       await expect(focus).toBeFocused(); await expect(focus).toBeInViewport();
-      const evidence = await reflowEvidence(page, region);
+      const settling = await region.evaluate(settleCaptureMotion);
+      await expect(focus).toBeFocused(); await expect(focus).toBeInViewport();
+      const evidence = { ...await reflowEvidence(page, region), settling };
       expect(evidence.violations).toEqual([]);
       expect(Number(evidence.zoom)).toBe(zoom);
       expect(evidence.animations).toEqual([]);

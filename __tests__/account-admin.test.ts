@@ -86,6 +86,8 @@ describe('admin account mutations', () => {
   it('decrements recipients before removing a departing user’s endorsements', async () => {
     const order: string[] = [];
     const deleteMany = jest.fn().mockResolvedValue({ count: 1 });
+    const spaceMissionInvitation = { findMany: jest.fn().mockResolvedValue([]) };
+    const invitationDeleteMany = jest.fn().mockResolvedValue({ count: 0 });
     const user = {
       findUnique: jest.fn().mockResolvedValue({ role: 'ADMIN' }),
       count: jest.fn().mockResolvedValue(2),
@@ -102,12 +104,17 @@ describe('admin account mutations', () => {
         if (property === 'endorsement') return endorsement;
         if (property === 'skillEndorsement') return { groupBy: async () => [] };
         if (property === 'course') return { findMany: async () => [], deleteMany };
+        if (property === 'spaceMissionInvitation') return spaceMissionInvitation;
+        if (property === 'spaceMissionInvitationRequest' || property === 'spaceMissionInvitationAccess' ||
+          property === 'spaceMissionInvitationSetting') return { deleteMany: invitationDeleteMany };
         return { deleteMany };
       },
     });
     db.$transaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) => callback(client));
     const response = await DELETE(request({}), { params: Promise.resolve({ id: 'user-2' }) });
     expect(response.status).toBe(200);
+    expect(spaceMissionInvitation.findMany).toHaveBeenCalledTimes(2);
+    expect(invitationDeleteMany).toHaveBeenCalledTimes(3);
     expect(user.updateMany).toHaveBeenCalledWith({
       where: { id: 'user-3', endorsements: { gte: 1 } },
       data: { endorsements: { decrement: 1 } },

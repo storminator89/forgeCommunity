@@ -204,6 +204,10 @@ test('discover a private mission without courses, navigate by keyboard and remov
     await page.keyboard.press('Tab');
     await expect(page.getByRole('button', { name: 'Übersicht aktualisieren' })).toBeFocused();
     await page.keyboard.press('Tab');
+    const ownInvitations = page.getByRole('button', { name: 'Meine Einladungen', exact: true });
+    await expect(ownInvitations).toBeFocused();
+    await expect(ownInvitations).toHaveAttribute('aria-expanded', 'false');
+    await page.keyboard.press('Tab');
     await expect(page.getByRole('link', { name: 'Alle', exact: true })).toBeFocused();
     await page.keyboard.press('Tab');
     await expect(page.getByRole('link', { name: 'Gemerkte', exact: true })).toBeFocused();
