@@ -10,7 +10,7 @@ Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
 runtime data. Its frozen Sites source is
-`c3a1e96a9e4eea1c828c82bb7240891c845b1bcc`. It is experimental and does not
+`21fefbb2a3916d2bf903bebd6db4fcd99bb0fc87`. It is experimental and does not
 claim feature parity with main.
 
 ## Requirements and setup
@@ -70,7 +70,7 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The current Version 15 source includes these bounded ports. Live QA is ongoing;
+The current Version 17 source includes these bounded ports. Live QA is ongoing;
 source implementation and publication do not establish complete runtime or
 all-page visual coverage.
 
@@ -112,7 +112,10 @@ still import native bcrypt or NextAuth dependencies absent from this branch.
 
 Validation for this work is limited to the published Site and the exact source
 build reported with its release. Version 15 passed production typechecking
-and its build; live regression checking is still in progress. No new local
+and its build, but its live Q&A regression check failed. Version 17 includes
+fixed-class diagnostics without provider messages/data and an equivalent
+compound-query grouping correction. Version 17 passed its production source
+validation and build; its live acceptance retest is still in progress. No new local
 test suite or GitHub CI run is
 part of this work. The inherited standard pipeline is unchanged: pushes run
 only for main/master, and no pull request is opened for this branch. Recheck

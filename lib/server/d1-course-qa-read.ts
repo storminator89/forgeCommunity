@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { env } from 'cloudflare:workers';
+import type { D1Result } from '@cloudflare/workers-types';
 import { parseAssignmentContent } from '@/app/courses/[courseId]/contents/assignment-content';
 import type { CourseQaLessonContext, CourseQaLessonContextPair, CourseQaScope } from '@/lib/course-qa-context-contract';
 import { CourseQAError } from '@/lib/server/course-qa';
@@ -177,7 +178,10 @@ const snapshotSql = `WITH RECURSIVE
     UNION ALL SELECT ${cost(['x.title', 'x.id', 'c.activePublicationId', 'c.id', 'x.id', 'c.id', 'x.id'])}
       FROM context_needed c JOIN live_contents x ON x.id = ?7 WHERE ?6 = c.activePublicationId
   ), costs AS (
-    SELECT bytes FROM question_costs UNION ALL SELECT bytes FROM answer_costs UNION ALL SELECT bytes FROM content_costs
+    -- Workerd's hardened SQLite parser allows at most five compound SELECT
+    -- terms. Group the first two without changing bag multiplicity or cost.
+    SELECT bytes FROM (SELECT bytes FROM question_costs UNION ALL SELECT bytes FROM answer_costs)
+    UNION ALL SELECT bytes FROM content_costs
     UNION ALL SELECT bytes FROM context_costs
     UNION ALL SELECT ${cost(['payload', 'id', 'courseId'])} FROM context_publication
     UNION ALL SELECT ${cost(['activePublicationId'])} FROM authorized
@@ -246,6 +250,40 @@ function storedPair(row: Row): CourseQaLessonContextPair | null {
 }
 
 type Snapshot = { rows: Row[]; access: Row; contents: Content[]; nodes: PathNode[] | null; now: number };
+
+/** Diagnostic classes only: provider text may contain SQL or data. Never emit
+ * any message, cause, statement, binding, identifier or private content. */
+function d1FailureClass(error: unknown) {
+  let current: unknown = error;
+  const seen = new Set<object>();
+  for (let depth = 0; depth < 3 && current !== null && typeof current === 'object'; depth++) {
+    if (seen.has(current)) break;
+    seen.add(current);
+    const detail = current as { message?: unknown; cause?: unknown };
+    const message = typeof detail.message === 'string' ? detail.message.slice(0, 4096) : '';
+    if (/no such table|table .+ does not exist/i.test(message)) return 'missing_table';
+    if (/no such column|has no column named/i.test(message)) return 'missing_column';
+    if (/ambiguous column|ambiguous name/i.test(message)) return 'ambiguous_name';
+    if (/circular reference|recursive aggregate|recursive reference|multiple references to recursive/i.test(message)) return 'recursive_query';
+    if (/syntax error|incomplete input|unrecognized token/i.test(message)) return 'syntax';
+    if (/too many references|too many cursors/i.test(message)) return 'cte_reference_limit';
+    if (/expression tree|expression depth|nested.{0,40}too deep/i.test(message)) return 'expression_depth';
+    if (/parser stack/i.test(message)) return 'parser_stack';
+    if (/too many (?:tables|terms in FROM)|at most \d+ tables|join.{0,40}(?:maximum|limit)/i.test(message)) return 'join_table_limit';
+    if (/too many terms in compound|compound SELECT.{0,40}(?:maximum|limit)/i.test(message)) return 'compound_terms';
+    if (/too many (?:SQL variables|parameters)|variable number must be between/i.test(message)) return 'bind_limit';
+    if (/string or blob too big|value.{0,30}too (?:big|large)|row.{0,30}too (?:big|large)/i.test(message)) return 'value_size_limit';
+    if (/statement too long|SQL.{0,30}too (?:big|large|long)/i.test(message)) return 'sql_text_limit';
+    if (/bind|binding|parameter count|parameters? (?:were|was|are) provided/i.test(message)) return 'binding';
+    if (/too (?:many|big|large)|maximum|limit exceeded|string or blob too big|expression tree|parser stack/i.test(message)) return 'query_limit';
+    if (/malformed json|json (?:path|object|array)|json_extract/i.test(message)) return 'json';
+    if (/datatype mismatch|type mismatch|unsupported type/i.test(message)) return 'type';
+    if (/timed? ?out|timeout|deadline|interrupted/i.test(message)) return 'timeout';
+    current = detail.cause;
+  }
+  return 'unknown';
+}
+
 function contextTopology(rows: Row[], access: Row, courseId: string): { contents: Content[]; nodes: PathNode[] | null } {
   if (!access.contextNeeded) return { contents: [], nodes: null };
   const publication = rows.find(row => row.kind === 'publication');
@@ -278,9 +316,15 @@ async function readSnapshot(courseId: string, actor: Actor, input: ReadInput): P
   const shortPattern = Buffer.byteLength(pattern, 'utf8') <= 50 ? 1 : 0;
   let manifest = '[]';
   for (let attempt = 0; attempt < 5; attempt++) {
-    const result = await db.prepare(snapshotSql).bind(actor.id, courseId, actor.role ?? '', input.filter, pattern,
-      input.pair?.publicationId ?? null, input.pair?.contentId ?? null, input.cursor?.createdAt.getTime() ?? null,
-      input.cursor?.id ?? '', input.questionId, input.mode, JSON.stringify(input.ids), manifest, shortPattern).all<Row>();
+    let result: D1Result<Row>;
+    try {
+      result = await db.prepare(snapshotSql).bind(actor.id, courseId, actor.role ?? '', input.filter, pattern,
+        input.pair?.publicationId ?? null, input.pair?.contentId ?? null, input.cursor?.createdAt.getTime() ?? null,
+        input.cursor?.id ?? '', input.questionId, input.mode, JSON.stringify(input.ids), manifest, shortPattern).all<Row>();
+    } catch (error) {
+      console.error('D1_COURSE_QA_READ_FAILURE', d1FailureClass(error));
+      throw error;
+    }
     if (!result.success) throw new Error('D1 Q&A snapshot failed.');
     const access = result.results.find(row => row.kind === 'access');
     if (!access) throw new Error('Missing D1 Q&A snapshot');
