@@ -9,10 +9,10 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up the published Version 33 source
-`3f8f4b43276bd07a0db4b84e82fd2173890f0d60`. Version 33 deployed successfully on
-17 October 2026 at 22:20:27 UTC. Bounded existing-resource fallback readback
-passed; real metadata fetching and its DNS/transport blocker remain unresolved.
+runtime data. This GitHub snapshot backs up the published Version 34 source
+`0a7d452f767b77401e424eab60bc51e17c169d1e`. Version 34 deployed successfully on
+17 October 2026 at 22:29:24 UTC. The Space-base source port is live, while positive
+Admin/create/join/leave runtime acceptance remains open.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -73,8 +73,8 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 33 source includes the existing bounded ports below,
-inherited from Version 32, plus compact resource-preview fallback UI described
+The published Version 34 source includes the existing bounded ports below,
+inherited from Version 33, plus bounded native Space-base writes described
 below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
@@ -131,6 +131,8 @@ all-page visual coverage.
   regression passed, while guest and login-callback acceptance remain source-only
 - Compact fixed-status resource-preview fallback with the existing safe source
   link; this UI change does not repair metadata fetching or its DNS/transport port
+- Native D1 atomic ADMIN Space creation with creator membership and PUBLIC
+  own desired join/leave operations; positive runtime mutation acceptance open
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -145,8 +147,11 @@ all-page visual coverage.
 
 This remains a partial adaptation. Course deletion, formative-practice
 mutation flows, course Q&A creation/replies/moderation/solution writes,
-course analytics, and Space/mission mutation flows are unported. Other workflows may still use Prisma transaction patterns that D1
-does not support. Do not infer support for every write flow from this scope.
+course analytics, and other Space/mission mutation flows remain unported.
+Version 34 ports only ADMIN Space creation and PUBLIC own join/leave source;
+positive mutation acceptance remains open. Other workflows may still use Prisma
+transaction patterns that D1 does not support. Do not infer full write-flow
+support from this source scope.
 
 Chat images use the existing private R2 binding through the dedicated chat
 upload/serve routes. The browser prepares JPEG/PNG/WebP/GIF as a bounded
@@ -460,6 +465,31 @@ its distinction between observed findings, source blockers and proposals.
 Unnecessary test-account labels, account totals and concrete search contents
 were anonymized for this public repository copy. The roadmap does not claim
 that proposals or later release work were implemented at its recorded base.
+
+## Version 34 bounded Space-base write port
+
+Version 34 changes three reviewed backend files. ADMIN Space creation and its
+creator membership share one native atomic batch. PUBLIC own join/leave is a
+desired set/unset operation with protected preflight, exact throwing snapshot
+guards and in-batch response assertions. Stored ADMIN authority, dates, bounded
+response projections and fresh count invariants are checked. CREATE has no
+durable request receipt, no automatic ambiguous-result retry and no exactly-once
+guarantee.
+
+Discussion/reply writes, private member removal and invitation/mission cleanup
+remain outside this port. This delivers only the first bounded source stage of
+the roadmap P1-A package; it does not complete the usable Space discussion flow.
+The additional user-flow roadmap remains byte-identical to the curated document
+added with Version 33, retaining its recorded Version 32 date/base and proposal
+status.
+
+Independent source review, production typechecking/build and static artifact
+checks passed. Deployment succeeded on 17 October 2026 at 22:29:24 UTC. A bounded
+read at 22:29:57 UTC retained the signed-in session after reload and showed the
+empty Spaces directory without a UI error. No Space was created and no join or
+leave was performed. Positive Admin/create/join/leave, private-space, race and
+rollback acceptance remain unverified; the empty directory and passed build
+are not positive mutation acceptance.
 
 ## Keeping the branches separate
 
