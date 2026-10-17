@@ -3,11 +3,11 @@ import 'server-only';
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '@/generated/prisma/client';
 import prisma from '@/lib/prisma';
-import { containsInsensitive } from '@/lib/server/database-query';
 import { sanitizeTextServer } from '@/lib/server/sanitize-html';
 import type { CourseQaLessonContext, CourseQaLessonContextPair } from '@/lib/course-qa-context-contract';
 import { courseQaContextProjection } from '@/lib/server/course-qa-context';
 import { CoursePathError } from '@/lib/server/course-path';
+import { listD1CourseQuestions, readD1CourseQuestion, revalidateD1CourseQuestionIds } from '@/lib/server/d1-course-qa-read';
 
 export class CourseQAError extends Error {
   constructor(message: string, public readonly status: number) { super(message); }
@@ -16,7 +16,6 @@ export class CourseQAError extends Error {
 type Actor = { id: string; role?: string | null };
 type Db = Prisma.TransactionClient;
 type Access = { canModerate: boolean; canAsk: boolean; canReply: boolean; published: boolean; activePublicationId: string | null };
-const PAGE_SIZE = 20;
 const MAX_ANSWERS = 100;
 const MAX_DAILY_QUESTIONS = 10;
 const MAX_DAILY_ANSWERS = 10;
@@ -96,11 +95,6 @@ function validatedSearch(value: unknown) {
   if (q.length > 64 || /[\u0000-\u001f\u007f]/.test(q)) throw new CourseQAError('Ungültige Suche.', 400);
   return q;
 }
-function scopeWhere(pair: CourseQaLessonContextPair | null) {
-  return pair ? { contextPublicationId: pair.publicationId, contextContentId: pair.contentId } : {};
-}
-function searchWhere(q: string) { return q ? { OR: [{ title: containsInsensitive(q) }, { body: containsInsensitive(q) }] } : {}; }
-
 type Cursor = { createdAt: Date; id: string };
 function decodeCursor(raw: string | null, courseId: string, filter: string, q: string, pair: CourseQaLessonContextPair | null): Cursor | null {
   if (raw === null) return null;
@@ -119,13 +113,6 @@ function decodeCursor(raw: string | null, courseId: string, filter: string, q: s
     return { createdAt, id: item.id };
   } catch { throw new CourseQAError('Ungültiger Seitenzeiger.', 400); }
 }
-function encodeCursor(item: Cursor, courseId: string, filter: string, q: string, pair: CourseQaLessonContextPair | null) {
-  return Buffer.from(JSON.stringify({ v: 2, courseId, filter, q, id: item.id, createdAt: item.createdAt.toISOString(), lessonContext: pair })).toString('base64url');
-}
-function after(cursor: Cursor) {
-  return { OR: [{ createdAt: { lt: cursor.createdAt } }, { createdAt: cursor.createdAt, id: { lt: cursor.id } }] };
-}
-
 function summary(question: {
   id: string; title: string; body: string; createdAt: Date; hiddenAt: Date | null; solutionRevision: string | null;
   author: { id: string; name: string | null }; solution: { answerId: string } | null;
@@ -149,32 +136,7 @@ export async function listCourseQuestions(courseId: string, actor: Actor, params
   const q = validatedSearch(params.get('q') ?? undefined);
   const pair = params.has('publicationId') || params.has('contentId') ? validatedLessonContext({ publicationId: params.get('publicationId'), contentId: params.get('contentId') }) : null;
   const cursor = decodeCursor(params.get('cursor'), courseId, filter, q, pair);
-  return courseQATransaction(async tx => {
-    const now = Date.now();
-    const access = await authorize(tx, courseId, actor);
-    if (filter === 'hidden' && !access.canModerate) throw new CourseQAError('Kein Zugriff auf diesen Filter.', 403);
-    const rows = await tx.courseQuestion.findMany({
-      where: { courseId, ...scopeWhere(pair), hiddenAt: filter === 'hidden' ? { not: null } : null,
-        ...(filter === 'open' ? { solution: { is: null } } : filter === 'answered' ? { solution: { isNot: null } } : {}),
-        AND: [
-          ...(q ? [searchWhere(q)] : []),
-          ...(cursor ? [after(cursor)] : []),
-        ] },
-      take: PAGE_SIZE + 1, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      select: { id: true, title: true, body: true, createdAt: true, hiddenAt: true, solutionRevision: true, contextPublicationId: true, contextContentId: true,
-        author: { select: { id: true, name: true } },
-        solution: { select: { answerId: true } },
-        _count: { select: { answers: { where: { hiddenAt: null } } } },
-      },
-    });
-    const page = rows.slice(0, PAGE_SIZE);
-    const projection = courseQaContextProjection(tx, courseId, actor.id, access.activePublicationId, now);
-    const scope = await projection.scope(pair);
-    return { items: await Promise.all(page.map(async row => summary(row, await projection.context(storedPair(row))))),
-      scope, canAskInScope: access.canAsk && (scope.kind === 'course' || scope.lessonContext.status === 'current'),
-      nextCursor: rows.length > PAGE_SIZE ? encodeCursor(page[page.length - 1], courseId, filter, q, pair) : null,
-      canModerate: access.canModerate, canAsk: access.canAsk, canReply: access.canReply };
-  });
+  return listD1CourseQuestions(courseId, actor, { filter, q, pair, cursor });
 }
 
 /** Recheck every retained list row without replacing the reader's pagination window. */
@@ -186,40 +148,12 @@ export async function revalidateCourseQuestionIds(courseId: string, actor: Actor
   if (!['all', 'open', 'answered', 'hidden'].includes(filter as string)) throw new CourseQAError('Ungültiger Filter.', 400);
   const q = validatedSearch(input.q);
   const pair = validatedLessonContext(input.lessonContext);
-  return courseQATransaction(async tx => {
-    const now = Date.now();
-    const access = await authorize(tx, courseId, actor);
-    const rows = filter === 'hidden' && !access.canModerate ? [] : await tx.courseQuestion.findMany({
-      where: { courseId, ...scopeWhere(pair), ...searchWhere(q), id: { in: ids as string[] }, hiddenAt: filter === 'hidden' ? { not: null } : null,
-        ...(filter === 'open' ? { solution: { is: null } } : filter === 'answered' ? { solution: { isNot: null } } : {}) },
-      select: { id: true, contextPublicationId: true, contextContentId: true },
-    });
-    const projection = courseQaContextProjection(tx, courseId, actor.id, access.activePublicationId, now);
-    const scope = await projection.scope(pair);
-    return { visibleIds: rows.map(row => row.id),
-      contexts: await Promise.all(rows.map(async row => ({ id: row.id, lessonContext: await projection.context(storedPair(row)) }))),
-      scope, canAskInScope: access.canAsk && (scope.kind === 'course' || scope.lessonContext.status === 'current'),
-      canModerate: access.canModerate, canAsk: access.canAsk, canReply: access.canReply };
-  });
+  return revalidateD1CourseQuestionIds(courseId, actor, { ids: ids as string[], filter: filter as string, q, pair });
 }
 
 export async function readCourseQuestion(courseId: string, questionId: string, actor: Actor) {
   validatedId(questionId, 'Frage');
-  return courseQATransaction(async tx => {
-    const now = Date.now();
-    const access = await authorize(tx, courseId, actor);
-    const question = await tx.courseQuestion.findUnique({ where: { id: questionId },
-      select: { id: true, courseId: true, title: true, body: true, createdAt: true, hiddenAt: true, solutionRevision: true, contextPublicationId: true, contextContentId: true,
-        author: { select: { id: true, name: true } }, solution: { select: { answerId: true } } } });
-    if (!question || question.courseId !== courseId || (question.hiddenAt && !access.canModerate)) throw new CourseQAError('Frage nicht gefunden.', 404);
-    const answers = await tx.courseAnswer.findMany({ where: { questionId, ...(access.canModerate ? {} : { hiddenAt: null }) },
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: MAX_ANSWERS + 1,
-      select: { id: true, body: true, createdAt: true, hiddenAt: true, author: { select: { id: true, name: true } } } });
-    if (answers.length > MAX_ANSWERS) throw new CourseQAError('Zu viele Antworten für diese Ansicht.', 413);
-    const projection = courseQaContextProjection(tx, courseId, actor.id, access.activePublicationId, now);
-    return { question: summary(question, await projection.context(storedPair(question))), answers: answers.map(answerDto),
-      canModerate: access.canModerate, canAsk: access.canAsk, canReply: access.canReply };
-  });
+  return readD1CourseQuestion(courseId, questionId, actor);
 }
 
 export async function createCourseQuestion(courseId: string, actor: Actor, input: Record<string, unknown>) {

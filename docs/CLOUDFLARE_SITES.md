@@ -10,7 +10,7 @@ Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
 runtime data. Its frozen Sites source is
-`a9ebf7ab6f413989898c950338789de5956d2d1f`. It is experimental and does not
+`c3a1e96a9e4eea1c828c82bb7240891c845b1bcc`. It is experimental and does not
 claim feature parity with main.
 
 ## Requirements and setup
@@ -70,7 +70,7 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The current Version 14 source includes these bounded ports. Live QA is ongoing;
+The current Version 15 source includes these bounded ports. Live QA is ongoing;
 source implementation and publication do not establish complete runtime or
 all-page visual coverage.
 
@@ -79,6 +79,8 @@ all-page visual coverage.
   quizzes and certificates
 - Comment reads and atomic comment-plus-notification writes for other post
   authors; comment counts are derived from stored comment rows
+- D1-backed course Q&A list/detail reads and retained-list revalidation,
+  preserving access checks and lesson-context visibility; Q&A writes remain unported
 - Native D1 atomic chat-message creation and generic notifications to all
   explicit other channel members, retaining existing channel-access checks
 - Latest own quiz-attempt display on reopening, with an explicit repeat action
@@ -95,8 +97,8 @@ all-page visual coverage.
   license, replacing checkout-origin font references
 
 This remains a partial adaptation. Course deletion, assignments and grading,
-formative practice, course Q&A/analytics, and Space/mission mutation flows are
-unported. Other workflows may still use Prisma transaction patterns that D1
+formative practice, course Q&A creation/replies/moderation/solution writes,
+course analytics, and Space/mission mutation flows are unported. Other workflows may still use Prisma transaction patterns that D1
 does not support. Do not infer support for every write flow from this scope.
 
 Persistent image uploads, private chat/course assets, and H5P package storage
@@ -109,7 +111,7 @@ their standalone wrapper is not part of this source snapshot. The inherited
 still import native bcrypt or NextAuth dependencies absent from this branch.
 
 Validation for this work is limited to the published Site and the exact source
-build reported with its release. Version 14 passed production typechecking
+build reported with its release. Version 15 passed production typechecking
 and its build; live regression checking is still in progress. No new local
 test suite or GitHub CI run is
 part of this work. The inherited standard pipeline is unchanged: pushes run
