@@ -1,5 +1,7 @@
+import type { PracticeAvailability } from '@/lib/formative-practice-availability'
+
 /** Learner-only, no-store practice API. Reading due state must not reserve an item. */
-export type PracticeLearnerStatus = 'off' | 'unpublished' | 'archived' | 'available' | 'paused' | 'ready' | 'active' | 'complete'
+export type PracticeLearnerStatus = 'off' | 'unpublished' | 'archived' | 'available' | 'paused' | 'ready' | 'active' | 'complete' | 'unavailable'
 export type PracticePending = {
   reservationId: string
   ordinal: number
@@ -8,6 +10,8 @@ export type PracticePending = {
 export type PracticeLearnerState = {
   status: PracticeLearnerStatus
   dueCount: number
+  availability: PracticeAvailability
+  nextAvailableAt: string | null
   publicationId?: string
   snapshotId?: string
   session?: { id: string; answeredCount: number; pending?: PracticePending }
@@ -34,18 +38,19 @@ async function request<T>(url: string, init: RequestInit = {}): Promise<T> {
   return body as T
 }
 
-function post<T>(courseId: string, action: string, body: unknown): Promise<T> {
-  return request<T>(`${base(courseId)}/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+function post<T>(courseId: string, action: string, body: unknown, signal?: AbortSignal): Promise<T> {
+  return request<T>(`${base(courseId)}/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal })
 }
 
 export const getLearnerPractice = (courseId: string, signal?: AbortSignal) =>
   request<PracticeLearnerState>(base(courseId), { signal })
-export const optInPractice = (courseId: string) => post<unknown>(courseId, 'opt-in', {})
-export const pausePractice = (courseId: string) => post<unknown>(courseId, 'pause', {})
-export const optOutPractice = (courseId: string) => post<unknown>(courseId, 'opt-out', {})
-export const startPractice = (courseId: string) => post<unknown>(courseId, 'start', {})
-export const nextPractice = (courseId: string, sessionId: string) => post<unknown>(courseId, 'next', { sessionId })
-export const answerPractice = (courseId: string, input: { sessionId: string; reservationId: string; submissionId: string; optionIndex: number; confidence: AnswerConfidence }) =>
-  post<AnswerFeedback>(courseId, 'answer', input)
-export const preparePracticeReset = (courseId: string) => post<{ token: string }>(courseId, 'reset/prepare', {})
-export const resetPractice = (courseId: string, token: string) => post<unknown>(courseId, 'reset', { token, confirmation: 'RESET_MY_PRACTICE' })
+export const optInPractice = (courseId: string, signal?: AbortSignal) => post<unknown>(courseId, 'opt-in', {}, signal)
+export const pausePractice = (courseId: string, signal?: AbortSignal) => post<unknown>(courseId, 'pause', {}, signal)
+export const optOutPractice = (courseId: string, signal?: AbortSignal) => post<unknown>(courseId, 'opt-out', {}, signal)
+export const startPractice = (courseId: string, signal?: AbortSignal) => post<unknown>(courseId, 'start', {}, signal)
+export const closePractice = (courseId: string, sessionId: string, signal?: AbortSignal) => post<unknown>(courseId, 'close', { sessionId }, signal)
+export const nextPractice = (courseId: string, sessionId: string, signal?: AbortSignal) => post<unknown>(courseId, 'next', { sessionId }, signal)
+export const answerPractice = (courseId: string, input: { sessionId: string; reservationId: string; submissionId: string; optionIndex: number; confidence: AnswerConfidence }, signal?: AbortSignal) =>
+  post<AnswerFeedback>(courseId, 'answer', input, signal)
+export const preparePracticeReset = (courseId: string, signal?: AbortSignal) => post<{ token: string }>(courseId, 'reset/prepare', {}, signal)
+export const resetPractice = (courseId: string, token: string, signal?: AbortSignal) => post<unknown>(courseId, 'reset', { token, confirmation: 'RESET_MY_PRACTICE' }, signal)

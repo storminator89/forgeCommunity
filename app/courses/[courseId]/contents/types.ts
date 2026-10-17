@@ -74,6 +74,7 @@ export interface LearnerQuizContent {
 }
 
 export interface CourseProgressSnapshot {
+  publicationId?: string | null;
   completedContentIds: string[];
   complete: boolean;
   canIssueCertificate?: boolean;

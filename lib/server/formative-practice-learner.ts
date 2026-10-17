@@ -4,6 +4,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { Prisma, QuizConfidence } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { PracticeError } from '@/lib/server/formative-practice';
+import { isPracticeRetentionHealthy, practiceReviewIntervalMs, projectPracticeSelection, PRACTICE_SESSION_LIMIT } from '@/lib/formative-practice-availability';
 
 type Tx = Prisma.TransactionClient;
 type SnapshotItem = {
@@ -12,8 +13,7 @@ type SnapshotItem = {
 };
 type Snapshot = { id: string; coursePublicationId: string; payload: string; itemCount: number };
 type LearnerSession = Awaited<ReturnType<Tx['practiceLearnerSession']['findFirst']>>;
-const MAX_SESSION_ITEMS = 10;
-const RETENTION_HEARTBEAT_MAX_AGE_MS = 45 * 60_000;
+const MAX_SESSION_ITEMS = PRACTICE_SESSION_LIMIT;
 const ID = /^[A-Za-z0-9_-]{8,100}$/;
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 const requireId = (value: unknown, name: string) => {
@@ -38,11 +38,13 @@ async function access(tx: Tx, courseId: string, userId: string) {
   return { course, snapshot, setting };
 }
 
-async function assertRetentionHealthy(tx: Tx) {
+async function retentionHealthy(tx: Tx, now: Date) {
   const state = await tx.practiceRetentionHealth.findUnique({ where: { id: 'learner' }, select: { lastSuccessAt: true } });
-  const latest = state?.lastSuccessAt?.getTime();
-  const now = Date.now();
-  if (latest === undefined || latest < now - RETENTION_HEARTBEAT_MAX_AGE_MS || latest > now + 5 * 60_000) {
+  return isPracticeRetentionHealthy(state?.lastSuccessAt, now);
+}
+
+async function assertRetentionHealthy(tx: Tx) {
+  if (!await retentionHealthy(tx, new Date())) {
     throw new PracticeError('Privates Üben ist vorübergehend nicht verfügbar. Bitte später erneut versuchen.', 503);
   }
 }
@@ -101,29 +103,19 @@ async function pendingDto(tx: Tx, session: NonNullable<LearnerSession>, items: S
   return { reservationId: reservation.id, ordinal: reservation.ordinal, item: publicItem(item) };
 }
 
-async function dueItems(tx: Tx, userId: string, courseId: string, snapshot: Snapshot, session: LearnerSession, now: Date) {
+async function selectionInput(tx: Tx, userId: string, courseId: string, snapshot: Snapshot, session: LearnerSession, now: Date) {
   const items = itemsOf(snapshot);
   const states = await tx.practiceLearnerSchedule.findMany({ where: { userId, courseId, snapshotId: snapshot.id } });
-  const stateByItem = new Map(states.map(state => [state.itemId, state]));
-  // Exclusions are bounded and deterministic. The 24-hour horizon lets small
-  // published pools be practiced again in a later session after their due date.
   const recent = await tx.practiceLearnerReservation.findMany({
     where: { session: { userId, courseId, snapshotId: snapshot.id }, shownAt: { gte: new Date(now.getTime() - 24 * 3600_000) } },
-    orderBy: [{ shownAt: 'desc' }, { id: 'desc' }], take: 2, select: { itemId: true },
+    orderBy: [{ shownAt: 'desc' }, { id: 'desc' }], take: 2, select: { itemId: true, shownAt: true },
   });
-  const excluded = new Set(recent.map(row => row.itemId));
-  if (session) {
-    const sessionItems = await tx.practiceLearnerReservation.findMany({ where: { sessionId: session.id }, select: { itemId: true } });
-    for (const row of sessionItems) excluded.add(row.itemId);
-  }
-  return items.filter(item => {
-    const state = stateByItem.get(item.itemId);
-    return !excluded.has(item.itemId) && (!state || (state.itemRevision === item.itemRevision && state.dueAt <= now));
-  }).sort((a, b) => {
-    const aDue = stateByItem.get(a.itemId)?.dueAt.getTime() ?? 0;
-    const bDue = stateByItem.get(b.itemId)?.dueAt.getTime() ?? 0;
-    return aDue - bDue || (a.itemId < b.itemId ? -1 : a.itemId > b.itemId ? 1 : 0);
-  });
+  const sessionItems = session ? await tx.practiceLearnerReservation.findMany({ where: { sessionId: session.id }, select: { itemId: true } }) : [];
+  return { items, states, recent, sessionItemIds: sessionItems.map(row => row.itemId), now };
+}
+
+async function dueItems(tx: Tx, userId: string, courseId: string, snapshot: Snapshot, session: LearnerSession, now: Date) {
+  return projectPracticeSelection(await selectionInput(tx, userId, courseId, snapshot, session, now)).candidates;
 }
 
 async function txRun<T>(work: (tx: Tx) => Promise<T>): Promise<T> {
@@ -143,23 +135,37 @@ async function txRun<T>(work: (tx: Tx) => Promise<T>): Promise<T> {
 export async function readLearnerPractice(courseId: string, userId: string) {
   return txRun(async tx => {
     const { course, snapshot, setting } = await access(tx, courseId, userId);
-    if (!course.activePublicationId) return { status: 'unpublished', dueCount: 0 };
+    const unavailable = { availability: 'unavailable' as const, dueCount: 0, nextAvailableAt: null };
+    if (!course.activePublicationId) return { status: 'unpublished', ...unavailable };
     if (!snapshot) {
       const everPublished = await tx.practiceSnapshot.count({ where: { courseId } });
-      return { status: everPublished ? 'archived' : 'off', dueCount: 0 };
+      return { status: everPublished ? 'archived' : 'off', ...unavailable };
     }
     const base = { publicationId: course.activePublicationId, snapshotId: snapshot.id };
-    if (!setting?.optedIn) return { ...base, status: 'available', dueCount: 0 };
-    if (setting.paused) return { ...base, status: 'paused', dueCount: 0 };
+    if (!setting?.optedIn) return { ...base, status: 'available', availability: 'notOptedIn', dueCount: 0, nextAvailableAt: null };
+    if (setting.paused) return { ...base, status: 'paused', availability: 'paused', dueCount: 0, nextAvailableAt: null };
+    const now = new Date();
+    // Never expose a usable private question or a ready count during an outage.
+    if (!await retentionHealthy(tx, now)) return { ...base, status: 'unavailable', ...unavailable };
     const session = await activeSession(tx, userId, courseId);
-    const items = itemsOf(snapshot);
-    if (session?.snapshotId === snapshot.id) {
-      const pending = await pendingDto(tx, session, items);
-      const dueCount = session.answeredCount >= MAX_SESSION_ITEMS ? 0 : (await dueItems(tx, userId, courseId, snapshot, session, new Date())).length;
-      return { ...base, status: 'active', dueCount, session: { id: session.id, answeredCount: session.answeredCount, ...(pending && { pending }) } };
+    const current = session?.snapshotId === snapshot.id ? session : null;
+    const input = await selectionInput(tx, userId, courseId, snapshot, current, now);
+    const selection = projectPracticeSelection(input);
+    if (current) {
+      const pending = await pendingDto(tx, current, input.items);
+      const remaining = Math.max(0, MAX_SESSION_ITEMS - current.answeredCount - (pending ? 1 : 0));
+      const dueCount = Math.min(remaining, selection.candidates.length);
+      const availability = pending ? 'resume' : dueCount ? 'ready' : 'sessionComplete';
+      // Session exclusions last until explicit close. The return date in that
+      // state describes a new session, never an automatic reservation.
+      const nextAvailableAt = pending || dueCount ? null
+        : projectPracticeSelection({ ...input, sessionItemIds: [] }).nextAvailableAt;
+      return { ...base, status: 'active', availability, dueCount, nextAvailableAt,
+        session: { id: current.id, answeredCount: current.answeredCount, ...(pending && { pending }) } };
     }
-    const dueCount = (await dueItems(tx, userId, courseId, snapshot, null, new Date())).length;
-    return { ...base, status: dueCount ? 'ready' : 'complete', dueCount };
+    const dueCount = Math.min(MAX_SESSION_ITEMS, selection.candidates.length);
+    return { ...base, status: dueCount ? 'ready' : 'complete', availability: dueCount ? 'ready' : 'waiting',
+      dueCount, nextAvailableAt: dueCount ? null : selection.nextAvailableAt };
   });
 }
 
@@ -254,6 +260,23 @@ export async function nextLearnerPractice(courseId: string, userId: string, sess
   });
 }
 
+/** Explicit closure never selects/reserves, even if new items became due. */
+export async function closeLearnerPractice(courseId: string, userId: string, sessionIdInput: unknown) {
+  const sessionId = requireId(sessionIdInput, 'Sitzungs-ID');
+  return txRun(async tx => {
+    const { snapshot } = await access(tx, courseId, userId);
+    const session = await tx.practiceLearnerSession.findUnique({ where: { id: sessionId } });
+    if (!session || session.userId !== userId || session.courseId !== courseId) throw new PracticeError('Sitzung nicht gefunden.', 404);
+    if (!snapshot || session.snapshotId !== snapshot.id || !['ACTIVE', 'COMPLETE'].includes(session.status)) throw new PracticeError('Sitzung ist veraltet.', 409);
+    if (session.pendingReservationId) throw new PracticeError('Eine geöffnete Frage wartet noch auf deine Antwort.', 409);
+    if (session.status === 'COMPLETE') return { sessionId, complete: true };
+    const changed = await tx.practiceLearnerSession.updateMany({ where: { id: sessionId, status: 'ACTIVE',
+      version: session.version, pendingReservationId: null }, data: { status: 'COMPLETE', version: { increment: 1 } } });
+    if (changed.count !== 1) throw new PracticeError('Sitzung wurde gleichzeitig geändert. Bitte erneut versuchen.', 409);
+    return { sessionId, complete: true };
+  });
+}
+
 export async function answerLearnerPractice(courseId: string, userId: string, body: Record<string, unknown>) {
   const sessionId = requireId(body.sessionId, 'Sitzungs-ID');
   const reservationId = requireId(body.reservationId, 'Reservierungs-ID');
@@ -299,12 +322,8 @@ export async function answerLearnerPractice(courseId: string, userId: string, bo
     const prior = await tx.practiceLearnerSchedule.findUnique({ where: { userId_courseId_snapshotId_itemId:
       { userId, courseId, snapshotId: snapshot.id, itemId: item.itemId } } });
     const streak = correct ? Math.min((prior?.streak ?? 0) + 1, 6) : 0;
-    const baseDays = correct ? Math.min(1 << (streak - 1), 30) : 0;
     // Confidence adjusts only private review timing, never a grade or reward.
-    const reviewMs = !correct ? (confidence === 'SURE' ? 5 : 10) * 60_000
-      : confidence === 'UNSURE' || confidence === 'GUESSED' ? 6 * 3600_000
-      : confidence === 'SURE' ? Math.min(baseDays * 2, 30) * 86400_000
-      : baseDays * 86400_000;
+    const reviewMs = practiceReviewIntervalMs(correct, confidence as QuizConfidence | null, streak);
     const intervalDays = Math.floor(reviewMs / 86400_000);
     const dueAt = new Date(now.getTime() + reviewMs);
     const changed = await tx.practiceLearnerSession.updateMany({ where: { id: session.id, version: session.version, pendingReservationId: reservationId, status: 'ACTIVE' },

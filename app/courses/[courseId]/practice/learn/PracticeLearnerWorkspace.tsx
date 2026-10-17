@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { PracticeLearnerView, type ConfidenceChoice, type LearnerFeedback, type LearnerQuestion, type LearnerStage } from './PracticeLearnerView'
 import {
-  answerPractice, getLearnerPractice, nextPractice, optInPractice, optOutPractice, pausePractice,
+  answerPractice, closePractice, getLearnerPractice, nextPractice, optInPractice, optOutPractice, pausePractice,
   preparePracticeReset, resetPractice, startPractice, PracticeLearnerApiError,
   type AnswerConfidence, type PracticeLearnerState,
 } from './practice-learner-api'
@@ -25,7 +25,7 @@ function questionFrom(state: PracticeLearnerState): LearnerQuestion | null {
 }
 
 function stageFrom(state: PracticeLearnerState): LearnerStage {
-  if (state.status === 'off' || state.status === 'unpublished' || state.status === 'archived' || state.status === 'available' || state.status === 'paused') return state.status
+  if (state.status === 'off' || state.status === 'unpublished' || state.status === 'archived' || state.status === 'available' || state.status === 'paused' || state.status === 'unavailable') return state.status
   if (state.session?.pending) return 'question'
   return state.status === 'complete' || state.dueCount < 1 ? 'done' : 'idle'
 }
@@ -41,6 +41,7 @@ export function PracticeLearnerWorkspace({ courseId, sessionStatus }: { courseId
   const lock = useRef(false)
   const submission = useRef<{ reservationId: string; optionIndex: number; confidence: AnswerConfidence; id: string } | null>(null)
   const mounted = useRef(true)
+  const lifecycle = useRef<AbortController | null>(null)
 
   const apply = useCallback((next: PracticeLearnerState) => {
     setState(next)
@@ -52,19 +53,24 @@ export function PracticeLearnerWorkspace({ courseId, sessionStatus }: { courseId
   }, [])
 
   const load = useCallback(async (signal?: AbortSignal) => {
-    const next = await getLearnerPractice(courseId, signal)
-    if (!signal?.aborted && mounted.current) apply(next)
+    const boundSignal = signal ?? lifecycle.current?.signal
+    const next = await getLearnerPractice(courseId, boundSignal)
+    if (!boundSignal?.aborted && mounted.current) apply(next)
   }, [apply, courseId])
 
   const handleError = useCallback((cause: unknown) => {
-    if (!mounted.current) return
+    if (!mounted.current || lifecycle.current?.signal.aborted) return
+    setState(null)
+    setQuestion(null)
+    setFeedback(null)
     if (cause instanceof PracticeLearnerApiError && cause.status === 401) {
+      setStage('loading')
       router.replace(`/login?callbackUrl=${encodeURIComponent(`/courses/${courseId}/practice/learn`)}`)
       return
     }
     if (cause instanceof PracticeLearnerApiError && cause.status === 403) { setStage('forbidden'); setError(null); return }
     setError(errorMessage(cause))
-    setStage(current => current === 'loading' ? 'error' : current)
+    setStage('error')
   }, [courseId, router])
 
   useEffect(() => {
@@ -75,17 +81,20 @@ export function PracticeLearnerWorkspace({ courseId, sessionStatus }: { courseId
     }
     if (sessionStatus !== 'authenticated') return () => { mounted.current = false }
     const controller = new AbortController()
+    lifecycle.current = controller
     void load(controller.signal).catch(cause => { if (!controller.signal.aborted) handleError(cause) })
     return () => { mounted.current = false; controller.abort() }
   }, [courseId, handleError, load, router, sessionStatus])
 
-  const mutate = useCallback(async (action: () => Promise<void>) => {
+  const mutate = useCallback(async (action: (signal?: AbortSignal) => Promise<void>) => {
     if (lock.current) return
     lock.current = true
     setBusy(true)
     setError(null)
-    try { await action() }
+    const signal = lifecycle.current?.signal
+    try { await action(signal) }
     catch (cause) {
+      if (signal?.aborted || !mounted.current) return
       if (cause instanceof PracticeLearnerApiError && (cause.status === 401 || cause.status === 403)) {
         handleError(cause)
         return
@@ -102,19 +111,23 @@ export function PracticeLearnerWorkspace({ courseId, sessionStatus }: { courseId
     }
   }, [handleError, load])
 
-  const enable = () => void mutate(async () => { await optInPractice(courseId); await load() })
-  const pause = () => void mutate(async () => { await pausePractice(courseId); await load() })
-  const optOut = () => void mutate(async () => { await optOutPractice(courseId); await load() })
+  const enable = () => void mutate(async signal => { await optInPractice(courseId, signal); await load(signal) })
+  const pause = () => void mutate(async signal => { await pausePractice(courseId, signal); await load(signal) })
+  const optOut = () => void mutate(async signal => { await optOutPractice(courseId, signal); await load(signal) })
   const next = () => {
-    if (stage === 'feedback' && feedback?.canContinue === false) { setStage('done'); return }
-    void mutate(async () => {
-      if (state?.session?.id && (stage === 'feedback' || stage === 'done' ||
-        (state.session.answeredCount > 0 && !state.session.pending))) await nextPractice(courseId, state.session.id)
-      else await startPractice(courseId)
-      await load()
+    if (stage === 'feedback' && feedback?.canContinue === false) {
+      void mutate(async signal => { await load(signal) })
+      return
+    }
+    void mutate(async signal => {
+      if (stage === 'done' && state?.session?.id) await closePractice(courseId, state.session.id, signal)
+      else if (state?.session?.id && (stage === 'feedback' ||
+        (state.session.answeredCount > 0 && !state.session.pending))) await nextPractice(courseId, state.session.id, signal)
+      else await startPractice(courseId, signal)
+      await load(signal)
     })
   }
-  const answer = (optionIndex: number, confidence: ConfidenceChoice) => void mutate(async () => {
+  const answer = (optionIndex: number, confidence: ConfidenceChoice) => void mutate(async signal => {
     const pending = state?.session?.pending
     if (!pending || !state?.session?.id) throw new Error('Diese Frage ist nicht mehr geöffnet. Bitte lade die Übung neu.')
     const code = confidence === null ? null : confidenceCode[confidence]
@@ -123,22 +136,29 @@ export function PracticeLearnerWorkspace({ courseId, sessionStatus }: { courseId
       submission.current = { reservationId: pending.reservationId, optionIndex, confidence: code, id: crypto.randomUUID() }
     }
     const result = await answerPractice(courseId, { sessionId: state.session.id, reservationId: pending.reservationId,
-      submissionId: submission.current.id, optionIndex, confidence: code })
-    if (!mounted.current) return
+      submissionId: submission.current.id, optionIndex, confidence: code }, signal)
+    if (!mounted.current || signal?.aborted) return
+    // Answer feedback and its return window must share a fresh live snapshot.
+    // A completed session is no longer present in this GET; never reuse its id.
+    const fresh = await getLearnerPractice(courseId, signal)
+    if (!mounted.current || signal?.aborted) return
+    if (!['ready', 'active', 'complete'].includes(fresh.status) ||
+      fresh.snapshotId !== state.snapshotId || fresh.publicationId !== state.publicationId) { apply(fresh); return }
+    setState(fresh)
     setFeedback({ correct: result.correct, correctIndex: result.correctIndex, explanation: result.explanation,
-      canContinue: result.canContinue })
+      canContinue: result.canContinue && fresh.status === 'active' && Boolean(fresh.session) && (fresh.dueCount > 0 || Boolean(fresh.session?.pending)) })
     setStage('feedback')
   })
-  const reset = () => void mutate(async () => {
-    const prepared = await preparePracticeReset(courseId)
+  const reset = () => void mutate(async signal => {
+    const prepared = await preparePracticeReset(courseId, signal)
     if (!prepared.token) throw new Error('Das Zurücksetzen konnte nicht vorbereitet werden.')
-    await resetPractice(courseId, prepared.token)
-    await load()
+    await resetPractice(courseId, prepared.token, signal)
+    await load(signal)
   })
-  const retry = () => { setStage('loading'); setError(null); void load().catch(handleError) }
+  const retry = () => { void mutate(async signal => { await load(signal) }) }
 
   return <PracticeLearnerView courseId={courseId} stage={stage} question={question} feedback={feedback}
-    error={error} busy={busy} onRetry={retry} onEnable={enable} onPause={pause} onOptOut={optOut} onNext={next}
+    error={error} busy={busy} availabilityState={state} onRefresh={retry} onRetry={retry} onEnable={enable} onPause={pause} onOptOut={optOut} onNext={next}
     onAnswer={answer} onReset={reset} nextLabel={state?.session && state.session.answeredCount > 0 ? 'Weitere Frage öffnen' : undefined}
     canCloseSession={stage === 'done' && state?.status === 'active' && Boolean(state.session && !state.session.pending)} />
 }

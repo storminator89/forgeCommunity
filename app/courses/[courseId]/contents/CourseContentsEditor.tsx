@@ -19,6 +19,8 @@ import { Label } from '@/components/ui/label'
 import { PageState, RetryButton } from '@/components/page-state'
 import { chapterReleaseLabel } from '@/lib/course-release'
 import { cn } from '@/lib/utils'
+import { ReaderContinuePanel } from './ReaderContinuePanel'
+import { projectReaderProgress } from './reader-progress'
 import { CourseContentsSidebar } from './CourseContentsSidebar'
 import { CourseAuthoringOutline } from './CourseAuthoringOutline'
 import { NewCourseContentDialog, type NewCourseContentInput } from './NewCourseContentDialog'
@@ -34,6 +36,7 @@ import { appendContent, editableFields, editableSignature, findContent, parentId
 
 type CourseDetails = { id: string; name: string; canEdit: boolean; activePublicationId: string | null }
 type Notice = { type: 'success' | 'error'; message: string }
+const learnerActionClassName = 'h-auto min-h-11 min-w-0 max-w-full whitespace-normal px-[min(1rem,16px)] py-[min(.5rem,8px)] [overflow-wrap:anywhere]'
 const typeNames: Record<CourseContent['type'], string> = { TEXT: 'Text', VIDEO: 'Video', AUDIO: 'Audio', H5P: 'H5P', QUIZ: 'Quiz', ASSIGNMENT: 'Aufgabe' }
 
 // The quiz editor emits normalized object drafts, including on mount. Compare
@@ -41,6 +44,14 @@ const typeNames: Record<CourseContent['type'], string> = { TEXT: 'Text', VIDEO: 
 function authoringSignature(content: CourseContent): string {
   const quiz = content.type === 'QUIZ' || content.type === 'TEXT' ? parseQuizContent(content.content) : null
   return editableSignature(quiz ? { ...content, type: 'QUIZ', content: quiz } : content)
+}
+
+class CourseResponseError extends Error {
+  constructor(message: string, readonly status: number) { super(message) }
+}
+
+function isAccessError(error: unknown): error is CourseResponseError {
+  return error instanceof CourseResponseError && [401, 403, 404].includes(error.status)
 }
 
 async function responseData<T>(response: Response, fallback: string): Promise<T> {
@@ -53,14 +64,21 @@ async function responseData<T>(response: Response, fallback: string): Promise<T>
       412: 'Der Inhalt wurde geändert. Bitte lade die Ansicht erneut, bevor du ihn abschließt.',
       423: 'Dieser Inhalt ist noch gesperrt. Schließe zuerst die angegebenen Voraussetzungen ab.',
     }
-    throw new Error(messages[response.status] || fallback)
+    throw new CourseResponseError(messages[response.status] || fallback, response.status)
   }
   return response.json() as Promise<T>
 }
 
-export function CourseContentsEditor({ courseId, forceLearner = false, onReturnToAuthor }: { courseId: string; forceLearner?: boolean; onReturnToAuthor?: () => void }) {
+type EditorProps = { courseId: string; forceLearner?: boolean; onReturnToAuthor?: () => void }
+
+export function CourseContentsEditor(props: EditorProps) {
+  const viewer = useSession()
+  return <CourseContentsEditorState key={JSON.stringify([props.courseId, viewer.status, viewer.data?.user?.id, viewer.data?.user?.role])} {...props} viewer={viewer} />
+}
+
+function CourseContentsEditorState({ courseId, forceLearner = false, onReturnToAuthor, viewer }: EditorProps & { viewer: ReturnType<typeof useSession> }) {
   const router = useRouter()
-  const { data: session, status } = useSession()
+  const { data: session, status } = viewer
   const [course, setCourse] = useState<CourseDetails | null>(null)
   const [contents, setContents] = useState<CourseContent[]>([])
   const [progress, setProgress] = useState<CourseProgressSnapshot | null>(null)
@@ -88,6 +106,15 @@ export function CourseContentsEditor({ courseId, forceLearner = false, onReturnT
   const [savedLiveId, setSavedLiveId] = useState<string | null>(null)
   const editorRef = useRef<HTMLDivElement>(null)
   const restoreSaveFocus = useRef(false)
+  const lessonHeading = useRef<HTMLHeadingElement>(null)
+  const openFocus = useRef<{ id: string; trigger: HTMLButtonElement } | null>(null)
+  const alive = useRef(true)
+  const readerRequest = useRef(0)
+  const readerAccessDenied = useRef(false)
+  const readerController = useRef<AbortController | null>(null)
+  const [readerRefreshing, setReaderRefreshing] = useState(false)
+  const [readerRefreshKey, setReaderRefreshKey] = useState(0)
+  const [readerSnapshotFailed, setReaderSnapshotFailed] = useState(false)
   const [moveOpen, setMoveOpen] = useState(false)
   const [moveParent, setMoveParent] = useState('root')
   const [moveError, setMoveError] = useState<string | null>(null)
@@ -100,21 +127,85 @@ export function CourseContentsEditor({ courseId, forceLearner = false, onReturnT
   const authorMode = canManage && mode === 'author'
   const completedIds = progress?.completedContentIds ?? []
   const selectedComplete = Boolean(selected && completedIds.includes(selected.id))
+  const readerEligible = Boolean(!authorMode && !course?.canEdit && progress?.canTrack)
+  const readerProjection = useMemo(() => projectReaderProgress(contents, readerSnapshotFailed ? null : progress), [contents, progress, readerSnapshotFailed])
   const selectedTrackable = Boolean(!authorMode && selected && !selected.locked && progress?.canTrack && !selected.subContents?.length && selected.type !== 'QUIZ' && selected.type !== 'ASSIGNMENT')
 
   const refreshProgress = useCallback(async () => {
     const response = await fetch(`/api/courses/${courseId}/progress`)
     const snapshot = await responseData<CourseProgressSnapshot>(response, 'Der Kursfortschritt konnte nicht geladen werden.')
-    setProgress(snapshot)
+    if (alive.current && !readerAccessDenied.current) setProgress(snapshot)
     return snapshot
   }, [courseId])
 
-  const refreshContents = useCallback(async () => {
-    const response = await fetch(`/api/courses/${courseId}/contents`, { cache: 'no-store' })
-    const tree = await responseData<CourseContent[]>(response, 'Der Lernpfad konnte nicht geladen werden.')
-    setContents(tree)
-    return tree
-  }, [courseId])
+  const invalidateReaderSnapshot = useCallback(() => {
+    readerRequest.current++
+    readerController.current?.abort()
+    setReaderRefreshing(false)
+    setReaderSnapshotFailed(true)
+  }, [])
+
+  const purgeReaderAccess = useCallback((error: unknown) => {
+    if (!isAccessError(error)) return false
+    readerAccessDenied.current = true
+    readerRequest.current++
+    readerController.current?.abort()
+    openFocus.current = null
+    setContents([])
+    setProgress(null)
+    setSelectedId(null)
+    setCourse(null)
+    setEditingId(null)
+    setDraft(null)
+    setNotice(null)
+    setReaderRefreshing(false)
+    setLoadError(error.message)
+    if (error.status === 401) router.replace(`/login?callbackUrl=${encodeURIComponent(`/courses/${courseId}/contents`)}`)
+    return true
+  }, [courseId, router])
+
+  const refreshReader = useCallback(async () => {
+    if (!alive.current || readerAccessDenied.current) return
+    const request = ++readerRequest.current
+    readerController.current?.abort()
+    const controller = new AbortController()
+    readerController.current = controller
+    setReaderRefreshing(true)
+    const read = async <T,>(path: string, fallback: string): Promise<T> => {
+      try { return await responseData<T>(await fetch(path, { cache: 'no-store', signal: controller.signal }), fallback) }
+      catch (error) {
+        // Promise.all reports only its first rejection. A later authority loss
+        // still purges this pair even if its sibling already failed transiently.
+        if (alive.current && request === readerRequest.current && isAccessError(error)) purgeReaderAccess(error)
+        throw error
+      }
+    }
+    try {
+      const [tree, snapshot] = await Promise.all([
+        read<CourseContent[]>(`/api/courses/${courseId}/contents`, 'Der Lernpfad konnte nicht geladen werden.'),
+        read<CourseProgressSnapshot>(`/api/courses/${courseId}/progress`, 'Der Kursfortschritt konnte nicht geladen werden.'),
+      ])
+      if (!alive.current || request !== readerRequest.current) return
+      // Commit this pair together. A publication mismatch stays fail-closed in
+      // the projection instead of offering a lesson from two different reads.
+      setContents(tree)
+      setProgress(snapshot)
+      setReaderSnapshotFailed(false)
+      setReaderRefreshKey(value => value + 1)
+    } catch (error) {
+      if (!alive.current || request !== readerRequest.current) return
+      setReaderSnapshotFailed(true)
+      purgeReaderAccess(error)
+      throw error
+    } finally {
+      if (alive.current && request === readerRequest.current) setReaderRefreshing(false)
+    }
+  }, [courseId, purgeReaderAccess])
+
+  useEffect(() => {
+    alive.current = true
+    return () => { alive.current = false; readerController.current?.abort() }
+  }, [])
 
   useEffect(() => {
     if (status === 'unauthenticated') router.replace(`/login?callbackUrl=${encodeURIComponent(`/courses/${courseId}/contents`)}`)
@@ -129,6 +220,8 @@ export function CourseContentsEditor({ courseId, forceLearner = false, onReturnT
       fetch(`/api/courses/${courseId}/progress`, { signal: controller.signal }).then(r => responseData<CourseProgressSnapshot>(r, 'Der Kursfortschritt konnte nicht geladen werden.')),
     ]).then(([details, tree, snapshot]) => {
       if (controller.signal.aborted) return
+      readerAccessDenied.current = false
+      setReaderSnapshotFailed(false)
       setCourse(details)
       setContents(tree)
       setProgress(snapshot)
@@ -225,7 +318,7 @@ export function CourseContentsEditor({ courseId, forceLearner = false, onReturnT
   }
 
   const setCompletion = async (contentId: string, completed: boolean, publicationId?: string | null, contentVersionToken?: string | null) => {
-    if (authorMode || progressLock.current || !progress?.canTrack || !publicationId || !contentVersionToken) return
+    if (readerAccessDenied.current || authorMode || progressLock.current || !progress?.canTrack || !publicationId || !contentVersionToken) return
     progressLock.current = true
     setProgressBusy(true)
     try {
@@ -233,11 +326,18 @@ export function CourseContentsEditor({ courseId, forceLearner = false, onReturnT
         method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contentId, completed, publicationId, contentVersionToken }),
       })
       const changed = await responseData<Pick<CourseProgressSnapshot, 'completedContentIds' | 'complete'>>(response, 'Der Kursfortschritt konnte nicht gespeichert werden.')
+      if (!alive.current || readerAccessDenied.current) return
       setProgress(previous => previous ? { ...previous, ...changed } : previous)
-      await refreshContents()
+      await refreshReader()
+      if (!alive.current || readerAccessDenied.current) return
       setNotice({ type: 'success', message: completed ? 'Inhalt als abgeschlossen markiert.' : 'Abschlussmarkierung entfernt.' })
-    } catch (error) { setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Der Kursfortschritt konnte nicht gespeichert werden.' }) }
-    finally { progressLock.current = false; setProgressBusy(false) }
+    } catch (error) {
+      if (alive.current && !purgeReaderAccess(error)) {
+        if (error instanceof CourseResponseError && [409, 412, 423].includes(error.status)) invalidateReaderSnapshot()
+        setNotice({ type: 'error', message: error instanceof Error ? error.message : 'Der Kursfortschritt konnte nicht gespeichert werden.' })
+      }
+    }
+    finally { progressLock.current = false; if (alive.current) setProgressBusy(false) }
   }
 
   const createContent = async ({ title, type, parentId: contentParentId }: NewCourseContentInput) => {
@@ -347,18 +447,50 @@ export function CourseContentsEditor({ courseId, forceLearner = false, onReturnT
   }
 
   useEffect(() => {
-    if (loading) return
+    if (loading || loadError) return
     const url = new URL(location.href)
     if (selectedId) url.searchParams.set('content', selectedId)
     else url.searchParams.delete('content')
     if (url.href !== location.href) history.replaceState(history.state, '', url)
-  }, [loading, selectedId])
+  }, [loadError, loading, selectedId])
 
   useEffect(() => {
     if (!restoreSaveFocus.current) return
     restoreSaveFocus.current = false
     editorRef.current?.querySelector<HTMLButtonElement>('button[type="submit"]')?.focus()
   }, [editorVersion])
+
+  useEffect(() => {
+    const requested = openFocus.current
+    if (!requested || requested.id !== selectedId) return
+    openFocus.current = null
+    if (document.activeElement === requested.trigger || document.activeElement === document.body) lessonHeading.current?.focus()
+  }, [selectedId])
+
+  const openRecommended = (id: string, trigger: HTMLButtonElement) => {
+    if (!alive.current || readerAccessDenied.current || readerRefreshing || progressBusy || readerProjection.next?.id !== id) return
+    requestNavigation(() => {
+      openFocus.current = { id, trigger }
+      selectContent(id)
+    })
+  }
+  const handleReaderIssue = (status: number) => {
+    if (!alive.current || readerAccessDenied.current) return
+    if ([401, 403, 404].includes(status)) {
+      const message = status === 401 ? 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' :
+        status === 403 ? 'Du hast keinen Zugriff auf diesen Kurs.' : 'Der Kurs oder Inhalt ist nicht mehr verfügbar.'
+      purgeReaderAccess(new CourseResponseError(message, status))
+    } else if ([409, 412, 423].includes(status)) {
+      // A submission conflict is not proof of lost access. Recheck navigation
+      // against fresh content/progress before offering the next lesson again.
+      invalidateReaderSnapshot()
+    }
+  }
+  const checkReader = () => {
+    void refreshReader().catch(error => { if (alive.current && !isAccessError(error)) setNotice({ type: 'error', message: 'Der Lernfortschritt konnte nicht geprüft werden. Bitte versuche es erneut.' }) })
+  }
+  const readerPanel = (entry: boolean) => <ReaderContinuePanel projection={readerProjection} entry={entry} selectedComplete={selectedComplete}
+    busy={readerRefreshing || progressBusy} onOpen={openRecommended} onRefresh={checkReader} />
 
   const cancelEdit = () => requestNavigation(() => { setEditingId(null); setDraft(null); setSavedLiveId(null) })
   const changeMode = (nextMode: 'author' | 'learner') => {
@@ -428,7 +560,7 @@ export function CourseContentsEditor({ courseId, forceLearner = false, onReturnT
                       isProgressMutating={progressBusy} mainContentId={null} mainTopicIndex={0}
                       courseId={courseId} courseName={course?.name || ''} isLoading={false}
                       onSubContentSubmit={async () => {}} progress={progress}
-                      onCertificateIssued={() => { void refreshProgress().catch(() => {}) }} />}
+                      onCertificateIssued={checkReader} />}
                 </div>
                 <div role="separator" aria-label="Breite des Inhaltsverzeichnisses" aria-orientation="vertical" aria-valuemin={220} aria-valuemax={440} aria-valuenow={sidebarWidth} tabIndex={0} className="absolute right-0 top-0 hidden h-full w-4 cursor-col-resize border-r border-border focus-visible:bg-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring md:block" onMouseDown={event => { resizeStart.current = { x: event.pageX, width: sidebarWidth }; setResizing(true) }} onKeyDown={event => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); setSidebarWidth(width => Math.max(220, Math.min(440, width + (event.key === 'ArrowLeft' ? -20 : 20)))) } }} />
               </div>
@@ -437,9 +569,9 @@ export function CourseContentsEditor({ courseId, forceLearner = false, onReturnT
                   <CourseReadinessPanel contents={contents} hasUnsavedChanges={dirty} disabled={mutating} onSelectContent={id => requestNavigation(() => { selectContent(id, true); setReviewOpen(false) })} />
                   <CoursePathOverview contents={contents} disabled={mutating} onContentSelect={id => requestNavigation(() => { selectContent(id, true); setReviewOpen(false) })} />
                 </div>}
-                {selected ? <div className="mx-auto w-full max-w-4xl p-4 sm:p-6 lg:p-8">
+                {selected ? <div className={cn('mx-auto w-full max-w-4xl', authorMode ? 'p-4 sm:p-6 lg:p-8' : 'px-[min(1rem,16px)] py-4 sm:px-[min(1.5rem,24px)] sm:py-6 lg:px-[min(2rem,32px)] lg:py-8')}>
                   <div className="mb-6 flex flex-wrap items-start justify-between gap-3 border-b pb-5">
-                    <div className="min-w-0"><p className="mb-2 text-sm text-muted-foreground">{parentIds(contents, selected.id).reverse().map(id => findContent(contents, id)?.title).filter(Boolean).join(' / ') || typeNames[selected.type]}</p><h2 className="break-words text-2xl font-semibold tracking-tight [overflow-wrap:anywhere]">{selected.title}</h2></div>
+                    <div className="min-w-0"><p className="mb-2 text-sm text-muted-foreground">{parentIds(contents, selected.id).reverse().map(id => findContent(contents, id)?.title).filter(Boolean).join(' / ') || typeNames[selected.type]}</p><h2 ref={lessonHeading} tabIndex={-1} className="break-words text-2xl font-semibold tracking-tight outline-offset-4 focus-visible:outline-2 focus-visible:outline-ring [overflow-wrap:anywhere]">{selected.title}</h2></div>
                     {authorMode && !editingId && <div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" disabled={mutating} onClick={() => selectContent(selected.id, true)}><Edit className="mr-2 h-4 w-4" />Inhalt bearbeiten</Button><Button variant="ghost" size="sm" disabled={mutating} onClick={() => requestNavigation(() => openMove(selected.id))}><FolderInput className="mr-2 h-4 w-4" />Verschieben</Button></div>}
                     {authorMode && editingId && <span className="text-xs text-muted-foreground" role="status">{dirty ? 'Ungespeicherte Änderungen' : 'Bearbeiten'}</span>}
                   </div>
@@ -450,8 +582,9 @@ export function CourseContentsEditor({ courseId, forceLearner = false, onReturnT
                       onSubmit={updateContent} onContentChange={change => {
                         setDraft(previous => previous ? { ...previous, ...change } : { ...selected, ...change })
                       }} onCancel={cancelEdit} />
-                  </div> : selected.locked && !authorMode ? <div className="space-y-4 rounded-xl border bg-card p-5" role="status" aria-live="polite"><div className="flex items-center gap-2 text-base font-semibold"><LockKeyhole aria-hidden="true" className="h-5 w-5 text-muted-foreground" />Inhalt gesperrt</div>{selectedComplete && <p className="text-sm leading-relaxed">Bereits abgeschlossen. Dein Abschluss zählt weiter; der Zugriff wartet auf die Kapitelfreigabe.</p>}{selected.releaseLocked && selected.releaseOn && <><p className="text-sm leading-relaxed text-muted-foreground">Freigabe ab {chapterReleaseLabel(selected.releaseOn)}. Gilt für alle Lernenden.</p><Button type="button" variant="outline" onClick={() => void Promise.all([refreshContents(), refreshProgress()]).catch(() => setNotice({ type: 'error', message: 'Der Zugriff konnte nicht geprüft werden. Bitte versuche es erneut.' }))}>Zugriff neu prüfen</Button></>}{Boolean(selected.missingPrerequisites?.length) && <p className="text-sm leading-relaxed text-muted-foreground">Schließe zuerst diese Inhalte ab. Danach wird der Inhalt freigeschaltet.</p>}<ul className="space-y-2">{selected.missingPrerequisites?.map(item => <li key={item.id}><button type="button" className="min-h-11 w-full rounded-md border bg-background px-3 py-2 text-left text-sm hover:bg-accent/60 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring" onClick={() => selectContent(item.id)}>{item.title} öffnen</button></li>)}</ul></div> : <div className="space-y-6">{selected.type === 'TEXT'  && typeof selected.content === 'string' && !selected.content.trim() ? <div className="space-y-3">{selected.subContents?.length ? <><h3 className="text-sm font-semibold">Themen in diesem Kapitel</h3>{selected.subContents.map(child => <button type="button" key={child.id} className="block min-h-11 w-full rounded-xl border bg-card p-4 text-left text-sm hover:border-input focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring" onClick={() => requestNavigation(() => selectContent(child.id, authorMode))}>{child.title}</button>)}</> : <p className="text-sm text-muted-foreground">Für dieses Thema wurde noch kein Inhalt hinterlegt.</p>}</div> : <ContentRenderer key={selected.id} content={selected} learnerQuiz={!authorMode && Boolean(progress?.canTrack)} onQuizPassed={authorMode ? undefined : () => { void Promise.all([refreshProgress(), refreshContents()]).catch(() => setNotice({ type: 'error', message: 'Quiz bestanden. Bitte lade den Lernpfad erneut.' })) }} />}{selectedTrackable && <div className="border-t pt-5"><Button type="button" variant={selectedComplete ? 'outline' : 'default'} disabled={progressBusy || mutating || !selected.publicationId || !selected.contentVersionToken} onClick={() => void setCompletion(selected.id, !selectedComplete, selected.publicationId, selected.contentVersionToken)}>{progressBusy ? 'Wird gespeichert …' : selectedComplete ? 'Abschlussmarkierung entfernen' : 'Als abgeschlossen markieren'}</Button><p className="mt-2 text-sm text-muted-foreground">Bestätige selbst, wenn du diesen Inhalt abgeschlossen hast.</p></div>}</div>}
-                </div> : <div className="mx-auto flex max-w-md flex-col items-center gap-3 px-6 py-16 text-center"><FileText className="h-8 w-8 text-muted-foreground" /><h2 className="text-xl font-semibold">{contents.length ? 'Wähle ein Thema' : 'Noch keine Kursinhalte'}</h2><p className="text-sm text-muted-foreground">{contents.length ? authorMode ? 'Wähle in der Kursstruktur einen Inhalt zum Ausarbeiten.' : 'Die Inhalte findest du im Inhaltsverzeichnis.' : authorMode ? 'Lege in der Kursstruktur den ersten Inhalt an.' : 'Für diesen Kurs wurden noch keine Inhalte angelegt.'}</p>{authorMode && <Button type="button" disabled={mutating} onClick={() => requestNavigation(() => openCreate(null))}><Plus aria-hidden="true" className="mr-2 h-4 w-4" />Inhalt hinzufügen</Button>}</div>}
+                  </div> : selected.locked && !authorMode ? <div className="space-y-4 rounded-xl border bg-card p-5" role="status" aria-live="polite"><div className="flex items-center gap-2 text-base font-semibold"><LockKeyhole aria-hidden="true" className="h-5 w-5 text-muted-foreground" />Inhalt gesperrt</div>{selectedComplete && <p className="text-sm leading-relaxed">Bereits abgeschlossen. Dein Abschluss zählt weiter; der Zugriff wartet auf die Kapitelfreigabe.</p>}{selected.releaseLocked && selected.releaseOn && <><p className="text-sm leading-relaxed text-muted-foreground">Freigabe ab {chapterReleaseLabel(selected.releaseOn)}. Gilt für alle Lernenden.</p><Button type="button" variant="outline" className={learnerActionClassName} onClick={() => void refreshReader().catch(() => setNotice({ type: 'error', message: 'Der Zugriff konnte nicht geprüft werden. Bitte versuche es erneut.' }))}>Zugriff neu prüfen</Button></>}{Boolean(selected.missingPrerequisites?.length) && <p className="text-sm leading-relaxed text-muted-foreground">Schließe zuerst diese Inhalte ab. Danach wird der Inhalt freigeschaltet.</p>}<ul className="space-y-2">{selected.missingPrerequisites?.map(item => <li key={item.id}><button type="button" className="min-h-11 w-full rounded-md border bg-background px-3 py-2 text-left text-sm hover:bg-accent/60 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring" onClick={() => selectContent(item.id)}>{item.title} öffnen</button></li>)}</ul></div> : <div className="space-y-6">{selected.type === 'TEXT'  && typeof selected.content === 'string' && !selected.content.trim() ? <div className="space-y-3">{selected.subContents?.length ? <><h3 className="text-sm font-semibold">Themen in diesem Kapitel</h3>{selected.subContents.map(child => <button type="button" key={child.id} className="block min-h-11 w-full rounded-xl border bg-card p-4 text-left text-sm hover:border-input focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring" onClick={() => requestNavigation(() => selectContent(child.id, authorMode))}>{child.title}</button>)}</> : <p className="text-sm text-muted-foreground">Für dieses Thema wurde noch kein Inhalt hinterlegt.</p>}</div> : <ContentRenderer key={selected.id} content={selected} onReaderIssue={authorMode ? undefined : handleReaderIssue} learnerRefreshKey={readerRefreshKey} learnerQuiz={!authorMode && Boolean(progress?.canTrack)} onQuizPassed={authorMode ? undefined : checkReader} />}{selectedTrackable && <div className="border-t pt-5"><Button type="button" variant={selectedComplete ? 'outline' : 'default'} className={learnerActionClassName} disabled={progressBusy || mutating || !selected.publicationId || !selected.contentVersionToken} onClick={() => void setCompletion(selected.id, !selectedComplete, selected.publicationId, selected.contentVersionToken)}>{progressBusy ? 'Wird gespeichert …' : selectedComplete ? 'Abschlussmarkierung entfernen' : 'Als abgeschlossen markieren'}</Button><p className="mt-2 text-sm text-muted-foreground">Bestätige selbst, wenn du diesen Inhalt abgeschlossen hast.</p></div>}</div>}
+                  {readerEligible && <div className="mt-6">{readerPanel(false)}</div>}
+                </div> : readerEligible ? <div className="mx-auto w-full max-w-2xl px-[min(1rem,16px)] py-4 sm:px-[min(1.5rem,24px)] sm:py-6 lg:px-[min(2rem,32px)] lg:py-8">{readerPanel(true)}</div> : <div className="mx-auto flex max-w-md flex-col items-center gap-3 px-6 py-16 text-center"><FileText className="h-8 w-8 text-muted-foreground" /><h2 className="text-xl font-semibold">{contents.length ? 'Wähle ein Thema' : 'Noch keine Kursinhalte'}</h2><p className="text-sm text-muted-foreground">{contents.length ? authorMode ? 'Wähle in der Kursstruktur einen Inhalt zum Ausarbeiten.' : 'Die Inhalte findest du im Inhaltsverzeichnis.' : authorMode ? 'Lege in der Kursstruktur den ersten Inhalt an.' : 'Für diesen Kurs wurden noch keine Inhalte angelegt.'}</p>{authorMode && <Button type="button" disabled={mutating} onClick={() => requestNavigation(() => openCreate(null))}><Plus aria-hidden="true" className="mr-2 h-4 w-4" />Inhalt hinzufügen</Button>}</div>}
               </section>
               </div>
             </div>

@@ -27,7 +27,7 @@ beforeEach(() => {
   window.localStorage.clear()
   mockPush.mockClear()
   mockCanEdit = true
-  mockProgress = { completedContentIds: [], complete: false, canTrack: true, hasCertificate: true, completedAt: null }
+  mockProgress = { publicationId: 'pub-1', completedContentIds: [], complete: false, canTrack: true, hasCertificate: true, completedAt: null }
   mockTree = [lesson('chapter', { title: 'Kapitel', content: '', subContents: [lesson('lesson', { title: 'Lektion', parentId: 'chapter' }), lesson('quiz', { title: 'Wissenstest', type: 'QUIZ', content: JSON.stringify(quiz), parentId: 'chapter', order: 2 })] }), lesson('empty', { title: 'Noch leer', content: '', order: 2 })]
   mockWrite = jest.fn(async (url, options) => {
     const body = options.body ? JSON.parse(String(options.body)) : {}
