@@ -414,7 +414,7 @@ function ScopedEvents({ session, sessionStatus }: {
           {Array.from({ length: (7 - (startingDayIndex + days.length) % 7) % 7 }).map((_, index) => <div key={`trailing-${index}`} className="h-20 bg-muted/30 sm:h-32 lg:h-40" aria-hidden="true" />)}
         </div>
       </div>
-      <p className="border-t px-4 py-3 text-xs text-muted-foreground">Datum und Uhrzeit gelten in der jeweiligen Event-Zeitzone. Wähle einen Tag für die Details.</p>
+      <p className="border-t px-4 py-3 text-xs text-muted-foreground">Termine gelten in der jeweiligen Event-Zeitzone.</p>
     </section>
   );
 
@@ -522,7 +522,7 @@ function ScopedEvents({ session, sessionStatus }: {
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="min-w-0">
                   <h2 id="upcoming-events-heading" className="text-lg font-semibold">Nächste Events</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">Termine ab heute, auch in späteren Monaten. Deine Suche gilt auch hier.</p>
+
                 </div>
                 {upcomingEvents.length > 0 && <Button type="button" variant="outline" size="sm" onClick={handleShowUpcomingList}>Alle in der Liste ansehen</Button>}
               </div>

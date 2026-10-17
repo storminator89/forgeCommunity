@@ -118,7 +118,6 @@ function ScopedCourseGoals({ canSeePathways }: { canSeePathways: boolean }) {
           <Link href="/courses" className="text-sm text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Zur Kursübersicht</Link>
           {canSeePathways && <Link href="/courses/pathways" className="ml-5 text-sm text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Lernpfade entdecken</Link>}
           <div className="mt-6 border-b pb-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">In deinem Tempo</p>
             <h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Ein kleines Ziel für deinen nächsten Lernschritt</h2>
             <p className="mt-3 text-sm leading-relaxed text-muted-foreground">Freiwillig und nur für dich sichtbar. Es zählen aktuelle, serverbestätigte Abschlüsse von Kursinhalten, keine Seitenaufrufe oder Klicks. Es gibt dafür keine Punkte, Rangliste oder Serie.</p>
           </div>

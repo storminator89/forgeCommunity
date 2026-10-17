@@ -363,8 +363,7 @@ function AccountSettings({ userId }: { userId: string }) {
 
         <main id="page-content" tabIndex={-1} aria-busy={isLoading} className="min-w-0 flex-1 overflow-y-auto p-4 lg:p-8">
           <div className="mx-auto max-w-4xl space-y-6">
-            <div className="border-b pb-6"><h2 className="text-xl font-semibold tracking-tight">Dein Konto verwalten</h2><p className="mt-2 max-w-[68ch] text-sm leading-relaxed text-muted-foreground">Profil, Benachrichtigungen, Privatsphäre und deine eigenen Nachweise an einem Ort.</p></div>
-            {isLoading ? <PageState kind="loading" title="Einstellungen werden geladen" description="Deine gespeicherten Angaben werden vorbereitet." /> : loadError ? <PageState kind="error" title="Einstellungen konnten nicht geladen werden" description={loadError} action={<Button variant="outline" onClick={() => window.location.reload()}>Erneut laden</Button>} /> : (
+            {isLoading ? <PageState kind="loading" title="Einstellungen werden geladen" /> : loadError ? <PageState kind="error" title="Einstellungen konnten nicht geladen werden" description={loadError} action={<Button variant="outline" onClick={() => window.location.reload()}>Erneut laden</Button>} /> : (
             <Suspense fallback={<PageState kind="loading" title="Einstellungen werden geladen" />}>
             <SettingsTabs>
               <TabsList className="mb-6 grid h-auto w-full grid-cols-2 gap-1 p-1 sm:grid-cols-3 lg:grid-cols-5">

@@ -215,7 +215,7 @@ function EditUserDialogForm({ user, isOpen, onClose, onUpdateUser }: EditUserDia
               </p>
             </div>
           </DialogTitle>
-          <DialogDescription>Kontodaten und Einstellungen von {user.name || user.email} bearbeiten.</DialogDescription>
+          <DialogDescription>{user.name || user.email}</DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} noValidate>

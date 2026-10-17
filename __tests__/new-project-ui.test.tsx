@@ -18,6 +18,9 @@ beforeEach(() => {
 
 it('does not count editor markup as project description text', () => {
   render(<NewProjectPage />)
+  expect(screen.queryByText('Ein guter erster Eindruck')).not.toBeInTheDocument()
+  expect(screen.getByText('Mindestens 50 Zeichen.')).toBeVisible()
+  expect(screen.getByText('* Pflichtfeld')).toBeVisible()
   fireEvent.change(screen.getByLabelText('Titel *'), { target: { value: 'Mein Projekt' } })
   fireEvent.change(screen.getByLabelText('Beschreibungstext'), { target: { value: '<p>&nbsp;</p>'.repeat(30) } })
   fireEvent.click(screen.getByRole('button', { name: 'Projekt einreichen' }))
@@ -29,12 +32,12 @@ it('normalizes tags and prevents duplicate whitespace variants', () => {
   render(<NewProjectPage />)
   fireEvent.change(screen.getByLabelText(/Tags/), { target: { value: ' React ' } })
   fireEvent.keyDown(screen.getByLabelText(/Tags/), { key: 'Enter' })
-  expect(screen.getByText('Mit Enter hinzufügen. 1/20 Tags.')).toBeInTheDocument()
+  expect(screen.getByText('1/20 Tags.')).toBeInTheDocument()
   fireEvent.change(screen.getByLabelText(/Tags/), { target: { value: 'React' } })
   fireEvent.click(screen.getByRole('button', { name: 'Tag hinzufügen' }))
-  expect(screen.getByText('Mit Enter hinzufügen. 1/20 Tags.')).toBeInTheDocument()
+  expect(screen.getByText('1/20 Tags.')).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'Tag React entfernen' }))
-  expect(screen.getByText('Mit Enter hinzufügen. 0/20 Tags.')).toBeInTheDocument()
+  expect(screen.getByText('0/20 Tags.')).toBeInTheDocument()
 })
 
 it('rejects malformed image addresses without rendering an unsafe preview', () => {

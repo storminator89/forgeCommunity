@@ -102,7 +102,7 @@ it('keeps all nine categories and controls reachable with mobile-sized touch tar
   expect(screen.getByRole('button', { name: 'Suche löschen' })).toHaveClass('h-11', 'w-11');
   expect(screen.getByRole('tablist', { name: 'Suchkategorie' })).toHaveClass('overflow-x-auto');
   expect(screen.getByRole('tablist', { name: 'Suchkategorie' })).toHaveClass('h-auto', 'min-h-12');
-  expect(screen.getByText(/Weitere Kategorien seitlich scrollen/)).toBeInTheDocument();
+  expect(screen.getByText(/Weitere Kategorien: wischen oder Pfeiltasten\./)).toBeInTheDocument();
   expect(screen.getAllByRole('tab')).toHaveLength(9);
   screen.getAllByRole('tab').forEach((tab) => expect(tab).toHaveClass('min-h-11'));
 

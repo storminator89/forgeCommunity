@@ -70,7 +70,7 @@ export default function VerifyCertificate() {
       <main id="page-content" tabIndex={-1} className="mx-auto w-full max-w-[1200px] px-4 py-10 sm:px-6 sm:py-16 lg:px-8">
         <div className="max-w-3xl border-t pt-7">
           <span className={'flex h-12 w-12 items-center justify-center rounded-[10px] ' + (error || (!loading && !certificate) ? 'bg-destructive/10 text-destructive' : 'bg-accent text-primary')}>{certificate ? <BadgeCheck className="h-6 w-6" aria-hidden="true" /> : error || result ? <CircleAlert className="h-6 w-6" aria-hidden="true" /> : <ShieldCheck className="h-6 w-6" aria-hidden="true" />}</span>
-          <p className="mt-6 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Zertifikatsprüfung</p>
+
           <h1 className="mt-2 break-words text-[clamp(2rem,1.3rem+2vw,3rem)] font-semibold tracking-tight [overflow-wrap:anywhere]">{title}</h1>
           <p className="mt-3 max-w-[60ch] text-base leading-relaxed text-muted-foreground">{description}</p>
           {loading && <p role="status" className="mt-7 inline-flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Prüfung läuft…</p>}

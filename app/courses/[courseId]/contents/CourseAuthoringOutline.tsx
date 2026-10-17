@@ -68,7 +68,7 @@ export function CourseAuthoringOutline({ contents, selectedContentId, onContentS
       <Button id="course-authoring-add" type="button" variant="outline" className="w-full justify-start gap-2" disabled={blocked} onClick={() => request(() => onAddContent(null))}><Plus className="h-4 w-4" aria-hidden="true" />Inhalt hinzufügen</Button>
     </div>
     <div className="min-h-0 flex-1 overflow-y-auto p-2" aria-busy={busy}>
-      {entries.length === 0 ? <div className="space-y-2 px-2 py-5"><p className="text-sm font-medium">Dein Kurs beginnt hier.</p><p className="text-sm text-muted-foreground">Lege den ersten Inhalt an. Weitere Inhalte kannst du darunter einordnen.</p></div> : <nav aria-label="Kursstruktur bearbeiten"><ol className="space-y-1">
+      {entries.length === 0 ? <div className="space-y-2 px-2 py-5"><p className="text-sm text-muted-foreground">Lege den ersten Inhalt an. Weitere Inhalte kannst du darunter einordnen.</p></div> : <nav aria-label="Kursstruktur bearbeiten"><ol className="space-y-1">
         {entries.filter(entry => !entry.ancestorIds.some(id => collapsed.has(id))).map(entry => {
           const { content } = entry
           const Icon = icons[entry.type]

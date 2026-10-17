@@ -43,7 +43,7 @@ test('keeps one heading and uses an explicit, keyboard-accessible detail control
   const list = screen.getByRole('region', { name: 'Benutzerliste, horizontal verschiebbar' })
   expect(list).toHaveAttribute('tabindex', '0')
   expect(list).toHaveAttribute('aria-describedby', 'users-table-scroll-hint')
-  expect(screen.getByText(/Weitere Spalten: Tabelle seitlich wischen/)).toBeVisible()
+  expect(screen.getByText(/Weitere Spalten: wischen oder Pfeiltasten\./)).toBeVisible()
   expect(within(list).getByRole('button', { name: 'Aktionen für Ada Beispiel' })).toBeVisible()
   fireEvent.click(screen.getByText('ada@example.com'))
   expect(screen.queryByRole('complementary', { name: 'Details zu Ada Beispiel' })).not.toBeInTheDocument()

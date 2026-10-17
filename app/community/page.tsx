@@ -429,7 +429,7 @@ function Community({ session, topic, onSelectTopic }: { session: Session | null;
                       <div className="border-t py-12 text-center" role="status">
                         <PlusCircle className="mx-auto mb-4 h-8 w-8 text-muted-foreground" aria-hidden="true" />
                         <h3 className="text-lg font-semibold text-foreground">Keine Beiträge gefunden</h3>
-                        <p className="mt-2 text-sm text-muted-foreground">{topic ? `Für „${topic}“ gibt es noch keine sichtbaren Beiträge.` : 'Sei der Erste, der etwas teilt!'}</p>
+                        {topic && <p className="mt-2 text-sm text-muted-foreground">Für „{topic}“ gibt es noch keine sichtbaren Beiträge.</p>}
                         {topic ? <Button type="button" variant="outline" className="mt-5" onClick={() => document.getElementById('community-topic-search')?.focus()}>Anderes Thema suchen</Button>
                           : <Button type="button" variant="outline" className="mt-5" onClick={openComposer}>Beitrag schreiben</Button>}
                       </div>

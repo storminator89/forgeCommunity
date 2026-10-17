@@ -90,3 +90,15 @@ it('clears an unfinished course before another account sees the composer', () =>
   view.rerender(<NewCoursePage />)
   expect(screen.getByLabelText('Kurstitel')).toHaveValue('')
 })
+
+it('keeps creation focused on labelled fields and the private-publication decision', () => {
+  render(<NewCoursePage />)
+  expect(screen.getByRole('heading', { name: 'Kursdaten' })).toBeVisible()
+  expect(screen.getByRole('textbox', { name: 'Kurskategorie' })).toBeVisible()
+  expect(screen.getByLabelText('Startdatum (optional)')).toBeVisible()
+  expect(screen.getByLabelText('Enddatum (optional)')).toBeVisible()
+  expect(screen.queryByRole('complementary', { name: 'Hinweise zur Kurserstellung' })).not.toBeInTheDocument()
+  expect(screen.queryByText('Diese Angabe erscheint als Kategorie in der Kursübersicht.')).not.toBeInTheDocument()
+  expect(screen.getByText('Nach dem Anlegen bearbeitest du den privaten Entwurf und veröffentlichst ihn später ausdrücklich. Für Lernende ist er bis dahin nicht sichtbar.')).toBeVisible()
+  expect(screen.getByText('Ein privates Titelbild kannst du im Autorenarbeitsplatz hochladen, sobald der Kursentwurf angelegt ist.')).toBeVisible()
+})

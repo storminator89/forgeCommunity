@@ -59,7 +59,7 @@ export default function NotificationsPage() {
           <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
             <div className="flex flex-wrap items-end justify-between gap-4 border-b pb-6">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Deine Aktivität</p>
+
                 <p className="mt-2 text-sm text-muted-foreground" role="status">{unreadCount === 0 ? 'Du bist auf dem aktuellen Stand.' : `${unreadCount} ungelesene ${unreadCount === 1 ? 'Benachrichtigung' : 'Benachrichtigungen'}`}</p>
               </div>
               <Button type="button" variant="outline" size="sm" disabled={unreadCount === 0} onClick={() => markAllAsRead()}>
@@ -116,7 +116,6 @@ export default function NotificationsPage() {
               <div className="py-16 text-center" role="status">
                 <Bell className="mx-auto mb-4 h-9 w-9 text-muted-foreground" aria-hidden="true" />
                 <h2 className="text-xl font-semibold">{filter === 'unread' ? 'Alles gelesen' : 'Noch keine Benachrichtigungen'}</h2>
-                <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">{filter === 'unread' ? 'Hier erscheinen deine neuen Benachrichtigungen.' : 'Sobald es Neuigkeiten in deiner Community gibt, findest du sie hier.'}</p>
                 {filter === 'unread' && notifications.length > 0 && <Button type="button" variant="outline" size="sm" className="mt-5" onClick={() => setFilter('all')}>Alle Benachrichtigungen anzeigen</Button>}
               </div>
             )}

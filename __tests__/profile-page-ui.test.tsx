@@ -57,7 +57,8 @@ it('gives only the empty-profile owner a keyboard-accessible skill settings link
   const view = render(<ProfilePage />);
   const link = await screen.findByRole('link', { name: 'Fähigkeiten ergänzen' });
   expect(link).toHaveAttribute('href', '/settings?tab=skills');
-  expect(screen.getByText('Du kannst deine Fähigkeiten in den Einstellungen ergänzen.')).toBeInTheDocument();
+  expect(screen.getByText('Noch keine Skills vorhanden.', { exact: true })).toBeVisible();
+  expect(screen.queryByText('Du kannst deine Fähigkeiten in den Einstellungen ergänzen.')).not.toBeInTheDocument();
   expect(screen.queryByText('Ergänze deine Fähigkeiten im Profil.')).not.toBeInTheDocument();
   const activate = jest.fn((event: Event) => event.preventDefault());
   link.addEventListener('click', activate);

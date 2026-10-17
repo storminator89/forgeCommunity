@@ -42,7 +42,7 @@ export function PostTopicPicker({ value, onChange, disabled }: { value: string[]
 
   return <div>
     <Label htmlFor="post-topic-input" className="block text-sm font-medium">Themen (optional, bis zu 3)</Label>
-    <p id="post-topic-help" className="mt-1 text-xs text-muted-foreground">Hilft anderen, deinen Beitrag wiederzufinden. Wähle ein bestehendes Thema oder lege eines an.</p>
+    <p id="post-topic-help" className="mt-1 text-xs text-muted-foreground">Wähle ein bestehendes Thema oder lege eines an.</p>
     {value.length > 0 && <ul className="mt-3 flex flex-wrap gap-2" aria-label="Ausgewählte Themen">
       {value.map(topic => <li key={topic}><Button type="button" variant="outline" size="sm" disabled={disabled}
         aria-label={`Thema ${topic} entfernen`} onClick={() => onChange(value.filter(item => item !== topic))}>{topic} ×</Button></li>)}

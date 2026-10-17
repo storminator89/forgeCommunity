@@ -294,11 +294,11 @@ function ScopedUserManagement({ viewerId }: { viewerId: string }) {
   return <div className="min-w-0 space-y-6">
     <header className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-5">
       <div className="min-w-0">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Administration / Mitglieder</p>
+
         <h1 className="flex items-center gap-3 text-[clamp(1.65rem,1.1rem+2vw,2.35rem)] font-semibold tracking-tight text-foreground">
           <Users aria-hidden="true" className="h-6 w-6 shrink-0 text-primary" /> Benutzerverwaltung
         </h1>
-        <p className="mt-2 text-sm text-muted-foreground">Konten, Rollen und Aktivitäten an einem Ort verwalten.</p>
+
       </div>
       <Button className="shrink-0" onClick={() => setIsAddUserOpen(true)}><UserPlus aria-hidden="true" className="mr-2 h-4 w-4" />Neuer Benutzer</Button>
     </header>
@@ -324,7 +324,7 @@ function ScopedUserManagement({ viewerId }: { viewerId: string }) {
         {actionError && <p role="alert" className="rounded-xl border border-destructive/40 p-4 text-sm text-destructive">{actionError}</p>}
         {loadState === 'ready' && (filteredUsers.length ?
           <div className="min-w-0 space-y-2">
-            <p id="users-table-scroll-hint" className="text-xs text-muted-foreground 2xl:hidden">Weitere Spalten: Tabelle seitlich wischen oder mit den Pfeiltasten scrollen →</p>
+            <p id="users-table-scroll-hint" className="text-xs text-muted-foreground 2xl:hidden">Weitere Spalten: wischen oder Pfeiltasten.</p>
             <div role="region" aria-label="Benutzerliste, horizontal verschiebbar" aria-describedby="users-table-scroll-hint" tabIndex={0} className="max-w-full overflow-x-auto rounded-xl border border-border bg-card focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
             <table className="w-full min-w-[690px] text-left text-sm">
               <thead className="border-b border-border bg-muted/40 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><tr>

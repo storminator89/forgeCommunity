@@ -98,7 +98,7 @@ export function ActivityFeed({ userId }: { userId: string }) {
     return <PageState kind="error" title={loadError} description="Prüfe deine Verbindung und versuche es erneut." action={<Button variant="outline" onClick={() => startFetch(1)}>Erneut versuchen</Button>} />;
   }
   if (activities.length === 0) {
-    return <PageState title="Noch keine Aktivitäten" description="Hier erscheinen Beiträge, Kommentare, Projekte und Kurse dieses Mitglieds." />;
+    return <PageState title="Noch keine Aktivitäten" />;
   }
 
   return (

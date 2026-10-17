@@ -178,7 +178,6 @@ function AccountProfilePage({ profileId, accountId, status }: { profileId: strin
               </>
             ) : (
               <>
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Community / Mitgliedsprofil</p>
                 {safeCoverImage && <div className="mt-5 h-32 overflow-hidden rounded-[14px] bg-muted bg-cover bg-center sm:h-44" style={{ backgroundImage: `url("${safeCoverImage.replaceAll('"', '%22')}")` }} role="img" aria-label="Titelbild" />}
                 <header className="mt-6 flex min-w-0 flex-wrap items-start justify-between gap-6 border-b pb-7">
                   <div className="flex min-w-0 flex-wrap items-start gap-5">
@@ -234,11 +233,11 @@ function AccountProfilePage({ profileId, accountId, status }: { profileId: strin
                     <div className="grid min-w-0 gap-x-10 gap-y-8 md:grid-cols-2">
                       <section aria-labelledby="profile-bio-title" className="min-w-0 border-t pt-5">
                         <h2 id="profile-bio-title" className="text-xl font-semibold tracking-tight">Über mich</h2>
-                        <p className="mt-4 whitespace-pre-wrap break-words text-base leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">{visibleProfile.bio || (visibleProfile.isCurrentUser ? 'Ergänze eine Biografie, damit andere mehr über dich erfahren.' : 'Noch keine Biografie vorhanden.')}</p>
+                        <p className="mt-4 whitespace-pre-wrap break-words text-base leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">{visibleProfile.bio || 'Noch keine Biografie vorhanden.'}</p>
                       </section>
                       <section aria-labelledby="profile-skills-title" className="min-w-0 border-t pt-5">
                         <h2 id="profile-skills-title" className="text-xl font-semibold tracking-tight">Skills</h2><p className="mt-1 text-xs text-muted-foreground">Kenntnisstände sind Selbsteinschätzungen.</p>
-                        {visibleProfile.skills.length === 0 ? <div className="mt-4 space-y-3"><p className="text-base text-muted-foreground">{visibleProfile.isCurrentUser ? 'Du kannst deine Fähigkeiten in den Einstellungen ergänzen.' : 'Noch keine Skills vorhanden.'}</p>{visibleProfile.isCurrentUser && <Button asChild variant="outline"><Link href="/settings?tab=skills">Fähigkeiten ergänzen</Link></Button>}</div> : <ul className="mt-4 divide-y">{visibleProfile.skills.map(skill => <li key={skill.id} className="py-3 first:pt-0"><div className="flex flex-wrap items-baseline justify-between gap-2"><span className="min-w-0 break-words font-medium">{skill.name}</span><span className="text-sm text-muted-foreground">{skill.endorsements} Empfehlungen</span></div><p className="mt-2 text-xs tabular-nums text-muted-foreground">Selbsteinschätzung {skill.level}%</p><Progress value={Math.max(0, Math.min(100, skill.level))} className="mt-2 h-2" aria-label={`${skill.name}: ${skill.level} Prozent`} /></li>)}</ul>}
+                        {visibleProfile.skills.length === 0 ? <div className="mt-4 space-y-3"><p className="text-base text-muted-foreground">Noch keine Skills vorhanden.</p>{visibleProfile.isCurrentUser && <Button asChild variant="outline"><Link href="/settings?tab=skills">Fähigkeiten ergänzen</Link></Button>}</div> : <ul className="mt-4 divide-y">{visibleProfile.skills.map(skill => <li key={skill.id} className="py-3 first:pt-0"><div className="flex flex-wrap items-baseline justify-between gap-2"><span className="min-w-0 break-words font-medium">{skill.name}</span><span className="text-sm text-muted-foreground">{skill.endorsements} Empfehlungen</span></div><p className="mt-2 text-xs tabular-nums text-muted-foreground">Selbsteinschätzung {skill.level}%</p><Progress value={Math.max(0, Math.min(100, skill.level))} className="mt-2 h-2" aria-label={`${skill.name}: ${skill.level} Prozent`} /></li>)}</ul>}
                       </section>
                       {visibleProfile.badges.length > 0 && <section aria-labelledby="profile-achievements-title" className="min-w-0 border-t pt-5 md:col-span-2">
                         <h2 id="profile-achievements-title" className="text-xl font-semibold tracking-tight">Auszeichnungen</h2>

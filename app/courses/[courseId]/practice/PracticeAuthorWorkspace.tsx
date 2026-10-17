@@ -424,7 +424,7 @@ export function PracticeAuthorWorkspace({ courseId, sessionStatus }: { courseId:
       <div className="mx-auto max-w-6xl space-y-8">
         <div className="space-y-3 border-b pb-5">
           <Button variant="ghost" size="sm" className="min-h-11" onClick={() => { if (askDiscard(hasLocalChanges)) router.push(`/courses/${encodeURIComponent(courseId)}/contents`) }}><ArrowLeft className="mr-2 h-4 w-4" />Zum Kursentwurf</Button>
-          <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><p className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Autorenarbeitsplatz / Übungspool</p><h1 className="break-words text-2xl font-semibold tracking-tight [overflow-wrap:anywhere] sm:text-3xl">Formative Übungen</h1><p className="mt-2 max-w-prose text-sm leading-relaxed text-muted-foreground">Lernziele und einfache Single-Choice-Fragen erstellen, feste Versionen auswählen und eine Kursfassung prüfen.</p></div></div>
+          <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><h1 className="break-words text-2xl font-semibold tracking-tight [overflow-wrap:anywhere] sm:text-3xl">Formative Übungen</h1></div></div>
           <p className="border-l-2 border-primary pl-3 text-sm leading-relaxed">Veröffentlichte Übungen können Mitglieder im Kurs freiwillig nutzen.</p>
         </div>
         {sessionStatus !== 'authenticated' ? <PageState kind="loading" title="Sitzung wird geprüft" /> :

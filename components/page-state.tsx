@@ -21,7 +21,7 @@ export function PageState({ kind = 'empty', title, description, action }: {
 
 export function LoadingScreen() {
   return <div className="mx-auto flex min-h-dvh max-w-lg items-center px-6"><div className="w-full">
-    <PageState kind="loading" title="Inhalte werden geladen" description="Einen Moment, wir bereiten alles für dich vor." />
+    <PageState kind="loading" title="Inhalte werden geladen" />
   </div></div>;
 }
 
