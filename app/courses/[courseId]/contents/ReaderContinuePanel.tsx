@@ -13,10 +13,10 @@ type Props = {
   onRefresh: () => void
 }
 
-const actionClassName = 'h-auto min-h-11 min-w-0 max-w-full whitespace-normal [overflow-wrap:anywhere]'
+const actionClassName = 'h-auto min-h-11 min-w-0 max-w-full whitespace-normal px-[min(1rem,16px)] py-[min(.5rem,8px)] [overflow-wrap:anywhere]'
 
 export function ReaderContinuePanel({ projection, entry, selectedComplete, busy, onOpen, onRefresh }: Props) {
-  const refresh = <Button type="button" variant="outline" className={actionClassName} disabled={busy} onClick={onRefresh}>{busy ? 'Wird geprüft …' : 'Lernfortschritt aktualisieren'}</Button>
+  const refresh = <Button type="button" variant="outline" className={actionClassName} aria-label={busy ? 'Wird geprüft …' : 'Lernfortschritt aktualisieren'} disabled={busy} onClick={onRefresh}>{busy ? 'Wird geprüft …' : 'Aktualisieren'}</Button>
   if (!entry && !selectedComplete && projection.state !== 'unavailable') return <div className="min-w-0 max-w-full border-t pt-5">{refresh}</div>
   const Heading = entry ? 'h2' : 'h3'
   const state = projection.state
@@ -24,7 +24,7 @@ export function ReaderContinuePanel({ projection, entry, selectedComplete, busy,
     state === 'locked' ? 'Weitere Inhalte sind noch gesperrt' : state === 'unavailable' ? 'Lernfortschritt neu laden' :
       entry ? 'Dein nächster Lernschritt' : 'Nächster Lernschritt'
   const Icon = state === 'complete' ? Check : state === 'locked' ? LockKeyhole : FileText
-  return <div className="min-w-0 max-w-full space-y-4 rounded-xl border bg-card p-5 text-left sm:p-6" aria-label="Nächster Lernschritt" aria-busy={busy}>
+  return <div className="min-w-0 max-w-full space-y-4 rounded-xl border bg-card px-[min(1.25rem,20px)] py-5 text-left sm:px-[min(1.5rem,24px)] sm:py-6" aria-label="Nächster Lernschritt" aria-busy={busy}>
     <div className="flex items-start gap-3"><Icon aria-hidden="true" className={`mt-0.5 h-5 w-5 shrink-0 ${state === 'complete' ? 'text-success' : 'text-muted-foreground'}`} />
       <div className="min-w-0 space-y-2"><Heading className="break-words text-lg font-semibold tracking-tight [overflow-wrap:anywhere]">{title}</Heading>
         {state === 'ready' && projection.next ? <p className="break-words text-sm [overflow-wrap:anywhere]">{projection.next.title}</p> :

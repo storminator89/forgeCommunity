@@ -6,7 +6,7 @@ const ready: ReturnType<typeof projectReaderProgress> = {
   state: 'ready', completedCount: 0, leaves: [], firstLocked: null,
   next: { id: 'next', title: 'Eine lange nächste Lektion', type: 'TEXT', locked: false, completed: false },
 }
-const flexibleTarget = ['h-auto', 'min-h-11', 'min-w-0', 'max-w-full', 'whitespace-normal', '[overflow-wrap:anywhere]']
+const flexibleTarget = ['h-auto', 'min-h-11', 'min-w-0', 'max-w-full', 'whitespace-normal', 'px-[min(1rem,16px)]', 'py-[min(.5rem,8px)]', '[overflow-wrap:anywhere]']
 
 it.each([
   ['entry', true, false, false],
@@ -18,10 +18,12 @@ it.each([
   const refresh = screen.getByRole('button', { name: busy ? 'Wird geprüft …' : 'Lernfortschritt aktualisieren' })
   expect(refresh).toHaveClass(...flexibleTarget)
   expect(refresh).not.toHaveClass('h-11', 'whitespace-nowrap')
+  expect(refresh).toHaveTextContent(busy ? 'Wird geprüft …' : 'Aktualisieren')
   if (entry || selectedComplete) {
     const open = screen.getByRole('button', { name: entry ? 'Kurs starten' : 'Nächste Lektion öffnen' })
     expect(open).toHaveClass(...flexibleTarget)
     expect(refresh.parentElement).toHaveClass('min-w-0', 'flex-wrap')
+    expect(refresh.closest('[aria-label="Nächster Lernschritt"]')).toHaveClass('px-[min(1.25rem,20px)]', 'sm:px-[min(1.5rem,24px)]')
   }
   if (busy) expect(refresh).toBeDisabled()
 })

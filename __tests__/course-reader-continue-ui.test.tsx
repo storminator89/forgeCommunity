@@ -440,3 +440,40 @@ it('keeps author preview separate from learner continue controls', async () => {
   expect(await screen.findByRole('heading', { name: 'Wähle ein Thema' })).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Kurs starten' })).not.toBeInTheDocument()
 })
+
+
+const flexibleLearnerAction = ['h-auto', 'min-h-11', 'min-w-0', 'max-w-full', 'whitespace-normal', 'px-[min(1rem,16px)]', 'py-[min(.5rem,8px)]', '[overflow-wrap:anywhere]']
+
+it('keeps completion mark, busy and remove controls flexible without changing their mutation', async () => {
+  render(<CourseContentsEditor courseId="course" forceLearner />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Kurs starten' }))
+  const mark = screen.getByRole('button', { name: 'Als abgeschlossen markieren' })
+  expect(mark).toHaveClass(...flexibleLearnerAction)
+  expect(mark).not.toHaveClass('h-11', 'whitespace-nowrap')
+  expect(mark.closest('.max-w-4xl')).toHaveClass('px-[min(1rem,16px)]', 'sm:px-[min(1.5rem,24px)]', 'lg:px-[min(2rem,32px)]')
+  mockDelayNextProgress = true
+  fireEvent.click(mark)
+  await waitFor(() => expect(mockDelayedProgress).not.toBeNull())
+  const busy = screen.getByRole('button', { name: 'Wird gespeichert …' })
+  expect(busy).toHaveClass(...flexibleLearnerAction)
+  expect(busy).toBeDisabled()
+  await act(async () => { mockDelayedProgress!(response(mockProgress)) })
+  const remove = await screen.findByRole('button', { name: 'Abschlussmarkierung entfernen' })
+  await waitFor(() => expect(remove).toBeEnabled())
+  expect(remove).toHaveClass(...flexibleLearnerAction)
+  expect(writes()).toHaveLength(1)
+  expect(mockProgress.completedContentIds).toEqual(['eins'])
+})
+
+it('keeps the selected release-lock recheck flexible and read-only', async () => {
+  mockContents = [leaf('eins', 1, { locked: true, releaseLocked: true, releaseOn: '2099-11-01', contentVersionToken: null })]
+  history.replaceState({}, '', '/courses/course/contents?content=eins')
+  render(<CourseContentsEditor courseId="course" forceLearner />)
+  const recheck = await screen.findByRole('button', { name: 'Zugriff neu prüfen' })
+  expect(recheck).toHaveClass(...flexibleLearnerAction)
+  expect(recheck).not.toHaveClass('h-11', 'whitespace-nowrap')
+  fireEvent.click(recheck)
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Lernfortschritt aktualisieren' })).toBeEnabled())
+  expect(writes()).toHaveLength(0)
+  expect(location.search).toBe('?content=eins')
+})
