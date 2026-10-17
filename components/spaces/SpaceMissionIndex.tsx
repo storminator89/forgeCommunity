@@ -145,7 +145,7 @@ export function SpaceMissionIndex({ spaceId, canManage, request, onUnavailable }
   const currentMonday = missionCurrentMonday(timezone.trim());
   const weekPreview = missionWeekPreview(startDate, timezone.trim());
   const replayDraft = replayPayload === JSON.stringify({ title: title.trim(), prompt: prompt.trim(), ...(weekly ? { week: { startDate, timezone: timezone.trim() } } : {}) });
-  return <section aria-labelledby={headingId} className="mt-8 border-b pb-8">
+  return <section aria-labelledby={headingId} className="fc-section-card mt-5">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="flex min-w-0 items-center gap-3"><MissionIllustration compact /><div className="min-w-0"><h2 id={headingId} className="text-xl font-semibold">Gemeinsam erklären</h2><span className="mt-2 inline-block text-xs text-muted-foreground">Freiwillig · Privater Space · Bis zu 5 Personen</span></div></div>
       {canManage && !hasOpen && !loading && <Button ref={createButtonRef} type="button" variant="outline" disabled={pending} aria-expanded={showForm} aria-controls={`${headingId}-form`} onClick={() => showForm ? closeForm() : openForm()}>{!showForm && <Plus size={16} aria-hidden="true" />}{showForm ? 'Schließen' : 'Mission starten'}</Button>}

@@ -1,6 +1,8 @@
 'use client'
 
 import { PageState, LoadingScreen, RetryButton } from '@/components/page-state';
+import { HeroBanner, PageContainer } from '@/components/discovery';
+import { GraduationCap } from 'lucide-react';
 import { AppShell, AppHeader } from '@/components/app-shell';
 import { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
@@ -184,7 +186,8 @@ function ScopedCourseClient({ session }: { session: NonNullable<ReturnType<typeo
           </div>
         </AppHeader>
         <main id="page-content" tabIndex={-1} className="min-w-0 flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-[1440px] px-4 pb-16 pt-5 sm:px-6 sm:pt-7 lg:px-8">
+          <PageContainer>
+            <HeroBanner icon={GraduationCap} title="Wissen teilen. Neues lernen." description="Finde deinen nächsten Kurs und wachse mit der Community." action={creatorPerspective ? <Button asChild><Link href="/courses/new"><Plus className="h-4 w-4" aria-hidden="true" />Neuer Kurs</Link></Button> : undefined} />
             <section aria-labelledby="course-directory-title" className="min-w-0">
               <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                 <div>
@@ -193,10 +196,10 @@ function ScopedCourseClient({ session }: { session: NonNullable<ReturnType<typeo
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   {hasFilters && filteredCourses.length > 0 && <Button type="button" variant="ghost" onClick={resetFilters}>Filter zurücksetzen</Button>}
-                  {creatorPerspective && <Button asChild><Link href="/courses/new"><Plus aria-hidden="true" className="h-4 w-4" />Neuer Kurs</Link></Button>}
+
                 </div>
               </div>
-              <div className="mt-4 grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_220px] sm:items-end">
+              <div className="fc-filter-bar fc-filter-surface mt-4 grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_220px] sm:items-end">
                 <div className="min-w-0">
                   <label htmlFor="course-search" className="mb-1.5 block text-sm font-medium">Kurse suchen</label>
                   <div className="relative">
@@ -246,7 +249,7 @@ function ScopedCourseClient({ session }: { session: NonNullable<ReturnType<typeo
                     {hasFilters && <Button type="button" variant="outline" onClick={resetFilters}>Filter zurücksetzen</Button>}
                   </div>}
                 />}
-                {!isLoading && !loadError && filteredCourses.length > 0 && <div className="divide-y border-y" role="list" aria-label="Kurse">
+                {!isLoading && !loadError && filteredCourses.length > 0 && <div className="fc-entity-list" role="list" aria-label="Kurse">
                   {filteredCourses.map(course => <CourseRow key={course.id} course={course}
                     onDelete={() => void handleDeleteCourse(course.id)} deleting={deletingCourseId === course.id}
                     onJoin={() => void changeEnrollment(course)} onLeave={() => void changeEnrollment(course, true)} pending={pendingCourseId === course.id}
@@ -255,7 +258,7 @@ function ScopedCourseClient({ session }: { session: NonNullable<ReturnType<typeo
                 </div>}
               </div>
             </section>
-          </div>
+          </PageContainer>
         </main>
       </div>
     </AppShell>
@@ -281,7 +284,7 @@ function CourseRow({ course, onDelete, deleting, onJoin, onLeave, pending, canMa
   const actionLabel = pending ? 'Wird verarbeitet …' : course.canDelete ? 'Kurs verwalten' : course.isEnrolled ? 'Kurs öffnen' : isPaid ? 'Anmeldung derzeit nicht verfügbar' : isFull ? 'Kurs ausgebucht' : 'Kurs beitreten';
 
   return (
-    <article role="listitem" className="min-w-0 py-5 sm:py-6">
+    <article role="listitem" className="fc-entity-card">
       <div className="grid min-w-0 gap-4 sm:grid-cols-[112px_minmax(0,1fr)] lg:grid-cols-[112px_minmax(0,1fr)_minmax(180px,240px)] lg:gap-6">
         <div className="relative hidden h-28 overflow-hidden rounded-2xl border bg-secondary sm:block">
           {course.imageUrl ? <Image src={course.imageUrl} alt="" fill sizes="112px" unoptimized={course.imageUrl.startsWith('/api/courses/')} className="object-cover" /> : <div className="flex h-full items-center justify-center text-muted-foreground"><BookOpen aria-hidden="true" className="h-8 w-8" /></div>}

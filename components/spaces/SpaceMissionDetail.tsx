@@ -254,7 +254,7 @@ export function SpaceMissionDetail({ spaceId, missionId, viewerId, invitationId 
         </details>
       </section>
 
-      <section aria-labelledby="mission-participation" className="border-b py-6">
+      <section aria-labelledby="mission-participation" className="fc-section-card mt-5">
         <div className="flex flex-wrap items-baseline justify-between gap-2"><h2 id="mission-participation" className="text-lg font-semibold">Wer dabei ist</h2><p className="text-sm text-muted-foreground">{mission.participants.length}/{mission.participantLimit} Personen</p></div>
         {mission.participants.length ? <ul className={styles.participants}>{mission.participants.map(person => <li key={person.id}><span aria-hidden="true" className={styles.initial}>{(person.name || 'M').slice(0, 1)}</span><span className="min-w-0">{person.name || 'Mitglied'}{person.id === viewerId ? ' (du)' : ''}</span></li>)}</ul> : <p className="mt-3 text-sm text-muted-foreground">Bisher nimmt niemand teil.</p>}
         <h3 ref={participationTargetRef} tabIndex={-1} className={`${styles.taskTarget} mt-4 text-base font-semibold`}>Deine Teilnahme</h3>
@@ -267,7 +267,7 @@ export function SpaceMissionDetail({ spaceId, missionId, viewerId, invitationId 
         {mission.closedAt ? <p className="mt-3 text-sm text-muted-foreground">Die Mission ist geschlossen. Du kannst deine Teilnahme weiterhin beenden und eigene Beiträge zurückziehen.</p> : !mission.participation.active && !mission.canJoin && <p className="mt-3 text-sm text-muted-foreground">{mission.participants.length >= mission.participantLimit ? 'Alle fünf Plätze sind belegt. Du kannst die Beiträge trotzdem lesen.' : 'Eine Teilnahme ist aktuell nicht möglich. Du kannst die Beiträge trotzdem lesen.'}</p>}
       </section>
 
-      <section aria-labelledby="mission-contributions" className="py-6">
+      <section aria-labelledby="mission-contributions" className="fc-section-card mt-5">
         <h2 id="mission-contributions" className="text-lg font-semibold">Erkenntnisse und Gedanken</h2>
         {mission.contributions.length ? <ul className={`${styles.list} mt-4`}>{mission.contributions.map(item => {
           const target = mission.contributions.find(other => other.id === item.targetContributionId);

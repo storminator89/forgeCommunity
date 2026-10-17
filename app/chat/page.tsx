@@ -288,7 +288,7 @@ function ChatPageContent() {
 
   if (!session || loading) {
     return (
-      <AppShell>
+      <AppShell data-page-family="chat">
         <Sidebar />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <AppHeader><div className="app-header-row"><h1 className="app-header-title">Chat</h1><div className="app-header-actions"><ThemeToggle /><UserNav /></div></div></AppHeader>
@@ -303,7 +303,7 @@ function ChatPageContent() {
   }
 
   return (
-    <AppShell>
+    <AppShell data-page-family="chat">
       <Sidebar />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <AppHeader>
@@ -324,7 +324,7 @@ function ChatPageContent() {
         </div>}
 
         <div id="page-content" role="main" tabIndex={-1} className="flex min-h-0 flex-1 overflow-hidden">
-          <aside id="chat-channel-list" aria-label="Chat-Channels" className={cn('min-h-0 min-w-0 flex-col border-r bg-card', showChannelsMobile ? 'flex flex-1' : 'hidden', 'md:flex md:w-64 md:flex-none')}>
+          <aside id="chat-channel-list" aria-label="Chat-Channels" className={cn('fc-chat-channels min-h-0 min-w-0 flex-col bg-card', showChannelsMobile ? 'flex flex-1' : 'hidden', 'md:flex md:w-64 md:flex-none')}>
             <div className="flex min-h-16 items-center justify-between border-b px-4 py-2">
               <h2 className="text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">Channels <span className="ml-1 tabular-nums">{channels.length}</span></h2>
               {session.user.role === 'ADMIN' && (
@@ -422,7 +422,7 @@ function ChatPageContent() {
             </nav>
           </aside>
 
-          <section aria-label="Unterhaltung" className={cn('min-h-0 min-w-0 flex-1 flex-col', showChannelsMobile ? 'hidden' : 'flex', 'md:flex')}>
+          <section aria-label="Unterhaltung" className={cn('fc-chat-conversation min-h-0 min-w-0 flex-1 flex-col', showChannelsMobile ? 'hidden' : 'flex', 'md:flex')}>
             <div className="flex min-h-16 shrink-0 items-center justify-between gap-3 border-b px-4 py-3 sm:px-6">
               <div className="min-w-0">
                 <h2 className="min-w-0 truncate text-base font-semibold tracking-tight">{currentChannel ? '# ' + currentChannel.name : 'Unterhaltung'}</h2>
@@ -446,7 +446,7 @@ function ChatPageContent() {
                 </div>
               )}
               {displayedMessages.map((message) => (
-                <article id={`chat-message-${message.id}`} tabIndex={-1} key={message.id} className={cn('border-b py-5 first:pt-0', linkedTarget?.messageId === message.id && 'rounded-lg bg-accent/50 px-3 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring')}>
+                <article id={`chat-message-${message.id}`} tabIndex={-1} key={message.id} className={cn('fc-chat-message py-4 first:pt-0', linkedTarget?.messageId === message.id && 'rounded-lg bg-accent/50 px-3 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring')}>
                   <div className="flex min-w-0 items-start gap-3">
                     <Avatar className="h-9 w-9 shrink-0">
                       <AvatarImage src={message.author.image ?? undefined} alt="" />
@@ -521,7 +521,7 @@ function ChatPageContent() {
               ))}
             </div>
 
-            <div className="space-y-4 border-t bg-card px-4 py-3 sm:px-6">
+            <div className="fc-chat-composer space-y-4 border-t bg-card px-4 py-3 sm:px-6">
               {imagePreview && (
                 <div className="relative inline-block">
                   <div className="relative w-32 h-32">

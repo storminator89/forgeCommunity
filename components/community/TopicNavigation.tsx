@@ -1,5 +1,7 @@
 'use client'
 
+import Link from 'next/link'
+import { ArrowRight, Search } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -43,13 +45,13 @@ export function TopicNavigation({ selected, onSelect, disabled = false }: { sele
     onSelect(topic)
   }
 
-  return <section className="mt-4 min-w-0" aria-labelledby="community-topic-heading">
+  return <section className="mt-5 min-w-0" aria-labelledby="community-topic-heading">
     <h3 id="community-topic-heading" className="sr-only">Themenfilter</h3>
     <div className="flex min-w-0 flex-wrap items-center gap-3">
       <Label htmlFor="community-topic-search" className="min-w-0 text-sm">Thema suchen</Label>
-      <Input id="community-topic-search" type="search" value={query} maxLength={MAX_TOPIC_LENGTH} disabled={disabled} onFocus={() => setOpen(true)}
+      <div className="relative min-w-0 flex-[1_1_12rem]"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" /><Input id="community-topic-search" type="search" value={query} maxLength={MAX_TOPIC_LENGTH} disabled={disabled} onFocus={() => setOpen(true)}
         onKeyDown={event => { if (event.key === 'Escape') setOpen(false) }}
-        onChange={event => { setQuery(event.target.value); setOpen(true) }} placeholder="z. B. Design" className="min-w-0 max-w-full flex-[1_1_8rem]" />
+        onChange={event => { setQuery(event.target.value); setOpen(true) }} placeholder="z. B. Design" className="min-w-0 max-w-full pl-10" /></div><Link href="/community/spaces" className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-primary">Spaces entdecken<ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
     </div>
     {selected && <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
       <p className="min-w-0 rounded-md bg-accent px-2 py-1 text-sm text-accent-foreground [overflow-wrap:anywhere]">Aktives Thema: <strong>{selected}</strong></p>

@@ -13,12 +13,12 @@ export default function AdminShell({
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   return (
-    <AppShell>
+    <AppShell data-page-family="administration">
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <AdminHeader onMenuClick={() => setIsSidebarOpen(true)} />
         <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto p-4 lg:p-8">
-          <div className="max-w-[1600px] mx-auto space-y-6">
+          <div className="fc-admin-container mx-auto max-w-[1600px] space-y-6">
             {children}
           </div>
         </main>

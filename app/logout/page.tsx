@@ -31,7 +31,7 @@ export default function LogoutPage() {
       <a href="#page-content" className="skip-link">Zum Inhalt springen</a>
       <header className="border-b"><div className="mx-auto flex min-h-20 max-w-[1200px] items-center justify-between gap-3 px-4 sm:px-6 lg:px-8"><Link href="/" className="inline-flex min-h-11 items-center gap-2 rounded-[10px] text-sm font-semibold focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"><ArrowLeft className="h-4 w-4" aria-hidden="true" />ForgeCommunity</Link><ThemeToggle /></div></header>
       <main id="page-content" tabIndex={-1} className="mx-auto flex min-h-[calc(100dvh-5rem)] w-full max-w-[1200px] items-center px-4 py-12 sm:px-6 lg:px-8">
-        <div className="w-full max-w-xl border-t pt-7">
+        <div className="fc-auth-card w-full max-w-xl">
           <span className="flex h-12 w-12 items-center justify-center rounded-[10px] bg-accent text-primary"><LogOut className="h-5 w-5" aria-hidden="true" /></span>
           <p className="mt-6 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Konto / Sitzung</p>
           <h1 className="mt-2 text-[clamp(2rem,1.3rem+2vw,3rem)] font-semibold tracking-tight">Abmelden</h1>

@@ -1,12 +1,13 @@
-import Image from 'next/image';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { navigationArtworkSource } from '@/lib/navigation-artwork';
+import { cn } from '@/lib/utils';
 
-/** Labels remain on their links/buttons; generated artwork is decorative. */
-export function NavigationArtwork({ href, fallback }: { href: string; fallback?: ReactNode }) {
+/** Generated outline artwork uses alpha masks so it follows the text color in both themes. */
+export function NavigationArtwork({ href, fallback, className }: { href: string; fallback?: ReactNode; className?: string }) {
   const src = navigationArtworkSource(href);
   if (!src) return fallback ?? null;
 
-  return <Image src={src} width={28} height={28} alt="" aria-hidden="true"
-    className="h-7 w-7 shrink-0 object-contain" draggable={false} unoptimized />;
+  return <span aria-hidden="true" data-navigation-icon={src}
+    className={cn('fc-navigation-icon', className)}
+    style={{ '--navigation-icon': `url("${src}")` } as CSSProperties} />;
 }

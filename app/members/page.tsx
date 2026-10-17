@@ -1,6 +1,7 @@
 "use client";
 
 import { PageState } from '@/components/page-state';
+import { HeroBanner, PageContainer, SurfaceCard } from '@/components/discovery';
 import { AppShell, AppHeader } from '@/components/app-shell';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
@@ -72,10 +73,11 @@ export default function Members() {
   const [retryKey, setRetryKey] = useState(0);
   const [sortBy, setSortBy] = useState<'name' | 'joinedAt' | 'followers'>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
+  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
 
   // Extrahiere einzigartige Skills und Rollen
   const uniqueSkills = [...new Set(members.flatMap(m => m.skills))].sort();
@@ -170,6 +172,7 @@ export default function Members() {
   }, [members, searchTerm, sortBy, sortOrder, selectedSkills, selectedRoles]);
 
   const filteredMembers = getSortedAndFilteredMembers();
+  const selectedMember = filteredMembers.find(member => member.id === selectedMemberId);
   const mainRef = useRef<HTMLElement>(null);
 
   const handleSort = (key: 'name' | 'joinedAt' | 'followers') => {
@@ -178,6 +181,7 @@ export default function Members() {
   };
 
   const hasActiveFilters = Boolean(searchTerm || selectedSkills.length || selectedRoles.length);
+  const closeInspector = () => { document.getElementById('member-preview-' + selectedMemberId)?.focus(); setSelectedMemberId(null); };
   const clearFilters = () => { setSearchTerm(''); setSelectedSkills([]); setSelectedRoles([]); };
   const retryLoad = () => { setIsLoading(true); setLoadError(false); setRetryKey(value => value + 1); };
   const scrollToTop = () => { mainRef.current?.scrollTo?.({ top: 0, behavior: getPreferredScrollBehavior() }); };
@@ -194,9 +198,11 @@ export default function Members() {
         </AppHeader>
 
         <main ref={mainRef} onScroll={event => setShowScrollTop(event.currentTarget.scrollTop > 400)} id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto w-full max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+          <PageContainer>
+            <HeroBanner icon={Users} title="Lerne die Community kennen." description="Entdecke die Menschen hinter den Ideen. Vernetze dich und lerne von anderen." action={!isLoading && !loadError ? <div className="flex items-center gap-3 rounded-xl bg-card/80 px-4 py-3"><div className="flex -space-x-2" aria-hidden="true">{members.slice(0, 3).map(member => <Avatar key={member.id} className="h-9 w-9 border-2 border-card"><AvatarImage src={member.image} alt="" /><AvatarFallback className="bg-accent text-xs">{member.name.slice(0, 2).toUpperCase()}</AvatarFallback></Avatar>)}</div><span className="text-sm font-medium">{members.length} {members.length === 1 ? 'Mitglied' : 'Mitglieder'}</span></div> : undefined} />
+            <div className="fc-member-layout">
             <section aria-labelledby="member-results-title">
-              <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+              <div className="fc-filter-bar grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
                 <div className="min-w-0">
                   <label htmlFor="member-search" className="mb-2 block text-sm font-medium">Mitglieder suchen</label>
                   <div className="relative">
@@ -248,8 +254,8 @@ export default function Members() {
                   </DropdownMenu>
 
                   <div role="group" aria-label="Ansicht wählen" className="flex items-center rounded-[10px] border border-input p-0.5">
-                    <Button type="button" aria-label="Kartenansicht" aria-pressed={viewMode === 'grid'} variant="ghost" size="icon" onClick={() => setViewMode('grid')} className={viewMode === 'grid' ? 'bg-secondary' : ''}><LayoutGrid className="h-4 w-4" aria-hidden="true" /></Button>
-                    <Button type="button" aria-label="Listenansicht" aria-pressed={viewMode === 'list'} variant="ghost" size="icon" onClick={() => setViewMode('list')} className={viewMode === 'list' ? 'bg-secondary' : ''}><List className="h-4 w-4" aria-hidden="true" /></Button>
+                    <Button type="button" aria-label="Kartenansicht" aria-pressed={viewMode === 'grid'} variant="ghost" size="icon" onClick={() => setViewMode('grid')} className={viewMode === 'grid' ? 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground' : ''}><LayoutGrid className="h-4 w-4" aria-hidden="true" /></Button>
+                    <Button type="button" aria-label="Listenansicht" aria-pressed={viewMode === 'list'} variant="ghost" size="icon" onClick={() => setViewMode('list')} className={viewMode === 'list' ? 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground' : ''}><List className="h-4 w-4" aria-hidden="true" /></Button>
                   </div>
                 </div>
               </div>
@@ -285,19 +291,18 @@ export default function Members() {
               ) : filteredMembers.length === 0 ? (
                 <div className="mt-6"><PageState title={hasActiveFilters ? 'Keine Mitglieder gefunden' : 'Noch keine Mitglieder'} description={hasActiveFilters ? 'Versuche einen anderen Suchbegriff oder entferne deine Filter.' : 'Sobald Mitglieder da sind, erscheinen sie hier.'} action={hasActiveFilters ? <Button type="button" variant="outline" onClick={clearFilters}>Filter zurücksetzen</Button> : undefined} /></div>
               ) : (
-                <div className={viewMode === 'grid' ? 'grid min-w-0 gap-x-8 sm:grid-cols-2 xl:grid-cols-3' : 'min-w-0'}>
+                <div className={viewMode === 'grid' ? 'fc-entity-grid' : 'fc-entity-list'}>
                   {filteredMembers.map(member => (
-                    <Link key={member.id} href={'/profile/' + member.id} aria-label={'Profil von ' + member.name + ' öffnen'}
-                      className="group block min-w-0 border-b py-6 transition-colors hover:bg-muted/40 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                    <div key={member.id} className="fc-member-card group min-w-0">
                       <div className="flex min-w-0 items-start gap-3">
                         <Avatar className="h-12 w-12 shrink-0">
                           <AvatarImage src={member.image} alt="" />
-                          <AvatarFallback className="bg-secondary text-foreground">{member.name.slice(0, 2).toUpperCase()}</AvatarFallback>
+                          <AvatarFallback className="bg-coral-highlight/35 text-foreground">{member.name.slice(0, 2).toUpperCase()}</AvatarFallback>
                         </Avatar>
                         <div className="min-w-0 flex-1">
                           <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
-                            <h3 className="min-w-0 break-words text-base font-semibold tracking-tight [overflow-wrap:anywhere]">{member.name}</h3>
-                            <span className="text-xs text-muted-foreground">{roleLabel(member.role)}</span>
+                            <h3 className="min-w-0 break-words text-base font-semibold tracking-tight [overflow-wrap:anywhere]"><Link href={'/profile/' + member.id} aria-label={'Profil von ' + member.name + ' öffnen'} className="hover:text-primary">{member.name}</Link></h3>
+                            <Badge variant="secondary" className="bg-accent/70 text-accent-foreground font-medium">{roleLabel(member.role)}</Badge>
                           </div>
                           {member.title && <p className="mt-1 break-words text-sm text-muted-foreground [overflow-wrap:anywhere]">{member.title}</p>}
                           <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
@@ -310,14 +315,22 @@ export default function Members() {
                             {member.skills.length > 3 && <Badge variant="outline">+{member.skills.length - 3}</Badge>}
                           </div>}
                         </div>
-                        <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground group-hover:text-primary" aria-hidden="true" />
+                        <Button type="button" variant="outline" size="sm" id={'member-preview-' + member.id} aria-label={'Kurzprofil von ' + member.name} aria-pressed={selectedMemberId === member.id} aria-controls={selectedMemberId === member.id ? 'member-inspector' : undefined} onClick={() => setSelectedMemberId(previous => previous === member.id ? null : member.id)} className="shrink-0"><span className="hidden 2xl:inline">Kurzprofil</span><ArrowUpRight className="h-4 w-4" aria-hidden="true" /></Button>
                       </div>
-                    </Link>
+                    </div>
                   ))}
                 </div>
               )}
             </section>
-          </div>
+            {selectedMember && <aside id="member-inspector" aria-label={'Kurzprofil von ' + selectedMember.name} onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); closeInspector(); } }} className="fc-profile-inspector fc-surface">
+              <div className="flex items-start gap-3"><Avatar className="h-16 w-16"><AvatarImage src={selectedMember.image} alt="" /><AvatarFallback className="bg-coral-highlight/35 text-lg">{selectedMember.name.slice(0, 2).toUpperCase()}</AvatarFallback></Avatar><div className="min-w-0 flex-1 pt-2"><h2 className="break-words font-semibold">{selectedMember.name}</h2><p className="mt-1 text-sm text-muted-foreground">{roleLabel(selectedMember.role)}</p></div><Button type="button" variant="ghost" size="icon" aria-label="Kurzprofil schließen" onClick={closeInspector}><X className="h-4 w-4" /></Button></div>
+              {selectedMember.title && <p className="mt-4 text-sm text-muted-foreground">{selectedMember.title}</p>}
+              <Button asChild className="mt-5 w-full"><Link href={'/profile/' + selectedMember.id}>Profil ansehen<ArrowUpRight className="h-4 w-4" aria-hidden="true" /></Link></Button>
+              <h3>Über</h3><dl className="grid grid-cols-2 gap-2"><div className="rounded-xl bg-muted/60 p-3"><dt className="text-xs text-muted-foreground">Mitglied seit</dt><dd className="mt-2 text-sm font-medium">{format(new Date(selectedMember.joinedAt), 'MMM yyyy', { locale: de })}</dd></div><div className="rounded-xl bg-muted/60 p-3"><dt className="text-xs text-muted-foreground">Follower</dt><dd className="mt-2 text-sm font-medium">{selectedMember.followers}</dd></div></dl>
+              <h3>Interessen & Skills</h3>{selectedMember.skills.length > 0 ? <div className="flex flex-wrap gap-2">{selectedMember.skills.map(skill => <Badge key={skill} variant="secondary">{skill}</Badge>)}</div> : <SurfaceCard className="bg-muted/30 p-5 text-center"><Briefcase className="mx-auto mb-3 h-5 w-5 text-muted-foreground" aria-hidden="true" /><p className="text-sm">Noch keine Skills hinterlegt</p><p className="mt-2 text-xs leading-relaxed text-muted-foreground">Dieses Mitglied hat noch keine Skills angegeben.</p></SurfaceCard>}
+            </aside>}
+            </div>
+          </PageContainer>
 
           {showScrollTop && <Button type="button" aria-label="Nach oben" variant="secondary" size="icon" onClick={scrollToTop} className="fixed bottom-6 right-6 z-20 border shadow-xs"><ChevronUp className="h-4 w-4" aria-hidden="true" /></Button>}
         </main>

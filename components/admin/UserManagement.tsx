@@ -292,7 +292,7 @@ function ScopedUserManagement({ viewerId }: { viewerId: string }) {
   }
 
   return <div className="min-w-0 space-y-6">
-    <header className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-5">
+    <header className="fc-detail-header flex flex-wrap items-end justify-between gap-4">
       <div className="min-w-0">
 
         <h1 className="flex items-center gap-3 text-[clamp(1.65rem,1.1rem+2vw,2.35rem)] font-semibold tracking-tight text-foreground">
@@ -304,7 +304,7 @@ function ScopedUserManagement({ viewerId }: { viewerId: string }) {
     </header>
 
     <div className="grid min-w-0 gap-8 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,23rem)]">
-      <section aria-labelledby="users-heading" className="min-w-0 space-y-4">
+      <section aria-labelledby="users-heading" className="fc-section-card space-y-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div><h2 id="users-heading" className="text-xl font-semibold text-foreground">Benutzer</h2>
             <p role="status" className="text-sm text-muted-foreground">{filteredUsers.length} von {users.length} Konten</p></div>
@@ -351,7 +351,7 @@ function ScopedUserManagement({ viewerId }: { viewerId: string }) {
           : <div className="rounded-xl border border-dashed border-border p-8 text-center"><p className="font-medium text-foreground">{searchTerm ? 'Keine Treffer' : 'Noch keine Benutzer'}</p><p className="mt-1 text-sm text-muted-foreground">{searchTerm ? 'Versuchen Sie einen anderen Suchbegriff.' : 'Erstellen Sie das erste Konto, um es hier zu verwalten.'}</p>{searchTerm && <Button variant="outline" size="sm" className="mt-4" onClick={() => setSearchTerm('')}>Suche zurücksetzen</Button>}</div>)}
       </section>
 
-      <aside aria-label={selectedUser ? `Details zu ${displayName(selectedUser)}` : 'Benutzerstatistiken'} className="min-w-0 xl:border-l xl:border-border xl:pl-8">
+      <aside aria-label={selectedUser ? `Details zu ${displayName(selectedUser)}` : 'Benutzerstatistiken'} className="fc-section-card self-start">
         {selectedUser ? <div className="min-w-0 space-y-5">
           <div className="flex min-w-0 items-center gap-3 border-b border-border pb-4"><Avatar className="h-12 w-12 shrink-0"><AvatarImage src={selectedUser.image || ''} alt="" /><AvatarFallback>{displayName(selectedUser).slice(0, 2).toUpperCase()}</AvatarFallback></Avatar><div className="min-w-0"><h2 className="break-words text-lg font-semibold">{displayName(selectedUser)}</h2><p className="break-all text-sm text-muted-foreground">{selectedUser.email}</p></div></div>
           <div className="rounded-xl border border-border bg-card p-4"><div className="flex items-start justify-between gap-4"><div className="space-y-1"><Label htmlFor={`test-account-${selectedUser.id}`}>Testkonto</Label><p id={`test-account-description-${selectedUser.id}`} className="text-sm text-muted-foreground">Testkonten können keine Punkte oder Kursbelohnungen verdienen und erscheinen nicht in der Rangliste.</p></div><Switch id={`test-account-${selectedUser.id}`} aria-describedby={`test-account-description-${selectedUser.id}`} checked={selectedUser.isTestAccount === true} disabled={testAccountPendingId === selectedUser.id} onCheckedChange={checked => void updateTestAccount(selectedUser, checked)} /></div>{testAccountError && <p role="alert" className="mt-2 text-sm text-destructive">{testAccountError}</p>}</div>

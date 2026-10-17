@@ -212,12 +212,12 @@ function AccountEditArticle({ id, accountId, status }: { id: string; accountId: 
 
   if (status === 'loading' || (accountId && isLoading)) {
     return (
-      <AppShell><Sidebar /><div className="flex min-h-0 min-w-0 flex-1 flex-col"><AppHeader><div className="app-header-row"><h1 className="app-header-title">Artikel bearbeiten</h1></div></AppHeader><main id="page-content" tabIndex={-1} className="flex min-h-0 flex-1 items-center justify-center p-4"><PageState kind="loading" title="Artikel wird geladen" /></main></div></AppShell>
+      <AppShell data-page-family="editor"><Sidebar /><div className="flex min-h-0 min-w-0 flex-1 flex-col"><AppHeader><div className="app-header-row"><h1 className="app-header-title">Artikel bearbeiten</h1></div></AppHeader><main id="page-content" tabIndex={-1} className="flex min-h-0 flex-1 items-center justify-center p-4"><PageState kind="loading" title="Artikel wird geladen" /></main></div></AppShell>
     );
   }
 
   return (
-    <AppShell>
+    <AppShell data-page-family="editor">
       <Sidebar />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <AppHeader>
@@ -225,7 +225,7 @@ function AccountEditArticle({ id, accountId, status }: { id: string; accountId: 
         </AppHeader>
 
         <main id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto w-full max-w-[1440px] px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
+          <div className="fc-editor-surface mx-auto my-4 w-[calc(100%-2rem)] max-w-[1380px] py-3 sm:my-6 sm:py-6">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
               <Button type="button" variant="ghost" size="sm" onClick={() => router.push('/knowledgebase/' + id)}><ArrowLeft className="h-4 w-4" aria-hidden="true" />Zum Artikel</Button>
               {!loadError && <Button type="submit" form="editForm" disabled={isSubmitting}>{isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Save className="h-4 w-4" aria-hidden="true" />}{isSubmitting ? 'Speichern…' : 'Speichern'}</Button>}
@@ -240,7 +240,7 @@ function AccountEditArticle({ id, accountId, status }: { id: string; accountId: 
                 {error && <Alert variant="destructive" role="alert" className="my-6"><AlertCircle className="h-4 w-4" aria-hidden="true" /><AlertDescription>{error}</AlertDescription></Alert>}
                 <form id="editForm" method="post" onSubmit={handleSubmit} className="min-w-0 pt-4">
                   <p id="edit-article-required-fields" className="text-sm text-muted-foreground">Pflichtangaben: Titel, Inhalt und Kategorie.</p>
-                  <div className="mt-5 grid min-w-0 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-8" role="group" aria-label="Pflichtangaben" aria-describedby="edit-article-required-fields">
+                  <div className="mt-4 grid min-w-0 items-start gap-5 sm:mt-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-8" role="group" aria-label="Pflichtangaben" aria-describedby="edit-article-required-fields">
                     <div className="min-w-0">
                       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                         <Label htmlFor="title">Titel <span className="text-destructive">*</span></Label>
@@ -252,7 +252,7 @@ function AccountEditArticle({ id, accountId, status }: { id: string; accountId: 
                       <CategorySelect categories={existingCategories} selectedCategory={category} setSelectedCategory={setCategory} onAddCategory={handleAddNewCategory} />
                     </div>
                   </div>
-                  <section aria-labelledby="edit-article-content-title" aria-describedby="edit-article-required-fields" className="mt-6 min-w-0">
+                  <section aria-labelledby="edit-article-content-title" aria-describedby="edit-article-required-fields" className="mt-3 min-w-0 sm:mt-6">
                     <h2 id="edit-article-content-title" className="mb-2 text-sm font-medium">Inhalt <span className="text-destructive">*</span></h2>
                     <div className="overflow-hidden rounded-[10px] focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"><Editor content={content} onChange={setContent} className="min-h-[400px]" /></div>
                   </section>

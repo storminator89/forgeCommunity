@@ -1,5 +1,7 @@
 'use client'
 
+import { SurfaceCard } from '@/components/discovery';
+import { Lightbulb, FileCheck2 } from 'lucide-react';
 import { AppShell, AppHeader } from '@/components/app-shell';
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -101,10 +103,10 @@ function CourseComposer({ session }: { session: Session | null }) {
               <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">Der Entwurf ist für Lernende erst nach deiner ausdrücklichen Veröffentlichung sichtbar.</p>
             </div>
 
-            <div className="mt-8 min-w-0 max-w-3xl">
-              <form onSubmit={handleSubmit} className="min-w-0 space-y-9" aria-label="Neuen Kurs erstellen">
-                <section aria-labelledby="course-basics-title" className="space-y-5">
-                  <div><h2 id="course-basics-title" className="text-lg font-semibold">Kursdaten</h2></div>
+            <div className="mt-8 grid min-w-0 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_260px]">
+              <form onSubmit={handleSubmit} className="min-w-0 space-y-5" aria-label="Neuen Kurs erstellen">
+                <section aria-labelledby="course-basics-title" className="fc-form-section space-y-5">
+                  <div><h2 id="course-basics-title" className="fc-step-title text-lg font-semibold"><span aria-hidden="true">1</span>Kursdaten</h2></div>
                   <div className="space-y-2">
                     <Label htmlFor="title">Kurstitel</Label>
                     <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="z. B. Einführung in React" />
@@ -115,8 +117,8 @@ function CourseComposer({ session }: { session: Session | null }) {
                   </div>
                 </section>
 
-                <section aria-labelledby="course-details-title" className="space-y-5 border-t pt-8">
-                  <div><h2 id="course-details-title" className="text-lg font-semibold">Zeitraum und Plätze</h2></div>
+                <section aria-labelledby="course-details-title" className="fc-form-section space-y-5">
+                  <div><h2 id="course-details-title" className="fc-step-title text-lg font-semibold"><span aria-hidden="true">2</span>Zeitraum und Plätze</h2></div>
                   <div className="grid min-w-0 gap-5 sm:grid-cols-2">
                     <div className="min-w-0 space-y-2">
                       <Label htmlFor="start-date">Startdatum (optional)</Label>
@@ -141,21 +143,22 @@ function CourseComposer({ session }: { session: Session | null }) {
                   </div>
                 </section>
 
-                <section aria-labelledby="course-price-title" className="space-y-5 border-t pt-8">
-                  <div><h2 id="course-price-title" className="text-lg font-semibold">Kosten festlegen</h2><p className="mt-1 text-sm text-muted-foreground">Trage 0 für einen kostenlosen Kurs ein.</p></div>
+                <section aria-labelledby="course-price-title" className="fc-form-section space-y-5">
+                  <div><h2 id="course-price-title" className="fc-step-title text-lg font-semibold"><span aria-hidden="true">3</span>Kosten festlegen</h2><p className="mt-1 text-sm text-muted-foreground">Trage 0 für einen kostenlosen Kurs ein.</p></div>
                   <div className="grid min-w-0 gap-5 sm:grid-cols-2">
                     <div className="min-w-0 space-y-2"><Label htmlFor="price">Preis</Label><Input id="price" type="number" value={price} onChange={(e) => setPrice(e.target.value)} required placeholder="0.00" min="0" step="0.01" /></div>
                     <div className="min-w-0 space-y-2"><Label htmlFor="currency">Währung</Label><select id="currency" value={currency} onChange={(e) => setCurrency(e.target.value)} required className="h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-base text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:text-sm"><option value="EUR">EUR</option><option value="USD">USD</option><option value="GBP">GBP</option></select></div>
                   </div>
                 </section>
 
-                <section aria-labelledby="course-image-title" className="space-y-2 border-t pt-8"><h2 id="course-image-title" className="text-lg font-semibold">Kursbild</h2><p className="text-sm leading-relaxed text-muted-foreground">Ein privates Titelbild kannst du im Autorenarbeitsplatz hochladen, sobald der Kursentwurf angelegt ist.</p></section>
+                <section aria-labelledby="course-image-title" className="fc-form-section space-y-2"><h2 id="course-image-title" className="fc-step-title text-lg font-semibold"><span aria-hidden="true">4</span>Kursbild</h2><p className="text-sm leading-relaxed text-muted-foreground">Ein privates Titelbild kannst du im Autorenarbeitsplatz hochladen, sobald der Kursentwurf angelegt ist.</p></section>
 
                 <div className="space-y-5 border-t pt-7">
                   {error && <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">{error}</p>}
                   <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"><Button asChild variant="outline"><Link href="/courses">Abbrechen</Link></Button><Button type="submit" disabled={isSubmitting} aria-busy={isSubmitting}>{isSubmitting ? 'Entwurf wird angelegt …' : 'Kursentwurf anlegen'}</Button></div>
                 </div>
               </form>
+              <aside className="space-y-4 lg:sticky lg:top-6" aria-label="Hinweise zum Kursentwurf"><SurfaceCard className="p-5"><Lightbulb className="mb-3 h-6 w-6 text-primary" aria-hidden="true" /><h2 className="font-semibold">Ein guter Kurs beginnt mit einer Idee.</h2><p className="mt-3 text-sm leading-relaxed text-muted-foreground">Wähle einen klaren Titel und eine passende Kategorie. Inhalte und ein Titelbild ergänzt du anschließend im Autorenarbeitsplatz.</p></SurfaceCard><SurfaceCard className="p-5"><FileCheck2 className="mb-3 h-6 w-6 text-primary" aria-hidden="true" /><h2 className="font-semibold">Vom Entwurf zum Kurs</h2><ol className="mt-4 list-decimal space-y-3 pl-4 text-sm leading-relaxed text-muted-foreground"><li>Kursentwurf anlegen</li><li>Inhalte und Kursbild ergänzen</li><li>Kurs prüfen und veröffentlichen</li></ol></SurfaceCard></aside>
             </div>
           </div>
         </main>

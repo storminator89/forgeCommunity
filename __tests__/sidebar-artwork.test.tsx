@@ -8,7 +8,7 @@ jest.mock('@/contexts/NotificationContext', () => ({ useNotifications: () => ({ 
 
 beforeEach(() => { mockRole = 'USER'; window.localStorage.clear(); });
 
-test.each(['USER', 'MODERATOR', 'ADMIN'])('generated artwork preserves %s role filters, active names and unread badge', role => {
+test.each(['USER', 'MODERATOR', 'ADMIN'])('line icons preserve %s role filters, active names and unread badge', role => {
   mockRole = role;
   render(<Sidebar />);
   const navigation = screen.getByRole('navigation', { name: 'Hauptnavigation' });
@@ -16,10 +16,9 @@ test.each(['USER', 'MODERATOR', 'ADMIN'])('generated artwork preserves %s role f
   for (const link of links) {
     expect(link).toHaveAccessibleName();
     expect(link).toHaveClass('min-h-11');
-    const image = link.querySelector('img');
-    expect(image).toHaveAttribute('alt', '');
+    const image = link.querySelector('[data-navigation-icon]');
     expect(image).toHaveAttribute('aria-hidden', 'true');
-    expect(image).toHaveAttribute('width', '28');
+    expect(link.querySelector('img')).toBeNull();
   }
   expect(within(navigation).getByRole('link', { name: 'Community' })).toHaveAttribute('aria-current', 'page');
   expect(within(navigation).getByLabelText('7 ungelesene Benachrichtigungen')).toHaveTextContent('7');
@@ -29,7 +28,7 @@ test.each(['USER', 'MODERATOR', 'ADMIN'])('generated artwork preserves %s role f
   expect(learnerPath !== null).toBe(role === 'USER');
 });
 
-test('collapsed navigation retains labelled links, active state, badge and 28px artwork', () => {
+test('collapsed navigation retains labelled links, active state, badge and line icons', () => {
   render(<Sidebar />);
   fireEvent.click(screen.getByRole('button', { name: 'Navigation einklappen' }));
   expect(screen.getByRole('button', { name: 'Navigation erweitern' })).toHaveAttribute('aria-expanded', 'false');
@@ -37,7 +36,7 @@ test('collapsed navigation retains labelled links, active state, badge and 28px 
   const community = within(navigation).getByRole('link', { name: 'Community' });
   expect(community).toHaveAttribute('aria-label', 'Community');
   expect(community).toHaveAttribute('aria-current', 'page');
-  expect(community.querySelector('img')).toHaveAttribute('width', '28');
+  expect(community.querySelector('[data-navigation-icon]')).toHaveAttribute('aria-hidden', 'true');
   expect(within(navigation).getByLabelText('7 ungelesene Benachrichtigungen')).toHaveTextContent('7');
 });
 
@@ -46,7 +45,7 @@ test('drawer links retain their labels and close the drawer when selected', () =
   render(<Sidebar isOpen onClose={onClose} />);
   const drawer = screen.getByRole('dialog', { name: 'Navigation' });
   const community = within(drawer).getByRole('link', { name: 'Community' });
-  expect(community.querySelector('img')).toHaveAttribute('alt', '');
+  expect(community.querySelector('[data-navigation-icon]')).toHaveAttribute('aria-hidden', 'true');
   fireEvent.click(community);
   expect(onClose).toHaveBeenCalledTimes(1);
 });

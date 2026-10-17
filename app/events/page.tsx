@@ -2,6 +2,9 @@
 
 "use client";
 
+import { HeroBanner } from '@/components/discovery';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SlidersHorizontal, RotateCcw, ArrowRight } from 'lucide-react';
 import { AppShell, AppHeader } from '@/components/app-shell';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
@@ -84,6 +87,8 @@ function ScopedEvents({ session, sessionStatus }: {
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [focusedEventId, setFocusedEventId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [periodFilter, setPeriodFilter] = useState('all');
   const [eventsData, setEventsData] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -268,11 +273,17 @@ function ScopedEvents({ session, sessionStatus }: {
     }
   }, [view]);
 
+  const categories = [...new Set(eventsData.map(event => event.category).filter((category): category is string => Boolean(category)))].sort((a, b) => a.localeCompare(b, 'de'));
+  const hasFilters = Boolean(searchTerm || categoryFilter !== 'all' || periodFilter !== 'all');
   const filteredEvents = eventsData.filter(event =>
-    event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    event.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (event.category && event.category.toLowerCase().includes(searchTerm.toLowerCase()))
+    (categoryFilter === 'all' || event.category === categoryFilter) &&
+    (periodFilter === 'all' || (periodFilter === 'upcoming' ? eventIsTodayOrLater(event) : !eventIsTodayOrLater(event))) &&
+    (event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      event.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (event.category && event.category.toLowerCase().includes(searchTerm.toLowerCase())))
   );
+  const resetFilters = () => { setSearchTerm(''); setCategoryFilter('all'); setPeriodFilter('all'); };
+  const categorySelect = (id: string) => <Select value={categoryFilter} onValueChange={setCategoryFilter}><SelectTrigger id={id} aria-label="Event-Kategorie wählen"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Alle Kategorien</SelectItem>{categories.map(category => <SelectItem key={category} value={category}>{category}</SelectItem>)}</SelectContent></Select>;
 
   // Each event keeps its own local day, including earlier today, independently
   // of the viewer's timezone and the displayed calendar month.
@@ -381,8 +392,8 @@ function ScopedEvents({ session, sessionStatus }: {
         aria-label={`${format(day, 'EEEE, dd. MMMM yyyy', { locale: de })}, ${dayEvents.length} ${dayEvents.length === 1 ? 'Event' : 'Events'}`}
         aria-current={today ? 'date' : undefined}
         className={cn(
-          "min-w-0 bg-card p-1.5 text-left transition-colors hover:bg-accent focus-visible:z-10 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:p-3",
-          week ? "flex min-h-20 items-start gap-4 sm:block sm:h-44" : "h-20 sm:h-32 lg:h-40",
+          "relative min-w-0 bg-card p-1.5 text-left transition-colors hover:bg-accent focus-visible:z-10 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:p-3",
+          week ? "flex min-h-20 items-start gap-4 sm:block sm:h-44" : "h-20 sm:h-28 xl:h-28",
           today && "bg-primary/5"
         )}>
         <time dateTime={format(day, 'yyyy-MM-dd')} className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-semibold", today && "bg-primary text-primary-foreground")}>
@@ -400,18 +411,18 @@ function ScopedEvents({ session, sessionStatus }: {
   };
 
   const renderMonthView = () => (
-    <section aria-label="Monatskalender" className="mx-auto max-w-6xl overflow-hidden rounded-xl border bg-card">
+    <section aria-label="Monatskalender" className="fc-surface fc-calendar overflow-hidden">
       <div className="flex items-center justify-between gap-2 border-b p-3 sm:p-5">
         <Button variant="outline" size="icon" aria-label="Vorheriger Monat" onClick={handlePreviousMonth}><ChevronLeft className="h-4 w-4" /></Button>
         <h2 className="text-center text-base font-semibold sm:text-xl">{format(currentMonth, 'MMMM yyyy', { locale: de })}</h2>
-        <Button variant="outline" size="icon" aria-label="Nächster Monat" onClick={handleNextMonth}><ChevronRight className="h-4 w-4" /></Button>
+        <Button variant="outline" size="icon" aria-label="Nächster Monat" onClick={handleNextMonth}><ChevronRight className="h-4 w-4" /></Button><Button type="button" variant="outline" onClick={() => setCurrentMonth(new Date())} aria-label="Heute anzeigen"><CalendarDays className="h-4 w-4 sm:hidden" aria-hidden="true" /><span className="hidden sm:inline">Heute</span></Button>
       </div>
       <div role="group" aria-label="Monatskalender horizontal verschieben" tabIndex={0} className="max-w-full overflow-x-auto focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
         <div className="grid min-w-[314px] grid-cols-7 gap-px bg-border">
           {['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].map(day => <div key={day} className="bg-card py-2 text-center text-xs font-medium text-muted-foreground">{day}</div>)}
-          {Array.from({ length: startingDayIndex }).map((_, index) => <div key={`empty-${index}`} className="h-20 bg-muted/30 sm:h-32 lg:h-40" aria-hidden="true" />)}
+          {Array.from({ length: startingDayIndex }).map((_, index) => <div key={`empty-${index}`} className="h-20 bg-muted/30 sm:h-28 xl:h-28" aria-hidden="true" />)}
           {days.map(day => renderDay(day))}
-          {Array.from({ length: (7 - (startingDayIndex + days.length) % 7) % 7 }).map((_, index) => <div key={`trailing-${index}`} className="h-20 bg-muted/30 sm:h-32 lg:h-40" aria-hidden="true" />)}
+          {Array.from({ length: (7 - (startingDayIndex + days.length) % 7) % 7 }).map((_, index) => <div key={`trailing-${index}`} className="h-20 bg-muted/30 sm:h-28 xl:h-28" aria-hidden="true" />)}
         </div>
       </div>
       <p className="border-t px-4 py-3 text-xs text-muted-foreground">Termine gelten in der jeweiligen Event-Zeitzone.</p>
@@ -422,7 +433,7 @@ function ScopedEvents({ session, sessionStatus }: {
     const weekStart = startOfWeek(currentMonth, { locale: de, weekStartsOn: 1 });
     const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
     return (
-      <section aria-label="Wochenkalender" className="mx-auto max-w-6xl overflow-hidden rounded-xl border bg-card">
+      <section aria-label="Wochenkalender" className="fc-surface fc-calendar overflow-hidden">
         <div className="flex items-center justify-between gap-2 border-b p-3 sm:p-5">
           <Button variant="outline" size="icon" aria-label="Vorherige Woche" onClick={() => setCurrentMonth(addDays(currentMonth, -7))}><ChevronLeft className="h-4 w-4" /></Button>
           <h2 className="text-center text-sm font-semibold sm:text-lg">{format(weekStart, 'dd. MMM', { locale: de })} – {format(addDays(weekStart, 6), 'dd. MMM yyyy', { locale: de })}</h2>
@@ -435,8 +446,11 @@ function ScopedEvents({ session, sessionStatus }: {
   };
 
   const renderListView = () => {
+    const listEvents = periodFilter === 'past'
+      ? [...filteredEvents].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      : upcomingEvents;
     return (
-      <section aria-labelledby="event-list-heading" className="mx-auto max-w-6xl border-y">
+      <section aria-labelledby="event-list-heading" className="fc-surface overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4 lg:p-6">
           <h2 ref={listHeadingRef} tabIndex={-1} id="event-list-heading" className="text-lg font-semibold text-foreground lg:text-2xl">
             Listenansicht
@@ -447,8 +461,8 @@ function ScopedEvents({ session, sessionStatus }: {
           </Button>
         </div>
         <div className="divide-y divide-border px-4 lg:px-6">
-          {upcomingEvents.length > 0 ? (
-            upcomingEvents.map(event => (
+          {listEvents.length > 0 ? (
+            listEvents.map(event => (
               <article key={event.id} id={selectedDate ? undefined : `event-${encodeURIComponent(event.id)}`} tabIndex={-1} className="py-5">
                 <div className="flex min-w-0 flex-col items-start justify-between gap-3 sm:flex-row">
                   <div className="min-w-0 flex-1 break-words [overflow-wrap:anywhere]">
@@ -484,7 +498,7 @@ function ScopedEvents({ session, sessionStatus }: {
               </article>
             ))
           ) : (
-            <p className="py-10 text-center text-sm text-muted-foreground">Keine zukünftigen Events gefunden.</p>
+            <p className="py-10 text-center text-sm text-muted-foreground">{periodFilter === 'past' ? 'Keine vergangenen Events gefunden.' : 'Keine zukünftigen Events gefunden.'}</p>
           )}
         </div>
       </section>
@@ -501,24 +515,27 @@ function ScopedEvents({ session, sessionStatus }: {
             <div className="app-header-actions"><ThemeToggle /><UserNav /></div>
           </div>
         </AppHeader>
-        <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto p-4 lg:p-8">
-          <div className="mx-auto mb-5 flex max-w-6xl flex-wrap items-center justify-between gap-3">
-            <div role="group" aria-label="Kalenderansicht" className="flex gap-1 rounded-xl border bg-card p-1">
+        <main id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto">
+          <div className="fc-page-container">
+          <HeroBanner title="Events" description="Entdecke spannende Events, Webinare und Community-Treffen." icon={CalendarIcon} className="fc-events-hero" action={isAdmin ? <Button onClick={handleOpenAddDialog}><Plus className="h-4 w-4" aria-hidden="true" />Event erstellen</Button> : undefined}><div className="fc-calendar-art" aria-hidden="true"><CalendarDays /></div></HeroBanner>
+          <div className="fc-events-controls mb-5 flex flex-wrap items-center justify-between gap-4">
+            <div role="group" aria-label="Kalenderansicht" className="grid max-w-full grid-cols-3 gap-1 rounded-xl border bg-card p-1">
               <Button variant={view === 'month' ? 'default' : 'ghost'} size="sm" aria-pressed={view === 'month'} onClick={() => setView('month')}><CalendarDays className="mr-1 h-4 w-4" aria-hidden="true" />Monat</Button>
               <Button variant={view === 'week' ? 'default' : 'ghost'} size="sm" aria-pressed={view === 'week'} onClick={() => setView('week')}><CalendarIcon className="mr-1 h-4 w-4" aria-hidden="true" />Woche</Button>
               <Button variant={view === 'list' ? 'default' : 'ghost'} size="sm" aria-pressed={view === 'list'} onClick={() => setView('list')}><List className="mr-1 h-4 w-4" aria-hidden="true" />Liste</Button>
             </div>
-            {isAdmin && <Button size="sm" onClick={handleOpenAddDialog} className="gap-2"><Plus className="h-4 w-4" aria-hidden="true" />Event erstellen</Button>}
-            <div className="relative w-full">
+            <div className="fc-event-search-row w-full"><div className="relative min-w-0">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
               <Input ref={searchInputRef} type="search" aria-label="Events durchsuchen" placeholder="Titel, Beschreibung oder Kategorie suchen …" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9 pr-12 [&::-webkit-search-cancel-button]:appearance-none" />
               {searchTerm && <Button type="button" variant="ghost" size="icon" aria-label="Eventsuche löschen" onClick={handleClearSearch} className="absolute right-0 top-1/2 -translate-y-1/2"><X className="h-4 w-4" aria-hidden="true" /></Button>}
             </div>
-            {searchTerm && <p className="w-full text-sm text-muted-foreground" role="status">{filteredEvents.length} {filteredEvents.length === 1 ? 'Event gefunden' : 'Events gefunden'}</p>}
+            <div className="min-w-0">{categorySelect('event-category-top')}</div></div>
+            {hasFilters && <p className="w-full text-sm text-muted-foreground" role="status">{filteredEvents.length} {filteredEvents.length === 1 ? 'Event gefunden' : 'Events gefunden'}</p>}
           </div>
 
+          <div className="fc-events-layout"><div className="min-w-0 space-y-5">
           {view !== 'list' && (
-            <section aria-labelledby="upcoming-events-heading" className="mx-auto mb-5 max-w-6xl rounded-xl border bg-card p-4 sm:p-5">
+            <section aria-labelledby="upcoming-events-heading" className="fc-surface p-4 sm:p-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="min-w-0">
                   <h2 id="upcoming-events-heading" className="text-lg font-semibold">Nächste Events</h2>
@@ -529,23 +546,21 @@ function ScopedEvents({ session, sessionStatus }: {
               {upcomingEvents.length > 0 ? (
                 <>
                   <p className="mt-3 text-xs text-muted-foreground">{Math.min(upcomingEvents.length, 3)} von {upcomingEvents.length} {upcomingEvents.length === 1 ? 'Event' : 'Events'} ab heute</p>
-                  <ul className="mt-2 grid gap-2 sm:grid-cols-3">
+                  <ul className="mt-4 grid gap-3">
                     {upcomingEvents.slice(0, 3).map(event => (
                       <li key={event.id} className="min-w-0">
                         <button type="button" aria-label={`Details öffnen: ${event.title}, ${format(eventCalendarDate(event), 'dd. MMMM yyyy', { locale: de })}`}
                           onClick={e => handleOpenUpcomingEvent(event, e.currentTarget)}
-                          className="h-full w-full min-w-0 rounded-lg border p-3 text-left transition-colors hover:bg-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
-                          <time dateTime={event.date} className="block text-xs text-muted-foreground">{format(eventCalendarDate(event), 'dd. MMM yyyy', { locale: de })}{` · ${eventStartTime(event)} (${event.timezone})`}</time>
-                          <span className="mt-1 block break-words font-semibold [overflow-wrap:anywhere]">{event.title}</span>
-                          <span className="mt-1 block break-words text-sm text-muted-foreground [overflow-wrap:anywhere]">{event.location}</span>
-                          <span className="mt-2 block text-sm font-medium text-primary">Details öffnen</span>
+                          className="fc-event-preview group flex w-full min-w-0 items-center gap-3 sm:gap-4 rounded-2xl border p-3 text-left hover:border-primary/40 hover:bg-muted/30 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                          <span className="fc-event-date" aria-hidden="true"><strong>{format(eventCalendarDate(event), 'd')}</strong><span>{format(eventCalendarDate(event), 'MMM', { locale: de })}</span></span>
+                          <span className="min-w-0 flex-1"><span className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground"><time dateTime={event.date} className="inline-flex min-w-0 items-start gap-2 [overflow-wrap:anywhere]"><CalendarDays className="h-4 w-4 shrink-0" aria-hidden="true" />{format(eventCalendarDate(event), 'dd. MMM yyyy', { locale: de })}{` · ${eventStartTime(event)}${event.endTime ? ` – ${event.endTime}` : ''} (${event.timezone})`}</time><span className="inline-flex items-center gap-1"><MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />{event.location}</span></span><span className="mt-3 block break-words font-semibold [overflow-wrap:anywhere]">{event.title}</span><span className="sr-only">Details öffnen</span></span><ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                         </button>
                       </li>
                     ))}
                   </ul>
                 </>
               ) : (
-                <p className="mt-4 text-sm text-muted-foreground" role="status">{searchTerm ? 'Keine passenden Events ab heute gefunden.' : 'Keine Events ab heute geplant.'}</p>
+                <p className="mt-4 text-sm text-muted-foreground" role="status">{hasFilters ? 'Keine passenden Events ab heute gefunden.' : 'Keine Events ab heute geplant.'}</p>
               )}
             </section>
           )}
@@ -553,6 +568,12 @@ function ScopedEvents({ session, sessionStatus }: {
           {view === 'month' && renderMonthView()}
           {view === 'week' && renderWeekView()}
           {view === 'list' && renderListView()}
+          </div>
+          <aside aria-label="Event-Filter und Kalenderhinweise" className="fc-events-aside space-y-5">
+            <section className="fc-surface p-5 sm:p-6" aria-labelledby="event-filter-title"><h2 id="event-filter-title" className="mb-5 flex items-center gap-3 font-semibold"><SlidersHorizontal className="h-5 w-5 text-primary" aria-hidden="true" />Event-Filter</h2><div className="space-y-4"><div><label htmlFor="event-category-sidebar" className="mb-2 block text-sm font-medium">Kategorie</label>{categorySelect('event-category-sidebar')}</div><div><label htmlFor="event-period" className="mb-2 block text-sm font-medium">Zeitraum</label><Select value={periodFilter} onValueChange={setPeriodFilter}><SelectTrigger id="event-period"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Alle Events</SelectItem><SelectItem value="upcoming">Ab heute</SelectItem><SelectItem value="past">Vergangene Events</SelectItem></SelectContent></Select></div><Button type="button" variant="ghost" className="justify-start px-0 text-primary" disabled={!hasFilters} onClick={resetFilters}><RotateCcw className="h-4 w-4" aria-hidden="true" />Filter zurücksetzen</Button></div></section>
+            <section className="fc-surface p-5 sm:p-6" aria-labelledby="event-next-title"><h2 id="event-next-title" className="flex items-center gap-3 font-semibold"><CalendarDays className="h-5 w-5 text-primary" aria-hidden="true" />Dein nächster Termin</h2>{upcomingEvents[0] ? <><p className="mt-4 text-sm font-medium">{upcomingEvents[0].title}</p><p className="mt-2 text-sm leading-relaxed text-muted-foreground">{format(eventCalendarDate(upcomingEvents[0]), 'dd. MMMM yyyy', { locale: de })}<br />{eventStartTime(upcomingEvents[0])} ({upcomingEvents[0].timezone})</p><Button type="button" variant="link" className="mt-3 px-0" onClick={event => handleOpenUpcomingEvent(upcomingEvents[0], event.currentTarget)}>Termin ansehen<ArrowRight className="h-4 w-4" aria-hidden="true" /></Button></> : <p className="mt-4 text-sm leading-relaxed text-muted-foreground">Aktuell ist kein kommender Termin für deine Auswahl geplant.</p>}</section>
+            <section className="fc-surface p-5 sm:p-6"><h2 className="flex items-center gap-3 font-semibold"><Download className="h-5 w-5 text-primary" aria-hidden="true" />In deinen Kalender übernehmen</h2><p className="mt-4 text-sm leading-relaxed text-muted-foreground">Öffne einen Termin und lade seine Kalenderdatei herunter. Sie lässt sich in deinem eigenen Kalender öffnen.</p></section>
+          </aside></div></div>
         </main>
       </div>
 

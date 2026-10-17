@@ -157,11 +157,18 @@ async function main() {
     assert.ok(['(forced-colors:none)', '(forced-colors:active)'].includes(mediaQueries(rule).join()), `Unscoped compiled progress override ${rule.selector}`);
   }
   result.root.walkDecls('forced-color-adjust', declaration => {
-    assert.equal(declaration.value, 'auto', 'User color adjustment must remain enabled');
     const rule = declaration.parent;
-    assert.equal(rule.type, 'rule', 'Color adjustment must be scoped to native progress');
-    assert.equal(rule.selector, 'progress.accent-progress', 'No document or container color-adjust override');
+    assert.equal(rule.type, 'rule', 'Color adjustment must be scoped to native progress or a decorative icon');
     assert.equal(mediaQueries(rule).join(), '(forced-colors:active)', 'Color adjustment must be forced-color-specific');
+    if (rule.selector === '.fc-navigation-icon::before') {
+      // Background paint normally becomes Canvas in forced colors and would
+      // erase alpha-mask icons. Only the glyph opts out, using system ink.
+      assert.equal(declaration.value, 'none');
+      assert.ok(rule.nodes.some(node => node.prop === 'background-color' && node.value === 'CanvasText'), 'Masked icons must follow the user-selected system ink');
+    } else {
+      assert.equal(declaration.value, 'auto', 'User color adjustment must remain enabled');
+      assert.equal(rule.selector, 'progress.accent-progress', 'No document or container color-adjust override');
+    }
   });
   expectClass('text-success', 'color', 'hsl(var(--success))');
   expectClass('text-destructive', 'color', 'hsl(var(--destructive))');

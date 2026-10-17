@@ -72,7 +72,7 @@ function PreviewContents({ contents, selectedContentId, draft }: Pick<Instructor
     <section aria-label="Inhalt der Vorschau" className="min-h-0 min-w-0 overflow-y-auto p-4 sm:p-6">
       <div className="mx-auto max-w-3xl space-y-5">
         {previewingDraft && <p role="status" className="border-l-2 border-primary pl-3 text-sm leading-relaxed">Ungespeicherter Entwurf. Diese Änderungen sind nur hier in deiner Vorschau enthalten.</p>}
-        <header className="space-y-2 border-b pb-5">
+        <header className="fc-section-card space-y-2">
           {selected.path.length > 0 && <p className="break-words text-sm text-muted-foreground [overflow-wrap:anywhere]">{selected.path.join(' / ')}</p>}
           <h3 ref={titleRef} tabIndex={-1} className="break-words text-xl font-semibold tracking-tight outline-hidden focus-visible:ring-2 focus-visible:ring-ring [overflow-wrap:anywhere]">{selected.content.title || 'Thema ohne Titel'}</h3>
           <p className="text-sm text-muted-foreground">Inhalt {selectedIndex + 1} von {rows.length}</p>

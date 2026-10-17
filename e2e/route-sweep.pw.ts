@@ -732,7 +732,7 @@ test.describe('every App Router page, one at a time', () => {
       await expect(page).toHaveURL(url => url.pathname === caseUrl(item));
       if (paletteTheme === 'dark') await expect(page.locator('html')).toHaveClass(/\bdark\b/);
       else await expect(page.locator('html')).not.toHaveClass(/\bdark\b/);
-      await expect(page.locator('body')).toHaveCSS('background-color', paletteTheme === 'dark' ? 'rgb(8, 37, 47)' : 'rgb(239, 248, 246)');
+      await expect(page.locator('body')).toHaveCSS('background-color', paletteTheme === 'dark' ? 'rgb(8, 37, 47)' : 'rgb(246, 250, 251)');
       const main = page.locator('#page-content');
       await expect(main).toHaveCount(1);
       await expect(page.getByRole('main')).toHaveCount(1);

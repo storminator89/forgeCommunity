@@ -99,3 +99,10 @@
   .detail .goalTrail { grid-template-columns: minmax(0, 1fr); gap: 20px; }
   .detail .goalTrail li:not(:last-child)::after { display: none; }
 }
+/* Screenshot-led surface family, shared by mission overview and detail. */
+.surface, .listItem, .contribution { border-radius: var(--radius-panel); box-shadow: var(--shadow-surface); }
+.hero { border-radius: var(--radius-banner); background: linear-gradient(112deg, hsl(var(--hero-start)), hsl(var(--hero-middle)), hsl(var(--hero-end))); padding: var(--space-lg); }
+.list { gap: var(--space-sm); }
+.listItem { padding: var(--space-md); }
+.goalPanel { background: hsl(var(--card)); }
+@media (max-width: 767px) { .hero, .listItem { padding: var(--space-md); } }

@@ -363,3 +363,11 @@
   .primaryAction { border-color: ButtonText; }
   .areaLink { border-color: CanvasText; }
 }
+
+/* Public entry uses the same daylight, petrol and mint identity as the app. */
+.page > header { background: hsl(var(--card)); border-bottom: 1px solid hsl(var(--border)); }
+.hero { margin-top: var(--space-md); padding: var(--space-lg); border-radius: var(--radius-banner); background: linear-gradient(112deg, hsl(var(--hero-start)), hsl(var(--hero-middle)), hsl(var(--hero-end))); }
+.areaGrid { gap: var(--space-sm); }
+.areaLink { padding: var(--space-md); border: 1px solid hsl(var(--border)); border-radius: var(--radius-panel); background: hsl(var(--card)); box-shadow: var(--shadow-surface); }
+.footer { border-top: 1px solid hsl(var(--border)); background: hsl(var(--card)); }
+@media (max-width: 767px) { .hero { padding: var(--space-md); } .areaLink { padding: var(--space-sm); } }

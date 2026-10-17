@@ -418,11 +418,11 @@ export function PracticeAuthorWorkspace({ courseId, sessionStatus }: { courseId:
 
   const classInput = 'min-h-11'
   const classSelect = 'min-h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50'
-  return <AppShell><Sidebar /><div className="min-w-0 flex-1">
+  return <AppShell data-page-family="authoring"><Sidebar /><div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
     <AppHeader><div className="app-header-row"><span className="app-header-title font-semibold">Kursautorenschaft</span><div className="app-header-actions"><ThemeToggle /><UserNav /></div></div></AppHeader>
-    <main id="page-content" tabIndex={-1} className="min-w-0 px-4 py-5 sm:px-6 lg:px-8">
+    <main id="page-content" tabIndex={-1} className="min-h-0 min-w-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl space-y-8">
-        <div className="space-y-3 border-b pb-5">
+        <div className="fc-detail-header space-y-3">
           <Button variant="ghost" size="sm" className="min-h-11" onClick={() => { if (askDiscard(hasLocalChanges)) router.push(`/courses/${encodeURIComponent(courseId)}/contents`) }}><ArrowLeft className="mr-2 h-4 w-4" />Zum Kursentwurf</Button>
           <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><h1 className="break-words text-2xl font-semibold tracking-tight [overflow-wrap:anywhere] sm:text-3xl">Formative Übungen</h1></div></div>
           <p className="border-l-2 border-primary pl-3 text-sm leading-relaxed">Veröffentlichte Übungen können Mitglieder im Kurs freiwillig nutzen.</p>

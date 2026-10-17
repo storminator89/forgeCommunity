@@ -111,7 +111,7 @@ function ArticlePageForViewer({ id, session }: { id: string; session: Session | 
   const isAuthor = Boolean(displayedArticle && session?.user?.id === displayedArticle.author.id);
 
   return (
-    <AppShell>
+    <AppShell data-page-family="reading">
       <Sidebar />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <AppHeader>
@@ -137,7 +137,7 @@ function ArticlePageForViewer({ id, session }: { id: string; session: Session | 
                   </div>
                 </div>}
 
-                <header className="mx-auto max-w-[72ch] py-8 sm:py-12">
+                <header className="fc-detail-header mx-auto mb-6 max-w-[72ch]">
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
                     <span className="font-semibold text-foreground">{displayedArticle.category}</span>
                     <time dateTime={displayedArticle.createdAt}>{new Date(displayedArticle.createdAt).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}</time>
@@ -153,7 +153,7 @@ function ArticlePageForViewer({ id, session }: { id: string; session: Session | 
                   <Image src={displayedArticle.featuredImage} alt="" fill priority className="object-contain" />
                 </div>}
 
-                <div className="mx-auto max-w-[72ch] border-t py-8 sm:py-10">
+                <div className="fc-reading-surface mx-auto max-w-[72ch]">
                   <div className="prose prose-neutral dark:prose-invert max-w-none break-words text-base leading-relaxed prose-headings:font-semibold prose-headings:tracking-tight prose-a:text-primary prose-pre:max-w-full prose-pre:overflow-x-auto prose-img:rounded-[10px] [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto"
                     dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(displayedArticle.content) }} />
                 </div>

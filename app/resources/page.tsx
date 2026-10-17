@@ -3,6 +3,8 @@
 /* Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V5 */
 /* Hallmark · genre: editorial · macrostructure: resource directory · design-system: design.md · designed-as-app */
 
+import { HeroBanner, PageContainer } from '@/components/discovery';
+import { FolderOpen } from 'lucide-react';
 import { AppShell, AppHeader } from '@/components/app-shell';
 import { PageState } from '@/components/page-state';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
@@ -11,7 +13,7 @@ import { UserNav } from "@/components/user-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -329,10 +331,10 @@ function ResourceLibraryForViewer({ session }: { session: Session | null }) {
 
         <main id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto">
           <ToastContainer position="top-right" />
-          <div className="mx-auto w-full max-w-[1440px] px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
-            {session && <div className="flex flex-wrap justify-end border-b pb-5">
+          <PageContainer>
+            <HeroBanner icon={FolderOpen} title="Gutes Wissen verdient einen Platz." description="Entdecke hilfreiche Links, Werkzeuge und Materialien aus der Community." action={session ? <Button type="button" onClick={() => setIsDialogOpen(true)}><Plus className="h-4 w-4" aria-hidden="true" />Ressource hinzufügen</Button> : undefined} />
+            {session && <div>
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                <DialogTrigger asChild><Button type="button"><Plus className="h-4 w-4" aria-hidden="true" />Ressource hinzufügen</Button></DialogTrigger>
                 <DialogContent>
                   <DialogHeader><DialogTitle>Neue Ressource hinzufügen</DialogTitle><DialogDescription>Titel und URL sind erforderlich.</DialogDescription></DialogHeader>
                   <form onSubmit={event => { event.preventDefault(); void handleAddResource(); }} className="space-y-5">
@@ -348,7 +350,7 @@ function ResourceLibraryForViewer({ session }: { session: Session | null }) {
               </Dialog>
             </div>}
 
-            <section aria-label="Ressourcen filtern" className="grid min-w-0 gap-4 border-b py-7 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_12rem_10rem_10rem] lg:items-end">
+            <section aria-label="Ressourcen filtern" className="fc-filter-bar fc-filter-surface grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_12rem_10rem_10rem] lg:items-end">
               <div className="min-w-0 sm:col-span-2 lg:col-span-1"><Label htmlFor="resource-search" className="mb-2 block">Ressourcen suchen</Label><div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" /><Input id="resource-search" type="search" value={searchTerm} onChange={event => setSearchTerm(event.target.value)} placeholder="Titel, Kategorie oder Autor" className="pl-10" /></div></div>
               <div className="min-w-0"><Label htmlFor="resource-filter-category" className="mb-2 block">Kategorie</Label><Select value={selectedCategory} onValueChange={setSelectedCategory}><SelectTrigger id="resource-filter-category"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Alle Kategorien</SelectItem>{categories.map(category => <SelectItem key={category} value={category}>{category}</SelectItem>)}</SelectContent></Select></div>
               <div className="min-w-0"><Label htmlFor="resource-filter-type" className="mb-2 block">Typ</Label><Select value={selectedType} onValueChange={setSelectedType}><SelectTrigger id="resource-filter-type"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Alle Typen</SelectItem>{types.map(type => <SelectItem key={type} value={type}>{typeLabels[type as ResourceType]}</SelectItem>)}</SelectContent></Select></div>
@@ -362,12 +364,12 @@ function ResourceLibraryForViewer({ session }: { session: Session | null }) {
               {isFirstPageLoading ? <div className="mt-6"><PageState kind="loading" title="Ressourcen werden geladen" /></div>
                 : loadError ? <div className="mt-6"><PageState kind="error" title="Ressourcen konnten nicht geladen werden" description="Prüfe deine Verbindung und versuche es erneut." action={<Button type="button" variant="outline" onClick={retryLoad}>Erneut versuchen</Button>} /></div>
                 : filteredAndSortedResources.length === 0 ? <div className="mt-6"><PageState title={hasMore ? 'Noch keine passenden Ressourcen geladen' : hasFilters ? 'Keine Ressourcen gefunden' : 'Noch keine Ressourcen'} description={hasMore ? 'Lade weitere Ressourcen, um nach passenden Einträgen zu suchen.' : hasFilters ? 'Versuche es mit anderen Suchbegriffen oder Filtern.' : 'Sobald Links geteilt werden, findest du sie hier.'} action={hasMore ? <Button type="button" variant="outline" onClick={loadMore} disabled={loading}>Weitere Ressourcen laden</Button> : hasFilters ? <Button type="button" variant="outline" onClick={clearFilters}>Filter zurücksetzen</Button> : session ? <Button type="button" onClick={() => setIsDialogOpen(true)}>Erste Ressource hinzufügen</Button> : undefined} /></div>
-                : <ul className="divide-y">{filteredAndSortedResources.map(resource => <ResourceItem key={resource.id} resource={resource} isAdmin={isAdmin} currentUserId={session?.user?.id} onDelete={handleDeleteResource} onEdit={handleEditResource} />)}</ul>}
+                : <ul className="fc-entity-grid">{filteredAndSortedResources.map(resource => <ResourceItem key={resource.id} resource={resource} isAdmin={isAdmin} currentUserId={session?.user?.id} onDelete={handleDeleteResource} onEdit={handleEditResource} />)}</ul>}
 
               {hasMore && filteredAndSortedResources.length > 0 && <div ref={ref} className="flex justify-center py-7"><Button type="button" variant="outline" onClick={loadMore} disabled={loading}>{loading ? 'Weitere Ressourcen werden geladen…' : 'Weitere Ressourcen laden'}</Button></div>}
               {loading && !isFirstPageLoading && <p role="status" className="pb-6 text-center text-sm text-muted-foreground">Weitere Ressourcen werden geladen…</p>}
             </section>
-          </div>
+          </PageContainer>
         </main>
 
         {editResource && <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
@@ -418,8 +420,8 @@ function ResourceItem({ resource, isAdmin, currentUserId, onDelete, onEdit }: {
     window.open(destinations[platform], '_blank', 'noopener,noreferrer');
   };
 
-  return <li className="min-w-0">
-    <div className="flex min-w-0 items-start gap-3 py-6 sm:gap-5">
+  return <li className="fc-entity-card">
+    <div className="flex min-w-0 items-start gap-3 sm:gap-5">
       <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] border bg-muted text-muted-foreground" aria-hidden="true">{getIcon(resource.type)}</div>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground"><span className="font-semibold uppercase tracking-[0.08em] text-foreground">{typeLabels[resource.type]}</span><span className="min-w-0 break-words [overflow-wrap:anywhere]">{resource.category}</span><time dateTime={resource.createdAt}>{new Date(resource.createdAt).toLocaleDateString('de-DE')}</time></div>

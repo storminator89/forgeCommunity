@@ -4,11 +4,11 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { ArrowUpRight } from 'lucide-react';
+import { NavigationArtwork } from '@/components/navigation-artwork';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { navigationItems, adminNavigation } from '@/lib/navigation';
 import { canSeeLearnerPathways } from '@/lib/pathway-visibility';
-import { NavigationArtwork } from '@/components/navigation-artwork';
 
 export function NavigationSearch({ collapsed = false, keyboardShortcut = true, onNavigate, hideLearnerPathways = false }: { collapsed?: boolean; keyboardShortcut?: boolean; onNavigate?: () => void; hideLearnerPathways?: boolean }) {
   const [open, setOpen] = useState(false);
@@ -41,7 +41,7 @@ export function NavigationSearch({ collapsed = false, keyboardShortcut = true, o
   return <>
     <button type="button" onClick={event => { returnFocusRef.current = event.currentTarget; setOpen(true); }} aria-label="Schnellsuche öffnen"
       className={`mb-5 flex h-11 w-full items-center gap-2 rounded-[10px] border border-input bg-background px-3 text-sm text-muted-foreground transition-colors hover:border-primary hover:text-foreground ${collapsed ? 'lg:justify-center lg:px-0' : ''}`}>
-      <NavigationArtwork href="/search" />
+      <NavigationArtwork href="/search" className="h-4 w-4" />
       <span className={collapsed ? 'lg:hidden' : ''}>Schnellsuche</span>
       <kbd className={`ml-auto rounded-[0.25rem] border px-1.5 py-0.5 text-[11px] ${collapsed ? 'lg:hidden' : ''}`}>⌘/Ctrl K</kbd>
     </button>
@@ -64,7 +64,7 @@ export function NavigationSearch({ collapsed = false, keyboardShortcut = true, o
         <nav aria-label="Suchergebnisse" className="max-h-[50dvh] overflow-y-auto">
           {matches.map(item => <button type="button" key={item.href} onClick={() => navigate(item.href)}
             className="flex min-h-11 w-full items-center gap-3 rounded-[10px] px-3 py-2.5 text-left text-sm hover:bg-muted">
-            <NavigationArtwork href={item.href} fallback={<item.icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />} />{item.name}<ArrowUpRight className="ml-auto h-4 w-4 text-muted-foreground" />
+            <NavigationArtwork href={item.href} className="h-4 w-4" fallback={<item.icon className="h-4 w-4" aria-hidden="true" />} />{item.name}<ArrowUpRight className="ml-auto h-4 w-4 text-muted-foreground" />
           </button>)}
           {query.trim() && <button type="button" onClick={() => navigate(`/search?q=${encodeURIComponent(query)}`)} className="mt-2 min-h-11 w-full rounded-[10px] border border-input bg-background px-3 py-3 text-left text-sm font-medium text-primary hover:bg-accent">Inhalte nach „{query}“ durchsuchen →</button>}
         </nav>

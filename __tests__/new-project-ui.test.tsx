@@ -19,7 +19,7 @@ beforeEach(() => {
 it('does not count editor markup as project description text', () => {
   render(<NewProjectPage />)
   expect(screen.getByRole('link', { name: 'Alle Projekte' }).parentElement).not.toHaveClass('border-b', 'pb-7')
-  expect(screen.getByRole('region', { name: 'Projektdetails' })).toHaveClass('border-t')
+  expect(screen.getByRole('region', { name: 'Projektdetails' })).toHaveClass('fc-form-section')
   expect(screen.queryByText('Ein guter erster Eindruck')).not.toBeInTheDocument()
   expect(screen.getByText('Mindestens 50 Zeichen.')).toBeVisible()
   expect(screen.getByText('* Pflichtfeld')).toBeVisible()

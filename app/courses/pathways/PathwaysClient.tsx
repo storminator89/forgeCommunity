@@ -24,7 +24,7 @@ function dateLabel(iso: string) {
 }
 
 function PathwaysAccessDenied() {
-  return <AppShell>
+  return <AppShell data-page-family="learning">
     <Sidebar hideLearnerPathways />
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <AppHeader><div className="app-header-row"><h1 className="app-header-title">Lernpfade</h1><div className="app-header-actions"><ThemeToggle /><UserNav /></div></div></AppHeader>
@@ -167,18 +167,18 @@ function ScopedPathways({ pathwayId }: { pathwayId?: string }) {
 
   if (forbidden) return <PathwaysAccessDenied />;
 
-  return <AppShell>
+  return <AppShell data-page-family="learning">
     <Sidebar />
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <AppHeader><div className="app-header-row"><h1 className="app-header-title">{pathwayId ? 'Mein Lernpfad' : 'Lernpfade'}</h1><div className="app-header-actions"><ThemeToggle /><UserNav /></div></div></AppHeader>
       <main id="page-content" tabIndex={-1} className="min-w-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-5xl px-4 pb-16 pt-7 sm:px-6 sm:pt-10 lg:px-8">
+        <div className="fc-page-container mx-auto max-w-5xl">
           <nav aria-label="Brotkrumen" className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/courses" className="rounded-sm underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Kurse</Link>
             <span aria-hidden="true">/</span>
             {pathwayId ? <><Link href="/courses/pathways" className="rounded-sm underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Lernpfade</Link><span aria-hidden="true">/</span><span aria-current="page" className="truncate text-foreground">{selected?.title ?? 'Lernpfad'}</span></> : <span aria-current="page" className="text-foreground">Lernpfade</span>}
           </nav>
-          <header className="mt-6 flex min-w-0 flex-col gap-5 border-b pb-7 sm:flex-row sm:items-end sm:justify-between">
+          <header className="fc-detail-header mt-6 flex min-w-0 flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
             <div className="min-w-0 max-w-[68ch]">
               <h2 className="mt-2 break-words text-[clamp(1.65rem,1.1rem+2vw,2.35rem)] font-semibold leading-tight tracking-tight">{pathwayId ? selected?.title ?? 'Dein Lernpfad' : 'Ein Weg durch passende Kurse'}</h2>
               <p className="mt-3 text-base leading-relaxed text-muted-foreground">{pathwayId && selected ? selected.description : 'Lernpfade verbinden zwei bis vier veröffentlichte Kurse. Du entscheidest selbst, ob du teilnimmst. Dein Fortschritt und dein Abzeichen sind nur für dich sichtbar.'}</p>
@@ -193,8 +193,8 @@ function ScopedPathways({ pathwayId }: { pathwayId?: string }) {
           {pathways !== null && !pathwayId && <section aria-labelledby="pathway-list-title" className="mt-8">
             <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2"><h3 id="pathway-list-title" className="text-xl font-semibold tracking-tight">Verfügbare Lernpfade</h3><p className="text-sm text-muted-foreground">{pathways.length} {pathways.length === 1 ? 'Lernpfad' : 'Lernpfade'}</p></div>
             {pathways.length === 0 ? <PageState title="Noch keine Lernpfade verfügbar" description="Schau später noch einmal vorbei. Deine Kurse bleiben wie gewohnt verfügbar." action={<Button asChild variant="outline"><Link href="/courses">Kurse ansehen</Link></Button>} />
-              : <ol className="divide-y border-y">{pathways.map((pathway, index) => <li key={pathway.id} className="min-w-0">
-                <Link href={`/courses/pathways/${encodeURIComponent(pathway.id)}`} className="group grid min-h-32 min-w-0 gap-3 py-5 focus-visible:rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:grid-cols-[3rem_minmax(0,1fr)_auto] sm:items-start sm:gap-5">
+              : <ol className="fc-entity-list">{pathways.map((pathway, index) => <li key={pathway.id} className="min-w-0">
+                <Link href={`/courses/pathways/${encodeURIComponent(pathway.id)}`} className="fc-entity-card group grid min-h-32 min-w-0 gap-3 focus-visible:rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:grid-cols-[3rem_minmax(0,1fr)_auto] sm:items-start sm:gap-5">
                   <span className="hidden pt-0.5 text-xl font-semibold tabular-nums text-muted-foreground sm:block" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
                   <span className="min-w-0"><span className="block break-words text-lg font-semibold tracking-tight group-hover:underline">{pathway.title}</span><span className="mt-1 block max-w-[65ch] text-sm leading-relaxed text-muted-foreground">{pathway.description}</span><span className="mt-3 block text-xs font-medium text-foreground">{pathwayStatus(pathway)} · {pathway.requiredCount} Kurse</span></span>
                   <span className="flex items-center gap-2 text-sm font-medium text-primary sm:mt-1">Details ansehen <ArrowRight className="h-4 w-4" aria-hidden="true" /></span>
@@ -205,14 +205,14 @@ function ScopedPathways({ pathwayId }: { pathwayId?: string }) {
           {pathways !== null && pathwayId && !selected && <div className="mt-8"><PageState kind="empty" title="Lernpfad nicht gefunden" description="Dieser Lernpfad ist nicht verfügbar." action={<Button asChild variant="outline"><Link href="/courses/pathways">Alle Lernpfade ansehen</Link></Button>} /></div>}
           {selected && <div className="mt-8 grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,18rem)] lg:gap-12">
             <div className="min-w-0">
-              <section aria-labelledby="pathway-progress-title">
+              <section aria-labelledby="pathway-progress-title" className="fc-section-card">
                 <div className="flex flex-col gap-2 border-b pb-5 sm:flex-row sm:items-end sm:justify-between"><div><h3 id="pathway-progress-title" ref={statusRef} tabIndex={-1} className="mt-1 text-xl font-semibold focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">{pathwayStatus(selected)}</h3></div><p className="text-sm tabular-nums text-muted-foreground">{selected.creditedCount} von {selected.requiredCount} Kursen aktuell bestätigt</p></div>
                 <progress className="mt-5 h-3 w-full accent-progress" value={Math.min(selected.creditedCount, selected.requiredCount)} max={selected.requiredCount || 1} aria-label={`Lernpfad: ${selected.creditedCount} von ${selected.requiredCount} Kursen aktuell bestätigt`}>{selected.creditedCount} von {selected.requiredCount}</progress>
                 {needsRevalidation && <div role="status" className="mt-5 border-l-2 border-destructive bg-muted/50 px-4 py-3"><p className="font-medium">Abzeichen derzeit nicht aktiv</p><p className="mt-1 text-sm leading-relaxed text-muted-foreground">{pathwayReason(latestRevocation?.reason ?? null)} Wenn die Voraussetzungen wieder erfüllt sind, kann es erneut aktiv werden. <Button type="button" variant="link" className="h-auto p-0 align-baseline" onClick={() => void load()}>Stand erneut prüfen</Button></p></div>}
                 {joined && selected.participation?.badgeActive && <div className="mt-5 border-l-2 border-reward-foreground bg-reward px-4 py-3 text-reward-foreground"><p className="font-medium">Privates Abzeichen aktiv: {selected.badgeLabel}</p><p className="mt-1 text-sm leading-relaxed">Diese Anerkennung ist nur in deinem Lernpfad sichtbar. Sie ist kein Zertifikat.</p></div>}
                 {!joined && <div className="mt-5 border-l-2 border-border bg-muted/50 px-4 py-3"><p className="text-sm leading-relaxed">Du kannst diesen Weg freiwillig beginnen. Erst mit deiner Teilnahme wird ein privates Pfad-Abzeichen für dich geführt. Du kannst jederzeit wieder aussteigen.</p></div>}
               </section>
-              <section aria-labelledby="pathway-courses-title" className="mt-10"><div className="border-b pb-4"><h3 id="pathway-courses-title" className="mt-1 text-xl font-semibold">Kurse in diesem Lernpfad</h3></div>
+              <section aria-labelledby="pathway-courses-title" className="fc-section-card mt-5"><div className="border-b pb-4"><h3 id="pathway-courses-title" className="mt-1 text-xl font-semibold">Kurse in diesem Lernpfad</h3></div>
                 <ol className="divide-y">{[...selected.courses].sort((a, b) => a.order - b.order).map((course, index) => <li key={course.courseId} className="grid min-w-0 grid-cols-[2rem_minmax(0,1fr)] gap-3 py-5 sm:grid-cols-[3rem_minmax(0,1fr)_auto] sm:gap-5">
                   <span className="pt-0.5 text-lg font-semibold tabular-nums text-muted-foreground" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span><div className="min-w-0"><h4 className="break-words font-semibold">{course.title}</h4><p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">{!course.available ? <><BookOpen className="h-4 w-4" aria-hidden="true" /> Kurs nicht mehr verfügbar</> : course.creditActive ? <><Check className="h-4 w-4 text-primary" aria-hidden="true" /> Aktuell bestätigt</> : <><BookOpen className="h-4 w-4" aria-hidden="true" /> Noch nicht bestätigt</>}</p>{courseError?.courseId === course.courseId && <p role="alert" className="mt-2 text-sm text-destructive">{courseError.message}</p>}</div>{course.available && (course.isEnrolled ? <Link href={`/courses/${encodeURIComponent(course.courseId)}/contents`} className="col-start-2 flex min-h-11 items-center gap-1 self-start rounded-sm text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:col-start-3">Kurs öffnen <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link> : <Button type="button" variant="outline" className="col-start-2 min-h-11 self-start sm:col-start-3" aria-label={`Kurs beitreten: ${course.title}`} disabled={joiningCourseId !== null} onClick={() => void joinCourse(course.courseId)}>{joiningCourseId === course.courseId ? 'Beitritt läuft…' : 'Kurs beitreten'}</Button>)}
                 </li>)}</ol>
@@ -225,7 +225,7 @@ function ScopedPathways({ pathwayId }: { pathwayId?: string }) {
                 return <li key={`${event.type}-${event.at}-${index}`} className="flex flex-col gap-1 py-3 text-sm sm:flex-row sm:justify-between sm:gap-4"><span>{priorOptOut ? 'Frühere Teilnahme beendet' : event.type === 'AWARDED' ? 'Abzeichen erstmals aktiv' : event.type === 'REINSTATED' ? 'Abzeichen erneut aktiv' : 'Abzeichen nicht mehr aktiv'}{event.type === 'REVOKED' && !priorOptOut && <span className="block text-muted-foreground">{pathwayReason(event.reason)}</span>}</span><time dateTime={event.at} className="shrink-0 text-muted-foreground">{dateLabel(event.at)}</time></li>;
               })}</ol></section>}
             </div>
-            <aside className="min-w-0 self-start border-t pt-5 lg:border-l lg:border-t-0 lg:pl-7 lg:pt-0"><ShieldCheck className="h-6 w-6 text-primary" aria-hidden="true" /><h3 className="mt-3 text-lg font-semibold">Deine Entscheidung</h3><p className="mt-2 text-sm leading-relaxed text-muted-foreground">Teilnahme und Abzeichen sind privat. Niemand sieht hier eine Liste von Teilnehmenden.</p>
+            <aside className="fc-section-card self-start"><ShieldCheck className="h-6 w-6 text-primary" aria-hidden="true" /><h3 className="mt-3 text-lg font-semibold">Deine Entscheidung</h3><p className="mt-2 text-sm leading-relaxed text-muted-foreground">Teilnahme und Abzeichen sind privat. Niemand sieht hier eine Liste von Teilnehmenden.</p>
               {joined ? <AlertDialog><AlertDialogTrigger asChild><Button type="button" variant="outline" className="mt-5 w-full whitespace-nowrap" disabled={pending}>Teilnahme beenden</Button></AlertDialogTrigger><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Teilnahme an diesem Lernpfad beenden?</AlertDialogTitle><AlertDialogDescription>Dein Pfad-Abzeichen wird inaktiv. Deine Kursabschlüsse bleiben erhalten. {selected.unavailable ? 'Eine erneute Teilnahme ist derzeit nicht möglich, da mindestens ein Kurs entfernt oder unveröffentlicht ist.' : 'Du kannst später erneut teilnehmen.'}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Weiter teilnehmen</AlertDialogCancel><AlertDialogAction onClick={() => void changeParticipation(selected.id, 'DELETE')}>Teilnahme beenden</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog> : selected.unavailable ? <p className="mt-5 text-sm text-muted-foreground">Eine neue Teilnahme ist derzeit nicht möglich.</p> : <Button ref={joinRef} type="button" className="mt-5 w-full whitespace-nowrap" disabled={pending} onClick={() => void changeParticipation(selected.id, 'POST')}>{pending ? 'Wird gespeichert…' : selected.participation ? 'Erneut privat teilnehmen' : 'Privat teilnehmen'}</Button>}
               <Button asChild variant="link" className="mt-2 w-full"><Link href="/courses/pathways"><ArrowLeft className="h-4 w-4" aria-hidden="true" />Alle Lernpfade</Link></Button>
             </aside>

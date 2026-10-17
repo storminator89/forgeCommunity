@@ -134,7 +134,7 @@ function SpacesDirectory({ canCreate }: { canCreate: boolean }) {
   const visibleSpaces = spaces.filter(space => filter === 'ALL' || space.visibility === filter);
   const resultCount = `${visibleSpaces.length} ${visibleSpaces.length === 1 ? 'Space' : 'Spaces'}`;
   return <SpaceShell>
-    <div className="flex flex-wrap items-end justify-between gap-4 border-b pb-6">
+    <div className="fc-detail-header flex flex-wrap items-end justify-between gap-4">
       <h1 className="min-w-0 text-[clamp(1.65rem,1.1rem+2vw,2.35rem)] font-semibold tracking-tight">Spaces</h1>
       {canCreate && <Button type="button" onClick={() => { setShowCreate(value => !value); setCreateError(''); }} aria-expanded={showCreate} aria-controls="create-space">{showCreate ? 'Schließen' : 'Space erstellen'}</Button>}
     </div>
@@ -159,7 +159,7 @@ function SpacesDirectory({ canCreate }: { canCreate: boolean }) {
       title={cursor ? 'Noch kein passender Space geladen' : 'Keine Spaces gefunden'}
       description={cursor ? 'Auf weiteren Seiten können passende Spaces liegen.' : undefined}
       action={cursor ? <Button type="button" variant="outline" disabled={loadingMore} onClick={loadMore}>{loadingMore ? 'Wird geladen…' : 'Weitere Spaces laden'}</Button> : filter !== 'ALL' ? <Button variant="outline" onClick={() => setFilter('ALL')}>Alle anzeigen</Button> : undefined} />}
-    {!loading && visibleSpaces.length > 0 && <ul className="divide-y border-y">{visibleSpaces.map(space => <li key={space.id} className="min-w-0"><Link href={spaceUrl(space.id)} className="group flex min-h-28 min-w-0 flex-col justify-center gap-2 py-5 transition-colors hover:bg-muted/40 focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:flex-row sm:items-start sm:justify-between sm:gap-8 sm:px-2">
+    {!loading && visibleSpaces.length > 0 && <ul className="fc-entity-list">{visibleSpaces.map(space => <li key={space.id} className="min-w-0"><Link href={spaceUrl(space.id)} className="fc-entity-card group flex min-h-28 min-w-0 flex-col justify-center gap-2 transition-colors hover:bg-muted/40 focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:flex-row sm:items-start sm:justify-between sm:gap-8 sm:px-2">
       <span className="min-w-0"><span className="block break-words text-lg font-semibold group-hover:text-primary">{space.name}</span><span className="mt-1 block max-w-[70ch] break-words text-sm leading-relaxed text-muted-foreground">{space.description}</span></span>
       <span className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground sm:justify-end"><span className="inline-flex items-center gap-1.5">{space.visibility === 'PRIVATE' ? <SpaceLockIcon className="h-4 w-4" aria-hidden="true" /> : <SpaceGlobeIcon className="h-4 w-4" aria-hidden="true" />}{space.visibility === 'PRIVATE' ? 'Privat' : 'Offen für Mitglieder'}</span><span>{space.discussionCount} Diskussionen</span></span>
     </Link></li>)}</ul>}

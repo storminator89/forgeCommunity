@@ -3,6 +3,8 @@
 /* Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V5 */
 /* Hallmark · genre: editorial · macrostructure: knowledge directory · design-system: design.md · designed-as-app */
 
+import { HeroBanner } from '@/components/discovery';
+import { Library as PageBannerIcon } from 'lucide-react';
 import { PageState, RetryButton } from '@/components/page-state';
 import { AppShell, AppHeader } from '@/components/app-shell';
 import { useState, useEffect, useMemo } from 'react';
@@ -104,7 +106,7 @@ export default function KnowledgeBase() {
 
 
   return (
-    <AppShell>
+    <AppShell data-page-family="discovery">
       <Sidebar />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <AppHeader>
@@ -115,8 +117,9 @@ export default function KnowledgeBase() {
         </AppHeader>
 
         <main id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto w-full max-w-[1440px] px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
-            <div className="flex flex-col gap-3 border-b pb-5 sm:flex-row sm:items-end sm:gap-5">
+          <div className="fc-page-container mx-auto w-full max-w-[1440px]">
+          <HeroBanner title="Wissen, das weiterbringt." description="Entdecke Artikel, teile Erfahrungen und finde Antworten aus der Community." icon={PageBannerIcon} action={<Button asChild><Link href="/knowledgebase/new-article"><Plus className="h-4 w-4" aria-hidden="true" />Neuer Artikel</Link></Button>} />
+            <div className="fc-filter-surface flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-5">
               <div className="min-w-0 flex-1">
                 <label htmlFor="kb-search" className="mb-2 block text-sm font-medium">Artikel suchen</label>
                 <div className="relative">
@@ -124,7 +127,7 @@ export default function KnowledgeBase() {
                   <Input id="kb-search" type="search" placeholder="Titel, Inhalt oder Tag" value={searchTerm} onChange={event => setSearchTerm(event.target.value)} className="pl-10" />
                 </div>
               </div>
-              <Button asChild className="self-start sm:shrink-0"><Link href="/knowledgebase/new-article"><Plus className="h-4 w-4" aria-hidden="true" />Neuer Artikel</Link></Button>
+
             </div>
 
             {hasFilters && <div aria-label="Aktive Suche und Filter" className="flex min-w-0 flex-wrap items-center gap-2 pt-3 text-sm">
@@ -134,7 +137,7 @@ export default function KnowledgeBase() {
             </div>}
 
             <div className="grid min-w-0 gap-4 pt-4 lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-10 lg:pt-6">
-              <aside aria-label="Artikelfilter" className="min-w-0 lg:border-r lg:pr-8">
+              <aside aria-label="Artikelfilter" className="fc-section-card self-start">
                 <h2 className="hidden text-base font-semibold tracking-tight lg:block">Filter</h2>
                 <Button type="button" variant="outline" aria-expanded={filtersOpen} aria-controls="kb-filter-options" onClick={() => setFiltersOpen(!filtersOpen)} className="w-full justify-between lg:hidden">
                   <span className="flex items-center gap-2"><SlidersHorizontal className="h-4 w-4" aria-hidden="true" />Filter</span>
@@ -184,10 +187,10 @@ export default function KnowledgeBase() {
                 ) : filteredArticles.length === 0 ? (
                   <div className="mt-5"><PageState title={hasFilters ? 'Keine Artikel gefunden' : 'Noch keine Artikel'} description={hasFilters ? 'Versuche es mit anderen Suchbegriffen oder Filtern.' : 'Sobald Artikel veröffentlicht werden, findest du sie hier.'} /></div>
                 ) : (
-                  <ul className="divide-y">
+                  <ul className="fc-entity-list">
                     {filteredArticles.map(article => (
                       <li key={article.id} className="min-w-0">
-                        <Link href={'/knowledgebase/' + article.id} className={'group grid min-w-0 gap-5 py-6 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ' + (article.featuredImage ? 'sm:grid-cols-[minmax(0,1fr)_11rem]' : '')}>
+                        <Link href={'/knowledgebase/' + article.id} className={'fc-entity-card group grid min-w-0 gap-5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ' + (article.featuredImage ? 'sm:grid-cols-[minmax(0,1fr)_11rem]' : '')}>
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                               <span className="min-w-0 max-w-full break-words font-semibold [overflow-wrap:anywhere]">{article.category}</span>

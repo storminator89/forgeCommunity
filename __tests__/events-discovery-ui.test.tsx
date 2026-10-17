@@ -28,6 +28,12 @@ const event = (id: string, title: string, date: Date, category = 'Workshop') => 
 const nextMonth = () => event('next-month', 'Nächster Workshop', monthDate(1));
 const nextYear = () => event('next-year', 'Jahrestreffen', futureYearDate(), 'Seminar');
 
+// JSDOM does not implement the pointer/scroll APIs used by Radix Select.
+beforeAll(() => {
+  Element.prototype.hasPointerCapture = jest.fn(() => false);
+  Element.prototype.scrollIntoView = jest.fn();
+});
+
 beforeEach(() => {
   jest.clearAllMocks();
   window.history.replaceState(null, '', '/events');
@@ -187,7 +193,7 @@ test('month, week, preview, list and deep link keep an event-zone day across a U
   global.fetch = eventApiFixture([tokyo]);
   render(<Events />);
   const preview = await screen.findByRole('button', { name: 'Details öffnen: Tokio nach Mitternacht, 01. Januar 2030' });
-  expect(within(preview).getByText('01. Jan. 2030 · 00:30 (Asia/Tokyo)')).toBeVisible();
+  expect(within(preview).getByText('01. Jan. 2030 · 00:30 – 01:30 (Asia/Tokyo)')).toBeVisible();
   await user.click(preview);
   const dialog = await screen.findByRole('dialog');
   expect(within(dialog).getByRole('heading', { name: '01. Januar 2030' })).toBeVisible();
@@ -238,4 +244,27 @@ test('long detail content keeps the one-column grid and flex shrink boundaries w
   expect(within(dialog).getByText(longLocation, { exact: true })).toHaveClass('min-w-0', 'flex-1');
   expect(await within(dialog).findByRole('button', { name: 'Zusage zurücknehmen' })).toBeEnabled();
   expect(within(dialog).getByText('12:00 - 13:00 (Europe/Berlin)')).toBeVisible();
+});
+
+test('keeps category controls synchronized and makes past events available through the period filter', async () => {
+  const user = userEvent.setup();
+  const past = new Date();
+  past.setDate(past.getDate() - 2);
+  global.fetch = eventApiFixture([nextMonth(), nextYear(), event('past', 'Vergangener Workshop', past)]);
+  render(<Events />);
+  const upcoming = await screen.findByRole('region', { name: 'Nächste Events' });
+  const categories = screen.getAllByRole('combobox', { name: 'Event-Kategorie wählen' });
+  await user.click(categories[0]);
+  await user.click(screen.getByRole('option', { name: 'Seminar' }));
+  expect(categories[1]).toHaveTextContent('Seminar');
+  expect(within(upcoming).getAllByRole('button', { name: /^Details öffnen:/ })).toHaveLength(1);
+  expect(within(upcoming).getByRole('button', { name: /^Details öffnen: Jahrestreffen/ })).toBeVisible();
+  await user.click(screen.getByRole('button', { name: 'Filter zurücksetzen' }));
+  expect(categories[0]).toHaveTextContent('Alle Kategorien');
+  await user.click(screen.getByRole('combobox', { name: 'Zeitraum' }));
+  await user.click(screen.getByRole('option', { name: 'Vergangene Events' }));
+  await user.click(screen.getByRole('button', { name: 'Liste' }));
+  expect(screen.getAllByRole('article')).toHaveLength(1);
+  expect(screen.getByRole('heading', { name: 'Vergangener Workshop' })).toBeVisible();
+  expect(screen.queryByRole('heading', { name: 'Nächster Workshop' })).not.toBeInTheDocument();
 });

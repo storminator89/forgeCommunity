@@ -2,6 +2,20 @@
 
 This is the shared visual contract for the multi-page redesign. Preserve existing routes, German copy intent, authorization, data workflows, and content. The visual language should feel like a calm, useful place to work with other people, not a marketing template.
 
+## October 2026 screenshot direction
+
+The user supplied community, member, project and event-calendar references and requested the same design across every page. All 49 App Router page routes are mapped in `artifacts/redesign/page-coverage.md`: 47 rendered views plus two redirect routes. Shared wrappers, learner/author variants, public/auth pages and staff views all participate. These references supersede earlier preferences for open, ruled directories and decorative clay navigation. Keep Inter, real data, permissions and all existing workflows. Use the shared `HeroBanner`, `PageContainer` and `SurfaceCard` in `components/discovery.tsx`, alongside existing shadcn controls. App discovery pages may use a compact mint/blue banner; the community banner includes an original decorative vector landscape. Forms and reading surfaces stay white and quiet. Keep the original `/images/brand/forge-community-mark.webp` logo unchanged. Use individually generated ImageGen outline artwork as theme-aware monochrome masks in the sidebar, a selected mint navigation row, compact white entity cards and contextual member previews with existing fields only. Do not display invented online indicators or message actions.
+
+The active anchors are petrol `#075B63`, ink approximately `#142E3B`, background `#F6FAFB`, white, mint and pale blue. Semantic HSL channels remain in `app/globals.css`; `tokens.css` contains shared spacing, radii, shadows, banner/landscape colors and motion. This preserves the established Tailwind/shadcn and chart contracts. The reference table below follows the active palette; runtime CSS is authoritative.
+
+- Layout: discovery workbench with a stable 264px collapsible sidebar, compact topbar and up to 1600px content canvas. Community uses a feed and activity column; directories use filter toolbars and cards; editors use quiet sections.
+- Type: existing Inter, 400 body / 600–650 headings, compact tracking. Page titles 28–32px, banner headlines 26–36px, card titles 18–20px.
+- Visual review: match the references' spacing and hierarchy without adding unsupported controls, counters or backend behavior. Use the same surface language in dark mode.
+- Page families: discovery banners for directories; entity-led mint/blue headers for profiles and details; bounded white reading/forms/editor surfaces; task-specific chat, calendar, course workspaces and administrative tables. Preserve scrollports in fixed-height app layouts.
+- Events: month/week/list, real upcoming previews, synchronized category selectors, timezone-aware period filters, and a right filter/help column. Calendar export uses the existing per-event ICS download. The reference’s subscription control is not shown without a supported subscription endpoint.
+- Search: reveal the active category by moving only its horizontal strip; never scroll the document on mount or change the first keyboard destination.
+- Navigation artwork: one transparent source per icon under `assets/source/navigation-outline/individual/`; explicit contain export and 8px safety gutters in 96px lossless assets under `outline-v2`. Preserve each silhouette’s proportions. Sidebar boxes are 22px; quick search is 16px. A subtle zero-blur subpixel reinforcement keeps small contours legible.
+
 ## Current brief and design process
 
 The latest brief calls for less default prose, a friendly and distinctive product, and playful optional motion. Apply the [pinned frontend-design guidance](https://github.com/anthropics/skills/blob/dbd4588f9e1033efb41dad4bef2f7947c8993d44/skills/frontend-design/SKILL.md): first write a compact palette/type/layout plan, critique it against the actual task, then build and inspect real screenshots. This contract does not claim a fresh Hallmark runtime audit.
@@ -25,18 +39,18 @@ The palette deliberately changes to deep petrol, warm coral and targeted sunny r
 
 `app/globals.css` owns these semantic HSL channels because Tailwind and shadcn already consume them through `hsl(var(--token))`. Do not scatter raw brand colors through page classes. When a role is missing, add a named token first.
 
-The six visual anchors are petrol `#075C65`, coral `#EF8D75`, sun `#F2C75C`, cool daylight `#EFF8F6`, deep water `#08252F` and ink `#14343D`. The table gives reference sRGB hex values; runtime values remain numeric HSL channels.
+The six visual anchors are petrol `#075B63`, coral `#EF8D75`, sun `#F2C75C`, cool daylight `#F6FAFB`, deep water `#08252F` and ink `#142E3B`. The table gives reference sRGB hex values; runtime values remain numeric HSL channels.
 
 | Role | Light reference | Dark reference | Intent |
 | --- | --- | --- | --- |
-| `--background` / `--foreground` | `#EFF8F6` / `#14343D` | `#08252F` / `#E8F5F2` | quiet canvas and body ink |
-| `--card`, `--popover` / foreground | `#FFFFFF` / `#14343D` | `#10333D` / `#E8F5F2` | reading and tool surfaces |
-| `--primary`, `--progress`, `--ring` | `#075C65` | `#72D0CC` | action, actual progress and external focus |
+| `--background` / `--foreground` | `#F6FAFB` / `#142E3B` | `#08252F` / `#E8F5F2` | quiet canvas and body ink |
+| `--card`, `--popover` / foreground | `#FFFFFF` / `#142E3B` | `#10333D` / `#E8F5F2` | reading and tool surfaces |
+| `--primary`, `--progress`, `--ring` | `#075B63` | `#72D0CC` | action, actual progress and external focus |
 | primary/progress foreground | `#FFFFFF` | `#08252F` | text on solid action fill |
-| `--secondary` / foreground | `#FBE3DC` / `#713D33` | `#713D33` / `#FFE9E1` | quiet warm secondary surface |
-| `--accent` / foreground | `#D9EEEB` / `#075C65` | `#164B55` / `#A7E7E0` | selected interactive surface |
-| `--muted` / foreground | `#E2EEEC` / `#4A666C` | `#183E47` / `#ADC8CA` | supporting regions and text |
-| `--border` / `--input` | `#C7DDDA` / `#63868A` | `#365E68` / `#83A7AB` | quiet separator / visible control boundary |
+| `--secondary` / foreground | `#F4F8FA` / `#243F50` | `#183E47` / `#E8F5F2` | quiet warm secondary surface |
+| `--accent` / foreground | `#E2F3F1` / `#075B63` | `#164B55` / `#A7E7E0` | selected interactive surface |
+| `--muted` / foreground | `#F0F5F8` / `#53697B` | `#183E47` / `#ADC8CA` | supporting regions and text |
+| `--border` / `--input` | `#DDE9ED` / `#63868A` | `#365E68` / `#83A7AB` | quiet separator / visible control boundary |
 | `--coral` / foreground | `#A54130` / `#FFFFFF` | `#F3A18D` / `#08252F` | social text or paired solid fill |
 | `--coral-highlight` / foreground | `#EF8D75` / `#14343D` | `#F3A18D` / `#08252F` | bright artwork and avatar fill |
 | `--reward` / foreground | `#F2C75C` / `#14343D` | `#F2C75C` / `#08252F` | existing earned reward fill |
@@ -45,7 +59,7 @@ The six visual anchors are petrol `#075C65`, coral `#EF8D75`, sun `#F2C75C`, coo
 | `--warning` / foreground | `#8B5A0A` / `#FFFFFF` | `#F0C270` / `#08252F` | warning plus wording/icon |
 | `--info` / foreground | `#126A7A` / `#FFFFFF` | `#82D5E4` / `#08252F` | informational state |
 | `--destructive` / foreground | `#B72E4A` / `#FFFFFF` | `#FF8AA4` / `#08252F` | error/destructive action plus text/icon |
-| `--chart-1` to `--chart-5` | `#075C65`, `#A54130`, `#8B6A0C`, `#357D73`, `#52616B` | `#72D0CC`, `#F3A18D`, `#F2C75C`, `#9BC8B0`, `#B7C6D3` | reserved plot strokes; retain labels/tooltips and other cues |
+| `--chart-1` to `--chart-5` | `#075B63`, `#A54130`, `#8B6A0C`, `#357D73`, `#52616B` | `#72D0CC`, `#F3A18D`, `#F2C75C`, `#9BC8B0`, `#B7C6D3` | reserved plot strokes; retain labels/tooltips and other cues |
 
 Bright coral and yellow do not support white small text. Use their paired dark foregrounds, and use `reward-ink` for small reward text rather than yellow text on a light surface. Reading or visiting content is progress, not an earned award; preserve the actual badge/point eligibility conditions. Existing Spark artwork retains its amber/copper, mint, graphite and ivory colors, assets and voluntary motion controls.
 
@@ -60,7 +74,7 @@ Persisted project/resource colors and authored third-party content keep their ow
 - Subheads: 1.1–1.4rem, semibold. One h1 per rendered screen; headings follow a useful h2/h3 outline.
 - Spacing: follow the existing 4px Tailwind scale. Default page gutters 16px mobile, 24px tablet, 32px desktop. Reading widths 68–75ch; data/workbench max width around 1440–1600px.
 - Radius: controls 10px, panels 14–16px, small chips fully rounded only when genuinely a chip. Borders are one quiet pixel. Avoid nested card-in-card stacks.
-- A panel is for a bounded tool or object. Use open sections and rules for content lists; don't put every element in a card.
+- A panel is for a bounded tool or object. Discovery entities use white cards; supporting metadata uses quiet inset surfaces. Keep editors free of decorative gradients.
 
 ## Navigation and component voice
 

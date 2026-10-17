@@ -152,7 +152,7 @@ function AccountProfilePage({ profileId, accountId, status }: { profileId: strin
   const hasExpertise = Boolean(visibleProfile?.teachingLanguages?.length || visibleProfile?.expertise?.length);
 
   return (
-    <AppShell>
+    <AppShell data-page-family="profile">
       <Sidebar />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <AppHeader>
@@ -179,7 +179,7 @@ function AccountProfilePage({ profileId, accountId, status }: { profileId: strin
             ) : (
               <>
                 {safeCoverImage && <div className="mt-5 h-32 overflow-hidden rounded-[14px] bg-muted bg-cover bg-center sm:h-44" style={{ backgroundImage: `url("${safeCoverImage.replaceAll('"', '%22')}")` }} role="img" aria-label="Titelbild" />}
-                <header className="mt-6 flex min-w-0 flex-wrap items-start justify-between gap-6 border-b pb-7">
+                <header className="fc-detail-header mt-6 flex min-w-0 flex-wrap items-start justify-between gap-6">
                   <div className="flex min-w-0 flex-wrap items-start gap-5">
                     <Avatar className="h-20 w-20 shrink-0 border-2 border-background sm:h-24 sm:w-24">
                       <AvatarImage src={visibleProfile.image || undefined} alt="" />
@@ -212,7 +212,7 @@ function AccountProfilePage({ profileId, accountId, status }: { profileId: strin
 
                 {actionError && <p role="alert" className="mt-5 rounded-[10px] border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">{actionError} {!accountId && <Link href="/login" className="font-semibold underline underline-offset-2">Zur Anmeldung</Link>}</p>}
 
-                <section aria-label="Profilzahlen" className="grid grid-cols-2 border-b py-5 sm:grid-cols-4">
+                <section aria-label="Profilzahlen" className="fc-section-card my-5 grid grid-cols-2 sm:grid-cols-4">
                   <div className="min-w-0 border-r p-2 sm:p-3"><FollowersList userId={visibleProfile.id} count={visibleProfile.stats.followers} type="followers" /></div>
                   <div className="min-w-0 p-2 sm:border-r sm:p-3"><FollowersList userId={visibleProfile.id} count={visibleProfile.stats.following} type="following" /></div>
                   <div className="min-w-0 border-r border-t p-3 sm:border-t-0"><p className="text-2xl font-semibold tabular-nums">{visibleProfile.endorsements}</p><p className="text-sm text-muted-foreground">Empfehlungen</p>{!visibleProfile.isCurrentUser && <Button type="button" variant="ghost" size="sm" className="mt-1" onClick={() => void handleEndorseProfile()} disabled={isEndorsing || hasEndorsed}><Star className="h-4 w-4" aria-hidden="true" />{hasEndorsed ? 'Bereits empfohlen' : isEndorsing ? 'Wird empfohlen…' : 'Empfehlen'}</Button>}</div>
@@ -231,15 +231,15 @@ function AccountProfilePage({ profileId, accountId, status }: { profileId: strin
                   </TabsList>
                   <TabsContent value="overview" className="pt-6">
                     <div className="grid min-w-0 gap-x-10 gap-y-8 md:grid-cols-2">
-                      <section aria-labelledby="profile-bio-title" className="min-w-0 border-t pt-5">
+                      <section aria-labelledby="profile-bio-title" className="fc-section-card">
                         <h2 id="profile-bio-title" className="text-xl font-semibold tracking-tight">Über mich</h2>
                         <p className="mt-4 whitespace-pre-wrap break-words text-base leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">{visibleProfile.bio || 'Noch keine Biografie vorhanden.'}</p>
                       </section>
-                      <section aria-labelledby="profile-skills-title" className="min-w-0 border-t pt-5">
+                      <section aria-labelledby="profile-skills-title" className="fc-section-card">
                         <h2 id="profile-skills-title" className="text-xl font-semibold tracking-tight">Skills</h2><p className="mt-1 text-xs text-muted-foreground">Kenntnisstände sind Selbsteinschätzungen.</p>
                         {visibleProfile.skills.length === 0 ? <div className="mt-4 space-y-3"><p className="text-base text-muted-foreground">Noch keine Skills vorhanden.</p>{visibleProfile.isCurrentUser && <Button asChild variant="outline"><Link href="/settings?tab=skills">Fähigkeiten ergänzen</Link></Button>}</div> : <ul className="mt-4 divide-y">{visibleProfile.skills.map(skill => <li key={skill.id} className="py-3 first:pt-0"><div className="flex flex-wrap items-baseline justify-between gap-2"><span className="min-w-0 break-words font-medium">{skill.name}</span><span className="text-sm text-muted-foreground">{skill.endorsements} Empfehlungen</span></div><p className="mt-2 text-xs tabular-nums text-muted-foreground">Selbsteinschätzung {skill.level}%</p><Progress value={Math.max(0, Math.min(100, skill.level))} className="mt-2 h-2" aria-label={`${skill.name}: ${skill.level} Prozent`} /></li>)}</ul>}
                       </section>
-                      {visibleProfile.badges.length > 0 && <section aria-labelledby="profile-achievements-title" className="min-w-0 border-t pt-5 md:col-span-2">
+                      {visibleProfile.badges.length > 0 && <section aria-labelledby="profile-achievements-title" className="fc-section-card md:col-span-2">
                         <h2 id="profile-achievements-title" className="text-xl font-semibold tracking-tight">Auszeichnungen</h2>
                         <ul className="mt-4 divide-y border-y">{visibleProfile.badges.map(badge => {
                           const awardedAt = new Date(badge.awardedAt);
@@ -254,7 +254,7 @@ function AccountProfilePage({ profileId, accountId, status }: { profileId: strin
                         })}</ul>
                         {visibleProfile.isCurrentUser && visibleProfile.badges.some(badge => badge.badgeId === VERIFIED_COURSE_BADGE.id) && <p className="mt-3 text-sm text-muted-foreground">Deine Lern-Auszeichnung sehen andere nur, wenn du der öffentlichen Rangliste zustimmst. <Link href="/settings" className="text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Sichtbarkeit einstellen</Link></p>}
                       </section>}
-                      {visibleProfile.role === 'INSTRUCTOR' && hasExpertise && <section aria-labelledby="profile-expertise-title" className="border-t pt-5 md:col-span-2"><h2 id="profile-expertise-title" className="text-xl font-semibold tracking-tight">Expertise</h2><div className="mt-4 grid gap-5 sm:grid-cols-2"><div><h3 className="font-medium">Unterrichtssprachen</h3><div className="mt-2 flex flex-wrap gap-2">{visibleProfile.teachingLanguages?.length ? visibleProfile.teachingLanguages.map(language => <Badge key={language} variant="secondary">{language}</Badge>) : <p className="text-sm text-muted-foreground">Keine angegeben</p>}</div></div><div><h3 className="font-medium">Fachgebiete</h3><div className="mt-2 flex flex-wrap gap-2">{visibleProfile.expertise?.length ? visibleProfile.expertise.map(subject => <Badge key={subject} variant="secondary">{subject}</Badge>) : <p className="text-sm text-muted-foreground">Keine angegeben</p>}</div></div></div></section>}
+                      {visibleProfile.role === 'INSTRUCTOR' && hasExpertise && <section aria-labelledby="profile-expertise-title" className="fc-section-card md:col-span-2"><h2 id="profile-expertise-title" className="text-xl font-semibold tracking-tight">Expertise</h2><div className="mt-4 grid gap-5 sm:grid-cols-2"><div><h3 className="font-medium">Unterrichtssprachen</h3><div className="mt-2 flex flex-wrap gap-2">{visibleProfile.teachingLanguages?.length ? visibleProfile.teachingLanguages.map(language => <Badge key={language} variant="secondary">{language}</Badge>) : <p className="text-sm text-muted-foreground">Keine angegeben</p>}</div></div><div><h3 className="font-medium">Fachgebiete</h3><div className="mt-2 flex flex-wrap gap-2">{visibleProfile.expertise?.length ? visibleProfile.expertise.map(subject => <Badge key={subject} variant="secondary">{subject}</Badge>) : <p className="text-sm text-muted-foreground">Keine angegeben</p>}</div></div></div></section>}
                     </div>
                   </TabsContent>
                   <TabsContent value="activity" className="pt-6"><ActivityFeed userId={visibleProfile.id} /></TabsContent>

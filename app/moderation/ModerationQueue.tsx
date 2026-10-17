@@ -1,5 +1,7 @@
 'use client';
 
+import { HeroBanner } from '@/components/discovery';
+import { ShieldCheck as PageBannerIcon } from 'lucide-react';
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
@@ -268,7 +270,7 @@ function ModerationQueueForViewer() {
   if (accessLost) return <PageState kind="error" title="Keine Berechtigung" />;
 
   const hasNextPage = queue !== null && page * queue.pageSize < queue.total;
-  return <AppShell>
+  return <AppShell data-page-family="moderation">
     <Sidebar />
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <AppHeader>
@@ -277,8 +279,9 @@ function ModerationQueueForViewer() {
           <div className="app-header-actions"><ThemeToggle /><UserNav /></div>
         </div>
       </AppHeader>
-      <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto p-4 lg:p-8">
-        <div className="mx-auto max-w-4xl space-y-5">
+      <main id="page-content" tabIndex={-1} className="min-w-0 flex-1 overflow-y-auto">
+        <div className="fc-page-container mx-auto max-w-4xl space-y-5">
+          <HeroBanner title="Gemeinsam für eine gute Community." description="Prüfe eingegangene Meldungen und bearbeite sie nachvollziehbar." icon={PageBannerIcon} />
           <p className="text-sm text-muted-foreground">Nur Moderation und Administration können Meldungen sehen und bearbeiten. Meldungen aus privaten Spaces können nur Admins prüfen. Entscheidungen werden mit Zeit und Bearbeiter protokolliert.</p>
           <div role="group" aria-label="Meldungsstatus" className="flex flex-wrap gap-2">
             {([['OPEN', 'Offen'], ['DISMISSED', 'Abgewiesen'], ['RESOLVED', 'Maßnahme dokumentiert']] as const).map(([value, label]) =>

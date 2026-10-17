@@ -195,7 +195,7 @@ function AccountNewArticle({ accountId, status }: { accountId: string | null; st
 
               {!accountId ? <PageState kind="error" title="Anmeldung erforderlich" description="Melde dich an, um einen Artikel zu schreiben." action={<Button asChild variant="outline"><Link href="/login">Zur Anmeldung</Link></Button>} /> : <>
 
-              <div>
+              <div className="fc-editor-surface">
                 <div className="flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
                   <Button type="button" variant="ghost" size="sm" className="self-start" onClick={() => router.push('/knowledgebase')}><ArrowLeft className="h-4 w-4" aria-hidden="true" />Zur Übersicht</Button>
                   <div role="group" aria-label="Artikel speichern oder veröffentlichen" className="grid gap-2 sm:flex sm:gap-3">

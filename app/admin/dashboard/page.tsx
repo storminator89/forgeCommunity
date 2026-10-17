@@ -86,7 +86,7 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-w-0 space-y-8">
-      <header className="flex flex-col items-start gap-4 border-b pb-6 sm:flex-row sm:items-end sm:justify-between">
+      <header className="fc-detail-header flex flex-col items-start gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0 space-y-2">
           <h1 className="text-[clamp(1.65rem,1.1rem+2vw,2.35rem)] font-semibold tracking-tight">Dashboard</h1>
 
@@ -102,14 +102,14 @@ export default function AdminDashboard() {
           <h2 id="overview-heading" className="text-lg font-semibold tracking-tight">Community im Überblick</h2>
 
         </div>
-        <div className="grid min-w-0 grid-cols-1 rounded-2xl border bg-card text-card-foreground sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {metrics.map(({ key, title, icon: Icon, href }) => (
             <Link
               key={key}
               href={href}
               aria-label={`${title} öffnen`}
               aria-describedby={!isLoading ? `metric-${key}` : undefined}
-              className="group min-w-0 rounded-xl p-5 transition-colors hover:bg-muted active:bg-accent focus-visible:z-10 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="fc-section-card group min-w-0 transition-colors hover:bg-muted active:bg-accent focus-visible:z-10 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               <div className="flex items-center justify-between gap-3 text-sm font-medium">
                 <span className="whitespace-nowrap">{title}</span>
@@ -135,7 +135,7 @@ export default function AdminDashboard() {
       {error ? (
         <PageState kind="error" title="Dashboard-Daten konnten nicht geladen werden" description={error} action={<Button variant="outline" onClick={refresh}>Erneut versuchen</Button>} />
       ) : (
-        <section aria-labelledby="activity-heading" aria-busy={isLoading} className="min-w-0 border-t pt-6">
+        <section aria-labelledby="activity-heading" aria-busy={isLoading} className="fc-section-card">
           <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-baseline sm:justify-between">
             <div className="min-w-0 space-y-1">
               <h2 id="activity-heading" className="text-lg font-semibold tracking-tight">Letzte Aktivitäten</h2>

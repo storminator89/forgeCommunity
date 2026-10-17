@@ -1,0 +1,382 @@
+[
+  {
+    "name": "community",
+    "source": {
+      "width": 1254,
+      "height": 1254,
+      "bounds": [
+        226,
+        317,
+        1026,
+        946
+      ],
+      "minimumMargin": 252
+    },
+    "output": {
+      "width": 96,
+      "height": 96,
+      "minimumMargin": 8
+    }
+  },
+  {
+    "name": "members",
+    "source": {
+      "width": 1254,
+      "height": 1254,
+      "bounds": [
+        152,
+        200,
+        1101,
+        1055
+      ],
+      "minimumMargin": 178
+    },
+    "output": {
+      "width": 96,
+      "height": 96,
+      "minimumMargin": 8
+    }
+  },
+  {
+    "name": "projects",
+    "source": {
+      "width": 1254,
+      "height": 1254,
+      "bounds": [
+        227,
+        300,
+        1026,
+        977
+      ],
+      "minimumMargin": 253
+    },
+    "output": {
+      "width": 96,
+      "height": 96,
+      "minimumMargin": 8
+    }
+  },
+  {
+    "name": "events",
+    "source": {
+      "width": 1254,
+      "height": 1254,
+      "bounds": [
+        204,
+        230,
+        1049,
+        1047
+      ],
+      "minimumMargin": 230
+    },
+    "output": {
+      "width": 96,
+      "height": 96,
+      "minimumMargin": 8
+    }
+  },
+  {
+    "name": "courses",
+    "source": {
+      "width": 1254,
+      "height": 1254,
+      "bounds": [
+        161,
+        233,
+        1086,
+        1043
+      ],
+      "minimumMargin": 187
+    },
+    "output": {
+      "width": 96,
+      "height": 96,
+      "minimumMargin": 8
+    }
+  },
+  {
+    "name": "pathways",
+    "source": {
+      "width": 1254,
+      "height": 1254,
+      "bounds": [
+        149,
+        338,
+        1154,
+        986
+      ],
+      "minimumMargin": 125
+    },
+    "output": {
+      "width": 96,
+      "height": 96,
+      "minimumMargin": 8
+    }
+  },
+  {
+    "name": "knowledge",
+    "source": {
+      "width": 1254,
+      "height": 1254,
+      "bounds": [
+        299,
+        224,
+        955,
+        1029
+      ],
+      "minimumMargin": 250
+    },
+    "output": {
+      "width": 96,
+      "height": 96,
+      "minimumMargin": 8
+    }
+  },
+  {
+    "name": "resources",
+    "source": {
+      "width": 1254,
+      "height": 1254,
+      "bounds": [
+        204,
+        229,
+        1064,
+        1060
+      ],
+      "minimumMargin": 215
+    },
+    "output": {
+      "width": 96,
+      "height": 96,
+      "minimumMargin": 8
+    }
+  },
+  {
+    "name": "skills",
+    "source": {
+      "width": 1254,
+      "height": 1254,
+      "bounds": [
+        328,
+        241,
+        925,
+        1013
+      ],
+      "minimumMargin": 266
+    },
+    "output": {
+      "width": 96,
+      "height": 96,
+      "minimumMargin": 8
+    }
+  },
+  {
+    "name": "missions",
+    "source": {
+      "width": 1254,
+      "height": 1254,
+      "bounds": [
+        232,
+        151,
+        1014,
+        1103
+      ],
+      "minimumMargin": 176
+    },
+    "output": {
+      "width": 96,
+      "height": 96,
+      "minimumMargin": 8
+    }
+  },
+  {
+    "name": "drafts",
+    "source": {
+      "width": 1254,
+      "height": 1254,
+      "bounds": [
+        305,
+        238,
+        1051,
+        1029
+      ],
+      "minimumMargin": 228
+    },
+    "output": {
+      "width": 96,
+      "height": 96,
+      "minimumMargin": 8
+    }
+  },
+  {
+    "name": "chat",
+    "source": {
+      "width": 1254,
+      "height": 1254,
+      "bounds": [
+        252,
+        277,
+        1001,
+        978
+      ],
+      "minimumMargin": 278
+    },
+    "output": {
+      "width": 96,
+      "height": 96,
+      "minimumMargin": 8
+    }
+  },
+  {
+    "name": "notifications",
+    "source": {
+      "width": 1254,
+      "height": 1254,
+      "bounds": [
+        307,
+        274,
+        988,
+        1005
+      ],
+      "minimumMargin": 274
+    },
+    "output": {
+      "width": 96,
+      "height": 96,
+      "minimumMargin": 8
+    }
+  },
+  {
+    "name": "search",
+    "source": {
+      "width": 1254,
+      "height": 1254,
+      "bounds": [
+        247,
+        242,
+        1011,
+        1032
+      ],
+      "minimumMargin": 247
+    },
+    "output": {
+      "width": 96,
+      "height": 96,
+      "minimumMargin": 8
+    }
+  },
+  {
+    "name": "settings",
+    "source": {
+      "width": 1254,
+      "height": 1254,
+      "bounds": [
+        202,
+        178,
+        1052,
+        1091
+      ],
+      "minimumMargin": 188
+    },
+    "output": {
+      "width": 96,
+      "height": 96,
+      "minimumMargin": 8
+    }
+  },
+  {
+    "name": "about",
+    "source": {
+      "width": 1254,
+      "height": 1254,
+      "bounds": [
+        211,
+        210,
+        1041,
+        1040
+      ],
+      "minimumMargin": 236
+    },
+    "output": {
+      "width": 96,
+      "height": 96,
+      "minimumMargin": 8
+    }
+  },
+  {
+    "name": "dashboard",
+    "source": {
+      "width": 1254,
+      "height": 1254,
+      "bounds": [
+        264,
+        292,
+        990,
+        1012
+      ],
+      "minimumMargin": 267
+    },
+    "output": {
+      "width": 96,
+      "height": 96,
+      "minimumMargin": 8
+    }
+  },
+  {
+    "name": "user-management",
+    "source": {
+      "width": 1254,
+      "height": 1254,
+      "bounds": [
+        303,
+        218,
+        1019,
+        1059
+      ],
+      "minimumMargin": 220
+    },
+    "output": {
+      "width": 96,
+      "height": 96,
+      "minimumMargin": 8
+    }
+  },
+  {
+    "name": "moderation",
+    "source": {
+      "width": 1254,
+      "height": 1254,
+      "bounds": [
+        268,
+        237,
+        986,
+        1038
+      ],
+      "minimumMargin": 241
+    },
+    "output": {
+      "width": 96,
+      "height": 96,
+      "minimumMargin": 8
+    }
+  },
+  {
+    "name": "saved",
+    "source": {
+      "width": 1254,
+      "height": 1254,
+      "bounds": [
+        321,
+        262,
+        931,
+        989
+      ],
+      "minimumMargin": 288
+    },
+    "output": {
+      "width": 96,
+      "height": 96,
+      "minimumMargin": 8
+    }
+  }
+]

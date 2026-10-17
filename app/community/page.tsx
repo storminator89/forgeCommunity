@@ -3,6 +3,7 @@
 /* Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V5 */
 /* Hallmark · genre: editorial · macrostructure: conversation workbench · design-system: design.md · designed-as-app */
 
+import { HeroBanner, PageContainer, CommunityLandscape } from '@/components/discovery';
 import { AppShell, AppHeader } from '@/components/app-shell';
 import { useState, useEffect, useRef, useSyncExternalStore } from 'react'
 import Link from 'next/link'
@@ -321,7 +322,7 @@ function Community({ session, topic, onSelectTopic }: { session: Session | null;
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <AppHeader>
           <div className="app-header-row">
-            <h1 className="app-header-title">Community</h1>
+            <div className="app-header-title"><h1>Community</h1><p className="mt-1 text-sm text-muted-foreground">Austauschen. Lernen. Gemeinsam wachsen.</p></div>
             <div className="app-header-actions">
               <ThemeToggle />
               <UserNav />
@@ -330,15 +331,11 @@ function Community({ session, topic, onSelectTopic }: { session: Session | null;
         </AppHeader>
 
         <main ref={mainRef} id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto scroll-smooth">
-          <div className="mx-auto w-full max-w-[1440px] px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
-            {session?.user?.id && <SparkEntry className="mb-3" />}
+          <PageContainer>
             {session?.user?.id && session.user.role === 'USER' && <FirstActionGuide userId={session.user.id} />}
-            <div className="flex min-w-0 flex-col items-start gap-10 lg:flex-row lg:flex-wrap lg:gap-12">
-              <section aria-labelledby="community-feed-title" className="w-full min-w-0 lg:flex-[2_1_24rem]">
-                <div className="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-                  <h2 id="community-feed-title" tabIndex={-1} className="text-xl font-semibold tracking-tight focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Aktuelle Beiträge</h2>
-                  <Link href="/community/spaces" className="inline-flex min-h-11 items-center text-sm font-semibold text-primary underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Spaces entdecken</Link>
-                </div>
+            <div className="fc-community-layout">
+              <section aria-labelledby="community-feed-title" className="min-w-0">
+                <HeroBanner title="Gemeinsam mehr erreichen." description="Stelle Fragen, teile Wissen, diskutiere Ideen und vernetze dich mit anderen Mitgliedern." className="fc-community-hero"><CommunityLandscape /></HeroBanner>
                 {notification && (
                   <div className={`sticky top-0 z-10 mb-3 rounded-lg border bg-card px-4 py-3 text-sm font-medium ${notification.type === 'success' ? 'border-success/30 text-success' : 'border-destructive/30 text-destructive'}`}
                     role={notification.type === 'error' ? 'alert' : 'status'}>
@@ -351,15 +348,15 @@ function Community({ session, topic, onSelectTopic }: { session: Session | null;
                     <motion.button
                       key="new-post-button"
                       type="button"
-                      className="flex min-h-16 w-full min-w-0 flex-wrap items-center gap-3 rounded-[14px] border border-input bg-card p-4 text-left transition-colors hover:border-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      className="fc-composer fc-surface hover:border-primary/40 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       aria-label="Neuen Beitrag erstellen"
                       onClick={openComposer}
                     >
                       <Avatar className="h-10 w-10 shrink-0"><AvatarImage src={session?.user?.image || ''} alt="" /><AvatarFallback className="bg-coral-highlight text-coral-highlight-foreground">{session?.user?.name?.[0] || 'F'}</AvatarFallback></Avatar>
-                      <span className="min-w-0 flex-[1_1_8rem] text-sm font-medium text-foreground [overflow-wrap:anywhere]">
+                      <span className="fc-composer-prompt min-w-0 [overflow-wrap:anywhere]">
                         Beitrag schreiben{session?.user?.name ? `, ${session.user.name.split(' ')[0]}` : ''}
                       </span>
-                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-coral-highlight text-coral-highlight-foreground"><PlusCircle className="h-5 w-5" aria-hidden="true" /></span>
+                      <span className="fc-composer-action"><PlusCircle className="h-4 w-4" aria-hidden="true" />Beitrag schreiben</span>
                     </motion.button>
                   ) : (
                     <PostForm
@@ -380,7 +377,7 @@ function Community({ session, topic, onSelectTopic }: { session: Session | null;
                 <TopicNavigation key={isEditing ? 'composing' : 'browsing'} selected={topic} onSelect={onSelectTopic} disabled={isEditing} />
 
                 <div className="mt-4">
-                  <p className="border-b pb-3 text-sm tabular-nums text-muted-foreground">{feedCount}</p>
+                  <div className="mb-2 mt-7 flex flex-wrap items-center justify-between gap-2"><h2 id="community-feed-title" tabIndex={-1} className="text-xl font-semibold tracking-tight focus-visible:ring-2 focus-visible:ring-ring">Aktuelle Beiträge</h2><p className="text-xs tabular-nums text-muted-foreground">{feedCount}</p></div>
                   <div className="mt-4 space-y-5">
                     {linkedTargetLoading && <p className="text-sm text-muted-foreground" role="status">Verlinkter Beitrag wird geladen…</p>}
                     {linkedTargetError && <PageState kind="error" title="Verlinkter Inhalt ist nicht verfügbar" description="Der Inhalt wurde möglicherweise gelöscht oder ist für dieses Konto nicht sichtbar." action={<Button type="button" variant="outline" onClick={() => void retryLinkedTarget()}>Verlinkten Inhalt erneut laden</Button>} />}
@@ -438,18 +435,19 @@ function Community({ session, topic, onSelectTopic }: { session: Session | null;
                 </div>
               </section>
 
-<aside aria-label="Deine Community im Überblick" className="w-full min-w-0 space-y-9 lg:sticky lg:top-8 lg:max-w-[19rem] lg:flex-[1_1_16rem]">
+<aside aria-label="Deine Community im Überblick" className="fc-community-aside">
                 <StatsCard stats={activity} activityLoading={activityLoading} activityError={activityError} onRetryActivity={refreshActivity} rewards={rewards} rewardsLoading={rewardsLoading} rewardsError={rewardsError} isSignedIn={!!session} />
-                <div className="min-w-0 [overflow-wrap:anywhere] [&_button]:h-auto [&_button]:min-h-11 [&_button]:max-w-full [&_button]:whitespace-normal">
+                <div className="fc-surface p-5 min-w-0 [overflow-wrap:anywhere] [&_button]:h-auto [&_button]:min-h-11 [&_button]:max-w-full [&_button]:whitespace-normal">
                   <ContributionMilestonesCard summary={contributions.summary} loading={contributions.loading} error={contributions.error} isSignedIn={!!session?.user?.id} onRefresh={contributions.refresh} />
                 </div>
+                {session?.user?.id && <SparkEntry />}
                 <LeaderboardCard
                   users={leaderboardUsers}
                   isLoading={isLeaderboardLoading}
                 />
               </aside>
             </div>
-          </div>
+          </PageContainer>
         </main>
       </div>
 

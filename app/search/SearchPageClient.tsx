@@ -1,5 +1,7 @@
 "use client";
 
+import { HeroBanner } from '@/components/discovery';
+import { Search as PageBannerIcon } from 'lucide-react';
 import { AppShell, AppHeader } from '@/components/app-shell';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Sidebar } from "@/components/Sidebar";
@@ -207,9 +209,15 @@ function SearchPageForViewer({
   }, [applySearchState]);
 
   useEffect(() => {
-    tabListRef.current
-      ?.querySelector<HTMLElement>('[data-state="active"]')
-      ?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+    const list = tabListRef.current;
+    const active = list?.querySelector<HTMLElement>('[data-state="active"]');
+    if (!list || !active) return;
+    // Move only the horizontal category strip. scrollIntoView also changes
+    // Chromium's next keyboard focus position when the page first mounts.
+    const bounds = list.getBoundingClientRect();
+    const tab = active.getBoundingClientRect();
+    if (tab.left < bounds.left) list.scrollLeft -= bounds.left - tab.left;
+    else if (tab.right > bounds.right) list.scrollLeft += tab.right - bounds.right;
   }, [activeTab]);
 
   const updateSearchUrl = (query: string, type: string, nextPage: number, push = false) => {
@@ -501,7 +509,7 @@ function SearchPageForViewer({
   };
 
   return (
-    <AppShell>
+    <AppShell data-page-family="discovery">
       <Sidebar />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <AppHeader>
@@ -514,8 +522,9 @@ function SearchPageForViewer({
           </div>
         </AppHeader>
 
-        <main id="page-content" tabIndex={-1} className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
-          <div className="mx-auto max-w-4xl space-y-6">
+        <main id="page-content" tabIndex={-1} className="min-w-0 flex-1 overflow-y-auto">
+          <div className="fc-page-container mx-auto max-w-4xl space-y-6">
+          <HeroBanner title="Was möchtest du entdecken?" description="Durchsuche Kurse, Wissen, Menschen und Ideen aus der Community." icon={PageBannerIcon} />
 
             <div className="relative">
               <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />

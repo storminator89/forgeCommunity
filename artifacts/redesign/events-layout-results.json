@@ -1,0 +1,259 @@
+{
+  "fixtures": true,
+  "results": [
+    {
+      "view": "Monat",
+      "theme": "light",
+      "width": 320,
+      "main": true,
+      "document": true
+    },
+    {
+      "view": "Monat",
+      "theme": "light",
+      "width": 375,
+      "main": true,
+      "document": true
+    },
+    {
+      "view": "Monat",
+      "theme": "light",
+      "width": 414,
+      "main": true,
+      "document": true
+    },
+    {
+      "view": "Monat",
+      "theme": "light",
+      "width": 768,
+      "main": true,
+      "document": true
+    },
+    {
+      "view": "Monat",
+      "theme": "light",
+      "width": 1280,
+      "main": true,
+      "document": true
+    },
+    {
+      "view": "Monat",
+      "theme": "light",
+      "width": 1440,
+      "main": true,
+      "document": true
+    },
+    {
+      "view": "Monat",
+      "theme": "dark",
+      "width": 320,
+      "main": true,
+      "document": true
+    },
+    {
+      "view": "Monat",
+      "theme": "dark",
+      "width": 375,
+      "main": true,
+      "document": true
+    },
+    {
+      "view": "Monat",
+      "theme": "dark",
+      "width": 414,
+      "main": true,
+      "document": true
+    },
+    {
+      "view": "Monat",
+      "theme": "dark",
+      "width": 768,
+      "main": true,
+      "document": true
+    },
+    {
+      "view": "Monat",
+      "theme": "dark",
+      "width": 1280,
+      "main": true,
+      "document": true
+    },
+    {
+      "view": "Monat",
+      "theme": "dark",
+      "width": 1440,
+      "main": true,
+      "document": true
+    },
+    {
+      "view": "Woche",
+      "theme": "light",
+      "width": 320,
+      "main": true,
+      "document": true
+    },
+    {
+      "view": "Woche",
+      "theme": "light",
+      "width": 375,
+      "main": true,
+      "document": true
+    },
+    {
+      "view": "Woche",
+      "theme": "light",
+      "width": 414,
+      "main": true,
+      "document": true
+    },
+    {
+      "view": "Woche",
+      "theme": "light",
+      "width": 768,
+      "main": true,
+      "document": true
+    },
+    {
+      "view": "Woche",
+      "theme": "light",
+      "width": 1280,
+      "main": true,
+      "document": true
+    },
+    {
+      "view": "Woche",
+      "theme": "light",
+      "width": 1440,
+      "main": true,
+      "document": true
+    },
+    {
+      "view": "Woche",
+      "theme": "dark",
+      "width": 320,
+      "main": true,
+      "document": true
+    },
+    {
+      "view": "Woche",
+      "theme": "dark",
+      "width": 375,
+      "main": true,
+      "document": true
+    },
+    {
+      "view": "Woche",
+      "theme": "dark",
+      "width": 414,
+      "main": true,
+      "document": true
+    },
+    {
+      "view": "Woche",
+      "theme": "dark",
+      "width": 768,
+      "main": true,
+      "document": true
+    },
+    {
+      "view": "Woche",
+      "theme": "dark",
+      "width": 1280,
+      "main": true,
+      "document": true
+    },
+    {
+      "view": "Woche",
+      "theme": "dark",
+      "width": 1440,
+      "main": true,
+      "document": true
+    },
+    {
+      "view": "Liste",
+      "theme": "light",
+      "width": 320,
+      "main": true,
+      "document": true
+    },
+    {
+      "view": "Liste",
+      "theme": "light",
+      "width": 375,
+      "main": true,
+      "document": true
+    },
+    {
+      "view": "Liste",
+      "theme": "light",
+      "width": 414,
+      "main": true,
+      "document": true
+    },
+    {
+      "view": "Liste",
+      "theme": "light",
+      "width": 768,
+      "main": true,
+      "document": true
+    },
+    {
+      "view": "Liste",
+      "theme": "light",
+      "width": 1280,
+      "main": true,
+      "document": true
+    },
+    {
+      "view": "Liste",
+      "theme": "light",
+      "width": 1440,
+      "main": true,
+      "document": true
+    },
+    {
+      "view": "Liste",
+      "theme": "dark",
+      "width": 320,
+      "main": true,
+      "document": true
+    },
+    {
+      "view": "Liste",
+      "theme": "dark",
+      "width": 375,
+      "main": true,
+      "document": true
+    },
+    {
+      "view": "Liste",
+      "theme": "dark",
+      "width": 414,
+      "main": true,
+      "document": true
+    },
+    {
+      "view": "Liste",
+      "theme": "dark",
+      "width": 768,
+      "main": true,
+      "document": true
+    },
+    {
+      "view": "Liste",
+      "theme": "dark",
+      "width": 1280,
+      "main": true,
+      "document": true
+    },
+    {
+      "view": "Liste",
+      "theme": "dark",
+      "width": 1440,
+      "main": true,
+      "document": true
+    }
+  ],
+  "errors": [],
+  "filterInteractions": true
+}

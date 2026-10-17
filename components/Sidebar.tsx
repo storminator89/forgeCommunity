@@ -9,8 +9,9 @@ import { useNotifications } from '@/contexts/NotificationContext';
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAppNavigation } from '@/components/app-shell';
-import { NavigationSearch } from '@/components/navigation-search';
 import { NavigationArtwork } from '@/components/navigation-artwork';
+import { NavigationSearch } from '@/components/navigation-search';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ForgeBrandMark } from '@/components/forge-brand-mark';
 import { navigationGroups, utilityNavigation, adminNavigation, moderationNavigation, isNavigationActive } from '@/lib/navigation';
 import { canSeeLearnerPathways } from '@/lib/pathway-visibility';
@@ -61,7 +62,7 @@ export function Sidebar({ className, isOpen: externalOpen = false, onClose, hide
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
         <NavigationSearch collapsed={compact} keyboardShortcut={!mobile} onNavigate={() => setOpen(false)} hideLearnerPathways={hideLearnerPathways} />
-        <nav aria-label="Hauptnavigation" className="space-y-4">
+        <nav aria-label="Hauptnavigation" className="space-y-6">
           {groups.map(group => <div key={group.title}>
             {!compact && <p className="mb-1 px-3 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">{group.title}</p>}
             <ul className="space-y-1">
@@ -72,7 +73,7 @@ export function Sidebar({ className, isOpen: externalOpen = false, onClose, hide
                 const link = <Link href={item.href} aria-current={active ? 'page' : undefined} aria-label={compact ? item.name : undefined}
                   onClick={() => setOpen(false)} className={cn('relative flex min-h-11 items-center gap-3 rounded-[10px] px-3 text-sm transition-colors',
                     compact && 'justify-center px-2', active ? 'bg-accent/70 font-semibold text-foreground before:absolute before:bottom-2 before:left-0 before:top-2 before:w-0.5 before:rounded-full before:bg-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')}>
-                  <NavigationArtwork href={item.href} fallback={<item.icon className={cn('h-[18px] w-[18px] shrink-0', active && 'text-primary')} aria-hidden="true" />} />
+                  <NavigationArtwork href={item.href} fallback={<item.icon className="h-5 w-5 shrink-0" aria-hidden="true" />} className={active ? 'text-primary' : undefined} />
                   {!compact && <span className="truncate">{item.name}</span>}
                   {count > 0 && <span aria-label={`${count} ungelesene Benachrichtigungen`} className={cn('flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[11px] font-semibold text-primary-foreground', compact ? 'absolute right-0 top-0' : 'ml-auto')}>
                     {count > 99 ? '99+' : count}
@@ -84,17 +85,16 @@ export function Sidebar({ className, isOpen: externalOpen = false, onClose, hide
           </div>)}
         </nav>
       </div>
-      <div className="shrink-0 border-t px-3 py-3">
-        {!compact && <p className="mb-2 truncate px-3 text-xs font-medium">{session?.user?.name || 'Deine Community'}</p>}
-        <button type="button" onClick={() => signOut({ callbackUrl: '/login' })} aria-label="Abmelden" className={cn('flex h-11 w-full items-center gap-3 rounded-[10px] px-3 text-sm text-muted-foreground hover:bg-muted hover:text-foreground', compact && 'justify-center')}>
-          <LogOut className="h-[18px] w-[18px]" />{!compact && 'Abmelden'}
-        </button>
+      <div className="flex shrink-0 items-center gap-3 border-t px-4 py-4">
+        <Avatar className="h-10 w-10 shrink-0"><AvatarImage src={session?.user?.image || ''} alt="" /><AvatarFallback className="bg-primary text-primary-foreground">{session?.user?.name?.[0] || 'F'}</AvatarFallback></Avatar>
+        {!compact && <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{session?.user?.name || 'Deine Community'}</p><button type="button" onClick={() => signOut({ callbackUrl: '/login' })} className="min-h-7 text-xs text-muted-foreground hover:text-primary">Abmelden</button></div>}
+        {compact && <button type="button" onClick={() => signOut({ callbackUrl: '/login' })} aria-label="Abmelden" className="sr-only focus:not-sr-only"><LogOut className="h-4 w-4" /></button>}
       </div>
     </div>;
   };
 
   return <TooltipProvider delayDuration={700}>
-    <aside id="app-navigation-rail" className={cn('app-sidebar hidden shrink-0 border-r bg-card lg:block', collapsed ? 'w-[88px]' : 'w-[252px]', className)}>
+    <aside id="app-navigation-rail" className={cn('app-sidebar hidden shrink-0 border-r bg-card lg:block', collapsed ? 'w-[88px]' : 'w-[264px]', className)}>
       {renderNavigation(collapsed)}
     </aside>
     <Sheet open={open} onOpenChange={setOpen}>

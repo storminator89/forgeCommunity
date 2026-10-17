@@ -94,12 +94,12 @@ export default function RegisterPage() {
         </div>
       </header>
       <main id="page-content" tabIndex={-1} className="mx-auto grid min-h-[calc(100svh-5rem)] max-w-6xl items-center gap-12 px-4 py-12 sm:px-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,28rem)] lg:gap-20 lg:py-20">
-        <section className="hidden min-w-0 border-r pr-12 lg:block" aria-label="Über ForgeCommunity">
+        <section className="fc-auth-context hidden min-w-0 lg:block" aria-label="Über ForgeCommunity">
 
           <p className="max-w-[12ch] text-[clamp(2.75rem,2rem+2.5vw,4.5rem)] font-semibold leading-[1.08] tracking-[-0.05em]">Fragen stellen. Wissen teilen. Gemeinsam weiterkommen.</p>
 
         </section>
-        <div className="mx-auto w-full max-w-md min-w-0 border-t border-input pt-7 sm:pt-9">
+        <div className="fc-auth-card mx-auto w-full max-w-md min-w-0">
 
           <h1 className="text-[clamp(2rem,1.5rem+2vw,2.7rem)] font-semibold tracking-[-0.04em]">Konto erstellen</h1>
 

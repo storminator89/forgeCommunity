@@ -5,18 +5,18 @@ const { audit, composite, contrast, hexToRgb, hslToRgb, oklchToRgb, luminance, r
 // decimals, so assert channels to four decimal places, not textual HSL spelling.
 const paletteHex = {
   light: {
-    background: '#EFF8F6', foreground: '#14343D', card: '#FFFFFF', 'card-foreground': '#14343D', popover: '#FFFFFF', 'popover-foreground': '#14343D',
-    primary: '#075C65', 'primary-foreground': '#FFFFFF', progress: '#075C65', 'progress-foreground': '#FFFFFF', ring: '#075C65',
-    secondary: '#FBE3DC', 'secondary-foreground': '#713D33', accent: '#D9EEEB', 'accent-foreground': '#075C65', muted: '#E2EEEC', 'muted-foreground': '#4A666C',
-    input: '#63868A', border: '#C7DDDA', coral: '#A54130', 'coral-foreground': '#FFFFFF', 'coral-highlight': '#EF8D75', 'coral-highlight-foreground': '#14343D',
+    background: '#F6FAFB', foreground: '#142E3B', card: '#FFFFFF', 'card-foreground': '#142E3B', popover: '#FFFFFF', 'popover-foreground': '#142E3B',
+    primary: '#075B63', 'primary-foreground': '#FFFFFF', progress: '#075B63', 'progress-foreground': '#FFFFFF', ring: '#075B63',
+    secondary: '#F4F8FA', 'secondary-foreground': '#243F50', accent: '#E2F3F1', 'accent-foreground': '#075B63', muted: '#F0F5F8', 'muted-foreground': '#53697B',
+    input: '#63868A', border: '#DDE9ED', coral: '#A54130', 'coral-foreground': '#FFFFFF', 'coral-highlight': '#EF8D75', 'coral-highlight-foreground': '#14343D',
     reward: '#F2C75C', 'reward-foreground': '#14343D', 'reward-ink': '#846112', info: '#126A7A', 'info-foreground': '#FFFFFF',
     warning: '#8B5A0A', 'warning-foreground': '#FFFFFF', success: '#1E7257', 'success-foreground': '#FFFFFF', destructive: '#B72E4A', 'destructive-foreground': '#FFFFFF',
-    'chart-1': '#075C65', 'chart-2': '#A54130', 'chart-3': '#8B6A0C', 'chart-4': '#357D73', 'chart-5': '#52616B',
+    'chart-1': '#075B63', 'chart-2': '#A54130', 'chart-3': '#8B6A0C', 'chart-4': '#357D73', 'chart-5': '#52616B',
   },
   dark: {
     background: '#08252F', foreground: '#E8F5F2', card: '#10333D', 'card-foreground': '#E8F5F2', popover: '#10333D', 'popover-foreground': '#E8F5F2',
     primary: '#72D0CC', 'primary-foreground': '#08252F', progress: '#72D0CC', 'progress-foreground': '#08252F', ring: '#72D0CC',
-    secondary: '#713D33', 'secondary-foreground': '#FFE9E1', accent: '#164B55', 'accent-foreground': '#A7E7E0', muted: '#183E47', 'muted-foreground': '#ADC8CA',
+    secondary: '#183E47', 'secondary-foreground': '#E8F5F2', accent: '#164B55', 'accent-foreground': '#A7E7E0', muted: '#183E47', 'muted-foreground': '#ADC8CA',
     input: '#83A7AB', border: '#365E68', coral: '#F3A18D', 'coral-foreground': '#08252F', 'coral-highlight': '#F3A18D', 'coral-highlight-foreground': '#08252F',
     reward: '#F2C75C', 'reward-foreground': '#08252F', 'reward-ink': '#F2C75C', info: '#82D5E4', 'info-foreground': '#08252F',
     warning: '#F0C270', 'warning-foreground': '#08252F', success: '#8BD8AF', 'success-foreground': '#08252F', destructive: '#FF8AA4', 'destructive-foreground': '#08252F',

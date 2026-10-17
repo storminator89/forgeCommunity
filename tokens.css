@@ -1,0 +1,39 @@
+/* Hallmark · macrostructure: discovery workbench · tone: modern-minimal · anchor hue: petrol */
+:root {
+  --space-xs: .5rem;
+  --space-sm: 1rem;
+  --space-md: 1.5rem;
+  --space-lg: 2rem;
+  --space-xl: 3rem;
+  --radius-control: .75rem;
+  --radius-panel: 1.125rem;
+  --radius-banner: 1.25rem;
+  --shadow-surface: 0 4px 24px -12px hsl(var(--foreground) / .13);
+  --shadow-control: 0 3px 12px -6px hsl(var(--foreground) / .15);
+  --hero-start: 183 65% 95%;
+  --hero-middle: 211 87% 94%;
+  --hero-end: 151 69% 95%;
+  --landscape-far: 185 27% 76%;
+  --landscape-middle: 183 27% 63%;
+  --landscape-near: 182 36% 46%;
+  --landscape-tree: 184 55% 28%;
+  --landscape-snow: 175 40% 95%;
+  --landscape-sun: 42 100% 96%;
+  --landscape-trail: 39 35% 79%;
+  --ease-out: cubic-bezier(.16, 1, .3, 1);
+  --ease-in: cubic-bezier(.7, 0, .84, 0);
+  --ease-in-out: cubic-bezier(.65, 0, .35, 1);
+  --dur-short: 180ms;
+}
+.dark {
+  --hero-start: 188 43% 17%;
+  --hero-middle: 210 40% 20%;
+  --hero-end: 164 38% 17%;
+  --landscape-far: 185 23% 31%;
+  --landscape-middle: 183 30% 27%;
+  --landscape-near: 182 36% 23%;
+  --landscape-tree: 184 48% 16%;
+  --landscape-snow: 180 22% 52%;
+  --landscape-sun: 42 42% 78%;
+  --landscape-trail: 39 20% 42%;
+}

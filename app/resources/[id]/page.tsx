@@ -118,7 +118,7 @@ export default function ResourcePage() {
   };
 
   return (
-    <AppShell>
+    <AppShell data-page-family="detail">
       <Sidebar />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <AppHeader>
@@ -142,18 +142,18 @@ export default function ResourcePage() {
                   </DropdownMenu>
                 </div>
 
-                <header className="mx-auto max-w-[72ch] py-8 sm:py-12">
+                <header className="fc-detail-header mx-auto mb-6 max-w-[72ch]">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground"><span className="inline-flex items-center gap-2 font-semibold text-foreground">{getIcon(resource.type)}{typeLabel}</span><span>{resource.category}</span></div>
                   <h1 className="mt-5 min-w-0 break-words text-[clamp(2rem,1.35rem+2.5vw,3.5rem)] font-semibold leading-tight tracking-[-0.045em] [overflow-wrap:anywhere]">{resource.title}</h1>
                   <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground"><span>Von {resource.author.name || resource.author.email || 'Unbekannt'}</span><span aria-hidden="true">·</span><time dateTime={resource.createdAt}>{new Date(resource.createdAt).toLocaleDateString('de-DE')}</time></div>
                 </header>
 
-                <div className="mx-auto max-w-[72ch] border-y py-6">
+                <div className="fc-section-card mx-auto max-w-[72ch]">
                   <h2 className="text-base font-semibold tracking-tight">Quelle</h2>
                   {safeResourceUrl ? <div className="mt-3 flex flex-wrap items-center gap-3"><Button asChild><a href={safeResourceUrl} target="_blank" rel="noopener noreferrer"><ExternalLink className="h-4 w-4" aria-hidden="true" />Ressource öffnen</a></Button><span className="min-w-0 break-all text-sm text-muted-foreground">{safeResourceUrl}</span></div> : <p className="mt-2 text-sm text-muted-foreground">Für diese Ressource ist keine sichere Zieladresse verfügbar.</p>}
                 </div>
 
-                {safeResourceUrl && <section aria-labelledby="resource-preview-title" className="mx-auto max-w-4xl py-8 sm:py-10"><h2 id="resource-preview-title" className="mb-4 text-lg font-semibold tracking-tight">Vorschau</h2><div className="overflow-hidden rounded-[14px] border bg-card"><ResourcePreview url={resource.url} type={resource.type} /></div></section>}
+                {safeResourceUrl && <section aria-labelledby="resource-preview-title" className="fc-section-card mx-auto mt-6 max-w-4xl"><h2 id="resource-preview-title" className="mb-4 text-lg font-semibold tracking-tight">Vorschau</h2><div className="overflow-hidden rounded-[14px] border bg-card"><ResourcePreview url={resource.url} type={resource.type} /></div></section>}
               </article>}
           </div>
         </main>

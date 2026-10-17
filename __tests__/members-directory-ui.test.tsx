@@ -49,7 +49,7 @@ it('starts with search and truthful results without activity or location claims'
   expect(screen.queryByText('Alle Mitglieder')).not.toBeInTheDocument()
   expect(screen.queryByText('Menschen / Community')).not.toBeInTheDocument()
   expect(screen.getByText('2 Ergebnisse')).toBeInTheDocument()
-  expect(within(screen.getByRole('link', { name: 'Profil von Ada Lovelace öffnen' })).getByText('Mitglied')).toBeInTheDocument()
+  expect(within(screen.getByRole('link', { name: 'Profil von Ada Lovelace öffnen' }).closest('.fc-member-card') as HTMLElement).getByText('Mitglied')).toBeInTheDocument()
 })
 
 it('uses readable existing roles in search, filters and removable selections', async () => {
@@ -80,4 +80,22 @@ it('does not claim an empty result before the request finishes', () => {
   render(<Members />)
   expect(screen.getByRole('status', { name: 'Mitglieder werden geladen' })).toBeInTheDocument()
   expect(screen.queryByText('0 Ergebnisse')).not.toBeInTheDocument()
+})
+
+
+it('opens only loaded member details and returns keyboard focus when the preview closes', async () => {
+  render(<Members />)
+  const trigger = await screen.findByRole('button', { name: 'Kurzprofil von Ada Lovelace' })
+  expect(screen.queryByRole('complementary')).not.toBeInTheDocument()
+  fireEvent.click(trigger)
+  const preview = screen.getByRole('complementary', { name: 'Kurzprofil von Ada Lovelace' })
+  expect(within(preview).getByText('2')).toBeInTheDocument()
+  expect(within(preview).getByText('TypeScript')).toBeInTheDocument()
+  expect(within(preview).getByRole('link', { name: 'Profil ansehen' })).toHaveAttribute('href', '/profile/ada')
+  expect(within(preview).queryByText(/online|Nachricht senden/i)).not.toBeInTheDocument()
+  fireEvent.click(within(preview).getByRole('button', { name: 'Kurzprofil schließen' }))
+  expect(trigger).toHaveFocus()
+  fireEvent.click(trigger)
+  fireEvent.change(screen.getByLabelText('Mitglieder suchen'), { target: { value: 'Bruno' } })
+  expect(screen.queryByRole('complementary')).not.toBeInTheDocument()
 })

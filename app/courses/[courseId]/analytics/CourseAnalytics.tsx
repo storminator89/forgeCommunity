@@ -92,13 +92,13 @@ export function CourseAnalytics({ courseId, accountId, sessionStatus }: { course
     finally { setExporting(false); }
   };
 
-  return <AppShell>
+  return <AppShell data-page-family="analytics">
     <Sidebar />
     <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
       <AppHeader><div className="app-header-row"><h1 className="app-header-title break-words text-base font-semibold [overflow-wrap:anywhere]">Kursanalyse</h1><div className="app-header-actions"><ThemeToggle /><UserNav /></div></div></AppHeader>
       <main id="page-content" tabIndex={-1} className="min-w-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-6xl space-y-7">
-          <div className="space-y-3 border-b pb-6">
+          <div className="fc-detail-header space-y-3">
             <Link href={`/courses/${encodeURIComponent(courseId)}/contents`} className="inline-flex whitespace-nowrap text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">← Zum Autorenarbeitsplatz</Link>
             <div className="flex flex-wrap items-end justify-between gap-4"><div className="min-w-0"><h2 className="mt-1 min-w-0 break-words text-2xl font-semibold tracking-tight [overflow-wrap:anywhere] sm:text-3xl">{result?.course.title || 'Lernfortschritt'}</h2><p className="mt-2 max-w-2xl text-sm text-muted-foreground">Aktueller Stand der veröffentlichten Inhalte. Frühere Abschlüsse und Zertifikate stehen getrennt davon.</p></div></div>
           </div>

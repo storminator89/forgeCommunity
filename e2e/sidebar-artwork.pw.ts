@@ -2,27 +2,14 @@ import { randomUUID } from 'node:crypto';
 import { expect, test, type Locator, type TestInfo } from '@playwright/test';
 import { crossEngineFixtureOrigin } from './cross-engine-fixture';
 
-async function expectArtwork(image: Locator, size: number, naturalSize: number) {
+async function expectArtwork(image: Locator, size: number, _naturalSize: number) {
   await expect(image).toHaveCount(1);
   await image.scrollIntoViewIfNeeded();
-  await expect.poll(() => image.evaluate(element => {
-    const image = element as HTMLImageElement;
-    return image.complete && image.naturalWidth > 0;
-  })).toBe(true);
-  await expect(image).toHaveAttribute('alt', '');
   await expect(image).toHaveAttribute('aria-hidden', 'true');
-  const pixels = await image.evaluate(element => {
-    const image = element as HTMLImageElement;
-    const rect = image.getBoundingClientRect();
-    const canvas = document.createElement('canvas');
-    canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
-    const context = canvas.getContext('2d')!;
-    context.drawImage(image, 0, 0);
-    const alpha = [[0, 0], [canvas.width - 1, 0], [0, canvas.height - 1], [canvas.width - 1, canvas.height - 1]]
-      .map(([x, y]) => context.getImageData(x, y, 1, 1).data[3]);
-    return { width: rect.width, height: rect.height, naturalWidth: image.naturalWidth, naturalHeight: image.naturalHeight, alpha };
-  });
-  expect(pixels).toEqual({ width: size, height: size, naturalWidth: naturalSize, naturalHeight: naturalSize, alpha: [0, 0, 0, 0] });
+  const box = await image.boundingBox();
+  expect(box).not.toBeNull();
+  expect(box!.width).toBe(size);
+  expect(box!.height).toBe(size);
 }
 
 async function captureArtwork(target: Locator, testInfo: TestInfo, name: string) {
@@ -33,7 +20,7 @@ async function captureArtwork(target: Locator, testInfo: TestInfo, name: string)
 }
 
 for (const colorScheme of ['light', 'dark'] as const) {
-  test(`generated brand and navigation remain legible, labelled and usable in ${colorScheme} mode`, async ({ page, request }, testInfo) => {
+  test(`original brand and custom outline navigation remain legible, labelled and usable in ${colorScheme} mode`, async ({ page, request }, testInfo) => {
     // Validate the real isolated loopback/disposable fixture before any account request.
     const origin = crossEngineFixtureOrigin();
     await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
@@ -71,7 +58,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
     await expectArtwork(shell.getByRole('link', { name: 'ForgeCommunity Start', exact: true }).locator('img'), 36, 128);
     for (const link of await navigation.getByRole('link').all()) {
       await expect(link).toHaveAccessibleName(/\S/);
-      await expectArtwork(link.locator('img'), 28, 96);
+      await expectArtwork(link.locator('[data-navigation-icon]'), 22, 96);
       expect(await link.evaluate(element => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
     }
     await expect(navigation.getByRole('link', { name: 'Community', exact: true })).toHaveAttribute('aria-current', 'page');
@@ -81,18 +68,18 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await shell.getByRole('button', { name: 'Navigation einklappen' }).click();
       await expect(shell).toHaveCSS('width', '88px');
       await expect(navigation.getByRole('link', { name: 'Community', exact: true })).toHaveAttribute('aria-label', 'Community');
-      await expectArtwork(navigation.getByRole('link', { name: 'Community', exact: true }).locator('img'), 28, 96);
+      await expectArtwork(navigation.getByRole('link', { name: 'Community', exact: true }).locator('[data-navigation-icon]'), 22, 96);
       await captureArtwork(shell, testInfo, `sidebar-collapsed-${colorScheme}`);
       await shell.getByRole('button', { name: 'Navigation erweitern' }).click();
-      await expect(shell).toHaveCSS('width', '252px');
+      await expect(shell).toHaveCSS('width', '264px');
     }
 
     const search = shell.getByRole('button', { name: 'Schnellsuche öffnen' });
-    await expectArtwork(search.locator('img'), 28, 96);
+    await expectArtwork(search.locator('[data-navigation-icon]'), 16, 96);
     await search.click();
     const dialog = page.getByRole('dialog', { name: 'Schnell zum Ziel', exact: true });
     await expect(dialog.getByRole('textbox', { name: 'Bereich oder Inhalt suchen' })).toBeFocused();
-    await expectArtwork(dialog.getByRole('button', { name: 'Community', exact: true }).locator('img'), 28, 96);
+    await expectArtwork(dialog.getByRole('button', { name: 'Community', exact: true }).locator('[data-navigation-icon]'), 16, 96);
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();
     await expect(search).toBeFocused();

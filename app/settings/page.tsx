@@ -1,5 +1,7 @@
 "use client"
 
+import { HeroBanner } from '@/components/discovery';
+import { Settings as PageBannerIcon } from 'lucide-react';
 import { AppShell, AppHeader } from '@/components/app-shell';
 import { Suspense, useState, useEffect, useRef, type ReactNode } from 'react'
 import Link from 'next/link'
@@ -349,7 +351,7 @@ function AccountSettings({ userId }: { userId: string }) {
   }
 
   return (
-    <AppShell>
+    <AppShell data-page-family="settings">
       <Sidebar />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <AppHeader>
@@ -362,8 +364,9 @@ function AccountSettings({ userId }: { userId: string }) {
           </div>
         </AppHeader>
 
-        <main id="page-content" tabIndex={-1} aria-busy={isLoading} className="min-w-0 flex-1 overflow-y-auto p-4 lg:p-8">
-          <div className="mx-auto max-w-4xl space-y-6">
+        <main id="page-content" tabIndex={-1} aria-busy={isLoading} className="min-w-0 flex-1 overflow-y-auto">
+          <div className="fc-page-container mx-auto max-w-4xl space-y-6">
+          <HeroBanner title="Dein Profil. Deine Einstellungen." description="Verwalte dein Konto, deine Fähigkeiten und deine persönlichen Einstellungen." icon={PageBannerIcon} />
             {isLoading ? <PageState kind="loading" title="Einstellungen werden geladen" /> : loadError ? <PageState kind="error" title="Einstellungen konnten nicht geladen werden" description={loadError} action={<Button variant="outline" onClick={() => window.location.reload()}>Erneut laden</Button>} /> : (
             <Suspense fallback={<PageState kind="loading" title="Einstellungen werden geladen" />}>
             <SettingsTabs>

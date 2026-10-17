@@ -3,6 +3,8 @@
 /* Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V5 */
 /* Hallmark · genre: editorial · macrostructure: activity ledger · design-system: design.md · designed-as-app */
 
+import { HeroBanner } from '@/components/discovery';
+import { Bell as PageBannerIcon } from 'lucide-react';
 import { AppShell, AppHeader } from '@/components/app-shell';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -45,7 +47,7 @@ export default function NotificationsPage() {
   };
 
   return (
-    <AppShell>
+    <AppShell data-page-family="inbox">
       <Sidebar />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <AppHeader>
@@ -56,8 +58,9 @@ export default function NotificationsPage() {
         </AppHeader>
 
         <main id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
-            <div className="flex flex-wrap items-end justify-between gap-4 border-b pb-6">
+          <div className="fc-page-container mx-auto w-full max-w-4xl">
+          <HeroBanner title="Was gibt es Neues?" description="Deine Nachrichten und Neuigkeiten aus der Community an einem Ort." icon={PageBannerIcon} />
+            <div className="fc-section-card flex flex-wrap items-end justify-between gap-4">
               <div>
 
                 <p className="mt-2 text-sm text-muted-foreground" role="status">{unreadCount === 0 ? 'Du bist auf dem aktuellen Stand.' : `${unreadCount} ungelesene ${unreadCount === 1 ? 'Benachrichtigung' : 'Benachrichtigungen'}`}</p>
@@ -67,7 +70,7 @@ export default function NotificationsPage() {
               </Button>
             </div>
 
-            <div className="flex gap-2 border-b py-3" role="group" aria-label="Benachrichtigungen filtern">
+            <div className="fc-inline-tabs" role="group" aria-label="Benachrichtigungen filtern">
               <Button type="button" size="sm" variant={filter === 'all' ? 'secondary' : 'ghost'} aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>Alle <span className="text-muted-foreground">{notifications.length}</span></Button>
               <Button type="button" size="sm" variant={filter === 'unread' ? 'secondary' : 'ghost'} aria-pressed={filter === 'unread'} onClick={() => setFilter('unread')}>Ungelesen <span className="text-muted-foreground">{unreadCount}</span></Button>
             </div>
@@ -82,7 +85,7 @@ export default function NotificationsPage() {
                   <motion.article key={notification.id}
                     initial={{ opacity: 0, y: reduceMotion ? 0 : 8 }} animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: reduceMotion ? 0 : -8 }} transition={{ duration: reduceMotion ? 0 : 0.15 }}
-                    className={`relative grid min-w-0 grid-cols-[2.75rem_minmax(0,1fr)] gap-3 border-b py-6 sm:gap-5 ${!notification.isRead ? 'before:absolute before:inset-y-5 before:left-0 before:w-0.5 before:rounded-full before:bg-primary' : ''}`}>
+                    className={`fc-section-card relative mb-3 grid min-w-0 grid-cols-[2.75rem_minmax(0,1fr)] gap-3 sm:gap-5 ${!notification.isRead ? 'before:absolute before:inset-y-5 before:left-0 before:w-0.5 before:rounded-full before:bg-primary' : ''}`}>
                     <div className={`ml-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] ${notification.isRead ? 'bg-muted text-muted-foreground' : 'bg-accent text-primary'}`}>{getIcon(notification.type)}</div>
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -113,7 +116,7 @@ export default function NotificationsPage() {
             </div>
 
             {!isLoading && !loadError && filteredNotifications.length === 0 && (
-              <div className="py-16 text-center" role="status">
+              <div className="fc-section-card py-16 text-center" role="status">
                 <Bell className="mx-auto mb-4 h-9 w-9 text-muted-foreground" aria-hidden="true" />
                 <h2 className="text-xl font-semibold">{filter === 'unread' ? 'Alles gelesen' : 'Noch keine Benachrichtigungen'}</h2>
                 {filter === 'unread' && notifications.length > 0 && <Button type="button" variant="outline" size="sm" className="mt-5" onClick={() => setFilter('all')}>Alle Benachrichtigungen anzeigen</Button>}

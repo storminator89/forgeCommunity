@@ -8,7 +8,7 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { UserNav } from '@/components/user-nav';
 
 export function SpaceShell({ children }: { children: ReactNode }) {
-  return <AppShell>
+  return <AppShell data-page-family="spaces">
     <Sidebar />
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <AppHeader>
@@ -18,7 +18,7 @@ export function SpaceShell({ children }: { children: ReactNode }) {
         </div>
       </AppHeader>
       <main id="page-content" tabIndex={-1} className="min-h-0 min-w-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">{children}</div>
+        <div className="fc-page-container fc-space-content mx-auto max-w-6xl">{children}</div>
       </main>
     </div>
   </AppShell>;

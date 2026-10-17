@@ -3,6 +3,8 @@
 /* Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V5 */
 /* Hallmark · genre: editorial · macrostructure: draft worklist · design-system: design.md · designed-as-app */
 
+import { HeroBanner } from '@/components/discovery';
+import { Bookmark as PageBannerIcon } from 'lucide-react';
 import { AppShell, AppHeader } from '@/components/app-shell';
 import { PageState } from '@/components/page-state';
 import { useSession } from 'next-auth/react';
@@ -140,7 +142,7 @@ function AccountDrafts({ accountId, status }: { accountId: string | null; status
   const newArticleLink = <Button asChild><Link href="/knowledgebase/new-article"><Plus className="h-4 w-4" aria-hidden="true" />Neuer Artikel</Link></Button>;
 
   return (
-    <AppShell>
+    <AppShell data-page-family="discovery">
       <Sidebar />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <AppHeader>
@@ -151,12 +153,11 @@ function AccountDrafts({ accountId, status }: { accountId: string | null; status
         </AppHeader>
 
         <main id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
-            <div className="flex flex-wrap justify-end border-b pb-5">
-              {newArticleLink}
-            </div>
+          <div className="fc-page-container mx-auto w-full max-w-5xl">
+          <HeroBanner title="Deine Ideen nehmen Form an." description="Schreibe in Ruhe weiter und veröffentliche, wenn dein Artikel bereit ist." icon={PageBannerIcon} action={newArticleLink} />
 
-            <div className="grid gap-3 pt-8 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+
+            <div className="fc-filter-bar fc-filter-surface grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
               <div className="min-w-0">
                 <label htmlFor="draft-search" className="mb-2 block text-sm font-medium">Entwürfe suchen</label>
                 <div className="relative">
@@ -192,9 +193,9 @@ function AccountDrafts({ accountId, status }: { accountId: string | null; status
             ) : filteredAndSortedDrafts.length === 0 ? (
               <div className="mt-6"><PageState title={searchQuery ? 'Keine Ergebnisse gefunden' : 'Keine Entwürfe vorhanden'} description={searchQuery ? 'Keine Entwürfe für diese Suche gefunden.' : 'Erstelle deinen ersten Artikel-Entwurf, um ihn später zu veröffentlichen.'} action={searchQuery ? <Button type="button" variant="outline" onClick={() => setSearchQuery('')}>Suche zurücksetzen</Button> : <Button asChild variant="outline"><Link href="/knowledgebase/new-article">Neuen Artikel erstellen</Link></Button>} /></div>
             ) : (
-              <ul className="divide-y">
+              <ul className="fc-entity-list">
                 {filteredAndSortedDrafts.map(draft => (
-                  <li key={draft.id} className="min-w-0 py-6">
+                  <li key={draft.id} className="fc-entity-card">
                     <div className={'grid min-w-0 gap-4 ' + (draft.featuredImage ? 'sm:grid-cols-[minmax(0,1fr)_5rem]' : '')}>
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2"><Badge variant="secondary">{draft.category}</Badge><span className="text-xs text-muted-foreground">Entwurf</span></div>

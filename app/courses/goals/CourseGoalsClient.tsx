@@ -109,19 +109,19 @@ function ScopedCourseGoals({ canSeePathways }: { canSeePathways: boolean }) {
     .format(new Date(new Date(goal.endsAt).getTime() - 1)) : '';
   const goalNoun = goal?.targetLeaves === 1 ? 'Kursinhalt' : 'Kursinhalten';
 
-  return <AppShell>
+  return <AppShell data-page-family="learning">
     <Sidebar />
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <AppHeader><div className="app-header-row"><h1 className="app-header-title">Mein Lernziel</h1><div className="app-header-actions"><ThemeToggle /><UserNav /></div></div></AppHeader>
       <main id="page-content" tabIndex={-1} className="min-w-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-3xl px-4 pb-16 pt-8 sm:px-6 sm:pt-10">
+        <div className="fc-page-container mx-auto max-w-3xl">
           <Link href="/courses" className="text-sm text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Zur Kursübersicht</Link>
           {canSeePathways && <Link href="/courses/pathways" className="ml-5 text-sm text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Lernpfade entdecken</Link>}
-          <div className="mt-6 border-b pb-6">
+          <div className="fc-detail-header mt-6">
             <h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Ein kleines Ziel für deinen nächsten Lernschritt</h2>
             <p className="mt-3 text-sm leading-relaxed text-muted-foreground">Freiwillig und nur für dich sichtbar. Es zählen aktuelle, serverbestätigte Abschlüsse von Kursinhalten, keine Seitenaufrufe oder Klicks. Es gibt dafür keine Punkte, Rangliste oder Serie.</p>
           </div>
-          <section aria-labelledby="learning-goal-title" className="mt-7 rounded-2xl border bg-card p-5 sm:p-7">
+          <section aria-labelledby="learning-goal-title" className="fc-section-card mt-7">
             <h3 id="learning-goal-title" className="text-lg font-semibold">Dein persönliches Lernziel</h3>
             {goal === undefined && !error && <p role="status" className="mt-4 text-sm text-muted-foreground">Lernziel wird geladen…</p>}
             {error && <div className="mt-4"><p role="alert" className="text-sm text-destructive">{error}</p><Button type="button" variant="outline" className="mt-3" onClick={() => void loadGoal()} disabled={pending}>Erneut laden</Button></div>}

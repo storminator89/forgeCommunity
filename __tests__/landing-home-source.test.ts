@@ -15,7 +15,7 @@ const illustration = source('components/landing/ForgeWorkbench.tsx');
 
 it('uses frozen semantic chrome, scoped focus and flexible narrow-screen layout around the full illustration', () => {
   expect(css).not.toMatch(/#[\da-f]{3,8}\b|rgba?\(|hsla?\(\s*\d/gi);
-  expect(css).not.toMatch(/gradient|@import|font-family|overflow(?:-x)?:\s*hidden|white-space:\s*nowrap/i);
+  expect(css).not.toMatch(/@import|font-family|overflow(?:-x)?:\s*hidden|white-space:\s*nowrap/i);
   for (const token of ['background', 'foreground', 'primary', 'primary-foreground', 'border', 'card']) {
     expect(css).toContain(`var(--${token})`);
   }

@@ -245,7 +245,7 @@ function SpaceOverview({ spaceId }: { spaceId: string }) {
   return <SpaceShell>
     {loading ? <><h1 className="sr-only">Space</h1><PageState kind="loading" title="Space wird geladen" /></> : !space ? <><h1 className="sr-only">Space nicht verfügbar</h1><PageState kind="error" title="Space nicht verfügbar" description={error} action={<Button variant="outline" onClick={retryLoad}>Erneut versuchen</Button>} /></> : <>
       <nav aria-label="Pfad" className="mb-6 text-sm text-muted-foreground"><Link href="/community" className="underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring">Community</Link><span aria-hidden="true"> / </span><Link href="/community/spaces" className="underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring">Spaces</Link></nav>
-      <header className="min-w-0 border-b pb-5">
+      <header className="fc-detail-header min-w-0">
         <SpaceVisibility visibility={space.visibility} explanatory={space.visibility === 'PRIVATE'} />
         <h1 className="mt-2 max-w-[72ch] break-words text-[clamp(1.65rem,1.1rem+2vw,2.35rem)] font-semibold tracking-tight [overflow-wrap:anywhere]">{space.name}</h1>
         <p className="mt-2 max-w-[72ch] whitespace-pre-wrap break-words text-base leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">{space.description}</p>
@@ -263,7 +263,7 @@ function SpaceOverview({ spaceId }: { spaceId: string }) {
         {space.canManage && space.visibility === 'PRIVATE' && <a href="#space-management" onClick={event => focusSection(event, 'space-management')} className="inline-flex min-h-11 items-center rounded-sm text-muted-foreground underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Verwaltung</a>}
       </nav>
 
-      <section id="space-discussions" tabIndex={-1} aria-labelledby="space-discussions-title" className="mt-5 scroll-mt-6 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring">
+      <section id="space-discussions" tabIndex={-1} aria-labelledby="space-discussions-title" className="fc-section-card mt-5 scroll-mt-6 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring">
         <div className="flex flex-wrap items-center justify-between gap-3"><h2 id="space-discussions-title" className="text-xl font-semibold">Diskussionen</h2>
           {space.isMember && <Button ref={composerButtonRef} type="button" onClick={() => showComposer ? closeComposer() : setShowComposer(true)} aria-expanded={showComposer} aria-controls="space-discussion-form">{showComposer ? 'Schließen' : 'Diskussion starten'}</Button>}</div>
         {!space.isMember && <p className="mt-3 text-sm text-muted-foreground">{space.visibility === 'PUBLIC' ? 'Tritt bei, um eine Diskussion zu starten oder zu antworten.' : 'Zum Schreiben ist eine Mitgliedschaft erforderlich.'}</p>}
@@ -288,7 +288,7 @@ function SpaceOverview({ spaceId }: { spaceId: string }) {
         <SpacePolls key={`${space.isMember}:${space.canManage}`} spaceId={spaceId} canManage={space.canManage} request={request} onUnavailable={invalidate} />
       </div>
 
-      {space.canManage && space.visibility === 'PRIVATE' && <section id="space-management" tabIndex={-1} aria-labelledby="space-management-title" className="mt-8 scroll-mt-6 rounded-sm border-t pt-6 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring">
+      {space.canManage && space.visibility === 'PRIVATE' && <section id="space-management" tabIndex={-1} aria-labelledby="space-management-title" className="fc-section-card mt-5 scroll-mt-6 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring">
         <h2 id="space-management-title" className="text-xl font-semibold">Space verwalten</h2>
         <SpaceMemberManager spaceId={spaceId} request={request} onChange={() => {
           if (revalidatingRef.current) { refreshAfterRevalidateRef.current = true; return; }

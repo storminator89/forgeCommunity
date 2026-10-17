@@ -147,20 +147,20 @@ export function PracticeLearnerView({ courseId, stage, question, feedback, error
   const dataStage = stage === 'question' && question ? 'question' : stage === 'feedback' && question && feedback ? 'feedback' : stage
   const isEnableDecision = dataStage === 'available' || dataStage === 'paused'
 
-  return <AppShell>
+  return <AppShell data-page-family="practice">
     <Sidebar />
-    <div className="flex min-w-0 flex-1 flex-col">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <AppHeader>
         <div className="app-header-row">
           <div className="app-header-title"><p className="text-sm text-muted-foreground">Kurs · freiwillige Übung</p><h1 className="[overflow-wrap:anywhere]">Privat üben</h1></div>
           <div className="app-header-actions"><ThemeToggle /><UserNav /></div>
         </div>
       </AppHeader>
-      <main id="page-content" tabIndex={-1} aria-busy={busy || stage === 'loading'} className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-        <div className="mx-auto max-w-5xl">
+      <main id="page-content" tabIndex={-1} aria-busy={busy || stage === 'loading'} className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+        <div className="fc-page-container mx-auto max-w-5xl">
           <Link href={courseHref} className="mb-8 inline-flex min-h-11 items-center gap-2 rounded-lg text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"><ArrowLeft aria-hidden="true" className="h-4 w-4" />Zum Kursinhalt</Link>
           <div className={`grid min-w-0 gap-10 ${isEnableDecision ? 'max-w-2xl' : 'lg:grid-cols-[minmax(0,1fr)_minmax(14rem,18rem)] lg:gap-12'}`}>
-            <div className="min-w-0">
+            <div className="fc-section-card min-w-0">
               {error && stage !== 'error' && <p role="alert" className="mb-5 rounded-xl border border-destructive/40 bg-card px-4 py-3 text-sm text-destructive">{error}</p>}
               {dataStage === 'loading' && <PageState kind="loading" title="Übungen werden geladen" />}
               {dataStage === 'error' && <PageState kind="error" title="Übung konnte nicht geladen werden" description={error ?? undefined} action={onRetry && <RetryButton onClick={onRetry} />} />}

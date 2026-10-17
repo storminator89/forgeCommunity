@@ -619,7 +619,7 @@ export function CourseQaWorkspace({ courseId, sessionStatus, lessonContext = nul
   const showList = !selectedId
   const activeAccess = detail?.question.id === selectedId ? detail : list
 
-  return <AppShell>
+  return <AppShell data-page-family="discussion">
     <Sidebar />
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <AppHeader>
@@ -628,8 +628,8 @@ export function CourseQaWorkspace({ courseId, sessionStatus, lessonContext = nul
           <div className="app-header-actions"><ThemeToggle /><UserNav /></div>
         </div>
       </AppHeader>
-      <main id="page-content" tabIndex={-1} className="min-h-0 min-w-0 flex-1 overflow-y-auto px-4 pb-10 pt-6 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-7xl">
+      <main id="page-content" tabIndex={-1} className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+        <div className="fc-page-container mx-auto max-w-7xl">
           {invalidLessonScope ? <PageState kind="error" title="Lektionskontext ungültig" description="Öffne die Kursfragen oder wähle die Lektion erneut." action={<Link href={`/courses/${encodeURIComponent(courseId)}/qa`} className="inline-flex min-h-11 items-center rounded-md px-4 text-primary underline focus-visible:ring-2 focus-visible:ring-ring">Alle Kursfragen</Link>} /> : accessError ? <PageState kind="error" title={accessError.title} description={accessError.message} action={<RetryButton onClick={retryAccess} />} /> : <>
           <nav aria-label="Kurspfad" className="mb-4 flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
             <Link href={`/courses/${encodeURIComponent(courseId)}/contents`} className="min-w-0 truncate rounded-sm hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">{courseTitle}</Link>

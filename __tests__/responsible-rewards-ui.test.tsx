@@ -87,7 +87,7 @@ it('lets metric labels and values wrap within their existing grid cells at enlar
   // checked by the strict Spark entry browser scenario and its geometry gate.
   for (const [label, value] of [
     ['Beiträge', '1234567890123456'], ['Likes', '2345678901234567'], ['Kommentare', '3456789012345678'],
-    ['Meine Punkte', '987654321012345'], ['Mindestens einmal abgeschlossene Kurse', '3'],
+    ['Meine Punkte', '987654321012345'], ['Abgeschlossene Kurse', '3'],
     ['Meilenstein: Erster abgeschlossener Kurs', 'Erreicht'],
   ]) {
     const term = screen.getByText(label)
@@ -97,7 +97,7 @@ it('lets metric labels and values wrap within their existing grid cells at enlar
     expect(term.nextElementSibling?.textContent).toBe(value)
     expect(cell).toHaveClass('min-w-0', '[overflow-wrap:anywhere]')
     expect(cell).not.toHaveClass('overflow-hidden', 'truncate')
-    expect(cell.parentElement).toHaveClass('grid-cols-2', 'gap-x-6')
+    expect(cell.parentElement?.tagName).toBe('DL')
   }
   const progress = screen.getByRole('progressbar', { name: 'Lernmeilenstein: 3 von 5 Kursen abgeschlossen' })
   expect(progress).toHaveAttribute('value', '3')

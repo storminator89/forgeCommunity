@@ -1,3 +1,4 @@
+import { FileText, Heart, MessageSquare, Trophy, BookOpen, ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 interface StatsCardProps {
@@ -36,36 +37,36 @@ const changeReason = {
 
 export function StatsCard({ stats, activityLoading = false, activityError = false, onRetryActivity, rewards, rewardsLoading, rewardsError, isSignedIn }: StatsCardProps) {
   const values = [
-    { label: 'Beiträge', value: stats?.posts },
-    { label: 'Likes', value: stats?.receivedLikes },
-    { label: 'Kommentare', value: stats?.comments },
+    { label: 'Beiträge', value: stats?.posts, icon: FileText },
+    { label: 'Likes', value: stats?.receivedLikes, icon: Heart },
+    { label: 'Kommentare', value: stats?.comments, icon: MessageSquare },
   ]
 
   return (
-    <section aria-labelledby="community-stats-title" className="border-t pt-5">
+    <section aria-labelledby="community-stats-title" className="fc-surface p-5">
       <h2 id="community-stats-title" className="text-base font-semibold tracking-tight">Deine Aktivität</h2>
-      <div className="mt-5">
+      <div className="mt-2">
         {!isSignedIn ? <p className="text-sm text-muted-foreground">Melde dich an, um deine Aktivität zu sehen.</p>
           : activityLoading ? <p className="text-sm text-muted-foreground" role="status">Aktivität wird geladen…</p>
           : activityError || !stats ? <div>
             <p className="text-sm text-destructive" role="alert">Aktivität konnte nicht geladen werden.</p>
             {onRetryActivity && <Button type="button" variant="outline" className="mt-3" onClick={onRetryActivity}>Aktivität erneut laden</Button>}
           </div> : <>
-        <details className="mb-4 text-xs text-muted-foreground">
+        <details className="mb-3 text-xs text-muted-foreground">
           <summary className="min-h-11 cursor-pointer rounded-sm py-3 text-sm text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">So wird gezählt</summary>
           <p className="mt-1">Alle deine Beiträge. Likes auf deine Beiträge, einschließlich eigener Likes. Kommentare in veröffentlichten und deinen eigenen Beiträgen.</p>
         </details>
-        <dl className="grid grid-cols-2 gap-x-6 gap-y-5">
-          {values.map(({ label, value }) => (
-            <div key={label} className="min-w-0 [overflow-wrap:anywhere]">
-              <dt className="text-sm text-muted-foreground">{label}</dt>
+        <dl className="fc-stat-grid">
+          {values.map(({ label, value, icon: Icon }) => (
+            <div key={label} className="fc-stat min-w-0 [overflow-wrap:anywhere]"><Icon aria-hidden="true" />
+              <dt className="text-xs text-muted-foreground">{label}</dt>
               <dd className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{value}</dd>
             </div>
           ))}
         </dl>
         </>}
         <div className="mt-6 border-t pt-5">
-          <h3 className="font-medium">Meine Kursbelohnungen</h3>
+          <h3 className="flex items-center gap-2 font-semibold"><Trophy className="h-5 w-5 text-primary" aria-hidden="true" />Meine Kursbelohnungen</h3>
           <details className="mt-1 text-sm text-muted-foreground">
             <summary aria-label="Sichtbarkeit meiner Kursbelohnungen" className="min-h-11 cursor-pointer rounded-sm py-3 text-sm text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">Sichtbarkeit</summary>
             <p className="mt-1">Deine Punkte und Meilensteine bleiben für dich sichtbar, auch wenn du nicht in der öffentlichen Rangliste stehst.</p>
@@ -73,13 +74,13 @@ export function StatsCard({ stats, activityLoading = false, activityError = fals
           {!isSignedIn ? <p className="mt-3 text-sm">Melde dich an, um deine Punkte zu sehen.</p>
             : rewardsLoading ? <p className="mt-3 text-sm" role="status">Belohnungen werden geladen…</p>
             : rewardsError || !rewards ? <p className="mt-3 text-sm text-destructive" role="alert">Belohnungen konnten nicht geladen werden.</p>
-            : <><dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-5">
+            : <><dl className="mt-4 grid grid-cols-2 gap-3 [&>div]:rounded-xl [&>div]:bg-muted/50 [&>div]:p-3">
                 <div className="min-w-0 [overflow-wrap:anywhere]">
                   <dt className="text-sm text-muted-foreground">Meine Punkte</dt>
                   <dd className={`mt-1 text-2xl font-semibold tabular-nums ${rewards.points > 0 ? "text-reward-ink" : "text-foreground"}`}>{rewards.points}</dd>
                 </div>
                 <div className="min-w-0 [overflow-wrap:anywhere]">
-                  <dt className="text-sm text-muted-foreground">Mindestens einmal abgeschlossene Kurse</dt>
+                  <dt className="text-sm text-muted-foreground" title="Mindestens einmal abgeschlossene Kurse">Abgeschlossene Kurse</dt>
                   <dd className={`mt-1 text-2xl font-semibold tabular-nums ${rewards.completedCourses > 0 ? "text-reward-ink" : "text-foreground"}`}>{rewards.completedCourses}</dd>
                 </div>
                 <div className="col-span-2 min-w-0 [overflow-wrap:anywhere]">
@@ -123,6 +124,6 @@ function LearningMilestoneProgress({ completedCourses }: { completedCourses: num
         className="mt-2 h-2 w-full accent-progress"
       >{completedCourses} von {nextTarget}</progress>
     </> : <p className="mt-1 text-sm text-reward-ink">Alle derzeitigen Lernmeilensteine erreicht.</p>}
-    <Link href="/courses" className="mt-3 inline-block text-sm text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Kurse entdecken</Link>
+    <Link href="/courses" className="mt-4 flex min-h-11 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"><BookOpen className="h-4 w-4" aria-hidden="true" />Kurse entdecken<ArrowRight className="ml-auto h-4 w-4" aria-hidden="true" /></Link>
   </div>
 }

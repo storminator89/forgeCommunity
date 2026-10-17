@@ -11,6 +11,8 @@ import { UserNav } from '@/components/user-nav';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
 import { LoadingScreen, PageState } from '@/components/page-state';
+import { HeroBanner } from '@/components/discovery';
+import { Route } from 'lucide-react';
 import { JourneyMark } from './JourneyMark';
 import { JourneyMascot } from './JourneyMascot';
 import { SparkStaticFigure } from '@/components/spark-entry';
@@ -74,7 +76,7 @@ export default function JourneyClient() {
     <p className="mt-3 text-sm text-muted-foreground">Melde dich an, um deinen Lernweg zu sehen.</p>
     <Button asChild className="mt-5"><Link href="/login?callbackUrl=%2Fcourses%2Fjourney">Zur Anmeldung</Link></Button>
   </main>;
-  if (session.user.role !== 'USER') return <AppShell><Sidebar /><div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+  if (session.user.role !== 'USER') return <AppShell data-page-family="learning"><Sidebar /><div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
     <AppHeader><div className="app-header-row"><h1 className="app-header-title">Mein Lernweg</h1><div className="app-header-actions"><ThemeToggle /><UserNav /></div></div></AppHeader>
     <main id="page-content" tabIndex={-1} className="min-w-0 flex-1 overflow-y-auto px-4 py-8 sm:px-6"><div className="mx-auto max-w-3xl"><PageState title="Lernweg für Lernende" description="Hier siehst du angemeldete Kurse anderer Lehrkräfte mit bestätigten nächsten Schritten." action={<Button asChild variant="outline"><Link href="/courses">Zur Kursübersicht</Link></Button>} /></div></main>
   </div></AppShell>;
@@ -184,12 +186,13 @@ function ScopedJourney() {
   const complete = detail.kind === 'ready' && detail.progress.complete;
   const readerHref = selectedId ? `/courses/${encodeURIComponent(selectedId)}/contents` : '/courses';
 
-  return <AppShell>
+  return <AppShell data-page-family="learning">
     <Sidebar />
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <AppHeader><div className="app-header-row"><h1 className="app-header-title">Mein Lernweg</h1><div className="app-header-actions"><ThemeToggle /><UserNav /></div></div></AppHeader>
       <main id="page-content" tabIndex={-1} className="min-w-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-5xl px-4 pb-16 pt-5 sm:px-6 sm:pt-7 lg:px-8">
+        <div className="fc-page-container mx-auto max-w-5xl">
+          <HeroBanner title="Schritt für Schritt weiterkommen." description="Setze deinen Lernweg fort und finde deinen nächsten verfügbaren Kursinhalt." icon={Route} />
           <nav aria-label="Brotkrumen" className="text-sm text-muted-foreground"><Link href="/courses" className="inline-flex min-h-11 items-center rounded-sm underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Kurse</Link><span className="mx-2" aria-hidden="true">/</span><span aria-current="page" className="text-foreground">Mein Lernweg</span></nav>
 
           {courses === null && !courseError && <div className="mt-4"><PageState kind="loading" title="Deine Kurse werden geladen" /></div>}
@@ -201,14 +204,14 @@ function ScopedJourney() {
             <div className="mt-5 flex justify-center"><Button asChild className="h-auto min-h-11 max-w-full whitespace-normal py-2"><Link href="/courses">Kurse entdecken</Link></Button></div>
           </section>}
           {courses && courses.length > 0 && <div className="mt-3 space-y-4">
-            <section aria-label="Deine angemeldeten Kurse" className="min-w-0 sm:flex sm:items-center sm:justify-between sm:gap-4">
+            <section aria-label="Deine angemeldeten Kurse" className="fc-section-card min-w-0 sm:flex sm:items-center sm:justify-between sm:gap-4">
               <label htmlFor="journey-course" className="mb-1.5 block shrink-0 text-sm font-medium sm:mb-0">Kurs auswählen <span className="font-normal text-muted-foreground">({courses.length})</span></label>
               <select id="journey-course" aria-label="Kurs auswählen" value={selectedId ?? ''} onChange={event => selectCourse(event.target.value)} className="h-11 w-full min-w-0 rounded-xl border bg-background px-3 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:max-w-md">{courses.map(course => <option key={course.id} value={course.id}>{course.title}</option>)}</select>
             </section>
 
             {detail.kind === 'loading' && <PageState kind="loading" title="Lernschritte werden geprüft" />}
             {detail.kind === 'error' && <PageState kind="error" title="Der Kursstand konnte nicht geladen werden" description="Vielleicht hat sich deine Anmeldung oder der Kurs geändert." action={<div className="flex flex-wrap justify-center gap-2"><Button type="button" variant="outline" onClick={retryDetail}>Erneut versuchen</Button><Button type="button" variant="ghost" onClick={retryCourses}>Kursliste aktualisieren</Button></div>} />}
-            {detail.kind === 'ready' && selectedCourse && projection && <section aria-labelledby="journey-progress-title" className="min-w-0 rounded-2xl border bg-card p-4 sm:p-6">
+            {detail.kind === 'ready' && selectedCourse && projection && <section aria-labelledby="journey-progress-title" className="fc-section-card">
               <h2 id="journey-progress-title" className="break-words text-xl font-semibold leading-snug tracking-tight sm:text-2xl">{selectedCourse.title}</h2>
               <p className="mt-2 text-sm text-muted-foreground" role="status" aria-live="polite">{complete ? 'Alle aktuellen Kursinhalte bestätigt' : projection.leaves.length ? `${projection.completedCount} von ${projection.leaves.length} Inhalten aktuell bestätigt` : 'Noch keine Kursinhalte verfügbar'}</p>
               <div className="mt-4 flex items-center gap-3 border-t pt-4 sm:gap-6">

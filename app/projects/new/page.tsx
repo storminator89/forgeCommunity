@@ -95,7 +95,7 @@ function ProjectComposer({ session, status }: { session: Session | null; status:
   const fieldError = (field: string) => errors[field] ? <p id={`${field}-error`} className="text-sm text-destructive">{errors[field]}</p> : null
 
   return (
-    <AppShell>
+    <AppShell data-page-family="editor">
       <Sidebar />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <AppHeader><div className="app-header-row"><h1 className="app-header-title flex items-center gap-2"><Briefcase className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" /><span className="min-w-0">Neues Projekt</span></h1><div className="app-header-actions"><ThemeToggle /><UserNav /></div></div></AppHeader>
@@ -104,7 +104,7 @@ function ProjectComposer({ session, status }: { session: Session | null; status:
             <div><Link href="/showcases" className="inline-flex min-h-11 items-center gap-2 rounded-[10px] text-sm text-muted-foreground hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"><ArrowLeft className="h-4 w-4" aria-hidden="true" />Alle Projekte</Link></div>
 
             <div className="min-w-0 pt-6">
-              <section aria-labelledby="project-details-title" className="min-w-0 border-t pt-5"><h2 id="project-details-title" className="text-lg font-semibold tracking-tight">Projektdetails</h2><p className="mt-2 text-sm text-muted-foreground">* Pflichtfeld</p><div className="pt-6">
+              <section aria-labelledby="project-details-title" className="fc-form-section min-w-0"><h2 id="project-details-title" className="text-lg font-semibold tracking-tight">Projektdetails</h2><p className="mt-2 text-sm text-muted-foreground">* Pflichtfeld</p><div className="pt-6">
                 <form onSubmit={handleSubmit} className="space-y-6" aria-busy={isSubmitting} noValidate>
                   {Object.keys(errors).length > 0 && <p role="alert" className="rounded-xl border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">Bitte überprüfen Sie die markierten Felder.</p>}
                   <fieldset disabled={isSubmitting} className="min-w-0 space-y-6">

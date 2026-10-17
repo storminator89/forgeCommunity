@@ -94,6 +94,12 @@ describe('native progress palette source contract', () => {
   it('does not opt the document, containers or native surfaces out of user color adjustment', () => {
     const adjustments: string[] = [];
     stylesheet.walkDecls('forced-color-adjust', declaration => {
+      if (declaration.parent?.type === 'rule' && declaration.parent.selector === '.fc-navigation-icon::before') {
+        // A monochrome mask needs paint; only its system-ink glyph opts out.
+        expect(mediaQueries(declaration.parent)).toEqual(['(forced-colors:active)']);
+        expect(declarations(declaration.parent)).toEqual({ 'forced-color-adjust': 'none', 'background-color': 'CanvasText' });
+        return;
+      }
       expect(declaration.value).toBe('auto');
       expect(declaration.parent).toBe(nativeRule(selectors[0], 'active'));
       adjustments.push(declaration.value);

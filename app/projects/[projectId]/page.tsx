@@ -363,9 +363,9 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
         <main id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
             {isLoading || loadedForId !== projectId ? <><h1 className="sr-only">Projekt</h1><PageState kind="loading" title="Projekt wird geladen" /></> : !project ? <><h1 className="sr-only">Projekt</h1><PageState kind="error" title="Projekt nicht verfügbar" description={loadError || 'Das Projekt konnte nicht geladen werden oder wurde entfernt.'} action={<div className="flex flex-wrap justify-center gap-2"><Button type="button" variant="outline" onClick={() => { setIsLoading(true); setRetryKey(value => value + 1); }}>Erneut versuchen</Button><Button asChild variant="outline"><Link href="/showcases">Zur Übersicht</Link></Button></div>} /></> : (
-              <article>
+              <article className="space-y-6">
                 {/* Project Header */}
-                <div className="mb-8 border-b pb-6">
+                <div className="fc-surface p-6 sm:p-8">
 
                   <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-start">
                     <div className="min-w-0 flex-1">
@@ -428,9 +428,9 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
                 )}
 
                 {/* Project Content */}
-                <div className="mx-auto max-w-[72ch] space-y-8">
+                <div className="mx-auto max-w-[76ch] space-y-5">
                   {/* Description */}
-                  <div className="prose prose-neutral dark:prose-invert max-w-none break-words [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto">
+                  <div className="fc-surface p-6 sm:p-8 prose prose-neutral dark:prose-invert max-w-none break-words [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto">
                     <div
                       className="[&>h2]:text-2xl [&>h2]:font-bold [&>h2]:text-foreground [&>h2]:mt-8 [&>h2]:mb-4
                                  [&>p]:text-muted-foreground [&>p]:leading-relaxed [&>p]:mb-4
@@ -445,7 +445,7 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
                   </div>
 
                   {/* Tags */}
-                  <div className="space-y-3 pt-4 border-t">
+                  <div className="fc-surface space-y-3 p-6">
                     <h2 className="text-lg font-semibold text-foreground">Tags</h2>
                     <div className="flex flex-wrap gap-2">
                       {project.tags.map((tag) => (
@@ -461,7 +461,7 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
                   </div>
 
                   {/* Project Link */}
-                  <div className="space-y-3 pt-4 border-t">
+                  <div className="fc-surface space-y-3 p-6">
                     <h2 className="text-lg font-semibold text-foreground">Projekt-Link</h2>
                     {safeProjectLink && (
                       <a
@@ -477,7 +477,7 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
                   </div>
 
                   {/* Interactions Section */}
-                  <div className="pt-8 mt-8 border-t">
+                  <div className="fc-surface p-6">
                     <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
                       <h2 className="text-xl font-semibold tracking-tight">
                         Kommentare
