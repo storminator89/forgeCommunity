@@ -10,7 +10,7 @@ Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
 runtime data. Its frozen Sites source is
-`ca62c2afaad423f0ae04180c5afa40c9edf1f9dd`. It is experimental and does not
+`91562fa0b3d555e8c48daa11ff4b62abd4de14e8`. It is experimental and does not
 claim feature parity with main.
 
 ## Requirements and setup
@@ -71,7 +71,7 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The current Version 21 source includes these bounded ports. Live QA is ongoing;
+The current Version 22 source includes these bounded ports. Live QA is ongoing;
 source implementation and publication do not establish complete runtime or
 all-page visual coverage.
 
@@ -158,7 +158,14 @@ or API change. Version 21 adds image-viewer Escape focus restoration, protected
 formative-practice learner GET reads, scoped course typography, and the authored
 public course-media examples. Version 21 production typechecking/build passed;
 its deployment succeeded on 17 October 2026 at 16:26:27 UTC. Its live runtime
-checks are still pending. Off, archived, or unavailable Practice states can be
+checks were pending when that source was archived. Version 22 only adds a
+UTF-8 byte-order mark to the public companion transcript so browsers can
+recognize its encoding. All other media and application code are unchanged.
+Version 22 production typechecking/build passed and its deployment succeeded
+on 17 October 2026 at 16:38:52 UTC. The bounded published transcript check
+passed at 16:39:24 UTC: the normal transcript URL reported UTF-8 and rendered
+the checked German accented words correctly. Other learner-course checks
+remain separate and pending. Off, archived, or unavailable Practice states can be
 honest results; these GET changes do not establish supported Practice writes,
 scheduling, retention maintenance, or cursor-signing repair. No new local
 functional tests or GitHub CI run are part of this work. The inherited standard pipeline is unchanged: pushes run
