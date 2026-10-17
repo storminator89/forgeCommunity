@@ -12,10 +12,10 @@ const postcss = require('postcss');
 const root = path.resolve(__dirname, '..');
 const source = readFileSync(path.join(root, 'e2e/private-mission-invitations.pw.ts'), 'utf8');
 const parsed = ts.createSourceFile('capture.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-const evaluate = (name, globals) => {
+const evaluate = (name, globals, transform = text => text) => {
   const node = parsed.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === name);
   assert.ok(node);
-  const compiled = ts.transpileModule(node.getText(parsed), {
+  const compiled = ts.transpileModule(transform(node.getText(parsed)), {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
   }).outputText;
   return vm.runInNewContext(`${compiled}; ${name}`, globals);
@@ -226,4 +226,113 @@ test('reflow overrides belong only to the detail container and preserve the norm
   assert.equal(value(query.nodes.find(node => node.selector === '.detail button'), 'min-height'), '44px');
   assert.equal(value(query.nodes.find(node => node.selector === '.detail .goalTrail'), 'grid-template-columns'), 'minmax(0, 1fr)');
   assert.equal(value(query.nodes.find(node => node.selector.endsWith('::after')), 'display'), 'none');
+});
+
+// The measured full/320 first alignment requested591.5 native scroll pixels.
+// Model integer scroll rounding without changing the actual coverage assertions.
+function nativeSequence({ target = 591.5, scale = 1, height = 612.125, noop = false,
+  throwScroll = false, extraStep = 0, oldRounding = false } = {}) {
+  const frames = [], motion = [], requests = [], screenshots = [], focusChecks = [];
+  const original = 693; let firstAlignment = true; let savedError;
+  const pane = { top: 77, bottom: 900, height: 823 };
+  const main = { scrollTop: original, scrollLeft: 0, clientHeight: pane.height / scale,
+    getBoundingClientRect: () => pane,
+    scrollTo(options) {
+      requests.push({ kind: 'to', ...options });
+      if (firstAlignment) {
+        firstAlignment = false;
+        if (throwScroll) { savedError = new Error('Synthetic native scroll failure'); throw savedError; }
+        if (noop) return;
+      }
+      main.scrollTop = Math.max(0, Math.round(options.top));
+    },
+    scrollBy(options) {
+      requests.push({ kind: 'by', ...options });
+      main.scrollTop = Math.max(0, Math.round(main.scrollTop + options.top + extraStep));
+    },
+  };
+  const region = { closest: () => main,
+    getBoundingClientRect: () => {
+      const top = pane.top + scale * (target - main.scrollTop);
+      return { top, bottom: top + height, height };
+    },
+  };
+  const focus = {}; const window = {};
+  const installInvitationScreenshotWatch = () => {};
+  const settleCaptureMotion = () => {};
+  region.evaluate = async (fn, argument) => {
+    if (fn === settleCaptureMotion) return { outcome: 'stable' };
+    if (fn === installInvitationScreenshotWatch) {
+      window.__invitationScreenshotWatch = { finish: () => ({ sampledFrames: 2, activeFrames: 0,
+        started: 0, initialActive: 0, finalActive: 0 }) };
+      return;
+    }
+    return fn(region, argument);
+  };
+  const globals = { innerHeight: 900, window, Date, installInvitationScreenshotWatch, settleCaptureMotion,
+    expect: value => value === focus ? {
+      toBeFocused: async () => { focusChecks.push('focused'); },
+      toBeInViewport: async () => { focusChecks.push('visible'); },
+    } : expect(value),
+  };
+  const page = { screenshot: async options => { screenshots.push(options.path); }, evaluate: async fn => fn() };
+  const info = { outputPath: name => name, attach: async () => {} };
+  const alignment = 'Math.floor(main.scrollTop + (box.top - Math.max(0, pane.top)) / scale)';
+  const transform = text => {
+    if (!oldRounding) return text;
+    assert.equal(text.split(alignment).length, 2);
+    return text.replace(alignment, 'main.scrollTop + (box.top - Math.max(0, pane.top)) / scale');
+  };
+  const run = () => evaluate('captureViewportSequence', globals, transform)(page, region, focus,
+    'private-invitation-full-no-reservation-Hell-320-100', info, frames, motion);
+  return { run, main, frames, motion, requests, screenshots, focusChecks, original, get savedError() { return savedError; } };
+}
+
+test('actual native sequence floors measured591.5 instead of rounding to592 and covers the entire region', async () => {
+  const f = nativeSequence(); await f.run();
+  assert.equal(f.requests[0].top, 591); assert.equal(f.frames.length, 1);
+  assert.equal(f.frames[0].top, 591); assert.equal(f.frames[0].regionTop, 77.5);
+  assert.equal(f.frames[0].visibleStart, 0); assert.equal(f.frames[0].visibleEnd, 612.125);
+  assert.equal(f.screenshots.length, 2); assert.equal(f.motion.length, 2);
+  assert.equal(f.main.scrollTop, f.original); assert.deepEqual(f.focusChecks, ['focused', 'visible', 'focused', 'visible']);
+});
+test('literal old alignment exposes the measured0.5 first-frame gap and preserves failing bounds', async () => {
+  const f = nativeSequence({ oldRounding: true }); await expect(f.run()).rejects.toThrow();
+  assert.equal(f.requests[0].top, 591.5); assert.equal(f.frames[0].top, 592);
+  assert.equal(f.frames[0].regionTop, 76.5); assert.equal(f.frames[0].visibleStart, 0.5);
+  assert.equal(f.frames[0].index, 1); assert.equal(f.screenshots.length, 1);
+  assert.equal(f.main.scrollTop, f.original);
+});
+test.each([591.1, 591.9, 592, 0.5])('fractional alignment%s remains strictly gap-free without an epsilon', async target => {
+  const f = nativeSequence({ target }); await f.run();
+  assert.equal(f.requests[0].top, Math.floor(target)); assert.equal(f.frames[0].visibleStart, 0);
+  assert.equal(f.frames[0].visibleEnd, f.frames[0].regionHeight);
+});
+test('scaled native sequence preserves strict overlapping originals and complete coverage', async () => {
+  const f = nativeSequence({ scale: 2, height: 1224.25 }); await f.run();
+  assert.equal(f.frames.length, 2); assert.equal(f.frames[0].visibleStart, 0);
+  assert.ok(f.frames[1].visibleStart <= f.frames[0].visibleEnd);
+  assert.equal(f.frames[1].visibleEnd, 1224.25); assert.equal(f.main.scrollTop, f.original);
+});
+test('a no-op native alignment still fails strict coverage and retains first-frame bounds', async () => {
+  const f = nativeSequence({ noop: true }); await expect(f.run()).rejects.toThrow();
+  assert.equal(f.frames[0].top, 693); assert.equal(f.frames[0].visibleStart, 101.5);
+  assert.equal(f.screenshots.length, 1); assert.equal(f.requests.at(-1).top, f.original);
+});
+test('a genuine later scroll gap still fails and retains both measured frames', async () => {
+  const f = nativeSequence({ height: 1600, extraStep: 100 }); await expect(f.run()).rejects.toThrow();
+  assert.equal(f.frames.length, 2); assert.ok(f.frames[1].visibleStart > f.frames[0].visibleEnd);
+  assert.equal(f.screenshots.length, 2); assert.equal(f.main.scrollTop, f.original);
+});
+test('unsuccessful native scroll preserves the original error and still restores focus and position', async () => {
+  const f = nativeSequence({ throwScroll: true }); let error;
+  try { await f.run(); } catch (caught) { error = caught; }
+  assert.ok(error); assert.equal(error, f.savedError);
+  assert.equal(f.frames.length, 0); assert.equal(f.requests.at(-1).top, f.original);
+  assert.deepEqual(f.focusChecks, ['focused', 'visible', 'focused', 'visible']);
+});
+test('native sequence still fails after the unchanged eight-frame coverage limit', async () => {
+  const f = nativeSequence({ height: 10000 }); await expect(f.run()).rejects.toThrow();
+  assert.equal(f.frames.length, 8); assert.equal(f.screenshots.length, 9);
+  assert.equal(f.main.scrollTop, f.original);
 });

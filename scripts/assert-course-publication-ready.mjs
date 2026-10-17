@@ -51,22 +51,81 @@ function expectedHistory(provider) {
 const invitationTables = ['SpaceMissionInvitationSetting', 'SpaceMissionInvitationAccess',
   'SpaceMissionInvitationRequest', 'SpaceMissionInvitation'];
 const compactSql = value => value.replace(/\s+/g, ' ').trim().replace(/;$/, '');
-const compactCheck = value => value
-  .replace(/::(?:"[^"]+"|[a-zA-Z_][\w]*(?:\[\])?)/g, '')
-  .replace(/[\s()"]/g, '').replace(/=ANYARRAY\[/g, 'IN').replaceAll(']', '');
-function checkExpressions(ddl) {
-  return [...ddl.matchAll(/CONSTRAINT "([^"]+)" CHECK \(/g)].map(match => {
-    const start = match.index + match[0].length - 1;
-    let end = start + 1; let depth = 1;
-    while (depth && end < ddl.length) {
-      if (ddl[end] === '(') depth++;
-      if (ddl[end] === ')') depth--;
-      end++;
-    }
-    if (depth) throw new Error('Unbalanced reviewed CHECK.');
-    return [match[1], compactCheck(`CHECK ${ddl.slice(start, end)}`)];
+const compactCheck = value => {
+  // Preserve literal bytes, quoted identifiers, grouping and casts. Only
+  // whitespace outside SQL's quoted tokens is a benign deparser variation.
+  if (value.includes('\0')) throw new Error('Unexpected CHECK marker.');
+  const quoted = [];
+  const unquoted = value.replace(/'(?:''|[^'])*'|"(?:""|[^"])*"/g, token => {
+    quoted.push(token); return `\0${quoted.length - 1}\0`;
   });
-}
+  if (/['"]/.test(unquoted)) throw new Error('Unterminated CHECK quoted token.');
+  return unquoted.replace(/\s+/g, '').replace(/\0(\d+)\0/g, (_, index) => quoted[Number(index)]);
+};
+// Strict PostgreSQL pg_get_constraintdef normal forms for the unchanged reviewed
+// invitation DDL. No removal of grouping, identifiers, casts or literal content.
+const invitationChecks = new Map([
+  [
+    "SpaceMissionInvitationAccess_epoch_check",
+    "CHECK (((epoch >= 0) AND (epoch <= 2147483647)))"
+  ],
+  [
+    "SpaceMissionInvitationRequest_payloadDigest_check",
+    "CHECK ((\"payloadDigest\" ~ '^[0-9a-f]{64}$'::text))"
+  ],
+  [
+    "SpaceMissionInvitationSetting_accountEpoch_check",
+    "CHECK (((\"accountEpoch\" >= 0) AND (\"accountEpoch\" <= 2147483647)))"
+  ],
+  [
+    "SpaceMissionInvitationSetting_revision_check",
+    "CHECK (((revision >= 0) AND (revision <= 2147483647)))"
+  ],
+  [
+    "SpaceMissionInvitation_distinct_users_check",
+    "CHECK (((\"senderId\" IS NULL) OR (\"senderId\" <> \"recipientId\")))"
+  ],
+  [
+    "SpaceMissionInvitation_pending_shape_check",
+    "CHECK ((((state = 'PENDING'::\"SpaceMissionInvitationState\") AND (\"senderId\" IS NOT NULL) AND (\"createdAt\" IS NOT NULL) AND (\"expiresAt\" IS NOT NULL) AND (\"senderEpoch\" IS NOT NULL) AND (\"senderAccessEpoch\" IS NOT NULL) AND (\"senderAccountEpoch\" IS NOT NULL) AND (\"recipientAccessEpoch\" IS NOT NULL) AND (\"recipientAccountEpoch\" IS NOT NULL) AND (\"recipientSettingRevision\" IS NOT NULL) AND (\"recipientEpoch\" IS NOT NULL)) OR ((state = ANY (ARRAY['ACCEPTED'::\"SpaceMissionInvitationState\", 'DECLINED'::\"SpaceMissionInvitationState\", 'REVOKED'::\"SpaceMissionInvitationState\", 'EXPIRED'::\"SpaceMissionInvitationState\"])) AND (\"senderId\" IS NULL) AND (\"createdAt\" IS NULL) AND (\"expiresAt\" IS NULL) AND (\"senderEpoch\" IS NULL) AND (\"senderAccessEpoch\" IS NULL) AND (\"senderAccountEpoch\" IS NULL) AND (\"recipientAccessEpoch\" IS NULL) AND (\"recipientAccountEpoch\" IS NULL) AND (\"recipientSettingRevision\" IS NULL) AND (\"recipientEpoch\" IS NULL))))"
+  ],
+  [
+    "SpaceMissionInvitation_recipientAccessEpoch_check",
+    "CHECK (((\"recipientAccessEpoch\" IS NULL) OR ((\"recipientAccessEpoch\" >= 0) AND (\"recipientAccessEpoch\" <= 2147483647))))"
+  ],
+  [
+    "SpaceMissionInvitation_recipientAccountEpoch_check",
+    "CHECK (((\"recipientAccountEpoch\" IS NULL) OR ((\"recipientAccountEpoch\" >= 0) AND (\"recipientAccountEpoch\" <= 2147483647))))"
+  ],
+  [
+    "SpaceMissionInvitation_recipientEpoch_check",
+    "CHECK (((\"recipientEpoch\" IS NULL) OR ((\"recipientEpoch\" >= 0) AND (\"recipientEpoch\" <= 2147483647))))"
+  ],
+  [
+    "SpaceMissionInvitation_recipientSettingRevision_check",
+    "CHECK (((\"recipientSettingRevision\" IS NULL) OR ((\"recipientSettingRevision\" >= 0) AND (\"recipientSettingRevision\" <= 2147483647))))"
+  ],
+  [
+    "SpaceMissionInvitation_revision_check",
+    "CHECK (((revision >= 1) AND (revision <= 2147483647)))"
+  ],
+  [
+    "SpaceMissionInvitation_senderAccessEpoch_check",
+    "CHECK (((\"senderAccessEpoch\" IS NULL) OR ((\"senderAccessEpoch\" >= 0) AND (\"senderAccessEpoch\" <= 2147483647))))"
+  ],
+  [
+    "SpaceMissionInvitation_senderAccountEpoch_check",
+    "CHECK (((\"senderAccountEpoch\" IS NULL) OR ((\"senderAccountEpoch\" >= 0) AND (\"senderAccountEpoch\" <= 2147483647))))"
+  ],
+  [
+    "SpaceMissionInvitation_senderEpoch_check",
+    "CHECK (((\"senderEpoch\" IS NULL) OR ((\"senderEpoch\" >= 1) AND (\"senderEpoch\" <= 2147483647))))"
+  ],
+  [
+    "SpaceMission_invitationAttemptCount_check",
+    "CHECK (((\"invitationAttemptCount\" >= 0) AND (\"invitationAttemptCount\" <= 20)))"
+  ]
+]);
 async function inspectInvitationStorage(query, provider) {
   const file = provider === 'sqlite'
     ? 'prisma/sqlite-migrations/0029_space_mission_invitations.sql'
@@ -143,9 +202,11 @@ async function inspectInvitationStorage(query, provider) {
   const expectedNames = [...ddl.matchAll(/CONSTRAINT "([^"]+)"/g)].map(match => match[1]);
   if (constraints.length !== expectedNames.length || byName.size !== constraints.length || expectedNames.some(name => !byName.has(name)) ||
       constraints.some(row => !row.validated || row.deferrable || row.table_name !== expectedOwners.get(row.name))) throw new Error('Invitation constraints differ.');
-  for (const [name, expression] of checkExpressions(ddl)) {
+  const checkNames = [...ddl.matchAll(/CONSTRAINT "([^"]+)" CHECK \(/g)].map(match => match[1]).sort();
+  if (JSON.stringify(checkNames) !== JSON.stringify([...invitationChecks.keys()].sort())) throw new Error('Invitation CHECK inventory differs.');
+  for (const [name, expression] of invitationChecks) {
     const row = byName.get(name);
-    if (row.type !== 'c' || compactCheck(row.definition) !== expression) throw new Error(`Invitation CHECK ${name} differs.`);
+    if (row.type !== 'c' || compactCheck(row.definition) !== compactCheck(expression)) throw new Error(`Invitation CHECK ${name} differs.`);
   }
   for (const match of ddl.matchAll(/CONSTRAINT "([^"]+)" PRIMARY KEY \(([^)]+)\)/g)) {
     const row = byName.get(match[1]); const fields = [...match[2].matchAll(/"([^"]+)"/g)].map(item => item[1]);
@@ -173,9 +234,19 @@ async function inspectInvitationStorage(query, provider) {
     if (!row || row.table_name !== match[3] || row.is_unique !== !!match[1] || !row.valid || !row.ready || !row.no_predicate || !row.no_expression ||
         row.key_columns !== fields.length || JSON.stringify(row.columns) !== JSON.stringify(fields)) throw new Error('Invitation index differs.');
   }
-  const counter = (await query(`SELECT data_type, is_nullable, column_default FROM information_schema.columns
-    WHERE table_schema=current_schema() AND table_name='SpaceMission' AND column_name='invitationAttemptCount'`))[0];
-  if (!counter || counter.data_type !== 'integer' || counter.is_nullable !== 'NO' || counter.column_default !== '0') throw new Error('Invitation counter differs.');
+  const counter = (await query(`SELECT pg_catalog.format_type(a.atttypid,a.atttypmod) AS formatted_type,
+      t.typname AS type_name, tn.nspname AS type_schema, t.typtype AS type_kind,
+      a.attnotnull AS required, a.attidentity AS identity_kind, a.attgenerated AS generated_kind,
+      pg_get_expr(d.adbin,d.adrelid) AS default_expression
+    FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid
+    JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_type t ON t.oid=a.atttypid
+    JOIN pg_namespace tn ON tn.oid=t.typnamespace
+    LEFT JOIN pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum
+    WHERE n.nspname=current_schema() AND c.relkind='r' AND c.relname='SpaceMission'
+      AND a.attname='invitationAttemptCount' AND a.attnum>0 AND NOT a.attisdropped`))[0];
+  if (!counter || counter.type_kind !== 'b' || counter.type_schema !== 'pg_catalog' || counter.type_name !== 'int4' ||
+      counter.formatted_type !== 'integer' || !counter.required || counter.identity_kind !== '' || counter.generated_kind !== '' ||
+      counter.default_expression !== '0') throw new Error('Invitation counter differs.');
   const states = await query(`SELECT e.enumlabel AS state FROM pg_type t JOIN pg_namespace n ON n.oid=t.typnamespace
     JOIN pg_enum e ON e.enumtypid=t.oid WHERE n.nspname=current_schema() AND t.typname='SpaceMissionInvitationState' ORDER BY e.enumsortorder`);
   if (JSON.stringify(states.map(row => row.state)) !== '["PENDING","ACCEPTED","DECLINED","REVOKED","EXPIRED"]') throw new Error('Invitation state enum differs.');

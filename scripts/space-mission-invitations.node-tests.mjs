@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { runInNewContext } from 'node:vm';
 import { after, test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import pg from 'pg';
@@ -98,6 +100,168 @@ const terminal = (overrides = {}) => ({ ...Object.fromEntries(fields.SpaceMissio
 function sqliteInvite(db, row) {
   return db.prepare(`INSERT INTO "SpaceMissionInvitation" (${Object.keys(row).map(quote)}) VALUES (${Object.keys(row).map(() => '?')})`).run(...Object.values(row));
 }
+
+
+// Actual inspector/function execution against synthetic catalog rows is not a
+// PostgreSQL provider run. The fixed forms were deparsed separately in PGlite;
+// the genuine PostgreSQL tests below must independently establish compatibility.
+const canonicalInvitationChecks = new Map([
+  [
+    "SpaceMissionInvitationAccess_epoch_check",
+    "CHECK (((epoch >= 0) AND (epoch <= 2147483647)))"
+  ],
+  [
+    "SpaceMissionInvitationRequest_payloadDigest_check",
+    "CHECK ((\"payloadDigest\" ~ '^[0-9a-f]{64}$'::text))"
+  ],
+  [
+    "SpaceMissionInvitationSetting_accountEpoch_check",
+    "CHECK (((\"accountEpoch\" >= 0) AND (\"accountEpoch\" <= 2147483647)))"
+  ],
+  [
+    "SpaceMissionInvitationSetting_revision_check",
+    "CHECK (((revision >= 0) AND (revision <= 2147483647)))"
+  ],
+  [
+    "SpaceMissionInvitation_distinct_users_check",
+    "CHECK (((\"senderId\" IS NULL) OR (\"senderId\" <> \"recipientId\")))"
+  ],
+  [
+    "SpaceMissionInvitation_pending_shape_check",
+    "CHECK ((((state = 'PENDING'::\"SpaceMissionInvitationState\") AND (\"senderId\" IS NOT NULL) AND (\"createdAt\" IS NOT NULL) AND (\"expiresAt\" IS NOT NULL) AND (\"senderEpoch\" IS NOT NULL) AND (\"senderAccessEpoch\" IS NOT NULL) AND (\"senderAccountEpoch\" IS NOT NULL) AND (\"recipientAccessEpoch\" IS NOT NULL) AND (\"recipientAccountEpoch\" IS NOT NULL) AND (\"recipientSettingRevision\" IS NOT NULL) AND (\"recipientEpoch\" IS NOT NULL)) OR ((state = ANY (ARRAY['ACCEPTED'::\"SpaceMissionInvitationState\", 'DECLINED'::\"SpaceMissionInvitationState\", 'REVOKED'::\"SpaceMissionInvitationState\", 'EXPIRED'::\"SpaceMissionInvitationState\"])) AND (\"senderId\" IS NULL) AND (\"createdAt\" IS NULL) AND (\"expiresAt\" IS NULL) AND (\"senderEpoch\" IS NULL) AND (\"senderAccessEpoch\" IS NULL) AND (\"senderAccountEpoch\" IS NULL) AND (\"recipientAccessEpoch\" IS NULL) AND (\"recipientAccountEpoch\" IS NULL) AND (\"recipientSettingRevision\" IS NULL) AND (\"recipientEpoch\" IS NULL))))"
+  ],
+  [
+    "SpaceMissionInvitation_recipientAccessEpoch_check",
+    "CHECK (((\"recipientAccessEpoch\" IS NULL) OR ((\"recipientAccessEpoch\" >= 0) AND (\"recipientAccessEpoch\" <= 2147483647))))"
+  ],
+  [
+    "SpaceMissionInvitation_recipientAccountEpoch_check",
+    "CHECK (((\"recipientAccountEpoch\" IS NULL) OR ((\"recipientAccountEpoch\" >= 0) AND (\"recipientAccountEpoch\" <= 2147483647))))"
+  ],
+  [
+    "SpaceMissionInvitation_recipientEpoch_check",
+    "CHECK (((\"recipientEpoch\" IS NULL) OR ((\"recipientEpoch\" >= 0) AND (\"recipientEpoch\" <= 2147483647))))"
+  ],
+  [
+    "SpaceMissionInvitation_recipientSettingRevision_check",
+    "CHECK (((\"recipientSettingRevision\" IS NULL) OR ((\"recipientSettingRevision\" >= 0) AND (\"recipientSettingRevision\" <= 2147483647))))"
+  ],
+  [
+    "SpaceMissionInvitation_revision_check",
+    "CHECK (((revision >= 1) AND (revision <= 2147483647)))"
+  ],
+  [
+    "SpaceMissionInvitation_senderAccessEpoch_check",
+    "CHECK (((\"senderAccessEpoch\" IS NULL) OR ((\"senderAccessEpoch\" >= 0) AND (\"senderAccessEpoch\" <= 2147483647))))"
+  ],
+  [
+    "SpaceMissionInvitation_senderAccountEpoch_check",
+    "CHECK (((\"senderAccountEpoch\" IS NULL) OR ((\"senderAccountEpoch\" >= 0) AND (\"senderAccountEpoch\" <= 2147483647))))"
+  ],
+  [
+    "SpaceMissionInvitation_senderEpoch_check",
+    "CHECK (((\"senderEpoch\" IS NULL) OR ((\"senderEpoch\" >= 1) AND (\"senderEpoch\" <= 2147483647))))"
+  ],
+  [
+    "SpaceMission_invitationAttemptCount_check",
+    "CHECK (((\"invitationAttemptCount\" >= 0) AND (\"invitationAttemptCount\" <= 20)))"
+  ]
+]);
+function inspectorFunctions() {
+  const source = readFileSync(new URL('scripts/assert-course-publication-ready.mjs', root), 'utf8');
+  const start = source.indexOf('const invitationTables =');
+  const end = source.indexOf('\nasync function inspect(query, provider)', start);
+  assert.ok(start >= 0 && end > start);
+  return runInNewContext(`${source.slice(start, end)}; ({ compactCheck, inspectInvitationStorage })`,
+    { readFileSync, resolve, root: fileURLToPath(root) });
+}
+function catalogFixture({ digestSpace = false, counterDomain = false, formatted = false } = {}) {
+  const ddl = sql(postgresTail, postgresDirectory);
+  const columns = [], constraints = [], indexes = [];
+  const types = { TEXT: ['text', 'text'], BOOLEAN: ['bool', 'boolean'], INTEGER: ['int4', 'integer'],
+    'TIMESTAMP(3)': ['timestamp', 'timestamp(3) without time zone'] };
+  const makeConstraint = (name, table_name, rest) => ({ name, table_name, validated: true, deferrable: false, ...rest });
+  const owners = new Map([['SpaceMission_invitationAttemptCount_check', 'SpaceMission']]);
+  for (const [, table, body] of ddl.matchAll(/CREATE TABLE "([^"]+)" \(([\s\S]*?)\n\);/g)) {
+    for (const [, name] of body.matchAll(/CONSTRAINT "([^"]+)"/g)) owners.set(name, table);
+    for (const [, name, type, suffix] of body.matchAll(/^  "([^"]+)" (TEXT|BOOLEAN|INTEGER|TIMESTAMP\(3\)|"SpaceMissionInvitationState")([^\n]*)$/gm)) {
+      const state = type === '"SpaceMissionInvitationState"';
+      const value = suffix.match(/\bDEFAULT ([^,\n]+)/)?.[1] ?? null;
+      columns.push({ table_name: table, column_name: name, formatted_type: state ? '"SpaceMissionInvitationState"' : types[type][1],
+        type_name: state ? 'SpaceMissionInvitationState' : types[type][0], type_schema: state ? 'fixture' : 'pg_catalog',
+        type_kind: state ? 'e' : 'b', same_schema_type: true, is_invitation_state: state,
+        required: /\bNOT NULL\b/.test(suffix), identity_kind: '', generated_kind: '',
+        default_expression: state ? `${value}::"SpaceMissionInvitationState"` : value });
+    }
+  }
+  for (const [name, raw] of canonicalInvitationChecks) {
+    let definition = raw;
+    if (digestSpace && name === 'SpaceMissionInvitationRequest_payloadDigest_check') definition = definition.replace("'^[0-9a-f]", "'^ [0-9a-f]");
+    if (formatted) definition = ` \n${definition.replace('CHECK ', 'CHECK \n ')}\t `;
+    constraints.push(makeConstraint(name, owners.get(name), { type: 'c', definition }));
+  }
+  for (const [, name, fields] of ddl.matchAll(/CONSTRAINT "([^"]+)" PRIMARY KEY \(([^)]+)\)/g)) {
+    constraints.push(makeConstraint(name, owners.get(name), { type: 'p', columns: [...fields.matchAll(/"([^"]+)"/g)].map(m => m[1]) }));
+  }
+  for (const [, name, field, table, action] of ddl.matchAll(/CONSTRAINT "([^"]+)" FOREIGN KEY \("([^"]+)"\) REFERENCES "([^"]+)" \("id"\) ON DELETE (CASCADE|SET NULL) ON UPDATE CASCADE/g)) {
+    constraints.push(makeConstraint(name, owners.get(name), { type: 'f', columns: [field], referenced_columns: ['id'],
+      referenced_table: table, same_schema: true, on_update: 'c', on_delete: action === 'CASCADE' ? 'c' : 'n' }));
+  }
+  for (const [, unique, name, table, fields] of ddl.matchAll(/CREATE (UNIQUE )?INDEX "([^"]+)" ON "([^"]+)" \(([^)]+)\)/g)) {
+    const keys = [...fields.matchAll(/"([^"]+)"/g)].map(m => m[1]);
+    indexes.push({ name, table_name: table, is_unique: !!unique, valid: true, ready: true,
+      no_predicate: true, no_expression: true, key_columns: keys.length, columns: keys });
+  }
+  const counter = { formatted_type: counterDomain ? '"RejectSeven"' : 'integer', type_name: counterDomain ? 'RejectSeven' : 'int4',
+    type_schema: counterDomain ? 'fixture' : 'pg_catalog', type_kind: counterDomain ? 'd' : 'b',
+    required: true, identity_kind: '', generated_kind: '', default_expression: '0' };
+  const query = async statement => {
+    assert.match(statement.trimStart(), /^SELECT /, 'Inspector remains read-only');
+    if (statement.includes('FROM pg_attribute')) return statement.includes("c.relname='SpaceMission'") ? [counter] : columns;
+    if (statement.includes('FROM pg_constraint')) return constraints;
+    if (statement.includes('FROM pg_index')) return indexes;
+    if (statement.includes('JOIN pg_enum')) return ['PENDING', 'ACCEPTED', 'DECLINED', 'REVOKED', 'EXPIRED'].map(state => ({ state }));
+    // This legacy shape intentionally looks like an integer to the old helper.
+    if (statement.includes('FROM information_schema.columns')) return [{ data_type: 'integer', is_nullable: 'NO', column_default: '0', domain_name: counterDomain ? 'RejectSeven' : null }];
+    assert.fail('Unexpected inspector query');
+  };
+  return { query };
+}
+test('inspector fixture accepts all reviewed canonical CHECK forms and benign unquoted whitespace', async () => {
+  const { inspectInvitationStorage } = inspectorFunctions();
+  await inspectInvitationStorage(catalogFixture().query, 'postgresql');
+  await inspectInvitationStorage(catalogFixture({ formatted: true }).query, 'postgresql');
+});
+test('inspector fixture rejects a leading-space digest regex despite otherwise exact catalog rows', async () => {
+  await assert.rejects(inspectorFunctions().inspectInvitationStorage(catalogFixture({ digestSpace: true }).query, 'postgresql'), /Invitation CHECK .* differs/);
+});
+test('inspector fixture rejects an integer-based rejecting counter domain despite legacy integer metadata', async () => {
+  await assert.rejects(inspectorFunctions().inspectInvitationStorage(catalogFixture({ counterDomain: true }).query, 'postgresql'), /Invitation counter differs/);
+});
+test('CHECK normal form preserves literal spaces/case/brackets, escaped quotes and quoted identifier bytes', () => {
+  const { compactCheck } = inspectorFunctions();
+  for (const [left, right] of [
+    ["CHECK (x ~ '^[0-9a-f]{64}$')", "CHECK (x ~ '^ [0-9a-f]{64}$')"],
+    ["CHECK (x = 'a b')", "CHECK (x = 'ab')"],
+    ["CHECK (x = 'a')", "CHECK (x = 'A')"],
+    ["CHECK (x = 'a'' b')", "CHECK (x = 'a''b')"],
+    ["CHECK (x = '[a]')", "CHECK (x = '[a')"],
+    ['CHECK ("a b" = 1)', 'CHECK ("ab" = 1)'],
+    ['CHECK ("a"" b" = 1)', 'CHECK ("a""b" = 1)'],
+    ['CHECK ("a" = 1)', 'CHECK ("A" = 1)'],
+  ]) assert.notEqual(compactCheck(left), compactCheck(right));
+  assert.equal(compactCheck(" CHECK ( x = 'a  b'' c' ) "), compactCheck("CHECK(\n x\t=\n'a  b'' c' )"));
+});
+test('CHECK normal form preserves AND/OR grouping, parentheses and casts instead of accepting old collisions', () => {
+  const { compactCheck } = inspectorFunctions();
+  assert.notEqual(compactCheck('CHECK ((a AND b) OR c)'), compactCheck('CHECK (a AND (b OR c))'));
+  assert.notEqual(compactCheck('CHECK ((x > 1::integer))'), compactCheck('CHECK ((x > 1::bigint))'));
+  assert.notEqual(compactCheck('CHECK ("a" = 1)'), compactCheck('CHECK (a = 1)'));
+});
+test('CHECK normal form fails closed for unterminated quoted tokens and forbidden marker bytes', () => {
+  const { compactCheck } = inspectorFunctions();
+  for (const text of ["CHECK (x = 'unterminated)", 'CHECK ("unterminated = 1)', "CHECK (x = '\0')"]) assert.throws(() => compactCheck(text));
+});
 
 test('paired invitation tails follow exact PR80 predecessors and add only bounded counter/four private models', () => {
   assert.deepEqual(names(sqliteDirectory).slice(-2), ['0028_course_qa_lesson_context.sql', sqliteTail]);
@@ -317,7 +481,7 @@ async function withPostgres(run) {
   await db.connect();
   try {
     await db.query(`CREATE SCHEMA ${quote(schema)}`); created = true; await db.query(`SET search_path TO ${quote(schema)}`);
-    await run(db, url.toString());
+    await run(db, url.toString(), schema);
   } finally { try { if (created) await db.query(`DROP SCHEMA ${quote(schema)} CASCADE`); } finally { await db.end(); } }
 }
 async function postgresPredecessor(db) {
@@ -530,3 +694,56 @@ test('PostgreSQL canonical guard rejects unsafe authority/query/socket overrides
     assert.throws(() => testDatabase.disposablePostgresqlTestUrl(value), /local forge_test/);
   }
 });
+
+const publicObjectInventory = async db => (await db.query(`SELECT c.relname, c.relkind
+  FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+  WHERE n.nspname='public' ORDER BY c.relname,c.relkind`)).rows;
+
+test('PostgreSQL rejects literal-space digest CHECK drift and accepts the unchanged canonical deparser form', { skip: !pgUrl }, async () => withPostgres(async (db, url, schema) => {
+  assert.match(schema, /^forge_mission_invitations_[a-f0-9_]+$/);
+  await applyPostgresqlUpgrades(url, { initializeEmptySchema: true }); await db.query(seedSql);
+  const history = await pgHistory(db); const rows = await postgresRows(db, true); const publicBefore = await publicObjectInventory(db);
+  const table = `${quote(schema)}."SpaceMissionInvitationRequest"`;
+  const constraint = '"SpaceMissionInvitationRequest_payloadDigest_check"';
+  assert.equal(await assertCoursePublicationReady(url, 'postgresql'), true);
+  try {
+    await db.query(`ALTER TABLE ${table} DROP CONSTRAINT ${constraint};
+      ALTER TABLE ${table} ADD CONSTRAINT ${constraint} CHECK ("payloadDigest" ~ '^ [0-9a-f]{64}$')`);
+    try {
+      await assert.rejects(assertCoursePublicationReady(url, 'postgresql'), schemaFailure);
+      await assert.rejects(db.query(`INSERT INTO ${table} ("missionId","senderId","requestId","payloadDigest") VALUES ('m','a','drift-valid',$1)`, ['a'.repeat(64)]), error => error.code === '23514');
+    } finally {
+      await db.query(`ALTER TABLE ${table} DROP CONSTRAINT ${constraint};
+        ALTER TABLE ${table} ADD CONSTRAINT ${constraint} CHECK ( "payloadDigest" ~ '^[0-9a-f]{64}$' )`);
+    }
+    assert.equal(await assertCoursePublicationReady(url, 'postgresql'), true);
+    assert.deepEqual(await pgHistory(db), history); assert.deepEqual(await postgresRows(db, true), rows);
+  } finally { assert.deepEqual(await publicObjectInventory(db), publicBefore); }
+}));
+
+test('PostgreSQL counter requires the plain pg_catalog integer rather than a rejecting integer domain', { skip: !pgUrl }, async () => withPostgres(async (db, url, schema) => {
+  assert.match(schema, /^forge_mission_invitations_[a-f0-9_]+$/);
+  await applyPostgresqlUpgrades(url, { initializeEmptySchema: true }); await db.query(seedSql);
+  const history = await pgHistory(db); const rows = await postgresRows(db, true); const publicBefore = await publicObjectInventory(db);
+  const table = `${quote(schema)}."SpaceMission"`; const domain = `${quote(schema)}."InvitationRejectSeven"`;
+  assert.equal(await assertCoursePublicationReady(url, 'postgresql'), true);
+  let created = false;
+  try {
+    await db.query(`CREATE DOMAIN ${domain} AS INTEGER CHECK (VALUE <> 7)`); created = true;
+    try {
+      await db.query(`ALTER TABLE ${table} ALTER COLUMN "invitationAttemptCount" TYPE ${domain} USING "invitationAttemptCount"::${domain}`);
+      const info = (await db.query(`SELECT data_type, domain_name FROM information_schema.columns
+        WHERE table_schema=$1 AND table_name='SpaceMission' AND column_name='invitationAttemptCount'`, [schema])).rows[0];
+      assert.equal(info.data_type, 'integer'); assert.equal(info.domain_name, 'InvitationRejectSeven');
+      await assert.rejects(assertCoursePublicationReady(url, 'postgresql'), schemaFailure);
+      await assert.rejects(db.query(`UPDATE ${table} SET "invitationAttemptCount"=7 WHERE id='m'`), error => error.code === '23514');
+    } finally {
+      await db.query(`ALTER TABLE ${table} ALTER COLUMN "invitationAttemptCount" TYPE INTEGER USING "invitationAttemptCount"::INTEGER`);
+    }
+    assert.equal(await assertCoursePublicationReady(url, 'postgresql'), true);
+    assert.deepEqual(await pgHistory(db), history); assert.deepEqual(await postgresRows(db, true), rows);
+  } finally {
+    try { if (created) await db.query(`DROP DOMAIN ${domain}`); }
+    finally { assert.deepEqual(await publicObjectInventory(db), publicBefore); }
+  }
+}));

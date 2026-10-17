@@ -515,7 +515,7 @@ async function captureViewportSequence(page: Page, region: Locator, focus: Locat
       await region.evaluate(element => {
         const main = element.closest('main')!; const pane = main.getBoundingClientRect(); const box = element.getBoundingClientRect();
         const scale = pane.height / main.clientHeight;
-        main.scrollTo({ top: main.scrollTop + (box.top - Math.max(0, pane.top)) / scale, left: main.scrollLeft, behavior: 'instant' });
+        main.scrollTo({ top: Math.floor(main.scrollTop + (box.top - Math.max(0, pane.top)) / scale), left: main.scrollLeft, behavior: 'instant' });
       }, undefined, { timeout: 2000 });
       let covered = 0; let complete = false;
       for (let index = 1; index <= 8; index++) {
@@ -527,9 +527,10 @@ async function captureViewportSequence(page: Page, region: Locator, focus: Locat
           return { index, top: main.scrollTop, left: main.scrollLeft, regionTop: box.top, regionBottom: box.bottom,
             visibleStart: Math.max(0, top - box.top), visibleEnd: Math.min(box.height, bottom - box.top), regionHeight: box.height };
         }, index, { timeout: 2000 });
+        frames.push(frame);
         expect(frame.visibleStart).toBeLessThanOrEqual(covered);
         expect(frame.visibleEnd).toBeGreaterThan(covered);
-        frames.push(frame); await save(`${prefix}-sequence-${index}`); covered = frame.visibleEnd;
+        await save(`${prefix}-sequence-${index}`); covered = frame.visibleEnd;
         if (covered >= frame.regionHeight) { complete = true; break; }
         await region.evaluate(element => {
           const main = element.closest('main')!; const pane = main.getBoundingClientRect(); const scale = pane.height / main.clientHeight;
