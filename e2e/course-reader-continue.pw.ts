@@ -3,9 +3,13 @@ import { lstatSync, realpathSync } from 'node:fs'
 import { basename, isAbsolute, resolve } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test'
+import { observeReaderRequests, type ReaderReadiness } from './reader-request-readiness'
+import { installReaderLayoutGuard, type ReaderLayoutWindow } from './reader-layout-readiness'
+import { serializeReaderEvidence } from './reader-evidence-budget'
 
 const origin = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3013'
 const candidateSha = /^[a-f0-9]{40}$/.test(process.env.GITHUB_SHA ?? '') ? process.env.GITHUB_SHA! : 'local-unverified-sha'
+const readerReadiness = new WeakMap<Page, ReaderReadiness>()
 type Node = { id: string; parentId: string | null; title: string; content: string; order: number; type: 'TEXT'; prerequisiteIds?: string[]; releaseOn?: string }
 type LearnerNode = Node & { locked: boolean; contentVersionToken: string | null; missingPrerequisites: Array<{ id: string }>; subContents: LearnerNode[] }
 type Progress = { completedContentIds: string[]; complete: boolean }
@@ -124,7 +128,7 @@ async function observeReaderTextZoom(refresh: Locator) {
         if (element) owners.add(element)
       }
       const viewport = window.visualViewport
-      return { reason, time: Math.round(performance.now()), rootFont: getComputedStyle(document.documentElement).fontSize,
+      return { reason, time: Math.round(performance.now()), timeOrigin: performance.timeOrigin, wallTime: Date.now(), rootFont: getComputedStyle(document.documentElement).fontSize,
         viewport: { width: innerWidth, height: innerHeight, scrollX, scrollY,
           visual: viewport ? { top: viewport.offsetTop, left: viewport.offsetLeft, width: viewport.width, height: viewport.height, scale: viewport.scale } : null },
         focused: identity(document.activeElement), focusVisible: target.matches(':focus-visible'), connected: target.isConnected,
@@ -235,7 +239,7 @@ async function readerOverflowGeometry(reader: Locator) {
       const style = getComputedStyle(element)
       const value = {
         index, parentIndex: parent ? elements.indexOf(parent) : null,
-        tag: element.tagName.toLowerCase(), control: control ? knownControls[element.textContent?.trim() || ''] || 'other' : null,
+        tag: element.tagName.toLowerCase(), control: control ? knownControls[element.getAttribute('aria-label') || element.textContent?.trim() || ''] || 'other' : null,
         rect: bounds, parentRect, outsideRegion, outsideParent,
         scrollWidth: element.scrollWidth, clientWidth: element.clientWidth,
         scrollHeight: element.scrollHeight, clientHeight: element.clientHeight,
@@ -258,10 +262,10 @@ async function readerOverflowGeometry(reader: Locator) {
   })
 }
 
-async function emitReaderTextZoomEvidence(page: Page, info: TestInfo, state: string, mode: 'light' | 'dark', originalCompleted: boolean, phase: string, overflowEvidence: unknown) {
+async function emitReaderTextZoomEvidence(page: Page, info: TestInfo, state: string, mode: 'light' | 'dark', originalCompleted: boolean, phase: string, overflowEvidence: unknown, readinessEvidence: unknown) {
   try {
     const evidence = await page.evaluate(() => (window as ReaderFocusProbeWindow).__readerTextZoomProbe?.finish())
-    const payload = JSON.stringify({ state, mode, candidateSha, originalCompleted, phase, evidence, overflowEvidence })
+    const payload = serializeReaderEvidence({ state, mode, candidateSha, originalCompleted, phase, evidence, overflowEvidence, readinessEvidence })
     // Observation must never replace the original assertion's verdict.
     if (Buffer.byteLength(payload) <= 192 * 1024) {
       console.info('Reader text-zoom focus evidence:', payload)
@@ -282,11 +286,31 @@ async function captureReaderTextZoom(page: Page, info: TestInfo, state: string, 
   let originalCompleted = false
   let phase = 'text-enlargement'
   let overflowEvidence: unknown = null
+  const reads = readerReadiness.get(page)!
+  const readinessEvidence: { data?: unknown; enlarged?: unknown; guard?: unknown; finalData?: unknown } = {}
   try {
+    phase = 'real-reader-data-readiness'
+    await expect.poll(() => reads().ready, { message: 'Actual authenticated Reader GETs must finish successfully' }).toBe(true)
+    await expect(page.locator('#page-content')).toHaveAttribute('aria-busy', 'false')
+    await expect(refresh).toBeEnabled()
+    const certificate = page.locator('#course-contents-navigation').getByRole('button', { name: 'Zertifikat herunterladen', exact: true })
+    await expect(certificate).toBeVisible()
+    if (reads().certificateEnabled) await expect(certificate).toBeEnabled()
+    else await expect(certificate).toBeDisabled()
+    await page.evaluate(async () => { await document.fonts.ready })
+    readinessEvidence.data = reads()
+    const readySequence = reads().sequence
+    await refresh.evaluate(installReaderLayoutGuard)
+    phase = 'deliberate-text-enlargement'
     // Actual text enlargement changes computed font size and layout. Do not use
     // a screenshot transform, device scale factor, or an overflow-hiding rule.
     await page.locator('html').evaluate((element, pixels) => { element.style.fontSize = `${pixels * 2}px` }, rootPixels)
     await expect.poll(() => refresh.evaluate(element => parseFloat(getComputedStyle(element).fontSize))).toBeGreaterThanOrEqual(originalLabelPixels * 1.99)
+    await page.evaluate(async () => { await document.fonts.ready })
+    readinessEvidence.enlarged = await page.evaluate(() => (window as ReaderLayoutWindow).__readerLayoutGuard!.settle())
+    expect(reads().sequence, 'No new relevant data read after declared Reader readiness').toBe(readySequence)
+    expect(reads().ready).toBe(true)
+    await page.evaluate(() => (window as ReaderLayoutWindow).__readerLayoutGuard!.arm())
     await page.evaluate(() => (window as ReaderFocusProbeWindow).__readerTextZoomProbe?.sample('text-enlarged'))
     await page.keyboard.press('Tab')
     await page.evaluate(() => (window as ReaderFocusProbeWindow).__readerTextZoomProbe?.sample('after-native-tab'))
@@ -303,6 +327,7 @@ async function captureReaderTextZoom(page: Page, info: TestInfo, state: string, 
     expect(await page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - innerWidth), `${state} ${mode} 320px text200 document overflow`).toBeLessThanOrEqual(1)
     expect(await page.locator('#page-content').evaluate(element => element.scrollWidth - element.clientWidth), `${state} text200 main overflow`).toBeLessThanOrEqual(1)
     expect(await reader.evaluate(element => element.scrollWidth - element.clientWidth), `${state} text200 reader overflow`).toBeLessThanOrEqual(1)
+    expect(await page.evaluate(() => (window as ReaderLayoutWindow).__readerLayoutGuard!.check().unsafe), 'Unexpected post-readiness layout drift').toBe(false)
     for (const action of await reader.getByRole('button', { name: /^(Kurs starten|Nächste Lektion öffnen|Lernfortschritt aktualisieren)$/ }).all()) {
       const bounds = await action.evaluate(element => {
         const rect = element.getBoundingClientRect()
@@ -316,6 +341,13 @@ async function captureReaderTextZoom(page: Page, info: TestInfo, state: string, 
       expect(bounds.overflowY).toBeLessThanOrEqual(1)
     }
     await page.screenshot({ path: info.outputPath(`reader-${state}-refresh-text200-${mode}-320-${candidateSha}.png`), fullPage: true, animations: 'disabled' })
+    expect(await page.evaluate(() => (window as ReaderLayoutWindow).__readerLayoutGuard!.check().unsafe), 'Unexpected post-input layout drift before explicit refresh').toBe(false)
+    expect(reads().sequence, 'No unexpected relevant data read before explicit refresh').toBe(readySequence)
+    readinessEvidence.guard = await page.evaluate(() => (window as ReaderLayoutWindow).__readerLayoutGuard!.finish())
+    expect((readinessEvidence.guard as { unsafe: boolean }).unsafe, 'Final retained layout verdict before intentional refresh').toBe(false)
+    expect(reads().sequence, 'No late relevant data read before intentional refresh').toBe(readySequence)
+    expect(reads().ready).toBe(true)
+    readinessEvidence.finalData = reads()
     const checking = page.waitForResponse(response => /\/api\/courses\/[^/]+\/progress$/.test(new URL(response.url()).pathname) && response.request().method() === 'GET')
     await page.keyboard.press('Enter')
     expect((await checking).status()).toBe(200)
@@ -331,7 +363,96 @@ async function captureReaderTextZoom(page: Page, info: TestInfo, state: string, 
     }
     throw error
   } finally {
-    await emitReaderTextZoomEvidence(page, info, state, mode, originalCompleted, phase, overflowEvidence)
+    const unfinishedGuard = await page.evaluate(() => (window as ReaderLayoutWindow).__readerLayoutGuard?.finish()).catch(() => undefined)
+    if (unfinishedGuard) readinessEvidence.guard = unfinishedGuard
+    readinessEvidence.finalData = reads()
+    await emitReaderTextZoomEvidence(page, info, state, mode, originalCompleted, phase, overflowEvidence, readinessEvidence)
+    await page.locator('html').evaluate((element, previous) => { element.style.fontSize = previous }, originalRootSize)
+  }
+}
+
+async function captureActiveNoticeControls(page: Page, info: TestInfo, withNext: boolean) {
+  const notice = page.getByRole('status').filter({ hasText: /^Inhalt als abgeschlossen markiert\./ })
+  const reader = page.getByRole('region', { name: 'Ausgewählter Kursinhalt' })
+  const remove = reader.getByRole('button', { name: 'Abschlussmarkierung entfernen', exact: true })
+  const refresh = reader.getByRole('button', { name: 'Lernfortschritt aktualisieren', exact: true })
+  const reads = readerReadiness.get(page)!
+  const mode = await page.locator('html').evaluate(element => element.classList.contains('dark') ? 'dark' : 'light')
+  const originalRootSize = await page.locator('html').evaluate(element => element.style.fontSize)
+  const rootPixels = await page.locator('html').evaluate(element => parseFloat(getComputedStyle(element).fontSize))
+  const originalLabelPixels = await refresh.evaluate(element => parseFloat(getComputedStyle(element).fontSize))
+  const controls: unknown[] = []
+  const readinessEvidence: { data?: unknown; enlarged?: unknown; guard?: unknown; finalData?: unknown; completionRetainedFocus?: boolean } = {}
+  let overflowEvidence: unknown = null
+  let originalCompleted = false
+  let phase = 'completion-notice-active-setup'
+  let guard: unknown
+  try {
+    expect(await page.evaluate(() => innerWidth)).toBe(320)
+    await expect(notice).toBeVisible()
+    // Native disabling during PATCH may blur this button while retaining the
+    // sequential-focus origin. Observe it; the first real Tab is the verdict.
+    readinessEvidence.completionRetainedFocus = await remove.evaluate(element => document.activeElement === element)
+    await expect.poll(() => reads().ready).toBe(true)
+    readinessEvidence.data = reads()
+    const readySequence = reads().sequence
+    await refresh.evaluate(installReaderLayoutGuard)
+    await page.locator('html').evaluate((element, pixels) => { element.style.fontSize = `${pixels * 2}px` }, rootPixels)
+    await expect.poll(() => refresh.evaluate(element => parseFloat(getComputedStyle(element).fontSize))).toBeGreaterThanOrEqual(originalLabelPixels * 1.99)
+    await page.evaluate(async () => { await document.fonts.ready })
+    readinessEvidence.enlarged = await page.evaluate(() => (window as ReaderLayoutWindow).__readerLayoutGuard!.settle())
+    await expect(notice).toBeVisible()
+    await page.evaluate(() => (window as ReaderLayoutWindow).__readerLayoutGuard!.arm())
+    // Native Tab order only: Remove -> [Next ->] Refresh -> [Next ->] Remove.
+    // No locator.focus(), retry, scroll correction or notice/clock manipulation.
+    const sequence = withNext ? [
+      ['Tab', 'Nächste Lektion öffnen', true], ['Tab', 'Lernfortschritt aktualisieren', true],
+      ['Shift+Tab', 'Nächste Lektion öffnen', false], ['Shift+Tab', 'Abschlussmarkierung entfernen', true],
+    ] as const : [['Tab', 'Lernfortschritt aktualisieren', true], ['Shift+Tab', 'Abschlussmarkierung entfernen', true]] as const
+    for (const [key, name, capture] of sequence) {
+      phase = `native-${key}-${name}`
+      await expect(notice).toBeVisible()
+      await page.keyboard.press(key)
+      const action = reader.getByRole('button', { name, exact: true })
+      await expect(action).toBeFocused()
+      await expect(action).toBeInViewport({ ratio: 1 })
+      expect(await action.evaluate(element => element.matches(':focus-visible'))).toBe(true)
+      const geometry = await action.evaluate(element => {
+        const rect = element.getBoundingClientRect()
+        const parent = element.parentElement!.getBoundingClientRect()
+        return { time: Math.round(performance.now()), height: rect.height, fits: rect.left >= parent.left - 1 && rect.right <= parent.right + 1,
+          overflowX: element.scrollWidth - element.clientWidth, overflowY: element.scrollHeight - element.clientHeight }
+      })
+      controls.push({ name, key, geometry })
+      expect(geometry.height).toBeGreaterThanOrEqual(44)
+      expect(geometry.fits).toBe(true)
+      expect(geometry.overflowX).toBeLessThanOrEqual(1)
+      expect(geometry.overflowY).toBeLessThanOrEqual(1)
+      if (!overflowEvidence) overflowEvidence = await readerOverflowGeometry(reader)
+      expect(await page.locator('#page-content').evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1)
+      expect(await reader.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1)
+      await expect(notice).toBeVisible()
+      if (capture) await page.screenshot({ path: info.outputPath(`reader-completion-notice-${withNext ? 'with-next' : 'all-complete'}-active-${controls.length}-text200-${mode}-320-${candidateSha}.png`), fullPage: true, animations: 'disabled' })
+      await expect(notice).toBeVisible()
+    }
+    guard = await page.evaluate(() => (window as ReaderLayoutWindow).__readerLayoutGuard!.finish())
+    expect((guard as { unsafe: boolean }).unsafe).toBe(false)
+    expect(reads().sequence).toBe(readySequence)
+    expect(reads().ready).toBe(true)
+    originalCompleted = true
+  } catch (error) {
+    await page.screenshot({ path: info.outputPath(`reader-completion-notice-active-failure-before-text-reset-${mode}-320-${candidateSha}.png`), fullPage: true, animations: 'disabled' }).catch(() => {})
+    throw error
+  } finally {
+    guard ??= await page.evaluate(() => (window as ReaderLayoutWindow).__readerLayoutGuard?.finish()).catch(() => undefined)
+    readinessEvidence.guard = guard
+    readinessEvidence.finalData = reads()
+    try {
+      overflowEvidence ??= await readerOverflowGeometry(reader)
+      const payload = serializeReaderEvidence({ state: withNext ? 'completion-notice-with-next-active' : 'completion-notice-all-complete-active', mode, candidateSha, originalCompleted, phase, controls, overflowEvidence, readinessEvidence })
+      console.info('Reader active-notice text-zoom evidence:', payload)
+      await info.attach(`reader-completion-notice-${withNext ? 'with-next' : 'all-complete'}-active-text200-${mode}-geometry`, { body: Buffer.from(payload), contentType: 'application/json' })
+    } catch (error) { console.info('Reader active-notice evidence unavailable:', error instanceof Error ? error.name : 'unknown error') }
     await page.locator('html').evaluate((element, previous) => { element.style.fontSize = previous }, originalRootSize)
   }
 }
@@ -363,6 +484,65 @@ async function capture(page: Page, info: TestInfo, state: string, focus?: Locato
   }
 }
 
+// An independent read-only context captures the disabled/enabled certificate
+// at actual enlarged text. Capture-only scrolling never alters the original
+// Reader's native keyboard/focus path or requests a certificate.
+async function captureCertificateReflow(page: Page, info: TestInfo, courseIds: string[], learnerId: string, state: 'entry-disabled' | 'complete-enabled') {
+  const context = await page.context().browser()!.newContext({ baseURL: origin, storageState: await page.context().storageState(), viewport: { width: 320, height: 700 }, reducedMotion: 'reduce' })
+  const capturePage = await context.newPage()
+  const reads = observeReaderRequests(capturePage, courseIds, learnerId)
+  try {
+    await capturePage.goto(page.url())
+    await expect.poll(() => reads().ready).toBe(true)
+    await expect(capturePage.locator('#page-content')).toHaveAttribute('aria-busy', 'false')
+    const certificate = capturePage.locator('#course-contents-navigation').getByRole('button', { name: 'Zertifikat herunterladen', exact: true })
+    const refresh = capturePage.getByRole('region', { name: 'Ausgewählter Kursinhalt' }).getByRole('button', { name: 'Lernfortschritt aktualisieren', exact: true })
+    for (const mode of ['light', 'dark'] as const) {
+      await capturePage.getByRole('button', { name: 'Farbschema auswählen' }).click()
+      await capturePage.getByRole('menuitem', { name: mode === 'light' ? 'Hell' : 'Dunkel', exact: true }).click()
+      const originalRootSize = await capturePage.locator('html').evaluate(element => element.style.fontSize)
+      const rootPixels = await capturePage.locator('html').evaluate(element => parseFloat(getComputedStyle(element).fontSize))
+      const originalLabelPixels = await certificate.evaluate(element => parseFloat(getComputedStyle(element).fontSize))
+      try {
+        await capturePage.locator('html').evaluate((element, pixels) => { element.style.fontSize = `${pixels * 2}px` }, rootPixels)
+        await expect.poll(() => certificate.evaluate(element => parseFloat(getComputedStyle(element).fontSize))).toBeGreaterThanOrEqual(originalLabelPixels * 1.99)
+        await capturePage.evaluate(async () => { await document.fonts.ready })
+        await refresh.evaluate(installReaderLayoutGuard)
+        await capturePage.evaluate(() => (window as ReaderLayoutWindow).__readerLayoutGuard!.settle())
+        await certificate.scrollIntoViewIfNeeded()
+        await expect(certificate).toBeInViewport({ ratio: 1 })
+        await expect(certificate).toHaveCSS('white-space', 'normal')
+        if (state === 'entry-disabled') await expect(certificate).toBeDisabled()
+        else await expect(certificate).toBeEnabled()
+        const geometry = await certificate.evaluate(element => {
+          const rect = element.getBoundingClientRect()
+          const label = element.querySelector('span')!
+          return { rootFont: getComputedStyle(document.documentElement).fontSize, labelFont: getComputedStyle(label).fontSize,
+            height: rect.height, left: rect.left, right: rect.right, viewport: innerWidth,
+            overflowX: element.scrollWidth - element.clientWidth, overflowY: element.scrollHeight - element.clientHeight,
+            labelOverflowX: label.scrollWidth - label.clientWidth, labelOverflowY: label.scrollHeight - label.clientHeight }
+        })
+        expect(geometry.height).toBeGreaterThanOrEqual(44)
+        expect(geometry.left).toBeGreaterThanOrEqual(0)
+        expect(geometry.right).toBeLessThanOrEqual(geometry.viewport)
+        expect(geometry.overflowX).toBeLessThanOrEqual(1)
+        expect(geometry.overflowY).toBeLessThanOrEqual(1)
+        expect(geometry.labelOverflowX).toBeLessThanOrEqual(1)
+        expect(geometry.labelOverflowY).toBeLessThanOrEqual(1)
+        expect(await capturePage.locator('#page-content').evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1)
+        await info.attach(`reader-certificate-${state}-text200-${mode}-geometry`, { body: Buffer.from(JSON.stringify({ state, mode, candidateSha, geometry })), contentType: 'application/json' })
+        await capturePage.screenshot({ path: info.outputPath(`reader-certificate-${state}-text200-${mode}-320-${candidateSha}.png`), fullPage: true, animations: 'disabled' })
+      } catch (error) {
+        await capturePage.screenshot({ path: info.outputPath(`reader-certificate-${state}-failure-before-text-reset-${mode}-320-${candidateSha}.png`), fullPage: true, animations: 'disabled' }).catch(() => {})
+        throw error
+      } finally {
+        await capturePage.evaluate(() => (window as ReaderLayoutWindow).__readerLayoutGuard?.finish()).catch(() => undefined)
+        await capturePage.locator('html').evaluate((element, previous) => { element.style.fontSize = previous }, originalRootSize)
+      }
+    }
+  } finally { await context.close() }
+}
+
 test('reader opens and continues only on explicit learner actions with current server-unlocked progress', async ({ page, request }, info) => {
   test.skip(info.project.name !== 'desktop-chromium', 'One disposable real-reader journey captures desktop and 320px in both themes.')
   test.setTimeout(300_000)
@@ -378,6 +558,7 @@ test('reader opens and continues only on explicit learner actions with current s
   const instructorId = (await author.json() as { userId: string }).userId
   const learnerId = (await learner.json() as { userId: string }).userId
   const fixture = seedReaders(path, instructorId, nonce)
+  readerReadiness.set(page, observeReaderRequests(page, fixture.fixtures.map(course => course.courseId), learnerId))
   const base = `/courses/${fixture.courseId}/contents`
   const progressPath = `/api/courses/${fixture.courseId}/progress`
   const contentsPath = `/api/courses/${fixture.courseId}/contents`
@@ -410,6 +591,7 @@ test('reader opens and continues only on explicit learner actions with current s
   await expect(reader.getByRole('button', { name: 'Als abgeschlossen markieren', exact: true })).toHaveCount(0)
   await expect(page.locator('#course-contents-navigation [aria-current="page"]')).toHaveCount(0)
   await capture(page, info, 'entry', start)
+  await captureCertificateReflow(page, info, fixture.fixtures.map(course => course.courseId), learnerId, 'entry-disabled')
   expect(new URL(page.url()).searchParams.has('content')).toBe(false)
   expect(saved()).toEqual([])
   expect(patches).toEqual([])
@@ -439,7 +621,13 @@ test('reader opens and continues only on explicit learner actions with current s
     return flatten(await refreshed.json() as LearnerNode[])
   }
 
+  // Choose the theme before the real mutation, never after its success notice
+  // starts. The existing completion keyboard helper remains unchanged.
+  await page.getByRole('button', { name: 'Farbschema auswählen' }).click()
+  await page.getByRole('menuitem', { name: 'Hell', exact: true }).click()
+  await expect(page.locator('html')).not.toHaveClass(/\bdark\b/)
   const unlocked = await complete(fixture.first.id, [fixture.first.id], false)
+  await captureActiveNoticeControls(page, info, true)
   expect(unlocked.find(node => node.id === fixture.next.id)?.locked).toBe(false)
   await expect(firstHeading).toBeVisible()
   await expect(page).toHaveURL(url => url.searchParams.get('content') === fixture.first.id)
@@ -477,7 +665,9 @@ test('reader opens and continues only on explicit learner actions with current s
   await expect(reader.getByRole('button', { name: 'Als abgeschlossen markieren', exact: true })).toBeVisible()
   expect(saved()).toEqual([fixture.first.id])
 
+  await expect(page.locator('html')).toHaveClass(/\bdark\b/)
   await complete(fixture.next.id, [fixture.first.id, fixture.next.id], true)
+  await captureActiveNoticeControls(page, info, false)
   await expect(nextHeading).toBeVisible()
   await expect(page).toHaveURL(url => url.searchParams.get('content') === fixture.next.id)
   await expect(next).toHaveCount(0)
@@ -487,6 +677,7 @@ test('reader opens and continues only on explicit learner actions with current s
   await expect(finished).toBeVisible()
   await expect(reader.getByRole('button', { name: /^(Kurs starten|Weiterlernen|Nächste Lektion öffnen)$/ })).toHaveCount(0)
   await capture(page, info, 'all-current-complete')
+  await captureCertificateReflow(page, info, fixture.fixtures.map(course => course.courseId), learnerId, 'complete-enabled')
   // Explicitly revisiting a completed lesson must survive reload, too.
   await page.goto(`${base}?content=${fixture.first.id}`)
   await page.reload()
