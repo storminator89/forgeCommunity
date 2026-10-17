@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { getChatUploadOwnerId } from '@/lib/server/image-upload';
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
+import { createD1ChatMessage } from '@/lib/server/d1-chat-messages';
 
 const MAX_MESSAGE_LENGTH = 4000;
 const validId = (value: unknown): value is string =>
@@ -70,30 +71,9 @@ export async function POST(req: Request) {
       return new NextResponse('Channel not found or access denied', { status: 403 });
     }
 
-    const message = await prisma.$transaction(async tx => {
-      const created = await tx.chatMessage.create({
-        data: {
-          content: content ?? '', channelId, authorId: session.user.id,
-          imageUrl, messageType,
-        },
-        include: { author: { select: { id: true, name: true, image: true } } },
-      });
-      // A channel's explicit members are the only durable notification
-      // audience. Public-channel visitors still get the existing local
-      // desktop alert while viewing chat, without a global inbox fan-out.
-      const members = await tx.chatMember.findMany({
-        where: { channelId, userId: { not: session.user.id } },
-        select: { userId: true },
-      });
-      if (members.length) {
-        await tx.notification.createMany({ data: members.map(member => ({
-          userId: member.userId,
-          type: 'CHAT_MESSAGE',
-          content: `${created.author.name || 'Ein Mitglied'} hat in #${channel.name} geschrieben.`,
-          targetType: 'CHAT_MESSAGE', targetId: created.id,
-        })) });
-      }
-      return created;
+    const message = await createD1ChatMessage({
+      content: content ?? '', channelId, authorId: session.user.id,
+      imageUrl: typeof imageUrl === 'string' ? imageUrl : null, messageType,
     });
 
     return NextResponse.json(message);

@@ -10,7 +10,7 @@ Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
 runtime data. Its frozen Sites source is
-`6a6b1d7f0cedc28cec2e47e76e575ef87ec8e7a2`. It is experimental and does not
+`a9ebf7ab6f413989898c950338789de5956d2d1f`. It is experimental and does not
 claim feature parity with main.
 
 ## Requirements and setup
@@ -70,7 +70,7 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The current Version 13 source includes these bounded ports. Live QA is ongoing;
+The current Version 14 source includes these bounded ports. Live QA is ongoing;
 source implementation and publication do not establish complete runtime or
 all-page visual coverage.
 
@@ -79,6 +79,8 @@ all-page visual coverage.
   quizzes and certificates
 - Comment reads and atomic comment-plus-notification writes for other post
   authors; comment counts are derived from stored comment rows
+- Native D1 atomic chat-message creation and generic notifications to all
+  explicit other channel members, retaining existing channel-access checks
 - Latest own quiz-attempt display on reopening, with an explicit repeat action
 - Embedded licensed certificate fonts and bounded wrapping for names/titles
 - Post/comment text formatting, multiline content and composer presentation
@@ -107,7 +109,7 @@ their standalone wrapper is not part of this source snapshot. The inherited
 still import native bcrypt or NextAuth dependencies absent from this branch.
 
 Validation for this work is limited to the published Site and the exact source
-build reported with its release. Version 13 passed production typechecking
+build reported with its release. Version 14 passed production typechecking
 and its build; live regression checking is still in progress. No new local
 test suite or GitHub CI run is
 part of this work. The inherited standard pipeline is unchanged: pushes run
