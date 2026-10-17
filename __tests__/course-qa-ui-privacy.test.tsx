@@ -20,10 +20,10 @@ const params = Promise.resolve({ courseId })
 const author = { id: 'student', name: 'Student' }
 function question(id: string, title: string, hidden = false) {
   return { id, title, body: `Private body ${id}`, createdAt: '2026-10-15T18:00:00.000Z', author,
-    answerCount: 0, acceptedAnswerId: null, revision: null, hidden }
+    answerCount: 0, acceptedAnswerId: null, revision: null, hidden, lessonContext: null }
 }
 function list(items: ReturnType<typeof question>[], nextCursor: string | null = null, canModerate = false) {
-  return { items, nextCursor, canModerate, canAsk: !canModerate, canReply: true }
+  return { items, nextCursor, canModerate, canAsk: !canModerate, canReply: true, canAskInScope: !canModerate, scope: { kind: 'course' } }
 }
 function response(value: unknown, status = 200) {
   return { ok: status >= 200 && status < 300, status, json: async () => value } as Response
@@ -40,7 +40,11 @@ function mockFetch(handler: (url: URL) => Response | Promise<Response>,
     if (url.pathname.endsWith('/revalidate')) {
       const payload = JSON.parse(String(init?.body)) as { ids: string[]; filter: string }
       return Promise.resolve(probe ? probe(payload.ids, payload.filter) : response({ visibleIds: payload.ids,
-        canAsk: mockSession?.user.role !== 'ADMIN', canReply: true, canModerate: mockSession?.user.role === 'ADMIN' }))
+        canAsk: mockSession?.user.role !== 'ADMIN', canReply: true, canModerate: mockSession?.user.role === 'ADMIN' })).then(async result => {
+          const value = await result.json()
+          return response({ ...value, scope: { kind: 'course' }, canAskInScope: value.canAsk,
+            contexts: (value.visibleIds ?? []).map((id: string) => ({ id, lessonContext: null })) }, result.status)
+        })
     }
     return Promise.resolve(handler(url))
   })
@@ -119,7 +123,7 @@ test('background access revalidation preserves already loaded older pages', asyn
   expect(await screen.findByText(older.title)).toBeInTheDocument()
   expect(listReads).toBe(2)
   act(() => { fireEvent.focus(window) })
-  await waitFor(() => expect(probeReads).toBe(1))
+  await waitFor(() => expect(probeReads).toBe(2))
   expect(listReads).toBe(2)
   expect(screen.getByText(first.title)).toBeInTheDocument()
   expect(screen.getByText(older.title)).toBeInTheDocument()
@@ -279,6 +283,27 @@ test('failed detail revalidation clears an already rendered private answer', asy
   await screen.findByText('Frage konnte nicht geladen werden')
   expect(screen.queryByText(reply.body)).not.toBeInTheDocument()
   expect(screen.getByRole('button', { name: new RegExp(first.title) })).toBeInTheDocument()
+})
+
+test('changing the list filter rechecks and retains the selected authorized discussion', async () => {
+  const selected = question('selected-question', 'Selected discussion survives a matching filter')
+  let detailReads = 0
+  mockFetch(url => {
+    if (url.pathname === `/api/courses/${courseId}`) return response({ name: 'Private course' })
+    if (url.pathname.endsWith(`/${selected.id}`)) {
+      detailReads += 1
+      return response({ question: selected, answers: [], canModerate: true, canAsk: false, canReply: true })
+    }
+    return response(list([selected], null, true))
+  })
+  await showPage()
+  fireEvent.click(await screen.findByRole('button', { name: new RegExp(selected.title) }))
+  await screen.findByRole('heading', { level: 2, name: selected.title })
+  const initialReads = detailReads
+  fireEvent.click(screen.getByRole('button', { name: /^Offen$/ }))
+  await screen.findByRole('heading', { level: 2, name: selected.title })
+  await waitFor(() => expect(detailReads).toBeGreaterThan(initialReads))
+  expect(screen.getByRole('button', { name: 'Frage ausblenden' })).toBeInTheDocument()
 })
 
 test('late load-more response cannot mix an old filter into the new view', async () => {

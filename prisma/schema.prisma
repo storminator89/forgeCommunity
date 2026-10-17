@@ -662,11 +662,14 @@ model CourseQuestion {
   updatedAt DateTime @updatedAt
   hiddenAt  DateTime?
   solutionRevision String?
+  contextPublicationId String?
+  contextContentId     String?
   answers   CourseAnswer[]
   solution  CourseQuestionSolution?
 
   @@unique([courseId, authorId, requestId])
   @@index([courseId, createdAt, id])
+  @@index([courseId, contextPublicationId, contextContentId, createdAt, id], map: "CourseQuestion_lesson_scope_page_idx")
 }
 
 model CourseAnswer {

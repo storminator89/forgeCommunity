@@ -57,8 +57,8 @@ const legacyMission = db => db.prepare(`SELECT id,"spaceId","creatorId","request
 const columns = db => db.prepare('PRAGMA table_info("SpaceMission")').all().map(row => row.name);
 
 test('paired current week tails add exactly four nullable columns and a complete positive-range check without rebuilding history', () => {
-  assert.deepEqual(names(sqliteDirectory).slice(-3), ['0025_space_polls.sql', sqliteTail, '0027_space_mission_bookmarks.sql']);
-  assert.deepEqual(names(postgresDirectory).slice(-3), ['0024_space_polls.sql', postgresTail, '0026_space_mission_bookmarks.sql']);
+  assert.deepEqual(names(sqliteDirectory).slice(-4), ['0025_space_polls.sql', sqliteTail, '0027_space_mission_bookmarks.sql', '0028_course_qa_lesson_context.sql']);
+  assert.deepEqual(names(postgresDirectory).slice(-4), ['0024_space_polls.sql', postgresTail, '0026_space_mission_bookmarks.sql', '0027_course_qa_lesson_context.sql']);
   for (const ddl of [sql(sqliteTail), sql(postgresTail, postgresDirectory)]) {
     const statements = ddl.replace(/^--.*$/gm, '');
     assert.ok(!/\b(?:DROP|DELETE|UPDATE|INSERT|CREATE|RENAME)\b/i.test(statements));

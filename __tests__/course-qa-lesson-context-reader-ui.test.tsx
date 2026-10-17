@@ -1,0 +1,106 @@
+import React from 'react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
+import { CourseContentsEditor } from '@/app/courses/[courseId]/contents/CourseContentsEditor'
+import { CourseWorkspaceRoute } from '@/app/courses/[courseId]/contents/CourseWorkspaceRoute'
+import type { CourseContent, CourseProgressSnapshot } from '@/app/courses/[courseId]/contents/types'
+
+const mockRouter = { push: jest.fn(), replace: jest.fn() }
+let mockViewer = { status: 'authenticated', data: { user: { id: 'learner', role: 'USER' } } }
+jest.mock('next/navigation', () => ({ useRouter: () => mockRouter }))
+jest.mock('next-auth/react', () => ({ useSession: () => mockViewer }))
+jest.mock('@/components/Sidebar', () => ({ Sidebar: () => null }))
+jest.mock('@/components/theme-toggle', () => ({ ThemeToggle: () => null }))
+jest.mock('@/components/user-nav', () => ({ UserNav: () => null }))
+jest.mock('@/app/courses/[courseId]/practice/learn/PracticeEntryLink', () => ({ PracticeEntryLink: () => null }))
+jest.mock('@/app/courses/[courseId]/contents/CourseContentsSidebar', () => ({ CourseContentsSidebar: ({ contents, onContentSelect }: { contents: CourseContent[]; onContentSelect: (id: string) => void }) => <nav>{contents.map(item => <button key={item.id} onClick={() => onContentSelect(item.id)}>{item.title}</button>)}</nav> }))
+jest.mock('@/app/courses/[courseId]/contents/EditContentForm', () => ({ EditContentForm: () => null }))
+jest.mock('@/app/courses/[courseId]/contents/CourseDraftWorkspace', () => ({ CourseDraftWorkspace: ({ onLiveMode }: { onLiveMode: () => void }) => <button onClick={onLiveMode}>Veröffentlichte Lernansicht öffnen</button> }))
+jest.mock('@/app/courses/[courseId]/contents/ContentRenderer', () => ({ ContentRenderer: () => <p>Lesson content</p> }))
+const response = (body: unknown) => ({ ok: true, status: 200, json: async () => body }) as Response
+let contents: CourseContent[]
+let progress: CourseProgressSnapshot
+let canEdit: boolean
+beforeEach(() => {
+  history.replaceState({}, '', '/courses/course/contents?content=leaf')
+  mockViewer = { status: 'authenticated', data: { user: { id: 'learner', role: 'USER' } } }
+  mockRouter.push.mockReset()
+  contents = [{ id: 'leaf', courseId: 'course', title: 'Current lesson', order: 1, parentId: null, type: 'TEXT', content: '<p>Actual authored text stays out of question</p>', publicationId: 'publication', contentVersionToken: 'token', locked: false }]
+  progress = { publicationId: 'publication', canTrack: true, complete: false, completedContentIds: [], hasCertificate: false, completedAt: null }
+  canEdit = false
+  global.fetch = jest.fn(async input => response(String(input).endsWith('/contents') ? contents : String(input).endsWith('/progress') ? progress : { id: 'course', name: 'Course', canEdit, activePublicationId: 'publication' }))
+})
+
+it.each(['TEXT', 'VIDEO', 'AUDIO', 'H5P', 'QUIZ', 'ASSIGNMENT'] as CourseContent['type'][])('offers the explicit current readable %s leaf entry with only pair and UI hint', async type => {
+  contents[0].type = type
+  render(<CourseContentsEditor courseId="course" forceLearner />)
+  const action = await screen.findByRole('button', { name: 'Zu dieser Lektion fragen' })
+  action.focus(); fireEvent.click(action); fireEvent.click(action)
+  expect(mockRouter.push).toHaveBeenCalledTimes(2)
+  expect(mockRouter.push).toHaveBeenLastCalledWith('/courses/course/qa?publicationId=publication&contentId=leaf&ask=1')
+  fireEvent.click(screen.getByRole('button', { name: /^Fragen/ }))
+  expect(mockRouter.push).toHaveBeenLastCalledWith('/courses/course/qa')
+  expect((global.fetch as jest.Mock).mock.calls.every(call => !call[1]?.method)).toBe(true)
+})
+
+it.each(['locked', 'parent', 'mismatch', 'unknown-lock', 'unenrolled', 'author', 'preview'])("omits the selected entry for %s readers", async state => {
+  if (state === 'locked') contents[0].locked = true
+  if (state === 'parent') contents[0].subContents = [{ ...contents[0], id: 'child', parentId: 'leaf' }]
+  if (state === 'mismatch') progress.publicationId = 'different-publication'
+  if (state === 'unknown-lock') delete contents[0].locked
+  if (state === 'unenrolled') progress.canTrack = false
+  if (state === 'author') canEdit = true
+  await act(async () => { render(<CourseContentsEditor courseId="course" forceLearner authorPreview={state === 'preview'} />) })
+  await screen.findByRole('heading', { name: 'Current lesson' })
+  expect(screen.queryByRole('button', { name: 'Zu dieser Lektion fragen' })).not.toBeInTheDocument()
+})
+
+it.each(['INSTRUCTOR', 'ADMIN'])('uses live learner proof for an enrolled non-owner with session role %s', async role => {
+  mockViewer.data.user.role = role
+  render(<CourseContentsEditor courseId="course" forceLearner />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Zu dieser Lektion fragen' }))
+  expect(mockRouter.push).toHaveBeenCalledWith('/courses/course/qa?publicationId=publication&contentId=leaf&ask=1')
+})
+
+it.each([true, false])('keeps the lesson-question action between completion and continuation controls, with next=%s', async withNext => {
+  progress.completedContentIds = ['leaf']
+  progress.complete = !withNext
+  if (withNext) contents.push({ ...contents[0], id: 'next', title: 'Next lesson', order: 2 })
+  render(<CourseContentsEditor courseId="course" forceLearner />)
+  const question = await screen.findByRole('button', { name: 'Zu dieser Lektion fragen' })
+  const remove = screen.getByRole('button', { name: 'Abschlussmarkierung entfernen' })
+  const refresh = screen.getByRole('button', { name: 'Lernfortschritt aktualisieren' })
+  expect(question).toBeEnabled()
+  expect(question).toHaveClass('h-auto', 'min-h-11', 'min-w-0', 'max-w-full', 'whitespace-normal', '[overflow-wrap:anywhere]')
+  expect(remove.compareDocumentPosition(question) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(question.compareDocumentPosition(refresh) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  if (withNext) {
+    const next = screen.getByRole('button', { name: 'Nächste Lektion öffnen' })
+    expect(question.compareDocumentPosition(next) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(next.compareDocumentPosition(refresh) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  } else expect(screen.queryByRole('button', { name: 'Nächste Lektion öffnen' })).not.toBeInTheDocument()
+})
+
+it('the real learner route keeps read-only mode and offers the server-proven lesson question entry after authoring 403', async () => {
+  const originalFetch = global.fetch as jest.Mock
+  const readerFetch = originalFetch.getMockImplementation()!
+  originalFetch.mockImplementation((input: string, init?: RequestInit) => String(input).endsWith('/authoring')
+    ? Promise.resolve({ ok: false, status: 403, json: async () => ({ error: 'Forbidden' }) } as Response)
+    : readerFetch(input, init))
+  render(<CourseWorkspaceRoute courseId="course" status="authenticated" />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Zu dieser Lektion fragen' }))
+  expect(mockRouter.push).toHaveBeenCalledWith('/courses/course/qa?publicationId=publication&contentId=leaf&ask=1')
+  expect(screen.queryByRole('button', { name: 'Inhalt bearbeiten' })).not.toBeInTheDocument()
+})
+
+it('the real author live-preview route suppresses lesson questions even if subsequent learner-shaped reads are available', async () => {
+  const originalFetch = global.fetch as jest.Mock
+  const readerFetch = originalFetch.getMockImplementation()!
+  originalFetch.mockImplementation((input: string, init?: RequestInit) => String(input).endsWith('/authoring')
+    ? Promise.resolve(response({ draft: { revision: 1 } }))
+    : readerFetch(input, init))
+  render(<CourseWorkspaceRoute courseId="course" status="authenticated" />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Veröffentlichte Lernansicht öffnen' }))
+  await screen.findByRole('heading', { name: 'Current lesson' })
+  expect(screen.queryByRole('button', { name: 'Zu dieser Lektion fragen' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Inhalt bearbeiten' })).not.toBeInTheDocument()
+})

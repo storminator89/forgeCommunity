@@ -5,16 +5,24 @@ export type ReaderLayoutWindow = Window & { __readerLayoutGuard?: {
   finish: () => unknown
 } }
 
+export type ReaderLayoutOptions = {
+  kind: 'qa-capture'
+  expectedRootFontPixels: number
+  expectedTargetFontPixels: number
+}
+
 // Serialized into the real page by Locator.evaluate. Keep all dependencies in
 // this function so unit tests and Chromium execute the same diagnostic code.
-export function installReaderLayoutGuard(target: Element) {
+export function installReaderLayoutGuard(target: Element, options?: ReaderLayoutOptions) {
   const limits = { stableFrames: 3, frames: 120, timeoutMs: 5000, changes: 8 }
+  const qaCapture = options?.kind === 'qa-capture' ? options : null
+  const fontSample = qaCapture ? 'Fragen' : 'Aktualisieren'
   const main = document.querySelector('#page-content')!
   const header = document.querySelector('.app-header')!
-  const outline = document.querySelector('#course-contents-navigation')!
-  const region = target.closest('section[aria-label="Ausgewählter Kursinhalt"]')!
-  const certificate = Array.from(outline.querySelectorAll('button')).find(button => ['Zertifikat herunterladen', 'Wird erstellt …'].includes(button.textContent?.trim() || '')) ?? null
-  const practice = main.querySelector('a[href$="/practice/learn"]')?.parentElement?.parentElement ?? null
+  const outline = qaCapture ? null : document.querySelector('#course-contents-navigation')!
+  const region = target.closest(qaCapture ? 'section[aria-label="Frage und Antworten"]' : 'section[aria-label="Ausgewählter Kursinhalt"]')
+  const certificate = qaCapture ? null : Array.from(outline!.querySelectorAll('button')).find(button => ['Zertifikat herunterladen', 'Wird erstellt …'].includes(button.textContent?.trim() || '')) ?? null
+  const practice = qaCapture ? null : main.querySelector('a[href$="/practice/learn"]')?.parentElement?.parentElement ?? null
   const rectangle = (element: Element) => {
     const rect = element.getBoundingClientRect()
     return { left: rect.left, top: rect.top, width: rect.width, height: rect.height }
@@ -46,7 +54,7 @@ export function installReaderLayoutGuard(target: Element) {
     document.fonts.forEach(face => {
       if (face.family.trim().replace(/^['"]|['"]$/g, '').toLowerCase() === 'inter' && face.status === 'loaded') primaryLoaded = true
     })
-    const primaryCheck = knownStack ? checkFont(`${style.fontWeight} ${style.fontSize} "Inter"`, 'Aktualisieren') : { ready: false, error: false }
+    const primaryCheck = knownStack ? checkFont(`${style.fontWeight} ${style.fontSize} "Inter"`, fontSample) : { ready: false, error: false }
     const stackCheck = checkFont(`${style.fontWeight} ${style.fontSize} ${style.fontFamily}`)
     return { fontPrimary: knownStack ? 'inter' : 'unknown', fontPrimaryLoaded: primaryLoaded,
       fontPrimaryCheck: primaryCheck.ready, fontPrimaryCheckError: primaryCheck.error,
@@ -63,13 +71,24 @@ export function installReaderLayoutGuard(target: Element) {
     const targetRect = target.getBoundingClientRect()
     const mainRect = main.getBoundingClientRect()
     const style = getComputedStyle(target)
-    return { time: Math.round(performance.now()), timeOrigin: performance.timeOrigin, wallTime: Date.now(), rootFont: getComputedStyle(document.documentElement).fontSize,
+    const rootFont = getComputedStyle(document.documentElement).fontSize
+    const matchesPixels = (actual: string, expected: number) => Number.isFinite(expected) && expected > 0 &&
+      Number.isFinite(parseFloat(actual)) && Math.abs(parseFloat(actual) - expected) <= .5
+    return { time: Math.round(performance.now()), timeOrigin: performance.timeOrigin, wallTime: Date.now(), rootFont,
       fontStatus: document.fonts.status, ...fontReadiness(style), mainBusy: main.getAttribute('aria-busy'),
       connected: target.isConnected, disabled: (target as HTMLButtonElement).disabled,
+      ...(qaCapture ? { qaCapture: {
+        expectedRootFontPixels: qaCapture.expectedRootFontPixels, expectedTargetFontPixels: qaCapture.expectedTargetFontPixels,
+        targetFont: style.fontSize, targetFontFamily: style.fontFamily, targetFontWeight: style.fontWeight,
+        rootFontMatches: matchesPixels(rootFont, qaCapture.expectedRootFontPixels),
+        targetFontMatches: matchesPixels(style.fontSize, qaCapture.expectedTargetFontPixels),
+        regionConnected: region?.isConnected === true, regionInMain: region !== null && main.contains(region), targetInRegion: region?.contains(target) === true,
+        mainConnected: main.isConnected, headerConnected: header.isConnected,
+      } } : {}),
       boxes: { header: box(header), main: box(main), outline: box(outline), region: box(region), target: box(target), certificate: box(certificate), practice: box(practice) },
       notice: noticeKind && previous && noticeStyle ? { kind: noticeKind,
         occupiedHeight: previous.getBoundingClientRect().height + parseFloat(noticeStyle.marginTop || '0') + parseFloat(noticeStyle.marginBottom || '0') } : null,
-      scroll: { mainTop: main.scrollTop, mainLeft: main.scrollLeft, outlineTop: outline.scrollTop },
+      scroll: { mainTop: main.scrollTop, mainLeft: main.scrollLeft, outlineTop: qaCapture ? null : outline!.scrollTop },
       focused: document.activeElement === target, focusVisible: target.matches(':focus-visible'),
       fullyInMain: targetRect.top >= Math.max(0, mainRect.top) && targetRect.bottom <= Math.min(innerHeight, mainRect.bottom) &&
         targetRect.left >= Math.max(0, mainRect.left) && targetRect.right <= Math.min(innerWidth, mainRect.right),
@@ -77,7 +96,13 @@ export function installReaderLayoutGuard(target: Element) {
   }
   type State = ReturnType<typeof snapshot>
   const geometry = (state: State) => ({ rootFont: state.rootFont, fontStatus: state.fontStatus, fontReady: state.fontReady, fontPrimary: state.fontPrimary,
-    mainBusy: state.mainBusy, connected: state.connected, disabled: state.disabled, boxes: state.boxes, notice: state.notice })
+    mainBusy: state.mainBusy, connected: state.connected, disabled: state.disabled, boxes: state.boxes, notice: state.notice,
+    ...(qaCapture ? { qaCapture: state.qaCapture } : {}) })
+  // The Q&A main has no aria-busy attribute. Keep its raw null in evidence;
+  // only this explicit mode accepts absence. Reader mode still requires false.
+  const busyReady = (state: State) => state.mainBusy === 'false' || Boolean(qaCapture && state.mainBusy === null)
+  const captureReady = (state: State) => !qaCapture || Boolean(state.qaCapture?.rootFontMatches && state.qaCapture.targetFontMatches &&
+    state.qaCapture.regionConnected && state.qaCapture.regionInMain && state.qaCapture.targetInRegion && state.qaCapture.mainConnected && state.qaCapture.headerConnected)
   const same = (left: unknown, right: unknown): boolean => {
     if (typeof left === 'number' && typeof right === 'number') return Math.abs(left - right) <= .5
     if (left && right && typeof left === 'object' && typeof right === 'object') {
@@ -107,11 +132,13 @@ export function installReaderLayoutGuard(target: Element) {
       })
       const roleChecks = (family: 'Inter' | 'Inter Fallback') => families.includes(family.toLowerCase()) ? {
         defaultSpace: checkFont(`${descriptor} "${family}"`),
-        refreshLabel: checkFont(`${descriptor} "${family}"`, 'Aktualisieren'),
+        ...(qaCapture ? { questionLabel: checkFont(`${descriptor} "${family}"`, fontSample) } :
+          { refreshLabel: checkFont(`${descriptor} "${family}"`, fontSample) }),
       } : null
       return { available: true, time: Math.round(performance.now()), size: style.fontSize, weight: style.fontWeight,
         stackRoles: { inter: families.includes('inter'), interFallback: families.includes('inter fallback'), other: families.some(family => !['inter', 'inter fallback'].includes(family)) },
-        checks: { stackDefaultSpace: checkFont(stack), stackRefreshLabel: checkFont(stack, 'Aktualisieren'),
+        checks: { stackDefaultSpace: checkFont(stack), ...(qaCapture ? { stackQuestionLabel: checkFont(stack, fontSample) } :
+          { stackRefreshLabel: checkFont(stack, fontSample) }),
           inter: roleChecks('Inter'), interFallback: roleChecks('Inter Fallback') },
         // Counts describe family entries, not a claim about which face painted.
         familyFaces, scannedFaces, omittedFaces }
@@ -127,10 +154,12 @@ export function installReaderLayoutGuard(target: Element) {
   }
   type Sample = { state: State; fonts: ReturnType<typeof fontEvidence> }
   const falseFlags = () => ({ disconnected: 0, disabled: 0, mainBusyNotFalse: 0, fontStatusNotLoaded: 0, fontReadyFalse: 0 })
+  const captureFalseFlags = () => ({ rootFontMismatch: 0, targetFontMismatch: 0, regionDisconnected: 0, regionOutsideMain: 0, targetOutsideRegion: 0, mainDisconnected: 0, headerDisconnected: 0 })
   type SettleEvidence = {
     outcome: 'pending' | 'stable' | 'frame-budget' | 'deadline'
     frames: number; readyFrames: number; consecutive: number; maxConsecutive: number
     falseFlags: ReturnType<typeof falseFlags>
+    qaCapture?: { falseFlags: ReturnType<typeof captureFalseFlags> }
     comparisons: number; geometryChanges: number; readinessChanges: number
     changedFields: Record<string, number>
     transitions: Array<{ frame: number; time: number; fields: string[]; omittedFields: number }>
@@ -138,6 +167,7 @@ export function installReaderLayoutGuard(target: Element) {
   }
   let settleEvidence: SettleEvidence | null = null
   const noticeOnlyRemoval = (before: State, after: State) => {
+    if (qaCapture) return false
     if (!before.notice || after.notice || !after.focused || !after.focusVisible || !after.fullyInMain) return false
     const a = before.boxes.main!, b = after.boxes.main!
     const occupied = before.notice.occupiedHeight
@@ -183,7 +213,8 @@ export function installReaderLayoutGuard(target: Element) {
       let done = false
       const evidence: SettleEvidence = settleEvidence = { outcome: 'pending', frames: 0, readyFrames: 0, consecutive: 0, maxConsecutive: 0,
         falseFlags: falseFlags(), comparisons: 0, geometryChanges: 0, readinessChanges: 0, changedFields: {},
-        transitions: [], omittedTransitions: 0, first: null, last: null }
+        transitions: [], omittedTransitions: 0, first: null, last: null,
+        ...(qaCapture ? { qaCapture: { falseFlags: captureFalseFlags() } } : {}) }
       const retainLast = () => { if (previous) evidence.last = { state: previous, fonts: fontEvidence() } }
       const timer = setTimeout(() => {
         done = true
@@ -199,14 +230,25 @@ export function installReaderLayoutGuard(target: Element) {
         if (!evidence.first) evidence.first = { state: current, fonts: fontEvidence() }
         if (!current.connected) evidence.falseFlags.disconnected++
         if (current.disabled) evidence.falseFlags.disabled++
-        if (current.mainBusy !== 'false') evidence.falseFlags.mainBusyNotFalse++
+        if (!busyReady(current)) evidence.falseFlags.mainBusyNotFalse++
         if (current.fontStatus !== 'loaded') evidence.falseFlags.fontStatusNotLoaded++
         if (!current.fontReady) evidence.falseFlags.fontReadyFalse++
+        if (current.qaCapture && evidence.qaCapture) {
+          const flags = evidence.qaCapture.falseFlags
+          if (!current.qaCapture.rootFontMatches) flags.rootFontMismatch++
+          if (!current.qaCapture.targetFontMatches) flags.targetFontMismatch++
+          if (!current.qaCapture.regionConnected) flags.regionDisconnected++
+          if (!current.qaCapture.regionInMain) flags.regionOutsideMain++
+          if (!current.qaCapture.targetInRegion) flags.targetOutsideRegion++
+          if (!current.qaCapture.mainConnected) flags.mainDisconnected++
+          if (!current.qaCapture.headerConnected) flags.headerDisconnected++
+        }
         if (previous) {
           evidence.comparisons++
           const fields = changedFields(geometry(previous), geometry(current))
-          if (fields.some(field => field === 'rootFont' || field.startsWith('boxes.') || field.startsWith('notice'))) evidence.geometryChanges++
-          if (fields.some(field => ['fontStatus', 'fontReady', 'fontPrimary', 'mainBusy', 'connected', 'disabled'].includes(field))) evidence.readinessChanges++
+          if (fields.some(field => field === 'rootFont' || field.startsWith('boxes.') || field.startsWith('notice') || field.startsWith('qaCapture.targetFont'))) evidence.geometryChanges++
+          if (fields.some(field => ['fontStatus', 'fontReady', 'fontPrimary', 'mainBusy', 'connected', 'disabled'].includes(field) ||
+            (field.startsWith('qaCapture.') && !field.startsWith('qaCapture.targetFont')))) evidence.readinessChanges++
           for (const field of fields) evidence.changedFields[field] = (evidence.changedFields[field] || 0) + 1
           if (fields.length) {
             const transition = { frame: frames, time: current.time, fields: fields.slice(0, 12), omittedFields: Math.max(0, fields.length - 12) }
@@ -214,7 +256,7 @@ export function installReaderLayoutGuard(target: Element) {
             else { evidence.transitions[limits.changes - 1] = transition; evidence.omittedTransitions++ }
           }
         }
-        const ready = current.connected && !current.disabled && current.mainBusy === 'false' && current.fontStatus === 'loaded' && current.fontReady
+        const ready = current.connected && !current.disabled && busyReady(current) && current.fontStatus === 'loaded' && current.fontReady && captureReady(current)
         if (ready) evidence.readyFrames++
         consecutive = ready && previous && same(geometry(previous), geometry(current)) ? consecutive + 1 : ready ? 1 : 0
         evidence.consecutive = consecutive; evidence.maxConsecutive = Math.max(evidence.maxConsecutive, consecutive)

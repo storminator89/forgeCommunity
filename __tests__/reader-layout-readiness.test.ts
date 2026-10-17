@@ -4,6 +4,7 @@ let frames: Map<number, FrameRequestCallback>
 let frameId: number
 let headerHeight: number
 let noticeHeight: number
+let qaHeadingHeight: number
 let target: HTMLButtonElement
 let main: HTMLElement
 let outline: HTMLElement
@@ -29,7 +30,7 @@ function setBox(element: Element, top: () => number, height: () => number, scrol
 }
 
 beforeEach(() => {
-  frames = new Map(); frameId = 0; headerHeight = 100; noticeHeight = 0
+  frames = new Map(); frameId = 0; headerHeight = 100; noticeHeight = 0; qaHeadingHeight = 128
   jest.spyOn(window, 'requestAnimationFrame').mockImplementation(callback => { frames.set(++frameId, callback); return frameId })
   jest.spyOn(window, 'cancelAnimationFrame').mockImplementation(id => { frames.delete(id) })
   setFonts()
@@ -52,6 +53,7 @@ afterEach(() => {
   jest.restoreAllMocks()
   jest.useRealTimers()
   document.body.innerHTML = ''
+  document.documentElement.style.fontSize = ''
 })
 
 async function readyGuard() {
@@ -63,6 +65,147 @@ async function readyGuard() {
   guard.arm()
   return guard
 }
+
+function qaTarget(rootFont = '32px', targetFont = '56px') {
+  document.documentElement.style.fontSize = rootFont
+  main.removeAttribute('aria-busy')
+  outline.remove()
+  const region = document.querySelector('section')!
+  region.setAttribute('aria-label', 'Frage und Antworten')
+  const heading = document.createElement('h2')
+  heading.textContent = 'Fragen zur Lektion'
+  heading.style.fontFamily = 'Inter, "Inter Fallback"'; heading.style.fontSize = targetFont; heading.style.fontWeight = '700'
+  target.replaceWith(heading)
+  setBox(heading, () => headerHeight + noticeHeight + 300 - main.scrollTop, () => qaHeadingHeight, 128)
+  return heading
+}
+
+const qaOptions = { kind: 'qa-capture', expectedRootFontPixels: 32, expectedTargetFontPixels: 56 } as const
+
+async function readyQaGuard() {
+  const heading = qaTarget()
+  installReaderLayoutGuard(heading, qaOptions)
+  const guard = (window as ReaderLayoutWindow).__readerLayoutGuard!
+  const settled = guard.settle()
+  flushFrame(); flushFrame(); flushFrame()
+  await settled
+  guard.arm()
+  return { guard, heading }
+}
+
+it('settles Q&A without reader-only elements only after both expected fonts have three stable frames', async () => {
+  const check = jest.fn().mockReturnValue(true)
+  setFonts({ check })
+  const heading = qaTarget('16px', '28px')
+  installReaderLayoutGuard(heading, qaOptions)
+  const guard = (window as ReaderLayoutWindow).__readerLayoutGuard!
+  const settled = guard.settle()
+  flushFrame(); flushFrame(); flushFrame()
+  expect(() => guard.arm()).toThrow('readiness was not established')
+  heading.style.fontSize = '56px'; flushFrame(); flushFrame()
+  expect(() => guard.arm()).toThrow('readiness was not established')
+  document.documentElement.style.fontSize = '32px'; flushFrame(); flushFrame()
+  expect(() => guard.arm()).toThrow('readiness was not established')
+  flushFrame(); await settled; guard.arm()
+  expect(check).toHaveBeenCalledWith('700 56px "Inter"', 'Fragen')
+  expect(check).not.toHaveBeenCalledWith(expect.any(String), 'Aktualisieren')
+  expect(guard.finish()).toMatchObject({ unsafe: false,
+    limits: { stableFrames: 3, frames: 120, timeoutMs: 5000, changes: 8 },
+    stable: { rootFont: '32px', mainBusy: null, connected: true, qaCapture: {
+      targetFont: '56px', rootFontMatches: true, targetFontMatches: true, regionConnected: true, targetInRegion: true,
+    }, boxes: { outline: null, certificate: null, practice: null, header: expect.any(Object), main: expect.any(Object), region: expect.any(Object), target: expect.any(Object) } },
+    settleEvidence: { outcome: 'stable', frames: 8, readyFrames: 3,
+      falseFlags: { mainBusyNotFalse: 0 }, qaCapture: { falseFlags: { rootFontMismatch: 5, targetFontMismatch: 3 } },
+      first: { state: { rootFont: '16px', qaCapture: { targetFont: '28px', rootFontMatches: false, targetFontMatches: false } },
+        fonts: { checks: { inter: { questionLabel: { ready: true } } } } },
+    } })
+})
+
+it.each(['root', 'target'] as const)('fails Q&A readiness within the existing frame budget for a too-small %s font', async kind => {
+  const heading = qaTarget(kind === 'root' ? '16px' : '32px', kind === 'target' ? '28px' : '56px')
+  installReaderLayoutGuard(heading, qaOptions)
+  const guard = (window as ReaderLayoutWindow).__readerLayoutGuard!
+  const failure = expect(guard.settle()).rejects.toThrow('frame budget')
+  for (let frame = 0; frame < 120; frame++) flushFrame()
+  await failure
+  expect(guard.finish()).toMatchObject({ stable: null, settleEvidence: {
+    outcome: 'frame-budget', frames: 120, readyFrames: 0, maxConsecutive: 0, transitions: [], geometryChanges: 0,
+    qaCapture: { falseFlags: { rootFontMismatch: kind === 'root' ? 120 : 0, targetFontMismatch: kind === 'target' ? 120 : 0 } },
+    first: { state: { mainBusy: null, qaCapture: { rootFontMatches: kind !== 'root', targetFontMatches: kind !== 'target' } } },
+    last: { state: { mainBusy: null, qaCapture: { rootFontMatches: kind !== 'root', targetFontMatches: kind !== 'target' } } },
+  } })
+})
+
+it('accepts Q&A expected font sizes only within the existing half-pixel tolerance', async () => {
+  const heading = qaTarget('31.5px', '56.5px')
+  installReaderLayoutGuard(heading, qaOptions)
+  const guard = (window as ReaderLayoutWindow).__readerLayoutGuard!
+  const settled = guard.settle()
+  flushFrame(); flushFrame(); flushFrame(); await settled
+  expect(guard.finish()).toMatchObject({ settleEvidence: { outcome: 'stable', frames: 3 },
+    stable: { qaCapture: { rootFontMatches: true, targetFontMatches: true } } })
+})
+
+it.each(['root', 'target', 'weight', 'header', 'target-box', 'region', 'primary'] as const)('retains late Q&A %s drift as unsafe even when it returns', async kind => {
+  const { guard, heading } = await readyQaGuard()
+  const region = heading.closest('section')!
+  const regionParent = region.parentElement!
+  if (kind === 'root') document.documentElement.style.fontSize = '16px'
+  if (kind === 'target') heading.style.fontSize = '28px'
+  if (kind === 'weight') heading.style.fontWeight = '500'
+  if (kind === 'header') headerHeight += 116
+  if (kind === 'target-box') qaHeadingHeight += 128
+  if (kind === 'region') main.append(heading)
+  if (kind === 'primary') setFonts({ primary: 'unloaded', check: () => false })
+  flushFrame()
+  expect(guard.check().unsafe).toBe(true)
+  document.documentElement.style.fontSize = '32px'; heading.style.fontSize = '56px'; heading.style.fontWeight = '700'; headerHeight = 100; qaHeadingHeight = 128
+  regionParent.append(region); region.append(heading); setFonts(); flushFrame()
+  expect(guard.check().unsafe).toBe(true)
+  expect(guard.finish()).toMatchObject({ unsafe: true, changes: [{ classification: 'unexpected-post-input-layout-drift' }] })
+})
+
+it('keeps unavailable primary Inter blocked in Q&A even when expected sizes and empty-match checks pass', async () => {
+  const heading = qaTarget()
+  setFonts({ primary: null, check: () => true })
+  installReaderLayoutGuard(heading, qaOptions)
+  const guard = (window as ReaderLayoutWindow).__readerLayoutGuard!
+  const failure = expect(guard.settle()).rejects.toThrow('frame budget')
+  for (let frame = 0; frame < 120; frame++) flushFrame()
+  await failure
+  expect(guard.finish()).toMatchObject({ settleEvidence: { outcome: 'frame-budget', readyFrames: 0, falseFlags: { fontReadyFalse: 120 },
+    last: { state: { fontPrimaryLoaded: false, fontPrimaryCheck: true, fontReady: false, qaCapture: { rootFontMatches: true, targetFontMatches: true } } } } })
+})
+
+it.each(['detached-region', 'outside-region', 'missing-region'] as const)('keeps Q&A %s failures attached to bounded evidence', async kind => {
+  const heading = qaTarget()
+  const region = heading.closest('section')!
+  if (kind === 'missing-region') region.removeAttribute('aria-label')
+  installReaderLayoutGuard(heading, qaOptions)
+  const guard = (window as ReaderLayoutWindow).__readerLayoutGuard!
+  if (kind === 'detached-region') region.remove()
+  if (kind === 'outside-region') main.append(heading)
+  const failure = expect(guard.settle()).rejects.toThrow('frame budget')
+  for (let frame = 0; frame < 120; frame++) flushFrame()
+  await failure
+  expect(guard.finish()).toMatchObject({ settleEvidence: { outcome: 'frame-budget', readyFrames: 0,
+    qaCapture: { falseFlags: { regionDisconnected: kind === 'outside-region' ? 0 : 120, targetOutsideRegion: kind === 'outside-region' || kind === 'missing-region' ? 120 : 0 } },
+    last: { state: { connected: kind !== 'detached-region', qaCapture: { regionConnected: kind === 'outside-region', targetInRegion: kind === 'detached-region' } } },
+  } })
+})
+
+it('continues requiring explicit false aria-busy in default reader mode', async () => {
+  main.removeAttribute('aria-busy')
+  installReaderLayoutGuard(target)
+  const guard = (window as ReaderLayoutWindow).__readerLayoutGuard!
+  const failure = expect(guard.settle()).rejects.toThrow('frame budget')
+  for (let frame = 0; frame < 120; frame++) flushFrame()
+  await failure
+  const result = guard.finish()
+  expect(result).toMatchObject({ stable: null, settleEvidence: { outcome: 'frame-budget', readyFrames: 0,
+    falseFlags: { mainBusyNotFalse: 120 }, last: { state: { mainBusy: null } } } })
+  expect(result).not.toHaveProperty('settleEvidence.qaCapture')
+})
 
 it('normalizes native main and nested outline scrolling without calling it layout drift', async () => {
   const guard = await readyGuard()

@@ -109,9 +109,11 @@ async function installSyntheticApi(page: Page, item?: RouteSweepCase) {
   if (item?.url === '/courses/qa-route-course/qa') {
     await page.route(/\/api\/courses\/qa-route-course\/qa\?filter=all(?:&|$)/, route => route.fulfill({ status: 200, json: {
       items: [], nextCursor: null, canModerate: false, canAsk: false, canReply: false,
+      scope: { kind: 'course' }, canAskInScope: false,
     } }));
     await page.route(/\/api\/courses\/qa-route-course\/qa\/revalidate(?:\?|$)/, route => route.fulfill({ status: 200, json: {
-      visibleIds: [], canModerate: false, canAsk: false, canReply: false,
+      visibleIds: [], contexts: [], canModerate: false, canAsk: false, canReply: false,
+      scope: { kind: 'course' }, canAskInScope: false,
     } }));
   }
   await page.route(/\/api\/courses\/qa-route-course\/assignments(?:\?|$)/, route => route.fulfill({ status: 200, json: { submissions: [], nextCursor: null } }));
