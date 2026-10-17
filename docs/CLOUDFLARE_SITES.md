@@ -9,11 +9,12 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up the published Version 41 source
-`28675ef56fec658fdb86e64d276fce4d835c0c63`. Version 41 deployed successfully on
-17 October 2026 at 23:41:23 UTC. Project-edit pending guards and comment-newline
-sanitizer selection are live. A read-only edit-form check found raw-HTML
-presentation and dismissal-focus gaps; positive save/race/newline proof is open.
+runtime data. This GitHub snapshot backs up the published Version 42 source
+`d8e895b70d593d6d1e94e3b21021545460225ada`. Version 42 deployed successfully on
+17 October 2026 at 23:53:06 UTC. Resource-edit pending source is live. Read-only
+opening/values/cancel passed, with dismissal focus returning to BODY as an open
+gap; positive PUT/race proof remains open. The project rich-editor/focus
+correction is not included; the Version 41 project gaps also remain open.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -74,8 +75,8 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 41 source includes the existing bounded ports below,
-inherited from Version 40, plus project-edit pending guards and comment newlines described
+The published Version 42 source includes the existing bounded ports below,
+inherited from Version 41, plus the scoped resource-edit pending guards described
 below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
@@ -159,6 +160,9 @@ all-page visual coverage.
   dismissal-focus gaps in the published edit form
 - Project-comment POST selects the existing newline-preserving plain-text
   sanitizer; stored comments are not rewritten, new multiline acceptance open
+- Resource-edit immutable submission, same-frame pending gate, target/draft/
+  dialog-generation guards and inline errors; source-reviewed pending handling,
+  positive published PUT/race acceptance remains open
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -749,6 +753,37 @@ source-reviewed only; ordinary opening/cancel does not prove it. No synthetic
 comment or project rewrite was made for these checks. Private field contents,
 record/account identifiers and screenshots are excluded from this backup.
 The curated roadmap remains byte-identical at its dated Version 32 base.
+
+## Version 42 resource-edit pending guards
+
+Version 42 changes only the Resources directory page. The existing edit form
+captures an immutable target/title/URL snapshot, with a synchronous pending gate
+before the request. Native fields/save are disabled while pending, Close stays
+available, and another resource cannot replace the active pending target.
+Target/draft/dialog revisions and an active-view guard isolate late responses
+across close/reopen and unmount. Failures retain the draft with inline errors;
+success updates only the submitted resource and closes only the matching
+unchanged dialog, otherwise a status notice can preserve the open draft.
+
+Existing resource API, PUT payload shape, authentication, permissions and server
+behavior are unchanged. The existing directory URL-state and create-pending
+source are retained. There is no cross-tab/exactly-once guarantee or server-side
+cancellation promise. The project page, comment API and plain-text link renderer
+remain byte-identical to Version 41. The separate project rich-editor and focus
+correction is not included; the prior raw-HTML and dismissal-focus gaps remain
+open.
+
+Independent exact-path source/integration review, production typechecking/build
+and static artifact/archive checks passed. Deployment succeeded on 17 October
+2026 at 23:53:06 UTC. A published read-only form check showed unchanged title
+and URL values and initial focus on the title. Cancel and Escape dismissed the
+form without a PUT. Dismissal focus returned to BODY instead of the Actions
+trigger; that remains an open UX gap, not a full focus acceptance pass. Positive
+PUT/persistence, pending/double-submit, close/reopen, target/account transition
+and error-path races remain source-reviewed only. A normal read or passed build
+does not establish those scenarios. No resource content was changed by
+implementation or backup. Private field contents, account/record identifiers and screenshots
+are excluded. The curated roadmap remains byte-identical at its Version 32 base.
 
 ## Keeping the branches separate
 

@@ -99,6 +99,16 @@ function ResourceLibraryForViewer({ session }: { session: Session | null }) {
   const addActiveRef = useRef(true);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editResource, setEditResource] = useState<Resource | null>(null);
+  const [isUpdatingResource, setIsUpdatingResource] = useState(false);
+  const [updateResourceError, setUpdateResourceError] = useState('');
+  const [updateResourceNotice, setUpdateResourceNotice] = useState('');
+  const editPendingRef = useRef(false);
+  const editActiveRef = useRef(false);
+  const editTargetRef = useRef<string | null>(null);
+  const editDialogOpenRef = useRef(false);
+  const editDialogGenerationRef = useRef(0);
+  const editDraftReadyRef = useRef(false);
+  const editDraftRevisionRef = useRef(0);
   const [hasMore, setHasMore] = useState(true);
   const [displayedResources, setDisplayedResources] = useState<Resource[]>([]);
   const [loading, setLoading] = useState(true);
@@ -130,6 +140,11 @@ function ResourceLibraryForViewer({ session }: { session: Session | null }) {
   useEffect(() => {
     addActiveRef.current = true;
     return () => { addActiveRef.current = false; };
+  }, []);
+
+  useEffect(() => {
+    editActiveRef.current = true;
+    return () => { editActiveRef.current = false; };
   }, []);
 
   const fetchResources = useCallback(async (pageNumber = 1, signal?: AbortSignal) => {
@@ -311,32 +326,91 @@ function ResourceLibraryForViewer({ session }: { session: Session | null }) {
   };
 
   const handleEditResource = (resource: Resource) => {
-    setEditResource(resource);
+    if (!editActiveRef.current) return;
+    if (editPendingRef.current && editTargetRef.current !== resource.id) return;
+    // Reopening the same pending/failed draft must not reload older row data.
+    if (!editDraftReadyRef.current || editTargetRef.current !== resource.id) {
+      setEditResource({ ...resource });
+      editTargetRef.current = resource.id;
+      editDraftRevisionRef.current += 1;
+      editDraftReadyRef.current = true;
+      setUpdateResourceError('');
+      setUpdateResourceNotice('');
+    }
+    editDialogGenerationRef.current += 1;
+    editDialogOpenRef.current = true;
     setIsEditDialogOpen(true);
   };
 
+  const handleEditDialogOpenChange = (open: boolean) => {
+    if (open) { if (editResource) handleEditResource(editResource); return; }
+    editDialogGenerationRef.current += 1;
+    editDialogOpenRef.current = false;
+    setIsEditDialogOpen(false);
+    if (!editPendingRef.current) {
+      editDraftReadyRef.current = false;
+      setUpdateResourceError('');
+      setUpdateResourceNotice('');
+    }
+  };
+
+  const updateEditResourceDraft = (update: (draft: Resource) => Resource) => {
+    if (editPendingRef.current) return;
+    editDraftRevisionRef.current += 1;
+    setEditResource(previous => previous ? update(previous) : previous);
+    setUpdateResourceError('');
+    setUpdateResourceNotice('');
+  };
+
   const handleUpdateResource = async () => {
+    if (!editActiveRef.current || !editDialogOpenRef.current || editPendingRef.current || !session?.user?.id || !editResource) return;
     if (!editResource?.title || !editResource?.url) {
+      setUpdateResourceError('Titel und URL sind erforderlich.');
       toast.error('Titel und URL sind erforderlich.');
       return;
     }
 
+    const submitted = { id: editResource.id, title: editResource.title, url: editResource.url };
+    const submittedRevision = editDraftRevisionRef.current;
+    const submittedGeneration = editDialogGenerationRef.current;
+    editPendingRef.current = true;
+    setIsUpdatingResource(true);
+    setUpdateResourceError('');
+    setUpdateResourceNotice('');
     try {
-      const response = await axios.put(`/api/resources/${editResource.id}`, {
-        title: editResource.title,
-        url: editResource.url,
+      const response = await axios.put(`/api/resources/${submitted.id}`, {
+        title: submitted.title,
+        url: submitted.url,
       });
 
+      if (!editActiveRef.current) return;
       setDisplayedResources(prev =>
         prev.map(resource =>
-          resource.id === editResource.id ? response.data : resource
+          resource.id === submitted.id ? response.data : resource
         )
       );
-      setIsEditDialogOpen(false);
+      const unchangedDraft = editTargetRef.current === submitted.id && editDraftRevisionRef.current === submittedRevision;
+      if (unchangedDraft && editDialogGenerationRef.current === submittedGeneration && editDialogOpenRef.current) {
+        editDraftReadyRef.current = false;
+        editDialogOpenRef.current = false;
+        setIsEditDialogOpen(false);
+      } else if (editDialogOpenRef.current && editTargetRef.current === submitted.id) {
+        setUpdateResourceNotice(unchangedDraft ? 'Änderungen gespeichert.' : 'Gespeichert. Neuere Änderungen sind noch offen.');
+      } else if (unchangedDraft) {
+        editDraftReadyRef.current = false;
+      }
       toast.success('Ressource erfolgreich aktualisiert!');
     } catch (error: any) {
+      if (!editActiveRef.current) return;
       console.error('Fehler beim Aktualisieren der Ressource:', error);
+      const serverError = error?.response?.data?.error;
+      setUpdateResourceError(typeof serverError === 'string'
+        ? serverError
+        : 'Ressource konnte nicht aktualisiert werden. Bitte versuche es erneut.');
       toast.error('Fehler beim Aktualisieren der Ressource.');
+    } finally {
+      editPendingRef.current = false;
+      if (editActiveRef.current) setIsUpdatingResource(false);
     }
   };
 
@@ -424,7 +498,7 @@ function ResourceLibraryForViewer({ session }: { session: Session | null }) {
               {isFirstPageLoading ? <div className="mt-6"><PageState kind="loading" title="Ressourcen werden geladen" /></div>
                 : loadError ? <div className="mt-6"><PageState kind="error" title="Ressourcen konnten nicht geladen werden" description="Prüfe deine Verbindung und versuche es erneut." action={<Button type="button" variant="outline" onClick={retryLoad}>Erneut versuchen</Button>} /></div>
                 : filteredAndSortedResources.length === 0 ? <div className="mt-6"><PageState title={hasMore ? 'Noch keine passenden Ressourcen geladen' : hasFilters ? 'Keine Ressourcen gefunden' : 'Noch keine Ressourcen'} description={hasMore ? 'Lade weitere Ressourcen, um nach passenden Einträgen zu suchen.' : hasFilters ? 'Versuche es mit anderen Suchbegriffen oder Filtern.' : 'Sobald Links geteilt werden, findest du sie hier.'} action={hasMore ? <Button type="button" variant="outline" onClick={loadMore} disabled={loading}>Weitere Ressourcen laden</Button> : hasFilters ? <Button type="button" variant="outline" onClick={clearFilters}>Filter zurücksetzen</Button> : session ? <Button type="button" onClick={() => setIsDialogOpen(true)}>Erste Ressource hinzufügen</Button> : undefined} /></div>
-                : <ul className="fc-entity-grid">{filteredAndSortedResources.map(resource => <ResourceItem key={resource.id} resource={resource} isAdmin={isAdmin} currentUserId={session?.user?.id} onDelete={handleDeleteResource} onEdit={handleEditResource} />)}</ul>}
+                : <ul className="fc-entity-grid">{filteredAndSortedResources.map(resource => <ResourceItem key={resource.id} resource={resource} isAdmin={isAdmin} currentUserId={session?.user?.id} onDelete={handleDeleteResource} onEdit={handleEditResource} pendingEditId={isUpdatingResource ? editResource?.id : undefined} />)}</ul>}
 
               {hasMore && filteredAndSortedResources.length > 0 && <div ref={ref} className="flex justify-center py-7"><Button type="button" variant="outline" onClick={loadMore} disabled={loading}>{loading ? 'Weitere Ressourcen werden geladen…' : 'Weitere Ressourcen laden'}</Button></div>}
               {loading && !isFirstPageLoading && <p role="status" className="pb-6 text-center text-sm text-muted-foreground">Weitere Ressourcen werden geladen…</p>}
@@ -432,13 +506,15 @@ function ResourceLibraryForViewer({ session }: { session: Session | null }) {
           </PageContainer>
         </main>
 
-        {editResource && <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        {editResource && <Dialog open={isEditDialogOpen} onOpenChange={handleEditDialogOpenChange}>
           <DialogContent>
             <DialogHeader><DialogTitle>Ressource bearbeiten</DialogTitle><DialogDescription>Titel und URL sind erforderlich.</DialogDescription></DialogHeader>
-            <form onSubmit={event => { event.preventDefault(); void handleUpdateResource(); }} className="space-y-5">
-              <div className="space-y-2"><Label htmlFor="edit-resource-title">Titel</Label><Input id="edit-resource-title" value={editResource.title} onChange={event => setEditResource(previous => previous ? { ...previous, title: event.target.value } : previous)} required /></div>
-              <div className="space-y-2"><Label htmlFor="edit-resource-url">URL</Label><Input id="edit-resource-url" type="url" value={editResource.url} onChange={event => setEditResource(previous => previous ? { ...previous, url: event.target.value } : previous)} required /></div>
-              <DialogFooter><Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>Abbrechen</Button><Button type="submit">Aktualisieren</Button></DialogFooter>
+            <form onSubmit={event => { event.preventDefault(); void handleUpdateResource(); }} className="space-y-5" aria-busy={isUpdatingResource}>
+              <div className="space-y-2"><Label htmlFor="edit-resource-title">Titel</Label><Input id="edit-resource-title" value={editResource.title} onChange={event => { const title = event.target.value; updateEditResourceDraft(previous => ({ ...previous, title })); }} required disabled={isUpdatingResource} /></div>
+              <div className="space-y-2"><Label htmlFor="edit-resource-url">URL</Label><Input id="edit-resource-url" type="url" value={editResource.url} onChange={event => { const url = event.target.value; updateEditResourceDraft(previous => ({ ...previous, url })); }} required disabled={isUpdatingResource} /></div>
+              {updateResourceError && <p role="alert" className="text-sm text-destructive">{updateResourceError}</p>}
+              {updateResourceNotice && <p role="status" className="text-sm text-muted-foreground">{updateResourceNotice}</p>}
+              <DialogFooter><Button type="button" variant="outline" onClick={() => handleEditDialogOpenChange(false)}>{isUpdatingResource ? 'Schließen' : 'Abbrechen'}</Button><Button type="submit" disabled={isUpdatingResource}>{isUpdatingResource ? 'Wird aktualisiert…' : 'Aktualisieren'}</Button></DialogFooter>
             </form>
           </DialogContent>
         </Dialog>}
@@ -447,12 +523,13 @@ function ResourceLibraryForViewer({ session }: { session: Session | null }) {
   );
 }
 
-function ResourceItem({ resource, isAdmin, currentUserId, onDelete, onEdit }: {
+function ResourceItem({ resource, isAdmin, currentUserId, onDelete, onEdit, pendingEditId }: {
   resource: Resource;
   isAdmin: boolean;
   currentUserId?: string;
   onDelete: (id: string) => void;
   onEdit: (resource: Resource) => void;
+  pendingEditId?: string;
 }) {
   const [copied, setCopied] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -495,7 +572,7 @@ function ResourceItem({ resource, isAdmin, currentUserId, onDelete, onEdit }: {
           <DropdownMenuItem onSelect={() => void handleCopyLink()}>{copied ? <Check className="mr-2 h-4 w-4" aria-hidden="true" /> : <Copy className="mr-2 h-4 w-4" aria-hidden="true" />}Link kopieren</DropdownMenuItem>
           <DropdownMenuItem onSelect={() => shareResource('twitter')}>Auf X teilen</DropdownMenuItem>
           <DropdownMenuItem onSelect={() => shareResource('linkedin')}>Auf LinkedIn teilen</DropdownMenuItem>
-          {canModify && <><DropdownMenuSeparator /><DropdownMenuItem onSelect={() => onEdit(resource)}><Edit className="mr-2 h-4 w-4" aria-hidden="true" />Bearbeiten</DropdownMenuItem><DropdownMenuItem onSelect={() => setDeleteOpen(true)} className="text-destructive focus:text-destructive focus:bg-destructive/10"><Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />Löschen</DropdownMenuItem></>}
+          {canModify && <><DropdownMenuSeparator /><DropdownMenuItem disabled={Boolean(pendingEditId && pendingEditId !== resource.id)} onSelect={() => onEdit(resource)}><Edit className="mr-2 h-4 w-4" aria-hidden="true" />Bearbeiten</DropdownMenuItem><DropdownMenuItem onSelect={() => setDeleteOpen(true)} className="text-destructive focus:text-destructive focus:bg-destructive/10"><Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />Löschen</DropdownMenuItem></>}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
