@@ -24,6 +24,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import Image from 'next/image';
 import { sanitizeRichHtml } from '@/lib/sanitize-html';
 import { getSafeHttpUrl } from '@/lib/security';
+import { PlainTextLinks } from '@/components/plain-text-links';
 
 
 interface Tag {
@@ -559,7 +560,7 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
                                 </p>
                               </div>
                             </div>
-                            <p className="text-foreground break-words whitespace-pre-wrap">{comment.content}</p>
+                            <p className="text-foreground break-words whitespace-pre-wrap [overflow-wrap:anywhere]"><PlainTextLinks text={comment.content} /></p>
                           </div>
                         ))}
                         {comments.length === 0 && <p className="py-5 text-sm text-muted-foreground">Noch keine Kommentare.</p>}

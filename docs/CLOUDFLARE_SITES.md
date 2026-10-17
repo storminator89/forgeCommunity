@@ -9,11 +9,11 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up the published Version 39 source
-`27726c48f47ac1c10f53acd0dc1bdf91baabdeea`. Version 39 deployed successfully on
-17 October 2026 at 23:24:43 UTC. Resources and Showcases directory URL-state
-source is live; Back/Forward and reload acceptance is in progress. The bounded
-Version 38 ordinary-comment check passed; its race variants remain unverified.
+runtime data. This GitHub snapshot backs up the published Version 40 source
+`429ec9835115caa1f77bed8b1c6b609e37e17c35`. Version 40 deployed successfully on
+17 October 2026 at 23:30:31 UTC. Project-comment plain-text web links are live;
+bounded existing-comment link/focus/reload readback passed. Version 39 directory
+context, reload/share-link and keyboard-reset acceptance also passed.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -74,8 +74,8 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 39 source includes the existing bounded ports below,
-inherited from Version 38, plus Resources/Showcases directory URL-state described
+The published Version 40 source includes the existing bounded ports below,
+inherited from Version 39, plus scoped project-comment web-link rendering described
 below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
@@ -150,7 +150,10 @@ all-page visual coverage.
   lifecycle guards; bounded ordinary-comment acceptance passed, race proof open
 - Resources and Showcases directory query/filter/sort state in local URLs,
   with native history and keyboard reset focus; API and existing filtering scope
-  unchanged, published Back/Forward/reload acceptance pending
+  unchanged, bounded detail/Back/reload/share/reset readback passed
+- Project-comment explicit HTTP(S) plain-text links use the existing URL guard,
+  token rejection and visible keyboard focus; stored content and sanitizer
+  unchanged, bounded existing-comment link readback passed
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -660,12 +663,50 @@ byte-identical to Version 38.
 
 Independent component and exact-union source review, production typechecking/
 build and static artifact/archive checks passed. Deployment succeeded on
-17 October 2026 at 23:24:43 UTC. Published Back/Forward, detail-return, reload,
-same-browser shared-link and keyboard-reset acceptance is in progress; no
-successful runtime result is inferred from the source review or build.
-Unknown/repeated parameters, delayed reads, error recovery, multiple pages,
-mobile and account transitions remain separate live acceptance gates.
-The dated curated roadmap remains byte-identical at its Version 32 base.
+17 October 2026 at 23:24:43 UTC. At 23:25-23:26 UTC bounded published reads
+passed in both directories. Resources search/category and Showcases search/sort
+retained their control values and one result after opening a detail and Browser
+Back. Reload and the exact UI URL in a temporary same-browser tab retained the
+same context and result in each directory. Keyboard reset cleared the URL and
+filter state and focused the corresponding stable search input. No data write
+was performed. Concrete search contents, record/account identifiers and
+screenshots are excluded from this documentation.
+
+Tags, larger result sets/paging, unknown/repeated parameters, independent
+Forward transitions, delayed reads, error recovery, mobile and account
+transitions remain separate live acceptance gates. The dated curated roadmap
+remains byte-identical at its Version 32 base.
+
+## Version 40 scoped project-comment plain-text web links
+
+Version 40 changes the project-comment output line/import and adds one scoped
+plain-text link renderer. Explicit HTTP(S) candidates use the existing safe URL
+helper, rejecting credentials and unsupported schemes. Bare hostnames remain
+text. Prose punctuation is separated without discarding balanced URL brackets;
+backslashes, control/bidi/format characters and misleading token prefixes are
+rejected as whole tokens. The reviewed final V2 includes U+061C and FEFF handling.
+Ordinary comment text remains React text, with no HTML interpretation.
+
+Accepted links retain their visible label, underline, wrapping and keyboard
+focus styling; they open a new tab with noopener/noreferrer and an accessible
+new-tab description. The existing comment bytes, server API, sanitizer, account
+scope, draft-revision/unmount guards, header and project actions are unchanged.
+No content migration, automatic fetch or backend mutation is added.
+
+Independent exact V2 source review, production typechecking/build and static
+artifact/archive checks passed. Deployment succeeded on 17 October 2026 at
+23:30:31 UTC. At 23:31 UTC a bounded published read of an unchanged existing
+comment showed exactly one correct HTTPS roadmap link, underline, new-tab
+attributes/description and noopener/noreferrer. Native keyboard focus showed a
+2-pixel outline. Reload retained the same text and link; the 1180-by-757-pixel
+view had no horizontal overflow. No content write or external link opening was
+performed. Actual external/new-tab navigation, narrow-layout and further URL
+variants remain unverified live. Unicode, punctuation, unsupported-scheme and
+credential rejection are source-reviewed; no malicious/race fixture was posted
+for this backup. No comment contents, record identifiers, account details or
+screenshots are committed.
+Earlier bounded acceptance and outstanding flow limits remain as documented.
+The curated roadmap stays byte-identical at its dated Version 32 base.
 
 ## Keeping the branches separate
 
