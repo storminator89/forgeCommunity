@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { sqlitePath } from './sqlite-init.mjs';
+import { inspectCommunityBookmarkStorage } from './community-bookmark-storage.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const reviewedSqlite = [
@@ -17,7 +18,7 @@ const reviewedSqlite = [
   '0017_chat_message_cursor_index.sql', '0018_chat_read_cursor.sql',
   '0019_course_qa.sql', '0020_spaces.sql', '0021_space_report_targets.sql',
   '0022_space_mission_foundation.sql', '0023_space_mission_contributions.sql',
-  '0024_event_waitlist.sql', '0025_space_polls.sql', '0026_space_mission_week.sql', '0027_space_mission_bookmarks.sql', '0028_course_qa_lesson_context.sql', '0029_space_mission_invitations.sql',
+  '0024_event_waitlist.sql', '0025_space_polls.sql', '0026_space_mission_week.sql', '0027_space_mission_bookmarks.sql', '0028_course_qa_lesson_context.sql', '0029_space_mission_invitations.sql', '0030_community_bookmarks.sql',
 ];
 const reviewedPostgresql = [
   '0001_skill_endorsements.sql', '0002_course_progress.sql', '0003_reports.sql',
@@ -30,7 +31,7 @@ const reviewedPostgresql = [
   '0016_chat_message_cursor_index.sql', '0017_chat_read_cursor.sql',
   '0018_course_qa.sql', '0019_spaces.sql', '0020_space_report_targets.sql',
   '0021_space_mission_foundation.sql', '0022_space_mission_contributions.sql',
-  '0023_event_waitlist.sql', '0024_space_polls.sql', '0025_space_mission_week.sql', '0026_space_mission_bookmarks.sql', '0027_course_qa_lesson_context.sql', '0028_space_mission_invitations.sql',
+  '0023_event_waitlist.sql', '0024_space_polls.sql', '0025_space_mission_week.sql', '0026_space_mission_bookmarks.sql', '0027_course_qa_lesson_context.sql', '0028_space_mission_invitations.sql', '0029_community_bookmarks.sql',
 ];
 
 function expectedHistory(provider) {
@@ -279,6 +280,8 @@ async function inspect(query, provider) {
     await query('SELECT "invitationAttemptCount" FROM "SpaceMission" LIMIT 0');
     await inspectInvitationStorage(query, provider);
   } catch { throw new Error('Mission invitation schema or constraints are missing or incomplete; startup refused.'); }
+  try { await inspectCommunityBookmarkStorage(query, provider); }
+  catch { throw new Error('Community bookmark schema or constraints are missing or incomplete; startup refused.'); }
   const missingDraft = await query(`SELECT c."id" FROM "Course" c
     LEFT JOIN "CourseDraft" d ON d."courseId" = c."id"
     WHERE d."courseId" IS NULL LIMIT 1`);

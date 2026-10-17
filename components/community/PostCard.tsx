@@ -8,6 +8,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { motion, AnimatePresence } from 'framer-motion'
 import { CommentSection } from './CommentSection'
 import { ReportControl } from './ReportControl'
+import { BookmarkButton } from './bookmarks/BookmarkButton'
 
 import { cn } from "@/lib/utils"
 import { sanitizeRichHtml } from '@/lib/sanitize-html'
@@ -155,7 +156,7 @@ export function PostCard({
 
         {/* Footer */}
         <CardFooter className="px-6 py-4 bg-muted/50 flex flex-wrap items-center justify-between gap-2 border-t border-border">
-          <div className="flex items-center space-x-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="ghost"
               size="sm"
@@ -186,6 +187,7 @@ export function PostCard({
               <span className="font-medium">{commentCount}</span>
               <span className="ml-1 hidden sm:inline">{commentLabel}</span>
             </Button>
+            {currentUserId && post.published === true && <BookmarkButton kind="post" targetId={post.id} />}
           </div>
           {currentUserId && !isAuthor && post.published !== false &&
             <ReportControl targetType="POST" targetId={post.id} />}
@@ -207,6 +209,7 @@ export function PostCard({
                   comments={post.comments}
                   currentUserId={currentUserId}
                   canReport={post.published !== false}
+                  canBookmark={post.published === true}
                   canSelectSolution={isAuthor && post.published === true}
                   acceptedCommentId={post.published !== false ? post.acceptedSolution?.comment.id : undefined}
                   onSelectSolution={onSelectSolution}
