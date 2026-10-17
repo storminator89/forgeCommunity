@@ -2,7 +2,7 @@ import '@testing-library/jest-dom';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useSession } from 'next-auth/react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import SpaceMissionPage from '@/app/community/spaces/[spaceId]/missions/[missionId]/page';
 import { SpaceMissionIndex } from '@/components/spaces/SpaceMissionIndex';
 import { ModerationQueue } from '@/app/moderation/ModerationQueue';
@@ -10,7 +10,7 @@ import { spaceJson, type SpaceSummary } from '@/components/spaces/space-api';
 import { isOwnBookmark, missionCurrentMonday, missionWeekDates, missionWeekPreview, type MissionAuditContribution, type MissionContribution, type SpaceMission } from '@/components/spaces/mission-api';
 
 jest.mock('next-auth/react', () => ({ useSession: jest.fn() }));
-jest.mock('next/navigation', () => ({ useParams: jest.fn(), useRouter: jest.fn() }));
+jest.mock('next/navigation', () => ({ useParams: jest.fn(), useRouter: jest.fn(), useSearchParams: jest.fn() }));
 jest.mock('@/components/Sidebar', () => ({ Sidebar: () => null }));
 jest.mock('@/components/user-nav', () => ({ UserNav: () => null }));
 jest.mock('@/components/theme-toggle', () => ({ ThemeToggle: () => null }));
@@ -68,6 +68,7 @@ function mutationCalls(path: string, method: string) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  jest.mocked(useSearchParams).mockReturnValue(new URLSearchParams() as ReturnType<typeof useSearchParams>);
   jest.mocked(useParams).mockReturnValue({ spaceId: 'secret', missionId: 'mission-1' });
   jest.mocked(useRouter).mockReturnValue({ push: jest.fn() } as unknown as ReturnType<typeof useRouter>);
   jest.mocked(useSession).mockReturnValue(session('member'));

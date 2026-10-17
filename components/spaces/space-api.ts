@@ -36,7 +36,7 @@ export interface SpaceReply {
 export interface SpacePage<T> { items: T[]; nextCursor: string | null }
 
 export class SpaceHttpError extends Error {
-  constructor(public status: number, message: string) { super(message); this.name = 'SpaceHttpError'; }
+  constructor(public status: number, message: string, public code?: string) { super(message); this.name = 'SpaceHttpError'; }
 }
 
 export function isSpaceAbort(error: unknown) {
@@ -49,7 +49,8 @@ export async function spaceJson<T>(path: string, init: RequestInit = {}): Promis
   if (!response.ok) {
     const message = data && typeof data === 'object' && 'error' in data && typeof data.error === 'string'
       ? data.error : 'Die Anfrage konnte nicht abgeschlossen werden.';
-    throw new SpaceHttpError(response.status, message);
+    const code = data && typeof data === 'object' && 'code' in data && typeof data.code === 'string' ? data.code : undefined;
+    throw new SpaceHttpError(response.status, message, code);
   }
   return data as T;
 }

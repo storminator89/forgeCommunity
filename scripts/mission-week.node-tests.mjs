@@ -57,8 +57,8 @@ const legacyMission = db => db.prepare(`SELECT id,"spaceId","creatorId","request
 const columns = db => db.prepare('PRAGMA table_info("SpaceMission")').all().map(row => row.name);
 
 test('paired current week tails add exactly four nullable columns and a complete positive-range check without rebuilding history', () => {
-  assert.deepEqual(names(sqliteDirectory).slice(-4), ['0025_space_polls.sql', sqliteTail, '0027_space_mission_bookmarks.sql', '0028_course_qa_lesson_context.sql']);
-  assert.deepEqual(names(postgresDirectory).slice(-4), ['0024_space_polls.sql', postgresTail, '0026_space_mission_bookmarks.sql', '0027_course_qa_lesson_context.sql']);
+  assert.deepEqual(names(sqliteDirectory).slice(-5), ['0025_space_polls.sql', sqliteTail, '0027_space_mission_bookmarks.sql', '0028_course_qa_lesson_context.sql', '0029_space_mission_invitations.sql']);
+  assert.deepEqual(names(postgresDirectory).slice(-5), ['0024_space_polls.sql', postgresTail, '0026_space_mission_bookmarks.sql', '0027_course_qa_lesson_context.sql', '0028_space_mission_invitations.sql']);
   for (const ddl of [sql(sqliteTail), sql(postgresTail, postgresDirectory)]) {
     const statements = ddl.replace(/^--.*$/gm, '');
     assert.ok(!/\b(?:DROP|DELETE|UPDATE|INSERT|CREATE|RENAME)\b/i.test(statements));
@@ -206,7 +206,7 @@ test('PostgreSQL populated tracked upgrade preserves all old mission state and r
     await applyPostgresqlUpgrades(url); await applyPostgresqlUpgrades(url);
     const current = await pgRows(db, 'SpaceMission');
     for (const row of current) { for (const field of fields) { assert.equal(row[field], null); delete row[field]; } }
-    assert.deepEqual(current, before);
+    assert.deepEqual(current, before.map(row => ({ ...row, invitationAttemptCount: 0 })));
     assert.deepEqual(await pgRows(db, 'SpaceMissionParticipation'), consent);
     assert.deepEqual(await pgRows(db, 'SpaceMissionContribution'), contributions);
     assert.deepEqual((await db.query('SELECT * FROM "_app_schema_upgrades" WHERE name < $1 ORDER BY 1,2', [postgresTail])).rows, history);

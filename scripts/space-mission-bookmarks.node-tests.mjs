@@ -18,6 +18,8 @@ const sqliteTail = '0027_space_mission_bookmarks.sql';
 const postgresTail = '0026_space_mission_bookmarks.sql';
 const sqliteSuccessor = '0028_course_qa_lesson_context.sql';
 const postgresSuccessor = '0027_course_qa_lesson_context.sql';
+const sqliteInvitationSuccessor = '0029_space_mission_invitations.sql';
+const postgresInvitationSuccessor = '0028_space_mission_invitations.sql';
 const contextIndex = 'CourseQuestion_lesson_scope_page_idx';
 const setting = 'SpaceMissionBookmarkSetting';
 const access = 'SpaceMissionBookmarkAccess';
@@ -59,7 +61,7 @@ function fixture({ predecessor = false } = {}) {
   };
   deploy();
   return { url, migrations, deploy, addTail: () => addFiles([sqliteTail]),
-    addSuccessor: () => addFiles([sqliteSuccessor]),
+    addSuccessor: () => addFiles(names(sqliteDirectory).filter(name => name >= sqliteSuccessor)),
     open: () => { const db = new DatabaseSync(url.slice(5)); db.exec('PRAGMA foreign_keys=ON'); return db; } };
 }
 
@@ -79,8 +81,8 @@ const sqliteIntegrity = db => {
 };
 
 test('paired bookmark tails create only the two private sidecars with provider-equivalent keys, checks and user-leading index', () => {
-  assert.deepEqual(names(sqliteDirectory).slice(-3), ['0026_space_mission_week.sql', sqliteTail, sqliteSuccessor]);
-  assert.deepEqual(names(postgresDirectory).slice(-3), ['0025_space_mission_week.sql', postgresTail, postgresSuccessor]);
+  assert.deepEqual(names(sqliteDirectory).slice(-4), ['0026_space_mission_week.sql', sqliteTail, sqliteSuccessor, '0029_space_mission_invitations.sql']);
+  assert.deepEqual(names(postgresDirectory).slice(-4), ['0025_space_mission_week.sql', postgresTail, postgresSuccessor, '0028_space_mission_invitations.sql']);
   const sqlite = sql(sqliteTail); const postgres = sql(postgresTail, postgresDirectory);
   assert.equal(sqlite.replaceAll('DATETIME', 'TIMESTAMP(3)').replace(/typeof\("(?:revision|epoch)"\) = 'integer' AND /g, ''), postgres);
   for (const ddl of [sqlite, postgres]) {
@@ -247,16 +249,19 @@ test('SQLite bookmark readiness/deployment fail closed for missing, tampered, ga
     await assert.rejects(assertCoursePublicationReady(f.url, 'sqlite'), historyFailure);
     assert.throws(f.deploy, /gap before 0027_space_mission_bookmarks\.sql/);
     db.prepare('INSERT INTO _app_migrations (name,checksum) VALUES (?,?)').run('0026_space_mission_week.sql',checksum(sql('0026_space_mission_week.sql')));
-    const savedTails = db.prepare('SELECT * FROM _app_migrations WHERE name IN (?,?) ORDER BY name').all(sqliteTail,sqliteSuccessor);
+    const savedTails = db.prepare('SELECT * FROM _app_migrations WHERE name IN (?,?,?) ORDER BY name').all(sqliteTail,sqliteSuccessor,sqliteInvitationSuccessor);
     db.prepare('DELETE FROM _app_migrations WHERE name=?').run(sqliteTail);
     await assert.rejects(assertCoursePublicationReady(f.url, 'sqlite'), historyFailure);
     assert.throws(f.deploy, /gap before 0028_course_qa_lesson_context\.sql/);
-    // Removing both last records exercises duplicate bookmark DDL separately.
     db.prepare('DELETE FROM _app_migrations WHERE name=?').run(sqliteSuccessor);
+    await assert.rejects(assertCoursePublicationReady(f.url, 'sqlite'), historyFailure);
+    assert.throws(f.deploy, /gap before 0029_space_mission_invitations\.sql/);
+    // Removing all three tail records reaches the original duplicate-DDL path.
+    db.prepare('DELETE FROM _app_migrations WHERE name=?').run(sqliteInvitationSuccessor);
     assert.throws(f.deploy, /already exists/);
     for (const row of savedTails) db.prepare('INSERT INTO _app_migrations (name,checksum,applied_at) VALUES (?,?,?)')
       .run(row.name,row.checksum,row.applied_at);
-    assert.deepEqual(db.prepare('SELECT * FROM _app_migrations WHERE name IN (?,?) ORDER BY name').all(sqliteTail,sqliteSuccessor),savedTails);
+    assert.deepEqual(db.prepare('SELECT * FROM _app_migrations WHERE name IN (?,?,?) ORDER BY name').all(sqliteTail,sqliteSuccessor,sqliteInvitationSuccessor),savedTails);
     db.prepare('INSERT INTO _app_migrations (name,checksum) VALUES (?,?)').run('0028_unreviewed_bookmarks.sql','unknown');
     await assert.rejects(assertCoursePublicationReady(f.url, 'sqlite'), historyFailure); assert.throws(f.deploy, /not present in the image/);
     db.prepare('DELETE FROM _app_migrations WHERE name=?').run('0028_unreviewed_bookmarks.sql');
@@ -297,8 +302,8 @@ async function postgresRows(db) {
   const tables = (await db.query(`SELECT table_name FROM information_schema.tables WHERE table_schema=current_schema() AND table_type='BASE TABLE' ORDER BY table_name`)).rows;
   const result = {};
   for (const { table_name: name } of tables) {
-    if (name === '_app_schema_upgrades' || bookmarkTables.includes(name)) continue;
-    result[name] = (await db.query(`SELECT to_jsonb(t) AS row FROM ${quote(name)} t ORDER BY to_jsonb(t)::text`)).rows;
+    if (name === '_app_schema_upgrades' || bookmarkTables.includes(name) || name.startsWith('SpaceMissionInvitation')) continue;
+    result[name] = (await db.query(`SELECT ${name === 'SpaceMission' ? "to_jsonb(t) - 'invitationAttemptCount'" : 'to_jsonb(t)'} AS row FROM ${quote(name)} t ORDER BY to_jsonb(t)::text`)).rows;
   }
   return result;
 }
@@ -364,7 +369,7 @@ test('PostgreSQL populated predecessor upgrade preserves all old rows/indexes/ch
     assert.deepEqual(await postgresRows(db),rows);
     assert.deepEqual((await db.query('SELECT * FROM "_app_schema_upgrades" WHERE name < $1 ORDER BY name',[postgresTail])).rows,history);
     const currentIndexes = (await db.query(`SELECT indexname,indexdef FROM pg_indexes WHERE schemaname=current_schema()
-      AND tablename NOT IN ('SpaceMissionBookmarkSetting','SpaceMissionBookmarkAccess') ORDER BY indexname`)).rows;
+      AND tablename NOT IN ('SpaceMissionBookmarkSetting','SpaceMissionBookmarkAccess') AND tablename NOT LIKE 'SpaceMissionInvitation%' ORDER BY indexname`)).rows;
     assert.deepEqual(currentIndexes.filter(row => row.indexname !== contextIndex),indexes);
     assert.equal(currentIndexes.length,indexes.length+1);
     assert.match(currentIndexes.find(row => row.indexname === contextIndex)?.indexdef ?? '',
@@ -377,15 +382,18 @@ test('PostgreSQL populated predecessor upgrade preserves all old rows/indexes/ch
     await db.query('DELETE FROM "_app_schema_upgrades" WHERE name=$1',['0025_space_mission_week.sql']);
     await assert.rejects(assertCoursePublicationReady(url,'postgresql'),historyFailure); await assert.rejects(applyPostgresqlUpgrades(url),/gap before 0026_space_mission_bookmarks\.sql/);
     await db.query('INSERT INTO "_app_schema_upgrades" (name,checksum) VALUES ($1,$2)',['0025_space_mission_week.sql',checksum(sql('0025_space_mission_week.sql',postgresDirectory))]);
-    const savedTails = (await db.query('SELECT * FROM "_app_schema_upgrades" WHERE name=ANY($1::text[]) ORDER BY name',[[postgresTail,postgresSuccessor]])).rows;
+    const savedTails = (await db.query('SELECT * FROM "_app_schema_upgrades" WHERE name=ANY($1::text[]) ORDER BY name',[[postgresTail,postgresSuccessor,postgresInvitationSuccessor]])).rows;
     await db.query('DELETE FROM "_app_schema_upgrades" WHERE name=$1',[postgresTail]);
     await assert.rejects(assertCoursePublicationReady(url,'postgresql'),historyFailure);
     await assert.rejects(applyPostgresqlUpgrades(url),/gap before 0027_course_qa_lesson_context\.sql/);
     await db.query('DELETE FROM "_app_schema_upgrades" WHERE name=$1',[postgresSuccessor]);
+    await assert.rejects(assertCoursePublicationReady(url,'postgresql'),historyFailure);
+    await assert.rejects(applyPostgresqlUpgrades(url),/gap before 0028_space_mission_invitations\.sql/);
+    await db.query('DELETE FROM "_app_schema_upgrades" WHERE name=$1',[postgresInvitationSuccessor]);
     await assert.rejects(applyPostgresqlUpgrades(url),pgError('42P07'));
     for (const row of savedTails) await db.query('INSERT INTO "_app_schema_upgrades" (name,checksum,applied_at) VALUES ($1,$2,$3)',
       [row.name,row.checksum,row.applied_at]);
-    assert.deepEqual((await db.query('SELECT * FROM "_app_schema_upgrades" WHERE name=ANY($1::text[]) ORDER BY name',[[postgresTail,postgresSuccessor]])).rows,savedTails);
+    assert.deepEqual((await db.query('SELECT * FROM "_app_schema_upgrades" WHERE name=ANY($1::text[]) ORDER BY name',[[postgresTail,postgresSuccessor,postgresInvitationSuccessor]])).rows,savedTails);
     await db.query('INSERT INTO "_app_schema_upgrades" (name,checksum) VALUES ($1,$2)',['0027_unreviewed_bookmarks.sql','unknown']);
     await assert.rejects(assertCoursePublicationReady(url,'postgresql'),historyFailure); await assert.rejects(applyPostgresqlUpgrades(url),/history mismatch/);
     await db.query('DELETE FROM "_app_schema_upgrades" WHERE name=$1',['0027_unreviewed_bookmarks.sql']);

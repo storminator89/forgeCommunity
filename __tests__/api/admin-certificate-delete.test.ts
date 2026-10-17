@@ -3,6 +3,7 @@ import { DELETE } from '@/app/api/admin/users/[id]/route';
 import prisma from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { deleteCourseDependencies } from '@/lib/server/course-deletion';
+import { Prisma } from '@prisma/client';
 
 jest.mock('next/server', () => ({
   NextResponse: class extends Response {
@@ -23,12 +24,20 @@ const course = { findMany: jest.fn(), deleteMany: jest.fn() };
 const certificate = { findFirst: jest.fn(), deleteMany: jest.fn() };
 const userSettings = { deleteMany: jest.fn() };
 const endorsement = { findMany: jest.fn(), deleteMany: jest.fn() };
+const spaceMissionInvitation = { findMany: jest.fn() };
+const spaceMissionInvitationRequest = { deleteMany: jest.fn() };
+const spaceMissionInvitationAccess = { deleteMany: jest.fn() };
+const spaceMissionInvitationSetting = { deleteMany: jest.fn() };
 const otherDeleteMany = jest.fn();
-const tx = new Proxy({ user, course, certificate, userSettings, endorsement }, {
+const tx = new Proxy({ user, course, certificate, userSettings, endorsement, spaceMissionInvitation,
+  spaceMissionInvitationRequest, spaceMissionInvitationAccess, spaceMissionInvitationSetting }, {
   get(target, key) { return target[key as keyof typeof target] ?? { deleteMany: otherDeleteMany }; },
 });
 const request = () => new Request('http://localhost/api/admin/users/teacher', { method: 'DELETE' }) as never;
 const params = { params: Promise.resolve({ id: 'teacher' }) };
+const serializationConflict = () => new Prisma.PrismaClientKnownRequestError('Serialization conflict', {
+  code: 'P2034', clientVersion: Prisma.prismaVersion.client,
+});
 
 beforeEach(() => {
   jest.resetAllMocks();
@@ -40,6 +49,10 @@ beforeEach(() => {
   course.findMany.mockResolvedValue([{ id: 'course-1' }]);
   certificate.findFirst.mockResolvedValue(null);
   endorsement.findMany.mockResolvedValue([]);
+  spaceMissionInvitation.findMany.mockResolvedValue([]);
+  spaceMissionInvitationRequest.deleteMany.mockResolvedValue({ count: 0 });
+  spaceMissionInvitationAccess.deleteMany.mockResolvedValue({ count: 0 });
+  spaceMissionInvitationSetting.deleteMany.mockResolvedValue({ count: 0 });
   db.$transaction.mockImplementation(async (work: (client: typeof tx) => Promise<unknown>) => work(tx));
 });
 
@@ -64,6 +77,10 @@ test('does not block deletion for certificates belonging only to the deleted acc
   // are deleted by the existing account-erasure path.
   const response = await DELETE(request(), params);
   expect(response.status).toBe(200);
+  expect(spaceMissionInvitation.findMany).toHaveBeenCalledTimes(2);
+  expect(spaceMissionInvitationRequest.deleteMany).toHaveBeenCalledWith({ where: { senderId: 'teacher' } });
+  expect(spaceMissionInvitationAccess.deleteMany).toHaveBeenCalledWith({ where: { userId: 'teacher' } });
+  expect(spaceMissionInvitationSetting.deleteMany).toHaveBeenCalledWith({ where: { userId: 'teacher' } });
   expect(certificate.findFirst).toHaveBeenCalledWith(expect.objectContaining({
     where: expect.objectContaining({ userId: { not: 'teacher' } }),
   }));
@@ -77,7 +94,7 @@ test('does not block deletion for certificates belonging only to the deleted acc
 
 test('rechecks newly issued third-party certificates after a serialization conflict', async () => {
   certificate.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: 'new-certificate' });
-  user.delete.mockRejectedValueOnce({ code: 'P2034' });
+  user.delete.mockRejectedValueOnce(serializationConflict());
   const response = await DELETE(request(), params);
   expect(response.status).toBe(409);
   expect(db.$transaction).toHaveBeenCalledTimes(2);
@@ -97,7 +114,7 @@ test('preserves authentication and administrator boundaries', async () => {
 });
 
 test('returns 409 after bounded serialization failures without claiming deletion', async () => {
-  db.$transaction.mockRejectedValue({ code: 'P2034' });
+  db.$transaction.mockRejectedValue(serializationConflict());
   const response = await DELETE(request(), params);
   expect(response.status).toBe(409);
   expect(db.$transaction).toHaveBeenCalledTimes(4);

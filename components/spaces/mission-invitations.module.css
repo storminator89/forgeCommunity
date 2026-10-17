@@ -1,0 +1,22 @@
+.region { min-width: 0; max-width: 100%; margin-block: 1.25rem; padding-block: 1.25rem; border-block: 1px solid hsl(var(--border)); color: hsl(var(--foreground)); overflow-wrap: anywhere; }
+.region h2 { font-size: 1.125rem; font-weight: 600; line-height: 1.4; }
+.region h3 { font-size: 1rem; font-weight: 600; line-height: 1.5; }
+.region p { max-width: 70ch; margin-block: .5rem; font-size: .875rem; line-height: 1.65; }
+.quiet { color: hsl(var(--muted-foreground)); }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: .625rem; margin-block: .75rem; min-width: 0; }
+.region button, .region input, .region a { max-width: 100%; }
+.region button { min-height: 44px; height: auto; white-space: normal; overflow-wrap: anywhere; }
+.region :is(button, input, a, summary):focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 3px; }
+.input { display: block; min-width: 0; width: 100%; min-height: 44px; padding: .625rem; border: 1px solid hsl(var(--input)); border-radius: .5rem; background: hsl(var(--background)); color: hsl(var(--foreground)); font: inherit; }
+.field { flex: 1 1 14rem; min-width: 0; }
+.list { list-style: none; padding: 0; margin: .75rem 0; display: grid; gap: .75rem; }
+.list li { min-width: 0; padding-block: .75rem; border-bottom: 1px solid hsl(var(--border)); }
+.peer { display: flex; align-items: flex-start; gap: .625rem; min-height: 44px; padding-block: .5rem; cursor: pointer; }
+.peer input { flex: 0 0 auto; margin-top: .25rem; }
+.link { display: inline-block; min-height: 44px; padding-block: .625rem; text-decoration: underline; text-underline-offset: .2em; }
+.error { color: hsl(var(--destructive)); }
+.target { scroll-margin-top: 1.5rem; }
+.region summary { min-height: 44px; cursor: pointer; display: list-item; }
+.region fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.region legend { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+.peer > span { min-width: 0; }

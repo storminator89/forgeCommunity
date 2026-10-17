@@ -23,7 +23,7 @@ function database() {
 }
 
 test('paired poll tails are additive, scoped and have matching tables/checks/indexes', () => {
-  assert.deepEqual(names.slice(-4), [tail, '0026_space_mission_week.sql', '0027_space_mission_bookmarks.sql', '0028_course_qa_lesson_context.sql']);
+  assert.deepEqual(names.slice(-5), [tail, '0026_space_mission_week.sql', '0027_space_mission_bookmarks.sql', '0028_course_qa_lesson_context.sql', '0029_space_mission_invitations.sql']);
   const sqlite = source(`prisma/sqlite-migrations/${tail}`);
   const postgres = source('prisma/postgresql-upgrades/0024_space_polls.sql');
   assert.equal(sqlite.replaceAll('DATETIME', 'TIMESTAMP(3)'), postgres);

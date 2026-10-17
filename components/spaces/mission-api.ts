@@ -1,4 +1,5 @@
 import { DateTime, IANAZone } from 'luxon';
+import type { MissionNextAction } from '@/types/space-mission-invitations';
 import { apiSpaceUrl, spaceUrl, SpaceHttpError, type SpaceAuthor } from './space-api';
 
 export interface MissionWeek {
@@ -37,6 +38,7 @@ export interface SpaceMissionOverview {
 }
 
 export interface SpaceMission {
+  myNextAction?: MissionNextAction | null;
   id: string;
   spaceId: string;
   title: string;

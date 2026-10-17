@@ -17,6 +17,10 @@ import { SpaceShell } from './SpaceShell';
 import { SpaceAuthorLine } from './SpaceAuthorLine';
 import { SpaceMissionConfirm } from './SpaceMissionConfirm';
 import { SpaceMissionModeration } from './SpaceMissionModeration';
+import { MissionInvitationComposer } from './MissionInvitationComposer';
+import { MissionInvitationDecision } from './MissionInvitationDecision';
+import { missionNextStep } from './mission-invitation-ui';
+import invitationStyles from './mission-invitations.module.css';
 import { MissionBookmarkButton } from './MissionBookmarkButton';
 import { useMissionFocusReturn } from './useMissionFocusReturn';
 import { apiSpaceUrl, isSpaceAbort, spaceUrl, SpaceHttpError, type SpaceSummary } from './space-api';
@@ -24,7 +28,7 @@ import { isOwnBookmark, missionAccessDenied, missionApiUrl, missionBookmarkPriva
 
 type Snapshot = { space: SpaceSummary; mission: SpaceMission };
 
-export function SpaceMissionDetail({ spaceId, missionId, viewerId }: { spaceId: string; missionId: string; viewerId: string }) {
+export function SpaceMissionDetail({ spaceId, missionId, viewerId, invitationId }: { spaceId: string; missionId: string; viewerId: string; invitationId?: string }) {
   const base = missionApiUrl(spaceId, missionId);
   const { enabled: motionEnabled } = useFriendlyMotion();
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
@@ -198,11 +202,12 @@ export function SpaceMissionDetail({ spaceId, missionId, viewerId }: { spaceId: 
   const targets = mission.contributions.filter(item => item.kind === 'INSIGHT' && item.author.id !== viewerId);
   const availableKind = kind === 'INSIGHT' ? !ownInsight : !ownBuildOn && targets.length > 0;
   const mayPost = mission.participation.active && !mission.closedAt && (!ownInsight || !ownBuildOn);
+  const nextStep = mission.myNextAction ? missionNextStep(mission.myNextAction) : null;
   const hasContributionTask = mayPost && (!ownInsight || (!ownBuildOn && targets.length > 0));
 
   return <SpaceShell>
     <nav aria-label="Pfad" className="mb-6 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground"><Link prefetch={false} href="/community/spaces" className="rounded-sm py-2 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring">Spaces</Link><span aria-hidden="true">/</span><Link prefetch={false} href={spaceUrl(spaceId)} className="min-w-0 max-w-full truncate rounded-sm py-2 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring">{space.name}</Link><span className="ml-auto"><FriendlyMotionToggle /></span></nav>
-    <div data-confirmed={Boolean(feedback && !actionError)} className={`max-w-4xl ${motionEnabled ? styles.motion : ''}`}>
+    <div data-confirmed={Boolean(feedback && !actionError)} className={`${styles.detail} max-w-4xl ${motionEnabled ? styles.motion : ''}`}>
     <header className={`${styles.surface} ${styles.hero}`}>
       <div className={styles.heroCopy}>
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -230,6 +235,11 @@ export function SpaceMissionDetail({ spaceId, missionId, viewerId }: { spaceId: 
       </div>
     </div>}
 
+    {invitationId && <MissionInvitationDecision viewerId={viewerId} spaceId={spaceId} missionId={missionId} invitationId={invitationId} onMission={updated => { if (updated.id === missionId && updated.spaceId === spaceId) { participationRef.current = updated.participation; setSnapshot({ space, mission: updated }); setContent(''); setTargetId(''); setKind('INSIGHT'); } }} />}
+    {nextStep && <section className={invitationStyles.region} data-invitation-region="next-action" aria-labelledby="mission-next-action">
+      <h2 id="mission-next-action" tabIndex={-1}>Dein nächster Schritt</h2>
+      {nextStep.href ? <a className={invitationStyles.link} href={nextStep.href}>{nextStep.text}</a> : <p>{nextStep.text}</p>}
+    </section>}
     <div className="mt-4">
       <p ref={feedbackRef} id={feedbackId} tabIndex={-1} role={actionError ? 'alert' : 'status'} data-feedback={Boolean(feedback && !actionError)} className={`${styles.confirmed} text-sm leading-relaxed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${actionError ? 'text-destructive' : 'text-muted-foreground'}`}>{actionError || feedback}</p>
       <section aria-labelledby="mission-goal" className={`${styles.surface} ${styles.goalPanel} mt-4`}>
@@ -274,13 +284,13 @@ export function SpaceMissionDetail({ spaceId, missionId, viewerId }: { spaceId: 
           </li>;
         })}</ul> : <p className="mt-4 text-sm text-muted-foreground">Noch keine sichtbaren Beiträge. Wer freiwillig teilnimmt, kann eine Erkenntnis teilen.</p>}
 
-        {mission.ownContributions.filter(item => !mission.contributions.some(visible => visible.id === item.id)).map(item => <div key={item.id} className="mt-4 flex flex-wrap items-center justify-between gap-3 border-y py-4">
+        {mission.ownContributions.filter(item => !mission.contributions.some(visible => visible.id === item.id)).map(item => <div id={`mission-own-contribution-${item.id}`} key={item.id} className="mt-4 flex flex-wrap items-center justify-between gap-3 border-y py-4">
           <p className="text-sm text-muted-foreground">Dein Beitrag ({item.kind === 'INSIGHT' ? 'Erkenntnis' : 'Weitergedacht'}) ist {item.hidden ? 'ausgeblendet' : 'wegen einer nicht mehr sichtbaren Erkenntnis verborgen'} und zählt nicht zum Ziel.</p>
           {item.canWithdraw && <SpaceMissionConfirm label="Beitrag zurückziehen" description="Der Beitrag bleibt für Mitglieder verborgen. Admins können den Inhalt zur Moderation aufbewahren. Er wird auch nach erneuter Teilnahme nicht wieder sichtbar." onConfirm={() => void mutate(`${base}/contributions/${encodeURIComponent(item.id)}`, 'DELETE', { epoch: mission.participation.epoch }, 'Dein verborgener Beitrag ist zurückgezogen.')} />}
         </div>)}
 
         {mayPost && <form onSubmit={contribute} aria-describedby={privacyId} className={`${styles.surface} ${styles.form} space-y-4`}>
-          <h3 ref={contributionTargetRef} tabIndex={-1} className={`${styles.taskTarget} text-base font-semibold`}>Dein Beitrag</h3>
+          <h3 id="mission-contributions-composer" ref={contributionTargetRef} tabIndex={-1} className={`${styles.taskTarget} text-base font-semibold`}>Dein Beitrag</h3>
           <p className="text-xs leading-relaxed text-muted-foreground">Im privaten Space sichtbar. In kleinen Gruppen können Änderungen einzelne Personen erkennen lassen.</p>
           <fieldset><legend className="mb-2 text-sm font-medium">Was möchtest du teilen?</legend><div className={styles.kindChoices}><label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm"><input type="radio" name="mission-kind" checked={kind === 'INSIGHT'} onChange={() => { setKind('INSIGHT'); setContent(''); setTargetId(''); }} disabled={ownInsight} className="h-4 w-4 accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" />Eine Erkenntnis{ownInsight ? ' (geteilt)' : ''}</label><label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm"><input type="radio" name="mission-kind" checked={kind === 'BUILD_ON'} onChange={() => { setKind('BUILD_ON'); setContent(''); setTargetId(''); }} disabled={ownBuildOn || targets.length === 0} className="h-4 w-4 accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" />Darauf aufbauen{ownBuildOn ? ' (geteilt)' : ''}</label></div></fieldset>
           {!targets.length && !ownBuildOn && <p className="text-sm text-muted-foreground">Aufbauen ist möglich, sobald eine andere teilnehmende Person eine Erkenntnis teilt.</p>}
@@ -289,6 +299,7 @@ export function SpaceMissionDetail({ spaceId, missionId, viewerId }: { spaceId: 
           {!availableKind && <p className="text-sm text-muted-foreground">Wähle die andere Beitragsart, um weiterzumachen.</p>}
         </form>}
       </section>
+      <MissionInvitationComposer viewerId={viewerId} spaceId={spaceId} missionId={missionId} participantEpoch={mission.participation.epoch} eligible={space.isMember && space.canWrite !== false && mission.myNextAction !== null && mission.participation.active && !mission.closedAt} />
       {mission.creator && <details className={styles.disclosure}><summary>Mission erstellt von</summary><SpaceAuthorLine author={mission.creator} date={mission.createdAt} /></details>}
       {mission.canManage && <SpaceMissionModeration base={base} request={request} onModerate={(id, hidden) => void mutate(`${base}/contributions/${encodeURIComponent(id)}/moderation`, 'PATCH', { hidden }, hidden ? 'Der Beitrag ist ausgeblendet.' : 'Moderation gespeichert. Nur aktuell gültige Beiträge sind sichtbar.')} />}
     </div>
