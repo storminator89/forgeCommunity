@@ -17,6 +17,26 @@ German interface.
 
 ![ForgeCommunity Home in light mode, with learning illustration and links to the community, courses, knowledge base, projects, members and events](docs/ui/readme/home-desktop-light.png)
 
+The gallery below shows the current interface across the community, courses,
+members and events. Authenticated views use synthetic example content. See the
+[complete redesign gallery](artifacts/redesign/README.md) for all routes,
+mobile and dark-mode captures, and verification details.
+
+<details>
+<summary>More screenshots from the current redesign</summary>
+
+![Community feed with the shared learning banner, topic search and activity panel](artifacts/redesign/after-community-light-1440.png)
+
+![Course catalogue with search and learning cards](artifacts/redesign/after-courses-light-1440.png)
+
+![Member directory with search, filters and list view](artifacts/redesign/after-members-light-1440.png)
+
+![Events list with month, week and list controls and event filters](artifacts/redesign/after-events-Liste-light-1440.png)
+
+[Open the full desktop contact sheet](artifacts/redesign/all-pages-desktop-contact-sheet.jpg)
+
+</details>
+
 ## Features
 
 ### Learn and teach
