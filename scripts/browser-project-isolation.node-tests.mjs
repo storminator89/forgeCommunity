@@ -9,6 +9,16 @@ const workflow = yaml.load(source('.github/workflows/ci.yml'));
 const projects = ['desktop-chromium', 'mobile-320-chromium', 'mobile-390-chromium'];
 const independentCondition = "${{ !cancelled() && steps.browser_build.outcome == 'success' && steps.browser_install.outcome == 'success' }}";
 
+function boundedBrowserArtifacts(value) {
+  const upload = value.jobs['browser-qa'].steps.find(step => step.name === 'Upload browser screenshots');
+  assert.ok(upload);
+  assert.equal(upload.if, 'always()');
+  assert.deepEqual(upload.with.path.trim().split(/\r?\n/).map(path => path.trim()), [
+    'test-results/**/*.png',
+    'test-results/**/home-artwork-delivery.json',
+  ], 'Upload screenshots and only the explicitly bounded hero diagnostics.');
+}
+
 function isolatedChromiumSteps(value) {
   const steps = value.jobs['browser-qa'].steps;
   const chromium = steps.filter(step => /^npx playwright test --project=/.test(step.run ?? ''));
@@ -34,7 +44,7 @@ test('CI preserves all Chromium projects with fresh servers and independent scre
   assert.ok(guard, 'Run this isolation regression in the official browser CI job.');
 });
 
-test('Firefox/WebKit still run after Chromium failures and all screenshot roots are uploaded', () => {
+test('Firefox/WebKit still run after Chromium failures and screenshot roots plus named hero diagnostics are uploaded', () => {
   const { steps, chromium } = isolatedChromiumSteps(workflow);
   const smoke = steps.find(step => step.run === 'npx playwright test --config=playwright.smoke.config.ts');
   assert.ok(smoke); assert.equal(smoke.if, independentCondition);
@@ -43,8 +53,7 @@ test('Firefox/WebKit still run after Chromium failures and all screenshot roots 
   assert.match(smokeConfig, /name: 'desktop-firefox-smoke'/);
   assert.match(smokeConfig, /name: 'desktop-webkit-smoke'/);
   assert.match(smokeConfig, /outputDir: 'test-results\/cross-engine-smoke'/);
-  const upload = steps.find(step => step.name === 'Upload browser screenshots');
-  assert.ok(upload); assert.equal(upload.if, 'always()'); assert.equal(upload.with.path, 'test-results/**/*.png');
+  boundedBrowserArtifacts(workflow);
 });
 
 test('isolation guard rejects dropped projects, shared outputs and fail-fast conditions', () => {
@@ -55,4 +64,19 @@ test('isolation guard rejects dropped projects, shared outputs and fail-fast con
   assert.throws(() => isolatedChromiumSteps(sharedOutput));
   const failFast = copy(); failFast.jobs['browser-qa'].steps.find(step => step.run?.includes('--project=mobile-390-chromium')).if = '${{ success() }}';
   assert.throws(() => isolatedChromiumSteps(failFast), /preceding failed project/);
+});
+
+
+test('artifact guard rejects broad JSON, trace, database uploads and missing approved artifacts', () => {
+  for (const extra of ['test-results/**/*.json', 'test-results/**/*.zip', 'test-results/**/*.db', 'test-results/**', 'test-results/**/trace.zip']) {
+    const copy = structuredClone(workflow);
+    const upload = copy.jobs['browser-qa'].steps.find(step => step.name === 'Upload browser screenshots');
+    upload.with.path += `\n${extra}`;
+    assert.throws(() => boundedBrowserArtifacts(copy), /only the explicitly bounded hero diagnostics/);
+  }
+  for (const only of ['test-results/**/*.png', 'test-results/**/home-artwork-delivery.json']) {
+    const copy = structuredClone(workflow);
+    copy.jobs['browser-qa'].steps.find(step => step.name === 'Upload browser screenshots').with.path = only;
+    assert.throws(() => boundedBrowserArtifacts(copy), /only the explicitly bounded hero diagnostics/);
+  }
 });

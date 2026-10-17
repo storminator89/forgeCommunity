@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button"
 import { UserNav } from "@/components/user-nav"
 import { Sidebar } from "@/components/Sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { SparkEntry } from '@/components/spark-entry'
 import { PlusCircle } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -330,6 +331,7 @@ function Community({ session, topic, onSelectTopic }: { session: Session | null;
 
         <main ref={mainRef} id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto scroll-smooth">
           <div className="mx-auto w-full max-w-[1440px] px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
+            {session?.user?.id && <SparkEntry className="mb-3" />}
             {session?.user?.id && session.user.role === 'USER' && <FirstActionGuide userId={session.user.id} />}
             <div className="flex min-w-0 flex-col items-start gap-10 lg:flex-row lg:flex-wrap lg:gap-12">
               <section aria-labelledby="community-feed-title" className="w-full min-w-0 lg:flex-[2_1_24rem]">

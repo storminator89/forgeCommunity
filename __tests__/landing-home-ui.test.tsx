@@ -2,6 +2,8 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useSession } from 'next-auth/react';
 import Home from '@/app/page';
+import { renderToString } from 'react-dom/server.node';
+import { ForgeWorkbench } from '@/components/landing/ForgeWorkbench';
 
 jest.mock('next-auth/react', () => ({ useSession: jest.fn() }));
 jest.mock('@/components/theme-toggle', () => ({ ThemeToggle: () => <button aria-label="Farbschema auswählen" /> }));
@@ -72,43 +74,90 @@ it('retains the deliberate signed-in community CTA and direct area destinations'
   expect(areas.getByRole('link', { name: /^Projekte/ })).toHaveAttribute('href', '/login?callbackUrl=%2Fshowcases');
 });
 
-it('provides one described, repo-native illustration that stays still until keyboard activation', async () => {
+it('provides one optimized local illustration that stays still until keyboard activation', async () => {
   const user = userEvent.setup();
   const { container } = render(<Home />);
-  const illustration = screen.getByRole('img', { name: 'Aus Lernen wird gemeinsames Machen' });
-  expect(illustration.tagName.toLowerCase()).toBe('svg');
-  expect(illustration).toHaveAccessibleDescription(/Buch.*Menschen.*Projekt/);
-  const spark = () => container.querySelector('[data-motion="forge-spark"]')!;
-  expect(spark()).not.toHaveClass('sparkPlaying');
+  const illustration = screen.getByRole('img', { name: /Illustration: Zwei Erwachsene.*Ideenfunken.*Buch.*Bausteinen/ });
+  expect(illustration.tagName.toLowerCase()).toBe('img');
+  expect(illustration).toHaveAttribute('src', '/images/home/forge-workbench-1440.webp');
+  const picture = illustration.closest('picture')!;
+  expect(picture).not.toBeNull();
+  expect(picture.querySelectorAll('source')).toHaveLength(0);
+  expect(illustration).not.toHaveAttribute('srcset');
+  expect(illustration).not.toHaveAttribute('sizes');
+  expect(illustration).toHaveAttribute('width', '1440');
+  expect(illustration).toHaveAttribute('height', '960');
+  expect(illustration).toHaveAttribute('loading', 'eager');
+  expect(illustration).toHaveAttribute('fetchpriority', 'high');
+  expect(illustration).toHaveAttribute('decoding', 'async');
+  const frame = () => container.querySelector<HTMLElement>('[data-motion="forge-workbench"]')!;
+  expect(within(frame()).getAllByRole('img')).toHaveLength(1);
+  expect(frame()).not.toHaveClass('illustrationPlaying');
   const replay = screen.getByRole('button', { name: 'Illustration bewegen' });
   replay.focus();
   await user.keyboard('{Enter}');
   expect(replay).toHaveFocus();
-  expect(spark()).toHaveClass('sparkPlaying');
-  fireEvent.animationEnd(spark());
-  expect(spark()).not.toHaveClass('sparkPlaying');
+  expect(frame()).toHaveClass('illustrationPlaying');
+  fireEvent.animationEnd(frame());
+  expect(frame()).not.toHaveClass('illustrationPlaying');
   await user.keyboard(' ');
-  expect(spark()).toHaveClass('sparkPlaying');
+  expect(frame()).toHaveClass('illustrationPlaying');
 });
 
 it('uses native disabled semantics for reduced motion and cancels live animation without auto-resuming', () => {
   reduced = true;
   const { container, unmount } = render(<Home />);
-  const spark = () => container.querySelector('[data-motion="forge-spark"]')!;
+  const frame = () => container.querySelector('[data-motion="forge-workbench"]')!;
   const replay = screen.getByRole('button', { name: 'Illustration bewegen (reduzierte Bewegung aktiv)' });
   expect(replay).toBeDisabled();
   fireEvent.click(replay);
-  expect(spark()).not.toHaveClass('sparkPlaying');
+  expect(frame()).not.toHaveClass('illustrationPlaying');
   changeReduced(false);
   expect(replay).toBeEnabled();
   fireEvent.click(replay);
-  expect(spark()).toHaveClass('sparkPlaying');
+  expect(frame()).toHaveClass('illustrationPlaying');
   changeReduced(true);
   expect(replay).toBeDisabled();
-  expect(spark()).not.toHaveClass('sparkPlaying');
+  expect(frame()).not.toHaveClass('illustrationPlaying');
   changeReduced(false);
   expect(replay).toBeEnabled();
-  expect(spark()).not.toHaveClass('sparkPlaying');
+  expect(frame()).not.toHaveClass('illustrationPlaying');
   unmount();
   expect(listeners.size).toBe(0);
+});
+
+
+it('hydrates the server image in place without rewriting fixed-source attributes during preference updates', () => {
+  const container = document.createElement('div');
+  container.innerHTML = renderToString(<ForgeWorkbench />);
+  const serverImage = container.querySelector('img')!;
+  const serverPicture = serverImage.closest('picture')!;
+  const serverFrame = container.querySelector('[data-motion="forge-workbench"]')!;
+  const attributes = () => Array.from(serverImage.attributes, ({ name, value }) => [name, value]);
+  const serverAttributes = attributes();
+  const mutations: MutationRecord[] = [];
+  const observer = new MutationObserver(records => mutations.push(...records));
+  observer.observe(container, { attributes: true, childList: true, subtree: true });
+  const onRecoverableError = jest.fn();
+  const view = render(<ForgeWorkbench />, { container, hydrate: true, onRecoverableError });
+  try {
+    expect(within(container).getByRole('button', { name: 'Illustration bewegen' })).toBeEnabled();
+    changeReduced(true);
+    expect(within(container).getByRole('button', { name: 'Illustration bewegen (reduzierte Bewegung aktiv)' })).toBeDisabled();
+    changeReduced(false);
+    view.rerender(<ForgeWorkbench />);
+    mutations.push(...observer.takeRecords());
+    expect(onRecoverableError).not.toHaveBeenCalled();
+    expect(container.querySelector('img')).toBe(serverImage);
+    expect(container.querySelector('picture')).toBe(serverPicture);
+    expect(container.querySelector('[data-motion="forge-workbench"]')).toBe(serverFrame);
+    expect(attributes()).toEqual(serverAttributes);
+    expect(serverPicture.querySelectorAll('source')).toHaveLength(0);
+    expect(container.querySelectorAll('link[rel="preload"][as="image"]')).toHaveLength(0);
+    expect(mutations.filter(record => record.target === serverImage || record.target === serverPicture)).toEqual([]);
+    // JSDOM establishes DOM ownership, not image requests, decoding or paint.
+  } finally {
+    observer.disconnect();
+    view.unmount();
+  }
 });

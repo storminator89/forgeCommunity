@@ -13,15 +13,15 @@ import { Button } from '@/components/ui/button';
 import { LoadingScreen, PageState } from '@/components/page-state';
 import { JourneyMark } from './JourneyMark';
 import { JourneyMascot } from './JourneyMascot';
+import { SparkStaticFigure } from '@/components/spark-entry';
+import { sparkVisibilitySnapshot as mascotSnapshot, useSparkVisibility } from '@/hooks/useSparkVisibility';
 import { eligibleJourneyCourses, projectJourney, type JourneyContent, type JourneyCourse, type JourneyLeaf } from './journey-progress';
 
 type Progress = { completedContentIds: string[]; complete: boolean; canTrack: boolean; publicationId: string | null };
 type Detail = { kind: 'idle' | 'loading' | 'error' } | { kind: 'ready'; courseId: string; contents: JourneyContent[]; progress: Progress };
 
 const motionPreferenceKey = 'forge-journey-motion-off';
-const mascotPreferenceKey = 'forge-journey-mascot-hidden';
 let fallbackMotionEnabled = true;
-let fallbackMascotVisible = true;
 // Document-local only: no account, course or time information is sent in the
 // playback URL. Keep it outside the learner scope so role/navigation remounts
 // cannot accidentally reuse an ended native image resource in this document.
@@ -39,20 +39,6 @@ function subscribeMotion(callback: () => void) {
 function motionSnapshot() {
   try { return window.localStorage.getItem(motionPreferenceKey) !== 'true'; }
   catch { return fallbackMotionEnabled; }
-}
-
-function subscribeMascot(callback: () => void) {
-  window.addEventListener('storage', callback);
-  window.addEventListener('forge-journey-mascot-visibility-change', callback);
-  return () => {
-    window.removeEventListener('storage', callback);
-    window.removeEventListener('forge-journey-mascot-visibility-change', callback);
-  };
-}
-
-function mascotSnapshot() {
-  try { return window.localStorage.getItem(mascotPreferenceKey) !== 'true'; }
-  catch { return fallbackMascotVisible; }
 }
 
 function subscribeReducedMotion(callback: () => void) {
@@ -104,7 +90,7 @@ function ScopedJourney() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<Detail>({ kind: 'idle' });
   const [detailRetry, setDetailRetry] = useState(0);
-  const mascotVisible = useSyncExternalStore(subscribeMascot, mascotSnapshot, () => false);
+  const { visible: mascotVisible, toggle: toggleMascot } = useSparkVisibility();
   const motionEnabled = useSyncExternalStore(subscribeMotion, motionSnapshot, () => false);
   const reducedMotion = useSyncExternalStore(subscribeReducedMotion, reducedMotionSnapshot, () => true);
   const [celebration, setCelebration] = useState<{ id: number; courseId: string; publicationId: string } | null>(null);
@@ -189,13 +175,6 @@ function ScopedJourney() {
     window.dispatchEvent(new Event('forge-journey-motion-change'));
   };
 
-  const toggleMascot = () => {
-    const next = !mascotVisible;
-    fallbackMascotVisible = next;
-    try { window.localStorage.setItem(mascotPreferenceKey, String(!next)); } catch { /* Memory preference still works. */ }
-    window.dispatchEvent(new Event('forge-journey-mascot-visibility-change'));
-  };
-
   const retryCourses = () => { detailSequence.current++; setCelebration(null); setCourses(null); setCourseError(false); setDetail({ kind: 'idle' }); setCourseRetry(value => value + 1); };
   const retryDetail = () => { detailSequence.current++; setCelebration(null); setDetail({ kind: 'loading' }); setDetailRetry(value => value + 1); };
 
@@ -215,7 +194,12 @@ function ScopedJourney() {
 
           {courses === null && !courseError && <div className="mt-4"><PageState kind="loading" title="Deine Kurse werden geladen" /></div>}
           {courseError && <div className="mt-4"><PageState kind="error" title="Deine Kurse konnten nicht geladen werden" action={<Button type="button" variant="outline" onClick={retryCourses}>Erneut versuchen</Button>} /></div>}
-          {courses?.length === 0 && <div className="mt-4"><PageState title="Dein Lernweg beginnt mit einem Kurs" description="Hier erscheinen deine angemeldeten Kurse anderer Lehrkräfte." action={<Button asChild><Link href="/courses">Kurse entdecken</Link></Button>} /></div>}
+          {courses?.length === 0 && <section className="mt-4 rounded-2xl border border-dashed bg-card px-6 py-6 text-center" role="status" aria-live="polite">
+            {mascotVisible && <div className="mx-auto mb-3 w-fit"><SparkStaticFigure /></div>}
+            <h2 className="text-base font-semibold">Dein Lernweg beginnt mit einem Kurs</h2>
+            <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">Hier erscheinen deine angemeldeten Kurse anderer Lehrkräfte.</p>
+            <div className="mt-5 flex justify-center"><Button asChild className="h-auto min-h-11 max-w-full whitespace-normal py-2"><Link href="/courses">Kurse entdecken</Link></Button></div>
+          </section>}
           {courses && courses.length > 0 && <div className="mt-3 space-y-4">
             <section aria-label="Deine angemeldeten Kurse" className="min-w-0 sm:flex sm:items-center sm:justify-between sm:gap-4">
               <label htmlFor="journey-course" className="mb-1.5 block shrink-0 text-sm font-medium sm:mb-0">Kurs auswählen <span className="font-normal text-muted-foreground">({courses.length})</span></label>
@@ -242,7 +226,7 @@ function ScopedJourney() {
           </div>}
 
           <div className="mt-3 border-b pb-4">
-            <div className="flex flex-wrap gap-2"><Button type="button" variant="ghost" size="sm" aria-label="Maskottchen anzeigen" aria-pressed={mascotVisible} onClick={toggleMascot}>Figur {mascotVisible ? 'an' : 'aus'}</Button>{mascotVisible && <Button type="button" variant="ghost" size="sm" aria-pressed={motionEnabled && !reducedMotion} onClick={toggleMotion} disabled={reducedMotion}>{reducedMotion ? 'Figurenanimationen aus' : `Figurenanimationen ${motionEnabled ? 'an' : 'aus'}`}</Button>}</div>
+            <div className="flex min-w-0 flex-wrap gap-2"><Button type="button" variant="ghost" size="sm" className="h-auto min-h-11 max-w-full whitespace-normal py-2 [overflow-wrap:anywhere] sm:h-auto" aria-label="Maskottchen anzeigen" aria-pressed={mascotVisible} onClick={toggleMascot}>Figur {mascotVisible ? 'an' : 'aus'}</Button>{mascotVisible && <Button type="button" variant="ghost" size="sm" className="h-auto min-h-11 max-w-full whitespace-normal py-2 [overflow-wrap:anywhere] sm:h-auto" aria-pressed={motionEnabled && !reducedMotion} onClick={toggleMotion} disabled={reducedMotion}>{reducedMotion ? 'Figurenanimationen aus' : `Figurenanimationen ${motionEnabled ? 'an' : 'aus'}`}</Button>}</div>
             {mascotVisible && reducedMotion && <p className="mt-1 text-xs text-muted-foreground">Weniger Bewegung ist am Gerät eingestellt.</p>}
           </div>
 
