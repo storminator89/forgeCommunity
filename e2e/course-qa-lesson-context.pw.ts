@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { lstatSync, realpathSync } from 'node:fs'
 import { basename, isAbsolute, resolve } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
-import { expect, test, type Locator, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page, type Route } from '@playwright/test'
 
 const origin = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3013'
 const candidateSha = /^[a-f0-9]{40}$/.test(process.env.GITHUB_SHA ?? '') ? process.env.GITHUB_SHA! : 'local-unverified-sha'
@@ -124,6 +124,17 @@ test('lesson provenance survives real creation, retained pages, republish, chose
       for (const { width, zoom } of [{ width: 1280, zoom: 100 }, { width: 320, zoom: 100 }, { width: 320, zoom: 200 }]) {
         await page.evaluate(value => { document.documentElement.style.fontSize = `${value}%` }, zoom)
         await page.setViewportSize({ width, height: 800 }); await page.emulateMedia({ reducedMotion: 'reduce' })
+        const discussion = page.getByRole('region', { name: 'Frage und Antworten' })
+        const heading = discussion.getByRole('heading', { level: 2, name: questionTitle })
+        const context = discussion.getByText(`Zu dieser Lektion: ${lessonTitle}`, { exact: true })
+        const solution = discussion.getByText('Lösung', { exact: true })
+        // Loading retained pages scrolls the shared content pane; frame the actual selected discussion.
+        await heading.scrollIntoViewIfNeeded(); await expect(heading).toBeVisible(); await expect(heading).toBeInViewport()
+        await expect(context).toBeVisible(); await expect(solution).toBeVisible()
+        if (width === 1280) {
+          await solution.scrollIntoViewIfNeeded()
+          await expect(heading).toBeInViewport(); await expect(context).toBeInViewport(); await expect(solution).toBeInViewport()
+        }
         const overflow = await page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - innerWidth); expect(overflow).toBeLessThanOrEqual(1)
         const name = `${candidateSha}-lesson-qa-${theme}-${width}-${zoom}`; const path = testInfo.outputPath(`${name}.png`)
         await page.screenshot({ path, fullPage: true }); await testInfo.attach(name, { path, contentType: 'image/png' })
@@ -144,21 +155,29 @@ test('lesson provenance survives real creation, retained pages, republish, chose
     await expect(page.getByText('Noch keine Fragen', { exact: true })).toBeVisible()
     const lostTitle = `Lost response ${nonce}`; const lostBody = 'The server must recover this exact committed question.'
     await page.getByRole('textbox', { name: 'Titel' }).fill(lostTitle); await page.getByRole('textbox', { name: 'Frage', exact: true }).fill(lostBody)
-    let firstPayload: unknown; let version3 = ''
+    let firstPayload: unknown; let version3 = ''; let loseNextPost = true
     const pattern = `**${api}`
-    await page.route(pattern, async route => {
-      if (route.request().method() !== 'POST') { await route.continue(); return }
+    const loseResponse = async (route: Route) => {
+      if (route.request().method() !== 'POST' || !loseNextPost) { await route.continue(); return }
+      loseNextPost = false
       firstPayload = route.request().postDataJSON(); const actual = await route.fetch(); expect(actual.status()).toBe(201)
       version3 = republish(dbPath, fixture, 3, version2, '2099-11-01')
-      await page.unroute(pattern); await route.abort('failed')
-    })
+      await route.abort('failed')
+    }
+    await page.route(pattern, loseResponse)
+    const failed = page.waitForEvent('requestfailed', r => new URL(r.url()).pathname === api && r.method() === 'POST')
     await activate(page, page.getByRole('button', { name: 'Frage veröffentlichen' }))
+    expect((await failed).failure()?.errorText).toBe('net::ERR_FAILED')
+    expect(firstPayload).toMatchObject({ title: lostTitle, body: lostBody, lessonContext: { publicationId: version2, contentId } })
     await expect(page.getByText('Du kannst den letzten Sendeversuch unverändert wiederholen.')).toBeVisible()
+    // Removing the last handler before aborting would continue its still-pending request.
+    await page.unroute(pattern, loseResponse)
     const retried = page.waitForResponse(r => new URL(r.url()).pathname === api && r.request().method() === 'POST')
     await activate(page, page.getByRole('button', { name: 'Sendeversuch wiederholen' })); const replay = await retried
     expect(replay.status(), await replay.text()).toBe(200); expect(replay.request().postDataJSON()).toEqual(firstPayload)
     expect((await replay.json()).question.lessonContext).toEqual({ status: 'unavailable' })
     expect(withDb(dbPath, db => (db.prepare('SELECT COUNT(*) AS count FROM "CourseQuestion" WHERE "courseId" = ? AND "title" = ?').get(courseId, lostTitle) as { count: number }).count, true)).toBe(1)
+    expect(withDb(dbPath, db => db.prepare('SELECT "contextPublicationId", "contextContentId" FROM "CourseQuestion" WHERE "courseId" = ? AND "title" = ?').get(courseId, lostTitle), true)).toEqual({ contextPublicationId: version2, contextContentId: contentId })
     await page.goto(`/courses/${courseId}/qa?${lessonQuery(version3, contentId)}`); await expect(page.getByRole('button', { name: 'Frage stellen' })).toBeDisabled()
     const withdrawn = await page.request.delete(`/api/courses/${courseId}/enrollment`, { headers: { origin } }); expect(withdrawn.status()).toBe(200)
     await page.evaluate(() => window.dispatchEvent(new Event('focus'))); await expect(page.getByText('Kein Zugriff auf Kursfragen', { exact: true })).toBeVisible()

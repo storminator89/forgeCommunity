@@ -61,6 +61,25 @@ it.each(['INSTRUCTOR', 'ADMIN'])('uses live learner proof for an enrolled non-ow
   expect(mockRouter.push).toHaveBeenCalledWith('/courses/course/qa?publicationId=publication&contentId=leaf&ask=1')
 })
 
+it.each([true, false])('keeps the lesson-question action between completion and continuation controls, with next=%s', async withNext => {
+  progress.completedContentIds = ['leaf']
+  progress.complete = !withNext
+  if (withNext) contents.push({ ...contents[0], id: 'next', title: 'Next lesson', order: 2 })
+  render(<CourseContentsEditor courseId="course" forceLearner />)
+  const question = await screen.findByRole('button', { name: 'Zu dieser Lektion fragen' })
+  const remove = screen.getByRole('button', { name: 'Abschlussmarkierung entfernen' })
+  const refresh = screen.getByRole('button', { name: 'Lernfortschritt aktualisieren' })
+  expect(question).toBeEnabled()
+  expect(question).toHaveClass('h-auto', 'min-h-11', 'min-w-0', 'max-w-full', 'whitespace-normal', '[overflow-wrap:anywhere]')
+  expect(remove.compareDocumentPosition(question) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(question.compareDocumentPosition(refresh) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  if (withNext) {
+    const next = screen.getByRole('button', { name: 'Nächste Lektion öffnen' })
+    expect(question.compareDocumentPosition(next) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(next.compareDocumentPosition(refresh) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  } else expect(screen.queryByRole('button', { name: 'Nächste Lektion öffnen' })).not.toBeInTheDocument()
+})
+
 it('the real learner route keeps read-only mode and offers the server-proven lesson question entry after authoring 403', async () => {
   const originalFetch = global.fetch as jest.Mock
   const readerFetch = originalFetch.getMockImplementation()!

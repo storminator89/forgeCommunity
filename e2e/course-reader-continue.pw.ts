@@ -408,12 +408,18 @@ async function captureActiveNoticeControls(page: Page, info: TestInfo, withNext:
     readinessEvidence.enlarged = await page.evaluate(() => (window as ReaderLayoutWindow).__readerLayoutGuard!.settle())
     await expect(notice).toBeVisible()
     await page.evaluate(() => (window as ReaderLayoutWindow).__readerLayoutGuard!.arm())
-    // Native Tab order only: Remove -> [Next ->] Refresh -> [Next ->] Remove.
+    // Native Tab order only: Remove -> Lesson question -> [Next ->] Refresh,
+    // then the same controls in reverse. The Q&A entry is an actual tab stop.
     // No locator.focus(), retry, scroll correction or notice/clock manipulation.
     const sequence = withNext ? [
+      ['Tab', 'Zu dieser Lektion fragen', false],
       ['Tab', 'Nächste Lektion öffnen', true], ['Tab', 'Lernfortschritt aktualisieren', true],
-      ['Shift+Tab', 'Nächste Lektion öffnen', false], ['Shift+Tab', 'Abschlussmarkierung entfernen', true],
-    ] as const : [['Tab', 'Lernfortschritt aktualisieren', true], ['Shift+Tab', 'Abschlussmarkierung entfernen', true]] as const
+      ['Shift+Tab', 'Nächste Lektion öffnen', false], ['Shift+Tab', 'Zu dieser Lektion fragen', false],
+      ['Shift+Tab', 'Abschlussmarkierung entfernen', true],
+    ] as const : [
+      ['Tab', 'Zu dieser Lektion fragen', false], ['Tab', 'Lernfortschritt aktualisieren', true],
+      ['Shift+Tab', 'Zu dieser Lektion fragen', false], ['Shift+Tab', 'Abschlussmarkierung entfernen', true],
+    ] as const
     for (const [key, name, capture] of sequence) {
       phase = `native-${key}-${name}`
       await expect(notice).toBeVisible()
