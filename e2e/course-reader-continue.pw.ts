@@ -6,6 +6,7 @@ import { expect, test, type Locator, type Page, type TestInfo } from '@playwrigh
 import { observeReaderRequests, type ReaderReadiness } from './reader-request-readiness'
 import { installReaderLayoutGuard, restoreReaderTextSize, type ReaderLayoutWindow } from './reader-layout-readiness'
 import { serializeReaderEvidence } from './reader-evidence-budget'
+import { installThemeCaptureFocusEvidence, type ThemeCaptureFocusPhase, type ThemeCaptureFocusWindow } from './theme-capture-focus-evidence'
 
 const origin = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3013'
 const candidateSha = /^[a-f0-9]{40}$/.test(process.env.GITHUB_SHA ?? '') ? process.env.GITHUB_SHA! : 'local-unverified-sha'
@@ -527,27 +528,60 @@ async function captureActiveNoticeControls(page: Page, info: TestInfo, withNext:
 
 async function capture(page: Page, info: TestInfo, state: string, focus?: Locator) {
   for (const mode of ['light', 'dark'] as const) {
-    await page.emulateMedia({ colorScheme: mode, reducedMotion: 'reduce' })
-    await page.getByRole('button', { name: 'Farbschema auswählen' }).click()
-    await page.getByRole('menuitem', { name: mode === 'light' ? 'Hell' : 'Dunkel', exact: true }).click()
-    if (mode === 'dark') await expect(page.locator('html')).toHaveClass(/\bdark\b/)
-    else await expect(page.locator('html')).not.toHaveClass(/\bdark\b/)
-    for (const viewport of [{ width: 1280, height: 800 }, { width: 320, height: 700 }]) {
-      await page.setViewportSize(viewport)
-      await page.evaluate(async () => { await document.fonts.ready })
-      if (!focus) await page.getByRole('region', { name: 'Ausgewählter Kursinhalt' }).getByRole('heading').first().scrollIntoViewIfNeeded()
-      if (focus) {
-        await page.keyboard.press('Tab')
-        await focus.focus()
-        await expect(focus).toBeFocused()
-        await expect(focus).toBeInViewport({ ratio: 1 })
-        expect(await focus.evaluate(element => element.matches(':focus-visible'))).toBe(true)
+    const trigger = page.getByRole('button', { name: 'Farbschema auswählen' })
+    const menu = page.getByRole('menu', { includeHidden: true })
+    const checkpoint = (phase: ThemeCaptureFocusPhase) => page.evaluate(value => (window as ThemeCaptureFocusWindow).__themeCaptureFocusEvidence!.checkpoint(value), phase)
+    let originalFailed = false
+    let originalError: unknown
+    try {
+      await page.emulateMedia({ colorScheme: mode, reducedMotion: 'reduce' })
+      await trigger.evaluate(installThemeCaptureFocusEvidence)
+      await checkpoint('before-menu-open')
+      await trigger.click()
+      await expect(menu).toHaveCount(1, { timeout: 2000 })
+      await page.getByRole('menuitem', { name: mode === 'light' ? 'Hell' : 'Dunkel', exact: true }).click()
+      await checkpoint('after-menu-select')
+      // A closed Radix menu may still be mounted for its exit animation.
+      await expect(menu).toHaveCount(0, { timeout: 2000 })
+      await checkpoint('after-menu-detach')
+      // FocusScope restores the trigger asynchronously after unmount; do not race it.
+      await expect(trigger).toBeFocused({ timeout: 2000 })
+      await checkpoint('after-trigger-focus')
+      if (mode === 'dark') await expect(page.locator('html')).toHaveClass(/\bdark\b/)
+      else await expect(page.locator('html')).not.toHaveClass(/\bdark\b/)
+      for (const viewport of [{ width: 1280, height: 800 }, { width: 320, height: 700 }]) {
+        await page.setViewportSize(viewport)
+        await page.evaluate(async () => { await document.fonts.ready })
+        if (!focus) await page.getByRole('region', { name: 'Ausgewählter Kursinhalt' }).getByRole('heading').first().scrollIntoViewIfNeeded()
+        if (focus) {
+          await page.keyboard.press('Tab')
+          await checkpoint('after-native-tab')
+          await focus.focus()
+          await checkpoint('after-heading-focus')
+          await expect(focus).toBeFocused()
+          await expect(focus).toBeInViewport({ ratio: 1 })
+          expect(await focus.evaluate(element => element.matches(':focus-visible'))).toBe(true)
+        }
+        expect(await page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - innerWidth), `${state} ${mode} ${viewport.width}px document overflow`).toBeLessThanOrEqual(1)
+        expect(await page.locator('#page-content').evaluate(element => element.scrollWidth - element.clientWidth), `${state} main overflow`).toBeLessThanOrEqual(1)
+        expect(await page.getByRole('region', { name: 'Ausgewählter Kursinhalt' }).evaluate(element => element.scrollWidth - element.clientWidth), `${state} reader overflow`).toBeLessThanOrEqual(1)
+        await page.screenshot({ path: info.outputPath(`reader-${state}-${mode}-${viewport.width}-${candidateSha}.png`), fullPage: true, animations: 'disabled' })
+        if (viewport.width === 320 && (state === 'entry' || state === 'completed-with-next')) await captureReaderTextZoom(page, info, state, mode)
       }
-      expect(await page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - innerWidth), `${state} ${mode} ${viewport.width}px document overflow`).toBeLessThanOrEqual(1)
-      expect(await page.locator('#page-content').evaluate(element => element.scrollWidth - element.clientWidth), `${state} main overflow`).toBeLessThanOrEqual(1)
-      expect(await page.getByRole('region', { name: 'Ausgewählter Kursinhalt' }).evaluate(element => element.scrollWidth - element.clientWidth), `${state} reader overflow`).toBeLessThanOrEqual(1)
-      await page.screenshot({ path: info.outputPath(`reader-${state}-${mode}-${viewport.width}-${candidateSha}.png`), fullPage: true, animations: 'disabled' })
-      if (viewport.width === 320 && (state === 'entry' || state === 'completed-with-next')) await captureReaderTextZoom(page, info, state, mode)
+    } catch (error) {
+      originalFailed = true; originalError = error
+      throw error
+    } finally {
+      try {
+        const evidence = await page.evaluate(() => (window as ThemeCaptureFocusWindow).__themeCaptureFocusEvidence?.finish())
+        if (!evidence) throw new Error('Reader capture theme-focus evidence was not installed')
+        const payload = serializeReaderEvidence({ state: 'capture-theme-focus', captureState: state, mode, candidateSha, evidence })
+        console.info('Reader capture theme-focus evidence:', payload)
+        await info.attach(`reader-${state}-${mode}-theme-focus`, { body: Buffer.from(payload), contentType: 'application/json' })
+      } catch (evidenceError) {
+        if (originalFailed) throw new AggregateError([originalError, evidenceError], 'Reader capture and theme-focus evidence both failed')
+        throw evidenceError
+      }
     }
   }
 }
