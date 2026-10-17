@@ -73,7 +73,7 @@ export default function AdminDashboard() {
   }, [isAdmin, status, requestVersion]);
 
   if (status === 'loading') {
-    return <PageState kind="loading" title="Berechtigung wird geprüft" description="Das Dashboard wird für dich vorbereitet." />;
+    return <PageState kind="loading" title="Berechtigung wird geprüft" />;
   }
 
   if (!isAdmin) {
@@ -89,9 +89,7 @@ export default function AdminDashboard() {
       <header className="flex flex-col items-start gap-4 border-b pb-6 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0 space-y-2">
           <h1 className="text-[clamp(1.65rem,1.1rem+2vw,2.35rem)] font-semibold tracking-tight">Dashboard</h1>
-          <p className="max-w-[68ch] text-sm leading-relaxed text-muted-foreground">
-            Benutzer, Inhalte und die neuesten Aktivitäten im Überblick.
-          </p>
+
         </div>
         <Button variant="outline" onClick={refresh} disabled={isLoading} aria-busy={isLoading} data-state={isLoading ? 'loading' : undefined} className="shrink-0">
           <RefreshCw className="h-4 w-4" aria-hidden="true" />
@@ -102,7 +100,7 @@ export default function AdminDashboard() {
       <section aria-labelledby="overview-heading" aria-busy={isLoading} className="min-w-0">
         <div className="mb-4 space-y-1">
           <h2 id="overview-heading" className="text-lg font-semibold tracking-tight">Community im Überblick</h2>
-          <p className="text-sm text-muted-foreground">Die Gesamtzahlen führen direkt in den jeweiligen Bereich.</p>
+
         </div>
         <div className="grid min-w-0 grid-cols-1 rounded-2xl border bg-card text-card-foreground sm:grid-cols-2 xl:grid-cols-4">
           {metrics.map(({ key, title, icon: Icon, href }) => (
@@ -141,7 +139,7 @@ export default function AdminDashboard() {
           <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-baseline sm:justify-between">
             <div className="min-w-0 space-y-1">
               <h2 id="activity-heading" className="text-lg font-semibold tracking-tight">Letzte Aktivitäten</h2>
-              <p className="text-sm text-muted-foreground">Neue Registrierungen, Beiträge und Kurse in zeitlicher Reihenfolge.</p>
+
             </div>
             {!isLoading && !!stats?.activities?.length && (
               <p className="shrink-0 text-sm tabular-nums text-muted-foreground">

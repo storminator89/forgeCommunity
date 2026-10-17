@@ -62,7 +62,7 @@ function ScopedAuthorCourses() {
         <div className="mx-auto max-w-[1080px] px-4 pb-16 pt-7 sm:px-6 sm:pt-10 lg:px-8">
           <Link href="/courses" className="inline-flex min-h-11 items-center text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:rounded-sm">← Zur Kursübersicht</Link>
           <div className="mt-3 flex flex-col gap-5 border-b pb-7 sm:flex-row sm:items-end sm:justify-between">
-            <div className="min-w-0"><p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Autorenarbeitsplatz</p><h2 className="text-[clamp(1.65rem,1.2rem+2vw,2.4rem)] font-semibold leading-tight tracking-tight">Deine Kurse und Entwürfe.</h2><p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">Hier findest du deine privat gespeicherten Entwürfe. Änderungen werden erst nach deiner ausdrücklichen Veröffentlichung für Lernende sichtbar.</p></div>
+            <div className="min-w-0"><h2 className="text-[clamp(1.65rem,1.2rem+2vw,2.4rem)] font-semibold leading-tight tracking-tight">Deine Kurse und Entwürfe.</h2><p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">Hier findest du deine privat gespeicherten Entwürfe. Änderungen werden erst nach deiner ausdrücklichen Veröffentlichung für Lernende sichtbar.</p></div>
             <Button asChild className="w-full shrink-0 sm:w-auto"><Link href="/courses/new"><Plus aria-hidden="true" className="h-4 w-4" />Neuer Kursentwurf</Link></Button>
           </div>
           <section aria-labelledby="author-course-list-title" className="pt-7 sm:pt-9">

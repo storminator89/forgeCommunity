@@ -59,7 +59,7 @@ export default function Home() {
         <section id="bereiche" className={styles.areas} aria-labelledby="areas-title">
           <div className={styles.sectionIntro}>
             <h2 id="areas-title">Was bringt dich weiter?</h2>
-            <p>Dein nächster Schritt hat hier Platz.</p>
+
           </div>
           <nav aria-label="Bereiche" className={styles.areaGrid}>
             {areas.map(area => (

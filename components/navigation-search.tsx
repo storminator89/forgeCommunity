@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { Search, ArrowUpRight } from 'lucide-react';
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { navigationItems, adminNavigation } from '@/lib/navigation';
 import { canSeeLearnerPathways } from '@/lib/pathway-visibility';
@@ -45,7 +45,7 @@ export function NavigationSearch({ collapsed = false, keyboardShortcut = true, o
       <kbd className={`ml-auto rounded-[0.25rem] border px-1.5 py-0.5 text-[11px] ${collapsed ? 'lg:hidden' : ''}`}>⌘/Ctrl K</kbd>
     </button>
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="max-w-lg gap-4 border-input p-5 sm:p-7" onCloseAutoFocus={event => {
+      <DialogContent aria-describedby={undefined} className="max-w-lg gap-4 border-input p-5 sm:p-7" onCloseAutoFocus={event => {
         // Button and shortcut openers live outside Radix's DialogTrigger tree.
         event.preventDefault();
         const target = returnFocusRef.current;
@@ -54,7 +54,7 @@ export function NavigationSearch({ collapsed = false, keyboardShortcut = true, o
       }}>
         <div className="space-y-1">
           <DialogTitle className="text-xl font-semibold tracking-tight">Schnell zum Ziel</DialogTitle>
-          <DialogDescription>Springe zu einem Bereich oder suche nach Inhalten.</DialogDescription>
+
         </div>
         <form onSubmit={event => { event.preventDefault(); navigate(`/search?q=${encodeURIComponent(query)}`); }}>
           <Input autoFocus aria-label="Bereich oder Inhalt suchen" placeholder="Was suchst du?" value={query} onChange={event => setQuery(event.target.value)} />

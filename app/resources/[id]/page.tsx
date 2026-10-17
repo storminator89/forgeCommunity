@@ -134,8 +134,8 @@ export default function ResourcePage() {
             {loading || loadedForId !== resourceId ? <><h1 className="sr-only">Ressource</h1><PageState kind="loading" title="Ressource wird geladen" /></>
               : !resource ? <><h1 className="sr-only">Ressource</h1><PageState kind="error" title="Ressource nicht verfügbar" description="Die Ressource konnte nicht geladen werden oder wurde entfernt." action={<div className="flex flex-wrap justify-center gap-2"><Button type="button" variant="outline" onClick={() => { setLoading(true); setRetryKey(value => value + 1); }}>Erneut versuchen</Button><Button asChild variant="outline"><Link href="/resources">Zur Übersicht</Link></Button></div>} /></>
               : <article>
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-5">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Ressourcen / Details</p>
+                <div className="flex flex-wrap items-center justify-end gap-3 border-b pb-5">
+
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild><Button type="button" variant="outline" size="sm" aria-label="Ressource teilen"><Share2 className="h-4 w-4" aria-hidden="true" />Teilen</Button></DropdownMenuTrigger>
                     <DropdownMenuContent align="end"><DropdownMenuItem onSelect={() => void handleCopyLink()}>Link kopieren</DropdownMenuItem></DropdownMenuContent>

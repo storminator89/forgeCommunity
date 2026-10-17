@@ -152,11 +152,7 @@ function AccountDrafts({ accountId, status }: { accountId: string | null; status
 
         <main id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
-            <div className="flex flex-wrap items-end justify-between gap-5 border-b pb-7">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Wissen / Meine Entwürfe</p>
-                <p className="mt-2 max-w-[55ch] text-base leading-relaxed text-muted-foreground">Begonnene Artikel weiterbearbeiten und veröffentlichen.</p>
-              </div>
+            <div className="flex flex-wrap justify-end border-b pb-5">
               {newArticleLink}
             </div>
 

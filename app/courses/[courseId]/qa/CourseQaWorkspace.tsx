@@ -637,7 +637,7 @@ export function CourseQaWorkspace({ courseId, sessionStatus, lessonContext = nul
             <span className="shrink-0 text-foreground">Fragen</span>
           </nav>
           <div className="mb-6 flex flex-wrap items-end justify-between gap-4 border-b pb-5">
-            <div className="min-w-0"><h1 className="break-words text-[clamp(1.65rem,1.1rem+2vw,2.35rem)] font-semibold tracking-tight [overflow-wrap:anywhere]">Fragen zum Kurs</h1><p className="mt-1 text-sm text-muted-foreground">Fragen und Antworten der Kursteilnehmenden.</p></div>
+            <div className="min-w-0"><h1 className="break-words text-[clamp(1.65rem,1.1rem+2vw,2.35rem)] font-semibold tracking-tight [overflow-wrap:anywhere]">Fragen zum Kurs</h1></div>
             {list?.canAsk && <Button ref={composerTrigger} type="button" className="h-auto min-h-11 max-w-full whitespace-normal [overflow-wrap:anywhere]" disabled={!composerOpen && !list.canAskInScope && !pendingCreate} onClick={() => { if (composerOpen) closeComposer(); else { composerFocus.current = true; setSelectedId(null); setComposerOpen(true) } }} aria-expanded={composerOpen} aria-controls="qa-composer">{composerOpen ? 'Schließen' : 'Frage stellen'}</Button>}
           </div>
           {lessonContext && <div className="mb-5 flex min-w-0 flex-wrap items-center justify-between gap-x-5 gap-y-2 border-l-2 border-primary pl-4">

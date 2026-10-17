@@ -43,7 +43,6 @@ export function PostForm({
             id="title"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Gib deinem Beitrag einen Titel"
             required
             disabled={isLoading}
             className="mt-2"

@@ -15,6 +15,8 @@ beforeEach(() => jest.clearAllMocks());
 
 it('explains the product and preserves the maker’s existing links', () => {
   render(<About />);
+  expect(screen.queryByText('Wähle den Bereich, der zu deinem nächsten Schritt passt.')).not.toBeInTheDocument();
+  expect(screen.queryByText('Ein persönlicher Kontakt für das Projekt.')).not.toBeInTheDocument();
   expect(screen.getByRole('main')).toHaveAttribute('id', 'page-content');
   expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
   expect(screen.getByRole('heading', { name: 'Hinter ForgeCommunity' })).toBeInTheDocument();

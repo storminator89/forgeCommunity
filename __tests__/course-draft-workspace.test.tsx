@@ -248,3 +248,20 @@ test('retains an unsaved date when the same chapter body is saved first, includi
   await screen.findByText('Freigabe im Entwurf gespeichert.')
   expect(server.draft.payload.contents[0].releaseOn).toBe('2026-11-01')
 })
+
+test('names the category directly while keeping the metadata contract and publication notice', async () => {
+  render(<CourseDraftWorkspace courseId="course" initialState={server} onLiveMode={onLiveMode} />)
+  const category = screen.getByRole('textbox', { name: 'Kurskategorie' })
+  expect(category).toHaveValue('Praxis')
+  expect(screen.queryByRole('textbox', { name: 'Beschreibung' })).not.toBeInTheDocument()
+  expect(screen.queryByText('Diese Angabe erscheint als Kategorie in der Kursübersicht.')).not.toBeInTheDocument()
+  expect(screen.getByText('Änderungen am Entwurf werden erst nach einer ausdrücklichen Veröffentlichung für Lernende sichtbar.')).toBeVisible()
+
+  fireEvent.change(category, { target: { value: 'Projektpraxis' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Entwurf speichern' }))
+  await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/courses/course/authoring', expect.objectContaining({
+    method: 'PATCH',
+    body: JSON.stringify({ expectedRevision: 2, operation: { kind: 'setMetadata', patch: { description: 'Projektpraxis' } } }),
+  })))
+  expect(mockFetch.mock.calls.some(([url]) => String(url).endsWith('/publish'))).toBe(false)
+})

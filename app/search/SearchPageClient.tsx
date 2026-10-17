@@ -551,7 +551,7 @@ function SearchPageForViewer({
                 <TabsTrigger className="min-h-11" value="resource">Ressourcen</TabsTrigger>
                 <TabsTrigger className="min-h-11" value="skill">Fähigkeiten</TabsTrigger>
               </TabsList>
-              <p id="search-tabs-hint" className="mt-2 text-xs text-muted-foreground sm:sr-only">Weitere Kategorien seitlich scrollen oder mit den Pfeiltasten auswählen</p>
+              <p id="search-tabs-hint" className="mt-2 text-xs text-muted-foreground sm:sr-only">Weitere Kategorien: wischen oder Pfeiltasten.</p>
 
               <TabsContent value={activeTab} className="mt-6">
                 {sessionLoading ? (
@@ -575,13 +575,7 @@ function SearchPageForViewer({
                     <h2 className="mb-2 text-lg font-semibold text-foreground">
                       {!searchTerm.trim() ? 'Geben Sie einen Suchbegriff ein' : searchTerm.trim().length < 2 ? 'Mindestens zwei Zeichen eingeben' : 'Keine Ergebnisse gefunden'}
                     </h2>
-                    <p className="text-sm text-muted-foreground">
-                      {!searchTerm.trim()
-                        ? 'Suchen Sie nach Kursen, Events, Mitgliedern, Beiträgen, Artikeln, Projekten, Ressourcen oder Fähigkeiten.'
-                        : searchTerm.trim().length < 2
-                          ? 'Ergänzen Sie Ihren Suchbegriff, um Ergebnisse zu sehen.'
-                          : 'Versuchen Sie es mit anderen Suchbegriffen oder wählen Sie eine andere Kategorie.'}
-                    </p>
+                    {searchTerm.trim().length >= 2 && <p className="text-sm text-muted-foreground">Versuchen Sie es mit anderen Suchbegriffen oder wählen Sie eine andere Kategorie.</p>}
                   </div>
                 ) : (
                         <>

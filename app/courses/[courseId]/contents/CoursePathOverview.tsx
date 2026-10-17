@@ -71,7 +71,6 @@ export function CoursePathOverview({ contents, disabled = false, onContentSelect
   return <section className="min-w-0 space-y-5" aria-label="Lernpfad im Kurs">
     <div className="space-y-2 border-b pb-4">
       <h2 className="text-xl font-semibold tracking-tight">Lernpfad im Kurs</h2>
-      <p className="text-sm leading-relaxed text-muted-foreground">Prüfe Reihenfolge, Material und Voraussetzungen deiner Kursinhalte. Änderungen speicherst du im jeweiligen Inhalt.</p>
       <p className="text-sm">{chapters} Kapitel · {leaves.length} Inhalte ohne Unterthemen · davon {quizzes} Quiz</p>
       <p className="text-sm text-muted-foreground">Für den Kursabschluss zählen alle Inhalte ohne Unterthemen. Quiz müssen bestanden, Aufgaben durch die Kursleitung bewertet werden. Andere Inhalte bestätigen Lernende selbst.</p>
     </div>
