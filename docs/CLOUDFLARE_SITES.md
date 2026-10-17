@@ -10,7 +10,7 @@ Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
 runtime data. Its frozen Sites source is
-`91562fa0b3d555e8c48daa11ff4b62abd4de14e8`. It is experimental and does not
+`b8fa7429ef14fef79283d61a88eead5047ab08cb`. It is experimental and does not
 claim feature parity with main.
 
 ## Requirements and setup
@@ -71,7 +71,7 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The current Version 22 source includes these bounded ports. Live QA is ongoing;
+The current Version 23 source includes these bounded ports. Live QA is ongoing;
 source implementation and publication do not establish complete runtime or
 all-page visual coverage.
 
@@ -94,6 +94,9 @@ all-page visual coverage.
   learning-pathway reads
 - Own mission-invitation preference and inbox GET reads using D1, without
   materializing missing settings or changing invitation mutation/signing setup
+- D1 assignment own/queue reads, learner submission and staff grading, using
+  publication/version checks and native atomic batches with progress/reward
+  updates; runtime assignment acceptance remains pending
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -106,8 +109,8 @@ all-page visual coverage.
 - Repository-owned Inter font assets with relative CSS URLs and their OFL
   license, replacing checkout-origin font references
 
-This remains a partial adaptation. Course deletion, assignments and grading,
-formative-practice mutation flows, course Q&A creation/replies/moderation/solution writes,
+This remains a partial adaptation. Course deletion, formative-practice
+mutation flows, course Q&A creation/replies/moderation/solution writes,
 course analytics, and Space/mission mutation flows are unported. Other workflows may still use Prisma transaction patterns that D1
 does not support. Do not infer support for every write flow from this scope.
 
@@ -165,7 +168,14 @@ Version 22 production typechecking/build passed and its deployment succeeded
 on 17 October 2026 at 16:38:52 UTC. The bounded published transcript check
 passed at 16:39:24 UTC: the normal transcript URL reported UTF-8 and rendered
 the checked German accented words correctly. Other learner-course checks
-remain separate and pending. Off, archived, or unavailable Practice states can be
+remain separate and pending. Version 23 ports the bounded assignment own/queue
+GET, learner submit, and staff grade operations to D1 with publication/version
+guards, historical receipt replay, atomic write fences, and first-pass progress,
+completion and rewards. Its production typechecking/build and static artifact
+checks passed; deployment succeeded on 17 October 2026 at 17:03:19 UTC. Actual
+assignment read, submission and grading acceptance remains pending. No schema,
+configuration, host, environment, access or UI change is included. Off, archived,
+or unavailable Practice states can be
 honest results; these GET changes do not establish supported Practice writes,
 scheduling, retention maintenance, or cursor-signing repair. No new local
 functional tests or GitHub CI run are part of this work. The inherited standard pipeline is unchanged: pushes run
