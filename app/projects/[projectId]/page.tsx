@@ -96,6 +96,16 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
   const commentRequest = useRef(false);
   const commentViewActive = useRef(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isSavingProject, setIsSavingProject] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editNotice, setEditNotice] = useState<string | null>(null);
+  const editRequest = useRef(false);
+  const editViewActive = useRef(false);
+  const editDialogOpen = useRef(false);
+  const editDialogGeneration = useRef(0);
+  const editDraftReady = useRef(false);
+  const editDraftRevision = useRef(0);
+  const editImageInput = useRef<HTMLInputElement>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [editProjectData, setEditProjectData] = useState<{
     title: string,
@@ -117,6 +127,11 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
   useEffect(() => {
     commentViewActive.current = true;
     return () => { commentViewActive.current = false; };
+  }, []);
+
+  useEffect(() => {
+    editViewActive.current = true;
+    return () => { editViewActive.current = false; };
   }, []);
 
   useEffect(() => {
@@ -260,15 +275,44 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
 
   const handleOpenEditDialog = () => {
     if (!project) return;
-    setEditProjectData({
-      title: project.title,
-      description: project.description,
-      category: project.category,
-      tags: project.tags.map(tag => tag.name),
-      link: project.link,
-      image: null,
-    });
+    // Pending Close/Reopen (or a failure while closed) keeps the actual draft.
+    if (!editDraftReady.current) {
+      setEditProjectData({
+        title: project.title,
+        description: project.description,
+        category: project.category,
+        tags: project.tags.map(tag => tag.name),
+        link: project.link,
+        image: null,
+      });
+      editDraftRevision.current += 1;
+      editDraftReady.current = true;
+      setEditError(null);
+      setEditNotice(null);
+    }
+    editDialogGeneration.current += 1;
+    editDialogOpen.current = true;
     setIsEditDialogOpen(true);
+  };
+
+  const handleEditDialogOpenChange = (open: boolean) => {
+    if (open) { handleOpenEditDialog(); return; }
+    editDialogGeneration.current += 1;
+    editDialogOpen.current = false;
+    setIsEditDialogOpen(false);
+    if (!editRequest.current) {
+      editDraftReady.current = false;
+      setEditError(null);
+      setEditNotice(null);
+    }
+  };
+
+  const updateEditProjectData = (update: (draft: typeof editProjectData) => typeof editProjectData) => {
+    if (editRequest.current) return;
+    editDraftRevision.current += 1;
+    setEditProjectData(update);
+    setEditError(null);
+    setEditNotice(null);
   };
 
   const handleOpenDeleteDialog = () => {
@@ -277,15 +321,23 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
   };
 
   const handleSubmitEditProject = async () => {
-    if (!project) return;
+    if (!editViewActive.current || editRequest.current || !project) return;
 
-    const { title, description, category, tags, link, image } = editProjectData;
+    const submittedDraft = { ...editProjectData, tags: [...editProjectData.tags] };
+    const submittedRevision = editDraftRevision.current;
+    const submittedGeneration = editDialogGeneration.current;
+    const targetId = project.id;
+    const { title, description, category, tags, link, image } = submittedDraft;
 
     if (!title || !description || !category || !link) {
-      alert('Bitte fülle alle erforderlichen Felder aus.');
+      setEditError('Bitte fülle alle erforderlichen Felder aus.');
       return;
     }
 
+    editRequest.current = true;
+    setIsSavingProject(true);
+    setEditError(null);
+    setEditNotice(null);
     try {
       const formData = new FormData();
       formData.append('title', title);
@@ -297,22 +349,41 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
         formData.append('image', image);
       }
 
-      const res = await fetch(`/api/projects/${project.id}`, {
+      const res = await fetch(`/api/projects/${targetId}`, {
         method: 'PUT',
         body: formData
       });
 
       if (!res.ok) {
         const errorData = await res.json();
-        throw new Error(errorData.error || 'Fehler beim Bearbeiten des Projekts.');
+        throw new Error(typeof errorData.error === 'string' ? errorData.error : 'Fehler beim Bearbeiten des Projekts.');
       }
 
       const updatedProject: Project = await res.json();
-      setProject(updatedProject);
-      setIsEditDialogOpen(false);
+      if (!editViewActive.current) return;
+      setProject(current => current?.id === targetId ? updatedProject : current);
+      const unchangedDraft = editDraftRevision.current === submittedRevision;
+      // A saved File is no longer a pending replacement. Never clear a newer one.
+      if (unchangedDraft) {
+        setEditProjectData(current => ({ ...current, image: null }));
+        if (editImageInput.current) editImageInput.current.value = '';
+      }
+      if (unchangedDraft && editDialogGeneration.current === submittedGeneration && editDialogOpen.current) {
+        editDraftReady.current = false;
+        editDialogOpen.current = false;
+        setIsEditDialogOpen(false);
+      } else if (editDialogOpen.current) {
+        setEditNotice(unchangedDraft ? 'Änderungen gespeichert.' : 'Gespeichert. Neuere Änderungen sind noch offen.');
+      } else if (unchangedDraft) {
+        editDraftReady.current = false;
+      }
     } catch (error: any) {
+      if (!editViewActive.current) return;
       console.error('Error updating project:', error);
-      alert(error.message || 'Fehler beim Aktualisieren des Projekts.');
+      setEditError(error instanceof Error ? error.message : 'Fehler beim Aktualisieren des Projekts.');
+    } finally {
+      editRequest.current = false;
+      if (editViewActive.current) setIsSavingProject(false);
     }
   };
 
@@ -575,19 +646,19 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
       </div>
 
       {/* Edit Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-h-[90dvh] overflow-y-auto">
+      <Dialog open={isEditDialogOpen} onOpenChange={handleEditDialogOpenChange}>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto" aria-busy={isSavingProject}>
           <DialogHeader>
             <DialogTitle>Projekt bearbeiten</DialogTitle>
             <DialogDescription>Titel, Beschreibung, Kategorie und Link sind erforderlich.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
+          <fieldset disabled={isSavingProject} className="min-w-0 space-y-4 border-0 p-0">
             <div>
               <Label htmlFor="title">Titel</Label>
               <Input
                 id="title"
                 value={editProjectData.title}
-                onChange={(e) => setEditProjectData(prev => ({ ...prev, title: e.target.value }))}
+                onChange={(e) => { const title = e.target.value; updateEditProjectData(prev => ({ ...prev, title })); }}
               />
             </div>
             <div>
@@ -595,7 +666,7 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
               <Textarea
                 id="description"
                 value={editProjectData.description}
-                onChange={(e) => setEditProjectData(prev => ({ ...prev, description: e.target.value }))}
+                onChange={(e) => { const description = e.target.value; updateEditProjectData(prev => ({ ...prev, description })); }}
               />
             </div>
             <div>
@@ -603,7 +674,7 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
               <Input
                 id="category"
                 value={editProjectData.category}
-                onChange={(e) => setEditProjectData(prev => ({ ...prev, category: e.target.value }))}
+                onChange={(e) => { const category = e.target.value; updateEditProjectData(prev => ({ ...prev, category })); }}
               />
             </div>
             <div>
@@ -611,7 +682,7 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
               <Input
                 id="tags"
                 value={editProjectData.tags.join(', ')}
-                onChange={(e) => setEditProjectData(prev => ({ ...prev, tags: e.target.value.split(',').map(tag => tag.trim()) }))}
+                onChange={(e) => { const tags = e.target.value.split(',').map(tag => tag.trim()); updateEditProjectData(prev => ({ ...prev, tags })); }}
               />
             </div>
             <div>
@@ -619,7 +690,7 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
               <Input
                 id="link"
                 value={editProjectData.link}
-                onChange={(e) => setEditProjectData(prev => ({ ...prev, link: e.target.value }))}
+                onChange={(e) => { const link = e.target.value; updateEditProjectData(prev => ({ ...prev, link })); }}
               />
             </div>
             <div>
@@ -628,16 +699,21 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
                 id="image"
                 type="file"
                 accept="image/*"
-                onChange={(e) => setEditProjectData(prev => ({ ...prev, image: e.target.files?.[0] || null }))}
+                ref={editImageInput}
+                aria-describedby={editProjectData.image ? 'project-edit-image-name' : undefined}
+                onChange={(e) => { const image = e.target.files?.[0] || null; updateEditProjectData(prev => ({ ...prev, image })); }}
               />
+              {editProjectData.image && <p id="project-edit-image-name" className="mt-2 break-words text-sm text-muted-foreground [overflow-wrap:anywhere]">Ausgewählt: {editProjectData.image.name}</p>}
             </div>
-          </div>
+          </fieldset>
+          {editError && <p role="alert" className="text-sm text-destructive">{editError}</p>}
+          {editNotice && <p role="status" className="text-sm text-muted-foreground">{editNotice}</p>}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-              Abbrechen
+            <Button type="button" variant="outline" onClick={() => handleEditDialogOpenChange(false)}>
+              {isSavingProject ? 'Schließen' : 'Abbrechen'}
             </Button>
-            <Button onClick={handleSubmitEditProject}>
-              Speichern
+            <Button type="button" onClick={handleSubmitEditProject} disabled={isSavingProject}>
+              {isSavingProject ? 'Wird gespeichert…' : 'Speichern'}
             </Button>
           </DialogFooter>
         </DialogContent>

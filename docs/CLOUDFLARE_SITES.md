@@ -9,11 +9,11 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up the published Version 40 source
-`429ec9835115caa1f77bed8b1c6b609e37e17c35`. Version 40 deployed successfully on
-17 October 2026 at 23:30:31 UTC. Project-comment plain-text web links are live;
-bounded existing-comment link/focus/reload readback passed. Version 39 directory
-context, reload/share-link and keyboard-reset acceptance also passed.
+runtime data. This GitHub snapshot backs up the published Version 41 source
+`28675ef56fec658fdb86e64d276fce4d835c0c63`. Version 41 deployed successfully on
+17 October 2026 at 23:41:23 UTC. Project-edit pending guards and comment-newline
+sanitizer selection are live. A read-only edit-form check found raw-HTML
+presentation and dismissal-focus gaps; positive save/race/newline proof is open.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -74,8 +74,8 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 40 source includes the existing bounded ports below,
-inherited from Version 39, plus scoped project-comment web-link rendering described
+The published Version 41 source includes the existing bounded ports below,
+inherited from Version 40, plus project-edit pending guards and comment newlines described
 below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
@@ -154,6 +154,11 @@ all-page visual coverage.
 - Project-comment explicit HTTP(S) plain-text links use the existing URL guard,
   token rejection and visible keyboard focus; stored content and sanitizer
   unchanged, bounded existing-comment link readback passed
+- Project-edit immutable submit snapshot, single-pending gate and dialog/draft
+  generation guards; source-reviewed only, with known raw-HTML description and
+  dismissal-focus gaps in the published edit form
+- Project-comment POST selects the existing newline-preserving plain-text
+  sanitizer; stored comments are not rewritten, new multiline acceptance open
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -707,6 +712,43 @@ for this backup. No comment contents, record identifiers, account details or
 screenshots are committed.
 Earlier bounded acceptance and outstanding flow limits remain as documented.
 The curated roadmap stays byte-identical at its dated Version 32 base.
+
+## Version 41 project-edit pending guards and comment newlines
+
+Version 41 combines two independently reviewed source changes in two files.
+The existing project-edit dialog captures an immutable submitted snapshot,
+including tags, selected file, target project and draft/dialog revisions. A
+synchronous single-pending guard disables editable fields and save while leaving
+Close available. Source-level generation and active-view checks isolate delayed
+responses across dismissal/reopen/unmount. Errors are inline; a selected file
+name can remain visible, and success clears only the submitted revision/file
+and closes only the matching open dialog. No cross-tab conflict or exactly-once
+guarantee is added.
+
+The comment POST route selects the existing newline-preserving comment-text
+sanitizer instead of the general whitespace-collapsing text sanitizer. It strips
+markup, normalizes CRLF/CR to LF and preserves internal line breaks. The shared
+sanitizer implementation and all other comment API bytes are unchanged.
+Existing stored comments are not rewritten. Version 40's link renderer and the
+complete Version 37 project-header block remain byte-identical. No project or
+comment content was changed by the implementation or backup.
+
+Independent component and exact-union source review, production typechecking/
+build and static artifact/archive checks passed. Deployment succeeded on
+17 October 2026 at 23:41:23 UTC. A subsequent published read-only form check
+verified opening, existing values and cancel without a PUT. It also found two
+open UX gaps: an existing rich description appears as raw HTML in the textarea,
+and Cancel/Escape returns focus to BODY rather than the opener. Those findings
+are not a completed edit-flow acceptance result or a data-loss finding.
+Separate corrections are planned.
+
+A positive PUT, pending/double-submit or close/reopen race, file replacement,
+late unmount/account transition, error path and a newly submitted multiline
+comment remain unverified live. The pending/lifecycle and newline behavior is
+source-reviewed only; ordinary opening/cancel does not prove it. No synthetic
+comment or project rewrite was made for these checks. Private field contents,
+record/account identifiers and screenshots are excluded from this backup.
+The curated roadmap remains byte-identical at its dated Version 32 base.
 
 ## Keeping the branches separate
 
