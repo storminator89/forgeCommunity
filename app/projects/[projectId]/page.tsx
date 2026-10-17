@@ -365,15 +365,15 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
             {isLoading || loadedForId !== projectId ? <><h1 className="sr-only">Projekt</h1><PageState kind="loading" title="Projekt wird geladen" /></> : !project ? <><h1 className="sr-only">Projekt</h1><PageState kind="error" title="Projekt nicht verfügbar" description={loadError || 'Das Projekt konnte nicht geladen werden oder wurde entfernt.'} action={<div className="flex flex-wrap justify-center gap-2"><Button type="button" variant="outline" onClick={() => { setIsLoading(true); setRetryKey(value => value + 1); }}>Erneut versuchen</Button><Button asChild variant="outline"><Link href="/showcases">Zur Übersicht</Link></Button></div>} /></> : (
               <article className="space-y-6">
                 {/* Project Header */}
-                <div className="fc-surface p-6 sm:p-8">
+                <div className="fc-surface p-4 sm:p-6 lg:p-8">
 
-                  <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-start">
-                    <div className="min-w-0 flex-1">
-                      <h1 className="mb-4 mt-4 min-w-0 break-words text-[clamp(2rem,1.35rem+2.5vw,3.5rem)] font-semibold leading-tight tracking-[-0.045em] [overflow-wrap:anywhere]">{project.title}</h1>
-                      <div className="flex flex-wrap items-center gap-4 text-muted-foreground">
-                        <div className="flex items-center">
-                          <Calendar className="w-4 h-4 mr-2" />
-                          <span>
+                  <div className="flex min-w-0 flex-col gap-5">
+                    <div className="min-w-0">
+                      <h1 className="min-w-0 text-[clamp(1.75rem,1.25rem+1.5vw,2.5rem)] font-semibold leading-[1.15] tracking-[-0.035em] [overflow-wrap:anywhere]">{project.title}</h1>
+                      <div className="mt-4 flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
+                        <div className="flex min-w-0 items-start">
+                          <Calendar className="mr-2 mt-0.5 h-4 w-4 shrink-0" />
+                          <span className="min-w-0 [overflow-wrap:anywhere]">
                             {new Date(project.createdAt).toLocaleDateString('de-DE', {
                               year: 'numeric',
                               month: 'long',
@@ -381,29 +381,29 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
                             })}
                           </span>
                         </div>
-                        <div className="flex items-center">
-                          <User className="w-4 h-4 mr-2" />
-                          <span>{project.author?.name || 'Anonym'}</span>
+                        <div className="flex min-w-0 items-start">
+                          <User className="mr-2 mt-0.5 h-4 w-4 shrink-0" />
+                          <span className="min-w-0 [overflow-wrap:anywhere]">{project.author?.name || 'Anonym'}</span>
                         </div>
-                        <div className="flex items-center">
-                          <Tag className="w-4 h-4 mr-2" />
-                          <span>{project.category}</span>
+                        <div className="flex min-w-0 items-start">
+                          <Tag className="mr-2 mt-0.5 h-4 w-4 shrink-0" />
+                          <span className="min-w-0 [overflow-wrap:anywhere]">{project.category}</span>
                         </div>
                       </div>
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2 border-t border-border pt-4">
                       {session?.user?.id === project.author.id && (
                         <>
-                          <Button variant="outline" size="sm" onClick={handleOpenEditDialog}><Edit className="mr-2 h-4 w-4" />Bearbeiten</Button>
-                          <Button variant="outline" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={handleOpenDeleteDialog}><Trash className="mr-2 h-4 w-4" />Löschen</Button>
+                          <Button variant="outline" size="sm" className="min-h-11" onClick={handleOpenEditDialog}><Edit className="mr-2 h-4 w-4" />Bearbeiten</Button>
+                          <Button variant="outline" size="sm" className="min-h-11 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={handleOpenDeleteDialog}><Trash className="mr-2 h-4 w-4" />Löschen</Button>
                         </>
                       )}
                       <Button
                         variant="outline"
                         size="sm"
-                        className="flex items-center"
+                        className="flex min-h-11 items-center"
                         onClick={() => handleShare()}
                       >
                         <Share2 className="w-4 h-4 mr-2" />

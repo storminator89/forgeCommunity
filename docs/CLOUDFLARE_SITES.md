@@ -9,11 +9,11 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up the published Version 36 source
-`f90430dcbce5f3fa2309fae9a2749538c0987ab1`. Version 36 deployed successfully on
-17 October 2026 at 22:50:53 UTC. Bounded Space discussion/reply POST source and
-the account-menu Journey fix are live. The bounded learner-menu check passed;
-positive Space POST/replay/race acceptance remains unverified.
+runtime data. This GitHub snapshot backs up the published Version 37 source
+`5808f87632fde1b6c2003f87167f3dd55ebb3886`. Version 37 deployed successfully on
+17 October 2026 at 23:02:26 UTC. The project-header layout-only fix is live;
+bounded desktop layout and keyboard-focus readback passed. Original project
+content is unchanged; positive Space POST/replay/race acceptance remains unverified.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -74,8 +74,8 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 36 source includes the existing bounded ports below,
-inherited from Version 35, plus Space discussion/reply POST and account-menu navigation described
+The published Version 37 source includes the existing bounded ports below,
+inherited from Version 36, plus the scoped project-header layout correction described
 below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
@@ -142,6 +142,9 @@ all-page visual coverage.
   runtime POST/replay/race acceptance remains open
 - Account-menu learning link opens Journey for USER learners and the course
   overview for other authenticated roles; bounded learner-menu readback passed
+- Project-detail header presentation with a bounded title scale, wrapping
+  metadata, separate action row and 44-pixel minimum action targets; original
+  content and behavior unchanged, bounded desktop layout readback passed
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -567,6 +570,33 @@ separate. Version 35's bounded completed single-course navigation check remains
 as documented above; this increment does not establish multiple-course or
 unfinished-course resumption. The curated roadmap remains byte-identical at
 its recorded Version 32 date/base, with findings and proposals kept distinct.
+
+## Version 37 project-header layout correction
+
+Version 37 changes only literal className attributes in the existing project
+detail page. The header uses a vertically arranged title/metadata block and a
+separate wrapping action row, reducing title scale and responsive padding while
+allowing long title and metadata text to wrap. Date, author and category icons
+remain non-shrinking; existing actions receive 44-pixel minimum target heights.
+
+Removing literal className attributes leaves all remaining source bytes
+identical to Version 36. Original stored project title/content, rendered data,
+permissions, action handlers, APIs, authentication and scoring are unchanged.
+No screenshot, account data, private project content or runtime state is
+included in this source backup.
+
+Independent exact-path source review, production typechecking/build and static
+artifact/archive checks passed. Deployment succeeded on 17 October 2026 at
+23:02:26 UTC. At 23:03 UTC a bounded published readback at 1180 by 757 pixels
+showed the unchanged title on one line without mid-word breaking, using a
+771-pixel-wide title region and approximately 37.7-pixel type. Three actions
+occupied a separate row with 44-pixel heights. Tab focus was visible on all
+three actions without activating them. Reload retained the same content and
+session. No content edit, action activation or data write was performed.
+Mobile/narrow layouts and other long-content or action-behavior variants remain
+unverified live. Earlier bounded acceptance and open flow limits remain as
+documented above. The curated roadmap is retained byte-identically at its dated
+Version 32 base.
 
 ## Keeping the branches separate
 
