@@ -152,7 +152,7 @@ test('lesson provenance survives real creation, retained pages, republish, chose
               const context = discussion.getByText(`Zu dieser Lektion: ${lessonTitle}`, { exact: true })
               const solution = discussion.getByText('Lösung', { exact: true })
               // Frame oversized text in the actual content pane using native scrolling only.
-              await heading.evaluate(installReaderLayoutGuard, { kind: 'qa-capture',
+              await heading.evaluate(installReaderLayoutGuard, { kind: 'qa-capture' as const,
                 expectedRootFontPixels: captureBaseline.rootFontPixels * zoom / 100, expectedTargetFontPixels: captureBaseline.targetFontPixels * zoom / 100 })
               readinessEvidence.enlarged = await page.evaluate(() => (window as ReaderLayoutWindow).__readerLayoutGuard!.settle())
               await page.evaluate(() => (window as ReaderLayoutWindow).__readerLayoutGuard!.arm())
@@ -212,7 +212,7 @@ test('lesson provenance survives real creation, retained pages, republish, chose
             await cleanup(() => page.evaluate(value => { document.documentElement.style.fontSize = value }, captureBaseline.fontStyle))
             await cleanup(() => page.setViewportSize(captureViewport))
             await cleanup(async () => {
-              await captureHeading.evaluate(installReaderLayoutGuard, { kind: 'qa-capture', expectedRootFontPixels: captureBaseline.rootFontPixels, expectedTargetFontPixels: captureBaseline.targetFontPixels })
+              await captureHeading.evaluate(installReaderLayoutGuard, { kind: 'qa-capture' as const, expectedRootFontPixels: captureBaseline.rootFontPixels, expectedTargetFontPixels: captureBaseline.targetFontPixels })
               await page.evaluate(() => (window as ReaderLayoutWindow).__readerLayoutGuard!.settle())
             })
             await cleanup(() => page.evaluate(() => (window as ReaderLayoutWindow).__readerLayoutGuard?.finish()))
