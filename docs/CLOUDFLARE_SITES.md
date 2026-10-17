@@ -10,7 +10,7 @@ Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
 runtime data. Its frozen Sites source is
-`21fefbb2a3916d2bf903bebd6db4fcd99bb0fc87`. It is experimental and does not
+`c497b003a5db8adccc148ad552e7a9d2be3c8a7c`. It is experimental and does not
 claim feature parity with main.
 
 ## Requirements and setup
@@ -18,8 +18,9 @@ claim feature parity with main.
 - Node.js 24 and npm, following the checked-in lockfile.
 - Your own Sites project and its deployment access. A generic `wrangler deploy`
   setup and standalone Cloudflare account deployment are not provided here.
-- A D1 binding named `DB`. The `BUCKET` R2 binding is declared by the hosting
-  template, but existing upload code is not yet migrated to durable R2 storage.
+- A D1 binding named `DB` and your own private R2 binding named `BUCKET`.
+  Only the bounded chat-image pipeline below uses R2; other upload paths
+  remain unported.
 - An HTTPS origin and an empty development database for first setup. Back up an
   existing database before applying any schema changes.
 
@@ -70,7 +71,7 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The current Version 17 source includes these bounded ports. Live QA is ongoing;
+The current Version 18 source includes these bounded ports. Live QA is ongoing;
 source implementation and publication do not establish complete runtime or
 all-page visual coverage.
 
@@ -81,6 +82,9 @@ all-page visual coverage.
   authors; comment counts are derived from stored comment rows
 - D1-backed course Q&A list/detail reads and retained-list revalidation,
   preserving access checks and lesson-context visibility; Q&A writes remain unported
+- Bounded chat-image uploads with browser normalization, server-side
+  JPEG/PNG decoding and fresh PNG encoding, private R2 storage, and
+  authenticated owner/message/channel-scoped image serving
 - Native D1 atomic chat-message creation and generic notifications to all
   explicit other channel members, retaining existing channel-access checks
 - Latest own quiz-attempt display on reopening, with an explicit repeat action
@@ -101,10 +105,22 @@ formative practice, course Q&A creation/replies/moderation/solution writes,
 course analytics, and Space/mission mutation flows are unported. Other workflows may still use Prisma transaction patterns that D1
 does not support. Do not infer support for every write flow from this scope.
 
-Persistent image uploads, private chat/course assets, and H5P package storage
-still depend on Node filesystem/native image-processing APIs. They are not
-supported as durable Workers storage. Declaring R2 does not make those paths
-R2-backed. No PostgreSQL or ordinary file-backed SQLite runtime is supported on
+Chat images use the existing private R2 binding through the dedicated chat
+upload/serve routes. The browser prepares JPEG/PNG/WebP/GIF as a bounded
+image; unsupported browser decoding fails clearly. The server accepts genuine
+JPEG/PNG up to 5 MiB, 1 megapixel and 1600 pixels per side, and stores only a
+freshly encoded PNG. There is one admitted upload per isolate and a 15-second
+body deadline; R2 provider delays can retain that admission until settlement.
+Image reads require the current account and either owner staging access or
+access to the exact message/channel. Legacy filesystem images are not migrated.
+A failed later message write can leave a private orphan. The codec pins are
+`jpeg-js@0.4.4` and `pngjs@7.0.0`; retain the complete public notice at
+`public/licenses/chat-image-codecs.txt`.
+
+Avatar/profile images, post-file uploads, course assets and H5P package storage
+remain outside this repair and may still depend on Node filesystem/native
+image-processing APIs. They are not supported as durable Workers storage.
+Declaring R2 does not port those other paths or establish general upload support. No PostgreSQL or ordinary file-backed SQLite runtime is supported on
 this branch. Managed-Linux helper scripts depend on external Sites tooling;
 their standalone wrapper is not part of this source snapshot. The inherited
 `db:seed` script and standard-runtime test fixtures are also unported and may
@@ -115,7 +131,11 @@ build reported with its release. Version 15 passed production typechecking
 and its build, but its live Q&A regression check failed. Version 17 includes
 fixed-class diagnostics without provider messages/data and an equivalent
 compound-query grouping correction. Version 17 passed its production source
-validation and build; its live acceptance retest is still in progress. No new local
+validation/build; basic Q&A list and revalidation reads returned 200 on the
+published Site, without establishing full Q&A coverage. Version 18 passed
+production typechecking and its build; its live chat-image/logo retest is
+still in progress. Browser compatibility, codec load/memory behavior and all
+other image workflows are not established by the build. No new local
 test suite or GitHub CI run is
 part of this work. The inherited standard pipeline is unchanged: pushes run
 only for main/master, and no pull request is opened for this branch. Recheck

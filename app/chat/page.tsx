@@ -36,9 +36,13 @@ import { de } from 'date-fns/locale'
 import { ChatMessage } from '@/types/chat'
 import Image from 'next/image'
 import { cn } from '@/lib/utils'
+import { ChatImagePreparationError, normalizeChatImage } from '@/lib/chat-image-normalize'
 
 export default function ChatPage() {
-  return <Suspense fallback={<div role="status" className="p-6">Chat wird geladen …</div>}><ChatPageContent /></Suspense>
+  const { data, status } = useSession()
+  const session = status === 'authenticated' ? data : null
+  const accountKey = `${session?.user?.id ?? 'anonymous'}:${session?.user?.role ?? 'none'}`
+  return <Suspense fallback={<div role="status" className="p-6">Chat wird geladen …</div>}><ChatPageContent key={accountKey} /></Suspense>
 }
 
 function ChatPageContent() {
@@ -49,7 +53,8 @@ function ChatPageContent() {
     /^[A-Za-z0-9_-]{1,100}$/.test(linkedChannelId) && /^[A-Za-z0-9_-]{1,100}$/.test(linkedMessageId)
       ? { channelId: linkedChannelId, messageId: linkedMessageId }
       : null, [linkedChannelId, linkedMessageId])
-  const { data: session } = useSession()
+  const { data, status } = useSession()
+  const session = status === 'authenticated' ? data : null
   const {
     channels,
     currentChannel,
@@ -67,6 +72,7 @@ function ChatPageContent() {
     deleteChannel,
     loading,
     error,
+    sendError,
     clearError
   } = useChat()
 
@@ -79,6 +85,8 @@ function ChatPageContent() {
   const [editContent, setEditContent] = useState('')
   const [selectedImage, setSelectedImage] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [isPreparingImage, setIsPreparingImage] = useState(false)
+  const [imageError, setImageError] = useState<string | null>(null)
   const [selectedImageForModal, setSelectedImageForModal] = useState<string | null>(null)
   const [showChannelsMobile, setShowChannelsMobile] = useState(false)
   const [linkedMessage, setLinkedMessage] = useState<ChatMessage | null>(null)
@@ -90,6 +98,25 @@ function ChatPageContent() {
   const focusedLinkedMessageRef = useRef<string | null>(null)
   const editInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const imagePreparationRef = useRef(0)
+  const preparingImageRef = useRef(false)
+  const sendingRef = useRef(false)
+  const pageActiveRef = useRef(false)
+  const selectedImageRef = useRef<File | null>(null)
+  const messageDraftRef = useRef('')
+
+  useLayoutEffect(() => {
+    pageActiveRef.current = true
+    return () => {
+      // Invalidate pending work during the account/unmount commit, before an
+      // old bitmap promise or retained event callback can update a new draft.
+      pageActiveRef.current = false
+      imagePreparationRef.current++
+      preparingImageRef.current = false
+      selectedImageRef.current = null
+      messageDraftRef.current = ''
+    }
+  }, [])
 
   useEffect(() => {
     if (!linkedTarget || loading || !session) return
@@ -224,26 +251,55 @@ function ChatPageContent() {
   }, [imagePreview])
 
   const handleSendMessage = async () => {
-    if (!currentChannel || isSending || (!newMessage.trim() && !selectedImage)) return
+    const content = messageDraftRef.current
+    const image = selectedImageRef.current
+    if (!pageActiveRef.current || !currentChannel || sendingRef.current || preparingImageRef.current || (!content.trim() && !image)) return
+    // State disables the controls after render; refs close the same-event-turn
+    // gap and keep retained handlers from sending a superseded image or draft.
+    sendingRef.current = true
     setIsSending(true)
     try {
-      const sent = await sendMessage(newMessage, selectedImage || undefined)
-      if (sent) {
+      const sent = await sendMessage(content, image || undefined)
+      if (sent && pageActiveRef.current) {
+        messageDraftRef.current = ''
+        selectedImageRef.current = null
         setNewMessage('')
         setSelectedImage(null)
         setImagePreview(null)
+        setImageError(null)
         if (fileInputRef.current) fileInputRef.current.value = ''
       }
     } finally {
-      setIsSending(false)
+      sendingRef.current = false
+      if (pageActiveRef.current) setIsSending(false)
     }
   }
 
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (file) {
-      setSelectedImage(file)
-      setImagePreview(URL.createObjectURL(file))
+    // Allow the same file to be selected again after a preparation failure.
+    e.target.value = ''
+    if (!file || !pageActiveRef.current || sendingRef.current || preparingImageRef.current) return
+    const preparation = ++imagePreparationRef.current
+    preparingImageRef.current = true
+    setIsPreparingImage(true)
+    setImageError(null)
+    try {
+      const normalized = await normalizeChatImage(file)
+      if (!pageActiveRef.current || preparation !== imagePreparationRef.current) return
+      const preview = URL.createObjectURL(normalized)
+      selectedImageRef.current = normalized
+      setSelectedImage(normalized)
+      setImagePreview(preview)
+    } catch (error) {
+      if (!pageActiveRef.current || preparation !== imagePreparationRef.current) return
+      const message = error instanceof ChatImagePreparationError ? error.message : 'Das Bild konnte nicht vorbereitet werden. Bitte wähle ein anderes Bild.'
+      setImageError(selectedImageRef.current ? `${message} Das bisherige Bild bleibt ausgewählt.` : message)
+    } finally {
+      if (pageActiveRef.current && preparation === imagePreparationRef.current) {
+        preparingImageRef.current = false
+        setIsPreparingImage(false)
+      }
     }
   }
 
@@ -275,6 +331,12 @@ function ChatPageContent() {
   }
 
   const cancelImageUpload = () => {
+    if (!pageActiveRef.current || sendingRef.current) return
+    imagePreparationRef.current++
+    preparingImageRef.current = false
+    selectedImageRef.current = null
+    setIsPreparingImage(false)
+    setImageError(null)
     setSelectedImage(null)
     setImagePreview(null)
     if (fileInputRef.current) {
@@ -318,7 +380,7 @@ function ChatPageContent() {
         </AppHeader>
 
         {error && <div role="alert" className="mx-4 my-2 flex flex-wrap items-center gap-3 rounded-xl border border-destructive/30 bg-card px-4 py-3 text-sm text-destructive sm:mx-6">
-          <p className="min-w-0 flex-1">Chat konnte nicht geladen oder geändert werden. Bitte versuche es erneut.</p>
+          <p className="min-w-0 flex-1">{sendError === error ? sendError : 'Chat konnte nicht geladen oder geändert werden. Bitte versuche es erneut.'}</p>
           <Button type="button" variant="outline" onClick={clearError}>Meldung schließen</Button>
           {channels.length === 0 && <Button type="button" variant="outline" onClick={() => window.location.reload()}>Chat neu laden</Button>}
         </div>}
@@ -522,6 +584,11 @@ function ChatPageContent() {
             </div>
 
             <div className="fc-chat-composer space-y-4 border-t bg-card px-4 py-3 sm:px-6">
+              {imageError && <p role="alert" className="text-sm text-destructive">{imageError}</p>}
+              {isPreparingImage && <div className="flex items-center gap-3 text-sm">
+                <p role="status">Bild wird lokal vorbereitet …</p>
+                <Button type="button" variant="outline" size="sm" onClick={cancelImageUpload}>Abbrechen</Button>
+              </div>}
               {imagePreview && (
                 <div className="relative inline-block">
                   <div className="relative w-32 h-32">
@@ -537,6 +604,7 @@ function ChatPageContent() {
                       className="absolute top-1 right-1"
                       aria-label="Bild entfernen"
                       onClick={cancelImageUpload}
+                      disabled={isSending}
                     >
                       <X className="h-4 w-4" />
                     </Button>
@@ -548,7 +616,11 @@ function ChatPageContent() {
                   type="text"
                   placeholder="Nachricht schreiben…"
                   value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
+                  onChange={(e) => {
+                    if (sendingRef.current) return
+                    messageDraftRef.current = e.target.value
+                    setNewMessage(e.target.value)
+                  }}
                   aria-label="Nachricht"
                   onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.preventDefault(); handleSendMessage() } }}
                   className="min-w-0 flex-1"
@@ -556,19 +628,22 @@ function ChatPageContent() {
                 />
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
                   className="hidden"
                   ref={fileInputRef}
                   onChange={handleImageSelect}
+                  disabled={!currentChannel || isSending || isPreparingImage}
+                  aria-describedby="chat-image-notice"
                 />
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
                   aria-label="Bild anhängen"
+                  aria-describedby="chat-image-notice"
                   className="shrink-0"
                   onClick={() => fileInputRef.current?.click()}
-                  disabled={!currentChannel || isSending}
+                  disabled={!currentChannel || isSending || isPreparingImage}
                 >
                   <ImageIcon className="h-4 w-4" />
                 </Button>
@@ -579,11 +654,12 @@ function ChatPageContent() {
                   aria-label="Nachricht senden"
                   aria-busy={isSending}
                   className="shrink-0"
-                  disabled={isSending || !currentChannel || (!newMessage.trim() && !selectedImage)}
+                  disabled={isSending || isPreparingImage || !currentChannel || (!newMessage.trim() && !selectedImage)}
                 >
                   <Send className="h-4 w-4" />
                 </Button>
               </div>
+              <p id="chat-image-notice" className="text-xs text-muted-foreground">JPEG, PNG, WebP oder GIF bis 5 MiB. Bilder werden lokal als PNG verkleinert (max. 1 MP, 1600 px pro Seite), Animationen als Standbild. Upload erst beim Senden.</p>
             </div>
           </section>
         </div>

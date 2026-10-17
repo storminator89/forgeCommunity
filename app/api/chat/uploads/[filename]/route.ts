@@ -1,70 +1,60 @@
-import { readFile } from 'node:fs/promises';
 import { NextResponse } from 'next/server';
+import { env } from 'cloudflare:workers';
 import { getServerSession } from '@/lib/sites-auth/server';
-
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
-import { getChatUploadOwnerId, getPrivateChatUploadPath } from '@/lib/server/image-upload';
+import { getChatImage, parseChatImageFilename } from '@/lib/server/chat-image-r2';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const CONTENT_TYPES: Record<string, string> = {
-  gif: 'image/gif',
-  jpg: 'image/jpeg',
-  png: 'image/png',
-  webp: 'image/webp',
-};
+const PRIVATE_HEADERS = { 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' };
+const notFound = () => NextResponse.json({ error: 'Not found' }, { status: 404, headers: PRIVATE_HEADERS });
+const unauthorized = () => NextResponse.json(
+  { error: 'Nicht autorisiert.', errorCode: 'UNAUTHORIZED' }, { status: 401, headers: PRIVATE_HEADERS },
+);
 
 export async function GET(
   _request: Request,
   props: { params: Promise<{ filename: string }> },
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const { filename } = await props.params;
-  const filePath = getPrivateChatUploadPath(filename);
-  const ownerId = getChatUploadOwnerId(filename);
-  if (!filePath || !ownerId) {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  }
-
   try {
-    let authorized = ownerId === session.user.id;
-    if (!authorized) {
-      const message = await prisma.chatMessage.findFirst({
-        where: {
-          imageUrl: `/api/chat/uploads/${filename}`,
-          authorId: ownerId,
-          channel: {
-            OR: [
-              { isPrivate: false },
-              { members: { some: { userId: session.user.id } } },
-            ],
-          },
-        },
-        select: { id: true },
-      });
-      authorized = Boolean(message);
-    }
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) return unauthorized();
 
-    if (!authorized) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    }
+    const { filename } = await props.params;
+    const parsed = parseChatImageFilename(filename);
+    if (!parsed) return notFound();
+    if (!env.DB) throw new Error('Chat database is unavailable.');
 
-    const bytes = await readFile(filePath);
-    const extension = filename.split('.').pop()?.toLowerCase() || '';
-    return new NextResponse(bytes, {
-      headers: {
-        'Content-Type': CONTENT_TYPES[extension] || 'application/octet-stream',
-        'Cache-Control': 'private, no-store',
-        'X-Content-Type-Options': 'nosniff',
-      },
+    // One current primary statement checks account existence and authority.
+    // Owners may preview their orphan upload. Everyone else needs an exact
+    // current message and readable current channel; ADMIN has no bypass.
+    const access = await env.DB.withSession('first-primary').prepare(`
+      SELECT viewer.id AS viewerId, (
+        viewer.id = ?2 OR EXISTS (
+          SELECT 1 FROM ChatMessage message
+          JOIN ChatChannel channel ON channel.id = message.channelId
+          WHERE message.imageUrl = ?3 AND message.authorId = ?2
+            AND (channel.isPrivate = 0 OR EXISTS (
+              SELECT 1 FROM ChatMember member
+              WHERE member.channelId = channel.id AND member.userId = viewer.id
+            ))
+        )
+      ) AS authorized
+      FROM User viewer WHERE viewer.id = ?1
+    `).bind(session.user.id, parsed.ownerId, `/api/chat/uploads/${filename}`)
+      .first<{ viewerId: string; authorized: number }>();
+    if (!access) return unauthorized();
+    if (access.authorized !== 1) return notFound();
+
+    // Authorization precedes even BUCKET.get. Do not forward object-controlled
+    // HTTP headers or materialize the image into an application byte buffer.
+    const object = await getChatImage(parsed.key, parsed.ownerId);
+    if (!object) return notFound();
+    return new NextResponse(object.body as unknown as ReadableStream<Uint8Array>, {
+      headers: { ...PRIVATE_HEADERS, 'Content-Type': 'image/png', 'Content-Length': String(object.size) },
     });
   } catch {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    return notFound();
   }
 }
