@@ -517,15 +517,25 @@ test('PostgreSQL fresh full chain has exact private fields/FKs/checks/indexes an
   assert.deepEqual(await postgresRows(db,true), rows); assert.deepEqual(await pgHistory(db), history);
 }));
 
-test('PostgreSQL exact invitation columns reject nullable/type/precision/default drift and extra private fields', { skip: !pgUrl }, async () => withPostgres(async (db,url) => {
+test('PostgreSQL exact invitation columns reject nullable/type/precision/default drift and extra private fields', { skip: !pgUrl }, async () => withPostgres(async (db,url,schema) => {
   await applyPostgresqlUpgrades(url,{ initializeEmptySchema: true });
   const history = await pgHistory(db); const before = await postgresRows(db,true);
   assert.equal(await assertCoursePublicationReady(url,'postgresql'),true);
+  assert.match(schema, /^forge_mission_invitations_[a-f0-9_]+$/);
+  const accessTable = `${quote(schema)}."SpaceMissionInvitationAccess"`;
+  const accessConstraint = 'SpaceMissionInvitationAccess_epoch_check';
+  const accessCheck = (await db.query(`SELECT pg_get_constraintdef(oid) AS definition
+    FROM pg_constraint WHERE conrelid=$1::regclass AND conname=$2 AND contype='c'`,
+    [accessTable, accessConstraint])).rows[0]?.definition;
+  assert.match(accessCheck, /^CHECK \(/);
   const changes = [
     ['nullable setting revision', 'ALTER TABLE "SpaceMissionInvitationSetting" ALTER COLUMN "revision" DROP NOT NULL', 'ALTER TABLE "SpaceMissionInvitationSetting" ALTER COLUMN "revision" SET NOT NULL'],
     ['required pending sender', 'ALTER TABLE "SpaceMissionInvitation" ALTER COLUMN "senderId" SET NOT NULL', 'ALTER TABLE "SpaceMissionInvitation" ALTER COLUMN "senderId" DROP NOT NULL'],
     ['bigint setting revision', 'ALTER TABLE "SpaceMissionInvitationSetting" ALTER COLUMN "revision" TYPE BIGINT', 'ALTER TABLE "SpaceMissionInvitationSetting" ALTER COLUMN "revision" TYPE INTEGER'],
-    ['numeric access epoch', 'ALTER TABLE "SpaceMissionInvitationAccess" ALTER COLUMN "epoch" TYPE NUMERIC', 'ALTER TABLE "SpaceMissionInvitationAccess" ALTER COLUMN "epoch" TYPE INTEGER'],
+    ['numeric access epoch', 'ALTER TABLE "SpaceMissionInvitationAccess" ALTER COLUMN "epoch" TYPE NUMERIC',
+      `ALTER TABLE ${accessTable} ALTER COLUMN "epoch" TYPE INTEGER;
+       ALTER TABLE ${accessTable} DROP CONSTRAINT ${quote(accessConstraint)};
+       ALTER TABLE ${accessTable} ADD CONSTRAINT ${quote(accessConstraint)} ${accessCheck}`],
     ['timestamp precision', 'ALTER TABLE "SpaceMissionInvitation" ALTER COLUMN "createdAt" TYPE TIMESTAMP(6)', 'ALTER TABLE "SpaceMissionInvitation" ALTER COLUMN "createdAt" TYPE TIMESTAMP(3)'],
     ['timestamp timezone', 'ALTER TABLE "SpaceMissionInvitation" ALTER COLUMN "expiresAt" TYPE TIMESTAMPTZ(3) USING "expiresAt" AT TIME ZONE \'UTC\'', 'ALTER TABLE "SpaceMissionInvitation" ALTER COLUMN "expiresAt" TYPE TIMESTAMP(3) USING "expiresAt" AT TIME ZONE \'UTC\''],
     ['enabled default', 'ALTER TABLE "SpaceMissionInvitationSetting" ALTER COLUMN "enabled" SET DEFAULT true', 'ALTER TABLE "SpaceMissionInvitationSetting" ALTER COLUMN "enabled" SET DEFAULT false'],
