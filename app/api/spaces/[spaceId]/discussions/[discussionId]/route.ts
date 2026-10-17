@@ -3,9 +3,8 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/sites-auth/server';
 import { authOptions } from '@/lib/auth';
-import { getReadableSpace, readableSpaceDiscussionWhere } from '@/lib/server/space-access';
-import { normalizeSpaceDiscussion, spaceDiscussionSelect } from '@/lib/server/space-discussions';
-import { requiredUserId, SPACE_NO_STORE, spaceErrorResponse, spaceTransaction, SpaceApiError, validDiscussionId, validSpaceId } from '@/lib/server/space-api';
+import { d1SpaceDiscussion } from '@/lib/server/d1-space-discussion-reads';
+import { requiredUserId, SPACE_NO_STORE, spaceErrorResponse, validDiscussionId, validSpaceId } from '@/lib/server/space-api';
 
 export async function GET(_request: NextRequest,
   { params }: { params: Promise<{ spaceId: string; discussionId: string }> }) {
@@ -15,14 +14,7 @@ export async function GET(_request: NextRequest,
     const { spaceId: rawSpaceId, discussionId: rawDiscussionId } = await params;
     const spaceId = validSpaceId(rawSpaceId);
     const discussionId = validDiscussionId(rawDiscussionId);
-    const item = await spaceTransaction(async tx => {
-      const access = await getReadableSpace(spaceId, userId, tx);
-      if (!access) throw new SpaceApiError('Diskussion nicht gefunden', 404);
-      const row = await tx.spaceDiscussion.findFirst({ where: { id: discussionId, ...readableSpaceDiscussionWhere(access) },
-        select: spaceDiscussionSelect });
-      if (!row) throw new SpaceApiError('Diskussion nicht gefunden', 404);
-      return normalizeSpaceDiscussion(row);
-    });
+    const item = await d1SpaceDiscussion(userId, spaceId, discussionId);
     return NextResponse.json(item, { headers: SPACE_NO_STORE });
   } catch (error) {
     return spaceErrorResponse(error, 'Diskussion konnte nicht geladen werden');

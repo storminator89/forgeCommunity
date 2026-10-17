@@ -4,10 +4,11 @@ import { Prisma } from '@/generated/prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/sites-auth/server';
 import { authOptions } from '@/lib/auth';
+import { d1SpaceReplies } from '@/lib/server/d1-space-discussion-reads';
 import { isSameOriginRequest } from '@/lib/server/auth-security';
 import { readJsonObject } from '@/lib/server/api-input';
-import { getReadableSpace, readableSpaceDiscussionWhere, readableSpaceReplyWhere } from '@/lib/server/space-access';
-import { afterSpaceCursor, normalizeSpaceReply, pageSpaceRows, readSpaceCursor, SPACE_ORDER, SPACE_PAGE_SIZE, spaceReplySelect } from '@/lib/server/space-discussions';
+import { getReadableSpace } from '@/lib/server/space-access';
+import { normalizeSpaceReply, readSpaceCursor, spaceReplySelect } from '@/lib/server/space-discussions';
 import { parseReplyInput, requiredUserId, SPACE_NO_STORE, spaceErrorResponse, spaceTransaction, SpaceApiError, validDiscussionId, validSpaceId } from '@/lib/server/space-api';
 
 type Context = { params: Promise<{ spaceId: string; discussionId: string }> };
@@ -19,20 +20,11 @@ export async function GET(request: NextRequest, { params }: Context) {
     const { spaceId: rawSpaceId, discussionId: rawDiscussionId } = await params;
     const spaceId = validSpaceId(rawSpaceId);
     const discussionId = validDiscussionId(rawDiscussionId);
-    const page = await spaceTransaction(async tx => {
-      const access = await getReadableSpace(spaceId, userId, tx);
-      if (!access) throw new SpaceApiError('Diskussion nicht gefunden', 404);
-      const parent = await tx.spaceDiscussion.findFirst({ where: { id: discussionId,
-        ...readableSpaceDiscussionWhere(access) }, select: { id: true } });
-      if (!parent) throw new SpaceApiError('Diskussion nicht gefunden', 404);
-      const cursor = readSpaceCursor(request, 'replies', spaceId, discussionId);
-      const rows = await tx.spaceReply.findMany({
-        where: { AND: [readableSpaceReplyWhere(access, discussionId), afterSpaceCursor(cursor)] },
-        select: spaceReplySelect, orderBy: SPACE_ORDER, take: SPACE_PAGE_SIZE + 1,
-      });
-      const result = pageSpaceRows(rows, 'replies', spaceId, discussionId);
-      return { items: result.items.map(normalizeSpaceReply), nextCursor: result.nextCursor };
-    });
+    let cursor: ReturnType<typeof readSpaceCursor> = null;
+    let cursorError: unknown;
+    try { cursor = readSpaceCursor(request, 'replies', spaceId, discussionId); } catch (error) { cursorError = error; }
+    const page = await d1SpaceReplies(userId, spaceId, discussionId, cursor, cursorError === undefined);
+    if (cursorError !== undefined) throw cursorError;
     return NextResponse.json(page, { headers: SPACE_NO_STORE });
   } catch (error) {
     return spaceErrorResponse(error, 'Antworten konnten nicht geladen werden');

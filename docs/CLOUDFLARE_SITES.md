@@ -9,10 +9,10 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up the published Version 30 source
-`0bfa6a142d78b3936f929b422e420f7938b3d8c4`. Version 30 deployed successfully on
-17 October 2026 at 21:45:00 UTC. Its published knowledge-base directory URL-state
-readback is still pending; bounded Version 29 article acceptance is recorded below.
+runtime data. This GitHub snapshot backs up the published Version 31 source
+`9e433ae0994bf33813cfbaf3ac036dc3f40a9c60`. Version 31 deployed successfully on
+17 October 2026 at 22:03:59 UTC. Bounded Resources disclosure/required-field
+readback passed; positive Space discussion reads still lack existing fixtures.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -73,8 +73,8 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 30 source includes the existing bounded ports below,
-inherited from Version 29, plus knowledge-base directory URL-state described
+The published Version 31 source includes the existing bounded ports below,
+inherited from Version 30, plus bounded Space reads and Resources UI described
 below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
@@ -119,8 +119,13 @@ all-page visual coverage.
   semantic headings, lists, spacing, links, code and images; bounded article
   acceptance is documented below
 - Local knowledge-base directory search/category/tag URL-state and native
-  history navigation, preserving existing data/filter/auth behavior; live
-  readback remains pending
+  history navigation, preserving existing data/filter/auth behavior; bounded
+  search/category/history/reset readback passed as documented below
+- Native protected D1 Space discussion/detail/reply GET reads; positive fixture,
+  private/hidden/revocation and pagination acceptance remain unverified
+- Resources submission disclosure, single-pending-submit guard and retained
+  inline errors, with existing backend behavior unchanged; bounded disclosure/
+  native validation readback passed, pending-request variants remain untested live
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -361,8 +366,42 @@ Existing published-article fetching, filtering, data and authentication remain
 unchanged, as does Version 29 reader typography. No API fetch call or article/
 content write is added. Source review, production typechecking/build and static
 artifact checks passed. Deployment succeeded on 17 October 2026 at 21:45:00 UTC.
-Normal published search/filter/article/Back/Forward/reset readback is still
-pending; no completed Version 30 browser result is claimed by this backup.
+A bounded normal published readback passed on 17 October 2026. At 21:46:27 UTC
+a search/category combination remained intact after opening an article and
+Browser Back, retaining one result. At 21:47:30 UTC Back/Forward restored the
+query-only and combined views correctly. Opening the exact UI URL in a temporary
+same-browser tab and reloading retained the filters and one result; that tab
+was closed. Keyboard reset cleared query/category to the all-category view and
+retained focus with a visible ring on the search input. No content write was
+performed. Tags, unknown parameters and slow-load behavior remain untested live.
+
+## Version 31 Space discussion reads and Resources submission UI
+
+Version 31 combines four reviewed backend read files with one separately
+reviewed Resources UI file. Discussion detail, reply-list and individual-reply
+GET routes use one protected native D1 statement per request. Existing access,
+hidden-content and manager boundaries, cursor/error ordering, dates, bounded
+projection and response DTOs are retained. Replies POST and all other mutation
+callbacks are unchanged. This is a read port, not Space mutation support.
+
+Resources adds a public-visibility/name disclosure, a same-frame pending-submit
+guard, disabled fields while pending, retained inline errors and stale-view
+success suppression after account/view unmount. Its backend and existing
+submission payload are unchanged. No resource or discussion was created for
+this backup.
+
+Independent source review, production typechecking/build and static artifact
+checks passed. Deployment succeeded on 17 October 2026 at 22:03:59 UTC. At
+22:04 UTC a bounded published readback showed the public-visibility disclosure.
+An empty submit triggered the native required-title check and focused that
+field; no POST occurred. Cancel retained the existing resource list without
+creating content. Actual pending-submit, repeated-submit and mid-request-close
+behavior remains source-reviewed only, with no live proof.
+
+The empty Spaces directory showed no UI error. Existing authorized discussion/
+reply fixtures are still absent, so positive detail/list/reply GET acceptance
+remains unverified. No private/hidden/revocation/pagination result is claimed,
+and no discussion or reply was created to manufacture a passing check.
 
 ## Keeping the branches separate
 

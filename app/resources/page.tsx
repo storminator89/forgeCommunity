@@ -75,6 +75,10 @@ function ResourceLibraryForViewer({ session }: { session: Session | null }) {
     url: '',
   });
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isAddingResource, setIsAddingResource] = useState(false);
+  const [addResourceError, setAddResourceError] = useState('');
+  const addPendingRef = useRef(false);
+  const addActiveRef = useRef(true);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editResource, setEditResource] = useState<Resource | null>(null);
   const [hasMore, setHasMore] = useState(true);
@@ -92,6 +96,11 @@ function ResourceLibraryForViewer({ session }: { session: Session | null }) {
   const loadingRef = useRef(true);
   const pendingLoadRef = useRef(false);
   const loadMoreRef = useRef<() => void>(() => {});
+
+  useEffect(() => {
+    addActiveRef.current = true;
+    return () => { addActiveRef.current = false; };
+  }, []);
 
   const fetchResources = useCallback(async (pageNumber = 1, signal?: AbortSignal) => {
     const response = await axios.get('/api/resources', {
@@ -213,11 +222,18 @@ function ResourceLibraryForViewer({ session }: { session: Session | null }) {
   });
 
   const handleAddResource = async () => {
+    // The ref closes the same-frame double-submit gap before React renders
+    // the native disabled button. It stays pending if the dialog is closed.
+    if (!session?.user?.id || !addActiveRef.current || addPendingRef.current) return;
     if (!newResource.title || !newResource.url) {
+      setAddResourceError('Titel und URL sind erforderlich.');
       toast.error('Titel und URL sind erforderlich.');
       return;
     }
 
+    addPendingRef.current = true;
+    setIsAddingResource(true);
+    setAddResourceError('');
     try {
       const resourceToAdd = {
         title: newResource.title,
@@ -228,6 +244,9 @@ function ResourceLibraryForViewer({ session }: { session: Session | null }) {
       };
 
       const response = await axios.post('/api/resources', resourceToAdd);
+      // The keyed viewer may have unmounted after a session/account change.
+      // An old request must not announce success in the next account's view.
+      if (!addActiveRef.current) return;
       setDisplayedResources(prev => [response.data, ...prev]);
       setNewResource({
         title: '',
@@ -238,8 +257,13 @@ function ResourceLibraryForViewer({ session }: { session: Session | null }) {
       setIsDialogOpen(false);
       toast.success('Ressource erfolgreich hinzugefügt!');
     } catch (error: any) {
+      if (!addActiveRef.current) return;
       console.error('Fehler beim Hinzufügen der Ressource:', error);
+      setAddResourceError('Ressource konnte nicht hinzugefügt werden. Bitte versuche es erneut.');
       toast.error('Fehler beim Hinzufügen der Ressource.');
+    } finally {
+      addPendingRef.current = false;
+      if (addActiveRef.current) setIsAddingResource(false);
     }
   };
 
@@ -335,15 +359,16 @@ function ResourceLibraryForViewer({ session }: { session: Session | null }) {
             {session && <div>
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogContent>
-                  <DialogHeader><DialogTitle>Neue Ressource hinzufügen</DialogTitle><DialogDescription>Titel und URL sind erforderlich.</DialogDescription></DialogHeader>
-                  <form onSubmit={event => { event.preventDefault(); void handleAddResource(); }} className="space-y-5">
-                    <div className="space-y-2"><Label htmlFor="resource-title">Titel</Label><Input id="resource-title" value={newResource.title} onChange={event => setNewResource(previous => ({ ...previous, title: event.target.value }))} placeholder="Titel der Ressource" required /></div>
+                  <DialogHeader><DialogTitle>Neue Ressource hinzufügen</DialogTitle><DialogDescription>Öffentlich, auch ohne Anmeldung. Dein Name wird angezeigt.</DialogDescription></DialogHeader>
+                  <form onSubmit={event => { event.preventDefault(); void handleAddResource(); }} className="space-y-5" aria-busy={isAddingResource}>
+                    <div className="space-y-2"><Label htmlFor="resource-title">Titel</Label><Input id="resource-title" value={newResource.title} onChange={event => setNewResource(previous => ({ ...previous, title: event.target.value }))} placeholder="Titel der Ressource" required disabled={isAddingResource} /></div>
                     <div className="grid min-w-0 gap-4 sm:grid-cols-2">
-                      <div className="min-w-0 space-y-2"><Label htmlFor="resource-type">Typ</Label><Select value={newResource.type} onValueChange={value => setNewResource(previous => ({ ...previous, type: value }))}><SelectTrigger id="resource-type"><SelectValue /></SelectTrigger><SelectContent>{types.map(type => <SelectItem key={type} value={type}>{typeLabels[type as ResourceType]}</SelectItem>)}</SelectContent></Select></div>
-                      <div className="min-w-0 space-y-2"><Label htmlFor="resource-category">Kategorie</Label><Select value={newResource.category} onValueChange={value => setNewResource(previous => ({ ...previous, category: value }))}><SelectTrigger id="resource-category"><SelectValue /></SelectTrigger><SelectContent>{categories.map(category => <SelectItem key={category} value={category}>{category}</SelectItem>)}</SelectContent></Select></div>
+                      <div className="min-w-0 space-y-2"><Label htmlFor="resource-type">Typ</Label><Select value={newResource.type} onValueChange={value => setNewResource(previous => ({ ...previous, type: value }))} disabled={isAddingResource}><SelectTrigger id="resource-type"><SelectValue /></SelectTrigger><SelectContent>{types.map(type => <SelectItem key={type} value={type}>{typeLabels[type as ResourceType]}</SelectItem>)}</SelectContent></Select></div>
+                      <div className="min-w-0 space-y-2"><Label htmlFor="resource-category">Kategorie</Label><Select value={newResource.category} onValueChange={value => setNewResource(previous => ({ ...previous, category: value }))} disabled={isAddingResource}><SelectTrigger id="resource-category"><SelectValue /></SelectTrigger><SelectContent>{categories.map(category => <SelectItem key={category} value={category}>{category}</SelectItem>)}</SelectContent></Select></div>
                     </div>
-                    <div className="space-y-2"><Label htmlFor="resource-url">URL</Label><Input id="resource-url" type="url" value={newResource.url} onChange={event => setNewResource(previous => ({ ...previous, url: event.target.value }))} placeholder="https://…" required /></div>
-                    <DialogFooter><Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Abbrechen</Button><Button type="submit">Hinzufügen</Button></DialogFooter>
+                    <div className="space-y-2"><Label htmlFor="resource-url">URL</Label><Input id="resource-url" type="url" value={newResource.url} onChange={event => setNewResource(previous => ({ ...previous, url: event.target.value }))} placeholder="https://…" required disabled={isAddingResource} /></div>
+                    {addResourceError && <p role="alert" className="text-sm text-destructive">{addResourceError}</p>}
+                    <DialogFooter><Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>{isAddingResource ? 'Schließen' : 'Abbrechen'}</Button><Button type="submit" disabled={isAddingResource}>{isAddingResource ? 'Wird hinzugefügt…' : 'Hinzufügen'}</Button></DialogFooter>
                   </form>
                 </DialogContent>
               </Dialog>
