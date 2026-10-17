@@ -1,6 +1,7 @@
 import React from 'react'
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { CourseContentsEditor } from '@/app/courses/[courseId]/contents/CourseContentsEditor'
+import { CourseWorkspaceRoute } from '@/app/courses/[courseId]/contents/CourseWorkspaceRoute'
 import type { CourseContent, CourseProgressSnapshot } from '@/app/courses/[courseId]/contents/types'
 
 const mockRouter = { push: jest.fn(), replace: jest.fn() }
@@ -13,6 +14,7 @@ jest.mock('@/components/user-nav', () => ({ UserNav: () => null }))
 jest.mock('@/app/courses/[courseId]/practice/learn/PracticeEntryLink', () => ({ PracticeEntryLink: () => null }))
 jest.mock('@/app/courses/[courseId]/contents/CourseContentsSidebar', () => ({ CourseContentsSidebar: ({ contents, onContentSelect }: { contents: CourseContent[]; onContentSelect: (id: string) => void }) => <nav>{contents.map(item => <button key={item.id} onClick={() => onContentSelect(item.id)}>{item.title}</button>)}</nav> }))
 jest.mock('@/app/courses/[courseId]/contents/EditContentForm', () => ({ EditContentForm: () => null }))
+jest.mock('@/app/courses/[courseId]/contents/CourseDraftWorkspace', () => ({ CourseDraftWorkspace: ({ onLiveMode }: { onLiveMode: () => void }) => <button onClick={onLiveMode}>Veröffentlichte Lernansicht öffnen</button> }))
 jest.mock('@/app/courses/[courseId]/contents/ContentRenderer', () => ({ ContentRenderer: () => <p>Lesson content</p> }))
 const response = (body: unknown) => ({ ok: true, status: 200, json: async () => body }) as Response
 let contents: CourseContent[]
@@ -30,7 +32,7 @@ beforeEach(() => {
 
 it.each(['TEXT', 'VIDEO', 'AUDIO', 'H5P', 'QUIZ', 'ASSIGNMENT'] as CourseContent['type'][])('offers the explicit current readable %s leaf entry with only pair and UI hint', async type => {
   contents[0].type = type
-  render(<CourseContentsEditor courseId="course" />)
+  render(<CourseContentsEditor courseId="course" forceLearner />)
   const action = await screen.findByRole('button', { name: 'Zu dieser Lektion fragen' })
   action.focus(); fireEvent.click(action); fireEvent.click(action)
   expect(mockRouter.push).toHaveBeenCalledTimes(2)
@@ -47,14 +49,39 @@ it.each(['locked', 'parent', 'mismatch', 'unknown-lock', 'unenrolled', 'author',
   if (state === 'unknown-lock') delete contents[0].locked
   if (state === 'unenrolled') progress.canTrack = false
   if (state === 'author') canEdit = true
-  await act(async () => { render(<CourseContentsEditor courseId="course" forceLearner={state === 'preview'} />) })
+  await act(async () => { render(<CourseContentsEditor courseId="course" forceLearner authorPreview={state === 'preview'} />) })
   await screen.findByRole('heading', { name: 'Current lesson' })
   expect(screen.queryByRole('button', { name: 'Zu dieser Lektion fragen' })).not.toBeInTheDocument()
 })
 
 it.each(['INSTRUCTOR', 'ADMIN'])('uses live learner proof for an enrolled non-owner with session role %s', async role => {
   mockViewer.data.user.role = role
-  render(<CourseContentsEditor courseId="course" />)
+  render(<CourseContentsEditor courseId="course" forceLearner />)
   fireEvent.click(await screen.findByRole('button', { name: 'Zu dieser Lektion fragen' }))
   expect(mockRouter.push).toHaveBeenCalledWith('/courses/course/qa?publicationId=publication&contentId=leaf&ask=1')
+})
+
+it('the real learner route keeps read-only mode and offers the server-proven lesson question entry after authoring 403', async () => {
+  const originalFetch = global.fetch as jest.Mock
+  const readerFetch = originalFetch.getMockImplementation()!
+  originalFetch.mockImplementation((input: string, init?: RequestInit) => String(input).endsWith('/authoring')
+    ? Promise.resolve({ ok: false, status: 403, json: async () => ({ error: 'Forbidden' }) } as Response)
+    : readerFetch(input, init))
+  render(<CourseWorkspaceRoute courseId="course" status="authenticated" />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Zu dieser Lektion fragen' }))
+  expect(mockRouter.push).toHaveBeenCalledWith('/courses/course/qa?publicationId=publication&contentId=leaf&ask=1')
+  expect(screen.queryByRole('button', { name: 'Inhalt bearbeiten' })).not.toBeInTheDocument()
+})
+
+it('the real author live-preview route suppresses lesson questions even if subsequent learner-shaped reads are available', async () => {
+  const originalFetch = global.fetch as jest.Mock
+  const readerFetch = originalFetch.getMockImplementation()!
+  originalFetch.mockImplementation((input: string, init?: RequestInit) => String(input).endsWith('/authoring')
+    ? Promise.resolve(response({ draft: { revision: 1 } }))
+    : readerFetch(input, init))
+  render(<CourseWorkspaceRoute courseId="course" status="authenticated" />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Veröffentlichte Lernansicht öffnen' }))
+  await screen.findByRole('heading', { name: 'Current lesson' })
+  expect(screen.queryByRole('button', { name: 'Zu dieser Lektion fragen' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Inhalt bearbeiten' })).not.toBeInTheDocument()
 })

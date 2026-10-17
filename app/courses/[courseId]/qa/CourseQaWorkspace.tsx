@@ -141,10 +141,10 @@ export function CourseQaWorkspace({ courseId, sessionStatus, lessonContext = nul
     contextProof.current = null
     loadedListScope.current = null
     listAbort.current?.abort(); detailAbort.current?.abort(); moreAbort.current?.abort(); probeAbort.current?.abort()
-    selectedIdRef.current = null; listRef.current = null; detailRef.current = null
+    listRef.current = null; detailRef.current = null
     moreLock.current = false; mutationLock.current = false; mutationSequence.current += 1
-    setList(null); setDetail(null); setSelectedId(null); setReply(''); setHideTarget(null)
-    setListLoading(true); setDetailLoading(false); setMoreBusy(false); setBusy(false); setNotice(null); setContextChecking(false)
+    setList(null); setDetail(null); setReply(''); setHideTarget(null)
+    setListLoading(true); setDetailLoading(Boolean(selectedIdRef.current)); setMoreBusy(false); setBusy(false); setNotice(null); setContextChecking(false)
   }, [scopeKey])
   useLayoutEffect(() => {
     alive.current = true
@@ -451,7 +451,7 @@ export function CourseQaWorkspace({ courseId, sessionStatus, lessonContext = nul
       })
       .finally(() => { if (!controller.signal.aborted && generation === epoch.current && !denied.current && selectedIdRef.current === selectedId) setDetailLoading(false) })
     return () => { controller.abort(); if (detailAbort.current === controller) detailAbort.current = null }
-  }, [base, selectedId, detailVersion, sessionStatus, revoke, readApi, resetMissingQuestion, resetChangedRights, courseId, pairKey, observeIncomingContexts, reconcileContexts])
+  }, [base, selectedId, detailVersion, sessionStatus, revoke, readApi, resetMissingQuestion, resetChangedRights, courseId, pairKey, scopeKey, observeIncomingContexts, reconcileContexts])
 
   useEffect(() => {
     if (sessionStatus !== 'authenticated') return

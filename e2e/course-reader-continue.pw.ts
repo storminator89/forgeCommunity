@@ -444,6 +444,60 @@ async function captureActiveNoticeControls(page: Page, info: TestInfo, withNext:
     expect((guard as { unsafe: boolean }).unsafe).toBe(false)
     expect(reads().sequence).toBe(readySequence)
     expect(reads().ready).toBe(true)
+    // The learner-control sequence and guard above stay intact. Now check the
+    // notice itself while its real four-second lifetime is still running.
+    phase = 'active-notice-dismiss-control'
+    const close = notice.getByRole('button', { name: 'Meldung schließen', exact: true })
+    await expect(notice).toBeVisible()
+    const noticeGeometry = await notice.evaluate(element => ({
+      overflowX: element.scrollWidth - element.clientWidth,
+      messageOverflowX: element.firstElementChild!.scrollWidth - element.firstElementChild!.clientWidth,
+    }))
+    const closeGeometry = await close.evaluate(element => {
+      const rect = element.getBoundingClientRect()
+      const parent = element.parentElement!.getBoundingClientRect()
+      return { width: rect.width, height: rect.height,
+        fitsNotice: rect.left >= parent.left && rect.right <= parent.right && rect.top >= parent.top && rect.bottom <= parent.bottom,
+        fitsViewport: rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight }
+    })
+    expect(noticeGeometry.overflowX).toBeLessThanOrEqual(1)
+    expect(noticeGeometry.messageOverflowX).toBeLessThanOrEqual(1)
+    expect(closeGeometry.width).toBeGreaterThanOrEqual(44)
+    expect(closeGeometry.height).toBeGreaterThanOrEqual(44)
+    expect(closeGeometry.fitsNotice).toBe(true)
+    expect(closeGeometry.fitsViewport).toBe(true)
+    await expect(close).toBeInViewport({ ratio: 1 })
+    // Traverse the existing outline's native reverse tab order, without
+    // locator.focus(), scrolling, retries, or changing the notice clock.
+    let reverseTabs = 0
+    while (reverseTabs < 16 && !await close.evaluate(element => document.activeElement === element)) {
+      await page.keyboard.press('Shift+Tab')
+      reverseTabs++
+      await expect(notice).toBeVisible()
+    }
+    await expect(close).toBeFocused()
+    expect(await close.evaluate(element => element.matches(':focus-visible'))).toBe(true)
+    await expect(close).toBeInViewport({ ratio: 1 })
+    await page.screenshot({ path: info.outputPath(`reader-completion-notice-${withNext ? 'with-next' : 'all-complete'}-dismiss-focused-text200-${mode}-320-${candidateSha}.png`), fullPage: true, animations: 'disabled' })
+    await expect(notice).toBeVisible()
+    // Observe the trusted keyboard click before React handles it. A later
+    // timeout must not make a missed Enter or a disconnected control pass.
+    await close.evaluate(element => {
+      document.documentElement.removeAttribute('data-reader-notice-dismissal')
+      element.addEventListener('click', event => {
+        document.documentElement.setAttribute('data-reader-notice-dismissal', JSON.stringify({
+          trusted: event.isTrusted, keyboard: (event as MouseEvent).detail === 0,
+          connected: element.isConnected, focused: document.activeElement === element,
+          noticeConnected: element.parentElement?.isConnected === true && element.parentElement.getAttribute('role') === 'status',
+        }))
+      }, { once: true })
+    })
+    await page.keyboard.press('Enter')
+    const dismissal = JSON.parse(await page.locator('html').getAttribute('data-reader-notice-dismissal') ?? '{}') as Record<string, boolean>
+    expect(dismissal).toEqual({ trusted: true, keyboard: true, connected: true, focused: true, noticeConnected: true })
+    expect(await notice.count()).toBe(0)
+    controls.push({ name: 'Meldung schließen', key: 'Shift+Tab', reverseTabs, geometry: closeGeometry, noticeGeometry, dismissal })
+    await page.locator('html').evaluate(element => element.removeAttribute('data-reader-notice-dismissal'))
     originalCompleted = true
   } catch (error) {
     originalFailed = true

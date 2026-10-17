@@ -16,19 +16,29 @@ PostgreSQL is an explicit alternative.
 
 ## Screenshots
 
-These unedited Playwright captures show the real app with disposable synthetic
-accounts and content. The current Space images come from
-[PR #67's passing CI run](https://github.com/storminator89/forgeCommunity/actions/runs/38884491467)
-on [source head `ad2c37e`](https://github.com/storminator89/forgeCommunity/commit/ad2c37efb1fddd62da165aea06333fd6642946ff),
-whose source tree matches [merged main `190320b`](https://github.com/storminator89/forgeCommunity/commit/190320b6c4beb3ed0dd04fb8cbba49e59c90cf8a).
-The landing and earlier learning images retain their own attribution. See
-[screenshot provenance](docs/ui/README.md) for artifact paths, hashes, fixture
-setup, and visual QA limits.
+The Home images show the real app from
+[PR #77's passing CI run](https://github.com/storminator89/forgeCommunity/actions/runs/38985703183),
+with the new illustration and default-visible Forge Spark. They are unedited
+browser captures; the illustration inside the app is generated fictional artwork
+of two adult learners. See [screenshot provenance](docs/ui/README.md) for exact
+source commits, artifact paths, hashes, fixture setup, and visual QA limits.
+The older Space and learning captures below retain their dated attribution.
 
-![ForgeCommunity public landing page, desktop light mode](docs/ui/readme/landing-desktop-light.png)
+![ForgeCommunity public Home in desktop light mode with the fictional learning illustration and static Spark](docs/ui/readme/home-desktop-light.png)
 
 <details>
-<summary>Private Space: mission discovery, learning week and cooperation</summary>
+<summary>Current Home, 320px dark mode</summary>
+
+This is an unedited full-document capture at a 320×700 viewport with reduced
+motion enabled. The static figure remains visible; the illustration's movement
+control is disabled.
+
+<img src="docs/ui/readme/home-mobile-dark-320.png" alt="Public Home at 320px in dark mode, fictional learning illustration and static Spark, reduced motion enabled" width="320" />
+
+</details>
+
+<details>
+<summary>Earlier private-Space captures: mission discovery, learning week and cooperation</summary>
 
 The mission overview lists open missions in the caller's private Spaces.
 Browsing does not join a mission.
@@ -60,7 +70,7 @@ page; this frame does not show a complete mobile workflow.
 </details>
 
 <details>
-<summary>Voluntary Space poll</summary>
+<summary>Earlier voluntary Space poll capture</summary>
 
 A current member's changed choice and three synthetic members' option totals
 in a private Space. This unedited section capture uses a 768px viewport and
@@ -101,7 +111,7 @@ pre-phase-2 immediate-save editor screenshots separately.
 | Area | Available in the app | Routes |
 | --- | --- | --- |
 | Community | Posts and replies, topic filters, likes, bounded feed/comment pagination, author-selected solutions, and reporting | `/community` |
-| Spaces | Signed-in public/private topic rooms, membership, paginated discussions/replies, voluntary polls, and optional private-Space cooperative missions with a soft learning week | `/community/spaces`, `/community/spaces/[spaceId]`, `/community/spaces/[spaceId]/discussions/[discussionId]`, `/community/spaces/[spaceId]/missions/[missionId]` |
+| Spaces | Signed-in public/private topic rooms, membership, paginated discussions/replies, voluntary polls, and optional private-Space cooperative missions with a soft learning week and self-only bookmarks | `/community/spaces`, `/community/spaces/[spaceId]`, `/community/spaces/[spaceId]/discussions/[discussionId]`, `/community/spaces/[spaceId]/missions/[missionId]` |
 | Members | Search/filter, grid/list views, profiles, following, and skill endorsements | `/members`, `/profile/[id]` |
 | Courses | Private course drafts, review/publish/version restore, free self-enrollment with capacity checks, nested text/video/audio/H5P/quiz lessons, revision-aware progress, and completion-gated certificate downloads | `/courses`, `/courses/authoring`, `/courses/new`, `/courses/[courseId]/contents` |
 | Course tools | Private versioned quiz-question bank, assignments with instructor grading, UTC chapter release dates, enrolled course Q&A, and bounded analytics/CSV export | `/courses/[courseId]/contents`, `/courses/[courseId]/qa`, `/courses/[courseId]/grading`, `/courses/[courseId]/analytics` |
@@ -180,8 +190,11 @@ every App Router page, including redirects.
   See [event waitlists](docs/EVENT-WAITLIST.md).
 - **Mein Lernweg** reads existing, publication-matched course progress for regular
   learners enrolled in other instructors' courses. Opening the page records no
-  completion. Its optional Forge Spark figure and animations can be switched
-  off locally; reduced-motion settings suppress motion. These are browser
+  completion. Forge Spark is visible by default on fresh browser state on Home,
+  Community, and the successfully loaded zero-enrollment Journey. Its shared
+  visibility control respects a saved Off across navigation and reload when
+  browser storage is available. Reduced motion leaves an enabled figure visible
+  and static. Figure and animation controls are browser-local
   presentation preferences, not shared account settings.
 - The member directory is not server-paginated. Unicode/collation and freshness
   semantics need an explicit decision before changing that contract.
@@ -430,7 +443,21 @@ server; never aim it at a production or personal database. Run
 1280px and 320px; the journey suites also run at 390px. Some dynamic route-sweep
 responses are synthetic API fixtures, as documented in [route-sweep coverage](docs/ROUTE-SWEEP-QA.md).
 
-The [PR #67 exact-head run 38884491467](https://github.com/storminator89/forgeCommunity/actions/runs/38884491467)
+The [PR #77 exact-head run 38985703183](https://github.com/storminator89/forgeCommunity/actions/runs/38985703183)
+passed all seven jobs on 17 October 2026: quality, strict security audit,
+Docker, both PostgreSQL gates, browser QA, and aggregate validation. PR head
+`686c029b1e0f6c2fe8f82b3afd57fbfe977db3e1`, CI merge checkout
+`2b36d77f7dc6b76e2ae62c54d5390f289e9c562b`, and merged main
+`dfc76958365e1afc321f8f8b41aa27038f72919b` share tree
+`7ae6960cadcd5c5eb6c7318bb1216f3d96a8a3c6`. Home journeys check guest/member,
+light/dark, desktop/320px/390px, keyboard focus, 200% text and 1×/2× image
+delivery. Dedicated desktop-Chromium Spark scenarios also sweep five viewport
+widths and check saved Off, reload/navigation, cross-tab controls, storage denial,
+and reduced motion. The selected two Home frames are a narrower visual sample.
+See [image-delivery limits](docs/hero-artwork-delivery.md) for the fixed
+93,712-byte WebP and its deliberate mobile bandwidth tradeoff.
+
+Earlier [PR #67 exact-head run 38884491467](https://github.com/storminator89/forgeCommunity/actions/runs/38884491467)
 and [post-merge main run 38885812817](https://github.com/storminator89/forgeCommunity/actions/runs/38885812817)
 passed all seven jobs on 16 October 2026: quality, strict security audit,
 Docker application flows, PostgreSQL release gate, authenticated PostgreSQL
@@ -447,7 +474,7 @@ Earlier [PR #65 run 38871008041](https://github.com/storminator89/forgeCommunity
 and [main run 38872143016](https://github.com/storminator89/forgeCommunity/actions/runs/38872143016)
 also passed all seven jobs for tree `9ea80641be9e08520675503971124e76aeee0770`.
 Those dated results and earlier learning captures keep their own provenance
-in the [gallery](docs/ui/README.md); the current Space images are from #67.
+in the [gallery](docs/ui/README.md); the dated Space images are from #67.
 
 This is repository integration evidence. Production deployment still requires
 operational review and a backed-up migration rehearsal. Chromium viewport tests
@@ -473,14 +500,19 @@ compatibility review; see [dependency history](docs/DEPENDENCY-SECURITY-2026-10-
 
 ## Design and documentation
 
-The shared [design contract](design.md) defines warm paper/charcoal surfaces,
-sparing blue accents, Inter typography, and task-specific workbench layouts.
-The redesign follows the inspected [Hallmark source](https://github.com/Nutlope/hallmark)
-within the existing routes and product boundaries. Screenshots show real app
-rendering; no generated mock interfaces or added browser/phone chrome are used.
+The shared [design contract](design.md) defines cool-daylight surfaces,
+deep-water dark mode, petrol actions, coral cooperation accents, sunny earned
+rewards, Inter typography, and task-specific layouts. The redesign references
+[Hallmark](https://github.com/Nutlope/hallmark) and the contract's pinned
+frontend-design guidance within existing routes and product boundaries.
+Home adds a generated fictional learning illustration; the gallery shows actual
+browser rendering with no redrawn interface or added browser/phone chrome.
+A full Hallmark comparison remains open. This documentation refresh is not a
+new app-wide design or accessibility audit.
 
 - [Spaces, access, and discussion boundaries](docs/SPACES.md)
 - [Private-Space cooperative missions and soft learning weeks](docs/COOPERATIVE-MISSIONS.md)
+- [Self-only private-mission bookmarks](docs/PRIVATE-MISSION-BOOKMARKS.md)
 - [Voluntary Space polls](docs/SPACE-POLLS.md)
 - [Event waitlists and promotion notices](docs/EVENT-WAITLIST.md)
 - [Bounded community feed](docs/COMMUNITY-FEED-PAGINATION.md)

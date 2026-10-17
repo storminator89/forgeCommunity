@@ -74,7 +74,7 @@ async function login(page: Page, email: string, password: string) {
   await page.getByLabel('Passwort', { exact: true }).fill(password); await page.getByLabel('Passwort', { exact: true }).press('Enter')
   await expect(page).toHaveURL(/\/community$/)
 }
-async function activate(page: Page, control: Locator) { await control.focus(); await expect(control).toBeFocused(); await page.keyboard.press('Enter') }
+async function activate(page: Page, control: Locator) { await expect(control).toBeVisible(); await control.focus(); await expect(control).toBeFocused(); await page.keyboard.press('Enter') }
 const lessonQuery = (publicationId: string, contentId: string) => new URLSearchParams({ publicationId, contentId }).toString()
 
 test('lesson provenance survives real creation, retained pages, republish, chosen solution, lost response, and revocation', async ({ page, browser, request }, testInfo) => {

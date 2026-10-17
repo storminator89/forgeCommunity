@@ -285,6 +285,27 @@ test('failed detail revalidation clears an already rendered private answer', asy
   expect(screen.getByRole('button', { name: new RegExp(first.title) })).toBeInTheDocument()
 })
 
+test('changing the list filter rechecks and retains the selected authorized discussion', async () => {
+  const selected = question('selected-question', 'Selected discussion survives a matching filter')
+  let detailReads = 0
+  mockFetch(url => {
+    if (url.pathname === `/api/courses/${courseId}`) return response({ name: 'Private course' })
+    if (url.pathname.endsWith(`/${selected.id}`)) {
+      detailReads += 1
+      return response({ question: selected, answers: [], canModerate: true, canAsk: false, canReply: true })
+    }
+    return response(list([selected], null, true))
+  })
+  await showPage()
+  fireEvent.click(await screen.findByRole('button', { name: new RegExp(selected.title) }))
+  await screen.findByRole('heading', { level: 2, name: selected.title })
+  const initialReads = detailReads
+  fireEvent.click(screen.getByRole('button', { name: 'Offen', exact: true }))
+  await screen.findByRole('heading', { level: 2, name: selected.title })
+  await waitFor(() => expect(detailReads).toBeGreaterThan(initialReads))
+  expect(screen.getByRole('button', { name: 'Frage ausblenden' })).toBeInTheDocument()
+})
+
 test('late load-more response cannot mix an old filter into the new view', async () => {
   mockSession = { user: { id: 'same-account', role: 'USER' } }
   const first = question('first-question', 'First all-filter question')
