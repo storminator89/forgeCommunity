@@ -52,6 +52,32 @@ it('shows private rewards and milestone independently of leaderboard placement',
   expect(screen.getByText(/Was zählt: Ein von Admins freigegebener Kurs/)).toBeInTheDocument()
 })
 
+it('keeps metric explanations in closed native disclosures without hiding the private rewards themselves', async () => {
+  const user = userEvent.setup()
+  render(<StatsCard stats={{ posts: 1, receivedLikes: 2, comments: 3 }} rewards={{ points: 50, completedCourses: 1, firstCourseCompleted: true }} rewardsLoading={false} rewardsError={false} isSignedIn />)
+
+  const activity = screen.getByText('So wird gezählt')
+  const visibility = screen.getByLabelText('Sichtbarkeit meiner Kursbelohnungen')
+  const activityHelp = screen.getByText('Alle deine Beiträge. Likes auf deine Beiträge, einschließlich eigener Likes. Kommentare in veröffentlichten und deinen eigenen Beiträgen.')
+  const visibilityHelp = screen.getByText('Deine Punkte und Meilensteine bleiben für dich sichtbar, auch wenn du nicht in der öffentlichen Rangliste stehst.')
+
+  for (const [summary, explanation] of [[activity, activityHelp], [visibility, visibilityHelp]]) {
+    expect(summary.tagName).toBe('SUMMARY')
+    expect(summary.parentElement?.tagName).toBe('DETAILS')
+    expect(summary.parentElement).not.toHaveAttribute('open')
+    expect(summary).toHaveClass('min-h-11', 'focus-visible:ring-2', 'focus-visible:ring-ring')
+    expect(explanation).not.toBeVisible()
+    await user.click(summary)
+    expect(summary.parentElement).toHaveAttribute('open')
+    expect(explanation).toBeVisible()
+    await user.click(summary)
+    expect(explanation).not.toBeVisible()
+  }
+  expect(screen.getByText('Meine Punkte').nextElementSibling).toHaveTextContent('50')
+  expect(screen.getByText('Meine Punkte').nextElementSibling).toBeVisible()
+  expect(screen.getByRole('progressbar', { name: 'Lernmeilenstein: 1 von 3 Kursen abgeschlossen' })).toBeVisible()
+})
+
 it('lets metric labels and values wrap within their existing grid cells at enlarged text sizes', () => {
   render(<StatsCard stats={{ posts: 1234567890123456, receivedLikes: 2345678901234567, comments: 3456789012345678 }}
     rewards={{ points: 987654321012345, completedCourses: 3, firstCourseCompleted: true }}

@@ -51,7 +51,10 @@ export function StatsCard({ stats, activityLoading = false, activityError = fals
             <p className="text-sm text-destructive" role="alert">Aktivität konnte nicht geladen werden.</p>
             {onRetryActivity && <Button type="button" variant="outline" className="mt-3" onClick={onRetryActivity}>Aktivität erneut laden</Button>}
           </div> : <>
-        <p className="mb-4 text-xs text-muted-foreground">Alle deine Beiträge. Likes auf deine Beiträge, einschließlich eigener Likes. Kommentare in veröffentlichten und deinen eigenen Beiträgen.</p>
+        <details className="mb-4 text-xs text-muted-foreground">
+          <summary className="min-h-11 cursor-pointer rounded-sm py-3 text-sm text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">So wird gezählt</summary>
+          <p className="mt-1">Alle deine Beiträge. Likes auf deine Beiträge, einschließlich eigener Likes. Kommentare in veröffentlichten und deinen eigenen Beiträgen.</p>
+        </details>
         <dl className="grid grid-cols-2 gap-x-6 gap-y-5">
           {values.map(({ label, value }) => (
             <div key={label} className="min-w-0 [overflow-wrap:anywhere]">
@@ -63,7 +66,10 @@ export function StatsCard({ stats, activityLoading = false, activityError = fals
         </>}
         <div className="mt-6 border-t pt-5">
           <h3 className="font-medium">Meine Kursbelohnungen</h3>
-          <p className="mt-1 text-sm text-muted-foreground">Deine Punkte und Meilensteine bleiben für dich sichtbar, auch wenn du nicht in der öffentlichen Rangliste stehst.</p>
+          <details className="mt-1 text-sm text-muted-foreground">
+            <summary aria-label="Sichtbarkeit meiner Kursbelohnungen" className="min-h-11 cursor-pointer rounded-sm py-3 text-sm text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">Sichtbarkeit</summary>
+            <p className="mt-1">Deine Punkte und Meilensteine bleiben für dich sichtbar, auch wenn du nicht in der öffentlichen Rangliste stehst.</p>
+          </details>
           {!isSignedIn ? <p className="mt-3 text-sm">Melde dich an, um deine Punkte zu sehen.</p>
             : rewardsLoading ? <p className="mt-3 text-sm" role="status">Belohnungen werden geladen…</p>
             : rewardsError || !rewards ? <p className="mt-3 text-sm text-destructive" role="alert">Belohnungen konnten nicht geladen werden.</p>

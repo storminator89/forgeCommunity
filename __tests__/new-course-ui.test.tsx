@@ -56,7 +56,7 @@ it('creates a private draft without public image upload or premature directory n
   global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ id: 'new-course' }) })
   render(<NewCoursePage />)
   completeRequiredFields()
-  expect(screen.getByText(/Für Lernende ist er bis dahin nicht sichtbar/)).toBeInTheDocument()
+  expect(screen.getByText('Der Entwurf ist für Lernende erst nach deiner ausdrücklichen Veröffentlichung sichtbar.')).toBeVisible()
   fireEvent.click(screen.getByRole('button', { name: 'Kursentwurf anlegen' }))
 
   await waitFor(() => expect(mockRouter.push).toHaveBeenCalledWith('/courses/new-course/contents'))
@@ -93,12 +93,14 @@ it('clears an unfinished course before another account sees the composer', () =>
 
 it('keeps creation focused on labelled fields and the private-publication decision', () => {
   render(<NewCoursePage />)
-  expect(screen.getByRole('heading', { name: 'Kursdaten' })).toBeVisible()
+  expect(screen.getByRole('heading', { level: 1, name: 'Neuen Kursentwurf anlegen' })).toBeVisible()
+  expect(screen.queryByRole('heading', { name: 'Ein neuer Kursentwurf.' })).not.toBeInTheDocument()
+  expect(screen.getByRole('heading', { level: 2, name: 'Kursdaten' })).toBeVisible()
   expect(screen.getByRole('textbox', { name: 'Kurskategorie' })).toBeVisible()
   expect(screen.getByLabelText('Startdatum (optional)')).toBeVisible()
   expect(screen.getByLabelText('Enddatum (optional)')).toBeVisible()
   expect(screen.queryByRole('complementary', { name: 'Hinweise zur Kurserstellung' })).not.toBeInTheDocument()
   expect(screen.queryByText('Diese Angabe erscheint als Kategorie in der Kursübersicht.')).not.toBeInTheDocument()
-  expect(screen.getByText('Nach dem Anlegen bearbeitest du den privaten Entwurf und veröffentlichst ihn später ausdrücklich. Für Lernende ist er bis dahin nicht sichtbar.')).toBeVisible()
+  expect(screen.getByText('Der Entwurf ist für Lernende erst nach deiner ausdrücklichen Veröffentlichung sichtbar.')).toBeVisible()
   expect(screen.getByText('Ein privates Titelbild kannst du im Autorenarbeitsplatz hochladen, sobald der Kursentwurf angelegt ist.')).toBeVisible()
 })
