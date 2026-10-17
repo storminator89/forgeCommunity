@@ -154,13 +154,19 @@ it('dismisses course areas on outside interaction and discards an open menu on a
 });
 
 it('places the selected course and unlocked next action before figure controls and mission discovery', async () => {
+  const user = userEvent.setup();
   journeyResponses();
   const view = render(<JourneyClient />);
   const next = await screen.findByRole('link', { name: 'Lernschritt öffnen' });
   expect(next).toHaveAttribute('href', '/courses/qa-route-course/contents?content=qa-open');
   comesBefore(screen.getByRole('combobox', { name: 'Kurs auswählen' }), screen.getByRole('heading', { name: course.title }));
   comesBefore(screen.getByRole('status'), next);
-  comesBefore(next, screen.getByRole('button', { name: 'Maskottchen anzeigen' }));
+  expect(screen.queryByRole('button', { name: 'Maskottchen anzeigen' })).not.toBeInTheDocument();
+  const animation = screen.getByRole('button', { name: 'Figurenanimationen an' });
+  comesBefore(next, animation);
+  next.focus();
+  await user.tab();
+  expect(animation).toHaveFocus();
   comesBefore(next, screen.getByRole('link', { name: 'Space-Missionen entdecken' }));
   expect(screen.getByRole('status')).toHaveTextContent('0 von 2 Inhalten aktuell bestätigt');
   expect(screen.getByRole('progressbar')).toHaveAttribute('value', '0');
@@ -173,12 +179,18 @@ it.each([
   ['empty', [], 'Noch keine Kursinhalte verfügbar'],
   ['locked', [locked], 'Gerade ist kein weiterer Inhalt frei.'],
 ] as const)('keeps the %s journey truthful and leaves its controls reachable', async (_state, contents, message) => {
+  const user = userEvent.setup();
   journeyResponses([...contents]);
   render(<JourneyClient />);
   await screen.findByRole('link', { name: 'Kurs ansehen' });
   expect(screen.getByText(message)).toBeVisible();
   expect(screen.queryByRole('link', { name: 'Lernschritt öffnen' })).not.toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Maskottchen anzeigen' })).toBeEnabled();
+  expect(screen.queryByRole('button', { name: 'Maskottchen anzeigen' })).not.toBeInTheDocument();
+  const animation = screen.getByRole('button', { name: 'Figurenanimationen an' });
+  expect(animation).toBeEnabled();
+  screen.getByRole('link', { name: 'Kurs ansehen' }).focus();
+  await user.tab();
+  expect(animation).toHaveFocus();
   expect(screen.getByRole('link', { name: 'Space-Missionen entdecken' })).toBeInTheDocument();
   if (contents.length === 0) expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
 });

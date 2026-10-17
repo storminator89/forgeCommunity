@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useSession } from 'next-auth/react';
+import { setSparkVisible } from '@/hooks/useSparkVisibility';
 import JourneyClient from '@/app/courses/journey/JourneyClient';
 
 jest.mock('next-auth/react', () => ({ useSession: jest.fn() }));
@@ -146,8 +147,8 @@ it.each(['visibility', 'motion', 'reduced', 'storage'])('consumes a celebration 
   await refresh();
   expect(view.container.querySelector(clipSelector)).toBeInTheDocument();
   if (kind === 'visibility') {
-    fireEvent.click(screen.getByRole('button', { name: 'Maskottchen anzeigen' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Maskottchen anzeigen' }));
+    act(() => setSparkVisible(false));
+    act(() => setSparkVisible(true));
   } else if (kind === 'motion') {
     fireEvent.click(screen.getByRole('button', { name: 'Figurenanimationen an' }));
     fireEvent.click(screen.getByRole('button', { name: 'Figurenanimationen aus' }));

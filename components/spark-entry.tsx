@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
-import { Button } from '@/components/ui/button';
 import { useSparkVisibility } from '@/hooks/useSparkVisibility';
 
 /** The existing resting Blender render. Entry points never request a clip. */
@@ -14,12 +13,11 @@ export function SparkStaticFigure() {
   </span>;
 }
 
-/** A quiet in-flow preference, kept out of the shared navigation/header. */
+/** A quiet decorative entry figure. Visibility is controlled in Settings. */
 export function SparkEntry({ className = '' }: { className?: string }) {
-  const { visible, toggle } = useSparkVisibility();
-  return <div className={`flex min-h-[64px] min-w-0 items-center gap-2 ${className}`} data-spark-entry="">
-    <span className="block size-[64px] shrink-0" aria-hidden="true">{visible && <SparkStaticFigure />}</span>
-    <Button type="button" variant="ghost" size="sm" className="h-auto min-h-11 min-w-0 max-w-full whitespace-normal py-2 text-left [overflow-wrap:anywhere] sm:h-auto"
-      onClick={toggle}>{visible ? 'Spark ausblenden' : 'Spark anzeigen'}</Button>
+  const { visible } = useSparkVisibility();
+  if (!visible) return null;
+  return <div className={`flex min-h-[64px] min-w-0 items-center ${className}`} data-spark-entry="">
+    <SparkStaticFigure />
   </div>;
 }
