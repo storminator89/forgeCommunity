@@ -11,8 +11,8 @@ D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
 runtime data. This GitHub snapshot backs up the published Version 27 source
 `8ca09f2e3cf4199ce6bad36da38f4b7f410e07bc`. Version 27 deployed successfully on
-17 October 2026 at 20:43:01 UTC. Its published Journey-trail browser acceptance
-is still pending; earlier bounded release checks are documented separately.
+17 October 2026 at 20:43:01 UTC. A bounded read-only desktop Journey-trail
+check passed; its coverage and remaining gaps are documented below.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -108,7 +108,8 @@ all-page visual coverage.
   reconciliation; a bounded single approval and reload check passed
 - Current-course Journey station trail with real chapter/descendant counters,
   retained earned stations, the existing global next step, and non-actionable
-  locked/waiting states; published Journey-trail acceptance remains pending
+  locked/waiting states; bounded desktop acceptance and untested variants are
+  distinguished below
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -249,9 +250,10 @@ environment revision 2 are unchanged. A single normal admin course approval
 was submitted at 20:03:04.851 UTC. The UI showed the approved state and
 withdrawal button at 20:03:14 UTC, and that state persisted after reload at
 20:03:37.924 UTC, without an observed error. No withdrawal or second submit
-was performed. Individual learner point credits were not separately proved;
-this bounded result does not establish all approval, withdrawal, or reward
-reconciliation scenarios.
+was performed. Individual learner point credits were not proved by that
+initial approval check. A later bounded community read, described below,
+showed a consistent positive course-reward balance and ledger entry. Neither
+result establishes all approval, withdrawal, or reconciliation scenarios.
 No secrets, active hosting identity, runtime database, Storage contents or
 private QA artifacts are included in this source backup.
 
@@ -271,9 +273,24 @@ The shared projector/reader, Spark preferences, and same-publication
 false-to-true completion celebration are unchanged. There are no API, backend,
 scoring, configuration, host or runtime-data writes in this increment.
 Source review, production typechecking/build and static artifact checks passed.
-Deployment succeeded on 17 October 2026 at 20:43:01 UTC. Published-only browser
-acceptance is still pending; no finished Version 27 visual, mobile, locked/
-pending negative-case or account-transition result is claimed.
+Deployment succeeded on 17 October 2026 at 20:43:01 UTC. A bounded published
+read-only desktop check at 1180 by 757 pixels passed. Journey showed all eight
+confirmed stations and the final checkpoint at 20:50:10 UTC. Reload at
+20:51:52 UTC retained 8 of 8 confirmed stations and eight correct station links.
+Station 1 opened through Tab/Enter, and station 8 opened its normal audio view
+with playback paused at the start. The focus outline measured 2 pixels and
+there was no horizontal overflow at the checked viewport. No learning-state
+write was performed.
+
+An earlier community read during the same bounded session showed a positive
+active-point balance matching one visible course-reward ledger entry after
+the legitimate Version 26 approval. This records readback consistency only,
+without storing account identities, account contents, or screenshots.
+
+The 320/390-pixel mobile layouts, chapter-group, next-step, pending and locked
+variants, account transitions and comprehensive accessibility have not been
+live-validated. The desktop completed-course check does not establish those
+scenarios.
 
 ## Keeping the branches separate
 
