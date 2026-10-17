@@ -2,10 +2,11 @@
 
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
-import { ArrowUpRight, BookOpen, Briefcase, Calendar, Flame, GraduationCap, MessageSquare, Users } from 'lucide-react';
+import { ArrowUpRight, BookOpen, Briefcase, Calendar, GraduationCap, MessageSquare, Users } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { ForgeWorkbench } from '@/components/landing/ForgeWorkbench';
 import { SparkEntry } from '@/components/spark-entry';
+import { ForgeBrandMark } from '@/components/forge-brand-mark';
 import styles from './home.module.css';
 
 const areas = [
@@ -26,7 +27,7 @@ export default function Home() {
       <header className={styles.header}>
         <div className={styles.headerInner}>
           <Link href="/" className={styles.brand} aria-label="ForgeCommunity Startseite">
-            <span className={styles.brandMark}><Flame size={22} aria-hidden="true" /></span>
+            <ForgeBrandMark />
             <span>Forge<span className={styles.brandCommunity}>Community</span></span>
           </Link>
           <nav aria-label="Startseite" className={styles.headerNav}>
