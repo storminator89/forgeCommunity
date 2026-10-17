@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { getServerSession } from 'next-auth/next'
+import { getServerSession } from '@/lib/sites-auth/server'
 import { authOptions } from '@/lib/auth'
-import { sanitizeTextServer } from '@/lib/server/sanitize-html'
+import { sanitizeCommentTextServer } from '@/lib/server/sanitize-html'
 import { readJsonObject, readPage, requestErrorResponse } from '@/lib/server/api-input'
 import { afterCommunityCursor, COMMUNITY_COMMENT_PREVIEW_SIZE, COMMUNITY_ORDER, COMMUNITY_PAGE_SIZE, communityCommentInclude, communityPage, isCurrentCommunityAdmin, normalizeCommunityComment, readCommunityCursor } from '@/lib/server/community-feed'
+import { createD1PostComment } from '@/lib/server/d1-post-comments'
 
 export async function POST(req: NextRequest, props: { params: Promise<{ postId: string }> }) {
   const params = await props.params;
@@ -17,7 +18,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ postId: 
     const { content } = await readJsonObject(req)
     const { postId } = params
 
-    const sanitizedContent = typeof content === 'string' ? sanitizeTextServer(content) : ''
+    const sanitizedContent = typeof content === 'string' ? sanitizeCommentTextServer(content) : ''
     if (!sanitizedContent) {
       return NextResponse.json({ error: 'Inhalt ist erforderlich' }, { status: 400 })
     }
@@ -35,25 +36,15 @@ export async function POST(req: NextRequest, props: { params: Promise<{ postId: 
       return NextResponse.json({ error: 'Beitrag nicht gefunden' }, { status: 404 })
     }
 
-    const newComment = await prisma.$transaction(async tx => {
-      const comment = await tx.comment.create({
-        data: { content: sanitizedContent, postId, authorId: session.user.id },
-        include: communityCommentInclude(session.user.id),
-      })
-      if (post.authorId !== session.user.id) {
-        await tx.notification.create({
-          data: {
-            userId: post.authorId, type: 'COMMENT',
-            content: 'Ein Mitglied hat deinen Beitrag kommentiert.',
-            targetType: 'COMMENT', targetId: comment.id,
-          },
-        })
-      }
-      return comment
+    const created = await createD1PostComment({
+      content: sanitizedContent, postId, authorId: session.user.id, sessionRole: session.user.role,
     })
+    if (!created) {
+      return NextResponse.json({ error: 'Beitrag nicht gefunden' }, { status: 404 })
+    }
 
     // Format comment for response
-    const formattedComment = normalizeCommunityComment(newComment, post.published && post.authorId === session.user.id)
+    const formattedComment = normalizeCommunityComment(created.comment, created.canSelectSolution)
 
     return NextResponse.json(formattedComment)
   } catch (error) {

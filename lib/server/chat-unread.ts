@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@/generated/prisma/client';
 import prisma from '@/lib/prisma';
 import { getDatabaseProvider, getPostgresqlSchema } from '@/lib/database-provider';
 

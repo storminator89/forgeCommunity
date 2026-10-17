@@ -12,7 +12,7 @@ import { POST as prepareReset } from '@/app/api/courses/[courseId]/practice/lear
 import { POST as reset } from '@/app/api/courses/[courseId]/practice/learner/reset/route';
 import { sweepPracticeRetention, practiceRetentionCutoffs } from '@/lib/server/formative-practice-retention';
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 
 jest.mock('next/server', () => ({ NextResponse: class extends Response {
   static json(value: unknown, init?: ResponseInit) { return new Response(JSON.stringify(value),

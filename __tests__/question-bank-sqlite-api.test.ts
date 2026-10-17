@@ -4,7 +4,7 @@ import { GET as listQuestions, POST as createQuestion } from '@/app/api/courses/
 import { GET as questionHistory, PATCH as reviseQuestion } from '@/app/api/courses/questions/[questionId]/route';
 import { GET as questionRevision } from '@/app/api/courses/questions/[questionId]/revisions/[revision]/route';
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 
 jest.mock('next/server', () => ({
   NextResponse: class extends Response {

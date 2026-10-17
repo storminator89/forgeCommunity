@@ -1,17 +1,17 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { Prisma } from '@prisma/client';
-import { authOptions } from '@/app/api/auth/[...nextauth]/options';
+import { getServerSession } from '@/lib/sites-auth/server';
+import { authOptions } from '@/lib/auth';
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
-import { contentQuiz, courseContentRevision, gradeQuizWithItemEvidence, InvalidQuizAnswersError, matchesContentVersionToken, recordCourseCompletion } from '@/lib/server/course-progress';
+import { contentQuiz, courseContentRevision, gradeQuizWithItemEvidence, InvalidQuizAnswersError, matchesContentVersionToken } from '@/lib/server/course-progress';
 import { assertConfidenceQuestionIds, InvalidQuizConfidenceError, parseQuizConfidence } from '@/lib/server/quiz-confidence';
 import { getQuizValidationError } from '@/app/courses/[courseId]/contents/types';
-import { contentTransaction } from '../../content-mutations';
-import { assertCurrentPrerequisites, CoursePathError } from '@/lib/server/course-prerequisites';
+import { CoursePathError } from '@/lib/server/course-path';
+import { assertD1ContentAccess, assertD1LearnerSnapshot, courseLearningDatabase, d1CourseSnapshotGuard,
+  d1LearningDate, isD1CourseSnapshotConflict, readD1CourseSnapshot } from '@/lib/server/d1-course-learning';
+import { d1CourseRewardStatements, d1RewardNodes } from '@/lib/server/d1-course-rewards';
 
 type Params = { params: Promise<{ courseId: string; contentId: string }> };
-type AttemptOutcome = { status: number; score?: number; passed?: boolean; retryAfterSeconds?: number; error?: string };
 
 export async function POST(request: NextRequest, props: Params) {
   const { courseId, contentId } = await props.params;
@@ -26,100 +26,75 @@ export async function POST(request: NextRequest, props: Params) {
     }
     const userId = session.user.id;
     const submissionId = body.submissionId;
-    const answers = body.answers;
     const confidence = parseQuizConfidence(body.confidenceByQuestion);
-    // A digest is stored only in the database for safe idempotent retries; it
-    // must never be returned to learners because answer-space is often small.
-    const answerDigest = createHash('sha256').update(JSON.stringify(answers)).digest('hex');
-
-    const attempt = async (): Promise<AttemptOutcome> => contentTransaction(async tx => {
-      const course = await tx.course.findUnique({ where: { id: courseId }, select: { activePublicationId: true } });
-      if (!course?.activePublicationId) return { status: 404, error: 'Course not found' };
-      const enrollment = await tx.enrollment.findUnique({ where: { userId_courseId: { userId, courseId } }, select: { id: true } });
-      if (!enrollment) return { status: 403, error: 'Enrollment required' };
-      const previous = await tx.quizAttempt.findUnique({ where: { userId_contentId_submissionId: { userId, contentId, submissionId } },
-        include: { itemEvidence: { select: { questionId: true } } } });
+    // Store only a private digest for retry identity. Never expose answer keys,
+    // answer-space hashes or private item evidence to the learner response.
+    const answerDigest = createHash('sha256').update(JSON.stringify(body.answers)).digest('hex');
+    const db = courseLearningDatabase();
+    const operationId = `attempt_${randomUUID()}`;
+    for (let retry = 0; retry < 4; retry++) {
+      const snapshot = await readD1CourseSnapshot(db, session.user, courseId, { contentId, submissionId });
+      assertD1LearnerSnapshot(snapshot, { requireEnrollment: true, requirePublication: true });
+      const previous = snapshot.attempt;
       if (previous) {
-        // Evidence rows retain the original published question IDs even after
-        // republishing, so a lost-response retry can validate its null keys.
-        if (previous.itemEvidence.length) {
-          assertConfidenceQuestionIds(confidence, previous.itemEvidence.map(item => ({ id: item.questionId })));
+        if (previous.questionIds.length) assertConfidenceQuestionIds(confidence, previous.questionIds.map(id => ({ id })));
+        if (previous.courseId !== courseId || previous.publicationId !== body.publicationId || previous.answerDigest !== answerDigest ||
+            (previous.confidenceDigest ?? null) !== confidence.digest) {
+          throw new CoursePathError('Submission ID was already used for different answers, confidence or a different publication', 409);
         }
-        if (previous.courseId !== courseId || previous.publicationId !== body.publicationId ||
-            previous.answerDigest !== answerDigest || (previous.confidenceDigest ?? null) !== confidence.digest) {
-          return { status: 409, error: 'Submission ID was already used for different answers, confidence or a different publication' };
-        }
-        // A lost-response retry may return its original outcome after a later
-        // publication. It must never create fresh progress on that later version.
-        return { status: 200, score: previous.score, passed: previous.passed };
+        // Historical retries may outlive publication changes without issuing
+        // fresh credit for the newer publication.
+        return NextResponse.json({ score: previous.score, passed: Boolean(previous.passed) });
       }
-      if (course.activePublicationId !== body.publicationId) return { status: 409, error: 'Quiz changed; reload before submitting' };
-      const content = await tx.courseContent.findUnique({ where: { id: contentId }, select: { id: true, courseId: true, parentId: true, type: true, content: true, archivedAt: true, children: { where: { archivedAt: null }, select: { id: true }, take: 1 } } });
-      if (!content || content.courseId !== courseId || content.archivedAt) return { status: 404, error: 'Content not found' };
-      if (content.children.length) return { status: 409, error: 'Only leaf quizzes can be submitted' };
+      if (snapshot.course!.activePublicationId !== body.publicationId) throw new CoursePathError('Quiz changed; reload before submitting', 409);
+      const content = snapshot.contents.find(row => row.id === contentId);
+      if (!content) throw new CoursePathError('Content not found', 404);
+      if (snapshot.contents.some(row => row.parentId === contentId)) throw new CoursePathError('Only leaf quizzes can be submitted', 409);
       const quiz = contentQuiz(content);
-      if (!quiz || getQuizValidationError(quiz)) return { status: 409, error: 'Quiz is not ready' };
-      if (!matchesContentVersionToken(body.contentVersionToken, course.activePublicationId, content)) return { status: 409, error: 'Quiz changed; reload before submitting' };
-      await assertCurrentPrerequisites(tx, userId, courseId, contentId, course.activePublicationId);
-      const revision = courseContentRevision(content);
+      if (!quiz || getQuizValidationError(quiz)) throw new CoursePathError('Quiz is not ready', 409);
+      if (!matchesContentVersionToken(body.contentVersionToken, body.publicationId, content)) throw new CoursePathError('Quiz changed; reload before submitting', 409);
       const now = new Date();
-      const windowStart = new Date(now.getTime() - 60 * 60 * 1000);
-      const recentFailures = await tx.quizAttempt.findMany({
-        where: { userId, contentId, revision, passed: false, submittedAt: { gte: windowStart } },
-        orderBy: { submittedAt: 'desc' }, take: 5, select: { submittedAt: true },
-      });
+      assertD1ContentAccess(snapshot, contentId, true, now.getTime());
+      const recentFailures = snapshot.recentFailures.map(row => d1LearningDate(row.submittedAt).getTime())
+        .filter(time => time >= now.getTime() - 60 * 60 * 1000);
       if (recentFailures.length >= 5) {
-        const oldest = recentFailures[recentFailures.length - 1].submittedAt;
-        return { status: 429, error: 'Please review the course and try again later', retryAfterSeconds: Math.max(1, Math.ceil((oldest.getTime() + 60 * 60 * 1000 - now.getTime()) / 1000)) };
+        const retryAfterSeconds = Math.max(1, Math.ceil((Math.min(...recentFailures) + 60 * 60 * 1000 - now.getTime()) / 1000));
+        return NextResponse.json({ error: 'Please review the course and try again later', retryAfterSeconds },
+          { status: 429, headers: { 'Retry-After': String(retryAfterSeconds) } });
       }
       assertConfidenceQuestionIds(confidence, quiz.questions);
-      const graded = gradeQuizWithItemEvidence(quiz, answers);
-      await tx.quizAttempt.create({ data: { userId, courseId, contentId, submissionId, answerDigest, revision,
-        publicationId: course.activePublicationId, confidenceDigest: confidence.digest, score: graded.score, passed: graded.passed,
-        itemEvidence: { create: graded.items.map(item => ({
-          questionId: item.questionId, correct: item.correct, confidence: confidence.values.get(item.questionId) ?? null,
-        })) } } });
+      const graded = gradeQuizWithItemEvidence(quiz, body.answers);
+      const revision = courseContentRevision(content);
+      const timestamp = now.toISOString();
+      const evidence = graded.items.map(item => ({ ...item, confidence: confidence.values.get(item.questionId) ?? null }));
+      const statements = [d1CourseSnapshotGuard(db, snapshot),
+        db.prepare(`INSERT INTO QuizAttempt (id, userId, courseId, contentId, submissionId, answerDigest, revision,
+          publicationId, confidenceDigest, score, passed, submittedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+          .bind(operationId, userId, courseId, contentId, submissionId, answerDigest, revision, body.publicationId,
+            confidence.digest, graded.score, graded.passed ? 1 : 0, timestamp),
+        db.prepare(`INSERT INTO QuizAttemptItemEvidence (attemptId, questionId, correct, confidence)
+          SELECT ?, json_extract(value, '$.questionId'), json_extract(value, '$.correct'), json_extract(value, '$.confidence') FROM json_each(?)`)
+          .bind(operationId, JSON.stringify(evidence)),
+      ];
       if (graded.passed) {
-        const existing = await tx.courseContentProgress.findUnique({ where: { userId_contentId: { userId, contentId } }, select: { revision: true } });
-        if (existing?.revision !== revision) {
-          await tx.courseContentProgress.upsert({ where: { userId_contentId: { userId, contentId } }, create: { userId, courseId, contentId, revision }, update: { revision, completedAt: now } });
-        }
-        await recordCourseCompletion(tx, userId, courseId);
+        statements.push(db.prepare(`INSERT INTO CourseContentProgress (userId, courseId, contentId, revision, completedAt)
+          VALUES (?, ?, ?, ?, ?) ON CONFLICT(userId, contentId) DO UPDATE SET revision = excluded.revision, completedAt = excluded.completedAt
+          WHERE CourseContentProgress.revision <> excluded.revision`).bind(userId, courseId, contentId, revision, timestamp),
+        ...d1CourseRewardStatements(db, { courseId, operationId, now: timestamp, nodes: d1RewardNodes(snapshot.contents),
+          gate: { sql: 'SELECT 1', values: [] }, mode: { kind: 'learner', userId } }));
       }
-      return { status: 200, score: graded.score, passed: graded.passed };
-    });
-
-    let outcome: AttemptOutcome;
-    try { outcome = await attempt(); }
-    catch (error) {
-      // Two identical submissions can race at the unique key. Reading the
-      // committed attempt yields the same result without double-counting it.
-      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') throw error;
-      outcome = await contentTransaction(async tx => {
-        const course = await tx.course.findUnique({ where: { id: courseId }, select: { activePublicationId: true } });
-        if (!course?.activePublicationId) return { status: 404, error: 'Course not found' };
-        const enrollment = await tx.enrollment.findUnique({ where: { userId_courseId: { userId, courseId } }, select: { id: true } });
-        if (!enrollment) return { status: 403, error: 'Enrollment required' };
-        const saved = await tx.quizAttempt.findUnique({ where: { userId_contentId_submissionId: { userId, contentId, submissionId } },
-          include: { itemEvidence: { select: { questionId: true } } } });
-        if (!saved) throw error;
-        if (saved.itemEvidence.length) {
-          assertConfidenceQuestionIds(confidence, saved.itemEvidence.map(item => ({ id: item.questionId })));
-        }
-        if (saved.answerDigest !== answerDigest || saved.courseId !== courseId ||
-            saved.publicationId !== body.publicationId || (saved.confidenceDigest ?? null) !== confidence.digest) {
-          return { status: 409, error: 'Submission ID was already used for different answers, confidence or a different publication' };
-        }
-        return { status: 200, score: saved.score, passed: saved.passed };
-      });
+      try {
+        await db.batch(statements);
+        return NextResponse.json({ score: graded.score, passed: graded.passed });
+      } catch (error) {
+        if (!isD1CourseSnapshotConflict(error)) throw error;
+        if (retry === 3) throw new CoursePathError('Course changed concurrently; retry', 409);
+      }
     }
-    if (outcome.status === 200) return NextResponse.json({ score: outcome.score, passed: outcome.passed });
-    if (outcome.status === 429) return NextResponse.json({ error: outcome.error, retryAfterSeconds: outcome.retryAfterSeconds }, { status: 429, headers: { 'Retry-After': String(outcome.retryAfterSeconds) } });
-    return NextResponse.json({ error: outcome.error }, { status: outcome.status });
+    throw new CoursePathError('Course changed concurrently; retry', 409);
   } catch (error) {
     if (error instanceof CoursePathError) return NextResponse.json({ error: error.message }, { status: error.status });
-    if (error instanceof InvalidQuizAnswersError) return NextResponse.json({ error: error.message }, { status: 400 });
-    if (error instanceof InvalidQuizConfidenceError) return NextResponse.json({ error: error.message }, { status: 400 });
+    if (error instanceof InvalidQuizAnswersError || error instanceof InvalidQuizConfidenceError) return NextResponse.json({ error: error.message }, { status: 400 });
     const inputError = requestErrorResponse(error);
     if (inputError) return inputError;
     console.error('Failed to grade course quiz:', error);

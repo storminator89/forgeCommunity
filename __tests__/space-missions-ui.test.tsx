@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/lib/sites-auth/react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import SpaceMissionPage from '@/app/community/spaces/[spaceId]/missions/[missionId]/page';
 import { SpaceMissionIndex } from '@/components/spaces/SpaceMissionIndex';

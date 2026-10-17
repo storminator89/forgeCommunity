@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@/generated/prisma/client';
 import { getDatabaseProvider, getPostgresqlSchema } from '@/lib/database-provider';
 
 const COURSE_SQL_TABLES = {

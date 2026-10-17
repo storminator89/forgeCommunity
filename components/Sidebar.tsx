@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useSyncExternalStore } from 'react';
-import { useSession, signOut } from 'next-auth/react';
+import { useSession } from '@/lib/sites-auth/react';
 import { usePathname } from 'next/navigation';
 import { ChevronLeft, ChevronRight, LogOut, X } from 'lucide-react';
 import { useNotifications } from '@/contexts/NotificationContext';
@@ -87,8 +87,8 @@ export function Sidebar({ className, isOpen: externalOpen = false, onClose, hide
       </div>
       <div className="flex shrink-0 items-center gap-3 border-t px-4 py-4">
         <Avatar className="h-10 w-10 shrink-0"><AvatarImage src={session?.user?.image || ''} alt="" /><AvatarFallback className="bg-primary text-primary-foreground">{session?.user?.name?.[0] || 'F'}</AvatarFallback></Avatar>
-        {!compact && <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{session?.user?.name || 'Deine Community'}</p><button type="button" onClick={() => signOut({ callbackUrl: '/login' })} className="min-h-7 text-xs text-muted-foreground hover:text-primary">Abmelden</button></div>}
-        {compact && <button type="button" onClick={() => signOut({ callbackUrl: '/login' })} aria-label="Abmelden" className="sr-only focus:not-sr-only"><LogOut className="h-4 w-4" /></button>}
+        {!compact && <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{session?.user?.name || 'Deine Community'}</p><button type="button" onClick={() => window.location.assign('/logout')} className="min-h-7 text-xs text-muted-foreground hover:text-primary">Abmelden</button></div>}
+        {compact && <button type="button" onClick={() => window.location.assign('/logout')} aria-label="Abmelden" className="sr-only focus:not-sr-only"><LogOut className="h-4 w-4" /></button>}
       </div>
     </div>;
   };

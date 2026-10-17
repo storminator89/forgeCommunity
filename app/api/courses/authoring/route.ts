@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/options';
+import { getServerSession } from '@/lib/sites-auth/server';
+import { authOptions } from '@/lib/auth';
 import { listAuthorCourses } from '@/lib/server/course-authoring';
 import { authoringFailure } from '../[courseId]/authoring/errors';
 

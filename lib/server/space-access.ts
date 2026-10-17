@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { Prisma, type SpaceVisibility } from '@prisma/client';
+import { Prisma, type SpaceVisibility } from '@/generated/prisma/client';
 import prisma from '@/lib/prisma';
 
 const snapshotViewer = Symbol('space-viewer-snapshot');

@@ -1,8 +1,8 @@
 import { PaginationError, readPagination } from '@/lib/server/pagination';
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "../../../auth/[...nextauth]/options";
+import { getServerSession } from "@/lib/sites-auth/server";
+import { authOptions } from '@/lib/auth';
 import { HttpUrlValidationError, normalizeHttpUrl } from '@/lib/server/url-security';
 import { getSafeHttpUrl } from '@/lib/security';
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';

@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '../../../auth/[...nextauth]/options';
-import prisma from '@/lib/prisma';
+import { getServerSession } from '@/lib/sites-auth/server';
+import { authOptions } from '@/lib/auth';
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
-import { completionState, contentQuiz, courseContentRevision, isQuizLikeContent, matchesContentVersionToken, recordCourseCompletion } from '@/lib/server/course-progress';
-import { contentTransaction } from '../contents/content-mutations';
-import { hasCurrentAdminReadAccess } from '@/lib/server/read-access';
-import { assertCurrentChapterRelease, assertCurrentPrerequisites, CoursePathError } from '@/lib/server/course-prerequisites';
+import { contentQuiz, courseContentRevision, isQuizLikeContent, matchesContentVersionToken } from '@/lib/server/course-progress';
+import { CoursePathError } from '@/lib/server/course-path';
+import { assertD1ContentAccess, assertD1LearnerSnapshot, courseLearningDatabase, d1CompletionState, d1CourseSnapshotGuard,
+  d1LearningDate, isD1CourseSnapshotConflict, readD1CourseSnapshot } from '@/lib/server/d1-course-learning';
+import { d1CourseRewardStatements, d1RewardNodes } from '@/lib/server/d1-course-rewards';
+import { randomUUID } from 'node:crypto';
 
 type Params = { params: Promise<{ courseId: string }> };
 
@@ -15,20 +16,13 @@ export async function GET(_request: NextRequest, props: Params) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const result = await contentTransaction(async tx => {
-      const course = await tx.course.findUnique({ where: { id: courseId }, select: { instructorId: true, activePublicationId: true } });
-      if (!course) return { status: 404 as const };
-      const enrollment = await tx.enrollment.findUnique({ where: { userId_courseId: { userId: session.user.id, courseId } }, select: { id: true, completedAt: true } });
-      const isEditor = course.instructorId === session.user.id || await hasCurrentAdminReadAccess(tx, session.user);
-      if (!course.activePublicationId && !isEditor) return { status: 404 as const };
-      if (!enrollment && !isEditor) return { status: 403 as const };
-      const certificate = await tx.certificate.findFirst({ where: { userId: session.user.id, courseId }, select: { id: true } });
-      const progress = enrollment && course.activePublicationId ? await completionState(tx, session.user.id, courseId) : { completedContentIds: [], complete: false, canIssueCertificate: false };
-      return { status: 200 as const, payload: { ...progress, canTrack: Boolean(enrollment && course.activePublicationId),
-        hasCertificate: Boolean(certificate), completedAt: enrollment?.completedAt ?? null, publicationId: course.activePublicationId } };
-    });
-    if (result.status !== 200) return NextResponse.json({ error: result.status === 404 ? 'Course not found' : 'Unauthorized' }, { status: result.status });
-    return NextResponse.json(result.payload, { headers: { 'Cache-Control': 'private, no-store' } });
+    const snapshot = await readD1CourseSnapshot(courseLearningDatabase(), session.user, courseId);
+    assertD1LearnerSnapshot(snapshot);
+    const progress = snapshot.enrollment && snapshot.course!.activePublicationId ? d1CompletionState(snapshot)
+      : { completedContentIds: [], complete: false, canIssueCertificate: false };
+    return NextResponse.json({ ...progress, canTrack: Boolean(snapshot.enrollment && snapshot.course!.activePublicationId),
+      hasCertificate: Boolean(snapshot.certificate), completedAt: snapshot.enrollment?.completedAt == null ? null : d1LearningDate(snapshot.enrollment.completedAt),
+      publicationId: snapshot.course!.activePublicationId }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     if (error instanceof CoursePathError) return NextResponse.json({ error: error.message }, { status: error.status });
     console.error('Failed to read course progress:', error);
@@ -46,39 +40,42 @@ export async function PATCH(request: NextRequest, props: Params) {
         typeof body.publicationId !== 'string' || typeof body.contentVersionToken !== 'string') {
       return NextResponse.json({ error: 'Invalid progress request' }, { status: 400 });
     }
-    const state = await contentTransaction(async tx => {
-      const course = await tx.course.findUnique({ where: { id: courseId }, select: { activePublicationId: true } });
-      if (!course?.activePublicationId) return { status: 404 as const };
-      const enrollment = await tx.enrollment.findUnique({ where: { userId_courseId: { userId: session.user.id, courseId } }, select: { id: true } });
-      if (!enrollment) return { status: 403 as const };
-      const content = await tx.courseContent.findUnique({ where: { id: body.contentId as string }, select: { id: true, courseId: true, parentId: true, type: true, content: true, archivedAt: true, children: { where: { archivedAt: null }, select: { id: true }, take: 1 } } });
-      if (!content || content.courseId !== courseId || content.archivedAt) return { status: 404 as const };
-      if (content.children.length || content.type === 'ASSIGNMENT' || contentQuiz(content) || isQuizLikeContent(content)) return { status: 409 as const };
-      if (course.activePublicationId !== body.publicationId || !matchesContentVersionToken(body.contentVersionToken, course.activePublicationId, content)) return { status: 412 as const };
-      if (body.completed) {
-        await assertCurrentPrerequisites(tx, session.user.id, courseId, content.id, course.activePublicationId);
-        const revision = courseContentRevision(content);
-        const existing = await tx.courseContentProgress.findUnique({ where: { userId_contentId: { userId: session.user.id, contentId: content.id } }, select: { revision: true } });
-        if (existing?.revision !== revision) {
-          await tx.courseContentProgress.upsert({
-            where: { userId_contentId: { userId: session.user.id, contentId: content.id } },
-            create: { userId: session.user.id, courseId, contentId: content.id, revision },
-            update: { revision, completedAt: new Date() },
-          });
-        }
-      } else {
-        // Undo may remove prerequisite-invalid credit, but even a current
-        // author-preview token must not mutate learner progress under a date lock.
-        await assertCurrentChapterRelease(tx, courseId, content.id, course.activePublicationId);
-        await tx.courseContentProgress.deleteMany({ where: { userId: session.user.id, courseId, contentId: content.id } });
+    const db = courseLearningDatabase();
+    const now = new Date().toISOString();
+    const operationId = `progress_${randomUUID()}`;
+    for (let retry = 0; retry < 4; retry++) {
+      const snapshot = await readD1CourseSnapshot(db, session.user, courseId);
+      assertD1LearnerSnapshot(snapshot, { requireEnrollment: true, requirePublication: true });
+      // Full publication parity and current authoritative prerequisite proof.
+      d1CompletionState(snapshot);
+      const content = snapshot.contents.find(row => row.id === body.contentId);
+      if (!content) throw new CoursePathError('Content not found', 404);
+      if (snapshot.contents.some(row => row.parentId === content.id) || content.type === 'ASSIGNMENT' || contentQuiz(content) || isQuizLikeContent(content)) {
+        throw new CoursePathError('Only non-quiz, non-assignment leaf content can be marked complete', 409);
       }
-      return { status: 200 as const, progress: await recordCourseCompletion(tx, session.user.id, courseId) };
-    });
-    if (state.status === 403) return NextResponse.json({ error: 'Enrollment required' }, { status: 403 });
-    if (state.status === 404) return NextResponse.json({ error: 'Content not found' }, { status: 404 });
-    if (state.status === 409) return NextResponse.json({ error: 'Only non-quiz, non-assignment leaf content can be marked complete' }, { status: 409 });
-    if (state.status === 412) return NextResponse.json({ error: 'Course publication changed; reload before updating progress' }, { status: 412 });
-    return NextResponse.json(state.progress);
+      if (snapshot.course!.activePublicationId !== body.publicationId || !matchesContentVersionToken(body.contentVersionToken, body.publicationId, content)) {
+        throw new CoursePathError('Course publication changed; reload before updating progress', 412);
+      }
+      assertD1ContentAccess(snapshot, content.id, body.completed);
+      const revision = courseContentRevision(content);
+      const nextProgress = snapshot.progress.filter(row => row.contentId !== content.id);
+      if (body.completed) nextProgress.push({ contentId: content.id, revision });
+      const state = d1CompletionState({ ...snapshot, progress: nextProgress });
+      const mutation = body.completed ? db.prepare(`INSERT INTO CourseContentProgress (userId, courseId, contentId, revision, completedAt)
+        VALUES (?, ?, ?, ?, ?) ON CONFLICT(userId, contentId) DO UPDATE SET revision = excluded.revision, completedAt = excluded.completedAt
+        WHERE CourseContentProgress.revision <> excluded.revision`).bind(session.user.id, courseId, content.id, revision, now)
+        : db.prepare('DELETE FROM CourseContentProgress WHERE userId = ? AND courseId = ? AND contentId = ?').bind(session.user.id, courseId, content.id);
+      try {
+        await db.batch([d1CourseSnapshotGuard(db, snapshot), mutation,
+          ...d1CourseRewardStatements(db, { courseId, operationId, now, nodes: d1RewardNodes(snapshot.contents),
+            gate: { sql: 'SELECT 1', values: [] }, mode: { kind: 'learner', userId: session.user.id } })]);
+        return NextResponse.json(state);
+      } catch (error) {
+        if (!isD1CourseSnapshotConflict(error)) throw error;
+        if (retry === 3) throw new CoursePathError('Course changed concurrently; retry', 409);
+      }
+    }
+    throw new CoursePathError('Course changed concurrently; retry', 409);
   } catch (error) {
     if (error instanceof CoursePathError) return NextResponse.json({ error: error.message }, { status: error.status });
     const inputError = requestErrorResponse(error);

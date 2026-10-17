@@ -4,7 +4,7 @@ import { renderToString } from 'react-dom/server'
 import { hydrateRoot } from 'react-dom/client'
 import { SearchParamsContext } from 'next/dist/shared/lib/hooks-client-context.shared-runtime'
 import axios from 'axios'
-import { useSession } from 'next-auth/react'
+import { useSession } from '@/lib/sites-auth/react'
 import SettingsPage from '@/app/settings/page'
 import { SettingsUrlContext as UrlContext } from '../test-utils/settings-url-context'
 

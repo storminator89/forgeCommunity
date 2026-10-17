@@ -11,7 +11,13 @@
 /out/
 
 # Production
-/build
+/build/*
+# Authored Sites integration source, required to rebuild a clean checkout.
+!/build/sites-worker.ts
+!/build/sites-vite-plugin.ts
+!/build/sites-vite-plugin.LICENSE
+!/build/connector-preview-plugin.mjs
+!/build/connector-preview-worker.mjs
 
 .bolt
 .idx
@@ -141,3 +147,16 @@ public/images/uploads/*
 /public/h5p-runtime/
 # Disposable HTTP smoke credentials, never part of an application release.
 h5p-smoke-fixture.json
+
+# Cloudflare / Sites checkout-local state and generated output
+/.openai/hosting.json
+/.wrangler/
+/.sites-runtime/
+/.vinext/
+/generated/
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite3-shm
+*.sqlite3-wal
+.env*
+!.env.example

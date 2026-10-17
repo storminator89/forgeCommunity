@@ -1,6 +1,6 @@
 /** @jest-environment node */
 import AdminLayout from '@/app/admin/layout';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/sites-auth/server';
 import { redirect } from 'next/navigation';
 
 jest.mock('next-auth', () => ({ getServerSession: jest.fn() }));

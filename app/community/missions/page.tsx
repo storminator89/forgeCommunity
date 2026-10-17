@@ -10,7 +10,7 @@ import { useInvitationAccount } from '@/components/spaces/mission-invitation-ui'
 import { MissionInvitationInbox } from '@/components/spaces/MissionInvitationInbox';
 import { MissionIllustration } from '@/components/spaces/MissionVisuals';
 import styles from '@/components/spaces/friendly-missions.module.css';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/lib/sites-auth/react';
 import { useSearchParams } from 'next/navigation';
 import { PageState } from '@/components/page-state';
 import { Button } from '@/components/ui/button';

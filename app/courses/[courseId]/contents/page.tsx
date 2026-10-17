@@ -1,7 +1,7 @@
 'use client'
 
 import { use } from 'react'
-import { useSession } from 'next-auth/react'
+import { useSession } from '@/lib/sites-auth/react'
 import { CourseWorkspaceRoute } from './CourseWorkspaceRoute'
 
 export default function CourseContentsPage({ params }: { params: Promise<{ courseId: string }> }) {

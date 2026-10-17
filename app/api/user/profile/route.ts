@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { emailEqualsInsensitive } from '@/lib/server/database-query'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '../../auth/[...nextauth]/options'
+import { getServerSession } from '@/lib/sites-auth/server'
+import { authOptions } from '@/lib/auth'
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input'
 import { ownProfileInput } from '@/lib/server/profile-input'
 

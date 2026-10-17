@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { DateTime } from 'luxon';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/lib/sites-auth/react';
 import Events from '@/app/events/page';
 import { eventApiFixture, participationFixture } from '../test-utils/event-participation';
 

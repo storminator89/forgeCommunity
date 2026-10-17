@@ -4,7 +4,7 @@ import { GET as readAnalytics } from '@/app/api/courses/[courseId]/analytics/rou
 import { GET as exportAnalytics } from '@/app/api/courses/[courseId]/analytics/export/route';
 import { courseContentRevision } from '@/lib/server/course-progress';
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 
 jest.mock('next/server', () => ({ NextResponse: class extends Response {
   static json(value: unknown, init?: ResponseInit) { return Response.json(value, init); }

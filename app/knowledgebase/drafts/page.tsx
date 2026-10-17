@@ -7,7 +7,7 @@ import { HeroBanner } from '@/components/discovery';
 import { Bookmark as PageBannerIcon } from 'lucide-react';
 import { AppShell, AppHeader } from '@/components/app-shell';
 import { PageState } from '@/components/page-state';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/lib/sites-auth/react';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import Image from 'next/image';

@@ -1,6 +1,6 @@
 import { GET } from '@/app/api/users/[id]/route';
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/sites-auth/server';
 import { VERIFIED_COURSE_BADGE } from '@/lib/course-achievement-badge';
 
 jest.mock('next/server', () => ({

@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { Prisma, type AttendeeStatus } from '@prisma/client';
+import { Prisma, type AttendeeStatus } from '@/generated/prisma/client';
 import { ParticipationError, participationTransaction } from '@/lib/server/participation';
 
 export const EVENT_PARTICIPATION_HEADERS = { 'Cache-Control': 'private, no-store' };

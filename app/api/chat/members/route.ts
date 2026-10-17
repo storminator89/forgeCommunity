@@ -1,7 +1,7 @@
 // app/api/chat/members/route.ts
 import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth/next'
-import { authOptions } from '@/app/api/auth/[...nextauth]/options'
+import { getServerSession } from '@/lib/sites-auth/server'
+import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input'
 

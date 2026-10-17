@@ -4,7 +4,7 @@
 /* Hallmark · genre: editorial · macrostructure: administration ledger · design-system: design.md · designed-as-app */
 
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/lib/sites-auth/react';
 import { ArrowDown, ArrowUp, Check, Plus, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

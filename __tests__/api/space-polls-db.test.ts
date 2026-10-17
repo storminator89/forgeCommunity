@@ -3,7 +3,7 @@
 import prisma from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { DriverAdapterError } from '@prisma/driver-adapter-utils';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/sites-auth/server';
 import { GET as list, POST as post } from '@/app/api/spaces/[spaceId]/polls/route';
 import { GET as get, PATCH as patch } from '@/app/api/spaces/[spaceId]/polls/[pollId]/route';
 import { PUT as put } from '@/app/api/spaces/[spaceId]/polls/[pollId]/vote/route';

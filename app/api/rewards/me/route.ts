@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/sites-auth/server';
 import prisma from '@/lib/prisma';
-import { authOptions } from '@/app/api/auth/[...nextauth]/options';
+import { authOptions } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 

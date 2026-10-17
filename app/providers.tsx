@@ -1,7 +1,7 @@
 // app/providers.tsx
 'use client'
 
-import { SessionProvider } from "next-auth/react"
+import { SessionProvider } from "@/lib/sites-auth/react"
 import { ThemeProvider } from "@/components/theme-provider"
 import { ChatProvider } from "@/contexts/ChatContext"
 import { NotificationProvider } from "@/contexts/NotificationContext"

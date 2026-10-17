@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/sites-auth/server';
 
 import prisma from '@/lib/prisma';
 import { containsInsensitive } from '@/lib/server/database-query';
@@ -9,7 +9,7 @@ import { sanitizeHtmlPreviewServer, sanitizeTextServer } from '@/lib/server/sani
 import { canShowBadgeToViewer } from '@/lib/course-achievement-badge';
 import { publishedCourseWhere } from '@/lib/server/published-course';
 
-import { authOptions } from '../auth/[...nextauth]/options';
+import { authOptions } from '@/lib/auth';
 
 const VALID_TYPES = new Set(['all', 'course', 'event', 'member', 'post', 'resource', 'article', 'project', 'skill']);
 const ALL_RESULTS_LIMIT = 5;

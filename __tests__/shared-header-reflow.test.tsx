@@ -10,7 +10,7 @@ import { AdminHeader } from '@/components/admin/AdminHeader';
 import { SpaceShell } from '@/components/spaces/SpaceShell';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { UserNav } from '@/components/user-nav';
-import { signOut, useSession } from 'next-auth/react';
+import { signOut, useSession } from '@/lib/sites-auth/react';
 
 const mockPush = jest.fn();
 const mockSetTheme = jest.fn();

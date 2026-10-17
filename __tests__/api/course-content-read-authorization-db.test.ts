@@ -12,7 +12,7 @@ import { publishDraft, publicationDigest, type CoursePayload } from '@/lib/serve
 import { contentVersionToken } from '@/lib/server/course-progress';
 import prisma from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 import { rmSync } from 'node:fs';
 
 jest.mock('next/server', () => {

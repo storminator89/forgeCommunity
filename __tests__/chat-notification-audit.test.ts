@@ -3,7 +3,7 @@ import { PATCH as editMessage } from '@/app/api/chat/messages/[messageId]/route'
 import { GET as listNotifications, PATCH as updateNotification } from '@/app/api/notifications/route';
 import { GET as notificationStream } from '@/app/api/notifications/sse/route';
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 
 jest.mock('next/server', () => {
   class MockNextResponse extends Response {

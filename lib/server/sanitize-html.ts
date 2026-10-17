@@ -1,6 +1,6 @@
 import 'server-only';
 
-import createDOMPurify from 'dompurify';
+import sanitizeHtml from 'sanitize-html';
 
 import {
   isSafeRichHtmlUrl,
@@ -8,50 +8,52 @@ import {
   RICH_HTML_ALLOWED_TAGS,
 } from '@/lib/html-sanitize-config';
 
-let DOMPurifyInstance: ReturnType<typeof createDOMPurify> | null = null;
-
-function getServerWindow() {
-  if (typeof globalThis.window !== 'undefined' && globalThis.window.document) {
-    return globalThis.window;
-  }
-
-  const { JSDOM } = require('jsdom') as typeof import('jsdom');
-  return new JSDOM('').window;
-}
-
-function getDOMPurify() {
-  if (!DOMPurifyInstance) {
-    const windowLike = getServerWindow();
-    DOMPurifyInstance = createDOMPurify(windowLike as unknown as any);
-    DOMPurifyInstance.addHook('uponSanitizeAttribute', (_node, data) => {
-      if ((data.attrName === 'href' || data.attrName === 'src') && !isSafeRichHtmlUrl(data.attrValue, data.attrName)) {
-        data.keepAttr = false;
-      }
-    });
-    DOMPurifyInstance.addHook('afterSanitizeAttributes', (node) => {
-      if ((node as Element).getAttribute?.('target') === '_blank') {
-        node.setAttribute('rel', 'noopener noreferrer');
-      }
-    });
-  }
-
-  return DOMPurifyInstance;
-}
+// A token-based sanitizer needs neither a browser DOM nor filesystem assets,
+// both of which jsdom assumes are available in a traditional Node server.
+const nonTextTags = ['style', 'script', 'textarea', 'option', 'xmp', 'noscript', 'template', 'svg', 'math', 'iframe', 'object'];
 
 export function sanitizeRichHtmlServer(html: string | null | undefined) {
-  return getDOMPurify().sanitize(html ?? '', {
-    ALLOWED_TAGS: [...RICH_HTML_ALLOWED_TAGS],
-    ALLOWED_ATTR: [...RICH_HTML_ALLOWED_ATTR],
-    ALLOW_DATA_ATTR: false,
+  return sanitizeHtml(html ?? '', {
+    allowedTags: [...RICH_HTML_ALLOWED_TAGS],
+    allowedAttributes: { '*': [...RICH_HTML_ALLOWED_ATTR] },
+    allowedSchemes: ['http', 'https', 'mailto', 'tel'],
+    allowedSchemesByTag: { img: ['http', 'https'] },
+    allowProtocolRelative: false,
+    parseStyleAttributes: false,
+    nonTextTags,
+    transformTags: {
+      '*': (tagName, attributes) => {
+        for (const attribute of ['href', 'src'] as const) {
+          if (attribute in attributes && !isSafeRichHtmlUrl(attributes[attribute], attribute)) delete attributes[attribute];
+        }
+        if (attributes.target === '_blank') attributes.rel = 'noopener noreferrer';
+        return { tagName, attribs: attributes };
+      },
+    },
   });
 }
 
 export function sanitizeTextServer(value: string | null | undefined) {
-  return getDOMPurify().sanitize(value ?? '', {
-    ALLOWED_TAGS: [],
-    ALLOWED_ATTR: [],
+  return sanitizeHtml(value ?? '', {
+    allowedTags: [],
+    allowedAttributes: {},
+    parseStyleAttributes: false,
+    nonTextTags,
   })
     .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Plain comment text keeps authored line breaks; never accepts rich HTML. */
+export function sanitizeCommentTextServer(value: string | null | undefined) {
+  return sanitizeHtml((value ?? '').replace(/\r\n?/g, '\n'), {
+    allowedTags: [],
+    allowedAttributes: {},
+    parseStyleAttributes: false,
+    nonTextTags,
+  })
+    .replace(/\r\n?/g, '\n')
+    .replace(/[^\S\n]+/g, ' ')
     .trim();
 }
 

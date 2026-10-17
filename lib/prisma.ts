@@ -1,35 +1,32 @@
 // lib/prisma.ts
 
-import { PrismaClient } from '@prisma/client';
-import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3';
-import { getDatabaseProvider, getDatabaseUrl, getPostgresqlSchema } from './database-provider';
+import { PrismaClient } from '@/generated/prisma/client';
+import { PrismaD1 } from '@prisma/adapter-d1';
+import { env } from 'cloudflare:workers';
+import { getHeadersContext } from 'vinext/shims/headers';
 
-const provider = getDatabaseProvider();
-const url = getDatabaseUrl();
-// pg ignores Prisma's ?schema= URL parameter. The driver adapter must also
-// receive it or a custom-schema deployment would query public instead of the
-// schema initialized by scripts/postgresql-upgrades.mjs.
-const schema = provider === 'postgresql' ? getPostgresqlSchema() : null;
-const adapter = provider === 'sqlite'
-  ? new PrismaBetterSqlite3({ url })
-  : new PrismaPg({ connectionString: url }, schema ? { schema } : undefined);
+// Prisma's initialization/query promises must belong to the current Worker
+// request. Sharing a client between concurrent requests can cancel their I/O.
+const requestClients = new WeakMap<object, PrismaClient>();
 
-declare global {
-  // Ermöglicht globale Variablen ohne TypeScript-Fehler
-  var prisma: PrismaClient | undefined;
+function getPrismaClient(): PrismaClient {
+  if (!env.DB) throw new Error('Cloudflare D1 binding DB is unavailable.');
+  const request = getHeadersContext()?.headers;
+  if (!request) return new PrismaClient({ adapter: new PrismaD1(env.DB) });
+  let client = requestClients.get(request);
+  if (!client) {
+    client = new PrismaClient({ adapter: new PrismaD1(env.DB) });
+    requestClients.set(request, client);
+  }
+  return client;
 }
 
-const prisma = global.prisma || new PrismaClient({ adapter });
-// The generated Prisma Client embeds its datasource provider. A mismatched
-// build would otherwise fail only when the first query runs.
-const generatedProvider = (prisma as PrismaClient & {
-  _engineConfig: { activeProvider: string };
-})._engineConfig.activeProvider;
-if (generatedProvider !== provider) {
-  throw new Error(`Prisma Client was generated for ${generatedProvider}, but DATABASE_PROVIDER=${provider}. Rebuild with DATABASE_PROVIDER=${provider}.`);
-}
-
-if (process.env.NODE_ENV !== 'production') global.prisma = prisma;
+const prisma = new Proxy({} as PrismaClient, {
+  get(_target, property) {
+    const client = getPrismaClient();
+    const value = Reflect.get(client, property, client);
+    return typeof value === 'function' ? value.bind(client) : value;
+  },
+});
 
 export default prisma;

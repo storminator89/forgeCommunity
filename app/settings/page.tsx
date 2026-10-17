@@ -6,7 +6,7 @@ import { AppShell, AppHeader } from '@/components/app-shell';
 import { Suspense, useState, useEffect, useRef, type ReactNode } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { useSession } from 'next-auth/react'
+import { useSession } from '@/lib/sites-auth/react'
 import { Sidebar } from "@/components/Sidebar"
 import { UserNav } from "@/components/user-nav"
 import { ThemeToggle } from "@/components/theme-toggle"

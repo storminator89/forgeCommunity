@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import sharp from 'sharp';
 import { Prisma } from '@prisma/client';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 import prisma from '@/lib/prisma';
 import { POST as upload } from '@/app/api/courses/[courseId]/authoring/assets/route';
 import { GET as getAsset, HEAD as headAsset } from '@/app/api/courses/[courseId]/assets/[assetId]/route';

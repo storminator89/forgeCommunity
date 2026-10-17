@@ -11,7 +11,7 @@ import { POST as upload } from '@/app/api/h5p/upload/route';
 import { GET as embed } from '@/app/h5p/embed/[id]/route';
 import { GET as assets, HEAD as headAssets } from '@/app/api/h5p/assets/[id]/[token]/[...path]/route';
 import { GET as metadata } from '@/app/api/h5p/contents/[id]/route';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 import prisma from '@/lib/prisma';
 
 jest.mock('next-auth/next', () => ({ getServerSession: jest.fn() }));

@@ -1,6 +1,6 @@
 /** @jest-environment node */
 import ModerationLayout from '@/app/moderation/layout';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/sites-auth/server';
 import { redirect } from 'next/navigation';
 import prisma from '@/lib/prisma';
 

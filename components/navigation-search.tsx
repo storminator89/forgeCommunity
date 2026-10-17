@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/lib/sites-auth/react';
 import { ArrowUpRight } from 'lucide-react';
 import { NavigationArtwork } from '@/components/navigation-artwork';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';

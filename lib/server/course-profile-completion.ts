@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@/generated/prisma/client';
 import { parseAssignmentContent } from '@/app/courses/[courseId]/contents/assignment-content';
 import { contentQuiz, courseContentRevision, courseLeaves, isQuizLikeContent, type ProgressContent } from '@/lib/server/course-progress';
 import { CoursePathError, prepareCoursePath, publicationPathNodes } from '@/lib/server/course-path';

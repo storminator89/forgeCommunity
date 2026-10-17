@@ -14,8 +14,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Trash, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
-import { useSession } from 'next-auth/react';
-import type { Session } from 'next-auth';
+import { useSession } from '@/lib/sites-auth/react';
+import type { Session } from '@/lib/sites-auth/server';
 
 import Image from 'next/image';
 import { sanitizeRichHtml } from '@/lib/sanitize-html';

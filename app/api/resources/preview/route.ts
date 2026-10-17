@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { JSDOM } from 'jsdom';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 
 import { authOptions } from '@/lib/auth';
 import { sanitizeTextServer } from '@/lib/server/sanitize-html';

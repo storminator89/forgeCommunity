@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { useSession, signOut } from "next-auth/react"
+import { useSession } from "@/lib/sites-auth/react"
 import { useRouter } from "next/navigation"
 import {
   User,
@@ -27,10 +27,7 @@ export function UserNav() {
   const router = useRouter()
 
   const handleSignOut = async () => {
-    await signOut({
-      callbackUrl: '/login',
-      redirect: true
-    })
+    window.location.assign('/logout')
   }
 
   const getInitials = (name: string | null | undefined) => {

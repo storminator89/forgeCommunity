@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { Prisma, type SpaceMissionContributionKind } from '@prisma/client';
+import { Prisma, type SpaceMissionContributionKind } from '@/generated/prisma/client';
 import { createHash } from 'node:crypto';
 import { readOwnMissionBookmark } from '@/lib/server/space-mission-bookmarks';
 import { getReadableSpace, type SpaceAccess } from '@/lib/server/space-access';

@@ -2,7 +2,7 @@
 import { GET as getCatalog, POST as createSkill } from '@/app/api/skills/route';
 import { GET as getOwnSkills, POST as attachSkill } from '@/app/api/user/skills/route';
 import { PUT as updateSkill, DELETE as removeSkill } from '@/app/api/user/skills/[id]/route';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 import prisma from '@/lib/prisma';
 import { rmSync } from 'node:fs';
 

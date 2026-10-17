@@ -2,7 +2,7 @@
 import prisma from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { DriverAdapterError } from '@prisma/driver-adapter-utils';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 import { GET, POST, DELETE } from '@/app/api/events/[id]/rsvp/route';
 import { PUT, DELETE as deleteEvent } from '@/app/api/events/[id]/route';
 import { POST as openNotice } from '@/app/api/notifications/[id]/open/route';

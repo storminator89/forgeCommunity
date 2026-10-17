@@ -6,7 +6,7 @@ import { AppShell, AppHeader } from '@/components/app-shell';
 import { AdminHeader } from '@/components/admin/AdminHeader';
 import { UserNav } from '@/components/user-nav';
 import { isNavigationActive } from '@/lib/navigation';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/lib/sites-auth/react';
 
 const push = jest.fn();
 jest.mock('next/navigation', () => ({ usePathname: () => '/courses/example/contents', useRouter: () => ({ push }) }));

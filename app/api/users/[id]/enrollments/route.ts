@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "../../../auth/[...nextauth]/options";
+import { getServerSession } from "@/lib/sites-auth/server";
+import { authOptions } from '@/lib/auth';
 import { activeCourseContentWhere, publishedCourseWhere } from '@/lib/server/published-course';
 import { hasCurrentAdminReadAccess } from '@/lib/server/read-access';
 import { contentTransaction } from '@/app/api/courses/[courseId]/contents/content-mutations';

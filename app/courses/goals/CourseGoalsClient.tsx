@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/lib/sites-auth/react';
 import Link from 'next/link';
 import { AppHeader, AppShell } from '@/components/app-shell';
 import { Sidebar } from '@/components/Sidebar';

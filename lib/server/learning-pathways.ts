@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@/generated/prisma/client';
 import { courseSqlTable } from '@/lib/server/course-sql-tables';
 import { getDatabaseProvider } from '@/lib/database-provider';
 

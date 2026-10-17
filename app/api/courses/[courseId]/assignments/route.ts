@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth/next'
-import { authOptions } from '@/app/api/auth/[...nextauth]/options'
+import { getServerSession } from '@/lib/sites-auth/server'
+import { authOptions } from '@/lib/auth'
 import { AssignmentError, readAssignmentQueue } from '@/lib/server/course-assignments'
 
 type Context = { params: Promise<{ courseId: string }> }

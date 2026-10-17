@@ -18,7 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import axios from 'axios';
-import { ResourceType } from '@prisma/client';
+import { ResourceType } from '@/generated/prisma/client';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { Sidebar } from "@/components/Sidebar";

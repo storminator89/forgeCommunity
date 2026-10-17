@@ -7,7 +7,7 @@ import { AppShell, AppHeader } from '@/components/app-shell';
 import { PageState } from '@/components/page-state';
 import { useState, useEffect, useRef, use } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/lib/sites-auth/react';
 import Image from 'next/image';
 import { Sidebar } from "@/components/Sidebar";
 import { UserNav } from "@/components/user-nav";

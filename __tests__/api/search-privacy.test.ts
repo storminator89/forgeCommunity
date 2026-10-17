@@ -1,7 +1,7 @@
 import { GET } from '@/app/api/search/route';
 import prisma from '@/lib/prisma';
 import { containsInsensitive } from '@/lib/server/database-query';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/sites-auth/server';
 import { VERIFIED_COURSE_BADGE } from '@/lib/course-achievement-badge';
 
 jest.mock('next/server', () => ({

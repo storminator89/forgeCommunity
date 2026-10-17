@@ -1,6 +1,6 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/lib/sites-auth/react';
 import PathwaysClient from '@/app/courses/pathways/PathwaysClient';
 import LearningPathwaysAdmin from '@/app/admin/learning-pathways/LearningPathwaysAdmin';
 import type { MemberPathway } from '@/app/courses/pathways/pathway-types';

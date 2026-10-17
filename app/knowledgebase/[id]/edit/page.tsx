@@ -13,7 +13,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/lib/sites-auth/react';
 import { useParams } from 'next/navigation';
 import { AlertCircle, ArrowLeft, Upload } from 'lucide-react';
 import { Alert, AlertDescription } from "@/components/ui/alert";

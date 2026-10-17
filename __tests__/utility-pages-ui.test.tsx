@@ -1,6 +1,6 @@
 import { StrictMode } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
-import { signOut } from 'next-auth/react';
+import { signOut } from '@/lib/sites-auth/react';
 import About from '@/app/about/page';
 import LogoutPage from '@/app/logout/page';
 

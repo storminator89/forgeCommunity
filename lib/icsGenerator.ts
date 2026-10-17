@@ -1,4 +1,4 @@
-import type { Event } from '@prisma/client';
+import type { Event } from '@/generated/prisma/client';
 import { DateTime } from 'luxon';
 import { eventWallTime } from '@/lib/event-time';
 

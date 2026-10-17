@@ -2,7 +2,7 @@ import '@testing-library/jest-dom';
 import React, { type ComponentProps } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/lib/sites-auth/react';
 import { useSearchParams } from 'next/navigation';
 import MissionOverviewPage from '@/app/community/missions/page';
 import { SpaceMissionDetail } from '@/components/spaces/SpaceMissionDetail';

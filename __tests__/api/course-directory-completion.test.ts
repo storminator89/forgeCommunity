@@ -2,7 +2,7 @@
 import { GET } from '@/app/api/courses/route';
 import { courseContentRevision } from '@/lib/server/course-progress';
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/sites-auth/server';
 
 jest.mock('next/server', () => ({ NextResponse: class extends Response {
   static json(value: unknown, init?: ResponseInit) { return new Response(JSON.stringify(value), init); }

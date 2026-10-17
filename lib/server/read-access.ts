@@ -1,6 +1,6 @@
 import 'server-only';
 
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from '@/generated/prisma/client';
 
 /** A session may have been validated before a committed role change. */
 export async function hasCurrentAdminReadAccess(db: Pick<Prisma.TransactionClient, 'user'>,

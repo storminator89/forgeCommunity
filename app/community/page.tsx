@@ -9,8 +9,8 @@ import { useState, useEffect, useRef, useSyncExternalStore } from 'react'
 import Link from 'next/link'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { PageState } from '@/components/page-state'
-import type { Session } from 'next-auth'
-import { useSession } from 'next-auth/react'
+import type { Session } from '@/lib/sites-auth/server'
+import { useSession } from '@/lib/sites-auth/react'
 import { Button } from "@/components/ui/button"
 import { UserNav } from "@/components/user-nav"
 import { Sidebar } from "@/components/Sidebar"

@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
 import { fireEvent, render, screen } from '@testing-library/react'
-import { useSession } from 'next-auth/react'
+import { useSession } from '@/lib/sites-auth/react'
 import CourseContentsPage from '@/app/courses/[courseId]/contents/page'
 
 const mockRouter = { push: jest.fn(), replace: jest.fn() }

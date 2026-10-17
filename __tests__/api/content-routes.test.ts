@@ -2,7 +2,7 @@
 import { PUT as updateArticle } from '@/app/api/articles/[id]/route';
 import { GET as legacyEventICS, PUT as updateEvent } from '@/app/api/events/[id]/route';
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 import { getSafeNavigationUrl } from '@/lib/security';
 
 jest.mock('next/server', () => {

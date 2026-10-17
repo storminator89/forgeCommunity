@@ -6,7 +6,7 @@ import { DELETE as deleteCourse } from '@/app/api/courses/[courseId]/route'
 import { contentVersionToken, courseContentRevision, gradeQuiz, publicQuiz } from '@/lib/server/course-progress'
 import { parseQuizContent } from '@/app/courses/[courseId]/contents/types'
 import prisma from '@/lib/prisma'
-import { getServerSession } from 'next-auth/next'
+import { getServerSession } from '@/lib/sites-auth/server'
 
 jest.mock('next/server', () => {
   class MockNextResponse extends Response {

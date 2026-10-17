@@ -5,7 +5,7 @@ import { contentVersionToken, courseContentRevision } from '@/lib/server/course-
 import { goalDeadline, pausedCalendarDays, shiftGoalDeadline } from '@/lib/learning-goal-clock';
 import { rmSync } from 'node:fs';
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 
 jest.mock('next/server', () => {
   class MockNextResponse extends Response {

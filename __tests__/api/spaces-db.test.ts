@@ -1,7 +1,7 @@
 /** @jest-environment node */
 
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/sites-auth/server';
 import { GET as listSpaces, POST as createSpace } from '@/app/api/spaces/route';
 import { GET as getSpace } from '@/app/api/spaces/[spaceId]/route';
 import { POST as joinSpace, DELETE as leaveSpace } from '@/app/api/spaces/[spaceId]/join/route';

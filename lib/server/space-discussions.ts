@@ -1,6 +1,6 @@
 import 'server-only';
 
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from '@/generated/prisma/client';
 import { validSpaceId } from './space-access';
 
 export const SPACE_PAGE_SIZE = 30;

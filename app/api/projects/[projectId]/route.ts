@@ -2,7 +2,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { getServerSession } from 'next-auth/next'
+import { getServerSession } from '@/lib/sites-auth/server'
 import { authOptions } from '@/lib/auth'
 import { deleteUploadedImage, ImageUploadValidationError, saveImageUpload } from '@/lib/server/image-upload'
 import { sanitizeRichHtmlServer, sanitizeTextServer } from '@/lib/server/sanitize-html'

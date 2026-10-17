@@ -1,6 +1,6 @@
 import { POST, DELETE } from '@/app/api/users/[id]/follow/route';
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 
 jest.mock('next/server', () => ({
   NextResponse: class extends Response {

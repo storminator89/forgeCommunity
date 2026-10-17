@@ -1,10 +1,10 @@
 import { TextEncoder } from 'node:util'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { getProviders, signIn } from 'next-auth/react'
+import { getProviders, signIn } from '@/lib/sites-auth/react'
 import LoginPage from '@/app/login/page'
 import RegisterPage from '@/app/register/page'
 import LogoutPage from '@/app/logout/page'
-import { signOut } from 'next-auth/react'
+import { signOut } from '@/lib/sites-auth/react'
 import { firstActionSnapshot, firstActionStorageKey } from '@/lib/new-member-first-action'
 
 const mockRouter = { push: jest.fn(), replace: jest.fn(), refresh: jest.fn() }

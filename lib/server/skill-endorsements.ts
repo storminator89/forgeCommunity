@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from '@/generated/prisma/client';
 
 // Call inside the same transaction that deletes the user, before cascade removes
 // their endorsement records. Legacy totals remain untouched.

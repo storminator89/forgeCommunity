@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/options';
+import { getServerSession } from '@/lib/sites-auth/server';
+import { authOptions } from '@/lib/auth';
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
 import { contentTransaction } from '@/app/api/courses/[courseId]/contents/content-mutations';
 import { reconcileUserRewards } from '@/lib/server/rewards';

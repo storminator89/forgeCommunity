@@ -11,7 +11,7 @@ jest.mock('@/lib/prisma', () => ({ __esModule: true, default: {
 jest.mock('@/lib/server/chat-unread', () => ({ getUnreadChannelIds: jest.fn() }));
 
 import { GET, POST } from '@/app/api/chat/channels/route';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 import prisma from '@/lib/prisma';
 import { getUnreadChannelIds } from '@/lib/server/chat-unread';
 

@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/lib/sites-auth/react';
 import Home from '@/app/page';
 import Community from '@/app/community/page';
 import JourneyClient from '@/app/courses/journey/JourneyClient';

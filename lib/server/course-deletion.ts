@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from '@/generated/prisma/client';
 import { revokeCourseRewards } from '@/lib/server/rewards';
 
 export async function deleteCourseDependencies(tx: Prisma.TransactionClient, courseIds: string[]) {

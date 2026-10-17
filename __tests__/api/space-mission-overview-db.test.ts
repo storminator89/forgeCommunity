@@ -2,7 +2,7 @@
 
 import prisma from '@/lib/prisma';
 import { Prisma, type Role, type SpaceVisibility } from '@prisma/client';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/sites-auth/server';
 import { dynamic, GET } from '@/app/api/space-missions/route';
 
 jest.setTimeout(30000);

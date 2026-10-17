@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { useSession } from 'next-auth/react'
+import { useSession } from '@/lib/sites-auth/react'
 import Community from '@/app/community/page'
 
 jest.mock('@/components/Sidebar', () => ({ Sidebar: () => null }))

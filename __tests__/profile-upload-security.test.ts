@@ -24,7 +24,7 @@ jest.mock('@/lib/server/request-body', () => ({
   requestWithBodyLimit: jest.fn(async (request: Request) => request),
 }));
 
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 import { DELETE, POST } from '@/app/api/users/[id]/upload/route';
 import { deleteUploadedImage, saveImageUpload } from '@/lib/server/image-upload';
 import prisma from '@/lib/prisma';

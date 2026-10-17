@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@/generated/prisma/client';
 import { DriverAdapterError } from '@prisma/driver-adapter-utils';
 import prisma from '@/lib/prisma';
 

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { Prisma } from '@prisma/client';
-import { authOptions } from '@/app/api/auth/[...nextauth]/options';
+import { getServerSession } from '@/lib/sites-auth/server';
+import { Prisma } from '@/generated/prisma/client';
+import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { goalDeadline, LEARNING_GOAL_DURATIONS, LEARNING_GOAL_TARGETS, pausedCalendarDays, shiftGoalDeadline, validGoalTimezone } from '@/lib/learning-goal-clock';
 import { privateGoalView } from '@/lib/server/learning-goals';

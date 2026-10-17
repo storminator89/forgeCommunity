@@ -1,8 +1,8 @@
 import { PUT as putPublicProfile } from '@/app/api/users/[id]/profile/route';
 import { PUT as putSocial } from '@/app/api/users/[id]/social/route';
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
-import { getServerSession as getNextAuthSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
+import { getServerSession as getNextAuthSession } from '@/lib/sites-auth/server';
 
 jest.mock('next/server', () => ({
   NextResponse: class extends Response {

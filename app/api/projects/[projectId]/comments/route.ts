@@ -2,7 +2,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { getServerSession } from 'next-auth/next'
+import { getServerSession } from '@/lib/sites-auth/server'
 import { authOptions } from '@/lib/auth'
 import { readJsonObject, readPage, requestErrorResponse } from '@/lib/server/api-input'
 import { sanitizeTextServer } from '@/lib/server/sanitize-html'

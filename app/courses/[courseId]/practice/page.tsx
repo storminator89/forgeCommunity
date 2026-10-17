@@ -1,7 +1,7 @@
 'use client'
 
 import { use, useEffect } from 'react'
-import { useSession } from 'next-auth/react'
+import { useSession } from '@/lib/sites-auth/react'
 import { useRouter } from 'next/navigation'
 import { PracticeAuthorWorkspace } from './PracticeAuthorWorkspace'
 

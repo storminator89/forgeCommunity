@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/lib/sites-auth/react';
 import Events from '@/app/events/page';
 import { eventApiFixture, participationFixture } from '../test-utils/event-participation';
 import type { EventParticipationState } from '@/components/events/participation-state';

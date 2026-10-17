@@ -6,7 +6,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { GET } from '@/app/api/chat/messages/route';
 import { GET as getChannels } from '@/app/api/chat/channels/route';
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 
 jest.mock('next/server', () => ({ NextResponse: class extends Response {
   static json(value: unknown, init?: ResponseInit) {

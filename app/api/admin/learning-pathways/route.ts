@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { Prisma } from '@prisma/client';
-import { authOptions } from '@/app/api/auth/[...nextauth]/options';
+import { getServerSession } from '@/lib/sites-auth/server';
+import { Prisma } from '@/generated/prisma/client';
+import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
 import { isSameOriginRequest } from '@/lib/server/auth-security';

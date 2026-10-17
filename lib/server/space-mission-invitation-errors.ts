@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@/generated/prisma/client';
 import { DriverAdapterError } from '@prisma/driver-adapter-utils';
 import { NextResponse } from 'next/server';
 import { requestErrorResponse } from '@/lib/server/api-input';

@@ -1,8 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 
-import { authOptions } from '@/app/api/auth/[...nextauth]/options';
+import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { getChatUploadOwnerId, getPrivateChatUploadPath } from '@/lib/server/image-upload';
 

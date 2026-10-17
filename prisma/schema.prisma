@@ -1,5 +1,7 @@
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+  runtime  = "cloudflare"
 }
 
 datasource db {
@@ -167,6 +169,7 @@ model User {
   followers          Follow[]        @relation("Following")
   following          Follow[]        @relation("Follower")
   userSettings       UserSettings?
+  siteAdminBootstrapClaim SiteAdminBootstrap?
   enrollments        Enrollment[]
   chatMemberships    ChatMember[]
   articles           Article[]
@@ -191,6 +194,13 @@ model User {
   solutionDecisions  AcceptedSolutionChange[] @relation("SolutionActor")
   courseQuestions    CourseQuestion[] @relation("CourseQuestionAuthor")
   courseAnswers      CourseAnswer[] @relation("CourseAnswerAuthor")
+}
+
+model SiteAdminBootstrap {
+  id        String   @id @default("initial")
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  claimedAt DateTime @default(now())
 }
 
 model UserSettings {

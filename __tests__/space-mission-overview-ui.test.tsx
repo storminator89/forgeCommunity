@@ -1,7 +1,7 @@
 import { StrictMode, type ComponentProps, type ReactNode } from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/lib/sites-auth/react';
 import { useSearchParams } from 'next/navigation';
 import MissionOverviewPage from '@/app/community/missions/page';
 import type { SpaceMissionOverview } from '@/components/spaces/mission-api';

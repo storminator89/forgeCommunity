@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 import { authOptions } from '@/lib/auth';
 import { readAsAdmin } from '@/lib/server/admin-read';
 import { startOfYear, endOfYear, eachMonthOfInterval, format } from 'date-fns';
@@ -21,7 +21,7 @@ export async function GET() {
     const endOfCurrentYear = endOfYear(now);
 
     const result = await readAsAdmin(session.user.id, async tx => {
-      // Counts and recent activity share the current administrator's snapshot.
+      // The helper checks current admin authority before and after these reads.
       const [totalUsers, totalCourses, totalEvents, totalPosts] = await Promise.all([
         tx.user.count(),
         tx.course.count(),
@@ -98,7 +98,7 @@ export async function GET() {
       activities
     }), {
       status: 200,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' },
     });
   } catch (error) {
     console.error('Error fetching dashboard stats:', error);

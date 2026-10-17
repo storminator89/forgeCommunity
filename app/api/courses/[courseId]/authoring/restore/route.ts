@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/options';
+import { getServerSession } from '@/lib/sites-auth/server';
+import { authOptions } from '@/lib/auth';
 import { readJsonObject } from '@/lib/server/api-input';
 import { restoreDraft } from '@/lib/server/course-authoring';
 import { authoringFailure } from '../errors';

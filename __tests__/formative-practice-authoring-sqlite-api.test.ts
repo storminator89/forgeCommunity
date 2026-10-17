@@ -12,7 +12,7 @@ import { GET as history } from '@/app/api/courses/[courseId]/practice/authoring/
 import { POST as previewPins } from '@/app/api/courses/[courseId]/practice/authoring/preview/route';
 import { credentialOverlapKey, normalizeOverlapText } from '@/lib/server/formative-practice';
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 
 jest.mock('next/server', () => ({ NextResponse: class extends Response {
   static json(value: unknown, init?: ResponseInit) { return new Response(JSON.stringify(value),

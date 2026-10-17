@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { Prisma, SpaceVisibility } from '@prisma/client';
+import { Prisma, SpaceVisibility } from '@/generated/prisma/client';
 import { DriverAdapterError } from '@prisma/driver-adapter-utils';
 import { createHash } from 'node:crypto';
 import { NextResponse } from 'next/server';

@@ -1,3 +1,14 @@
+> **Experimental Cloudflare / Sites branch**
+>
+> You are viewing `cloudflare-sites`, an optional, partial Workers/D1 adaptation.
+> For the standard self-hosted setup and first-time use, select
+> [`main`](https://github.com/storminator89/forgeCommunity/tree/main).
+> This branch requires its own Sites project and D1 `DB` binding. Read the
+> [Cloudflare / Sites setup and limitations](docs/CLOUDFLARE_SITES.md) before
+> installing. The product gallery below describes upstream features; it is not
+> a compatibility guarantee for this branch. The Docker, SQLite and PostgreSQL
+> setup sections below apply to main.
+
 # ForgeCommunity
 
 **Learn together. Build something. Pass it on.**

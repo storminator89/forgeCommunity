@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/lib/sites-auth/react';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { ArrowUp, Award, Calendar, Github, Globe, Linkedin, Mail, MessageSquare, Settings, Star, Twitter } from 'lucide-react';

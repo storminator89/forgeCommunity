@@ -5,7 +5,7 @@ import { HeroBanner, PageContainer } from '@/components/discovery';
 import { GraduationCap } from 'lucide-react';
 import { AppShell, AppHeader } from '@/components/app-shell';
 import { useState, useEffect, useRef } from 'react';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/lib/sites-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';

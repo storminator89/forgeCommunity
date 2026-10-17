@@ -2,7 +2,7 @@
 
 /* Hallmark · pre-emit critique: P4 H4 E4 S5 R5 V4. Extends Forge's existing course workbench and tokens. */
 import { use } from 'react';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/lib/sites-auth/react';
 import { CourseAnalytics } from './CourseAnalytics';
 
 export default function CourseAnalyticsPage({ params }: { params: Promise<{ courseId: string }> }) {

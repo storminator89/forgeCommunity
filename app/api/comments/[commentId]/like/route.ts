@@ -2,7 +2,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma' // Sicherstellen, dass dies korrekt ist
-import { getServerSession } from 'next-auth/next'
+import { getServerSession } from '@/lib/sites-auth/server'
 import { authOptions } from '@/lib/auth' // Import von lib/auth.ts
 
 export async function POST(req: NextRequest, props: { params: Promise<{ commentId: string }> }) {

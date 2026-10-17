@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '../../../auth/[...nextauth]/options'
+import { getServerSession } from '@/lib/sites-auth/server'
+import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input'
 import { publicProfileInput } from '@/lib/server/profile-input'

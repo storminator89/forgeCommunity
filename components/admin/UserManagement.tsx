@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useSession } from 'next-auth/react'
+import { useSession } from '@/lib/sites-auth/react'
 import { useRouter } from 'next/navigation'
 import { Award, MoreHorizontal, RefreshCw, Search, UserPlus, Users } from 'lucide-react'
 import AddUserDialog from './AddUserDialog'

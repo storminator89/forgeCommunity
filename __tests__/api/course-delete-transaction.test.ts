@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 import { DELETE } from '@/app/api/courses/[courseId]/route';
 import { deleteCourseDependencies } from '@/lib/server/course-deletion';
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 
 jest.mock('next/server', () => {
   class MockNextResponse extends Response {

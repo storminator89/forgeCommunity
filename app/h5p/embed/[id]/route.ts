@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/options';
+import { getServerSession } from '@/lib/sites-auth/server';
+import { authOptions } from '@/lib/auth';
 import { authorizedH5PContent, createH5PAssetToken, h5pAppOrigin } from '@/lib/server/h5p-access';
 import { H5PValidationError } from '@/lib/server/h5p-archive';
 import { readH5PAsset } from '@/lib/server/h5p-storage';

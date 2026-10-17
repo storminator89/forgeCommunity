@@ -1,7 +1,7 @@
 'use client'
 
 import { use, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { useSession } from 'next-auth/react'
+import { useSession } from '@/lib/sites-auth/react'
 import type { CourseQaLessonContextPair } from '@/lib/course-qa-context-contract'
 import { CourseQaWorkspace } from './CourseQaWorkspace'
 

@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/sites-auth/server';
 import { authOptions } from '@/lib/auth';
 import { getReadableSpace, readableSpaceReplyWhere } from '@/lib/server/space-access';
 import { normalizeSpaceReply, spaceReplySelect } from '@/lib/server/space-discussions';

@@ -4,7 +4,7 @@ import { constants } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { lstat, mkdir, open, realpath, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@/generated/prisma/client';
 import prisma from '@/lib/prisma';
 import { readAndNormalizeImage } from '@/lib/server/image-upload';
 

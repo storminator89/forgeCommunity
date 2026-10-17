@@ -17,7 +17,7 @@ import { POST as enroll } from '@/app/api/courses/[courseId]/enrollment/route';
 import { contentVersionToken } from '@/lib/server/course-progress';
 import { courseApprovalFingerprint } from '@/lib/server/rewards';
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 
 jest.mock('next/server', () => ({
   NextResponse: class extends Response {

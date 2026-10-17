@@ -1,6 +1,6 @@
 import { GET, POST } from '@/app/api/projects/route'
 import prisma from '@/lib/prisma'
-import { getServerSession } from 'next-auth/next'
+import { getServerSession } from '@/lib/sites-auth/server'
 import { authOptions } from '@/lib/auth'
 
 // Mock the dependencies

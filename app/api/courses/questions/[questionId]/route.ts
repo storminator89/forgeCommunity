@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/options';
+import { getServerSession } from '@/lib/sites-auth/server';
+import { authOptions } from '@/lib/auth';
 import { readJsonObject } from '@/lib/server/api-input';
 import { getBankQuestionHistory, reviseBankQuestion } from '@/lib/server/question-bank';
 import { privateBankHeaders, questionBankFailure } from '../errors';

@@ -20,8 +20,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Book, File, Video, Link as LinkIcon, Search, Plus, MoreVertical, Edit, Trash2, Copy, Check, ArrowUpRight } from 'lucide-react';
 import axios from 'axios';
-import { useSession } from 'next-auth/react';
-import type { Session } from 'next-auth';
+import { useSession } from '@/lib/sites-auth/react';
+import type { Session } from '@/lib/sites-auth/server';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useInView } from 'react-intersection-observer';

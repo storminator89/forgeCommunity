@@ -29,7 +29,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { useChat } from '@/contexts/ChatContext'
-import { useSession } from 'next-auth/react'
+import { useSession } from '@/lib/sites-auth/react'
 import { Hash, Send, Plus, Pencil, Check, X, Trash2, Image as ImageIcon, PanelLeft } from 'lucide-react'
 import { format } from 'date-fns'
 import { de } from 'date-fns/locale'

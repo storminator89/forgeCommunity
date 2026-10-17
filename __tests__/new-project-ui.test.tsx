@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { useSession } from 'next-auth/react'
+import { useSession } from '@/lib/sites-auth/react'
 import NewProjectPage from '@/app/projects/new/page'
 
 const mockRouter = { push: jest.fn(), replace: jest.fn() }

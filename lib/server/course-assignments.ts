@@ -1,7 +1,7 @@
 import 'server-only'
 
 import { createHash, randomUUID } from 'node:crypto'
-import { Prisma } from '@prisma/client'
+import { Prisma } from '@/generated/prisma/client'
 import { courseSqlTable } from '@/lib/server/course-sql-tables'
 import prisma from '@/lib/prisma'
 import { MAX_ASSIGNMENT_FEEDBACK, MAX_ASSIGNMENT_RESPONSE, parseAssignmentContent } from '@/app/courses/[courseId]/contents/assignment-content'

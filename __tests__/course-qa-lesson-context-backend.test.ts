@@ -1,7 +1,7 @@
 /** @jest-environment node */
 import { rmSync } from 'node:fs';
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 import { GET as listHttp, POST as createHttp } from '@/app/api/courses/[courseId]/qa/route';
 import { POST as probeHttp } from '@/app/api/courses/[courseId]/qa/revalidate/route';
 import { createCourseQuestion, createCourseAnswer, hideCourseQuestion, listCourseQuestions,

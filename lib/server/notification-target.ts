@@ -1,6 +1,6 @@
 import 'server-only';
 
-import type { Notification } from '@prisma/client';
+import type { Notification } from '@/generated/prisma/client';
 import prisma from '@/lib/prisma';
 import { resolveMissionInvitationTargets } from '@/lib/server/space-mission-invitations';
 

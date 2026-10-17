@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { getServerSession } from "next-auth/next";
-import { Prisma } from '@prisma/client';
-import { authOptions } from "../../auth/[...nextauth]/options";
+import { getServerSession } from "@/lib/sites-auth/server";
+import { Prisma } from '@/generated/prisma/client';
+import { authOptions } from '@/lib/auth';
 import { deleteCourseDependencies } from '@/lib/server/course-deletion';
-import { hasCurrentAdminReadAccess } from '@/lib/server/read-access';
-import { contentTransaction } from './contents/content-mutations';
+import { courseLearningDatabase, d1CourseDetail, readD1CourseSnapshot } from '@/lib/server/d1-course-learning';
+import { CoursePathError } from '@/lib/server/course-path';
 
 class CourseHasCertificatesError extends Error {}
 class CourseNotFoundError extends Error {}
@@ -29,40 +29,10 @@ export async function GET(
       return NextResponse.json({ error: 'Course ID is required' }, { status: 400 });
     }
 
-    const result = await contentTransaction(async tx => {
-      const course = await tx.course.findUnique({
-        where: { id: courseId },
-        select: { id: true, title: true, description: true, createdAt: true, updatedAt: true,
-          instructorId: true, activePublicationId: true },
-      });
-      if (!course) return { status: 404 as const };
-      const account = await tx.user.findUnique({ where: { id: session.user.id }, select: { id: true } });
-      if (!account) return { status: 403 as const };
-      const canEdit = course.instructorId === session.user.id || await hasCurrentAdminReadAccess(tx, session.user);
-      if (!canEdit) {
-        // Guessing an unpublished course ID or retaining a stale enrollment
-        // must not reveal its staged metadata.
-        if (!course.activePublicationId) return { status: 404 as const };
-        const enrollment = await tx.enrollment.findUnique({
-          where: { userId_courseId: { userId: session.user.id, courseId } }, select: { id: true },
-        });
-        if (!enrollment) return { status: 403 as const };
-      }
-      return { status: 200 as const, course, canEdit };
-    });
-    if (result.status !== 200) return NextResponse.json({ error: result.status === 404 ? 'Course not found' : 'Access denied to this course' }, { status: result.status });
-    const { course, canEdit } = result;
-
-    return NextResponse.json({
-      id: course.id,
-      name: course.title,
-      canEdit,
-      description: course.description,
-      createdAt: course.createdAt,
-      updatedAt: course.updatedAt,
-      activePublicationId: course.activePublicationId,
-    }, { headers: { 'Cache-Control': 'private, no-store' } });
+    const snapshot = await readD1CourseSnapshot(courseLearningDatabase(), session.user, courseId);
+    return NextResponse.json(d1CourseDetail(snapshot), { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
+    if (error instanceof CoursePathError) return NextResponse.json({ error: error.message }, { status: error.status });
     return NextResponse.json(
       {
         error: 'Failed to fetch course',

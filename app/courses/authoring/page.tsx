@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useSession } from 'next-auth/react'
+import { useSession } from '@/lib/sites-auth/react'
 import Link from 'next/link'
 import { BookOpen, ChevronRight, Plus } from 'lucide-react'
 import { AppHeader, AppShell } from '@/components/app-shell'

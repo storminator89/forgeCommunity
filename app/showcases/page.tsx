@@ -22,8 +22,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Briefcase, Search, ThumbsUp, MessageSquare, Plus, Edit, Trash, LayoutGrid, List, ArrowUpRight, X } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { useSession } from 'next-auth/react';
-import type { Session } from 'next-auth';
+import { useSession } from '@/lib/sites-auth/react';
+import type { Session } from '@/lib/sites-auth/server';
 import { Editor } from "@/components/Editor";
 import { sanitizeTextPreview } from '@/lib/sanitize-html';
 

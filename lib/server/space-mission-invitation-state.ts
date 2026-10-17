@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@/generated/prisma/client';
 import { DriverAdapterError } from '@prisma/driver-adapter-utils';
 import { isUserEmailConflict } from '@/lib/server/database-conflicts';
 import { SpaceApiError, spaceTransaction } from '@/lib/server/space-api';

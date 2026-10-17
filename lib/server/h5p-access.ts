@@ -2,7 +2,7 @@ import 'server-only';
 
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import prisma from '@/lib/prisma';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@/generated/prisma/client';
 import { H5PValidationError } from './h5p-archive';
 import { validH5PId } from './h5p-storage';
 import { assertCurrentPrerequisites, CoursePathError } from './course-prerequisites';
@@ -100,8 +100,8 @@ export async function authorizedH5PContent(id: string, user: H5PUser, origin?: s
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
-/** Existing course references grant read access, never permission to invent a new reference. */
-export async function assertCanAttachH5P(userId: string, role: string | null | undefined, source: string, origin?: string, db: Pick<Prisma.TransactionClient, 'h5PContent' | 'user'> = prisma) {
+/** Pure local-reference parser shared by D1 mutation fences and package access. */
+export function h5pAttachmentId(source: string, origin?: string): string | undefined {
   let id: string | undefined;
   if (/^[A-Za-z0-9_-]{1,80}$/.test(source)) id = source;
   else {
@@ -115,6 +115,12 @@ export async function assertCanAttachH5P(userId: string, role: string | null | u
       id = match[1];
     }
   }
+  return id;
+}
+
+/** Existing course references grant read access, never permission to invent a new reference. */
+export async function assertCanAttachH5P(userId: string, role: string | null | undefined, source: string, origin?: string, db: Pick<Prisma.TransactionClient, 'h5PContent' | 'user'> = prisma) {
+  const id = h5pAttachmentId(source, origin);
   if (!id) return; // Remote embeds retain the existing safe URL policy.
   const content = await db.h5PContent.findUnique({ where: { id }, select: { userId: true } });
   if (!content) throw new H5PValidationError('Der lokale H5P-Inhalt wurde nicht importiert.', 400);

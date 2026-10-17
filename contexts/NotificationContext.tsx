@@ -2,7 +2,7 @@
 'use client'
 
 import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/lib/sites-auth/react';
 import { NotificationType } from '@/types/notifications';
 
 interface Notification {

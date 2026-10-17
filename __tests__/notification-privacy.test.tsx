@@ -1,6 +1,6 @@
 import { render, screen, waitFor, act } from '@testing-library/react';
 import { NotificationProvider, useNotifications } from '@/contexts/NotificationContext';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/lib/sites-auth/react';
 
 jest.mock('next-auth/react', () => ({ useSession: jest.fn() }));
 const mockSession = jest.mocked(useSession);

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/lib/sites-auth/react';
 import { ArrowUpRight, BookOpen, Briefcase, Calendar, GraduationCap, MessageSquare, Users } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { ForgeWorkbench } from '@/components/landing/ForgeWorkbench';

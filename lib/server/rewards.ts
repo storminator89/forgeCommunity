@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { createHash } from 'node:crypto';
-import { Prisma, type RewardChangeReason } from '@prisma/client';
+import { Prisma, type RewardChangeReason } from '@/generated/prisma/client';
 import { getQuizValidationError } from '@/app/courses/[courseId]/contents/types';
 import { completionState, contentQuiz, courseContentRevision, courseLeaves, isQuizLikeContent } from '@/lib/server/course-progress';
 import { VERIFIED_COURSE_BADGE } from '@/lib/course-achievement-badge';

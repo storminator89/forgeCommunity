@@ -9,7 +9,7 @@ import { GET as readAnalytics } from '@/app/api/courses/[courseId]/analytics/rou
 import { GET as exportAnalytics } from '@/app/api/courses/[courseId]/analytics/export/route';
 import { contentVersionToken } from '@/lib/server/course-progress';
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 
 jest.mock('next/server', () => ({
   NextResponse: class extends Response {

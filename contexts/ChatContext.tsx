@@ -2,8 +2,8 @@
 'use client'
 
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, ReactNode } from 'react';
-import type { Session } from 'next-auth';
-import { useSession } from 'next-auth/react';
+import type { Session } from '@/lib/sites-auth/server';
+import { useSession } from '@/lib/sites-auth/react';
 import { ChatMessage, ChatChannel, CreateChannelInput, EditMessageInput } from '@/types/chat';
 import { BROWSER_CHAT_ALERT_PREFERENCE_EVENT, type BrowserChatAlertPreference } from '@/lib/browser-chat-alerts';
 

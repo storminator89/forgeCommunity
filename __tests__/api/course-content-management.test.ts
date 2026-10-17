@@ -7,7 +7,7 @@ import { groupCourseContents } from '@/lib/server/group-course-contents'
 import { publicationDigest, type CoursePayload, type DraftNode } from '@/lib/server/course-authoring'
 import prisma from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
-import { getServerSession } from 'next-auth/next'
+import { getServerSession } from '@/lib/sites-auth/server'
 
 jest.mock('next/server', () => ({ NextResponse: { json: (body: unknown, init?: ResponseInit) => new Response(JSON.stringify(body), init) } }))
 jest.mock('next-auth/next', () => ({ getServerSession: jest.fn() }))

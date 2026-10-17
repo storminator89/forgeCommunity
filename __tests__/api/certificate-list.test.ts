@@ -1,6 +1,6 @@
 import { GET } from '@/app/api/user/certificates/route'
 import prisma from '@/lib/prisma'
-import { getServerSession } from 'next-auth/next'
+import { getServerSession } from '@/lib/sites-auth/server'
 
 jest.mock('next/server', () => {
   class MockNextResponse extends Response {

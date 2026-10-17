@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@/generated/prisma/client';
 import prisma from '@/lib/prisma';
 import { sanitizeCourseTextContentServer, sanitizeTextServer } from '@/lib/server/sanitize-html';
 import { parseQuizContent } from '@/app/courses/[courseId]/contents/types';

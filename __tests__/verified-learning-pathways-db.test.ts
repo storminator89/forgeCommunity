@@ -8,7 +8,7 @@ import { courseApprovalFingerprint, courseQuizApprovalRevision, reconcileCourseR
 import { courseContentRevision } from '@/lib/server/course-progress';
 import { deleteCourseDependencies } from '@/lib/server/course-deletion';
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 import { Prisma } from '@prisma/client';
 
 jest.mock('next/server', () => ({ NextResponse: class extends Response {

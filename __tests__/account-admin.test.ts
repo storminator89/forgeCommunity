@@ -1,7 +1,7 @@
 import { POST } from '@/app/api/admin/users/route';
 import { DELETE, PUT } from '@/app/api/admin/users/[id]/route';
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/sites-auth/server';
 import bcrypt from 'bcrypt';
 
 jest.mock('next/server', () => ({

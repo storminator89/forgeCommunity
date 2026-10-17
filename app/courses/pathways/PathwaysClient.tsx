@@ -4,7 +4,7 @@
 /* Hallmark · genre: editorial · macrostructure: private course ledger · design-system: design.md · designed-as-app */
 
 import { useEffect, useRef, useState } from 'react';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/lib/sites-auth/react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, ArrowRight, BookOpen, Check, RefreshCw, ShieldCheck } from 'lucide-react';

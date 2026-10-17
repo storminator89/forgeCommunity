@@ -47,7 +47,7 @@ import EventForm from '@/components/EventForm';
 import { EventParticipation } from '@/components/events/EventParticipation';
 import { useToast } from '@/hooks/use-toast';
 import { sanitizeRichHtml } from '@/lib/sanitize-html';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/lib/sites-auth/react';
 import { eventCalendarDate, eventDateKey, eventIsTodayOrLater, eventStartTime } from '@/lib/event-time';
 
 

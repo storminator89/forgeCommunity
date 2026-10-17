@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile, rename, rm, realpath, lstat, open } from 'node:fs/promises';
 import path from 'node:path';
 import { constants } from 'node:fs';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@/generated/prisma/client';
 import prisma from '@/lib/prisma';
 import { H5PValidationError, H5PPackage, validateH5PPath } from './h5p-archive';
 

@@ -1,6 +1,6 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/lib/sites-auth/react';
 import CourseGoalsClient from '@/app/courses/goals/CourseGoalsClient';
 
 jest.mock('next-auth/react', () => ({ useSession: jest.fn() }));

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 import { authOptions } from '@/lib/auth';
 import { ParticipationError } from '@/lib/server/participation';
 import { EVENT_PARTICIPATION_HEADERS, joinEvent, leaveEvent, readEventParticipation } from '@/lib/server/event-participation';

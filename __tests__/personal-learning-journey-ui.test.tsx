@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/lib/sites-auth/react';
 import { setSparkVisible } from '@/hooks/useSparkVisibility';
 import JourneyClient from '@/app/courses/journey/JourneyClient';
 

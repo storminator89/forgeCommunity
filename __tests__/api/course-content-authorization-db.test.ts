@@ -12,7 +12,7 @@ import { contentVersionToken, courseContentRevision } from '@/lib/server/course-
 import { VERIFIED_COURSE_BADGE } from '@/lib/course-achievement-badge';
 import prisma from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 import { rmSync } from 'node:fs';
 
 jest.mock('next/server', () => ({ NextResponse: { json: (body: unknown, init?: ResponseInit) => new Response(JSON.stringify(body), init) } }));

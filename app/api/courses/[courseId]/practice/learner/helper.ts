@@ -1,6 +1,6 @@
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 import { NextResponse } from 'next/server';
-import { authOptions } from '@/app/api/auth/[...nextauth]/options';
+import { authOptions } from '@/lib/auth';
 import { PracticeError } from '@/lib/server/formative-practice';
 import { requestErrorResponse } from '@/lib/server/api-input';
 

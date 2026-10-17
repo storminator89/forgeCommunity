@@ -14,7 +14,7 @@ import { Prisma, type PrismaClient } from '@prisma/client';
 import { DriverAdapterError } from '@prisma/driver-adapter-utils';
 import { createHmac } from 'node:crypto';
 import { invitationTransaction } from '@/lib/server/space-mission-invitation-state';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/sites-auth/server';
 import { readInvitationPreference, setInvitationPreference, invitationCandidates,
   parseInvitationSend, sendMissionInvitation, listMissionInvitations, readMissionInvitation,
   decideMissionInvitation, resolveMissionInvitationTargets } from '@/lib/server/space-mission-invitations';

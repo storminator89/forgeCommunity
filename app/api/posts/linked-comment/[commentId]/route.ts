@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { communityCommentInclude, communityPostInclude, communityVisibility, isCurrentCommunityAdmin, normalizeCommunityComment, normalizeCommunityPost } from '@/lib/server/community-feed';

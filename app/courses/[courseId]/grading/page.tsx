@@ -1,7 +1,7 @@
 'use client'
 
 import { use } from 'react'
-import { useSession } from 'next-auth/react'
+import { useSession } from '@/lib/sites-auth/react'
 import { GradingClient } from './GradingClient'
 
 export default function GradingPage({ params }: { params: Promise<{ courseId: string }> }) {

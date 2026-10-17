@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { Prisma } from '@prisma/client';
-import { authOptions } from '@/app/api/auth/[...nextauth]/options';
+import { getServerSession } from '@/lib/sites-auth/server';
+import { Prisma } from '@/generated/prisma/client';
+import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { activeAssetContentIds, activeAssetReference, courseAssetUrl, readCourseAsset } from '@/lib/server/course-assets';
 import { completionState } from '@/lib/server/course-progress';

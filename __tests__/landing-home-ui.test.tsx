@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/lib/sites-auth/react';
 import Home from '@/app/page';
 import { renderToString } from 'react-dom/server.node';
 import { ForgeWorkbench } from '@/components/landing/ForgeWorkbench';

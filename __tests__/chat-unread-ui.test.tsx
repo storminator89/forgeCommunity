@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import ChatPage from '@/app/chat/page';
 import { useChat } from '@/contexts/ChatContext';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/lib/sites-auth/react';
 
 jest.mock('next-auth/react', () => ({ useSession: jest.fn() }));
 jest.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams() }));

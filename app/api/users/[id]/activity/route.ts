@@ -1,8 +1,8 @@
 import { PaginationError, readPagination } from '@/lib/server/pagination';
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '../../../auth/[...nextauth]/options'
+import { getServerSession } from '@/lib/sites-auth/server'
+import { authOptions } from '@/lib/auth'
 import { publishedCourseWhere } from '@/lib/server/published-course'
 
 export async function GET(

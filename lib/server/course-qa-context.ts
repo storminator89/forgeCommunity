@@ -1,6 +1,6 @@
 import 'server-only';
 
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from '@/generated/prisma/client';
 import type { CourseQaCurrentLessonContext, CourseQaLessonContextPair, CourseQaScope } from '@/lib/course-qa-context-contract';
 import { completionState } from '@/lib/server/course-progress';
 import { CoursePathError, coursePathAccess, publicationPathNodes } from '@/lib/server/course-path';

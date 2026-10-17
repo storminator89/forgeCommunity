@@ -3,7 +3,7 @@ import { POST as upload } from '@/app/api/h5p/upload/route';
 import { storeH5PPackage, readH5PAsset } from '@/lib/server/h5p-storage';
 import { validateH5PPackage } from '@/lib/server/h5p-archive';
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 import { Prisma } from '@prisma/client';
 import { zipSync, strToU8 } from 'fflate';
 import { mkdtemp, readdir, readFile, rename, rm } from 'node:fs/promises';

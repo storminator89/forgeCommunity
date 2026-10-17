@@ -56,6 +56,24 @@ describe('rich HTML URL policy', () => {
     expect(sanitized).not.toContain('data:image');
     expect(sanitized).toContain('/images/ok.png');
   });
+
+  it('keeps rich formatting while removing scripts, event handlers and encoded script URLs', () => {
+    const sanitized = sanitizeRichHtmlServer('<p class="intro" onclick="alert(1)"><strong>Hello</strong>' +
+      '<script>alert(2)</script><a href="java&#x73;cript:alert(3)">link</a>' +
+      '<img src="/images/ok.png" onerror="alert(4)"></p>');
+    expect(sanitized).toContain('<strong>Hello</strong>');
+    expect(sanitized).toContain('class="intro"');
+    expect(sanitized).toContain('src="/images/ok.png"');
+    expect(sanitized).not.toMatch(/script|onclick|onerror|alert\(/);
+  });
+
+  it('protects links opening another window and drops embedded documents', () => {
+    const sanitized = sanitizeRichHtmlServer('<a href="https://example.com" target="_blank">Docs</a>' +
+      '<iframe src="https://example.com">hidden frame</iframe><svg><script>alert(1)</script></svg>');
+    expect(sanitized).toContain('rel="noopener noreferrer"');
+    expect(sanitized).toContain('href="https://example.com"');
+    expect(sanitized).not.toMatch(/iframe|hidden frame|svg|script|alert\(/);
+  });
 });
 
 describe('server URL and request boundaries', () => {

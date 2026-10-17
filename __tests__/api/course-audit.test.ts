@@ -5,8 +5,8 @@ import { groupCourseContents } from '@/lib/server/group-course-contents'
 import { certificatePdfResponse } from '@/lib/server/certificate-pdf'
 import { deleteCourseDependencies } from '@/lib/server/course-deletion'
 import prisma from '@/lib/prisma'
-import { getServerSession as getNextSession } from 'next-auth/next'
-import { getServerSession } from 'next-auth'
+import { getServerSession as getNextSession } from '@/lib/sites-auth/server'
+import { getServerSession } from '@/lib/sites-auth/server'
 
 jest.mock('next/server', () => {
   class MockNextResponse extends Response {

@@ -1,6 +1,6 @@
 import { GET } from '@/app/api/users/[id]/activity/route';
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/sites-auth/server';
 import { readPagination } from '@/lib/server/pagination';
 
 jest.mock('next/server', () => ({ NextResponse: { json: (data: unknown, init?: ResponseInit) => new Response(JSON.stringify(data), init) } }));

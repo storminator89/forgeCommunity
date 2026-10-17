@@ -1,8 +1,8 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { Prisma } from '@prisma/client';
-import { getServerSession } from 'next-auth';
+import { Prisma } from '@/generated/prisma/client';
+import { getServerSession } from '@/lib/sites-auth/server';
 import prisma from '@/lib/prisma';
 import { authOptions } from '@/lib/auth';
 import { isSameOriginRequest } from '@/lib/server/auth-security';

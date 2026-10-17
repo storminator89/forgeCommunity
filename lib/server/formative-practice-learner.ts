@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { createHash, randomUUID } from 'node:crypto';
-import { Prisma, QuizConfidence } from '@prisma/client';
+import { Prisma, QuizConfidence } from '@/generated/prisma/client';
 import prisma from '@/lib/prisma';
 import { PracticeError } from '@/lib/server/formative-practice';
 import { isPracticeRetentionHealthy, practiceReviewIntervalMs, projectPracticeSelection, PRACTICE_SESSION_LIMIT } from '@/lib/formative-practice-availability';

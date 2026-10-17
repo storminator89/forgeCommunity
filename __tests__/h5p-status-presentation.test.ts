@@ -1,4 +1,4 @@
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 import { GET } from '@/app/h5p/embed/[id]/route';
 import { authorizedH5PContent } from '@/lib/server/h5p-access';
 import { readH5PAsset } from '@/lib/server/h5p-storage';

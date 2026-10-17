@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { useSession } from 'next-auth/react'
+import { useSession } from '@/lib/sites-auth/react'
 import Community from '@/app/community/page'
 import { CommunityPost, CommunityComment } from '@/lib/community-feed'
 import { CommentSection } from '@/components/community/CommentSection'

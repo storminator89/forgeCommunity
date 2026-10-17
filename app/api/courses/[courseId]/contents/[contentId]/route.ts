@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '../../../../auth/[...nextauth]/options';
+import { getServerSession } from '@/lib/sites-auth/server';
+import { authOptions } from '@/lib/auth';
 import { sanitizeTextServer } from '@/lib/server/sanitize-html';
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
 import { assertCanAttachH5P } from '@/lib/server/h5p-access';

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/options";
+import { getServerSession } from "@/lib/sites-auth/server";
+import { authOptions } from '@/lib/auth';
 import { requestWithBodyLimit, RequestBodyLimitError } from '@/lib/server/request-body';
 import { isSameOriginRequest } from '@/lib/server/auth-security';
 import { H5P_MAX_ARCHIVE_BYTES, H5PValidationError, validateH5PPackage } from '@/lib/server/h5p-archive';

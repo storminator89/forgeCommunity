@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useRouter } from 'next/navigation'
-import { useSession } from 'next-auth/react'
+import { useSession } from '@/lib/sites-auth/react'
 import { Check, ChevronLeft, ChevronRight, Edit, Eye, FileText, FolderInput, LockKeyhole, Plus, X } from 'lucide-react'
 import { AppShell, AppHeader } from '@/components/app-shell'
 import { Sidebar } from '@/components/Sidebar'

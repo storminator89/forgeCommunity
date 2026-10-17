@@ -1,6 +1,6 @@
 import 'server-only';
 
-import type { LearningGoal, Prisma } from '@prisma/client';
+import type { LearningGoal, Prisma } from '@/generated/prisma/client';
 import { pausedCalendarDays, shiftGoalDeadline } from '@/lib/learning-goal-clock';
 import { projectEffectiveCourseLeaves } from '@/lib/server/course-profile-completion';
 

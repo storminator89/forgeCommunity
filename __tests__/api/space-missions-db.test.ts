@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import { DriverAdapterError } from '@prisma/driver-adapter-utils';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/sites-auth/server';
 import { GET as listMissions, POST as createMission } from '@/app/api/spaces/[spaceId]/missions/route';
 import { GET as readMission, PATCH as closeMission } from '@/app/api/spaces/[spaceId]/missions/[missionId]/route';
 import { POST as joinMission, DELETE as leaveMission } from '@/app/api/spaces/[spaceId]/missions/[missionId]/participation/route';

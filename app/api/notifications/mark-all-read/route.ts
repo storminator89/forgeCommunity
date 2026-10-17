@@ -1,7 +1,7 @@
 // app/api/notifications/mark-all-read/route.ts
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/options';
+import { getServerSession } from '@/lib/sites-auth/server';
+import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 
 export async function POST(req: Request) {

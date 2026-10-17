@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '../auth/[...nextauth]/options';
+import { getServerSession } from '@/lib/sites-auth/server';
+import { authOptions } from '@/lib/auth';
 import { requestWithBodyLimit, RequestBodyLimitError } from '@/lib/server/request-body';
 import { assignmentPassedContentIds, courseContentRevision, courseLeaves } from '@/lib/server/course-progress';
 import { CoursePathError, prepareCoursePath, publicationPathNodes } from '@/lib/server/course-path';
@@ -9,6 +9,7 @@ import { publishedCourseWhere, activeCourseContentWhere } from '@/lib/server/pub
 import { publicationDigest, type CoursePayload } from '@/lib/server/course-authoring';
 import { sanitizeTextServer } from '@/lib/server/sanitize-html';
 import { contentTransaction } from './[courseId]/contents/content-mutations';
+import { createD1CourseDraft } from '@/lib/server/d1-course-drafts';
 
 const MAX_MULTIPART_REQUEST_BYTES = 5 * 1024 * 1024 + 256 * 1024;
 
@@ -33,7 +34,9 @@ export async function GET() {
   try {
     const session = await getServerSession(authOptions);
     const userId = session?.user?.id;
-    const formattedCourses = await contentTransaction(async tx => {
+    // This overview only reads. D1 cannot run interactive Prisma transactions.
+    const formattedCourses = await (async () => {
+    const tx = prisma;
     const courses = await tx.course.findMany({
       where: publishedCourseWhere,
       select: {
@@ -132,7 +135,7 @@ export async function GET() {
       canDelete: !!userId && (course.instructorId === userId || session?.user?.role === 'ADMIN'),
       imageUrl: course.imageUrl,
     }));
-    });
+    })();
 
     return NextResponse.json(formattedCourses, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
@@ -160,10 +163,14 @@ export async function POST(request: NextRequest) {
     const description = formData.get('description');
     const currency = formData.get('currency');
     const image = formData.get('image');
+    const requestId = formData.get('requestId');
     if (typeof title !== 'string' || !title.trim() || title.length > 300 ||
         typeof description !== 'string' || !description.trim() || description.length > 10_000 ||
         (currency !== null && typeof currency !== 'string') || (image !== null && !(image instanceof File))) {
       return NextResponse.json({ error: 'Invalid course fields' }, { status: 400 });
+    }
+    if (requestId !== null && (typeof requestId !== 'string' || !/^[A-Za-z0-9_-]{8,80}$/.test(requestId))) {
+      return NextResponse.json({ error: 'Ungültige Anfrage-ID.' }, { status: 400 });
     }
     // A newly created course is a private draft. The legacy upload writes to
     // public/, so require subsequent use of the authenticated course asset API.
@@ -190,21 +197,14 @@ export async function POST(request: NextRequest) {
     if (!staged.title || !staged.description) {
       return NextResponse.json({ error: 'Invalid course fields' }, { status: 400 });
     }
-    const newCourse = await prisma.$transaction(async tx => {
-      const course = await tx.course.create({
-        data: {
-          title: 'Unveröffentlichter Kurs', description: '', price,
-          currency: currency || null, maxStudents,
-          instructor: { connect: { id: session.user.id } },
-        },
-        include: { instructor: { select: { name: true } } },
-      });
-      await tx.courseDraft.create({ data: { courseId: course.id, revision: 0,
-        payload: JSON.stringify(staged), digest: publicationDigest(staged), lastEditorId: session.user.id } });
-      return course;
+    const result = await createD1CourseDraft({
+      actorId: session.user.id, requestId: requestId as string | null,
+      payload: JSON.stringify(staged), digest: publicationDigest(staged),
+      price, currency: currency || null, maxStudents,
     });
-
-    return NextResponse.json(newCourse, { status: 201, headers: { 'Cache-Control': 'private, no-store' } });
+    if (result.kind === 'forbidden') return NextResponse.json({ error: 'Kein Zugriff auf Kurse.' }, { status: 403 });
+    if (result.kind === 'conflict') return NextResponse.json({ error: 'Diese Anfrage gehört bereits zu einem anderen oder bearbeiteten Entwurf. Bitte öffne deine Kursentwürfe.' }, { status: 409 });
+    return NextResponse.json(result.course, { status: 201, headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     console.error('Failed to create course:', error);
     return NextResponse.json(

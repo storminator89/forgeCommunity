@@ -1,4 +1,4 @@
-import NextAuth from "next-auth"
+import NextAuth from "@/lib/sites-auth/server"
 
 declare module "next-auth" {
   interface Session {

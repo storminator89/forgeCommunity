@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '../auth/[...nextauth]/options';
-import { ResourceType } from '@prisma/client';
+import { getServerSession } from '@/lib/sites-auth/server';
+import { authOptions } from '@/lib/auth';
+import { ResourceType } from '@/generated/prisma/client';
 import { z } from 'zod';
 import prisma from '@/lib/prisma';
 import { containsInsensitive } from '@/lib/server/database-query';

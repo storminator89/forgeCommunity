@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@/generated/prisma/client';
 import { NextResponse } from 'next/server';
 import { readableSpaceWhere, resolveSpaceViewer } from '@/lib/server/space-access';
 import { spaceErrorResponse, spaceTransaction, SpaceApiError } from '@/lib/server/space-api';

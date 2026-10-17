@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/lib/sites-auth/react';
 import CourseClient from '@/app/courses/CourseClient';
 import JourneyClient from '@/app/courses/journey/JourneyClient';
 

@@ -1,7 +1,7 @@
 import { GET as getInstructorCourses } from '@/app/api/users/[id]/courses/route';
 import { GET as getEnrollments } from '@/app/api/users/[id]/enrollments/route';
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 import { courseContentRevision } from '@/lib/server/course-progress';
 
 jest.mock('next/server', () => ({

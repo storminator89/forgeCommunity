@@ -8,7 +8,7 @@ import { GET as getStats } from '@/app/api/posts/me/stats/route';
 import { GET as getTopics } from '@/app/api/posts/topics/route';
 import { encodeCommunityCursor } from '@/lib/server/community-feed';
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 import { rmSync } from 'node:fs';
 
 jest.mock('next/server', () => ({ NextResponse: { json: (body: unknown, init?: ResponseInit) => new Response(JSON.stringify(body), init) } }));

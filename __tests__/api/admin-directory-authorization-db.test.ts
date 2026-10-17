@@ -4,8 +4,8 @@ import { GET as getUser } from '@/app/api/admin/users/[id]/route';
 import { GET as getDashboard } from '@/app/api/admin/dashboard-stats/route';
 import { authOptions } from '@/app/api/auth/[...nextauth]/options';
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
-import { getServerSession as getNextSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
+import { getServerSession as getNextSession } from '@/lib/sites-auth/server';
 import { rmSync } from 'node:fs';
 import { Prisma } from '@prisma/client';
 

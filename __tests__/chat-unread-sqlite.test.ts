@@ -4,7 +4,7 @@ import { rmSync } from 'node:fs';
 import { GET as getChannels } from '@/app/api/chat/channels/route';
 import { POST as markRead } from '@/app/api/chat/channels/[channelId]/read/route';
 import { getUnreadChannelIds } from '@/lib/server/chat-unread';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 import prisma from '@/lib/prisma';
 
 jest.mock('next/server', () => ({ NextResponse: class extends Response {

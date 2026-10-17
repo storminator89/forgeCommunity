@@ -3,7 +3,7 @@ import { RequestBodyLimitError, requestWithBodyLimit } from '@/lib/server/reques
 import { GET as getResources } from '@/app/api/resources/route'
 import prisma from '@/lib/prisma'
 import { POST as createProjectComment } from '@/app/api/projects/[projectId]/comments/route'
-import { getServerSession } from 'next-auth/next'
+import { getServerSession } from '@/lib/sites-auth/server'
 
 jest.mock('next/server', () => ({
   NextResponse: {

@@ -2,7 +2,7 @@ import { GET as inbox, POST as createLegacy } from '@/app/api/notifications/rout
 import { POST as open } from '@/app/api/notifications/[id]/open/route';
 import { resolveNotificationTarget } from '@/lib/server/notification-target';
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 
 jest.mock('next/server', () => {
   class MockNextResponse extends Response {

@@ -1,7 +1,7 @@
 import { GET as getReports, POST as createReport } from '@/app/api/reports/route';
 import { PATCH as reviewReport } from '@/app/api/reports/[reportId]/route';
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/sites-auth/server';
 
 jest.mock('next/server', () => ({
   NextResponse: { json: (body: unknown, init?: ResponseInit) => new Response(JSON.stringify(body), init) },

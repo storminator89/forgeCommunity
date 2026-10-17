@@ -2,8 +2,8 @@
 
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
+import { getServerSession } from "@/lib/sites-auth/server";
+import { authOptions } from '@/lib/auth';
 import { readJsonObject, requestErrorResponse } from "@/lib/server/api-input";
 
 export async function GET(request: Request) {

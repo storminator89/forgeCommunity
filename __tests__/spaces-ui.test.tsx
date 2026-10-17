@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/lib/sites-auth/react';
 import { useParams, useRouter } from 'next/navigation';
 import SpacesPage from '@/app/community/spaces/page';
 import SpacePage from '@/app/community/spaces/[spaceId]/page';

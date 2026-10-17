@@ -1,6 +1,6 @@
 /** @jest-environment jsdom */
 import { GET } from '@/app/api/search/route';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/sites-auth/server';
 import prisma from '@/lib/prisma';
 import { rmSync } from 'node:fs';
 

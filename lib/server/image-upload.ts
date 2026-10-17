@@ -3,7 +3,6 @@ import 'server-only';
 import { randomUUID } from 'crypto';
 import { mkdir, writeFile } from 'fs/promises';
 import path from 'path';
-import sharp from 'sharp';
 
 const IMAGE_UPLOAD_DIR = path.join(process.cwd(), 'public', 'images', 'uploads');
 const PRIVATE_CHAT_UPLOAD_DIR = path.join(process.cwd(), 'private', 'chat-uploads');
@@ -61,6 +60,9 @@ async function validateAndNormalizeImage(fileType: string, bytes: Uint8Array) {
   }
 
   try {
+    // Native image codecs are only needed while processing an upload. Loading
+    // sharp at module scope also crashes unrelated GET handlers on Workers.
+    const { default: sharp } = await import('sharp');
     const decoded = sharp(bytes, {
       failOn: 'error',
       limitInputPixels: MAX_IMAGE_PIXELS,

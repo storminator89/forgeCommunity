@@ -1,5 +1,5 @@
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/options';
+import { getServerSession } from '@/lib/sites-auth/server';
+import { authOptions } from '@/lib/auth';
 import { AnalyticsError, analyticsCsv, courseAnalytics, parseAnalyticsQuery } from '@/lib/server/course-analytics';
 import { CoursePathError } from '@/lib/server/course-path';
 

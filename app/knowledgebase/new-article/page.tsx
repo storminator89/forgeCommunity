@@ -7,7 +7,7 @@ import { AppShell, AppHeader } from '@/components/app-shell';
 import { PageState } from '@/components/page-state';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/lib/sites-auth/react';
 import { Sidebar } from "@/components/Sidebar";
 import { UserNav } from "@/components/user-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -33,6 +33,10 @@ export default function NewArticle() {
 function AccountNewArticle({ accountId, status }: { accountId: string | null; status: 'loading' | 'authenticated' | 'unauthenticated' }) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const categoryFieldRef = useRef<HTMLDivElement>(null);
+  const contentFieldRef = useRef<HTMLDivElement>(null);
+  const submissionInFlight = useRef(false);
 
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -43,7 +47,11 @@ function AccountNewArticle({ accountId, status }: { accountId: string | null; st
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [alert, setAlert] = useState<{ message: string; type: 'error' | 'success' } | null>(null);
   const [isDraft, setIsDraft] = useState(false);
+  const [hasSubmitted, setHasSubmitted] = useState(false);
   const maxTitleLength = 100;
+  const titleMissing = !title.trim();
+  const contentMissing = !content.replace(/<[^>]*>/g, '').replace(/&nbsp;|&#160;/gi, ' ').trim() && !/<img\b/i.test(content);
+  const categoryMissing = !category.trim();
 
   const [existingCategories, setExistingCategories] = useState<string[]>([]);
   const [existingTags, setExistingTags] = useState<string[]>([]);
@@ -127,14 +135,18 @@ function AccountNewArticle({ accountId, status }: { accountId: string | null; st
   };
 
   const submitArticle = async (asDraft: boolean) => {
-    setIsDraft(asDraft);
-    setIsSubmitting(true);
+    if (submissionInFlight.current) return;
+    setHasSubmitted(true);
 
-    if (!title || !content || !category) {
-      toast.error('Bitte füllen Sie alle erforderlichen Felder aus.');
-      setIsSubmitting(false);
+    if (titleMissing || contentMissing || categoryMissing) {
+      if (titleMissing) titleInputRef.current?.focus();
+      else if (categoryMissing) categoryFieldRef.current?.querySelector<HTMLElement>('input, select')?.focus();
+      else contentFieldRef.current?.querySelector<HTMLElement>('[contenteditable="true"]')?.focus();
       return;
     }
+    submissionInFlight.current = true;
+    setIsDraft(asDraft);
+    setIsSubmitting(true);
 
     const formData = new FormData();
     formData.append('title', title);
@@ -146,6 +158,7 @@ function AccountNewArticle({ accountId, status }: { accountId: string | null; st
       formData.append('featuredImage', featuredImage);
     }
 
+    let saved = false;
     try {
       const response = await fetch('/api/articles', {
         method: 'POST',
@@ -154,6 +167,7 @@ function AccountNewArticle({ accountId, status }: { accountId: string | null; st
 
       if (response.ok) {
         const article = await response.json();
+        saved = true;
         toast.success(
           asDraft
             ? 'Artikel wurde als Entwurf gespeichert!'
@@ -172,7 +186,10 @@ function AccountNewArticle({ accountId, status }: { accountId: string | null; st
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Ein Fehler ist aufgetreten.');
     } finally {
-      setIsSubmitting(false);
+      if (!saved) {
+        submissionInFlight.current = false;
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -248,28 +265,33 @@ function AccountNewArticle({ accountId, status }: { accountId: string | null; st
                     </div>
                     <Input
                       id="title"
+                      ref={titleInputRef}
                       value={title}
                       onChange={(e) => setTitle(e.target.value.slice(0, maxTitleLength))}
                       className="text-lg py-2"
                       placeholder="Ein aussagekräftiger Titel"
-                      aria-describedby="new-article-required-fields new-article-title-count"
+                      aria-invalid={hasSubmitted && titleMissing}
+                      aria-describedby={`new-article-required-fields new-article-title-count${hasSubmitted && titleMissing ? ' new-article-title-error' : ''}`}
                       required
                     />
+                    {hasSubmitted && titleMissing && <p id="new-article-title-error" role="alert" className="mt-2 text-sm text-destructive">Gib einen Titel für deinen Artikel ein.</p>}
                   </div>
-                  <div className="min-w-0">
+                  <div ref={categoryFieldRef} className="min-w-0">
                     <CategorySelect
                       categories={existingCategories}
                       selectedCategory={category}
                       setSelectedCategory={setCategory}
                       onAddCategory={handleAddNewCategory}
+                      error={hasSubmitted && categoryMissing ? 'Wähle eine Kategorie oder erstelle eine neue Kategorie.' : undefined}
                     />
                   </div>
                 </div>
                 <section aria-labelledby="new-article-content-title" aria-describedby="new-article-required-fields" className="mt-6 min-w-0">
                   <h2 id="new-article-content-title" className="mb-2 text-sm font-medium">Artikelinhalt</h2>
-                  <div className="overflow-hidden rounded-[10px] focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+                  <div ref={contentFieldRef} role="group" aria-labelledby="new-article-content-title" aria-invalid={hasSubmitted && contentMissing} aria-describedby={hasSubmitted && contentMissing ? 'new-article-content-error' : undefined} className="overflow-hidden rounded-[10px] focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
                     <Editor content={content} onChange={setContent} className="min-h-[400px]" />
                   </div>
+                  {hasSubmitted && contentMissing && <p id="new-article-content-error" role="alert" className="mt-2 text-sm text-destructive">Schreibe den Inhalt deines Artikels.</p>}
                 </section>
                 <div className="mt-6 grid min-w-0 items-start gap-6 border-t pt-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-8">
                   {/* Beitragsbild */}

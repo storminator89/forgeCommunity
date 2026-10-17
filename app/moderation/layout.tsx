@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/sites-auth/server';
 import { redirect } from 'next/navigation';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';

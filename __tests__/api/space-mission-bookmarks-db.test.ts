@@ -3,7 +3,7 @@
 import prisma from '@/lib/prisma';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { DriverAdapterError } from '@prisma/driver-adapter-utils';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/sites-auth/server';
 import { PUT, dynamic } from '@/app/api/spaces/[spaceId]/missions/[missionId]/bookmark/route';
 import { GET as overview } from '@/app/api/space-missions/route';
 import { GET as detail, PATCH as closeMission } from '@/app/api/spaces/[spaceId]/missions/[missionId]/route';

@@ -13,8 +13,8 @@ import { PATCH as saveCourseDraft } from '@/app/api/courses/[courseId]/authoring
 import { publicationDigest, type CoursePayload } from '@/lib/server/course-authoring'
 import { courseContentRevision } from '@/lib/server/course-progress'
 import prisma from '@/lib/prisma'
-import { getServerSession as getNextAuthSession } from 'next-auth'
-import { getServerSession } from 'next-auth/next'
+import { getServerSession as getNextAuthSession } from '@/lib/sites-auth/server'
+import { getServerSession } from '@/lib/sites-auth/server'
 
 jest.mock('next/server', () => {
   class MockNextResponse extends Response {

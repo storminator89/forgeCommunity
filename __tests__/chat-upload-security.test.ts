@@ -25,7 +25,7 @@ jest.mock('node:fs/promises', () => ({
   writeFile: jest.fn(),
 }));
 
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 import { POST as postMessage } from '@/app/api/chat/messages/route';
 import { GET as getChatUpload } from '@/app/api/chat/uploads/[filename]/route';
 import prisma from '@/lib/prisma';

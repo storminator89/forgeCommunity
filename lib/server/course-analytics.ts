@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@/generated/prisma/client';
 import prisma from '@/lib/prisma';
 import { assignmentPassedContentIds, assignmentSubmittedUserIds, contentQuiz, courseContentRevision, courseLeaves } from '@/lib/server/course-progress';
 import { CoursePathError, prepareCoursePath, publicationPathNodes } from '@/lib/server/course-path';

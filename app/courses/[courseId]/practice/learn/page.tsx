@@ -1,7 +1,7 @@
 'use client'
 
 import { use } from 'react'
-import { useSession } from 'next-auth/react'
+import { useSession } from '@/lib/sites-auth/react'
 import { PracticeLearnerWorkspace } from './PracticeLearnerWorkspace'
 
 export default function CourseLearnerPracticePage({ params }: { params: Promise<{ courseId: string }> }) {

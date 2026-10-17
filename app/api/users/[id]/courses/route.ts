@@ -1,7 +1,7 @@
 import { PaginationError, readPagination } from '@/lib/server/pagination';
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "../../../auth/[...nextauth]/options";
+import { getServerSession } from "@/lib/sites-auth/server";
+import { authOptions } from '@/lib/auth';
 import { activeCourseContentWhere, publishedCourseWhere } from '@/lib/server/published-course';
 import { contentTransaction } from '@/app/api/courses/[courseId]/contents/content-mutations';
 

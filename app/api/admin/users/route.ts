@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { emailEqualsInsensitive } from '@/lib/server/database-query'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '../../auth/[...nextauth]/options'
-import bcrypt from 'bcrypt'
+import { getServerSession } from '@/lib/sites-auth/server'
+import { authOptions } from '@/lib/auth'
+import bcrypt from 'bcryptjs'
 import { adminUserInput } from '@/lib/server/account-security'
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input'
 import { readAsAdmin } from '@/lib/server/admin-read'
@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
       }
     }));
 
-    return NextResponse.json(transformedUsers);
+    return NextResponse.json(transformedUsers, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     console.error('Error fetching users:', error)
     return NextResponse.json(

@@ -1,6 +1,6 @@
 import 'server-only';
 
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from '@/generated/prisma/client';
 import { completionState } from '@/lib/server/course-progress';
 import { CoursePathError, publicationPathNodes } from '@/lib/server/course-path';
 import { chapterIsReleased, chapterReleaseDates, chapterReleaseLabel } from '@/lib/course-release';

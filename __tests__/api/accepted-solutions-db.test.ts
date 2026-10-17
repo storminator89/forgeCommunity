@@ -6,7 +6,7 @@ import { GET as getComments, POST as createComment } from '@/app/api/posts/[post
 import { GET as getLinkedComment } from '@/app/api/posts/linked-comment/[commentId]/route';
 import prisma from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 import { rmSync } from 'node:fs';
 
 jest.mock('next/server', () => ({ NextResponse: { json: (body: unknown, init?: ResponseInit) => new Response(JSON.stringify(body), init) } }));

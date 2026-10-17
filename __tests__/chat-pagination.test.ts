@@ -21,7 +21,7 @@ jest.mock('@/lib/prisma', () => ({
 }));
 
 import { GET } from '@/app/api/chat/messages/route';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 import prisma from '@/lib/prisma';
 
 const db = prisma as unknown as {

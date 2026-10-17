@@ -1,8 +1,8 @@
 export type DatabaseProvider = 'postgresql' | 'sqlite';
 
-// PostgreSQL remains the default for existing deployments.
+// This Site runs on Cloudflare D1, which uses the SQLite schema and SQL dialect.
 export function getDatabaseProvider(): DatabaseProvider {
-  const provider = process.env.DATABASE_PROVIDER ?? 'postgresql';
+  const provider = process.env.DATABASE_PROVIDER ?? 'sqlite';
   if (provider !== 'postgresql' && provider !== 'sqlite') {
     throw new Error('DATABASE_PROVIDER must be either "postgresql" or "sqlite".');
   }

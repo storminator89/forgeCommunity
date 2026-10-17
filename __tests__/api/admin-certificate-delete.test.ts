@@ -1,7 +1,7 @@
 /** @jest-environment node */
 import { DELETE } from '@/app/api/admin/users/[id]/route';
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/sites-auth/server';
 import { deleteCourseDependencies } from '@/lib/server/course-deletion';
 import { Prisma } from '@prisma/client';
 

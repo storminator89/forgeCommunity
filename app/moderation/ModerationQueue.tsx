@@ -4,7 +4,7 @@ import { HeroBanner } from '@/components/discovery';
 import { ShieldCheck as PageBannerIcon } from 'lucide-react';
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import Link from 'next/link';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/lib/sites-auth/react';
 import { AppHeader, AppShell } from '@/components/app-shell';
 import { PageState } from '@/components/page-state';
 import { Sidebar } from '@/components/Sidebar';

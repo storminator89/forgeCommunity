@@ -5,7 +5,7 @@ import { GET as getLinkedChatMessage } from '@/app/api/chat/messages/[messageId]
 import { GET as getLinkedComment } from '@/app/api/posts/linked-comment/[commentId]/route';
 import { POST as createComment } from '@/app/api/posts/[postId]/comments/route';
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 import { rmSync } from 'node:fs';
 
 jest.mock('next/server', () => ({ NextResponse: class extends Response {

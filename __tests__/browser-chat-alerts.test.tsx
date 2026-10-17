@@ -1,5 +1,5 @@
 import { act, render, screen, waitFor } from '@testing-library/react'
-import { useSession } from 'next-auth/react'
+import { useSession } from '@/lib/sites-auth/react'
 import { ChatProvider, useChat } from '@/contexts/ChatContext'
 import { publishBrowserChatAlertPreference } from '@/lib/browser-chat-alerts'
 

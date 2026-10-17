@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@/generated/prisma/client';
 import { getQuizValidationError, parseQuizContent, type QuizContent, type QuizQuestion } from '@/app/courses/[courseId]/contents/types';
 import { parseAssignmentContent } from '@/app/courses/[courseId]/contents/assignment-content';
 import { groupCourseContents } from '@/lib/server/group-course-contents';

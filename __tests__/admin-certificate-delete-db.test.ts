@@ -2,7 +2,7 @@
 import { DELETE } from '@/app/api/admin/users/[id]/route';
 import { rmSync } from 'node:fs';
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/sites-auth/server';
 
 jest.mock('next/server', () => ({
   NextResponse: class extends Response {

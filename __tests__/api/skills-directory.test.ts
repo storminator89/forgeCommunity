@@ -1,7 +1,7 @@
 /** @jest-environment node */
 import { GET } from '@/app/api/skills/directory/route';
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 
 jest.mock('next/server', () => {
   class MockNextResponse extends Response {

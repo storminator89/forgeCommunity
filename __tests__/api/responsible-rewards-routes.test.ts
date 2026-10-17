@@ -3,7 +3,7 @@ import { GET as getLeaderboard } from '@/app/api/leaderboard/route'
 import { PATCH as setCourseEligibility } from '@/app/api/admin/courses/[courseId]/reward-eligibility/route'
 import { PATCH as setTestAccount } from '@/app/api/admin/users/[id]/test-account/route'
 import { GET as getOwnProfile, PUT as updateOwnProfile } from '@/app/api/user/profile/route'
-import { getServerSession } from 'next-auth'
+import { getServerSession } from '@/lib/sites-auth/server'
 import prisma from '@/lib/prisma'
 import { courseApprovalFingerprint, courseHasRewardableQuiz, reconcileCourseRewards, reconcileUserRewards } from '@/lib/server/rewards'
 

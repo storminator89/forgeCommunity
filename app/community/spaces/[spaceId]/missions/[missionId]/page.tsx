@@ -2,7 +2,7 @@
 
 import { Suspense } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/lib/sites-auth/react';
 import { PageState } from '@/components/page-state';
 import { SpaceShell } from '@/components/spaces/SpaceShell';
 import { useInvitationAccount } from '@/components/spaces/mission-invitation-ui';

@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { strToU8, zipSync } from 'fflate';
 import sharp from 'sharp';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 import prisma from '@/lib/prisma';
 import { GET as readContents } from '@/app/api/courses/[courseId]/contents/route';
 import { GET as readProgress, PATCH as markProgress } from '@/app/api/courses/[courseId]/progress/route';

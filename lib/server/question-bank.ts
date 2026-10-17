@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@/generated/prisma/client';
 import prisma from '@/lib/prisma';
 import { getQuizValidationError, parseQuizContent, type QuizQuestion } from '@/app/courses/[courseId]/contents/types';
 

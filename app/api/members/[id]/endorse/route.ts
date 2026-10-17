@@ -1,8 +1,8 @@
 // app/api/members/[id]/endorse/route.ts
 
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next"; // Annahme: NextAuth.js wird verwendet
-import { authOptions } from "@/lib/auth"; // Pfad zu deinen Auth-Optionen
+import { getServerSession } from "@/lib/sites-auth/server"; // Annahme: NextAuth.js wird verwendet
+import { authOptions } from '@/lib/auth'; // Pfad zu deinen Auth-Optionen
 import prisma from '@/lib/prisma';
 
 export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '../../../../../auth/[...nextauth]/options';
+import { getServerSession } from '@/lib/sites-auth/server';
+import { authOptions } from '@/lib/auth';
 import { canEdit, contentTransaction, ContentMutationError, presentContent } from '../../content-mutations';
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
 import { groupCourseContents } from '@/lib/server/group-course-contents';

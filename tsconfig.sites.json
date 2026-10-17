@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "incremental": false
+  },
+  "include": [
+    "app/**/*.ts", "app/**/*.tsx", "components/**/*.ts", "components/**/*.tsx",
+    "contexts/**/*.ts", "contexts/**/*.tsx", "hooks/**/*.ts", "hooks/**/*.tsx",
+    "lib/**/*.ts", "lib/**/*.mts", "src/**/*.ts", "src/**/*.tsx",
+    "utils/**/*.ts", "types/**/*.d.ts", "generated/prisma/**/*.ts",
+    "proxy.ts", "cloudflare-env.d.ts", "vite.config.ts", "build/**/*.ts",
+    "node_modules/vite/client.d.ts"
+  ],
+  "exclude": ["node_modules", "__tests__", "e2e", "test-utils"]
+}

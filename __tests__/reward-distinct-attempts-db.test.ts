@@ -5,7 +5,7 @@ import { deleteCourseDependencies } from '@/lib/server/course-deletion';
 import { rmSync } from 'node:fs';
 import { contentVersionToken } from '@/lib/server/course-progress';
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 import { VERIFIED_COURSE_BADGE } from '@/lib/course-achievement-badge';
 
 jest.mock('next/server', () => {

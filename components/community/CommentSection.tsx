@@ -1,14 +1,15 @@
-import { useEffect, useRef, useState } from 'react'
-import { motion } from 'framer-motion'
-import { Card, CardContent } from "@/components/ui/card"
+import { useEffect, useId, useRef, useState } from 'react'
+import { motion, useReducedMotion } from 'framer-motion'
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { ThumbsUp, Send, Loader2, CheckCircle2 } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import { ReportControl } from './ReportControl'
 import { useCommentActionFocus } from './useCommentActionFocus'
+import { formatDistanceToNow } from 'date-fns'
+import { de } from 'date-fns/locale'
 
 const DEFAULT_AVATAR_URL = ''
 
@@ -62,8 +63,16 @@ export function CommentSection({
   onLikeComment
 }: CommentSectionProps) {
   const [newCommentContent, setNewCommentContent] = useState('')
-  const commentInputRef = useRef<HTMLInputElement>(null)
-  const actionFocus = useCommentActionFocus(postId, currentUserId, isLoading)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const submittingRef = useRef(false)
+  const errorId = useId()
+  const inputId = useId()
+  const shortcutId = useId()
+  const commentInputRef = useRef<HTMLTextAreaElement>(null)
+  const reduceMotion = useReducedMotion()
+  const isBusy = isLoading || isSubmitting
+  const actionFocus = useCommentActionFocus(postId, currentUserId, isBusy)
   const commentsStatusRef = useRef<HTMLParagraphElement>(null)
   const focusEndOfCommentsRef = useRef(false)
 
@@ -87,94 +96,116 @@ export function CommentSection({
   }, [comments]);
 
   const handleSubmit = async (origin: HTMLElement) => {
-    if (!newCommentContent.trim()) return
+    if (!newCommentContent.trim() || !onAddComment || isLoading || submittingRef.current) return
+    submittingRef.current = true
+    setIsSubmitting(true)
+    setSubmitError(null)
     const focus = actionFocus.begin(origin, commentInputRef.current)
     try {
-      await onAddComment?.(postId, newCommentContent)
+      await onAddComment(postId, newCommentContent)
       setNewCommentContent('')
     } catch (error) {
       console.error('Fehler beim Hinzufügen des Kommentars:', error)
+      setSubmitError('Dein Kommentar konnte gerade nicht gesendet werden. Dein Text bleibt hier erhalten. Bitte versuche es erneut.')
     } finally {
+      submittingRef.current = false
+      setIsSubmitting(false)
       actionFocus.complete(focus)
     }
   }
 
-  const handleKeyPress = async (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+  const handleKeyDown = async (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !e.altKey &&
+        !e.nativeEvent.isComposing && e.nativeEvent.keyCode !== 229) {
       e.preventDefault()
+      if (e.repeat) return
       await handleSubmit(e.currentTarget)
     }
   }
 
   return (
     <motion.div
-      initial={{ height: 0, opacity: 0 }}
+      initial={reduceMotion ? false : { height: 0, opacity: 0 }}
       animate={{ height: 'auto', opacity: 1 }}
       exit={{ height: 0, opacity: 0 }}
-      transition={{ duration: 0.3 }}
-      className="mt-4 space-y-4"
+      transition={{ duration: reduceMotion ? 0 : 0.2 }}
+      className="space-y-5"
     >
-      <div className="bg-card p-4 rounded-lg shadow-xs border border-border">
-        <div className="relative flex items-center">
-          <Input
+      <form className="rounded-[14px] border border-input bg-card p-3" aria-label="Kommentar verfassen" aria-busy={isSubmitting}
+        onSubmit={event => {
+          event.preventDefault()
+          const origin = (event.nativeEvent as SubmitEvent).submitter
+          void handleSubmit(origin instanceof HTMLElement ? origin : commentInputRef.current ?? event.currentTarget)
+        }}>
+          <label htmlFor={inputId} className="sr-only">Kommentar schreiben</label>
+          <Textarea
+            id={inputId}
             ref={commentInputRef}
             value={newCommentContent}
             onChange={(e) => setNewCommentContent(e.target.value)}
-            onKeyPress={handleKeyPress}
-            placeholder="Schreibe einen Kommentar..."
+            onKeyDown={handleKeyDown}
+            rows={2}
+            placeholder="Dein Kommentar …"
             aria-label="Kommentar schreiben"
-            className="pr-10 bg-muted/50 border-input"
-            disabled={isLoading}
+            aria-invalid={Boolean(submitError)}
+            aria-describedby={`${shortcutId}${submitError ? ` ${errorId}` : ''}`}
+            className="max-h-64 min-h-[80px] resize-y border-0 bg-transparent p-1 shadow-none focus-visible:ring-offset-0"
+            disabled={isBusy}
           />
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2">
+          <p id={shortcutId} className="text-xs text-muted-foreground">Strg/⌘ + Enter zum Senden</p>
           <Button
-            onClick={event => void handleSubmit(event.currentTarget)}
-            type="button"
+            type="submit"
             aria-label="Kommentar senden"
-            disabled={isLoading || !newCommentContent.trim()}
-            className="absolute right-2 p-1 hover:bg-accent text-foreground rounded-full flex items-center justify-center transition-colors duration-200"
-            size="icon"
-            variant="ghost"
+            disabled={isBusy || !newCommentContent.trim()}
+            aria-busy={isSubmitting}
+            className="ml-auto h-11"
           >
-            {isLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            {isBusy ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
             ) : (
-              <Send className="h-4 w-4 text-primary" />
+              <Send className="h-4 w-4" aria-hidden="true" />
             )}
+            {isSubmitting ? 'Wird gesendet …' : 'Senden'}
           </Button>
         </div>
-      </div>
+        {submitError && <p id={errorId} role="alert" className="mt-3 text-sm leading-6 text-destructive">{submitError}</p>}
+      </form>
 
+      <div className="space-y-5">
       {(comments || []).map((comment) => (
-        <Card id={`comment-${comment.id}`} key={comment.id} className="bg-card p-3 rounded-lg shadow-xs border border-border">
-          <CardContent className="p-0">
-            <div className="flex items-center space-x-3 mb-2">
-              <Avatar className="h-6 w-6">
+        <article id={`comment-${comment.id}`} key={comment.id} aria-label={`Kommentar von ${comment.author?.name || 'Anonym'}`} className="grid min-w-0 grid-cols-[2rem_minmax(0,1fr)] gap-2.5">
+              <Avatar className="mt-0.5 h-8 w-8">
                 <AvatarImage
                   src={comment.author?.image || DEFAULT_AVATAR_URL}
-                  alt={comment.author?.name || 'Anonym'}
+                  alt=""
                 />
-                <AvatarFallback className="text-xs bg-coral-highlight text-coral-highlight-foreground">{comment.author?.name?.[0] || 'A'}</AvatarFallback>
+                <AvatarFallback className="bg-accent text-xs text-accent-foreground">{comment.author?.name?.[0] || 'A'}</AvatarFallback>
               </Avatar>
-              <span className="text-sm font-medium text-foreground">
+          <div className="min-w-0">
+            <div className="rounded-2xl rounded-tl-md border border-border/60 bg-card px-3.5 py-3">
+            <header className="mb-1.5 flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+              <span className="break-words text-sm font-semibold text-foreground [overflow-wrap:anywhere]">
                 {comment.author?.name || 'Anonym'}
               </span>
-              <span className="text-xs text-muted-foreground">
-                {new Date(comment.createdAt).toLocaleDateString('de-DE', {
+              <time dateTime={comment.createdAt} className="text-xs text-muted-foreground" title={new Date(comment.createdAt).toLocaleDateString('de-DE', {
                   year: 'numeric',
                   month: 'long',
                   day: 'numeric',
                   hour: '2-digit',
                   minute: '2-digit'
-                })}
-              </span>
-            </div>
-            {acceptedCommentId === comment.id && <p className="mb-2 pl-9 text-sm font-medium text-coral">
-              <CheckCircle2 className="mr-1 inline h-4 w-4" aria-hidden="true" /> Vom Beitragsautor als Lösung ausgewählt
+                })}>
+                {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true, locale: de })}
+              </time>
+            </header>
+            {acceptedCommentId === comment.id && <p className="mb-2 text-xs font-semibold text-primary">
+              <CheckCircle2 className="mr-1 inline h-3.5 w-3.5" aria-hidden="true" /> Ausgewählte Lösung
             </p>}
-            <p className="text-sm text-foreground/90 leading-relaxed pl-9">
+            <p className="whitespace-pre-wrap text-sm leading-7 text-foreground [overflow-wrap:anywhere]">
               {comment.content}
             </p>
-            <div className="flex flex-wrap items-center gap-2 mt-2 pl-9">
+            </div>
+            <div className="mt-0.5 flex flex-wrap items-center gap-x-1 gap-y-0 [&_button]:min-h-11">
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -187,11 +218,12 @@ export function CommentSection({
                         finally { actionFocus.complete(focus) }
                       }}
                       aria-label={comment.isLiked ? 'Kommentar-Like entfernen' : 'Kommentar liken'}
-                      className={`hover:bg-coral/10 hover:text-coral flex items-center space-x-1 rounded-md p-2 h-auto py-1 transition-colors duration-200 ${comment.isLiked ? 'text-coral bg-coral/10 hover:bg-coral/15' : 'text-muted-foreground'
+                      aria-pressed={comment.isLiked}
+                      className={`h-11 rounded-[10px] px-2.5 hover:bg-coral/10 hover:text-coral ${comment.isLiked ? 'text-coral bg-coral/10 hover:bg-coral/15' : 'text-muted-foreground'
                         }`}
                       disabled={isLoading}
                     >
-                      <ThumbsUp className={cn("h-3 w-3 mr-1.5", comment.isLiked && "fill-current")} />
+                      <ThumbsUp className={cn("h-3.5 w-3.5", comment.isLiked && "fill-current")} aria-hidden="true" />
                       <span className="text-xs font-medium">{comment.votes}</span>
                     </Button>
                   </TooltipTrigger>
@@ -201,19 +233,20 @@ export function CommentSection({
                 </Tooltip>
               </TooltipProvider>
               {canSelectSolution && currentUserId !== comment.authorId && comment.solutionEligible !== false && onSelectSolution &&
-                <Button type="button" size="sm" variant="outline" disabled={isLoading}
+                <Button type="button" size="sm" variant="ghost" className="h-11 px-2.5 text-muted-foreground" disabled={isLoading}
                   aria-pressed={acceptedCommentId === comment.id}
                   aria-label={acceptedCommentId === comment.id ? 'Lösungsauswahl für diese Antwort entfernen' : 'Diese Antwort als Lösung auswählen'}
                   onClick={() => void onSelectSolution(postId, acceptedCommentId === comment.id ? null : comment.id)}>
                   <CheckCircle2 className="mr-1.5 h-4 w-4" aria-hidden="true" />
-                  {acceptedCommentId === comment.id ? 'Auswahl entfernen' : 'Als Lösung auswählen'}
+                  {acceptedCommentId === comment.id ? 'Auswahl entfernen' : 'Als Lösung'}
                 </Button>}
               {canReport && currentUserId && currentUserId !== comment.authorId &&
                 <ReportControl targetType="COMMENT" targetId={comment.id} />}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </article>
       ))}
+      </div>
       {loadMoreError && <p role="alert" className="text-sm text-destructive">Weitere Kommentare konnten nicht geladen werden.</p>}
       {hasMore && <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={event => {
         focusEndOfCommentsRef.current = document.activeElement === event.currentTarget

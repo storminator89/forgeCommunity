@@ -6,7 +6,7 @@ import { PUT as updateEvent } from '@/app/api/events/[id]/route';
 import { POST as rsvp, DELETE as cancelRsvp } from '@/app/api/events/[id]/rsvp/route';
 import prisma from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 
 jest.mock('next/server', () => ({ NextResponse: { json: (body: unknown, init?: ResponseInit) => new Response(JSON.stringify(body), init) } }));
 jest.mock('next-auth/next', () => ({ getServerSession: jest.fn() }));

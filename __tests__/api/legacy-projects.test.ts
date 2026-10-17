@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { POST } from '@/app/api/users/[id]/projects/route';
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/sites-auth/server';
 import { getSafeHttpUrl } from '@/lib/security';
 
 jest.mock('next/server', () => {
