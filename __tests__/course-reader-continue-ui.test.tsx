@@ -148,7 +148,7 @@ it('keeps the completion notice reflowable with a named, touch-sized keyboard di
   const message = within(notice).getByText('Inhalt als abgeschlossen markiert.', { exact: true })
   expect(message).toHaveClass('min-w-0', 'flex-1', '[overflow-wrap:anywhere]')
   expect(message).not.toHaveClass('truncate', 'whitespace-nowrap', 'overflow-hidden')
-  const close = within(notice).getByRole('button', { name: 'Meldung schließen', exact: true })
+  const close = within(notice).getByRole('button', { name: 'Meldung schließen' })
   expect(close).toHaveClass('min-h-11', 'min-w-11', 'shrink-0')
   expect(close).not.toHaveAttribute('tabindex', '-1')
   close.focus()
