@@ -27,13 +27,43 @@ async function login(page: Page, email: string, password: string) {
   await page.getByLabel('Passwort', { exact: true }).press('Enter')
   await expect(page).toHaveURL(/\/community$/)
 }
+async function assertCompactAvailability(page: Page, label: string, enlarged = false) {
+  if (!['waiting', 'waiting-refresh', 'close', 'close-refresh', 'unavailable'].includes(label)) return
+  const title = label === 'unavailable' ? 'Privates Üben gerade nicht verfügbar' : 'Gerade nichts fällig'
+  const status = page.getByRole('region', { name: title, exact: true })
+  const illustration = status.locator('img')
+  await expect(illustration).toHaveAttribute('alt', '')
+  await expect(illustration).toHaveAttribute('aria-hidden', 'true')
+  await expect(illustration).toHaveAttribute('width', '480')
+  await expect(illustration).toHaveAttribute('height', '320')
+  await expect(illustration).toHaveJSProperty('complete', true)
+  expect(await illustration.evaluate(element => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
+  const imageBox = await illustration.boundingBox()
+  expect(imageBox).not.toBeNull()
+  expect(imageBox!.width).toBeLessThanOrEqual(120)
+  expect(imageBox!.height).toBeLessThanOrEqual(80)
+  expect(await illustration.evaluate(element => getComputedStyle(element).animationName)).toBe('none')
+  expect(await status.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1)
+  await expect(page.getByRole('complementary', { name: 'Privat und freiwillig' })).toBeVisible()
+  if (label === 'unavailable') await expect(status.locator('time')).toHaveCount(0)
+  else await expect(status.getByText(/Voraussichtlich wieder ab/)).toContainText('(deine Ortszeit).')
+  const primary = status.getByRole('button', { name: label.startsWith('close') ? 'Sitzung abschließen' : 'Stand aktualisieren', exact: true })
+  if (!enlarged) await expect(primary).toBeInViewport({ ratio: 1 })
+  // The image is skipped by native keyboard traversal. No refresh or private
+  // write occurs while checking layout, theme, text sizing, or focus.
+  await page.getByRole('link', { name: 'Zum Kursinhalt', exact: true }).focus()
+  await page.keyboard.press('Tab')
+  await expect(primary).toBeFocused()
+  expect(await primary.evaluate(element => element.matches(':focus-visible'))).toBe(true)
+}
+
 async function capture(page: Page, testInfo: TestInfo, label: string, controls: string[] = []) {
   for (const theme of ['light', 'dark'] as const) {
     await page.getByRole('button', { name: 'Farbschema auswählen' }).click()
     await page.getByRole('menuitem', { name: theme === 'light' ? 'Hell' : 'Dunkel', exact: true }).click()
     if (theme === 'dark') await expect(page.locator('html')).toHaveClass(/dark/)
     else await expect(page.locator('html')).not.toHaveClass(/dark/)
-    for (const width of [1280, 320]) {
+    for (const width of [1280, 390, 320]) {
       await page.setViewportSize({ width, height: 800 })
       await page.evaluate(async () => { await document.fonts.ready; window.scrollTo(0, 0) })
       expect(await page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - innerWidth)).toBeLessThanOrEqual(1)
@@ -46,6 +76,7 @@ async function capture(page: Page, testInfo: TestInfo, label: string, controls: 
         expect(box!.x + box!.width).toBeLessThanOrEqual(width + 1)
         expect(await control.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1)
       }
+      await assertCompactAvailability(page, label)
       await page.screenshot({ path: testInfo.outputPath(`practice-availability-${label}-${theme}-${width}.png`), fullPage: true, animations: 'disabled' })
     }
   }
@@ -73,6 +104,8 @@ async function captureEnlargedControls(page: Page, testInfo: TestInfo, label: st
         await control.focus()
         await expect(control).toBeFocused()
       }
+      await assertCompactAvailability(page, label, true)
+      expect(await page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - innerWidth)).toBeLessThanOrEqual(1)
       await page.evaluate(() => window.scrollTo(0, 0))
       await page.screenshot({ path: testInfo.outputPath(`practice-availability-${label}-${theme}-320-text-200.png`), fullPage: true, animations: 'disabled' })
     } finally {
@@ -178,8 +211,19 @@ test('real private return window stays read-only until explicit refresh and reop
   await page.reload()
   await expect(page.getByText(/Voraussichtlich wieder ab/)).toBeVisible()
   expect(evidence()).toEqual(waitingEvidence)
+  const waitingLayoutRequestStart = practiceRequests.length
   await capture(page, testInfo, 'waiting', ['Stand aktualisieren'])
   await captureEnlargedControls(page, testInfo, 'waiting-refresh', ['Stand aktualisieren'])
+  await page.keyboard.press('Tab')
+  const manage = page.getByText('Übung verwalten', { exact: true })
+  await expect(manage).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('button', { name: 'Üben pausieren', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Übungsdaten zurücksetzen', exact: true })).toBeVisible()
+  await page.keyboard.press('Enter')
+  await expect(manage.locator('..')).not.toHaveAttribute('open', '')
+  expect(evidence()).toEqual(waitingEvidence)
+  expect(practiceRequests.slice(waitingLayoutRequestStart).every(request => request.method === 'GET')).toBe(true)
   await page.getByRole('link', { name: 'Zum Kursinhalt', exact: true }).click()
   await expect(page).toHaveURL(`${origin}${reader}`)
   // Scope assertions to the real existing reader entry, rather than another
@@ -258,7 +302,12 @@ test('real private return window stays read-only until explicit refresh and reop
     await page.reload()
     await expect(page.getByRole('heading', { name: 'Privates Üben gerade nicht verfügbar' })).toBeVisible()
     await expect(page.getByRole('group', { name: 'Which return fixture answer fits?' })).toHaveCount(0)
+    const unavailableBeforeLayout = evidence()
+    const unavailableRequestStart = practiceRequests.length
     await capture(page, testInfo, 'unavailable')
+    await captureEnlargedControls(page, testInfo, 'unavailable', ['Stand aktualisieren'])
+    expect(evidence()).toEqual(unavailableBeforeLayout)
+    expect(practiceRequests.slice(unavailableRequestStart).every(request => request.method === 'GET')).toBe(true)
   } finally {
     database(path, db => db.prepare('UPDATE "PracticeRetentionHealth" SET "lastSuccessAt" = ? WHERE "id" = ?').run(health.lastSuccessAt, 'learner'))
   }
@@ -270,3 +319,4 @@ test('real private return window stays read-only until explicit refresh and reop
   await expect(page.getByRole('heading', { name: 'Kein Zugang zu dieser Übung' })).toBeVisible()
   await expect(page.getByRole('group', { name: 'Which return fixture answer fits?' })).toHaveCount(0)
 })
+

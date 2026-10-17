@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { ArrowLeft, RotateCcw } from 'lucide-react'
 import { AppHeader, AppShell } from '@/components/app-shell'
 import { Sidebar } from '@/components/Sidebar'
@@ -137,6 +138,19 @@ function StateSection({ title, children, action }: { title: string; children: Re
   </section>
 }
 
+/** Quiet decoration only: availability and all actions still come from live state. */
+function AvailabilitySection({ title, children, action, note }: { title: string; children: ReactNode; action: ReactNode; note?: string }) {
+  return <section aria-labelledby="practice-state-heading" className="min-w-0 space-y-3 rounded-2xl border border-border bg-card p-[min(1rem,16px)] [overflow-wrap:anywhere]">
+    <div className="flex items-center justify-between gap-[min(.75rem,12px)]">
+      <h2 id="practice-state-heading" className="min-w-0 text-xl font-semibold leading-snug tracking-tight sm:text-2xl">{title}</h2>
+      <Image src="/illustrations/practice-waiting.webp" alt="" aria-hidden="true" width={480} height={320} sizes="(min-width: 640px) 120px, 88px" className="h-auto w-[88px] shrink-0 rounded-lg sm:w-[120px]" />
+    </div>
+    <div className="max-w-prose space-y-2 text-base leading-relaxed text-muted-foreground">{children}</div>
+    <div className="pt-1">{action}</div>
+    {note && <p className="text-sm leading-relaxed text-muted-foreground">{note}</p>}
+  </section>
+}
+
 export function PracticeLearnerView({ courseId, stage, question, feedback, error, busy = false,
   onRetry, onEnable, onPause, onOptOut, onNext, onAnswer, onReset, nextLabel, canCloseSession = false, availabilityState, onRefresh }: PracticeLearnerViewProps) {
   const [pauseOpen, setPauseOpen] = useState(false)
@@ -146,6 +160,7 @@ export function PracticeLearnerView({ courseId, stage, question, feedback, error
   const courseHref = `/courses/${encodeURIComponent(courseId)}/contents`
   const dataStage = stage === 'question' && question ? 'question' : stage === 'feedback' && question && feedback ? 'feedback' : stage
   const isEnableDecision = dataStage === 'available' || dataStage === 'paused'
+  const isAvailabilityState = dataStage === 'done' || dataStage === 'unavailable'
 
   return <AppShell>
     <Sidebar />
@@ -158,8 +173,8 @@ export function PracticeLearnerView({ courseId, stage, question, feedback, error
       </AppHeader>
       <main id="page-content" tabIndex={-1} aria-busy={busy || stage === 'loading'} className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
         <div className="mx-auto max-w-5xl">
-          <Link href={courseHref} className="mb-8 inline-flex min-h-11 items-center gap-2 rounded-lg text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"><ArrowLeft aria-hidden="true" className="h-4 w-4" />Zum Kursinhalt</Link>
-          <div className={`grid min-w-0 gap-10 ${isEnableDecision ? 'max-w-2xl' : 'lg:grid-cols-[minmax(0,1fr)_minmax(14rem,18rem)] lg:gap-12'}`}>
+          <Link href={courseHref} className={`${isAvailabilityState ? 'mb-4' : 'mb-8'} inline-flex min-h-11 items-center gap-2 rounded-lg text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2`}><ArrowLeft aria-hidden="true" className="h-4 w-4" />Zum Kursinhalt</Link>
+          <div className={`grid min-w-0 ${isAvailabilityState ? 'gap-6' : 'gap-10'} ${isEnableDecision ? 'max-w-2xl' : 'lg:grid-cols-[minmax(0,1fr)_minmax(14rem,18rem)] lg:gap-12'}`}>
             <div className="min-w-0">
               {error && stage !== 'error' && <p role="alert" className="mb-5 rounded-xl border border-destructive/40 bg-card px-4 py-3 text-sm text-destructive">{error}</p>}
               {dataStage === 'loading' && <PageState kind="loading" title="Übungen werden geladen" />}
@@ -176,21 +191,21 @@ export function PracticeLearnerView({ courseId, stage, question, feedback, error
                 <p>Es werden keine neuen Fragen geöffnet. Deine bisherigen Übungsdaten bleiben gespeichert.</p>
                 <PrivacyNote atDecision />
               </StateSection>}
-              {dataStage === 'unavailable' && <StateSection title="Privates Üben gerade nicht verfügbar" action={<Button type="button" variant="outline" className="h-auto min-h-11 min-w-0 max-w-full whitespace-normal [overflow-wrap:anywhere]" disabled={busy} onClick={onRefresh}>{busy ? 'Wird geprüft …' : 'Stand aktualisieren'}</Button>}><PracticeAvailabilityNotice state={availabilityState} /></StateSection>}
+              {dataStage === 'unavailable' && <AvailabilitySection title="Privates Üben gerade nicht verfügbar" action={<Button type="button" className="h-auto min-h-11 min-w-0 max-w-full whitespace-normal [overflow-wrap:anywhere]" disabled={busy} onClick={onRefresh}>{busy ? 'Wird geprüft …' : 'Stand aktualisieren'}</Button>}><PracticeAvailabilityNotice state={availabilityState} /></AvailabilitySection>}
               {dataStage === 'idle' && <StateSection title="Bereit für eine Frage?" action={<Button type="button" className="min-h-11" disabled={busy} onClick={onNext}>{busy ? 'Frage wird geladen …' : nextLabel ?? 'Erste Frage öffnen'}</Button>}>
                 <PracticeAvailabilityNotice state={availabilityState} /><p>Eine Frage wird erst ausgewählt, wenn du sie ausdrücklich öffnest.</p>
               </StateSection>}
-              {dataStage === 'done' && <StateSection title="Gerade keine weitere Frage fällig"
+              {dataStage === 'done' && <AvailabilitySection title="Gerade nichts fällig"
+                note="Fragen öffnest du selbst. Üben bleibt eingeschaltet, bis du pausierst."
                 action={<div className="flex flex-wrap gap-3">
                   {canCloseSession && <Button type="button" className="h-auto min-h-11 min-w-0 max-w-full whitespace-normal [overflow-wrap:anywhere]" disabled={busy} onClick={onNext}>{busy ? 'Sitzung wird abgeschlossen …' : 'Sitzung abschließen'}</Button>}
-                  <Button type="button" variant="outline" className="h-auto min-h-11 min-w-0 max-w-full whitespace-normal [overflow-wrap:anywhere]" disabled={busy} onClick={onRefresh}>{busy ? 'Wird geprüft …' : 'Stand aktualisieren'}</Button>
+                  <Button type="button" variant={canCloseSession ? 'outline' : 'default'} className="h-auto min-h-11 min-w-0 max-w-full whitespace-normal [overflow-wrap:anywhere]" disabled={busy} onClick={onRefresh}>{busy ? 'Wird geprüft …' : 'Stand aktualisieren'}</Button>
                 </div>}>
                 <PracticeAvailabilityNotice state={availabilityState} />
-                <p>Du öffnest jede Frage selbst. Privates Üben bleibt eingeschaltet, bis du es pausierst.</p>
-              </StateSection>}
+              </AvailabilitySection>}
               {dataStage === 'question' && question && <PracticeQuestion key={question.reservationId} question={question} busy={busy} onAnswer={onAnswer} />}
               {dataStage === 'feedback' && question && feedback && <PracticeFeedback question={question} feedback={feedback} busy={busy} onNext={onNext} availabilityState={availabilityState} />}
-              {dataStage !== 'loading' && dataStage !== 'error' && dataStage !== 'forbidden' && <details className="mt-10 border-t pt-6">
+              {dataStage !== 'loading' && dataStage !== 'error' && dataStage !== 'forbidden' && <details className={isAvailabilityState ? 'mt-6 border-t pt-3' : 'mt-10 border-t pt-6'}>
                 <summary className="w-fit cursor-pointer rounded-lg py-2 text-base font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">Übung verwalten</summary>
                 <div className="max-w-prose space-y-6 pt-4 text-sm leading-relaxed text-muted-foreground">
                   {(dataStage === 'idle' || dataStage === 'question' || dataStage === 'feedback' || dataStage === 'done' || dataStage === 'unavailable') && <div className="space-y-2"><h2 className="text-base font-semibold text-foreground">Vorübergehend pausieren</h2><p>Deine Zustimmung und bisherigen Übungsdaten bleiben bestehen. Es werden keine neuen Fragen geöffnet, bis du weitermachst.</p><Button type="button" variant="outline" className="min-h-11" disabled={busy} onClick={() => setPauseOpen(true)}>Üben pausieren</Button></div>}
@@ -215,3 +230,4 @@ export function PracticeLearnerView({ courseId, stage, question, feedback, error
     </AlertDialog>
   </AppShell>
 }
+

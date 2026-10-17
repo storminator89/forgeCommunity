@@ -179,7 +179,7 @@ test('a resumed exhausted session exposes an accessible close action before the 
   const user = userEvent.setup()
   render(<PracticeLearnerWorkspace courseId="course-1" sessionStatus="authenticated" />)
   const close = await screen.findByRole('button', { name: 'Sitzung abschließen' })
-  expect(screen.getByRole('heading', { name: 'Gerade keine weitere Frage fällig' })).toBeVisible()
+  expect(screen.getByRole('heading', { name: 'Gerade nichts fällig' })).toBeVisible()
   expect(writes).toHaveLength(0)
   await user.click(close)
   await waitFor(() => expect(writes).toEqual([{ path: `${base}/close`, body: { sessionId: 'session-1' } }]))
@@ -362,4 +362,88 @@ test('course-entry refresh uses the same bounded enlarged-text control treatment
   const refresh = await screen.findByRole('button', { name: 'Stand aktualisieren' })
   expect(refresh).toHaveClass('h-auto', 'min-w-0', 'max-w-full', 'whitespace-normal', '[overflow-wrap:anywhere]')
   expect(refresh).not.toHaveClass('h-11', 'whitespace-nowrap')
+})
+
+
+
+test.each(['done', 'unavailable'] as const)('%s keeps its illustration decorative and refresh explicit', async stage => {
+  const onRefresh = jest.fn()
+  const onNext = jest.fn()
+  const onEnable = jest.fn()
+  const user = userEvent.setup()
+  const { container } = render(<PracticeLearnerView courseId="course-1" stage={stage}
+    availabilityState={{ status: stage === 'done' ? 'complete' : 'unavailable', dueCount: 0,
+      availability: stage === 'done' ? 'waiting' : 'unavailable', nextAvailableAt: stage === 'done' ? '2026-10-18T12:00:00Z' : null }}
+    onRefresh={onRefresh} onNext={onNext} onEnable={onEnable} />)
+  const title = stage === 'done' ? 'Gerade nichts fällig' : 'Privates Üben gerade nicht verfügbar'
+  const status = screen.getByRole('region', { name: title })
+  const illustration = status.querySelector('img')!
+  expect(illustration).toHaveAttribute('alt', '')
+  expect(illustration).toHaveAttribute('aria-hidden', 'true')
+  expect(illustration).toHaveAttribute('width', '480')
+  expect(illustration).toHaveAttribute('height', '320')
+  expect(illustration).toHaveClass('h-auto', 'w-[88px]', 'shrink-0', 'sm:w-[120px]')
+  expect(illustration).not.toHaveAttribute('tabindex')
+  expect(screen.queryByRole('img')).not.toBeInTheDocument()
+  expect(container.querySelector('[class*="animate-"]')).toBeNull()
+  expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /Frage öffnen|Üben einschalten|Sitzung abschließen/ })).not.toBeInTheDocument()
+  expect(onRefresh).not.toHaveBeenCalled()
+  expect(onNext).not.toHaveBeenCalled()
+  expect(onEnable).not.toHaveBeenCalled()
+  if (stage === 'done') {
+    expect(within(status).getByText(/Voraussichtlich wieder ab/)).toHaveTextContent('(deine Ortszeit).')
+    expect(status.querySelector('time')).toHaveAttribute('datetime', '2026-10-18T12:00:00Z')
+    expect(within(status).getByText('Fragen öffnest du selbst. Üben bleibt eingeschaltet, bis du pausierst.')).toBeVisible()
+  } else {
+    expect(status.querySelector('time')).toBeNull()
+    expect(within(status).getByText(/vorübergehend nicht verfügbar/)).toBeVisible()
+  }
+  expect(screen.getByRole('complementary', { name: 'Privat und freiwillig' })).toBeVisible()
+  screen.getByRole('link', { name: 'Zum Kursinhalt' }).focus()
+  await user.tab()
+  const refresh = within(status).getByRole('button', { name: 'Stand aktualisieren' })
+  expect(refresh).toHaveFocus()
+  expect(refresh).toHaveClass('min-h-11', 'max-w-full', 'whitespace-normal')
+  await user.keyboard('{Enter}')
+  expect(onRefresh).toHaveBeenCalledTimes(1)
+  expect(onNext).not.toHaveBeenCalled()
+  expect(onEnable).not.toHaveBeenCalled()
+  await user.tab()
+  expect(screen.getByText('Übung verwalten')).toHaveFocus()
+  // jsdom does not implement the native summary Enter default action.
+  // Native keyboard expansion is covered by the real browser journey.
+  await user.click(screen.getByText('Übung verwalten'))
+  expect(screen.getByRole('button', { name: 'Üben pausieren' })).toBeVisible()
+  expect(screen.getByRole('button', { name: 'Übungsdaten zurücksetzen' })).toBeVisible()
+})
+
+test('waiting without a return estimate or answers never invents completion or an opening time', () => {
+  render(<PracticeLearnerView courseId="course-1" stage="done" availabilityState={{
+    status: 'complete', availability: 'waiting', dueCount: 0, nextAvailableAt: null,
+  }} />)
+  const status = screen.getByRole('region', { name: 'Gerade nichts fällig' })
+  expect(within(status).getByText('Gerade ist kein nächster Übungszeitpunkt verfügbar.')).toBeVisible()
+  expect(status.querySelector('time')).toBeNull()
+  expect(within(status).queryByText(/abgeschlossen|gemeistert|Streak|Belohnung|geschafft/i)).not.toBeInTheDocument()
+  expect(within(status).getAllByRole('button')).toHaveLength(1)
+})
+
+test('waiting busy state retains its compact status and blocks both explicit actions', async () => {
+  const onRefresh = jest.fn()
+  const onNext = jest.fn()
+  const user = userEvent.setup()
+  render(<PracticeLearnerView courseId="course-1" stage="done" busy canCloseSession onNext={onNext} onRefresh={onRefresh}
+    availabilityState={{ status: 'active', availability: 'sessionComplete', dueCount: 0, nextAvailableAt: null,
+      session: { id: 'session-1', answeredCount: 1 } }} />)
+  const status = screen.getByRole('region', { name: 'Gerade nichts fällig' })
+  const close = within(status).getByRole('button', { name: 'Sitzung wird abgeschlossen …' })
+  const refresh = within(status).getByRole('button', { name: 'Wird geprüft …' })
+  expect(close).toBeDisabled()
+  expect(refresh).toBeDisabled()
+  expect(within(status).getByText(/Schließe diese Sitzung bewusst ab/)).toBeVisible()
+  await user.click(close)
+  await user.click(refresh)
+  expect(onRefresh).not.toHaveBeenCalled()
+  expect(onNext).not.toHaveBeenCalled()
 })
