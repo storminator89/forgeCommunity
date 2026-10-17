@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { CourseContentsEditor } from '@/app/courses/[courseId]/contents/CourseContentsEditor'
 import type { CourseContent, CourseProgressSnapshot } from '@/app/courses/[courseId]/contents/types'
 
@@ -133,6 +134,30 @@ it('retains selection after completion, opens next only by a second action, and 
   again.focus(); fireEvent.click(again)
   expect(screen.getByRole('heading', { level: 2, name: 'Lektion drei' })).toHaveFocus()
   expect(writes()).toHaveLength(2)
+})
+
+it('keeps the completion notice reflowable with a named, touch-sized keyboard dismiss control', async () => {
+  const user = userEvent.setup()
+  render(<CourseContentsEditor courseId="course" forceLearner />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Kurs starten' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Als abgeschlossen markieren' }))
+  const notice = await screen.findByRole('status')
+  expect(notice).toHaveTextContent('Inhalt als abgeschlossen markiert.')
+  expect(notice).toHaveClass('min-w-0', 'shrink-0', 'mx-[min(1rem,16px)]', 'gap-[min(.75rem,12px)]', 'px-[min(1rem,16px)]')
+  expect(notice).not.toHaveClass('overflow-hidden', 'truncate')
+  const message = within(notice).getByText('Inhalt als abgeschlossen markiert.', { exact: true })
+  expect(message).toHaveClass('min-w-0', 'flex-1', '[overflow-wrap:anywhere]')
+  expect(message).not.toHaveClass('truncate', 'whitespace-nowrap', 'overflow-hidden')
+  const close = within(notice).getByRole('button', { name: 'Meldung schließen', exact: true })
+  expect(close).toHaveClass('min-h-11', 'min-w-11', 'shrink-0')
+  expect(close).not.toHaveAttribute('tabindex', '-1')
+  close.focus()
+  await user.keyboard('{Enter}')
+  expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  expect(screen.getByRole('heading', { level: 2, name: 'Lektion eins' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Nächste Lektion öffnen' })).toBeEnabled()
+  expect(location.search).toBe('?content=eins')
+  expect(writes()).toHaveLength(1)
 })
 
 it('waits for the refreshed server lock pair before offering the unlocked next lesson', async () => {
