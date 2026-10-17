@@ -19,6 +19,7 @@ import type { Session } from '@/lib/sites-auth/server';
 
 import Image from 'next/image';
 import { sanitizeRichHtml } from '@/lib/sanitize-html';
+import richTextStyles from './article-rich-text.module.css';
 
 interface Article {
   id: string;
@@ -154,7 +155,7 @@ function ArticlePageForViewer({ id, session }: { id: string; session: Session | 
                 </div>}
 
                 <div className="fc-reading-surface mx-auto max-w-[72ch]">
-                  <div className="prose prose-neutral dark:prose-invert max-w-none break-words text-base leading-relaxed prose-headings:font-semibold prose-headings:tracking-tight prose-a:text-primary prose-pre:max-w-full prose-pre:overflow-x-auto prose-img:rounded-[10px] [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto"
+                  <div className={richTextStyles.body}
                     dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(displayedArticle.content) }} />
                 </div>
               </article>

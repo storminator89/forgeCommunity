@@ -9,10 +9,10 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up the published Version 28 source
-`3d61fdab7b75b4d751ac6368c82e02a31bede892`. Version 28 deployed successfully on
-17 October 2026 at 21:34:25 UTC. Accepted-solution runtime acceptance and the
-auth-state UI readback are still pending; earlier release checks are separate.
+runtime data. This GitHub snapshot backs up the published Version 29 source
+`82b05a00fd403889d04bc76b5555b71d7f704b92`. Version 29 deployed successfully on
+17 October 2026 at 21:40:42 UTC. Its published knowledge-base article typography
+readback is still pending; earlier release checks are documented separately.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -73,8 +73,8 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 28 source includes the existing bounded ports below,
-inherited from Version 27, plus accepted solutions and auth-state UI described
+The published Version 29 source includes the existing bounded ports below,
+inherited from Version 28, plus knowledge-base article typography described
 below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
@@ -115,6 +115,8 @@ all-page visual coverage.
   and reversal/concurrency acceptance remain unverified
 - Anonymous/loading navigation and Community sign-in states avoid mounting
   member navigation, private account menus and the composer; live readback pending
+- Scoped knowledge-base article-viewer typography for existing rich HTML, with
+  semantic headings, lists, spacing, links, code and images; live readback pending
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -323,6 +325,19 @@ transitions, reversal and concurrency remain unverified live until a legitimate
 authorized flow occurs; no artificial selection or engagement record was made.
 Auth-state UI readback is still pending. No completed Version 28 browser result
 is claimed by this backup.
+
+## Version 29 knowledge-base article typography
+
+Version 29 changes only the article viewer CSS import/class and a dedicated
+scoped typography module. Headings, lists, paragraph spacing, links, code and
+images use the existing semantic light/dark tokens. The rich HTML string,
+sanitizer, editor, APIs and global styles are unchanged.
+
+Source review, production typechecking/build and static artifact checks passed.
+Deployment succeeded on 17 October 2026 at 21:40:42 UTC. Published article
+reader typography acceptance is still pending. No local functional tests,
+application/browser execution, or production article-content mutation is part
+of this source backup.
 
 ## Keeping the branches separate
 
