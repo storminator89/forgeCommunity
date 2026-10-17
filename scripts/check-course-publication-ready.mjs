@@ -13,7 +13,7 @@ import testDatabase from './space-mission-test-database.cjs';
 
 const sqliteNames = readdirSync(new URL('../prisma/sqlite-migrations/', import.meta.url))
   .filter(name => /^\d+_[\w-]+\.sql$/.test(name)).sort();
-assert.equal(sqliteNames.at(-1), '0027_space_mission_bookmarks.sql');
+assert.equal(sqliteNames.at(-1), '0028_course_qa_lesson_context.sql');
 const publicationIndex = sqliteNames.indexOf('0010_staged_course_publication.sql');
 assert.ok(publicationIndex >= 0);
 
@@ -139,8 +139,10 @@ test('SQLite migration still rolls back an injected DDL failure', () => {
   db.close();
 });
 
-test('SQLite readiness refuses missing, changed, gapped and divergent migration history through private mission bookmarks', async () => {
+test('SQLite readiness refuses missing, changed, gapped and divergent migration history through lesson Q&A context', async () => {
   for (const mutate of [
+    db => db.prepare(`DELETE FROM _app_migrations WHERE name='0028_course_qa_lesson_context.sql'`).run(),
+    db => db.prepare(`UPDATE _app_migrations SET checksum='changed' WHERE name='0028_course_qa_lesson_context.sql'`).run(),
     db => db.prepare(`DELETE FROM _app_migrations WHERE name='0027_space_mission_bookmarks.sql'`).run(),
     db => db.prepare(`UPDATE _app_migrations SET checksum='changed' WHERE name='0027_space_mission_bookmarks.sql'`).run(),
     db => db.prepare(`DELETE FROM _app_migrations WHERE name='0026_space_mission_week.sql'`).run(),
@@ -231,6 +233,26 @@ test('SQLite deploy refuses space report tail after a missing spaces predecessor
   assert.throws(() => initializeSqlite(f.url, f.migrations), /gap before 0021_space_report_targets\.sql/);
 });
 
+test('SQLite lesson context readiness checks each anchor column independently of valid history', async () => {
+  const f = fixture(); f.upgrade(); const db = f.db();
+  try {
+    const history = db.prepare('SELECT * FROM _app_migrations ORDER BY name').all();
+    for (const field of ['contextPublicationId', 'contextContentId']) {
+      db.exec(`ALTER TABLE "CourseQuestion" RENAME COLUMN "${field}" TO "missing_${field}"`);
+      try { await assert.rejects(assertCoursePublicationReady(f.url, 'sqlite'), /lesson context schema is missing or incomplete/); }
+      finally { db.exec(`ALTER TABLE "CourseQuestion" RENAME COLUMN "missing_${field}" TO "${field}"`); }
+    }
+    assert.deepEqual(db.prepare('SELECT * FROM _app_migrations ORDER BY name').all(), history);
+    assert.equal(await assertCoursePublicationReady(f.url, 'sqlite'), true);
+  } finally { db.close(); }
+});
+
+test('SQLite deploy refuses lesson context after a missing bookmark predecessor', () => {
+  const f = fixture(); f.upgrade(); const db = f.db();
+  db.prepare(`DELETE FROM _app_migrations WHERE name='0027_space_mission_bookmarks.sql'`).run(); db.close();
+  assert.throws(() => initializeSqlite(f.url, f.migrations), /gap before 0028_course_qa_lesson_context\.sql/);
+});
+
 const pgUrl = process.env.POSTGRESQL_RELEASE_GATE_DISPOSABLE === '1'
   ? testDatabase.disposablePostgresqlTestUrl(process.env.DATABASE_URL) : null;
 if (pgUrl) {
@@ -247,6 +269,8 @@ if (pgUrl) {
       assert.equal(await assertCoursePublicationReady(freshUrl.toString(), 'postgresql'), true);
       await db.query(`SET search_path TO "${fresh}"`);
       for (const [name, sql, file] of [
+        ['missing Q&A context tail', `DELETE FROM "_app_schema_upgrades" WHERE name='0027_course_qa_lesson_context.sql'`, '0027_course_qa_lesson_context.sql'],
+        ['tampered Q&A context tail', `UPDATE "_app_schema_upgrades" SET checksum='changed' WHERE name='0027_course_qa_lesson_context.sql'`, '0027_course_qa_lesson_context.sql'],
         ['missing mission bookmark tail', `DELETE FROM "_app_schema_upgrades" WHERE name='0026_space_mission_bookmarks.sql'`, '0026_space_mission_bookmarks.sql'],
         ['tampered mission bookmark tail', `UPDATE "_app_schema_upgrades" SET checksum='changed' WHERE name='0026_space_mission_bookmarks.sql'`, '0026_space_mission_bookmarks.sql'],
         ['missing mission week tail', `DELETE FROM "_app_schema_upgrades" WHERE name='0025_space_mission_week.sql'`, '0025_space_mission_week.sql'],
@@ -313,6 +337,17 @@ if (pgUrl) {
         '0016_chat_message_cursor_index.sql',
         createHash('sha256').update(readFileSync(new URL('../prisma/postgresql-upgrades/0016_chat_message_cursor_index.sql', import.meta.url))).digest('hex'),
       ]);
+      assert.equal(await assertCoursePublicationReady(freshUrl.toString(), 'postgresql'), true);
+      for (const field of ['contextPublicationId', 'contextContentId']) {
+        await db.query(`ALTER TABLE "CourseQuestion" RENAME COLUMN "${field}" TO "missing_${field}"`);
+        try { await assert.rejects(assertCoursePublicationReady(freshUrl.toString(), 'postgresql'), /lesson context schema is missing or incomplete/); }
+        finally { await db.query(`ALTER TABLE "CourseQuestion" RENAME COLUMN "missing_${field}" TO "${field}"`); }
+      }
+      const bookmarkHistory = (await db.query(`SELECT * FROM "_app_schema_upgrades" WHERE name='0026_space_mission_bookmarks.sql'`)).rows[0];
+      await db.query(`DELETE FROM "_app_schema_upgrades" WHERE name='0026_space_mission_bookmarks.sql'`);
+      await assert.rejects(applyPostgresqlUpgrades(freshUrl.toString()), /gap before 0027_course_qa_lesson_context\.sql/);
+      await db.query('INSERT INTO "_app_schema_upgrades" (name,checksum,applied_at) VALUES ($1,$2,$3)',
+        [bookmarkHistory.name,bookmarkHistory.checksum,bookmarkHistory.applied_at]);
       assert.equal(await assertCoursePublicationReady(freshUrl.toString(), 'postgresql'), true);
       await db.query(`CREATE SCHEMA "${legacy}"`);
       await db.query(`SET search_path TO "${legacy}"`);

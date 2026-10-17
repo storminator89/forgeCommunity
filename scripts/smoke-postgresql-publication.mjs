@@ -571,6 +571,52 @@ async function main() {
   const pathProgress = (contentId, contentVersionToken, status = 200) => learner(`${pathRoute}/progress`, {
     method: 'PATCH', status, body: { contentId, completed: true, publicationId: pathPublication, contentVersionToken },
   });
+  // Q&A context follows the same CURRENT learner proof on real PostgreSQL HTTP.
+  // Staff discussion authority does not grant a preview bypass for labels.
+  const pathQa = `${pathRoute}/qa`;
+  const firstPair = { publicationId: pathPublication, contentId: pathFirst };
+  const lastPair = { publicationId: pathPublication, contentId: pathLast };
+  const qaInput = { title: 'Synthetic path question', body: 'How should this synthetic step work?',
+    requestId: randomUUID(), lessonContext: firstPair };
+  const qaJson = async (client, path, options) => {
+    const response = await client(path, options);
+    assert.equal(response.headers.get('cache-control'), 'private, no-store', `Q&A cache policy: ${path}`);
+    return response.json();
+  };
+  const scopePath = pair => `${pathQa}?${new URLSearchParams(pair)}`;
+  await anonymous(pathQa, { status: 401 });
+  await peer(pathQa, { status: 403 });
+  await learner(pathQa, { method: 'POST', status: 423, body: { ...qaInput, lessonContext: lastPair } });
+  assert.deepEqual((await qaJson(author, scopePath(lastPair))).scope,
+    { kind: 'lesson', lessonContext: { status: 'unavailable' } });
+  const duplicateQuestions = await Promise.all([1, 2].map(() => qaJson(learner, pathQa, {
+    method: 'POST', status: [200, 201], body: qaInput,
+  })));
+  assert.equal(duplicateQuestions[0].question.id, duplicateQuestions[1].question.id);
+  assert.deepEqual(duplicateQuestions.map(row => row.created).sort(), [false, true]);
+  const pathQuestion = duplicateQuestions[0].question;
+  assert.deepEqual(pathQuestion.lessonContext, { status: 'current', ...firstPair,
+    title: 'First step', href: `/courses/${pathCourse}/contents?content=${pathFirst}` });
+  assert.ok(!JSON.stringify(pathQuestion).includes('<p>Public first step</p>'));
+  await learner(pathQa, { method: 'POST', status: 409, body: { ...qaInput, lessonContext: null } });
+  await learner(pathQa, { method: 'POST', status: 400, body: { ...qaInput, lessonContext: { ...firstPair, title: 'Injected' } } });
+  const legacyQaInput = { ...qaInput, requestId: randomUUID(), lessonContext: null };
+  const legacyQuestion = (await qaJson(learner, pathQa, { method: 'POST', status: 201, body: legacyQaInput })).question;
+  assert.equal(legacyQuestion.lessonContext, null);
+  assert.equal((await qaJson(learner, scopePath(firstPair))).items.length, 1);
+  assert.equal((await qaJson(learner, pathQa)).items.length, 2);
+  await peer(`${pathRoute}/enrollment`, { method: 'POST', status: 201 });
+  const qaReply = (await qaJson(peer, `${pathQa}/${pathQuestion.id}/answers`, { method: 'POST', status: 201,
+    body: { body: 'Synthetic peer explanation.', requestId: randomUUID() } })).answer;
+  const otherReply = (await qaJson(author, `${pathQa}/${pathQuestion.id}/answers`, { method: 'POST', status: 201,
+    body: { body: 'Synthetic instructor explanation.', requestId: randomUUID() } })).answer;
+  const solutionRace = await Promise.all([qaReply, otherReply].map(answer => qaJson(author,
+    `${pathQa}/${pathQuestion.id}/solution`, { method: 'PUT', status: [200, 409], body: { answerId: answer.id, expectedRevision: null } })));
+  assert.equal(solutionRace.filter(result => result.acceptedAnswerId).length, 1, 'Q&A chosen-answer CAS did not select exactly one winner.');
+  const chosen = solutionRace.find(result => result.acceptedAnswerId);
+  const anchoredStored = (await database.query(`SELECT "contextPublicationId", "contextContentId" FROM "${schema}"."CourseQuestion" WHERE "id"=$1`, [pathQuestion.id])).rows[0];
+  assert.deepEqual(anchoredStored, { contextPublicationId: pathPublication, contextContentId: pathFirst });
+  assert.equal((await database.query(`SELECT COUNT(*)::integer AS n FROM "${schema}"."CourseQuestion" WHERE "courseId"=$1`, [pathCourse])).rows[0].n, 2);
   await pathProgress(pathLast, authorPath[1].contentVersionToken, 423);
   await pathProgress(pathFirst, learnerPath[0].contentVersionToken);
   learnerPath = await (await learner(`${pathRoute}/contents`)).json();
@@ -578,6 +624,74 @@ async function main() {
   assert.equal(learnerPath[1].content, '<p>Protected last step</p>');
   await pathProgress(pathLast, learnerPath[1].contentVersionToken);
   assert.equal((await (await learner(`${pathRoute}/progress`)).json()).complete, true);
+  // Lock/republish keeps the conversation and original chosen answer, with no old
+  // title, identity or link in context. Lost-response retry keeps its exact pair.
+  await author(`${pathRoute}/authoring`, { method: 'PATCH', body: { expectedRevision: 3,
+    operation: { kind: 'updateNode', id: pathFirst, patch: { title: 'Revised first step', content: '<p>Revised private body</p>' } } } });
+  await author(`${pathRoute}/authoring`, { method: 'PATCH', body: { expectedRevision: 4,
+    operation: { kind: 'setReleaseOn', id: pathFirst, releaseOn: '2099-01-01' } } });
+  const contextPublishInput = { expectedRevision: 5, expectedActivePublicationId: pathPublication, requestId: randomUUID() };
+  const contextRace = await Promise.all([
+    qaJson(learner, pathQa, { method: 'POST', status: [201, 412, 409], body: { ...qaInput, requestId: randomUUID() } }),
+    author(`${pathRoute}/authoring/publish`, { method: 'POST', body: contextPublishInput }).then(response => response.json()),
+  ]);
+  const nextPathPublication = contextRace[1].publication.id;
+  const replayAfterPublish = await qaJson(learner, pathQa, { method: 'POST', status: 200, body: qaInput });
+  assert.equal(replayAfterPublish.created, false);
+  assert.equal(replayAfterPublish.question.id, pathQuestion.id);
+  assert.deepEqual(replayAfterPublish.question.lessonContext, { status: 'unavailable' });
+  const retainedQa = await qaJson(learner, `${pathQa}/revalidate`, { method: 'POST', body: {
+    ids: [pathQuestion.id, legacyQuestion.id], filter: 'all', q: '', lessonContext: null,
+  } });
+  assert.deepEqual(new Map(retainedQa.contexts.map(row => [row.id, row.lessonContext])),
+    new Map([[pathQuestion.id, { status: 'unavailable' }], [legacyQuestion.id, null]]));
+  assert.equal(Object.hasOwn(retainedQa, 'items'), false);
+  for (const forbidden of [pathFirst, pathPublication, 'First step', 'Revised first step', 'href', '<p>']) {
+    assert.ok(!JSON.stringify(retainedQa).includes(forbidden), `Retained Q&A probe exposed ${forbidden}`);
+  }
+  const oldQuestionDetail = await qaJson(learner, `${pathQa}/${pathQuestion.id}`);
+  assert.equal(oldQuestionDetail.question.acceptedAnswerId, chosen.acceptedAnswerId);
+  assert.equal(oldQuestionDetail.question.revision, chosen.revision);
+  assert.equal(oldQuestionDetail.answers.length, 2);
+  assert.equal((await qaJson(learner, scopePath({ publicationId: nextPathPublication, contentId: pathFirst }))).items.length, 0);
+  await learner(pathQa, { method: 'POST', status: 423, body: { ...qaInput, requestId: randomUUID(),
+    lessonContext: { publicationId: nextPathPublication, contentId: pathFirst } } });
+  await learner(pathQa, { method: 'POST', status: 412, body: { ...qaInput, requestId: randomUUID() } });
+  await learner(pathQa, { method: 'POST', status: 409, body: { ...qaInput,
+    lessonContext: { publicationId: nextPathPublication, contentId: pathFirst } } });
+  // A separate readable leaf exercises a real fresh-create/removal publication race.
+  const removableLeaf = randomUUID();
+  await author(`${pathRoute}/authoring`, { method: 'PATCH', body: { expectedRevision: 5, operation: {
+    kind: 'insertNode', node: { id: removableLeaf, title: 'Disposable readable leaf', type: 'TEXT', content: '<p>Temporary current content</p>' },
+    parentId: null, afterId: pathLast,
+  } } });
+  const removalBase = (await (await author(`${pathRoute}/authoring/publish`, { method: 'POST', body: {
+    expectedRevision: 6, expectedActivePublicationId: nextPathPublication, requestId: randomUUID(),
+  } })).json()).publication.id;
+  await author(`${pathRoute}/authoring`, { method: 'PATCH', body: { expectedRevision: 6,
+    operation: { kind: 'deleteNode', id: removableLeaf } } });
+  const removeInput = { ...qaInput, requestId: randomUUID(), lessonContext: { publicationId: removalBase, contentId: removableLeaf } };
+  const removedRace = await Promise.all([
+    qaJson(learner, pathQa, { method: 'POST', status: [201, 412, 409], body: removeInput }),
+    author(`${pathRoute}/authoring/publish`, { method: 'POST', body: {
+      expectedRevision: 7, expectedActivePublicationId: removalBase, requestId: randomUUID(),
+    } }).then(response => response.json()),
+  ]);
+  if (removedRace[0].question) {
+    assert.deepEqual((await qaJson(learner, `${pathQa}/${removedRace[0].question.id}`)).question.lessonContext, { status: 'unavailable' });
+    assert.equal((await qaJson(learner, pathQa, { method: 'POST', status: 200, body: removeInput })).created, false);
+  } else await learner(pathQa, { method: 'POST', status: 412, body: removeInput });
+  // A concurrent withdrawal and a fresh question must serialize before or after
+  // access loss; once withdrawal returns, neither replay nor read may succeed.
+  await Promise.all([
+    peer(pathQa, { method: 'POST', status: [201, 403, 409], body: { ...legacyQaInput, requestId: randomUUID() } }),
+    peer(`${pathRoute}/enrollment`, { method: 'DELETE' }),
+  ]);
+  await peer(pathQa, { method: 'POST', status: 403, body: qaInput });
+  await peer(pathQa, { status: 403 });
+  await peer(`${pathRoute}/enrollment`, { method: 'POST', status: 201 });
+  assert.deepEqual((await qaJson(peer, `${pathQa}/${pathQuestion.id}`)).question.lessonContext, { status: 'unavailable' });
+
 
   // Exercise the pathway HTTP routes against the real PostgreSQL adapter. The
   // two approved quiz courses and administrator are synthetic and live only in

@@ -20,10 +20,10 @@ const params = Promise.resolve({ courseId })
 const author = { id: 'student', name: 'Student' }
 function question(id: string, title: string, hidden = false) {
   return { id, title, body: `Private body ${id}`, createdAt: '2026-10-15T18:00:00.000Z', author,
-    answerCount: 0, acceptedAnswerId: null, revision: null, hidden }
+    answerCount: 0, acceptedAnswerId: null, revision: null, hidden, lessonContext: null }
 }
 function list(items: ReturnType<typeof question>[], nextCursor: string | null = null, canModerate = false) {
-  return { items, nextCursor, canModerate, canAsk: !canModerate, canReply: true }
+  return { items, nextCursor, canModerate, canAsk: !canModerate, canReply: true, canAskInScope: !canModerate, scope: { kind: 'course' } }
 }
 function response(value: unknown, status = 200) {
   return { ok: status >= 200 && status < 300, status, json: async () => value } as Response
@@ -40,7 +40,11 @@ function mockFetch(handler: (url: URL) => Response | Promise<Response>,
     if (url.pathname.endsWith('/revalidate')) {
       const payload = JSON.parse(String(init?.body)) as { ids: string[]; filter: string }
       return Promise.resolve(probe ? probe(payload.ids, payload.filter) : response({ visibleIds: payload.ids,
-        canAsk: mockSession?.user.role !== 'ADMIN', canReply: true, canModerate: mockSession?.user.role === 'ADMIN' }))
+        canAsk: mockSession?.user.role !== 'ADMIN', canReply: true, canModerate: mockSession?.user.role === 'ADMIN' })).then(async result => {
+          const value = await result.json()
+          return response({ ...value, scope: { kind: 'course' }, canAskInScope: value.canAsk,
+            contexts: (value.visibleIds ?? []).map((id: string) => ({ id, lessonContext: null })) }, result.status)
+        })
     }
     return Promise.resolve(handler(url))
   })
@@ -119,7 +123,7 @@ test('background access revalidation preserves already loaded older pages', asyn
   expect(await screen.findByText(older.title)).toBeInTheDocument()
   expect(listReads).toBe(2)
   act(() => { fireEvent.focus(window) })
-  await waitFor(() => expect(probeReads).toBe(1))
+  await waitFor(() => expect(probeReads).toBe(2))
   expect(listReads).toBe(2)
   expect(screen.getByText(first.title)).toBeInTheDocument()
   expect(screen.getByText(older.title)).toBeInTheDocument()
