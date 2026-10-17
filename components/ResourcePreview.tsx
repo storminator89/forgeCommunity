@@ -14,6 +14,14 @@ type VideoProvider = {
   id: string | null;
 };
 
+type PreviewFailure = 'unavailable' | 'unauthenticated' | 'rate-limited' | 'temporary';
+const previewFailureDescription: Record<PreviewFailure, string | null> = {
+  unavailable: null,
+  unauthenticated: 'Für die Vorschau ist eine Anmeldung erforderlich.',
+  'rate-limited': 'Zu viele Vorschauen. Versuche es später erneut.',
+  temporary: 'Die Vorschau ist vorübergehend nicht verfügbar. Versuche es später erneut.',
+};
+
 const getVideoProvider = (url: string): VideoProvider => {
   try {
     const urlObj = new URL(url);
@@ -58,7 +66,7 @@ export function ResourcePreview({ url, type }: ResourcePreviewProps) {
     type?: string;
   } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<PreviewFailure | null>(null);
   const [imageError, setImageError] = useState(false);
   const [videoProvider, setVideoProvider] = useState<VideoProvider>({ type: null, id: null });
 
@@ -112,13 +120,19 @@ export function ResourcePreview({ url, type }: ResourcePreviewProps) {
         });
 
         if (!response.ok) {
-          throw new Error('Vorschau konnte nicht geladen werden');
+          if (isMounted) {
+            setError(response.status === 401 ? 'unauthenticated'
+              : response.status === 429 ? 'rate-limited'
+              : response.status >= 500 ? 'temporary' : 'unavailable');
+          }
+          return;
         }
 
         const data = await response.json();
 
         if (data.error) {
-          throw new Error(data.error);
+          if (isMounted) setError('unavailable');
+          return;
         }
 
         if (isMounted) {
@@ -128,9 +142,9 @@ export function ResourcePreview({ url, type }: ResourcePreviewProps) {
             image: data.image
           });
         }
-      } catch (err: any) {
-        if (isMounted && err.name !== 'AbortError') {
-          setError(err.message);
+      } catch {
+        if (isMounted && !controller.signal.aborted) {
+          setError('unavailable');
         }
       } finally {
         if (isMounted) {
@@ -197,23 +211,11 @@ export function ResourcePreview({ url, type }: ResourcePreviewProps) {
 
   if (error) {
     return (
-      <div role="status" className="flex h-80 flex-col items-center justify-center bg-card/50 p-4 text-muted-foreground">
-        <svg
-          className="h-12 w-12 text-muted-foreground mb-3"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-          />
-        </svg>
-        <p className="text-center">{error}</p>
+      <div role="status" className="space-y-2 bg-card/50 p-4 sm:p-6">
+        <p className="text-sm font-medium text-foreground">Vorschau nicht verfügbar</p>
+        {previewFailureDescription[error] && <p className="text-sm text-muted-foreground">{previewFailureDescription[error]}</p>}
         {safeUrl && <a href={safeUrl} target="_blank" rel="noopener noreferrer"
-          className="mt-4 inline-flex min-h-11 items-center text-primary underline hover:no-underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="inline-flex min-h-11 items-center text-sm text-primary underline hover:no-underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           Direkt zur Quelle
         </a>}

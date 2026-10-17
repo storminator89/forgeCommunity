@@ -9,10 +9,10 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up the published Version 32 source
-`00b1f61a0abced59a14896819054e3f244ccc97a`. Version 32 deployed successfully on
-17 October 2026 at 22:12:03 UTC. Guest Search UI remains source-reviewed only;
-authenticated Search regression readback is in progress.
+runtime data. This GitHub snapshot backs up the published Version 33 source
+`3f8f4b43276bd07a0db4b84e82fd2173890f0d60`. Version 33 deployed successfully on
+17 October 2026 at 22:20:27 UTC. Bounded existing-resource fallback readback
+passed; real metadata fetching and its DNS/transport blocker remain unresolved.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -73,8 +73,8 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 32 source includes the existing bounded ports below,
-inherited from Version 31, plus the Search auth-state presentation described
+The published Version 33 source includes the existing bounded ports below,
+inherited from Version 32, plus compact resource-preview fallback UI described
 below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
@@ -127,8 +127,10 @@ all-page visual coverage.
   inline errors, with existing backend behavior unchanged; bounded disclosure/
   native validation readback passed, pending-request variants remain untested live
 - Search loading/anonymous presentation outside the private account-keyed
-  viewer, with a sign-in CTA and safe local return URL; published auth-state
-  acceptance remains incomplete as described below
+  viewer, with a sign-in CTA and safe local return URL; bounded signed-in
+  regression passed, while guest and login-callback acceptance remain source-only
+- Compact fixed-status resource-preview fallback with the existing safe source
+  link; this UI change does not repair metadata fetching or its DNS/transport port
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -417,10 +419,47 @@ API behavior are otherwise retained; no authentication or security setup changes
 are included. The loading shell honors reduced-motion styling.
 
 Source review, production typechecking/build and static artifact checks passed.
-Deployment succeeded on 17 October 2026 at 22:12:03 UTC. Guest UI behavior is
-source-reviewed only, and authenticated Search regression readback is in
-progress. No finished Version 32 guest, account-transition, reduced-motion or
-complete search-flow live acceptance is claimed by this backup.
+Deployment succeeded on 17 October 2026 at 22:12:03 UTC. A bounded normal
+signed-in Search regression produced real results. Keyboard activation of the
+article tab returned the matching article, opened its correct detail, and
+Browser Back retained query/filter context. Keyboard activation of the Resources
+tab showed the matching resource; reload retained the query, filter and result.
+No write or logout was performed. Account identities, search contents and
+screenshots are not included in this documentation. Guest UI and login-callback
+behavior remain source-reviewed only; account-transition, reduced-motion and
+complete search-flow live coverage is not established.
+
+## Version 33 compact resource-preview fallback
+
+Version 33 changes only `components/ResourcePreview.tsx`. A compact fixed-status
+fallback replaces the large error block and retains the existing safe direct
+source link. Authentication, rate-limit and temporary failures receive bounded
+server-status descriptions; arbitrary provider/error text is not displayed.
+No new request or retry is introduced. PDF/video special handling, existing
+URL/type and mounted/abort guards, and server auth, DNS, SSRF, redirect,
+transport and rate limits are unchanged.
+
+Source review, production typechecking/build and static artifact checks passed.
+Deployment succeeded on 17 October 2026 at 22:20:27 UTC. A bounded normal read
+of an existing resource showed the compact 148-pixel unavailable fallback. Its
+direct-source link had a 44-pixel target and visible keyboard focus, with the
+exact HTTPS destination and noopener/noreferrer protections retained. Reload at
+22:21:45 UTC retained the fallback and signed-in session. No content write was
+performed. Metadata remained unavailable; authentication, rate-limit and server-
+error status variants were not deliberately provoked and remain untested live.
+This increment does not repair metadata fetching: the DNS/transport source
+blocker remains open. No successful preview fetch or particular external-site
+restriction is inferred from the UI.
+
+## Additional curated user-flow roadmap
+
+[USER_FLOW_ROADMAP.md](USER_FLOW_ROADMAP.md) is an additional user-requested
+product document, not part of the Sites source. Its stated 17 October 2026,
+22:19 UTC date and Version 32 source base are intentionally retained, alongside
+its distinction between observed findings, source blockers and proposals.
+Unnecessary test-account labels, account totals and concrete search contents
+were anonymized for this public repository copy. The roadmap does not claim
+that proposals or later release work were implemented at its recorded base.
 
 ## Keeping the branches separate
 
