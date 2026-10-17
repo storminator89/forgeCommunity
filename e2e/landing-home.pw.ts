@@ -3,7 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { basename, dirname, isAbsolute } from 'node:path';
 import { expect, test, type BrowserContext, type Page, type Response, type TestInfo } from '@playwright/test';
 
-import { artworkCandidates, artworkCandidateBounds } from './landing-artwork-contract';
+import { fixedArtworkDelivery } from './landing-artwork-contract';
 
 const origin = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3013';
 const destinations = [
@@ -16,6 +16,7 @@ let password: string;
 
 const artworkName = 'Illustration: Zwei Erwachsene teilen einen goldenen Ideenfunken über einem offenen Buch, umgeben von farbigen Bausteinen.';
 const artworkPath = /^\/images\/home\/forge-workbench-(480|768|1440)\.webp$/;
+const fixedArtworkPath = fixedArtworkDelivery.path;
 
 function observeArtwork(page: Page) {
   const requests: string[] = [];
@@ -39,26 +40,11 @@ async function expectArtwork(page: Page, delivery: { requests: string[]; respons
     const rect = image.getBoundingClientRect();
     const style = getComputedStyle(image);
     const picture = image.closest('picture');
-    const sizes = image.sizes;
-    const srcSet = image.srcset;
-    let resolvedSize: { media: string; length: string; width: number } | null = null;
-    for (const clause of sizes.split(',').map(value => value.trim())) {
-      const conditional = clause.match(/^(\([^)]+\))\s+(.+)$/);
-      const media = conditional?.[1] ?? 'all';
-      const length = conditional?.[2] ?? clause;
-      if (!matchMedia(media).matches) continue;
-      // Resolve the actual sizes length through CSS, without changing page layout.
-      const probe = document.createElement('span');
-      probe.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none;display:block;height:0;margin:0;padding:0;border:0;min-width:0;max-width:none;box-sizing:content-box;contain:strict';
-      probe.style.width = length;
-      document.body.append(probe);
-      try {
-        resolvedSize = { media, length, width: probe.getBoundingClientRect().width };
-      } finally {
-        probe.remove();
-      }
-      break;
-    }
+    const frame = image.closest<HTMLElement>('[data-motion="forge-workbench"]')!;
+    const frameStyle = getComputedStyle(frame);
+    const frameContentWidth = frame.getBoundingClientRect().width -
+      parseFloat(frameStyle.paddingLeft) - parseFloat(frameStyle.paddingRight) -
+      parseFloat(frameStyle.borderLeftWidth) - parseFloat(frameStyle.borderRightWidth);
     return {
       viewport: {
         innerWidth: window.innerWidth, innerHeight: window.innerHeight,
@@ -75,7 +61,7 @@ async function expectArtwork(page: Page, delivery: { requests: string[]; respons
       dpr: window.devicePixelRatio,
       slot: { width: rect.width, height: rect.height, x: rect.x, y: rect.y },
       computed: { width: style.width, height: style.height, fit: style.objectFit },
-      sizes, srcSet, resolvedSize,
+      sizes: image.sizes, srcSet: image.srcset, frameContentWidth,
       picture: picture ? { sourceCount: picture.querySelectorAll('source').length } : null,
       imageAttributes: { src: image.getAttribute('src'), srcSet: image.getAttribute('srcset'), sizes: image.getAttribute('sizes') },
       resourceTimings: performance.getEntriesByType('resource')
@@ -89,18 +75,17 @@ async function expectArtwork(page: Page, delivery: { requests: string[]; respons
     };
   });
   const selectedUrl = new URL(state.currentSrc);
-  const selectedWidth = Number(artworkPath.exec(selectedUrl.pathname)?.[1]);
-  const candidate = artworkCandidates.find(candidate => candidate.width === selectedWidth);
-  const bounds = artworkCandidateBounds(state.slot.width, state.dpr);
+  const fixedUrl = new URL(fixedArtworkPath, origin).href;
+  const demand = state.slot.width * state.dpr;
   const response = await delivery.response;
   const bytes = await response.body();
   const evidencePath = testInfo.outputPath('home-artwork-delivery.json');
   await mkdir(dirname(evidencePath), { recursive: true });
   await writeFile(evidencePath, JSON.stringify({
       configuredViewport: page.viewportSize(), expectedDpr, ...state,
-      candidate: { width: selectedWidth, ...bounds, deliveredToDemandRatio: selectedWidth / bounds.uncappedDemand, fullyCoversDprDemand: selectedWidth >= bounds.uncappedDemand },
-      policy: 'Rendered CSS slot × actual DPR; permit the smallest adequate srcSet candidate or one larger discrete candidate as bounded browser over-delivery. This does not establish optimal selection. visualViewport.scale is recorded separately, not multiplied into DPR demand or treated as a cause.',
-      delivery: { requests: delivery.requests, requestCount: delivery.requests.length, status: response.status(), contentType: response.headers()['content-type'], cacheControl: response.headers()['cache-control'], fromServiceWorker: response.fromServiceWorker(), requestTiming: response.request().timing(), bytes: bytes.length, maximumBytes: 100 * 1024 },
+      fixedSource: { ...fixedArtworkDelivery, renderedPixelDemand: demand, deliveredToDemandRatio: fixedArtworkDelivery.width / demand, sourceLimited: demand > fixedArtworkDelivery.width },
+      policy: 'One fixed existing 1440px WebP, exactly 93,712 bytes below 100KiB, responsive through CSS only. Intentionally costs 76,550 more bytes than 480px and 58,756 more than 768px on mobile to remove candidate changes. This is a bounded robustness tradeoff, not optimal per-device delivery or proof of paint. visualViewport.scale is recorded separately, not multiplied into DPR demand or treated as a cause.',
+      delivery: { requests: delivery.requests, requestCount: delivery.requests.length, status: response.status(), contentType: response.headers()['content-type'], cacheControl: response.headers()['cache-control'], fromServiceWorker: response.fromServiceWorker(), requestTiming: response.request().timing(), bytes: bytes.length, maximumBytes: fixedArtworkDelivery.maximumBytes },
   }, null, 2));
   await testInfo.attach('home-artwork-delivery.json', { path: evidencePath, contentType: 'application/json' });
   await expect(image).toHaveAttribute('width', '1440');
@@ -114,34 +99,34 @@ async function expectArtwork(page: Page, delivery: { requests: string[]; respons
   expect(state.imageAttributes.src).not.toBeNull();
   const fallbackUrl = new URL(state.imageAttributes.src!, origin);
   expect(fallbackUrl.origin).toBe(new URL(origin).origin);
-  expect(fallbackUrl.pathname).toBe('/images/home/forge-workbench-768.webp');
+  expect(fallbackUrl.pathname).toBe(fixedArtworkPath);
   expect(fallbackUrl.search).toBe('');
   expect(fallbackUrl.hash).toBe('');
-  expect(state.imageAttributes.srcSet).toBe(state.srcSet);
-  expect(state.imageAttributes.sizes).toBe('(max-width: 30rem) calc(100vw - 3.125rem), (max-width: 34.5rem) calc(100vw - 3.625rem), (max-width: 46rem) 30.875rem, (max-width: 82.5rem) calc(55vw - 3.05rem), 42.325rem');
-  const declaredCandidates = state.srcSet.split(',').map(entry => {
-    const [src, descriptor] = entry.trim().split(/\s+/);
-    return { url: new URL(src, origin).href, descriptor };
-  });
-  expect(declaredCandidates).toEqual(artworkCandidates.map(candidate => ({ url: new URL(`/images/home/forge-workbench-${candidate.width}.webp`, origin).href, descriptor: `${candidate.width}w` })));
-  expect(state.resolvedSize).not.toBeNull();
-  expect(Math.abs(state.resolvedSize!.width - state.slot.width)).toBeLessThanOrEqual(1);
+  expect(state.imageAttributes.srcSet).toBeNull();
+  expect(state.imageAttributes.sizes).toBeNull();
+  expect(state.srcSet).toBe('');
+  expect(state.sizes).toBe('');
+  expect(state.currentSrc).toBe(fixedUrl);
+  expect(Math.abs(state.frameContentWidth - state.slot.width)).toBeLessThanOrEqual(1);
   expect(selectedUrl.origin).toBe(new URL(origin).origin);
   expect(selectedUrl.search).toBe('');
   expect(selectedUrl.hash).toBe('');
-  expect(candidate).toBeDefined();
-  expect(bounds.allowedWidths).toContain(selectedWidth);
+  expect(selectedUrl.pathname).toBe(fixedArtworkPath);
+  expect(state.naturalWidth).toBe(fixedArtworkDelivery.width);
+  expect(state.naturalHeight).toBe(fixedArtworkDelivery.height);
   expect(state.slot.width / state.slot.height).toBeCloseTo(3 / 2, 2);
   expect(state.naturalWidth / state.naturalHeight).toBeCloseTo(3 / 2, 2);
   expect(state.computed.fit).not.toBe('cover');
   expect(response.url()).toBe(state.currentSrc);
   expect(response.status()).toBe(200);
   expect(response.headers()['content-type']).toMatch(/^image\/webp(?:;|$)/);
-  expect(bytes.length).toBe(candidate!.bytes);
-  expect(bytes.length).toBeLessThanOrEqual(100 * 1024);
+  expect(bytes.length).toBe(fixedArtworkDelivery.bytes);
+  expect(bytes.length).toBeLessThanOrEqual(fixedArtworkDelivery.maximumBytes);
   expect(bytes.subarray(0, 4).toString()).toBe('RIFF');
   expect(bytes.subarray(8, 12).toString()).toBe('WEBP');
   expect(delivery.requests).toEqual([state.currentSrc]);
+  expect(state.resourceTimings).toHaveLength(1);
+  expect(state.resourceTimings[0]).toMatchObject({ url: fixedUrl, initiatorType: 'img', encodedBodySize: fixedArtworkDelivery.bytes });
 }
 
 function requireDisposableFixture() {
@@ -277,7 +262,7 @@ test('illustration motion is keyboard-requested, finite and cancelled by a live 
   expect(await running()).toBe(0);
 });
 
-test('home artwork selects and decodes one bounded local asset at real 2x device density', async ({ browser, page }, testInfo) => {
+test('home artwork decodes the one fixed bounded source at real 2x device density', async ({ browser, page }, testInfo) => {
   const viewport = page.viewportSize()!;
   const context = await browser.newContext({ baseURL: origin, viewport, deviceScaleFactor: 2, reducedMotion: 'reduce' });
   try {

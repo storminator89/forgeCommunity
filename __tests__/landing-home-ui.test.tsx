@@ -79,12 +79,12 @@ it('provides one optimized local illustration that stays still until keyboard ac
   const { container } = render(<Home />);
   const illustration = screen.getByRole('img', { name: /Illustration: Zwei Erwachsene.*Ideenfunken.*Buch.*Bausteinen/ });
   expect(illustration.tagName.toLowerCase()).toBe('img');
-  expect(illustration).toHaveAttribute('src', '/images/home/forge-workbench-768.webp');
+  expect(illustration).toHaveAttribute('src', '/images/home/forge-workbench-1440.webp');
   const picture = illustration.closest('picture')!;
   expect(picture).not.toBeNull();
   expect(picture.querySelectorAll('source')).toHaveLength(0);
-  expect(illustration).toHaveAttribute('srcset', '/images/home/forge-workbench-480.webp 480w, /images/home/forge-workbench-768.webp 768w, /images/home/forge-workbench-1440.webp 1440w');
-  expect(illustration).toHaveAttribute('sizes', '(max-width: 30rem) calc(100vw - 3.125rem), (max-width: 34.5rem) calc(100vw - 3.625rem), (max-width: 46rem) 30.875rem, (max-width: 82.5rem) calc(55vw - 3.05rem), 42.325rem');
+  expect(illustration).not.toHaveAttribute('srcset');
+  expect(illustration).not.toHaveAttribute('sizes');
   expect(illustration).toHaveAttribute('width', '1440');
   expect(illustration).toHaveAttribute('height', '960');
   expect(illustration).toHaveAttribute('loading', 'eager');
@@ -127,7 +127,7 @@ it('uses native disabled semantics for reduced motion and cancels live animation
 });
 
 
-it('hydrates the server image in place without rewriting responsive attributes during preference updates', () => {
+it('hydrates the server image in place without rewriting fixed-source attributes during preference updates', () => {
   const container = document.createElement('div');
   container.innerHTML = renderToString(<ForgeWorkbench />);
   const serverImage = container.querySelector('img')!;

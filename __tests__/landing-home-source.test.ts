@@ -7,7 +7,7 @@ import { createElement, type ReactElement } from 'react';
 import { Writable } from 'node:stream';
 import { renderToPipeableStream, renderToStaticMarkup } from 'react-dom/server';
 import { ForgeWorkbench } from '../components/landing/ForgeWorkbench';
-import { artworkCandidates, artworkCandidateBounds } from '../e2e/landing-artwork-contract';
+import { artworkCandidates, fixedArtworkDelivery } from '../e2e/landing-artwork-contract';
 
 const source = (name: string) => readFileSync(path.join(process.cwd(), name), 'utf8');
 const css = source('app/home.module.css');
@@ -67,8 +67,11 @@ it('adds real CI screenshots alongside the exact accessible landing heading cont
   expect(workflow).toContain('test-results/**/*.png');
   expect(workflow).toContain('test-results/**/home-artwork-delivery.json');
   expect(workflow).not.toContain('test-results/**/*.json');
-  expect(browser).toContain('artworkCandidateBounds(state.slot.width, state.dpr)');
-  expect(browser).toContain('state.resolvedSize!.width - state.slot.width');
+  expect(browser).toContain('state.frameContentWidth - state.slot.width');
+  expect(browser).toContain('expect(state.resourceTimings).toHaveLength(1)');
+  expect(browser).toContain('expect(bytes.length).toBe(fixedArtworkDelivery.bytes)');
+  expect(browser).toContain('expect(state.naturalWidth).toBe(fixedArtworkDelivery.width)');
+  expect(browser).toContain('expect(state.naturalHeight).toBe(fixedArtworkDelivery.height)');
   expect(browser).toContain('window.visualViewport.scale');
   expect(browser).not.toMatch(/viewport(?:Size\(\)!)?\.width\s*<=\s*390/);
   // Playwright inserts spaces for BR in accessible names; textContent does not.
@@ -115,20 +118,17 @@ it('pins the generated original and verifies every uncropped responsive WebP aga
 });
 
 
-it('bounds browser over-delivery by measured slot and DPR without declaring the largest candidate optimal', () => {
-  expect(artworkCandidateBounds(270, 1)).toMatchObject({ uncappedDemand: 270, cappedDemand: 270, smallestAdequateWidth: 480, allowedWidths: [480, 768], sourceLimited: false });
-  expect(artworkCandidateBounds(340, 1).allowedWidths).not.toContain(1440);
-  expect(artworkCandidateBounds(340, 2)).toMatchObject({ uncappedDemand: 680, smallestAdequateWidth: 768, allowedWidths: [768, 1440] });
-  expect(artworkCandidateBounds(655.2, 1)).toMatchObject({ smallestAdequateWidth: 768, allowedWidths: [768, 1440] });
-  expect(artworkCandidateBounds(655.2, 2)).toMatchObject({ smallestAdequateWidth: 1440, allowedWidths: [1440] });
-  expect(artworkCandidateBounds(800, 2)).toMatchObject({ uncappedDemand: 1600, cappedDemand: 1440, sourceLimited: true });
-  for (const [slot, dpr] of [[0, 1], [100, 0], [NaN, 1], [100, Infinity]]) {
-    expect(() => artworkCandidateBounds(slot, dpr)).toThrow('finite and positive');
-  }
+it('pins the fixed source, one-image byte ceiling and explicit mobile delivery cost', () => {
+  expect(fixedArtworkDelivery).toEqual({
+    path: '/images/home/forge-workbench-1440.webp', width: 1440, height: 960,
+    bytes: 93712, maximumBytes: 100 * 1024,
+    mobileExtraBytes: { 480: 76550, 768: 58756 },
+  });
+  expect(fixedArtworkDelivery.bytes).toBeLessThan(fixedArtworkDelivery.maximumBytes);
+  expect(fixedArtworkDelivery.bytes).toBe(artworkCandidates[2].bytes);
+  expect(fixedArtworkDelivery.mobileExtraBytes[480]).toBe(fixedArtworkDelivery.bytes - artworkCandidates[0].bytes);
+  expect(fixedArtworkDelivery.mobileExtraBytes[768]).toBe(fixedArtworkDelivery.bytes - artworkCandidates[1].bytes);
 });
-
-const expectedArtworkSizes = '(max-width: 30rem) calc(100vw - 3.125rem), (max-width: 34.5rem) calc(100vw - 3.625rem), (max-width: 46rem) 30.875rem, (max-width: 82.5rem) calc(55vw - 3.05rem), 42.325rem';
-const expectedArtworkSrcSet = '/images/home/forge-workbench-480.webp 480w, /images/home/forge-workbench-768.webp 768w, /images/home/forge-workbench-1440.webp 1440w';
 
 function renderStreamingMarkup(element: ReactElement): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -146,11 +146,10 @@ function renderStreamingMarkup(element: ReactElement): Promise<string> {
 it.each([
   ['static', (element: ReactElement) => Promise.resolve(renderToStaticMarkup(element))],
   ['streaming', renderStreamingMarkup],
-] as const)('keeps one responsive image owner and no automatic head hint in %s SSR', async (_name, renderMarkup) => {
+] as const)('keeps one fixed image source and no automatic head hint in %s SSR', async (_name, renderMarkup) => {
   const markup = await renderMarkup(createElement(ForgeWorkbench));
   const standalone = await renderMarkup(createElement('img', {
-    src: '/images/home/forge-workbench-768.webp',
-    srcSet: expectedArtworkSrcSet, sizes: expectedArtworkSizes,
+    src: '/images/home/forge-workbench-1440.webp',
     alt: '', loading: 'eager', fetchPriority: 'high',
   }));
   // The installed renderer hoists a standalone image, including in streaming SSR.
@@ -160,10 +159,20 @@ it.each([
   expect(markup).not.toMatch(/<source\b/);
   expect(markup.match(/<img\b/g)).toHaveLength(1);
   const imageMarkup = markup.match(/<img\b[^>]*\/>/)![0];
-  expect(imageMarkup).toContain(`sizes="${expectedArtworkSizes}"`);
-  expect(imageMarkup).toContain(`srcSet="${expectedArtworkSrcSet}"`);
-  expect(imageMarkup).toContain('src="/images/home/forge-workbench-768.webp"');
+  expect(imageMarkup).not.toMatch(/\b(?:sizes|srcset)="/i);
+  expect(imageMarkup).toContain('src="/images/home/forge-workbench-1440.webp"');
   expect(imageMarkup).toContain('width="1440" height="960"');
   expect(imageMarkup).toContain('alt="Illustration: Zwei Erwachsene teilen einen goldenen Ideenfunken über einem offenen Buch, umgeben von farbigen Bausteinen."');
   expect(imageMarkup).toMatch(/loading="eager"[^>]*fetchPriority="high"[^>]*decoding="async"/);
+});
+
+
+it('adds exact fixed-source checks around the unchanged strict single original Spark capture', () => {
+  const browser = source('e2e/spark-entry.pw.ts');
+  expect(browser).toContain("const fixedHeroPath = '/images/home/forge-workbench-1440.webp'");
+  for (const phase of ['observation', 'immediateAfter', 'after!']) {
+    expect(browser).toContain(`expect(${phase}.state.currentSrc).toBe(fixedHeroPath)`);
+  }
+  expect(browser).toContain('expect(pixels.nonblank');
+  expect(browser).toContain('expect(pixels.composition.matches');
 });

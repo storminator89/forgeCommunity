@@ -8,6 +8,7 @@ const origin = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3013';
 const preferenceKey = 'forge-journey-mascot-hidden';
 const preview = '[data-spark-entry-figure] img';
 const approvedHeroArtwork = readFileSync('public/images/home/forge-workbench-1440.webp');
+const fixedHeroPath = '/images/home/forge-workbench-1440.webp';
 const heroRequests = new WeakMap<Page, ReturnType<typeof observeSparkHeroRequests>>();
 const sizes = [
   { width: 1280, height: 800 }, { width: 320, height: 700 },
@@ -143,6 +144,7 @@ async function capture(page: Page, info: TestInfo, name: string) {
       return observation.ready;
     }, { timeout: 20_000, message: 'Hero currentSrc, decode and geometry must settle across rendering frames.' }).toBe(true);
     expect(observation.state.viewport).toMatchObject(page.viewportSize()!);
+    expect(observation.state.currentSrc).toBe(fixedHeroPath);
     // Exactly one original full-page capture. A blank result is a hard failure;
     // never recapture until a preferable frame appears or alter the saved PNG.
     captureWindow.startedAtMs = network!.mark('capture');
@@ -150,6 +152,7 @@ async function capture(page: Page, info: TestInfo, name: string) {
     captureWindow.finishedAtMs = network!.mark('post-capture');
     immediateAfter = await hero.evaluate(observeSparkHeroCapture, false);
     pixels = await inspectSparkHeroCapture(png, observation.state.rect, observation.state.viewport.dpr, observation.state.viewport.width, approvedHeroArtwork);
+    expect(immediateAfter.state.currentSrc).toBe(fixedHeroPath);
     expect(sparkHeroCaptureIdentity(observation, immediateAfter), 'Hero geometry and the approved family must also hold immediately after capture.').toMatchObject({
       approvedCompositionFamily: true, unchangedRenderedState: true,
     });
@@ -160,6 +163,7 @@ async function capture(page: Page, info: TestInfo, name: string) {
     expect(sparkHeroCaptureIdentity(observation, after!), 'Both decoded Hero observations must preserve document geometry and the approved composition family.').toEqual({
       decodedAndStable: true, approvedCompositionFamily: true, unchangedRenderedState: true,
     });
+    expect(after!.state.currentSrc).toBe(fixedHeroPath);
     expect(pixels.nonblank, 'The unchanged full-page PNG must contain visible Hero artwork, not an empty frame.').toBe(true);
     expect(pixels.composition.matches, 'The unchanged PNG interior must preserve the approved artwork composition.').toBe(true);
   } finally {
