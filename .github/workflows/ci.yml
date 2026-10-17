@@ -289,6 +289,7 @@ jobs:
           path: |
             test-results/**/*.png
             test-results/**/home-artwork-delivery.json
+            test-results/**/private-invitation-*.json
           if-no-files-found: warn
           retention-days: 7
 
