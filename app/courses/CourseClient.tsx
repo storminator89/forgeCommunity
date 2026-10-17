@@ -317,7 +317,6 @@ function CourseRow({ course, onDelete, deleting, onJoin, onLeave, pending, canMa
             <span className="min-w-0">{actionLabel}</span>{!unavailable && <ArrowRight aria-hidden="true" className="h-4 w-4 shrink-0" />}
           </Button>
           {isPaid && !canOpen && <p className="text-xs leading-relaxed text-muted-foreground">Für kostenpflichtige Kurse ist eine separate Buchung erforderlich.</p>}
-          {isFull && !isPaid && !canOpen && <p className="text-xs leading-relaxed text-muted-foreground">Alle Plätze sind derzeit vergeben.</p>}
           {course.isEnrolled && !course.completed && !course.everCompleted && !isPaid && !course.canDelete && <Button type="button" variant="ghost" className="w-full" onClick={onLeave} disabled={pending}>Kurs verlassen</Button>}
         </div>
       </div>

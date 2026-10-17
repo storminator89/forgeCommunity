@@ -135,10 +135,7 @@ function SpacesDirectory({ canCreate }: { canCreate: boolean }) {
   const resultCount = `${visibleSpaces.length} ${visibleSpaces.length === 1 ? 'Space' : 'Spaces'}`;
   return <SpaceShell>
     <div className="flex flex-wrap items-end justify-between gap-4 border-b pb-6">
-      <div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Community / Spaces</p>
-        <h1 className="mt-2 text-[clamp(1.65rem,1.1rem+2vw,2.35rem)] font-semibold tracking-tight">Spaces</h1>
-        <p className="mt-2 max-w-[60ch] text-sm leading-relaxed text-muted-foreground">Austausch in klaren Themenräumen.</p>
-      </div>
+      <h1 className="min-w-0 text-[clamp(1.65rem,1.1rem+2vw,2.35rem)] font-semibold tracking-tight">Spaces</h1>
       {canCreate && <Button type="button" onClick={() => { setShowCreate(value => !value); setCreateError(''); }} aria-expanded={showCreate} aria-controls="create-space">{showCreate ? 'Schließen' : 'Space erstellen'}</Button>}
     </div>
 
@@ -160,7 +157,7 @@ function SpacesDirectory({ canCreate }: { canCreate: boolean }) {
     {!loading && error && !loaded && <PageState kind="error" title="Spaces nicht verfügbar" description={error} action={<Button variant="outline" onClick={refreshDirectory}>Erneut versuchen</Button>} />}
     {!loading && loaded && visibleSpaces.length === 0 && <PageState
       title={cursor ? 'Noch kein passender Space geladen' : 'Keine Spaces gefunden'}
-      description={cursor ? 'Auf weiteren Seiten können passende Spaces liegen.' : filter === 'ALL' ? 'Hier sind noch keine Spaces verfügbar.' : 'In dieser Ansicht gibt es keine Spaces.'}
+      description={cursor ? 'Auf weiteren Seiten können passende Spaces liegen.' : undefined}
       action={cursor ? <Button type="button" variant="outline" disabled={loadingMore} onClick={loadMore}>{loadingMore ? 'Wird geladen…' : 'Weitere Spaces laden'}</Button> : filter !== 'ALL' ? <Button variant="outline" onClick={() => setFilter('ALL')}>Alle anzeigen</Button> : undefined} />}
     {!loading && visibleSpaces.length > 0 && <ul className="divide-y border-y">{visibleSpaces.map(space => <li key={space.id} className="min-w-0"><Link href={spaceUrl(space.id)} className="group flex min-h-28 min-w-0 flex-col justify-center gap-2 py-5 transition-colors hover:bg-muted/40 focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:flex-row sm:items-start sm:justify-between sm:gap-8 sm:px-2">
       <span className="min-w-0"><span className="block break-words text-lg font-semibold group-hover:text-primary">{space.name}</span><span className="mt-1 block max-w-[70ch] break-words text-sm leading-relaxed text-muted-foreground">{space.description}</span></span>

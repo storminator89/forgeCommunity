@@ -120,8 +120,7 @@ export function QuestionBankPanel({ activeQuestion, onInsert }: {
 
   return <section className="mb-6 border-y py-4" aria-label="Eigener Fragenpool">
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <div className="min-w-0 flex-1"><h4 className="font-semibold">Eigener Fragenpool</h4>
-        <p className="text-sm text-muted-foreground">Fragen versionieren und als unabhängige Kopie in dieses Quiz übernehmen.</p></div>
+      <div className="min-w-0 flex-1"><h4 className="font-semibold">Eigener Fragenpool</h4></div>
       <Button type="button" variant="outline" onClick={toggle} aria-expanded={open} aria-controls={`${id}-content`} className="min-h-11 shrink-0">
         {open ? 'Fragenpool schließen' : 'Fragenpool öffnen'}
       </Button>

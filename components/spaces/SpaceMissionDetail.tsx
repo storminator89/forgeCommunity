@@ -207,7 +207,7 @@ export function SpaceMissionDetail({ spaceId, missionId, viewerId, invitationId 
 
   return <SpaceShell>
     <nav aria-label="Pfad" className="mb-6 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground"><Link prefetch={false} href="/community/spaces" className="rounded-sm py-2 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring">Spaces</Link><span aria-hidden="true">/</span><Link prefetch={false} href={spaceUrl(spaceId)} className="min-w-0 max-w-full truncate rounded-sm py-2 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring">{space.name}</Link><span className="ml-auto"><FriendlyMotionToggle /></span></nav>
-    <div data-confirmed={Boolean(feedback && !actionError)} className={`max-w-4xl ${motionEnabled ? styles.motion : ''}`}>
+    <div data-confirmed={Boolean(feedback && !actionError)} className={`${styles.detail} max-w-4xl ${motionEnabled ? styles.motion : ''}`}>
     <header className={`${styles.surface} ${styles.hero}`}>
       <div className={styles.heroCopy}>
         <div className="flex flex-wrap items-center justify-between gap-2">

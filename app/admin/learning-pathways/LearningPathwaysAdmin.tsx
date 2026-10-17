@@ -136,7 +136,7 @@ function ScopedAdmin() {
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     {pathways === null && !error && <PageState kind="loading" title="Lernpfade werden geladen" />}
     {pathways !== null && <div className="grid min-w-0 gap-10 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)]">
-      <section aria-labelledby="create-pathway-title" className="min-w-0"><div className="border-b pb-4"><h2 id="create-pathway-title" className="text-xl font-semibold">Neuen Lernpfad erstellen</h2><p className="mt-1 text-sm text-muted-foreground">Der Server prüft Kursfreigabe und Veröffentlichung beim Speichern erneut.</p></div>
+      <section aria-labelledby="create-pathway-title" className="min-w-0"><div className="border-b pb-4"><h2 id="create-pathway-title" className="text-xl font-semibold">Neuen Lernpfad erstellen</h2></div>
         <form onSubmit={submit} className="mt-6 space-y-6">
           <div><label htmlFor="pathway-title" className="mb-1.5 block text-sm font-medium">Titel</label><Input ref={titleRef} id="pathway-title" value={title} onChange={event => setTitle(event.target.value)} maxLength={120} required placeholder="Zum Beispiel: Grundlagen der Zusammenarbeit" /></div>
           <div><label htmlFor="pathway-description" className="mb-1.5 block text-sm font-medium">Beschreibung</label><Textarea id="pathway-description" value={description} onChange={event => setDescription(event.target.value)} maxLength={500} required rows={3} placeholder="Was lernen Mitglieder auf diesem Weg?" /></div>

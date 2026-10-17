@@ -88,3 +88,14 @@
 .bookmarkMark { width: 21px; height: 21px; flex: 0 0 21px; }
 .taskTarget { scroll-margin-block: 20px; border-radius: 4px; }
 .taskTarget:focus { outline: 2px solid hsl(var(--ring)); outline-offset: 4px; }
+
+/* This detail surface can become 128 CSS px at 320px with CSS zoom 2.
+   Preserve every label and privacy sentence instead of overflowing or clipping. */
+.detail { min-width: 0; container-type: inline-size; overflow-wrap: anywhere; }
+.detail p { min-width: 0; overflow-wrap: anywhere; }
+.detail button { min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+@container (width < 240px) {
+  .detail button { height: auto; min-height: 44px; }
+  .detail .goalTrail { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .detail .goalTrail li:not(:last-child)::after { display: none; }
+}

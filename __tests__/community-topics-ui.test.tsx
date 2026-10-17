@@ -93,7 +93,10 @@ it('keeps topic-specific empty and error states actionable', async () => {
   expect(screen.getByRole('searchbox', { name: 'Thema suchen' })).toHaveFocus()
   fireEvent.click(screen.getByRole('button', { name: 'Alle Beiträge zeigen' }))
   expect(window.location.search).toBe('')
-  expect(await screen.findByText('Sei der Erste, der etwas teilt!')).toBeInTheDocument()
+  expect(await screen.findByRole('heading', { name: 'Keine Beiträge gefunden' })).toBeVisible()
+  expect(screen.getByRole('button', { name: 'Beitrag schreiben' })).toBeVisible()
+  expect(screen.queryByText('Für „Design“ gibt es noch keine sichtbaren Beiträge.')).not.toBeInTheDocument()
+  expect(screen.queryByText('Sei der Erste, der etwas teilt!')).not.toBeInTheDocument()
 })
 
 it('adds existing and new topics by keyboard, prevents duplicates, and removes selections', async () => {

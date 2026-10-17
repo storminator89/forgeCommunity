@@ -107,7 +107,7 @@ export function FollowersList({ userId, count, type }: FollowersListProps) {
           <DialogTitle>
             {type === 'followers' ? 'Follower' : 'Folgt'}
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="sr-only">
             {type === 'followers'
               ? 'Benutzer, die diesem Profil folgen'
               : 'Benutzer, denen dieses Profil folgt'}

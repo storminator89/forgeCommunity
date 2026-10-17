@@ -797,6 +797,46 @@ test.describe('every App Router page, one at a time', () => {
       await page.keyboard.press('Enter');
       await expect(main).toBeFocused();
 
+      if (item.url === '/community') {
+        const activity = main.getByRole('region', { name: 'Deine Aktivität', exact: true });
+        for (const [label, text, evidenceName] of [
+          ['So wird gezählt', 'Alle deine Beiträge. Likes auf deine Beiträge, einschließlich eigener Likes. Kommentare in veröffentlichten und deinen eigenen Beiträgen.', 'activity'],
+          ['Sichtbarkeit', 'Deine Punkte und Meilensteine bleiben für dich sichtbar, auch wenn du nicht in der öffentlichen Rangliste stehst.', 'rewards'],
+        ] as const) {
+          const summary = activity.locator('summary').filter({ hasText: new RegExp(`^${label}$`) });
+          const details = summary.locator('..');
+          const explanation = details.getByText(text, { exact: true });
+          await expect(details).not.toHaveAttribute('open');
+          await expect(explanation).toBeHidden();
+          await summary.scrollIntoViewIfNeeded();
+          expect((await summary.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+          await page.keyboard.press('Tab');
+          await summary.focus();
+          await expect(summary).toBeFocused();
+          expect(await summary.evaluate(element => element.matches(':focus-visible'))).toBe(true);
+          expect(await summary.evaluate(element => getComputedStyle(element).boxShadow)).not.toBe('none');
+          await summary.press('Enter');
+          await expect(details).toHaveAttribute('open');
+          await expect(explanation).toBeVisible();
+          await explanation.scrollIntoViewIfNeeded();
+          await page.screenshot({ path: testInfo.outputPath(`community-${evidenceName}-disclosure-open-${paletteTheme}.png`), animations: 'disabled' });
+          await summary.press('Space');
+          await expect(details).not.toHaveAttribute('open');
+          await expect(explanation).toBeHidden();
+          if (testInfo.project.use.hasTouch) {
+            await summary.tap();
+            await expect(explanation).toBeVisible();
+            await summary.tap();
+          } else {
+            await summary.click();
+            await expect(explanation).toBeVisible();
+            await summary.click();
+          }
+          await expect(details).not.toHaveAttribute('open');
+          await expect(explanation).toBeHidden();
+        }
+      }
+
       if (item.url === '/courses/qa-route-course/analytics') {
         const search = main.getByRole('textbox', { name: 'Name suchen' });
         await search.focus();

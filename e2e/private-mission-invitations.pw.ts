@@ -251,13 +251,59 @@ function readInvitationGeometry(element: Element) {
   };
   const main = element.closest('main');
   if (!main || !element.isConnected) throw new Error('Invitation capture requires its connected real main.');
-  const overflows = (box: ReturnType<typeof bounds>) => box.left < -1 || box.right > innerWidth + 1 || box.scrollWidth > box.clientWidth + 1;
+  const overflows = (box: ReturnType<typeof bounds>) => box.leftOverflow || box.rightOverflow || box.scrollOverflow;
+  const ancestorsClean = (node: Element) => {
+    for (let parent = node.parentElement; parent; parent = parent.parentElement) {
+      if (overflows(bounds(parent))) return false;
+      if (parent === main) return true;
+    }
+    return false;
+  };
+  const within = (inner: { left: number; right: number }, outer: { left: number; right: number }) =>
+    inner.left >= outer.left - 1 && inner.right <= outer.right + 1;
+  // The source-pinned Space-name breadcrumb deliberately uses CSS ellipsis.
+  // This never excuses a clipped control, another link, or an overflowing nav.
+  const breadcrumbClip = (node: Element, style: CSSStyleDeclaration, box: ReturnType<typeof bounds>) => {
+    if (node.tagName !== 'A') return false;
+    const nav = node.closest('nav[aria-label="Pfad"]');
+    if (!nav || node.parentElement !== nav) return false;
+    const links = Array.from(nav.children).filter(child => child.tagName === 'A');
+    return links.length === 2 && links[1] === node &&
+      style.overflowX === 'hidden' && style.textOverflow === 'ellipsis' && style.whiteSpace === 'nowrap' &&
+      !box.leftOverflow && !box.rightOverflow && box.width > 0 && ancestorsClean(node);
+  };
+  // Only the existing three-step GoalTrail's empty one-pixel connector may
+  // paint into its next grid cell. Its children, OL, every ancestor and viewport
+  // must fit, and the measured scroll extent must equal that exact paint end.
+  const goalConnector = (node: Element, style: CSSStyleDeclaration, box: ReturnType<typeof bounds>) => {
+    const list = node.parentElement;
+    if (node.tagName !== 'LI' || list?.tagName !== 'OL' || list.children.length !== 3 ||
+      !Array.from(list.children).every(child => child.tagName === 'LI') || node === list.lastElementChild ||
+      getComputedStyle(list).display !== 'grid' || style.display !== 'flex' || style.flexDirection !== 'column' ||
+      style.position !== 'relative' || style.overflowX !== 'visible' || box.leftOverflow || box.rightOverflow ||
+      !ancestorsClean(node) || node.children.length !== 3 ||
+      Array.from(node.children).map(child => child.tagName).join(',') !== 'SPAN,H3,SPAN' ||
+      node.querySelectorAll('button,input,textarea,select,a').length ||
+      !Array.from(node.children).every(child => within(bounds(child), box) && !bounds(child).scrollOverflow)) return false;
+    const after = getComputedStyle(node, '::after');
+    const width = parseFloat(style.width); const left = parseFloat(after.left); const lineWidth = parseFloat(after.width);
+    if (!['""', "''"].includes(after.content) || after.position !== 'absolute' || after.height !== '1px' || after.display === 'none' ||
+      ![width, left, lineWidth].every(Number.isFinite) || width <= 0 || lineWidth <= 0) return false;
+    const paintEnd = left + lineWidth;
+    const scale = box.width / width;
+    return Math.round(paintEnd) === box.scrollWidth &&
+      within({ left: box.left + left * scale, right: box.left + paintEnd * scale }, bounds(list));
+  };
+  type IntentionalOverflow = 'goal-trail-connector' | 'breadcrumb-ellipsis' | null;
   const violations: string[] = [];
   const surfaces = { document: bounds(document.documentElement), body: bounds(document.body), main: bounds(main), region: bounds(element) };
   for (const [name, box] of Object.entries(surfaces)) if (overflows(box)) violations.push(name);
-  const descendants: { label: string; bounds: ReturnType<typeof bounds>; whiteSpace: string; minWidth: number | null; inRegion: boolean; ancestors: { label: string; bounds: ReturnType<typeof bounds> }[] }[] = [];
+  const descendants: { label: string; bounds: ReturnType<typeof bounds>; whiteSpace: string; minWidth: number | null; inRegion: boolean;
+    intentionalOverflow: IntentionalOverflow; ancestors: { label: string; bounds: ReturnType<typeof bounds> }[] }[] = [];
   const texts: { label: string; left: number; right: number; top: number; bottom: number }[] = [];
-  let scannedDescendants = 0; let omittedDescendants = 0; let scannedTextRanges = 0; let omittedTextRanges = 0; let ancestorRows = 0; let omittedAncestorRows = 0;
+  const clippedTexts: { label: string; left: number; right: number; top: number; bottom: number; visibleLeft: number; visibleRight: number; reason: 'breadcrumb-ellipsis' }[] = [];
+  let scannedDescendants = 0; let omittedDescendants = 0; let scannedTextRanges = 0; let omittedTextRanges = 0;
+  let ancestorRows = 0; let omittedAncestorRows = 0; let omittedClippedTextRanges = 0;
   const selector = 'button,input,textarea,select,a,label,h1,h2,h3,p,li,[role="status"],[role="alert"]';
   for (const node of main.querySelectorAll(selector)) {
     const index = scannedDescendants++;
@@ -265,8 +311,11 @@ function readInvitationGeometry(element: Element) {
     const box = bounds(node);
     const tag = ['BUTTON', 'INPUT', 'TEXTAREA', 'SELECT', 'A', 'LABEL', 'H1', 'H2', 'H3', 'P', 'LI'].includes(node.tagName) ? node.tagName.toLowerCase() : 'semantic';
     const label = `main-${tag}-${index}`;
-    if (overflows(box)) violations.push(label);
     const style = getComputedStyle(node); const minimum = parseFloat(style.minWidth);
+    const intentionalOverflow: IntentionalOverflow = box.scrollOverflow && breadcrumbClip(node, style, box) ? 'breadcrumb-ellipsis'
+      : box.scrollOverflow && goalConnector(node, style, box) ? 'goal-trail-connector' : null;
+    const failing = overflows(box) && !intentionalOverflow;
+    if (failing) violations.push(label);
     const ancestors: { label: string; bounds: ReturnType<typeof bounds> }[] = [];
     if (overflows(box)) {
       let depth = 0;
@@ -276,14 +325,14 @@ function readInvitationGeometry(element: Element) {
         depth++;
       }
     }
-    const row = { label, bounds: box, ancestors,
+    const row = { label, bounds: box, ancestors, intentionalOverflow,
       whiteSpace: ['normal', 'nowrap', 'pre', 'pre-wrap', 'pre-line', 'break-spaces'].includes(style.whiteSpace) ? style.whiteSpace : 'other',
       minWidth: Number.isFinite(minimum) ? minimum : null, inRegion: element.contains(node) };
     if (descendants.length < 160) descendants.push(row);
     else {
       omittedDescendants++;
-      // Keep later failing leaves ahead of redundant nonfailing rows.
-      const replace = overflows(box) ? descendants.findLastIndex(row => !overflows(row.bounds)) : -1;
+      // Keep later failing leaves ahead of redundant clean/intentional rows.
+      const replace = failing ? descendants.findLastIndex(row => !overflows(row.bounds) || row.intentionalOverflow !== null) : -1;
       if (replace >= 0) { descendants.splice(replace, 1); descendants.push(row); }
     }
   }
@@ -295,7 +344,17 @@ function readInvitationGeometry(element: Element) {
     const range = document.createRange(); range.selectNodeContents(node);
     for (const box of range.getClientRects()) {
       const index = scannedTextRanges++;
-      if (box.left >= -1 && box.right <= innerWidth + 1) continue;
+      let visibleLeft = box.left; let visibleRight = box.right;
+      for (let parent: Element | null = node.parentElement; parent && parent !== main; parent = parent.parentElement) {
+        const clip = bounds(parent);
+        if (!breadcrumbClip(parent, getComputedStyle(parent), clip)) continue;
+        visibleLeft = Math.max(visibleLeft, clip.left); visibleRight = Math.min(visibleRight, clip.right);
+        if (clippedTexts.length < 40) clippedTexts.push({ label: `main-text-${index}`, left: box.left, right: box.right, top: box.top, bottom: box.bottom,
+          visibleLeft, visibleRight, reason: 'breadcrumb-ellipsis' });
+        else omittedClippedTextRanges++;
+        break;
+      }
+      if (visibleLeft >= -1 && visibleRight <= innerWidth + 1) continue;
       const label = `main-text-${index}`; violations.push(label);
       if (texts.length < 80) texts.push({ label, left: box.left, right: box.right, top: box.top, bottom: box.bottom });
       else omittedTextRanges++;
@@ -309,7 +368,8 @@ function readInvitationGeometry(element: Element) {
       duration: typeof timing?.duration === 'number' ? timing.duration : 'auto' };
   });
   return { viewport: { width: innerWidth, height: innerHeight }, zoom: Number(getComputedStyle(document.documentElement).zoom),
-    ...surfaces, descendants, texts, ancestorRows, omittedAncestorRows, scannedDescendants, omittedDescendants, scannedTextRanges, omittedTextRanges,
+    ...surfaces, descendants, texts, clippedTexts, omittedClippedTextRanges, ancestorRows, omittedAncestorRows,
+    scannedDescendants, omittedDescendants, scannedTextRanges, omittedTextRanges,
     violations: violations.slice(0, 256), omittedViolations: Math.max(0, violations.length - 256), animations, activeAnimations: active.length,
     omittedAnimations: Math.max(0, active.length - animations.length) };
 }
@@ -341,12 +401,18 @@ function settleCaptureMotion(element: Element) {
       if (done) return;
       try {
       frames++;
-      const nodes = [document.documentElement, main, element, document.activeElement];
+      // Flush the same descendant styles/geometry used by the final guard
+      // before observing animations, including newly instantiated 0.01ms
+      // reduced-motion transitions. The existing deadline/frame budget stays.
+      const nodes = [document.documentElement, main, element, document.activeElement, ...(main?.querySelectorAll('*') ?? [])];
       const geometry = JSON.stringify(nodes.map(node => {
         if (!node) return null;
-        const box = node.getBoundingClientRect();
+        const box = node.getBoundingClientRect(); const style = getComputedStyle(node);
+        const after = node.tagName === 'LI' ? getComputedStyle(node, '::after') : null;
         return [node.isConnected, box.left, box.top, box.width, box.height, node.scrollWidth, node.clientWidth,
-          node.scrollHeight, node.clientHeight, node.scrollTop, node.scrollLeft, getComputedStyle(node).zoom];
+          node.scrollHeight, node.clientHeight, node.scrollTop, node.scrollLeft, style.zoom, style.visibility,
+          style.whiteSpace, style.minWidth, style.overflowX, style.textOverflow, style.display, style.flexDirection, style.position, style.width,
+          after?.content, after?.display, after?.position, after?.left, after?.width, after?.height];
       }));
       const active = !main || main.getAnimations({ subtree: true }).some(animation => animation.pending || animation.playState === 'running' || animation.playState === 'paused');
       if (active) activeFrames++;

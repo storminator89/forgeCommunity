@@ -129,7 +129,7 @@ export function ProjectsList({ userId, isOwner }: { userId: string; isOwner: boo
     return <PageState kind="error" title={loadError} description="Prüfe deine Verbindung und versuche es erneut." action={<Button variant="outline" onClick={() => startFetch(1)}>Erneut versuchen</Button>} />;
   }
   if (projects.length === 0) {
-    return <PageState title="Noch keine Projekte" description={isOwner ? 'Du kannst dein erstes Projekt veröffentlichen.' : 'Dieses Mitglied hat noch keine Projekte veröffentlicht.'} action={isOwner ? <Button asChild><Link href="/projects/new">Projekt erstellen</Link></Button> : undefined} />;
+    return <PageState title="Noch keine Projekte" action={isOwner ? <Button asChild><Link href="/projects/new">Projekt erstellen</Link></Button> : undefined} />;
   }
 
   return (

@@ -129,13 +129,13 @@ function ArticlePageForViewer({ id, session }: { id: string; session: Session | 
               <><h1 className="sr-only">Artikel</h1><PageState kind="error" title="Artikel nicht verfügbar" description={error || 'Artikel nicht gefunden.'} action={<Button asChild variant="outline"><Link href="/knowledgebase">Zurück zur Übersicht</Link></Button>} /></>
             ) : (
               <article>
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-5">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Wissensdatenbank / Artikel</p>
-                  {isAuthor && <div className="flex flex-wrap items-center gap-2">
+                {isAuthor && <div className="flex flex-wrap items-center justify-end gap-3 border-b pb-5">
+
+                  <div className="flex flex-wrap items-center gap-2">
                     <Button asChild variant="outline" size="sm"><Link href={'/knowledgebase/' + displayedArticle.id + '/edit'}><Edit className="h-4 w-4" aria-hidden="true" />Bearbeiten</Link></Button>
                     <Button type="button" variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={handleDelete}><Trash className="h-4 w-4" aria-hidden="true" />Löschen</Button>
-                  </div>}
-                </div>
+                  </div>
+                </div>}
 
                 <header className="mx-auto max-w-[72ch] py-8 sm:py-12">
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">

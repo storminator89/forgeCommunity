@@ -158,11 +158,6 @@ export function ProfileEditor({ profile, onUpdate }: ProfileEditorProps) {
         <div className="flex flex-wrap gap-3 justify-between items-center">
           <div>
             <h4 className="text-sm font-medium">{title}</h4>
-            <p className="text-sm text-muted-foreground">
-              {currentImage
-                ? `Aktuelles ${imageType} hochgeladen`
-                : `Kein ${imageType} vorhanden`}
-            </p>
           </div>
           {currentImage && (
             <Button
@@ -219,7 +214,6 @@ export function ProfileEditor({ profile, onUpdate }: ProfileEditorProps) {
     <section aria-labelledby="profile-manage-title" className="mt-8 border-y py-6">
       <div className="mb-6">
         <h2 id="profile-manage-title" className="text-xl font-semibold tracking-tight">Profil verwalten</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Stammdaten, Bilder und externe Profile bearbeiten.</p>
       </div>
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList aria-label="Profil bearbeiten" className="flex h-auto w-full flex-wrap justify-start gap-1 rounded-none border-b bg-transparent p-0">
@@ -229,12 +223,10 @@ export function ProfileEditor({ profile, onUpdate }: ProfileEditorProps) {
         </TabsList>
         <TabsContent value="basic" className="pt-6">
           <h3 className="text-lg font-semibold">Persönliche Informationen</h3>
-          <p className="mt-1 text-sm text-muted-foreground">Name, Kontakt und Kurzbeschreibung.</p>
           <div className="mt-4"><ProfileEditForm userId={profile.id} initialData={{ name: profile.name || '', title: profile.title, bio: profile.bio, contact: profile.contact }} onUpdate={handleProfileUpdate} /></div>
         </TabsContent>
         <TabsContent value="media" className="pt-6">
           <h3 className="text-lg font-semibold">Medien verwalten</h3>
-          <p className="mt-1 text-sm text-muted-foreground">Profil- und Titelbild auswählen oder entfernen.</p>
           <div className="mt-5 grid min-w-0 gap-8 md:grid-cols-2">
             <div className="min-w-0 border-t pt-4">{renderMediaSection({ type: 'avatar', title: 'Profilbild' })}</div>
             <div className="min-w-0 border-t pt-4">{renderMediaSection({ type: 'cover', title: 'Titelbild' })}</div>
@@ -250,7 +242,6 @@ export function ProfileEditor({ profile, onUpdate }: ProfileEditorProps) {
       <div className="mt-7 border-t pt-5">
         <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2 text-sm"><span className="font-medium">Profilvollständigkeit</span><span className="tabular-nums text-muted-foreground">{calculateCompletionScore()}%</span></div>
         <Progress value={calculateCompletionScore()} className="h-2" aria-label={`Profilvollständigkeit: ${calculateCompletionScore()} Prozent`} />
-        <p className="mt-2 text-sm text-muted-foreground">{calculateCompletionScore() === 100 ? 'Profil vollständig' : 'Du kannst weitere Informationen ergänzen.'}</p>
       </div>
       {isLoading && <p role="status" className="mt-4 text-sm text-muted-foreground">Änderungen werden gespeichert…</p>}
     </section>

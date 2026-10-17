@@ -16,7 +16,8 @@ function boundedBrowserArtifacts(value) {
   assert.deepEqual(upload.with.path.trim().split(/\r?\n/).map(path => path.trim()), [
     'test-results/**/*.png',
     'test-results/**/home-artwork-delivery.json',
-  ], 'Upload screenshots and only the explicitly bounded hero diagnostics.');
+    'test-results/**/private-invitation-*.json',
+  ], 'Upload screenshots and only the explicitly bounded hero and invitation diagnostics.');
 }
 
 function isolatedChromiumSteps(value) {
@@ -44,7 +45,7 @@ test('CI preserves all Chromium projects with fresh servers and independent scre
   assert.ok(guard, 'Run this isolation regression in the official browser CI job.');
 });
 
-test('Firefox/WebKit still run after Chromium failures and screenshot roots plus named hero diagnostics are uploaded', () => {
+test('Firefox/WebKit still run after Chromium failures and screenshot roots plus named hero and invitation diagnostics are uploaded', () => {
   const { steps, chromium } = isolatedChromiumSteps(workflow);
   const smoke = steps.find(step => step.run === 'npx playwright test --config=playwright.smoke.config.ts');
   assert.ok(smoke); assert.equal(smoke.if, independentCondition);
@@ -72,11 +73,37 @@ test('artifact guard rejects broad JSON, trace, database uploads and missing app
     const copy = structuredClone(workflow);
     const upload = copy.jobs['browser-qa'].steps.find(step => step.name === 'Upload browser screenshots');
     upload.with.path += `\n${extra}`;
-    assert.throws(() => boundedBrowserArtifacts(copy), /only the explicitly bounded hero diagnostics/);
+    assert.throws(() => boundedBrowserArtifacts(copy), /only the explicitly bounded hero and invitation diagnostics/);
   }
-  for (const only of ['test-results/**/*.png', 'test-results/**/home-artwork-delivery.json']) {
+  for (const only of ['test-results/**/*.png', 'test-results/**/home-artwork-delivery.json', 'test-results/**/private-invitation-*.json']) {
     const copy = structuredClone(workflow);
     copy.jobs['browser-qa'].steps.find(step => step.name === 'Upload browser screenshots').with.path = only;
-    assert.throws(() => boundedBrowserArtifacts(copy), /only the explicitly bounded hero diagnostics/);
+    assert.throws(() => boundedBrowserArtifacts(copy), /only the explicitly bounded hero and invitation diagnostics/);
+  }
+});
+
+
+test('artifact guard requires every approved path and rejects near-miss invitation patterns', () => {
+  const approved = [
+    'test-results/**/*.png',
+    'test-results/**/home-artwork-delivery.json',
+    'test-results/**/private-invitation-*.json',
+  ];
+  for (const missing of approved) {
+    const copy = structuredClone(workflow);
+    copy.jobs['browser-qa'].steps.find(step => step.name === 'Upload browser screenshots').with.path = approved.filter(path => path !== missing).join('\n');
+    assert.throws(() => boundedBrowserArtifacts(copy), /only the explicitly bounded hero and invitation diagnostics/);
+  }
+  for (const nearMiss of [
+    'test-results/**/private-invitation*.json',
+    'test-results/**/private-invitation-*.zip',
+    'test-results/**/private-invitation-*',
+    'test-results/**/private-*.json',
+    'test-results/**/private-invitation-*.json*',
+    'test-results/**/private-invitation-*/**/*.json',
+  ]) {
+    const copy = structuredClone(workflow);
+    copy.jobs['browser-qa'].steps.find(step => step.name === 'Upload browser screenshots').with.path = [...approved.slice(0, 2), nearMiss].join('\n');
+    assert.throws(() => boundedBrowserArtifacts(copy), /only the explicitly bounded hero and invitation diagnostics/);
   }
 });

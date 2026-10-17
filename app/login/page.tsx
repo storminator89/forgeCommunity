@@ -80,15 +80,15 @@ function LoginContent() {
       </header>
       <main id="page-content" tabIndex={-1} className="mx-auto grid min-h-[calc(100svh-5rem)] max-w-6xl items-center gap-12 px-4 py-12 sm:px-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,28rem)] lg:gap-20 lg:py-20">
         <section className="hidden min-w-0 border-r pr-12 lg:block" aria-label="Über ForgeCommunity">
-          <p className="mb-5 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">ForgeCommunity / Zugang</p>
+
           <p className="max-w-[12ch] text-[clamp(2.75rem,2rem+2.5vw,4.5rem)] font-semibold leading-[1.08] tracking-[-0.05em]">Dein Platz für Austausch und neue Ideen.</p>
-          <p className="mt-6 max-w-[42ch] text-base leading-relaxed text-muted-foreground">Entdecke Beiträge, Kurse und Projekte. Und mach dort weiter, wo du gerade stehst.</p>
+
         </section>
         <div className="mx-auto w-full max-w-md min-w-0 border-t border-input pt-7 sm:pt-9">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Willkommen zurück</p>
+
           <h1 className="text-[clamp(2rem,1.5rem+2vw,2.7rem)] font-semibold tracking-[-0.04em]">Anmelden</h1>
-          <p className="mb-8 mt-2 text-sm leading-relaxed text-muted-foreground">Dein Zugang zu Community, Kursen und Projekten.</p>
-          <div className="space-y-6">
+
+          <div className="mt-7 space-y-6">
             <form method="post" onSubmit={handleSubmit} className="space-y-5" aria-busy={isLoading}>
               <div className="space-y-2">
                 <Label htmlFor="email">E-Mail-Adresse</Label>

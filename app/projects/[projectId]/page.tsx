@@ -366,7 +366,7 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
               <article>
                 {/* Project Header */}
                 <div className="mb-8 border-b pb-6">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Projekte / Details</p>
+
                   <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-start">
                     <div className="min-w-0 flex-1">
                       <h1 className="mb-4 mt-4 min-w-0 break-words text-[clamp(2rem,1.35rem+2.5vw,3.5rem)] font-semibold leading-tight tracking-[-0.045em] [overflow-wrap:anywhere]">{project.title}</h1>
@@ -562,9 +562,7 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
         <DialogContent className="max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Projekt bearbeiten</DialogTitle>
-            <DialogDescription>
-              Bearbeite die Details deines Projekts. Klicke auf Speichern, wenn du fertig bist.
-            </DialogDescription>
+            <DialogDescription>Titel, Beschreibung, Kategorie und Link sind erforderlich.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>

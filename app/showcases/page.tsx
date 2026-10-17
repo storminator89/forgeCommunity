@@ -412,7 +412,7 @@ function ProjectShowcaseForViewer({ session }: { session: Session | null }) {
         <AppHeader><div className="app-header-row"><h1 className="app-header-title">Projekte</h1><div className="app-header-actions"><ThemeToggle /><UserNav /></div></div></AppHeader>
         <main id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-[1440px] px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
-            <div className="flex flex-wrap items-end justify-between gap-5 border-b pb-7"><div><p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Community / Projekte</p><p className="mt-2 max-w-[55ch] text-base leading-relaxed text-muted-foreground">Entdecke Arbeiten, Ideen und Erfahrungen aus der Community.</p></div>{session && <Button type="button" onClick={() => setIsSubmitDialogOpen(true)}><Plus className="h-4 w-4" aria-hidden="true" />Projekt einreichen</Button>}</div>
+            {session && <div className="flex flex-wrap justify-end border-b pb-5"><Button type="button" onClick={() => setIsSubmitDialogOpen(true)}><Plus className="h-4 w-4" aria-hidden="true" />Projekt einreichen</Button></div>}
 
             <section aria-label="Projekte filtern" className="grid min-w-0 gap-4 border-b py-7 sm:grid-cols-[minmax(0,1fr)_12rem_auto] sm:items-end">
               <div className="min-w-0"><Label htmlFor="showcase-search" className="mb-2 block">Projekte suchen</Label><div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" /><Input id="showcase-search" type="search" value={searchTerm} onChange={event => setSearchTerm(event.target.value)} placeholder="Titel, Beschreibung oder Tag" className="pl-10" /></div></div>
@@ -634,7 +634,7 @@ function ProjectShowcaseForViewer({ session }: { session: Session | null }) {
           <DialogContent className="sm:max-w-[625px] max-h-[90dvh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Projekt bearbeiten</DialogTitle>
-              <DialogDescription>Aktualisiere dein Projekt und speichere deine Änderungen.</DialogDescription>
+              <DialogDescription>Titel, Beschreibung, Kategorie und Link sind erforderlich.</DialogDescription>
             </DialogHeader>
             <form onSubmit={(e) => { e.preventDefault(); void handleSubmitEditProject(); }} encType="multipart/form-data" aria-busy={isEditing}>
               {editError && <p role="alert" className="mt-4 rounded-[10px] border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">{editError}</p>}
@@ -742,11 +742,10 @@ function ProjectShowcaseForViewer({ session }: { session: Session | null }) {
           <DialogContent className="sm:max-w-[400px]">
             <DialogHeader>
               <DialogTitle>Projekt löschen</DialogTitle>
-              <DialogDescription>Bestätige das Löschen dieses Projekts.</DialogDescription>
-            </DialogHeader>
-            <p>
+              <DialogDescription>
               Bist du sicher, dass du das Projekt &quot;{projectToDelete.title}&quot; löschen möchtest? Diese Aktion kann nicht rückgängig gemacht werden.
-            </p>
+              </DialogDescription>
+            </DialogHeader>
             {deleteError && <p role="alert" className="rounded-[10px] border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">{deleteError}</p>}
             <div className="flex flex-wrap justify-end gap-3">
               <Button type="button" variant="outline" onClick={() => { setIsDeleteDialogOpen(false); setProjectToDelete(null); setDeleteError(null); }} disabled={isDeleting}>

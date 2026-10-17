@@ -330,15 +330,11 @@ function ResourceLibraryForViewer({ session }: { session: Session | null }) {
         <main id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto">
           <ToastContainer position="top-right" />
           <div className="mx-auto w-full max-w-[1440px] px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
-            <div className="flex flex-wrap items-end justify-between gap-5 border-b pb-7">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Entdecken / Ressourcen</p>
-                <p className="mt-2 max-w-[55ch] text-base leading-relaxed text-muted-foreground">Nützliche Links, Videos und Lesestoff aus der Community.</p>
-              </div>
-              {session && <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            {session && <div className="flex flex-wrap justify-end border-b pb-5">
+              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogTrigger asChild><Button type="button"><Plus className="h-4 w-4" aria-hidden="true" />Ressource hinzufügen</Button></DialogTrigger>
                 <DialogContent>
-                  <DialogHeader><DialogTitle>Neue Ressource hinzufügen</DialogTitle><DialogDescription>Teile einen Link mit der Community.</DialogDescription></DialogHeader>
+                  <DialogHeader><DialogTitle>Neue Ressource hinzufügen</DialogTitle><DialogDescription>Titel und URL sind erforderlich.</DialogDescription></DialogHeader>
                   <form onSubmit={event => { event.preventDefault(); void handleAddResource(); }} className="space-y-5">
                     <div className="space-y-2"><Label htmlFor="resource-title">Titel</Label><Input id="resource-title" value={newResource.title} onChange={event => setNewResource(previous => ({ ...previous, title: event.target.value }))} placeholder="Titel der Ressource" required /></div>
                     <div className="grid min-w-0 gap-4 sm:grid-cols-2">
@@ -349,8 +345,8 @@ function ResourceLibraryForViewer({ session }: { session: Session | null }) {
                     <DialogFooter><Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Abbrechen</Button><Button type="submit">Hinzufügen</Button></DialogFooter>
                   </form>
                 </DialogContent>
-              </Dialog>}
-            </div>
+              </Dialog>
+            </div>}
 
             <section aria-label="Ressourcen filtern" className="grid min-w-0 gap-4 border-b py-7 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_12rem_10rem_10rem] lg:items-end">
               <div className="min-w-0 sm:col-span-2 lg:col-span-1"><Label htmlFor="resource-search" className="mb-2 block">Ressourcen suchen</Label><div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" /><Input id="resource-search" type="search" value={searchTerm} onChange={event => setSearchTerm(event.target.value)} placeholder="Titel, Kategorie oder Autor" className="pl-10" /></div></div>
@@ -376,7 +372,7 @@ function ResourceLibraryForViewer({ session }: { session: Session | null }) {
 
         {editResource && <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
           <DialogContent>
-            <DialogHeader><DialogTitle>Ressource bearbeiten</DialogTitle><DialogDescription>Aktualisiere Titel und Zieladresse.</DialogDescription></DialogHeader>
+            <DialogHeader><DialogTitle>Ressource bearbeiten</DialogTitle><DialogDescription>Titel und URL sind erforderlich.</DialogDescription></DialogHeader>
             <form onSubmit={event => { event.preventDefault(); void handleUpdateResource(); }} className="space-y-5">
               <div className="space-y-2"><Label htmlFor="edit-resource-title">Titel</Label><Input id="edit-resource-title" value={editResource.title} onChange={event => setEditResource(previous => previous ? { ...previous, title: event.target.value } : previous)} required /></div>
               <div className="space-y-2"><Label htmlFor="edit-resource-url">URL</Label><Input id="edit-resource-url" type="url" value={editResource.url} onChange={event => setEditResource(previous => previous ? { ...previous, url: event.target.value } : previous)} required /></div>

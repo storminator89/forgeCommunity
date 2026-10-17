@@ -11,12 +11,10 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogDescription,
 } from "@/components/ui/dialog";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -166,12 +164,9 @@ export function ProfileEditForm({ userId, initialData, onUpdate }: ProfileEditFo
           Stammdaten bearbeiten
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[700px] h-[80vh] overflow-y-auto">
+      <DialogContent aria-describedby={undefined} className="sm:max-w-[700px] h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Profil bearbeiten</DialogTitle>
-          <DialogDescription>
-            Änderungen mit „Speichern“ übernehmen.
-          </DialogDescription>
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -191,9 +186,6 @@ export function ProfileEditForm({ userId, initialData, onUpdate }: ProfileEditFo
               <Card>
                 <CardHeader>
                   <CardTitle>Persönliche Informationen</CardTitle>
-                  <CardDescription>
-                    Name, Kontakt und Kurzbeschreibung.
-                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
@@ -209,7 +201,6 @@ export function ProfileEditForm({ userId, initialData, onUpdate }: ProfileEditFo
                         if (errors.name) setErrors({ ...errors, name: undefined });
                       }}
                       className={errors.name ? 'border-destructive' : ''}
-                      placeholder="Dein Name"
                     />
                     {errors.name && (
                       <p className="text-sm text-destructive flex items-center gap-1">
@@ -241,7 +232,6 @@ export function ProfileEditForm({ userId, initialData, onUpdate }: ProfileEditFo
                       id="bio"
                       value={formData.bio || ''}
                       onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
-                      placeholder="Über dich"
                       className="h-32 resize-none"
                     />
                   </div>
@@ -276,9 +266,6 @@ export function ProfileEditForm({ userId, initialData, onUpdate }: ProfileEditFo
               <Card>
                 <CardHeader>
                   <CardTitle>Profilbild</CardTitle>
-                  <CardDescription>
-                    Profilbild auswählen.
-                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex items-center justify-center">

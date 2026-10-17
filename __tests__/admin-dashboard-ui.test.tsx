@@ -29,6 +29,7 @@ beforeEach(() => {
 it('preserves the stats endpoint, linked destinations, German numbers, and a single page heading', async () => {
   const { container } = render(<AdminDashboard />);
   expect(await screen.findByText('1.234')).toBeVisible();
+  expect(screen.queryByText('Die Gesamtzahlen führen direkt in den jeweiligen Bereich.')).not.toBeInTheDocument();
   expect(global.fetch).toHaveBeenCalledWith('/api/admin/dashboard-stats', expect.objectContaining({ signal: expect.any(AbortSignal) }));
   expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
   expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Dashboard');
@@ -83,6 +84,7 @@ it.each(['network', 'http'])('offers a working retry after a %s failure without 
   expect(screen.queryByText('Noch keine Aktivitäten')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Erneut versuchen' }));
   expect(await screen.findByText('1.234')).toBeVisible();
+  expect(screen.queryByText('Die Gesamtzahlen führen direkt in den jeweiligen Bereich.')).not.toBeInTheDocument();
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   expect(global.fetch).toHaveBeenCalledTimes(2);
   errorSpy.mockRestore();

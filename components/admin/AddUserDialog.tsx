@@ -147,7 +147,7 @@ export default function AddUserDialog({ isOpen, onClose, onAddUser }: AddUserDia
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle>Neuen Benutzer erstellen</DialogTitle>
-          <DialogDescription>Pflichtfelder sind mit einem Stern markiert. Weitere Angaben können später ergänzt werden.</DialogDescription>
+          <DialogDescription>* Pflichtfeld</DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} noValidate>

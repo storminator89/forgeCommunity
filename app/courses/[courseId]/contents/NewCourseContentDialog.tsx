@@ -49,7 +49,7 @@ function NewCourseContentDraft({ onOpenChange, parentId, parentTitle, onCreate, 
     } finally { pendingRef.current = false; setSaving(false) }
   }
   return <DialogContent className="sm:max-w-xl" onEscapeKeyDown={event => { if (pendingRef.current) event.preventDefault() }} onPointerDownOutside={event => { if (pendingRef.current) event.preventDefault() }} onInteractOutside={event => { if (pendingRef.current) event.preventDefault() }}>
-    <DialogHeader><DialogTitle>Inhalt hinzufügen</DialogTitle><DialogDescription className="break-words [overflow-wrap:anywhere]">{parentId ? `Unter „${parentTitle || 'Ausgewählter Inhalt'}“` : 'Auf der obersten Kursebene'}. Du kannst den Inhalt anschließend ausarbeiten.</DialogDescription></DialogHeader>
+    <DialogHeader><DialogTitle>Inhalt hinzufügen</DialogTitle><DialogDescription className="break-words [overflow-wrap:anywhere]">{parentId ? `Unter „${parentTitle || 'Ausgewählter Inhalt'}“` : 'Auf der obersten Kursebene'}.</DialogDescription></DialogHeader>
     <form onSubmit={submit} aria-label="Kursinhalt hinzufügen" aria-busy={saving} className="min-w-0 space-y-5">
       <fieldset disabled={busy} className="min-w-0 space-y-5">
         <div className="space-y-2"><Label htmlFor={`${id}-title`}>Titel</Label><Input id={`${id}-title`} autoFocus required maxLength={300} value={title} onChange={event => { setTitle(event.target.value); setError(null) }} placeholder="Zum Beispiel: Willkommen im Kurs" /></div>

@@ -98,15 +98,13 @@ function CourseComposer({ session }: { session: Session | null }) {
           <div className="mx-auto max-w-[1200px] px-4 pb-16 pt-7 sm:px-6 sm:pt-10 lg:px-8">
             <div className="flex flex-wrap items-center gap-x-6 gap-y-1"><Link href="/courses" className="inline-flex min-h-11 items-center text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:rounded-sm">← Zur Kursübersicht</Link><Link href="/courses/authoring" className="inline-flex min-h-11 items-center text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:rounded-sm">Meine Kursentwürfe</Link></div>
             <div className="mt-3 border-b pb-7">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Wissen weitergeben</p>
-              <h2 className="max-w-2xl text-[clamp(1.65rem,1.2rem+2vw,2.4rem)] font-semibold leading-tight tracking-tight">Ein neuer Kursentwurf.</h2>
-              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">Beschreibe das Thema und lege die wichtigsten Eckdaten fest. Nach dem Anlegen bearbeitest du den privaten Entwurf und veröffentlichst ihn später ausdrücklich. Für Lernende ist er bis dahin nicht sichtbar.</p>
+              <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">Der Entwurf ist für Lernende erst nach deiner ausdrücklichen Veröffentlichung sichtbar.</p>
             </div>
 
-            <div className="mt-8 grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1fr)_260px] lg:gap-12">
+            <div className="mt-8 min-w-0 max-w-3xl">
               <form onSubmit={handleSubmit} className="min-w-0 space-y-9" aria-label="Neuen Kurs erstellen">
                 <section aria-labelledby="course-basics-title" className="space-y-5">
-                  <div><h3 id="course-basics-title" className="text-lg font-semibold">Das Wichtigste zuerst</h3><p className="mt-1 text-sm text-muted-foreground">Worum geht es in deinem Kurs?</p></div>
+                  <div><h2 id="course-basics-title" className="text-lg font-semibold">Kursdaten</h2></div>
                   <div className="space-y-2">
                     <Label htmlFor="title">Kurstitel</Label>
                     <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="z. B. Einführung in React" />
@@ -114,12 +112,11 @@ function CourseComposer({ session }: { session: Session | null }) {
                   <div className="space-y-2">
                     <Label htmlFor="description">Kurskategorie</Label>
                     <Input id="description" value={description} onChange={(e) => setDescription(e.target.value)} required placeholder="z. B. Webentwicklung" />
-                    <p className="text-xs leading-relaxed text-muted-foreground">Diese Angabe erscheint als Kategorie in der Kursübersicht.</p>
                   </div>
                 </section>
 
                 <section aria-labelledby="course-details-title" className="space-y-5 border-t pt-8">
-                  <div><h3 id="course-details-title" className="text-lg font-semibold">Zeitraum und Plätze</h3><p className="mt-1 text-sm text-muted-foreground">Termine sind optional. Die Teilnehmerzahl hilft bei der Planung.</p></div>
+                  <div><h2 id="course-details-title" className="text-lg font-semibold">Zeitraum und Plätze</h2></div>
                   <div className="grid min-w-0 gap-5 sm:grid-cols-2">
                     <div className="min-w-0 space-y-2">
                       <Label htmlFor="start-date">Startdatum (optional)</Label>
@@ -145,24 +142,20 @@ function CourseComposer({ session }: { session: Session | null }) {
                 </section>
 
                 <section aria-labelledby="course-price-title" className="space-y-5 border-t pt-8">
-                  <div><h3 id="course-price-title" className="text-lg font-semibold">Kosten festlegen</h3><p className="mt-1 text-sm text-muted-foreground">Trage 0 für einen kostenlosen Kurs ein.</p></div>
+                  <div><h2 id="course-price-title" className="text-lg font-semibold">Kosten festlegen</h2><p className="mt-1 text-sm text-muted-foreground">Trage 0 für einen kostenlosen Kurs ein.</p></div>
                   <div className="grid min-w-0 gap-5 sm:grid-cols-2">
                     <div className="min-w-0 space-y-2"><Label htmlFor="price">Preis</Label><Input id="price" type="number" value={price} onChange={(e) => setPrice(e.target.value)} required placeholder="0.00" min="0" step="0.01" /></div>
                     <div className="min-w-0 space-y-2"><Label htmlFor="currency">Währung</Label><select id="currency" value={currency} onChange={(e) => setCurrency(e.target.value)} required className="h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-base text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:text-sm"><option value="EUR">EUR</option><option value="USD">USD</option><option value="GBP">GBP</option></select></div>
                   </div>
                 </section>
 
-                <section aria-labelledby="course-image-title" className="space-y-2 border-t pt-8"><h3 id="course-image-title" className="text-lg font-semibold">Kursbild</h3><p className="text-sm leading-relaxed text-muted-foreground">Ein privates Titelbild kannst du im Autorenarbeitsplatz hochladen, sobald der Kursentwurf angelegt ist.</p></section>
+                <section aria-labelledby="course-image-title" className="space-y-2 border-t pt-8"><h2 id="course-image-title" className="text-lg font-semibold">Kursbild</h2><p className="text-sm leading-relaxed text-muted-foreground">Ein privates Titelbild kannst du im Autorenarbeitsplatz hochladen, sobald der Kursentwurf angelegt ist.</p></section>
 
                 <div className="space-y-5 border-t pt-7">
                   {error && <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">{error}</p>}
                   <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"><Button asChild variant="outline"><Link href="/courses">Abbrechen</Link></Button><Button type="submit" disabled={isSubmitting} aria-busy={isSubmitting}>{isSubmitting ? 'Entwurf wird angelegt …' : 'Kursentwurf anlegen'}</Button></div>
                 </div>
               </form>
-              <aside className="h-fit rounded-2xl border bg-card p-5 text-sm leading-relaxed text-muted-foreground" aria-label="Hinweise zur Kurserstellung">
-                <p className="font-semibold text-foreground">Auf einen Blick</p>
-                <ul className="mt-3 list-inside list-disc space-y-2"><li>Gib deinem Kurs einen klaren Titel.</li><li>Termine bleiben optional.</li><li>Nach dem Anlegen bearbeitest du den privaten Entwurf und lädst bei Bedarf ein Bild hoch.</li><li>Erst deine spätere Veröffentlichung macht den Kurs für Lernende sichtbar.</li></ul>
-              </aside>
             </div>
           </div>
         </main>
