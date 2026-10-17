@@ -3,6 +3,7 @@ import { useSession } from 'next-auth/react';
 import Home from '@/app/page';
 import Community from '@/app/community/page';
 import JourneyClient from '@/app/courses/journey/JourneyClient';
+import { SparkVisibilitySetting } from '@/components/spark-visibility-setting';
 import { setSparkVisible } from '@/hooks/useSparkVisibility';
 
 jest.mock('next-auth/react', () => ({ useSession: jest.fn() }));
@@ -52,12 +53,12 @@ it('shows real static Spark at the public entry while preserving the main CTA', 
   expect(screen.getByRole('banner').querySelector('[data-spark-entry]')).toBeNull();
 });
 
-it('keeps the public Off choice when entering the signed-in feed', async () => {
+it('keeps an existing browser Off choice when entering the signed-in feed', async () => {
   const home = render(<Home />);
-  fireEvent.click(screen.getByRole('button', { name: 'Spark ausblenden' }));
+  act(() => setSparkVisible(false));
   home.unmount();
   const member = render(<Community />);
-  expect(screen.getByRole('button', { name: 'Spark anzeigen' })).toBeVisible();
+  expect(screen.queryByRole('button', { name: /Spark/ })).not.toBeInTheDocument();
   expect(staticFigure(member.container)).toBeNull();
   expect(screen.getByRole('button', { name: 'Neuen Beitrag erstellen' })).toBeVisible();
   await act(async () => {});
@@ -90,7 +91,7 @@ it('shows a neutral Spark only after the genuine zero-enrollment request succeed
   expect(view.container.querySelector('[data-spark-celebration]')).toBeNull();
   fireEvent.error(staticFigure(view.container)!);
   expect(discover).toBeVisible();
-  fireEvent.click(screen.getByRole('button', { name: 'Maskottchen anzeigen' }));
+  act(() => setSparkVisible(false));
   expect(staticFigure(view.container)).toBeNull();
 });
 
@@ -100,7 +101,7 @@ it('keeps a saved Off choice in the zero-enrollment state and preserves reduced-
   const view = render(<JourneyClient />);
   await screen.findByRole('heading', { name: 'Dein Lernweg beginnt mit einem Kurs' });
   expect(staticFigure(view.container)).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Maskottchen anzeigen' }));
+  act(() => setSparkVisible(true));
   expect(staticFigure(view.container)).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Figurenanimationen aus' })).toBeDisabled();
   expect(view.container.querySelector('[data-spark-celebration]')).toBeNull();
@@ -115,4 +116,19 @@ it('leaves request errors and staff-role guidance without a new figure', async (
   view.rerender(<JourneyClient />);
   expect(screen.getByRole('heading', { name: 'Lernweg für Lernende' })).toBeVisible();
   expect(staticFigure(view.container)).toBeNull();
+});
+
+it('one settings switch immediately updates Home, Community and Journey with no inline visibility controls', async () => {
+  const view = render(<><SparkVisibilitySetting /><Home /><Community /><JourneyClient /></>);
+  await screen.findByRole('heading', { name: 'Dein Lernweg beginnt mit einem Kurs' });
+  expect(view.container.querySelectorAll('[data-spark-entry-figure] img')).toHaveLength(3);
+  expect(screen.getAllByRole('switch', { name: 'Spark anzeigen' })).toHaveLength(1);
+  expect(screen.queryByRole('button', { name: /Spark (ausblenden|anzeigen)|Maskottchen anzeigen/ })).not.toBeInTheDocument();
+  const control = screen.getByRole('switch', { name: 'Spark anzeigen' });
+  fireEvent.click(control);
+  expect(control).not.toBeChecked();
+  expect(view.container.querySelectorAll('[data-spark-entry-figure] img')).toHaveLength(0);
+  fireEvent.click(control);
+  expect(control).toBeChecked();
+  expect(view.container.querySelectorAll('[data-spark-entry-figure] img')).toHaveLength(3);
 });

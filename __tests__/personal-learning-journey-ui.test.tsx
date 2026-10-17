@@ -1,5 +1,6 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useSession } from 'next-auth/react';
+import { setSparkVisible } from '@/hooks/useSparkVisibility';
 import JourneyClient from '@/app/courses/journey/JourneyClient';
 
 jest.mock('next-auth/react', () => ({ useSession: jest.fn() }));
@@ -106,15 +107,14 @@ it('keeps the decorative figure hidden across visits without changing the motion
 
   const view = render(<JourneyClient />);
   await screen.findByRole('link', { name: 'Lernschritt öffnen' });
-  const visibility = screen.getByRole('button', { name: 'Maskottchen anzeigen' });
-  expect(visibility).toHaveAttribute('aria-pressed', 'false');
+  expect(screen.queryByRole('button', { name: 'Maskottchen anzeigen' })).not.toBeInTheDocument();
   expect(screen.queryByTestId('journey-mascot')).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /Figurenanimationen/ })).not.toBeInTheDocument();
 
-  fireEvent.click(visibility);
+  act(() => setSparkVisible(true));
   expect(screen.getByTestId('journey-mascot')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: /Figurenanimationen/ })).toHaveAttribute('aria-pressed', 'false');
-  fireEvent.click(visibility);
+  act(() => setSparkVisible(false));
   expect(screen.queryByTestId('journey-mascot')).not.toBeInTheDocument();
   expect(window.localStorage.getItem('forge-journey-mascot-hidden')).toBe('true');
   expect(window.localStorage.getItem('forge-journey-motion-off')).toBe('true');

@@ -90,7 +90,7 @@ function ScopedJourney() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<Detail>({ kind: 'idle' });
   const [detailRetry, setDetailRetry] = useState(0);
-  const { visible: mascotVisible, toggle: toggleMascot } = useSparkVisibility();
+  const { visible: mascotVisible } = useSparkVisibility();
   const motionEnabled = useSyncExternalStore(subscribeMotion, motionSnapshot, () => false);
   const reducedMotion = useSyncExternalStore(subscribeReducedMotion, reducedMotionSnapshot, () => true);
   const [celebration, setCelebration] = useState<{ id: number; courseId: string; publicationId: string } | null>(null);
@@ -225,10 +225,10 @@ function ScopedJourney() {
             </section>}
           </div>}
 
-          <div className="mt-3 border-b pb-4">
-            <div className="flex min-w-0 flex-wrap gap-2"><Button type="button" variant="ghost" size="sm" className="h-auto min-h-11 max-w-full whitespace-normal py-2 [overflow-wrap:anywhere] sm:h-auto" aria-label="Maskottchen anzeigen" aria-pressed={mascotVisible} onClick={toggleMascot}>Figur {mascotVisible ? 'an' : 'aus'}</Button>{mascotVisible && <Button type="button" variant="ghost" size="sm" className="h-auto min-h-11 max-w-full whitespace-normal py-2 [overflow-wrap:anywhere] sm:h-auto" aria-pressed={motionEnabled && !reducedMotion} onClick={toggleMotion} disabled={reducedMotion}>{reducedMotion ? 'Figurenanimationen aus' : `Figurenanimationen ${motionEnabled ? 'an' : 'aus'}`}</Button>}</div>
-            {mascotVisible && reducedMotion && <p className="mt-1 text-xs text-muted-foreground">Weniger Bewegung ist am Gerät eingestellt.</p>}
-          </div>
+          {mascotVisible && <div className="mt-3 border-b pb-4">
+            <Button type="button" variant="ghost" size="sm" className="h-auto min-h-11 max-w-full whitespace-normal py-2 [overflow-wrap:anywhere] sm:h-auto" aria-pressed={motionEnabled && !reducedMotion} onClick={toggleMotion} disabled={reducedMotion}>{reducedMotion ? 'Figurenanimationen aus' : `Figurenanimationen ${motionEnabled ? 'an' : 'aus'}`}</Button>
+            {reducedMotion && <p className="mt-1 text-xs text-muted-foreground">Weniger Bewegung ist am Gerät eingestellt.</p>}
+          </div>}
 
           {detail.kind === 'ready' && projection && projection.leaves.length > 0 && <section aria-labelledby="journey-outline-title" className="mt-6"><div className="flex flex-wrap items-end justify-between gap-3 border-b pb-3"><h2 id="journey-outline-title" className="text-lg font-semibold">Nächste Stationen</h2><Button type="button" variant="ghost" size="sm" onClick={retryDetail}>Stand aktualisieren</Button></div><ol className="divide-y">{projection.leaves.filter(leaf => !leaf.completed).slice(0, 5).map((leaf, index) => <li key={leaf.id} className="flex min-w-0 items-start gap-4 py-3 text-sm"><span className="flex size-7 shrink-0 items-center justify-center rounded-full border font-medium tabular-nums" aria-hidden="true">{index + 1}</span><span className="min-w-0 flex-1"><span className="block break-words font-medium">{leaf.title}</span><span className="mt-0.5 block text-muted-foreground">{contentLabel(leaf.type)} · {leaf.locked ? lockLabel(leaf) : 'Jetzt möglich'}</span></span></li>)}</ol>{projection.leaves.every(leaf => leaf.completed) && <p className="py-4 text-sm text-muted-foreground">Alle aktuellen Inhalte bestätigt.</p>}<Link href={readerHref} className="mt-3 inline-flex min-h-11 items-center rounded-sm text-sm text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Vollständiges Inhaltsverzeichnis im Kurs</Link></section>}
 

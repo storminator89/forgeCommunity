@@ -1,3 +1,4 @@
+import { setSparkInSettings } from './spark-settings';
 import { createHash, randomUUID } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
 import sharp from 'sharp';
@@ -188,9 +189,8 @@ test('Spark image requests respect visibility, independent motion preference, re
   }
   // Visibility survives a revisit without altering the independently saved motion choice.
   expect(await page.evaluate(() => localStorage.getItem('forge-journey-motion-off'))).toBe('true');
-  await page.getByRole('button', { name: 'Maskottchen anzeigen' }).focus();
-  await page.keyboard.press('Enter');
-  await expect(page.getByRole('button', { name: 'Maskottchen anzeigen' })).toHaveAttribute('aria-pressed', 'true');
+  await setSparkInSettings(page, true);
+  await page.goto('/courses/journey');
   await expect(page.getByRole('button', { name: 'Figurenanimationen aus' })).toBeDisabled();
   await screenshotWidths(page, testInfo, 'reduced-motion-static');
   await page.emulateMedia({ reducedMotion: 'no-preference', colorScheme: 'dark' });
@@ -255,8 +255,9 @@ test('the real Blender clip waits for load, changes frames once and replays only
   await page.keyboard.press('Enter');
   await expect(clip).toHaveCount(0);
   await expect(page.getByRole('status')).toContainText('Alle aktuellen Kursinhalte bestätigt');
-  await page.getByRole('button', { name: 'Maskottchen anzeigen' }).focus();
-  await page.keyboard.press('Enter');
+  await setSparkInSettings(page, false);
+  await page.goto('/courses/journey');
+  await expect(page.getByRole('button', { name: 'Stand aktualisieren' })).toBeVisible();
   await expect(mascot).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath('spark-hidden-completion.png'), fullPage: true });
 });
