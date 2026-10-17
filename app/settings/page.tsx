@@ -23,6 +23,7 @@ import 'react-toastify/dist/ReactToastify.css'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { PageState } from '@/components/page-state'
 import { publishBrowserChatAlertPreference } from '@/lib/browser-chat-alerts'
+import { SparkVisibilitySetting } from '@/components/spark-visibility-setting'
 
 interface Skill {
   id: string
@@ -375,7 +376,7 @@ function AccountSettings({ userId }: { userId: string }) {
               </TabsList>
 
               {/* Konto-Tab */}
-              <TabsContent value="account">
+              <TabsContent value="account" className="space-y-6">
                 <Card>
                   <CardHeader>
                     <CardTitle>Kontoinformationen</CardTitle>
@@ -410,6 +411,10 @@ function AccountSettings({ userId }: { userId: string }) {
                   <CardFooter>
                     <Button onClick={handleSave} disabled={!isLoaded || isLoading || isSaving}>{isSaving ? 'Wird gespeichert…' : 'Speichern'}</Button>
                   </CardFooter>
+                </Card>
+                <Card>
+                  <CardHeader><CardTitle>Darstellung</CardTitle></CardHeader>
+                  <CardContent><SparkVisibilitySetting /></CardContent>
                 </Card>
               </TabsContent>
 

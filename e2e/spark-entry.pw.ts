@@ -1,3 +1,4 @@
+import { setSparkInSettings } from './spark-settings';
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { basename, isAbsolute } from 'node:path';
@@ -226,7 +227,7 @@ test('fresh public entry shows real static Spark after the primary actions in bo
       await page.reload();
       await assertStaticFigure(page);
       await expect(page.locator(preview)).toBeInViewport({ ratio: 1 });
-      await expect(page.getByRole('button', { name: 'Spark ausblenden' })).toBeInViewport({ ratio: 1 });
+      await expect(page.getByRole('button', { name: /Spark (ausblenden|anzeigen)|Maskottchen anzeigen/ })).toHaveCount(0);
       await expect(page.getByRole('link', { name: 'Konto erstellen' })).toBeInViewport({ ratio: 1 });
       await expect(page.getByRole('banner').locator('[data-spark-entry]')).toHaveCount(0);
       await capture(page, info, `spark-public-default-${mode}-${size.width}`);
@@ -243,7 +244,7 @@ test('fresh real member and successful zero-enrollment Journey show static Spark
       await page.goto('/community');
       await assertStaticFigure(page);
       await expect(page.locator(preview)).toBeInViewport({ ratio: 1 });
-      await expect(page.getByRole('button', { name: 'Spark ausblenden' })).toBeInViewport({ ratio: 1 });
+      await expect(page.getByRole('button', { name: /Spark (ausblenden|anzeigen)|Maskottchen anzeigen/ })).toHaveCount(0);
       await expect(page.getByRole('heading', { name: 'Dein Einstieg' })).toBeVisible();
       await expect(page.getByRole('button', { name: 'Neuen Beitrag erstellen' })).toBeVisible();
       await capture(page, info, `spark-member-default-${mode}-${size.width}`);
@@ -266,7 +267,8 @@ test('fresh real member and successful zero-enrollment Journey show static Spark
 test('saved Off survives reload and public/member/Journey navigation without a preview request or flash', async ({ page }, info) => {
   await page.goto('/');
   await assertStaticFigure(page);
-  await page.getByRole('button', { name: 'Spark ausblenden' }).click();
+  await signIn(page);
+  await setSparkInSettings(page, false);
   expect(await page.evaluate(key => localStorage.getItem(key), preferenceKey)).toBe('true');
   await page.addInitScript(() => {
     const observation = { seen: false };
@@ -280,43 +282,48 @@ test('saved Off survives reload and public/member/Journey navigation without a p
   const assertNoFlash = async () => expect(await page.evaluate(() =>
     (window as typeof window & { __sparkEntryObservation?: { seen: boolean } }).__sparkEntryObservation?.seen)).toBe(false);
   await page.goto('/');
-  await expect(page.getByRole('button', { name: 'Spark anzeigen' })).toBeVisible();
+  await expect(page.locator(preview)).toHaveCount(0);
   await assertNoFlash();
   await page.reload();
-  await expect(page.getByRole('button', { name: 'Spark anzeigen' })).toBeVisible();
+  await expect(page.locator(preview)).toHaveCount(0);
   await assertNoFlash();
+  await page.context().clearCookies();
   await signIn(page);
-  await expect(page.getByRole('button', { name: 'Spark anzeigen' })).toBeVisible();
+  await expect(page.locator(preview)).toHaveCount(0);
   await assertNoFlash();
   await page.goto('/courses/journey');
   await expect(page.getByRole('heading', { name: 'Dein Lernweg beginnt mit einem Kurs' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Maskottchen anzeigen' })).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.getByRole('button', { name: 'Maskottchen anzeigen' })).toHaveCount(0);
   await expect(page.locator(preview)).toHaveCount(0);
   await assertNoFlash();
   expect(requests).toEqual([]);
   await capture(page, info, 'spark-saved-off-actual-zero-enrollment');
 });
 
-test('native keyboard Hide and Show retain focus and synchronize a second tab', async ({ page, context }, info) => {
-  await page.goto('/');
+test('one Settings switch retains keyboard focus and synchronizes a second tab', async ({ page, context }, info) => {
+  await signIn(page);
+  await page.goto('/settings?tab=account');
+  const control = page.getByRole('switch', { name: 'Spark anzeigen' });
+  await expect(control).toHaveAttribute('aria-checked', 'true');
   const other = await context.newPage();
-  await other.goto('/');
-  await page.getByRole('button', { name: 'Spark ausblenden' }).focus();
-  await page.keyboard.press('Enter');
-  await expect(page.getByRole('button', { name: 'Spark anzeigen' })).toBeFocused();
-  await expect(other.getByRole('button', { name: 'Spark anzeigen' })).toBeVisible();
+  await other.goto('/community');
+  await assertStaticFigure(other);
+  await control.focus();
+  await page.keyboard.press('Space');
+  await expect(control).toBeFocused();
+  await expect(control).toHaveAttribute('aria-checked', 'false');
   await expect(other.locator(preview)).toHaveCount(0);
-  await capture(page, info, 'spark-keyboard-hidden');
-  await other.getByRole('button', { name: 'Spark anzeigen' }).focus();
-  await other.keyboard.press('Space');
-  await expect(other.getByRole('button', { name: 'Spark ausblenden' })).toBeFocused();
-  await assertStaticFigure(page);
+  await capture(page, info, 'spark-settings-keyboard-hidden');
+  await setSparkInSettings(other, true);
+  await expect(control).toHaveAttribute('aria-checked', 'true');
+  await other.goto('/community');
+  await assertStaticFigure(other);
   await page.reload();
-  await assertStaticFigure(page);
-  await capture(other, info, 'spark-keyboard-shown');
+  await expect(page.getByRole('switch', { name: 'Spark anzeigen' })).toHaveAttribute('aria-checked', 'true');
+  await capture(page, info, 'spark-settings-keyboard-shown');
 });
 
-test('denied preference writes keep Hide working through same-document app navigation', async ({ page }, info) => {
+test('denied preference writes keep Settings working through same-document app navigation', async ({ page }, info) => {
   await page.addInitScript(key => {
     const write = Storage.prototype.setItem;
     Storage.prototype.setItem = function (name: string, value: string) {
@@ -325,19 +332,20 @@ test('denied preference writes keep Hide working through same-document app navig
     };
   }, preferenceKey);
   await signIn(page);
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Spark ausblenden' }).click();
-  await expect(page.locator(preview)).toHaveCount(0);
-  await page.getByRole('link', { name: 'Zur Community', exact: true }).click();
+  await setSparkInSettings(page, false);
+  await page.getByRole('link', { name: 'Community', exact: true }).click();
   await expect(page).toHaveURL(/\/community$/);
-  await expect(page.getByRole('button', { name: 'Spark anzeigen' })).toBeVisible();
   await expect(page.locator(preview)).toHaveCount(0);
-  await page.getByRole('button', { name: 'Spark anzeigen' }).click();
+  await page.getByRole('link', { name: 'Einstellungen', exact: true }).click();
+  const control = page.getByRole('switch', { name: 'Spark anzeigen' });
+  await expect(control).toHaveAttribute('aria-checked', 'false');
+  await control.click();
+  await page.getByRole('link', { name: 'Community', exact: true }).click();
   await assertStaticFigure(page);
   await capture(page, info, 'spark-storage-denied-member');
 });
 
-test('public and member Spark controls reflow at 200% text and remain keyboard usable', async ({ page }, info) => {
+test('public and member Spark entries reflow at 200% text without inline controls', async ({ page }, info) => {
   await page.setViewportSize({ width: 320, height: 700 });
   await page.goto('/');
   for (const state of ['public', 'member'] as const) {
@@ -349,12 +357,7 @@ test('public and member Spark controls reflow at 200% text and remain keyboard u
       const completedCourses = page.locator('dt').filter({ hasText: /^Mindestens einmal abgeschlossene Kurse$/ });
       if (state === 'member') await expect(completedCourses).toBeVisible();
       await assertStaticFigure(page);
-      const hide = page.getByRole('button', { name: 'Spark ausblenden' });
-      await hide.focus();
-      await expect(hide).toBeFocused();
-      const box = (await hide.boundingBox())!;
-      expect(box.x).toBeGreaterThanOrEqual(0);
-      expect(box.x + box.width).toBeLessThanOrEqual(320);
+      await expect(page.getByRole('button', { name: /Spark (ausblenden|anzeigen)|Maskottchen anzeigen/ })).toHaveCount(0);
       await capture(page, info, `spark-${state}-200-percent-${mode}`);
       if (state === 'member') {
         // Wait for the actual loaded reward label before the main gate above,
@@ -375,15 +378,34 @@ test('public and member Spark controls reflow at 200% text and remain keyboard u
         expect(geometry.overflow).toBeLessThanOrEqual(1);
         expect(geometry.labelOverflow).toBeLessThanOrEqual(1);
         await capture(page, info, `spark-member-stats-200-percent-${mode}`);
-        await hide.focus();
       }
-      await page.keyboard.press('Enter');
-      await expect(page.getByRole('button', { name: 'Spark anzeigen' })).toBeFocused();
-      await expect(page.locator(preview)).toHaveCount(0);
-      await page.keyboard.press('Space');
-      await expect(page.getByRole('button', { name: 'Spark ausblenden' })).toBeFocused();
-      await assertStaticFigure(page);
     }
+  }
+});
+
+test('Settings Spark switch reflows at 200% text and stays keyboard usable in both themes', async ({ page }, info) => {
+  await signIn(page);
+  await page.setViewportSize({ width: 320, height: 700 });
+  for (const mode of ['light', 'dark'] as const) {
+    await setTheme(page, mode);
+    await setSparkInSettings(page, true);
+    await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+    const control = page.getByRole('switch', { name: 'Spark anzeigen' });
+    await expect(control).toHaveCount(1);
+    await control.focus();
+    await expect.poll(() => control.evaluate(element => element.matches(':focus-visible'))).toBe(true);
+    const box = (await control.boundingBox())!;
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(320);
+    const label = page.locator('label[for="spark-visible"]');
+    expect((await label.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    await capture(page, info, `spark-settings-200-percent-${mode}`);
+    await page.keyboard.press('Space');
+    await expect(control).toBeFocused();
+    await expect(control).toHaveAttribute('aria-checked', 'false');
+    await page.keyboard.press('Space');
+    await expect(control).toBeFocused();
+    await expect(control).toHaveAttribute('aria-checked', 'true');
   }
 });
 

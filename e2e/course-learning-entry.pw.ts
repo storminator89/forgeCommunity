@@ -1,3 +1,4 @@
+import { setSparkInSettings } from './spark-settings';
 import { randomUUID } from 'node:crypto';
 import { basename, isAbsolute } from 'node:path';
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
@@ -135,10 +136,8 @@ test('catalog and journey bring the real task into the comparable first viewport
       await capture(page, info, `journey-comparable-${mode}-${size.width}x${size.height}`);
       await next.focus();
       await page.keyboard.press('Tab');
-      await expect(page.getByRole('button', { name: 'Maskottchen anzeigen' })).toBeFocused();
-      await page.keyboard.press('Enter');
-      await expect(page.locator('[data-journey-mascot]')).toHaveCount(0);
-      await page.keyboard.press('Enter');
+      await expect(page.getByRole('button', { name: 'Stand aktualisieren' })).toBeFocused();
+      await expect(page.getByRole('button', { name: 'Maskottchen anzeigen' })).toHaveCount(0);
       await expect(page.locator('[data-journey-mascot]')).toHaveCount(1);
       await expect(page.getByRole('button', { name: 'Figurenanimationen aus' })).toBeDisabled();
     }
@@ -301,11 +300,13 @@ test('journey locked, empty, error and long-content states keep honest actions a
   await page.reload();
   await page.getByRole('button', { name: 'Figurenanimationen an' }).click();
   await expect(page.getByRole('button', { name: 'Figurenanimationen aus' })).toHaveAttribute('aria-pressed', 'false');
-  await page.getByRole('button', { name: 'Maskottchen anzeigen' }).click();
+  await setSparkInSettings(page, false);
+  await page.goto('/courses/journey');
   await expect(page.locator('[data-journey-mascot]')).toHaveCount(0);
   await page.reload();
-  await expect(page.getByRole('button', { name: 'Maskottchen anzeigen' })).toHaveAttribute('aria-pressed', 'false');
-  await page.getByRole('button', { name: 'Maskottchen anzeigen' }).click();
+  await expect(page.locator('[data-journey-mascot]')).toHaveCount(0);
+  await setSparkInSettings(page, true);
+  await page.goto('/courses/journey');
   await expect(page.getByRole('button', { name: 'Figurenanimationen aus' })).toHaveAttribute('aria-pressed', 'false');
   await capture(page, info, 'journey-stress-motion-off-dark-320x700');
 });
