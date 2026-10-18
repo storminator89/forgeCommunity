@@ -9,12 +9,12 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up the published Version 54 source
-`479f7c8e09554570cd878982eae2a7abdfe79b89`. Version 54 deployed successfully on
-18 October 2026 at 02:00:54 UTC. Native D1 Mission bookmark PUT source is live;
-positive Save/Unsave/stale/global-revocation/race acceptance remains unverified.
-Member/account revocation callback chains remain separately unported. Other
-ports retain prior live gates. The roadmap retains its 18 October, 00:15 UTC v44 base.
+runtime data. This GitHub snapshot backs up the published Version 55 source
+`4bd97dd233ccc65e0d4b813b1d3d67b7a77f62b0`. Version 55 deployed successfully on
+18 October 2026 at 02:13:33 UTC. Native D1 ADMIN PRIVATE member Add/Remove with
+coupled revocation source is live; positive Add/Remove/revocation/privacy/race
+acceptance remains unverified. Account/role/invitation-decision callbacks remain
+separate. Other ports retain prior live gates; the roadmap keeps its dated v44 base.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -75,8 +75,8 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 54 source includes the existing bounded ports below,
-inherited from Version 53, plus native D1 Mission-bookmark PUT source described
+The published Version 55 source includes the existing bounded ports below,
+inherited from Version 54, plus native D1 PRIVATE member Add/Remove described
 below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
@@ -190,6 +190,8 @@ all-page visual coverage.
   live-kind rival rules; positive moderation/history/privacy/race acceptance open
 - Native D1 Mission bookmark Save/Unsave PUT with fixed access epoch and own
   revision fences; positive stale/global-revocation/race acceptance remains open
+- Native D1 ADMIN PRIVATE member Add/Remove with coupled invitation, bookmark
+  and participation revocation; positive Add/Remove/privacy/race acceptance open
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -210,9 +212,10 @@ Version 36 additionally ports member discussion/reply creation; Version 49 ports
 PRIVATE ADMIN Mission creation; Version 50 ports close and scoped cleanup;
 Version 51 ports normal self-join/leave and scoped invitation settlement;
 Version 52 ports own contribution Add/Withdraw; Version 53 ports ADMIN
-contribution moderation; Version 54 ports own Mission bookmark PUT.
+contribution moderation; Version 54 ports own Mission bookmark PUT; Version 55
+ports PRIVATE member Add/Remove with coupled revocation.
 Positive Space/Mission mutation acceptance remains open. Invitation creation/
-acceptance, private member removal and other mission mutation flows remain
+acceptance, account/role changes and other mission mutation flows remain
 outside these ports. Other workflows may still use Prisma
 transaction patterns that D1 does not support. Do not infer full write-flow
 support from this source scope.
@@ -1190,6 +1193,41 @@ no bookmark or other data mutation was performed. Positive Save/Unsave/stale/
 global-revocation/concurrency acceptance remains open. No local SQL/app/
 functional execution was used. The dated v44 roadmap remains byte-identical;
 full mission-flow or member/account revocation acceptance is not implied.
+
+## Version 55 bounded native D1 PRIVATE member Add/Remove
+
+Version 55 changes three files: a dedicated native helper and the existing
+member POST/DELETE delegates. Stored ADMIN precedes PRIVATE scope. Add requires
+a live target; duplicate membership is write-free and preserves joinedAt
+without reading/validating that date. Re-add never resets revocation fences.
+Remove is coupled and effectful for live nonmembers/repeated DELETE: the sole
+current open Mission's InvitationAccess and complete pending/notice settlement,
+global BookmarkAccess plus all this-Space settings including closed-Mission
+tombstones, all this-Space active participation optout, then membership deletion.
+Missing target retains the existing bookmark-cleanup early return. Explicit
+overflow/error order and fail-closed multiple-open legacy state are retained.
+
+Whole sets use no ID list, loop, quota LIMIT or partial commit chunks. Notices
+are asserted absent before source identity scrubbing; exact final authority,
+fences and no-remainder assertions share one atomic batch. Other-Space settings,
+contribution content and existing non-NULL optout timestamps remain untouched.
+Only named SQL first-guard rollback or exact eligible first-create UNIQUE plus
+changed fresh authority/state may recover. Unknown commits, other constraints/
+CAS/end-invariant/transport and malformed successful results never retry.
+Remove submits at most 43 helper statements; including at most two unchanged
+authentication SELECTs gives a source-derived bound of 45, not measured runtime
+queries, billing or cost. Set-based database work may grow and time out.
+
+Native member GET/cursors/candidate search, parsing/auth/response blocks and
+all existing Mission/invitation/bookmark/participation/close/account/role/schema
+helpers remain byte-identical. Account/role and invitation-decision callbacks
+are separate, unported flows. Independent final review, production typechecking/
+build and static artifact/archive checks passed. Deployment succeeded on
+18 October 2026 at 02:13:33 UTC. At 02:13:57 UTC the directory/session read showed
+zero Spaces and no alerts, with no member or revocation test/data mutation.
+Positive Add/Remove/revocation/privacy/overflow/concurrency acceptance remains
+open. No local SQL/app/functional execution was used. The dated v44 roadmap
+remains byte-identical; full member/account revocation acceptance is not implied.
 
 ## Keeping the branches separate
 

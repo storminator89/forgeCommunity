@@ -5,6 +5,7 @@ import { isSameOriginRequest } from '@/lib/server/auth-security';
 import { InvalidPaginationError, readJsonObject } from '@/lib/server/api-input';
 import { getReadableSpace } from '@/lib/server/space-access';
 import { d1SpaceMembers } from '@/lib/server/d1-space-reads';
+import { addD1PrivateSpaceMember } from '@/lib/server/d1-space-private-members';
 import { requiredUserId, SPACE_ID_RE, SPACE_NO_STORE, spaceErrorResponse, spaceTransaction, SpaceApiError, validSpaceId } from '@/lib/server/space-api';
 
 function readMemberCursor(request: Request, spaceId: string) {
@@ -54,18 +55,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const body = await readJsonObject(request, 2048);
     const userId = body.userId;
     if (typeof userId !== 'string' || !SPACE_ID_RE.test(userId)) throw new SpaceApiError('Ungültiges Mitglied', 400);
-    const result = await spaceTransaction(async tx => {
-      const actor = await tx.user.findUnique({ where: { id: actorId }, select: { role: true } });
-      if (actor?.role !== 'ADMIN') throw new SpaceApiError('Nicht autorisiert', 403);
-      const access = await getReadableSpace(spaceId, actorId, tx);
-      if (!access || access.space.visibility !== 'PRIVATE') throw new SpaceApiError('Space nicht gefunden', 404);
-      const target = await tx.user.findUnique({ where: { id: userId }, select: { id: true } });
-      if (!target) throw new SpaceApiError('Mitglied nicht gefunden', 404);
-      const existing = await tx.spaceMember.findUnique({ where: { spaceId_userId: { spaceId, userId } }, select: { userId: true } });
-      if (!existing) await tx.spaceMember.upsert({ where: { spaceId_userId: { spaceId, userId } },
-        update: {}, create: { spaceId, userId } });
-      return { spaceId, userId, alreadyMember: Boolean(existing) };
-    });
+    const result = await addD1PrivateSpaceMember(actorId, spaceId, userId);
     return NextResponse.json(result, { status: result.alreadyMember ? 200 : 201, headers: SPACE_NO_STORE });
   } catch (error) {
     return spaceErrorResponse(error, 'Mitglied konnte nicht hinzugefügt werden');
