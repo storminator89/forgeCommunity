@@ -9,16 +9,16 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up published Version 71 source
-`c6214ec419f1cfdf0f3bd35ef62df175c4021954`. Version 71 deployed successfully on
-18 October 2026 at 06:31:19 UTC. The bounded native Admin Event PUT preserves
-the existing edit contract and complete required waitlist promotion. A targeted
-description edit on the existing own Event saved successfully and persisted
-after reload; schedule, category, Event count and RSVP count stayed unchanged.
-FIFO, limits, permissions, notices and races remain separately unverified.
-PollCreate still returns 500/sql-resource after the v70 source-proven GLOB fix;
-the precise remaining provider failure is unresolved. Positive v68 staged-editor
-QA is retained. Roadmap uses v71; the source map retains v63.
+runtime data. This GitHub snapshot backs up published Version 72 source
+`35872e677eec462e1b7b73c9eeeaf4dc25c99591`. Version 72 deployed successfully on
+18 October 2026 at 06:40:58 UTC. It refines only bounded native PollCreate
+diagnostics into fixed resource families; database logic and responses are
+unchanged. One targeted Create still failed; its fixed diagnostic family is now
+sql-limit-expression. The responsible statement and safe correction remain
+under source analysis.
+The v71 simple Event-description Save/Reload and v68 staged-editor positive
+QA are retained; broader FIFO/permissions/notices/races remain separate.
+Roadmap uses v72; the source map retains v63.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -2211,6 +2211,42 @@ date/time/category, count (one Event) and RSVP count (zero) remained unchanged.
 No FIFO, capacity, ACL, notice or concurrency conclusion follows from this
 simple edit. These positive matrix cases remain open. PollCreate diagnosis and
 the still-callback-based Admin Event DELETE are separate remaining work.
+
+## Version 72: bounded PollCreate resource diagnostic families
+
+Published source: `35872e677eec462e1b7b73c9eeeaf4dc25c99591`.
+Deployment: `appgdep_6ad469eb94c08191ae9748edaf709177`, succeeded
+18 October 2026 at 06:40:58 UTC. One-source aggregate:
+`147b02a83ebb56ed04b2c0f361ae3c6f3efb0cb0b4157fcad9b8c3d122374166`.
+
+Only the diagnostic classifier in `lib/server/d1-space-poll-create.ts` changes.
+Exact reversal restores the entire v71 file; the original database SQL,
+bindings, guards, ACL, quotas, DTO, error/retry decisions and logging sink remain
+byte-identical. There are no additional database reads or writes.
+
+Known bounded diagnostic phrases distinguish variables, LIKE/GLOB pattern,
+expression tree, compound SELECT, function arguments, parser stack, table
+references, statement length, string/blob size, memory, storage, daily rows and
+request-count families. Output remains limited to a fixed stage, new/replay,
+bounded attempt and one of 23 fixed classes. No error object, arbitrary message,
+SQL, bindings, IDs, content or credentials are emitted. The existing own-data
+descriptor-only cause traversal is bounded to six causes, 2,048 characters per
+message prefix and 8,192 characters total. Classification remains heuristic;
+generic resource phrases return unknown. It does not attribute a statement,
+prove a concrete cause or authorize retry.
+
+Exact independent source/privacy review, final types/build, static artifact
+and archive checks passed. The v70 78-byte internal GLOB was an independently
+proven source/platform conflict and remains fixed; a subsequent targeted Create
+still returned generic sql-resource. No further functional fix is claimed by
+this diagnostic-only release. Exactly one legitimate Create after publication
+returned 500; its correlated fixed diagnostic was sql-limit-expression. The
+classifier requires the known phrase Expression tree is too large inside a
+SQL-qualified bounded cause prefix. This establishes the error family without
+exposing raw provider text or attributing a statement. The precise construction
+and corrective scope remain under static analysis. No retry or Vote was made;
+positive PollCreate/Vote quota/replay/privacy/concurrency QA remains separate.
+No local functional tests or new CI runs were performed.
 
 ## Keeping the branches separate
 

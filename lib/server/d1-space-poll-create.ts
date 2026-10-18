@@ -451,11 +451,26 @@ function pollCreateErrorClass(error: unknown): string {
     if (has(/D1_SPACE_POLL_CREATE_WRITE_INVARIANT/)) return 'own-write-invariant';
     if (has(/D1_SPACE_POLL_CREATE_SNAPSHOT_CONFLICT/)) return 'own-snapshot-guard';
     if (has(/malformed JSON|JSON path/i)) return 'sql-json';
+    if (has(/too many SQL variables|variable number must be between/i)) return 'sql-limit-variables';
     if (has(/bind|parameter|SQLITE_RANGE/i)) return 'sql-binding';
     if (has(/FOREIGN KEY constraint/i)) return 'sql-foreign-key';
     if (has(/UNIQUE constraint|PRIMARY KEY|CHECK constraint|NOT NULL constraint|SQLITE_CONSTRAINT/i)) return 'sql-constraint';
     if (has(/syntax|no such table|no such column|ambiguous column|misuse/i)) return 'sql-shape';
-    if (has(/too many|too (?:big|large)|SQLITE_TOOBIG|limit|quota|memory|resource/i)) return 'sql-resource';
+    // Exact known diagnostic phrases only. A generic resource/limit word is
+    // insufficient to attribute a specific SQLite or provider limit.
+    if (has(/LIKE or GLOB pattern too complex/i)) return 'sql-limit-pattern';
+    if (has(/Expression tree is too large/i)) return 'sql-limit-expression';
+    if (has(/too many terms in compound SELECT/i)) return 'sql-limit-compound';
+    if (has(/too many arguments on function/i)) return 'sql-limit-function-arguments';
+    if (has(/parser stack overflow/i)) return 'sql-limit-parser-stack';
+    if (has(/too many references to/i)) return 'sql-limit-table-references';
+    if (has(/statement too long/i)) return 'sql-limit-statement-length';
+    if (has(/string or blob too big/i)) return 'sql-limit-string-blob-size';
+    if (has(/out of memory/i)) return 'sql-out-of-memory';
+    if (has(/database or disk is full/i)) return 'sql-storage-full';
+    if (has(/daily row (?:read|write) limit/i)) return 'sql-limit-daily-rows';
+    if (has(/too many API requests|too many SQL statements/i)) return 'sql-limit-request-count';
+    if (has(/too many|too (?:big|large)|SQLITE_TOOBIG|limit|quota|memory|resource/i)) return 'unknown';
     return 'sql-other';
   } catch {
     return 'unknown';
