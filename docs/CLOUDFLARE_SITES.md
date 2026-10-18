@@ -12,8 +12,10 @@ D1-specific SQL for selected flows. Its source snapshot starts from upstream
 runtime data. This GitHub snapshot backs up the published Version 44 source
 `43ae9cc8c9136019917c4a652528949a9db64fb7`. Version 44 deployed successfully on
 18 October 2026 at 00:12:14 UTC. Member-directory query/filter/sort URL-state
-source is live; published history, reload and profile-return readback is in
-progress. Existing profile/member data and mutation behavior are unchanged.
+source is live. Bounded profile-return, reload and keyboard-reset acceptance
+passed; existing profile/member data and mutation behavior are unchanged.
+A separate documentation-only update refreshes the curated roadmap to its
+18 October 2026, 00:15 UTC Version 44 base, with no Sites source change.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -167,7 +169,7 @@ all-page visual coverage.
   focus restoration for project/resource dialogs, bounded read-only acceptance passed
 - Member-directory query, skill/role filters and sort/order in local URLs, with
   native history and reset focus; profile/inspector and layout stay local,
-  published history/reload/profile-return acceptance pending
+  bounded profile-return/reload/reset acceptance passed
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -496,12 +498,16 @@ restriction is inferred from the UI.
 ## Additional curated user-flow roadmap
 
 [USER_FLOW_ROADMAP.md](USER_FLOW_ROADMAP.md) is an additional user-requested
-product document, not part of the Sites source. Its stated 17 October 2026,
-22:19 UTC date and Version 32 source base are intentionally retained, alongside
-its distinction between observed findings, source blockers and proposals.
-Unnecessary test-account labels, account totals and concrete search contents
-were anonymized for this public repository copy. The roadmap does not claim
-that proposals or later release work were implemented at its recorded base.
+product document, not part of the Sites source. The separately reviewed
+18 October 2026, 00:15 UTC refresh replaces the earlier Version 32 roadmap with
+the actual published Version 44 base. It distinguishes delivered source, bounded
+live observations, untested variants, technical blockers and proposals. Its
+three next packages are legitimate positive Space acceptance, coupled private
+mission/access ports, and a safe resource-metadata runtime port. No member names,
+search contents, private record identifiers, credentials or internal notes are
+included. Earlier release entries that say the Version 32 roadmap was retained
+refer to their historical backup; this documentation update supersedes that
+roadmap snapshot without changing application source or deployment.
 
 ## Version 34 bounded Space-base write port
 
@@ -854,13 +860,30 @@ this backup, and no profile or data write was made.
 
 Independent exact-path source review, production typechecking/build and static
 artifact/archive checks passed. Deployment succeeded on 18 October 2026 at
-00:12:14 UTC. Published profile-return, Back/Forward, reload, exact shared URL
-and keyboard-reset acceptance is in progress. Multiple selected filters, unknown
-or repeated parameters, delayed/error reads, larger result sets, mobile and
-account transitions remain separate live acceptance gates. The project and
-Resources edit source is byte-identical to Version 43; its bounded read-only
-acceptance and untested write/race variants retain their prior scope.
-The curated roadmap stays byte-identical at its dated Version 32 base.
+00:12:14 UTC. At 00:13 UTC a bounded published UI-created query/role/sort/order
+combination survived opening the own profile and Browser Back with the same
+values and one result. Reload retained the context. Keyboard reset removed
+query and role and focused the stable member-search input; the sort/direction
+remained as designed. No data write was performed. Skill filters, independent
+Forward, exact new-tab shared-link behavior, multiple selections, unknown or
+repeated parameters, delayed/error reads, larger datasets, mobile and account
+transitions remain unverified live. Concrete member identities and search text
+are excluded. The project and Resources edit source is byte-identical to
+Version 43; its bounded read-only acceptance and untested write/race variants
+retain their prior scope. The separate roadmap refresh below is an additional
+curated documentation exception, not part of the Sites source.
+
+## Version 44 documentation-only refresh
+
+On 18 October 2026 the user-requested roadmap was replaced by the reviewed
+00:15 UTC Version 44 edition, and this guide received the bounded member-read
+result reported after the original backup. Only these two documents changed.
+All other curated path bytes/modes, the published Sites source pin, runtime
+content, deployment, configuration and workflow triggers are unchanged. The
+roadmap is product documentation, not another Sites release or full runtime
+acceptance. It retains explicit write/race, private-mission/access and metadata
+blocker limits. No build, functional test or new GitHub CI run accompanies this
+documentation-only update.
 
 ## Keeping the branches separate
 
