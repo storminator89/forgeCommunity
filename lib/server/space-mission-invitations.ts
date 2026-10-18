@@ -2,6 +2,7 @@ import 'server-only';
 
 import { Prisma } from '@/generated/prisma/client';
 import { reportInvitationFailure } from '@/lib/server/space-mission-invitation-errors';
+import { setD1InvitationPreference } from '@/lib/server/d1-space-mission-invitation-preference';
 import { assertD1MissionCandidateAuthority, listD1MissionInvitations, readD1InvitationPreference, readD1MissionCandidateSnapshot, readD1MissionInvitation, resolveD1MissionInvitationTargets } from '@/lib/server/d1-space-mission-invitation-reads';
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { DecideMissionInvitation, MissionInvitationAcknowledgment, MissionInvitationCandidates, MissionInvitationDetail,
@@ -103,21 +104,7 @@ export async function readInvitationPreference(userId: string) {
   return readD1InvitationPreference(userId);
 }
 export async function setInvitationPreference(userId: string, input: ReturnType<typeof parseInvitationPreference>) {
-  return invitationTransaction(async tx => {
-    await liveUser(userId, tx);
-    const setting = await invitationSetting(userId, tx);
-    if (setting.revision !== input.expectedRevision) throw invitationConflict();
-    // A same-value CAS is a write-free no-op. In particular, saving true again
-    // must not invalidate pending selections/notices by advancing their fence.
-    if (setting.enabled === input.enabled) return { enabled: setting.enabled, revision: setting.revision };
-    if (setting.revision >= INVITATION_MAX_VERSION) throw invitationConflict();
-    await fenceInvitationSetting(setting, tx);
-    const changed = await tx.spaceMissionInvitationSetting.updateMany({ where: setting,
-      data: { enabled: input.enabled, revision: setting.revision + 1 } });
-    if (changed.count !== 1) throw invitationConflict();
-    if (!input.enabled) await settleMissionInvitations({ recipientId: userId }, 'REVOKED', tx);
-    return { enabled: input.enabled, revision: setting.revision + 1 };
-  });
+  return setD1InvitationPreference(userId, input);
 }
 
 export async function invitationCandidates(spaceId: string, missionId: string, userId: string, request: Request): Promise<MissionInvitationCandidates> {

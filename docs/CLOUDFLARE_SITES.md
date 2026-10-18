@@ -9,12 +9,12 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up the published Version 57 source
-`271ab20145634328407b5c0c68ff2a54f2f7afd6`. Version 57 deployed successfully on
-18 October 2026 at 02:36:25 UTC. Native D1 invitation candidate reads, final V2,
-are live; positive candidate/LIKE/NUL/privacy/race/latency acceptance remains
-unverified. Existing signing/write/global-notice paths remain separate and
-unchanged. The curated roadmap retains its dated v44 base.
+runtime data. This GitHub snapshot backs up the published Version 58 source
+`ed16238f2980afd9aa5a708b637233c1de22273e`. Version 58 deployed successfully on
+18 October 2026 at 02:45:47 UTC. Native D1 invitation preference toggle and
+incoming-pending cleanup source is live; positive preference/noop/revision/
+overflow/cleanup/privacy/race acceptance remains unverified. Other signing/
+write contracts remain separate; the curated roadmap retains its dated v44 base.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -75,8 +75,8 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 57 source includes the existing bounded ports below,
-inherited from Version 56, plus native D1 invitation candidate reads described
+The published Version 58 source includes the existing bounded ports below,
+inherited from Version 57, plus native D1 invitation preference source described
 below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
@@ -196,6 +196,8 @@ all-page visual coverage.
   pending/terminal/closed/privacy gates; positive published acceptance remains open
 - Native D1 invitation candidate authority/snapshot reads with bounded lookahead
   and retained signing contract; positive candidate/LIKE/privacy/latency QA open
+- Native D1 invitation preference toggle and complete incoming Pending/Notice
+  cleanup; positive preference/noop/overflow/privacy/race acceptance remains open
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -1295,6 +1297,43 @@ no candidate search, live token, invitation or other data action was performed.
 Positive candidate/LIKE/NUL/privacy/race/latency acceptance remains open. No
 local App/SQL/matcher/crypto/functional execution or new CI was used. The dated
 v44 roadmap remains byte-identical; write/full-flow acceptance is not implied.
+
+## Version 58 bounded native D1 invitation preference toggle
+
+Version 58 changes two backend files: a dedicated preference helper and only
+setInvitationPreference import/delegation. Live account 401 then stored USER
+404 and fixed expectedRevision precede same-value behavior. Absent false/zero
+and same-value requests remain write-free, including same-value MAX revision.
+Genuine toggles increment revision once while preserving accountEpoch, even
+at MAX. Only true-to-false revokes every incoming PENDING invitation across
+all Missions and deletes its SYSTEM invitation notices. Notice absence is
+asserted before ten nullable identity/fence fields are scrubbed. Setting
+overflow precedes pending overflow. No access/participation/bookmark/request/
+Mission-attempt or global-account-epoch write is introduced.
+
+One native batch has 3 statements enabling or 7 disabling. Four attempts and
+five bounded scalar preflight reads submit at most 33 helper statements, or
+35 including the unchanged source-auth bound of two SELECTs. These are source
+bounds, not measured runtime/billing costs. Cleanup has no row limit, ID list,
+per-row loop or partial commits; large sets may hit native limits and fail
+closed. Only the named first-guard SQL rollback or eligible own first-create
+UNIQUE plus changed fresh authority/state may recover. Client versions never
+catch up automatically; unknown commits, other constraints/CAS/end-invariant,
+transport and malformed successful results never retry or prove cleanup.
+
+Native reads/candidates, signing/pure helpers, Send/Decide and every other API/
+parser/DTO/member/close/account/schema/UI path remain byte-identical. Other
+write and account-wide revocation contracts remain separate. Independent final
+review, production typechecking/build and static artifact/archive checks passed.
+Deployment succeeded on 18 October 2026 at 02:45:47 UTC. The bounded 02:46 UTC
+read regression retained session, zero-Space directory and unchanged Settings.
+Normal Missions-to-own-invitations navigation showed the existing opted-out
+presentation, unchecked consent, disabled switch and empty inbox without alerts.
+This supplies no positive toggle/cleanup acceptance. No preference toggle,
+opt-in/out, invitation, token or other production data action was performed.
+Positive preference/noop/revision/overflow/all-Mission-cleanup/privacy/race
+acceptance remains open. No local App/SQL/crypto/functional execution or new CI
+was used. The dated v44 roadmap remains byte-identical; full-flow QA is not implied.
 
 ## Keeping the branches separate
 
