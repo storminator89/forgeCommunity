@@ -9,11 +9,11 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up the published Version 43 source
-`08720e0dbd562ec0bfbb1dde17c4a2bab22dde3b`. Version 43 deployed successfully on
-18 October 2026 at 00:01:28 UTC. The reviewed V2 project rich-editor opt-in and
-project/resource dismissal-focus corrections are live. Bounded read-only rich-
-text and exact-opener focus acceptance passed; PUT/pending/race proof stays open.
+runtime data. This GitHub snapshot backs up the published Version 44 source
+`43ae9cc8c9136019917c4a652528949a9db64fb7`. Version 44 deployed successfully on
+18 October 2026 at 00:12:14 UTC. Member-directory query/filter/sort URL-state
+source is live; published history, reload and profile-return readback is in
+progress. Existing profile/member data and mutation behavior are unchanged.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -74,8 +74,8 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 43 source includes the existing bounded ports below,
-inherited from Version 42, plus the opt-in project rich-editor and dialog focus source described
+The published Version 44 source includes the existing bounded ports below,
+inherited from Version 43, plus the member-directory URL-state source described
 below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
@@ -165,6 +165,9 @@ all-page visual coverage.
 - Project-description rich-editor opt-in with silent controlled synchronization,
   initial/pending inert locks and root-document change checks; exact-opener
   focus restoration for project/resource dialogs, bounded read-only acceptance passed
+- Member-directory query, skill/role filters and sort/order in local URLs, with
+  native history and reset focus; profile/inspector and layout stay local,
+  published history/reload/profile-return acceptance pending
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -825,6 +828,39 @@ acceptance; earlier historical checks retain their release-specific scope.
 Private descriptions, resource fields, account/record identifiers and
 screenshots are excluded. The curated roadmap stays byte-identical at its
 dated Version 32 base.
+
+## Version 44 member-directory URL-state
+
+Version 44 changes the existing member page and adds one pure URL-state helper.
+Search, repeated skill/role selections, sort key and direction are represented
+in the local directory URL. Search removes control characters and is capped at
+120 characters; scalar repeats use defaults and repeated filters are deduplicated.
+Sort/direction are allowlisted. Dynamic skill/role choices remain intact while
+loading or on read failure and are validated only after the existing complete
+successful member read.
+
+The URL drives the view through native popstate subscriptions. Typing replaces
+the current history entry; deliberate filter/sort/reset actions push entries.
+Updates merge with the actual current URL to avoid stale rapid toggles/Back
+state, retaining an accepted local fragment. Reset clears query/skill/role
+filters and returns focus to the stable search input while preserving the
+existing sort/direction semantics. Profile/inspector selection and grid/list
+layout remain local; no member identity is added as directory state.
+
+Existing member reads, filtering/comparators, profile behavior, authentication,
+permissions, APIs, contact/membership data and scoring are unchanged. No member
+data, concrete search words, profile identifiers or screenshots are included in
+this backup, and no profile or data write was made.
+
+Independent exact-path source review, production typechecking/build and static
+artifact/archive checks passed. Deployment succeeded on 18 October 2026 at
+00:12:14 UTC. Published profile-return, Back/Forward, reload, exact shared URL
+and keyboard-reset acceptance is in progress. Multiple selected filters, unknown
+or repeated parameters, delayed/error reads, larger result sets, mobile and
+account transitions remain separate live acceptance gates. The project and
+Resources edit source is byte-identical to Version 43; its bounded read-only
+acceptance and untested write/race variants retain their prior scope.
+The curated roadmap stays byte-identical at its dated Version 32 base.
 
 ## Keeping the branches separate
 

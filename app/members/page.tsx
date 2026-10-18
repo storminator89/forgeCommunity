@@ -3,7 +3,7 @@
 import { PageState } from '@/components/page-state';
 import { HeroBanner, PageContainer, SurfaceCard } from '@/components/discovery';
 import { AppShell, AppHeader } from '@/components/app-shell';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { Sidebar } from "@/components/Sidebar";
 import { UserNav } from "@/components/user-nav";
@@ -27,6 +27,7 @@ import {
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { getPreferredScrollBehavior } from '@/lib/scroll-behavior';
+import { MEMBER_QUERY_LIMIT, memberDirectoryHref, readMemberDirectoryState, validateMemberDirectoryFilters, type MemberDirectoryState, type MemberSort } from './members-directory-url';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,6 +35,20 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+
+const directoryUrlChange = 'forge-member-directory-url-change';
+
+function subscribeDirectoryUrl(callback: () => void) {
+  window.addEventListener('popstate', callback);
+  window.addEventListener(directoryUrlChange, callback);
+  return () => {
+    window.removeEventListener('popstate', callback);
+    window.removeEventListener(directoryUrlChange, callback);
+  };
+}
+
+function directorySearchSnapshot() { return window.location.search; }
+function serverDirectorySearchSnapshot() { return ''; }
 
 interface Member {
   id: string;
@@ -66,17 +81,15 @@ const roleLabels: Record<string, string> = {
 const roleLabel = (role: string) => roleLabels[role] ?? role;
 
 export default function Members() {
-  const [searchTerm, setSearchTerm] = useState('');
+  const urlSearch = useSyncExternalStore(subscribeDirectoryUrl, directorySearchSnapshot, serverDirectorySearchSnapshot);
+  const requestedState = useMemo(() => readMemberDirectoryState(urlSearch), [urlSearch]);
+  const searchRef = useRef<HTMLInputElement>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
-  const [sortBy, setSortBy] = useState<'name' | 'joinedAt' | 'followers'>('name');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [showScrollTop, setShowScrollTop] = useState(false);
-  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
-  const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
 
   // Extrahiere einzigartige Skills und Rollen
@@ -120,6 +133,38 @@ export default function Members() {
       });
     return () => controller.abort();
   }, [fetchMembers, retryKey]);
+
+  // Keep shared choices intact until the complete member read succeeds.
+  const directoryState = !isLoading && !loadError
+    ? validateMemberDirectoryFilters(requestedState, uniqueSkills, uniqueRoles)
+    : requestedState;
+  const { query: searchTerm, skills: selectedSkills, roles: selectedRoles, sort: sortBy, order: sortOrder } = directoryState;
+
+  const updateDirectoryState = (
+    change: Partial<MemberDirectoryState> | ((current: MemberDirectoryState) => Partial<MemberDirectoryState>),
+    push = false,
+  ) => {
+    // Read the actual URL so rapid toggles and Back never merge stale filters.
+    const requested = readMemberDirectoryState(window.location.search);
+    const current = !isLoading && !loadError
+      ? validateMemberDirectoryFilters(requested, uniqueSkills, uniqueRoles)
+      : requested;
+    const next = { ...current, ...(typeof change === 'function' ? change(current) : change) };
+    const checked = !isLoading && !loadError
+      ? validateMemberDirectoryFilters(next, uniqueSkills, uniqueRoles)
+      : next;
+    const href = memberDirectoryHref(checked, window.location.hash);
+    if (href === `${window.location.pathname}${window.location.search}${window.location.hash}`) return;
+    if (push) window.history.pushState(window.history.state, '', href);
+    else window.history.replaceState(window.history.state, '', href);
+    window.dispatchEvent(new Event(directoryUrlChange));
+  };
+
+  const setSearchTerm = (query: string) => updateDirectoryState({ query });
+  const setSelectedSkills = (update: (previous: string[]) => string[]) =>
+    updateDirectoryState(current => ({ skills: update(current.skills) }), true);
+  const setSelectedRoles = (update: (previous: string[]) => string[]) =>
+    updateDirectoryState(current => ({ roles: update(current.roles) }), true);
 
   const getSortedAndFilteredMembers = useCallback(() => {
     let result = [...members];
@@ -175,14 +220,16 @@ export default function Members() {
   const selectedMember = filteredMembers.find(member => member.id === selectedMemberId);
   const mainRef = useRef<HTMLElement>(null);
 
-  const handleSort = (key: 'name' | 'joinedAt' | 'followers') => {
-    setSortBy(key);
-    setSortOrder(prev => sortBy === key ? (prev === 'asc' ? 'desc' : 'asc') : key === 'name' ? 'asc' : 'desc');
+  const handleSort = (key: MemberSort) => {
+    updateDirectoryState(current => ({
+      sort: key,
+      order: current.sort === key ? (current.order === 'asc' ? 'desc' : 'asc') : key === 'name' ? 'asc' : 'desc',
+    }), true);
   };
 
   const hasActiveFilters = Boolean(searchTerm || selectedSkills.length || selectedRoles.length);
   const closeInspector = () => { document.getElementById('member-preview-' + selectedMemberId)?.focus(); setSelectedMemberId(null); };
-  const clearFilters = () => { setSearchTerm(''); setSelectedSkills([]); setSelectedRoles([]); };
+  const clearFilters = () => { updateDirectoryState({ query: '', skills: [], roles: [] }, true); searchRef.current?.focus(); };
   const retryLoad = () => { setIsLoading(true); setLoadError(false); setRetryKey(value => value + 1); };
   const scrollToTop = () => { mainRef.current?.scrollTo?.({ top: 0, behavior: getPreferredScrollBehavior() }); };
 
@@ -207,7 +254,7 @@ export default function Members() {
                   <label htmlFor="member-search" className="mb-2 block text-sm font-medium">Mitglieder suchen</label>
                   <div className="relative">
                     <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-                    <Input id="member-search" type="search" placeholder="Name, Rolle oder Skill" value={searchTerm} onChange={event => setSearchTerm(event.target.value)} className="pl-10" />
+                    <Input ref={searchRef} id="member-search" type="search" maxLength={MEMBER_QUERY_LIMIT} placeholder="Name, Rolle oder Skill" value={searchTerm} onChange={event => setSearchTerm(event.target.value)} className="pl-10" />
                   </div>
                 </div>
 
