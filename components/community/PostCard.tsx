@@ -28,6 +28,7 @@ interface PostCardProps {
   topicHref?: (topic: string) => string
   topicNavigationDisabled?: boolean
   onAddComment?: (postId: string, content: string) => Promise<void>
+  onCommentDraftChange?: (instance: symbol, dirty: boolean) => void
   onLikeComment?: (commentId: string, postId: string) => Promise<void>
   onSelectSolution?: (postId: string, commentId: string | null) => Promise<void>
   solutionSaving?: boolean
@@ -48,6 +49,7 @@ export function PostCard({
   topicHref,
   topicNavigationDisabled = false,
   onAddComment,
+  onCommentDraftChange,
   onLikeComment,
   onSelectSolution,
   solutionSaving = false,
@@ -212,6 +214,7 @@ export function PostCard({
                   onSelectSolution={onSelectSolution}
                   isLoading={isLoading}
                   onAddComment={onAddComment}
+                  onCommentDraftChange={onCommentDraftChange}
                   onLikeComment={onLikeComment}
                   hasMore={!!post.commentsDeferred || !!post.commentsNextCursor}
                   commentCount={post.commentCount}
