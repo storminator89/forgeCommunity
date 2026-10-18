@@ -1,16 +1,15 @@
 import 'server-only';
 
-import { createHash, randomUUID } from 'node:crypto';
 import { Prisma } from '@/generated/prisma/client';
 import prisma from '@/lib/prisma';
 import { parseQuizContent } from '@/app/courses/[courseId]/contents/types';
+import { createObjectiveNative, reviseObjectiveNative, createItemNative, reviseItemNative, readDraftNative, saveDraftNative, publishDraftNative } from '@/lib/server/d1-formative-practice-authoring-mutations';
 
 export type PracticeActor = { id: string; role?: string | null };
 export type PracticeChoice = { schemaVersion: 1; type: 'SINGLE_CHOICE'; prompt: string; options: string[]; correctIndex: number; explanation: string };
 export type PracticeRef = { objectiveId: string; objectiveRevision: number; itemId: string; itemRevision: number };
 type PracticeDraftPayload = { schemaVersion: 1; items: PracticeRef[] };
 type PracticeSnapshotItem = PracticeRef & { objectiveTitle: string; objectiveDescription: string } & PracticeChoice;
-type PracticeSnapshotPayload = { schemaVersion: 1; coursePublicationId: string; items: PracticeSnapshotItem[] };
 
 export class PracticeError extends Error {
   constructor(message: string, public readonly status = 400) { super(message); }
@@ -18,8 +17,6 @@ export class PracticeError extends Error {
 
 const privateId = (value: unknown): value is string => typeof value === 'string' && /^[A-Za-z0-9_-]{8,100}$/.test(value);
 const revision = (value: unknown, allowZero = false): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= (allowZero ? 0 : 1);
-const hash = (value: string) => createHash('sha256').update(value).digest('hex');
-const emptyDraft: PracticeDraftPayload = { schemaVersion: 1, items: [] };
 const MAX_ITEMS = 100;
 const POOL_PAGE_SIZE = 100;
 type PoolCursor = { updatedAt: Date; id: string };
@@ -128,17 +125,6 @@ async function assertCourseAuthor(tx: Prisma.TransactionClient, courseId: string
   return course;
 }
 
-async function getOrCreateDraft(tx: Prisma.TransactionClient, courseId: string) {
-  const json = JSON.stringify(emptyDraft);
-  return tx.coursePracticeDraft.upsert({ where: { courseId }, create: { courseId, revision: 0, payload: json, digest: hash(json) }, update: {} });
-}
-
-async function activeSnapshot(tx: Prisma.TransactionClient, courseId: string, publicationId: string | null) {
-  if (!publicationId) return null;
-  return tx.practiceSnapshot.findFirst({ where: { courseId, coursePublicationId: publicationId }, orderBy: { sequence: 'desc' },
-    select: { id: true, coursePublicationId: true, sequence: true, digest: true, recordedAt: true, itemCount: true } });
-}
-
 export async function listPracticeObjectives(actor: PracticeActor, cursorValue: string | null = null) {
   const cursor = decodePoolCursor(cursorValue);
   return transaction(async tx => {
@@ -156,10 +142,7 @@ export async function createPracticeObjective(actor: PracticeActor, input: unkno
   if (Object.keys(body).some(key => !['title', 'description'].includes(key))) throw new PracticeError('Ungültiges Lernziel.');
   const title = boundedText(body.title, 300, 'Lernziel');
   const description = boundedText(body.description ?? '', 3000, 'Beschreibung', false);
-  return transaction(async tx => {
-    await assertAuthor(tx, actor);
-    return tx.practiceObjective.create({ data: { ownerId: actor.id, title, description }, select: { id: true, title: true, description: true, revision: true } });
-  });
+  return createObjectiveNative(actor, title, description);
 }
 
 export async function getPracticeObjective(actor: PracticeActor, objectiveId: string) {
@@ -181,16 +164,7 @@ export async function revisePracticeObjective(actor: PracticeActor, objectiveId:
   if (!Object.keys(body).length || Object.keys(body).some(key => !['title', 'description'].includes(key))) throw new PracticeError('Ungültiges Lernziel.');
   const title = body.title === undefined ? undefined : boundedText(body.title, 300, 'Lernziel');
   const description = body.description === undefined ? undefined : boundedText(body.description, 3000, 'Beschreibung', false);
-  return transaction(async tx => {
-    await assertAuthor(tx, actor);
-    const current = await tx.practiceObjective.findFirst({ where: { id: objectiveId, ownerId: actor.id }, select: { revision: true } });
-    if (!current) throw new PracticeError('Lernziel nicht gefunden.', 404);
-    if (current.revision !== expectedRevision) throw new PracticeError('Lernziel wurde geändert. Bitte neu laden.', 412);
-    const result = await tx.practiceObjective.updateMany({ where: { id: objectiveId, ownerId: actor.id, revision: expectedRevision },
-      data: { ...(title !== undefined && { title }), ...(description !== undefined && { description }), revision: { increment: 1 } } });
-    if (result.count !== 1) throw new PracticeError('Lernziel wurde geändert. Bitte neu laden.', 412);
-    return tx.practiceObjective.findUniqueOrThrow({ where: { id: objectiveId }, select: { id: true, title: true, description: true, revision: true } });
-  });
+  return reviseObjectiveNative(actor, objectiveId, expectedRevision, title, description);
 }
 
 export async function listPracticeItems(actor: PracticeActor, objectiveId: string, cursorValue: string | null = null) {
@@ -213,14 +187,7 @@ export async function listPracticeItems(actor: PracticeActor, objectiveId: strin
 export async function createPracticeItem(actor: PracticeActor, objectiveId: string, input: unknown) {
   if (!privateId(objectiveId)) throw new PracticeError('Lernziel nicht gefunden.', 404);
   const choice = practiceChoiceFromInput(input);
-  return transaction(async tx => {
-    await assertAuthor(tx, actor);
-    const objective = await tx.practiceObjective.findFirst({ where: { id: objectiveId, ownerId: actor.id }, select: { id: true } });
-    if (!objective) throw new PracticeError('Lernziel nicht gefunden.', 404);
-    return tx.practiceItem.create({ data: { ownerId: actor.id, objectiveId, latestRevision: 1,
-      revisions: { create: { revision: 1, payload: JSON.stringify(choice) } } },
-    select: { id: true, objectiveId: true, latestRevision: true } });
-  });
+  return createItemNative(actor, objectiveId, choice);
 }
 
 export async function getPracticeItem(actor: PracticeActor, itemId: string) {
@@ -252,27 +219,11 @@ export async function revisePracticeItem(actor: PracticeActor, itemId: string, e
   if (!privateId(itemId)) throw new PracticeError('Übungsfrage nicht gefunden.', 404);
   if (!revision(expectedRevision)) throw new PracticeError('Übungsrevision erforderlich.', 428);
   const choice = practiceChoiceFromInput(input);
-  return transaction(async tx => {
-    await assertAuthor(tx, actor);
-    const item = await tx.practiceItem.findFirst({ where: { id: itemId, ownerId: actor.id }, select: { latestRevision: true, objectiveId: true } });
-    if (!item) throw new PracticeError('Übungsfrage nicht gefunden.', 404);
-    if (item.latestRevision !== expectedRevision) throw new PracticeError('Übungsfrage wurde geändert. Bitte neu laden.', 412);
-    const updated = await tx.practiceItem.updateMany({ where: { id: itemId, ownerId: actor.id, latestRevision: expectedRevision },
-      data: { latestRevision: { increment: 1 } } });
-    if (updated.count !== 1) throw new PracticeError('Übungsfrage wurde geändert. Bitte neu laden.', 412);
-    const nextRevision = expectedRevision + 1;
-    await tx.practiceItemRevision.create({ data: { itemId, revision: nextRevision, payload: JSON.stringify(choice) } });
-    return { id: itemId, objectiveId: item.objectiveId, latestRevision: nextRevision };
-  });
+  return reviseItemNative(actor, itemId, expectedRevision, choice);
 }
 
 export async function readPracticeDraft(courseId: string, actor: PracticeActor) {
-  return transaction(async tx => {
-    const course = await assertCourseAuthor(tx, courseId, actor);
-    const draft = await getOrCreateDraft(tx, courseId);
-    return { draft: { revision: draft.revision, payload: parseDraft(draft.payload), digest: draft.digest },
-      activeCoursePublicationId: course.activePublicationId, activeSnapshot: await activeSnapshot(tx, courseId, course.activePublicationId) };
-  });
+  return readDraftNative(courseId, actor, parseDraft);
 }
 
 export async function savePracticeDraft(courseId: string, actor: PracticeActor, expectedRevision: unknown, items: unknown) {
@@ -280,18 +231,7 @@ export async function savePracticeDraft(courseId: string, actor: PracticeActor, 
   const payload: PracticeDraftPayload = { schemaVersion: 1, items: practiceRefs(items) };
   const json = JSON.stringify(payload);
   if (Buffer.byteLength(json, 'utf8') > 32 * 1024) throw new PracticeError('Übungsentwurf ist zu groß.', 413);
-  return transaction(async tx => {
-    const course = await assertCourseAuthor(tx, courseId, actor);
-    const draft = await getOrCreateDraft(tx, courseId);
-    if (draft.revision !== expectedRevision) throw new PracticeError('Übungsentwurf wurde geändert. Bitte neu laden.', 412);
-    await resolveRefs(tx, actor.id, payload.items);
-    const updated = await tx.coursePracticeDraft.updateMany({ where: { courseId, revision: expectedRevision }, data: {
-      revision: { increment: 1 }, payload: json, digest: hash(json), lastEditorId: actor.id,
-    } });
-    if (updated.count !== 1) throw new PracticeError('Übungsentwurf wurde geändert. Bitte neu laden.', 412);
-    return { draft: { revision: expectedRevision + 1, payload, digest: hash(json) },
-      activeCoursePublicationId: course.activePublicationId, activeSnapshot: await activeSnapshot(tx, courseId, course.activePublicationId) };
-  });
+  return saveDraftNative(courseId, actor, expectedRevision, payload, json, parseChoice);
 }
 
 async function resolveRefs(tx: Prisma.TransactionClient, ownerId: string, refs: PracticeRef[]): Promise<PracticeSnapshotItem[]> {
@@ -349,56 +289,11 @@ function assertNoCredentialDuplicates(publicationPayload: string, items: Practic
   }
 }
 
-function snapshotDto(row: { id: string; coursePublicationId: string; sequence: number; digest: string; itemCount: number }) {
-  return { id: row.id, coursePublicationId: row.coursePublicationId, sequence: row.sequence, digest: row.digest, itemCount: row.itemCount };
-}
-
 export async function publishPracticeDraft(courseId: string, actor: PracticeActor, expectedRevision: unknown, expectedActivePublicationId: unknown, requestId: unknown) {
   if (!revision(expectedRevision, true)) throw new PracticeError('Entwurfsrevision erforderlich.', 428);
   if (!privateId(expectedActivePublicationId)) throw new PracticeError('Aktive Kursveröffentlichung erforderlich.', 428);
   if (!privateId(requestId)) throw new PracticeError('Ungültige Anforderungs-ID.');
-  const requestDigest = hash(JSON.stringify([actor.id, expectedRevision, expectedActivePublicationId]));
-  const action = () => transaction(async tx => {
-    const course = await assertCourseAuthor(tx, courseId, actor);
-    const receipt = await tx.practicePublicationRequest.findUnique({ where: { courseId_requestId: { courseId, requestId } },
-      select: { actorId: true, requestDigest: true, snapshot: { select: { id: true, courseId: true, coursePublicationId: true, sequence: true, digest: true, itemCount: true } } } });
-    if (receipt) {
-      if (receipt.actorId !== actor.id || receipt.requestDigest !== requestDigest || receipt.snapshot.courseId !== courseId) throw new PracticeError('Anforderungs-ID wurde anders verwendet.', 409);
-      return { snapshot: snapshotDto(receipt.snapshot), unchanged: true, replay: true };
-    }
-    const draft = await getOrCreateDraft(tx, courseId);
-    if (draft.revision !== expectedRevision || course.activePublicationId !== expectedActivePublicationId) throw new PracticeError('Übungsentwurf oder Kursveröffentlichung wurde geändert. Bitte neu laden.', 412);
-    const refs = parseDraft(draft.payload).items;
-    if (!refs.length) throw new PracticeError('Mindestens eine Übungsfrage ist erforderlich.', 409);
-    const publication = await tx.coursePublication.findFirst({ where: { id: expectedActivePublicationId, courseId }, select: { payload: true } });
-    if (!publication) throw new PracticeError('Kursveröffentlichung ist beschädigt.', 409);
-    const items = await resolveRefs(tx, actor.id, refs);
-    assertNoCredentialDuplicates(publication.payload, items);
-    const payload: PracticeSnapshotPayload = { schemaVersion: 1, coursePublicationId: expectedActivePublicationId, items };
-    const json = JSON.stringify(payload);
-    if (Buffer.byteLength(json, 'utf8') > 1024 * 1024) throw new PracticeError('Übung ist zu groß.', 413);
-    const digest = hash(json);
-    const current = await activeSnapshot(tx, courseId, expectedActivePublicationId);
-    if (current?.digest === digest) {
-      await tx.practicePublicationRequest.create({ data: { courseId, requestId, actorId: actor.id, requestDigest, snapshotId: current.id } });
-      return { snapshot: snapshotDto(current), unchanged: true, replay: false };
-    }
-    const latest = await tx.practiceSnapshot.findFirst({ where: { courseId }, orderBy: { sequence: 'desc' }, select: { sequence: true } });
-    const snapshot = await tx.practiceSnapshot.create({ data: { id: randomUUID(), courseId, coursePublicationId: expectedActivePublicationId,
-      sequence: (latest?.sequence ?? 0) + 1, draftRevision: expectedRevision, payload: json, digest, itemCount: items.length, actorId: actor.id },
-      select: { id: true, coursePublicationId: true, sequence: true, digest: true, itemCount: true } });
-    await tx.practicePublicationRequest.create({ data: { courseId, requestId, actorId: actor.id, requestDigest, snapshotId: snapshot.id } });
-    return { snapshot: snapshotDto(snapshot), unchanged: false, replay: false };
-  });
-  // A simultaneous publish may collide on the receipt or next course sequence.
-  // Re-read committed state in a new transaction before deciding to reuse it.
-  for (let attempt = 0; ; attempt++) {
-    try { return await action(); }
-    catch (error) {
-      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') throw error;
-      if (attempt >= 2) throw new PracticeError('Gleichzeitige Veröffentlichung. Bitte neu laden.', 409);
-    }
-  }
+  return publishDraftNative(courseId, actor, expectedRevision, expectedActivePublicationId, requestId, parseDraft, parseChoice, assertNoCredentialDuplicates);
 }
 
 export async function listPracticeHistory(courseId: string, actor: PracticeActor, cursorValue: string | null = null) {
