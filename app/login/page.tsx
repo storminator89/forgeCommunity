@@ -24,18 +24,30 @@ function LoginContent() {
   const isReady = useClientReady()
   const [showPassword, setShowPassword] = useState(false)
   const [oauthProviders, setOAuthProviders] = useState<Array<{ id: string; name: string }>>([])
+  const [oauthProvidersStatus, setOAuthProvidersStatus] = useState<'loading' | 'loaded' | 'failed'>('loading')
   const searchParams = useSearchParams()
   const requestedCallback = searchParams.get('callbackUrl')
   const callbackUrl = safeLoginCallback(requestedCallback)
   const visibleError = error || loginErrorMessage(searchParams.get('error'))
+  const googleAvailable = oauthProviders.some(provider => provider.id === 'google')
+  const googleStatus = oauthProvidersStatus === 'loading' ? 'Wird geprüft…'
+    : oauthProvidersStatus === 'failed' ? 'Momentan nicht verfügbar' : 'Noch nicht eingerichtet'
 
   useEffect(() => {
     let active = true
     getProviders().then(providers => {
-      if (active) setOAuthProviders(Object.values(providers ?? {})
+      if (!active) return
+      if (!providers) {
+        setOAuthProvidersStatus('failed')
+        return
+      }
+      setOAuthProviders(Object.values(providers)
         .filter(provider => provider.type === 'oauth')
         .map(provider => ({ id: provider.id, name: provider.name.slice(0, 60) })))
-    }).catch(() => {})
+      setOAuthProvidersStatus('loaded')
+    }).catch(() => {
+      if (active) setOAuthProvidersStatus('failed')
+    })
     return () => { active = false }
   }, [])
 
@@ -113,12 +125,14 @@ function LoginContent() {
                 {isLoading ? 'Anmeldung läuft…' : 'Anmelden'}
               </Button>
             </form>
-            {oauthProviders.length > 0 && <>
-              <div className="flex items-center gap-3 text-xs text-muted-foreground"><span className="h-px flex-1 bg-border" />oder<span className="h-px flex-1 bg-border" /></div>
-              <div className="space-y-3">
-                {oauthProviders.map(provider => <Button key={provider.id} type="button" variant="outline" className="h-11 w-full" onClick={() => handleOAuthSignIn(provider.id)} disabled={isLoading || !isReady}>Mit {provider.name} anmelden</Button>)}
-              </div>
-            </>}
+            <div className="flex items-center gap-3 text-xs text-muted-foreground"><span className="h-px flex-1 bg-border" />oder<span className="h-px flex-1 bg-border" /></div>
+            <div className="space-y-3">
+              <Button type="button" variant="outline" className="h-auto min-h-11 w-full flex-col gap-1 py-3" onClick={googleAvailable ? () => handleOAuthSignIn('google') : undefined} disabled={isLoading || !isReady || !googleAvailable} aria-busy={oauthProvidersStatus === 'loading'}>
+                <span>Mit Google anmelden</span>
+                {!googleAvailable && <span className="text-xs font-normal">{googleStatus}</span>}
+              </Button>
+              {oauthProviders.filter(provider => provider.id !== 'google').map(provider => <Button key={provider.id} type="button" variant="outline" className="h-11 w-full" onClick={() => handleOAuthSignIn(provider.id)} disabled={isLoading || !isReady}>Mit {provider.name} anmelden</Button>)}
+            </div>
             <p className="text-sm text-muted-foreground">Noch kein Konto? <Link href="/register" className="inline-flex items-center gap-1 font-medium text-primary hover:underline">Konto erstellen <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" /></Link></p>
           </div>
         </div>

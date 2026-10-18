@@ -11,6 +11,11 @@ das Bereitstellen dieses Backends noch das sichere Hinterlegen der Zugangsdaten.
   JWT-Sitzungen, Datenbankrollen und Passwort-Fingerprints bleiben bestehen.
 - Google und ein zusätzlicher OIDC-Anbieter sind unabhängig optional.
   `/login` lädt die tatsächlich verfügbaren Anbieter aus `/api/auth/providers`.
+  Der Google-Button bleibt auch ohne vollständige Konfiguration sichtbar und ist
+  dann mit „Noch nicht eingerichtet“ deaktiviert. Während die Liste lädt,
+  erscheint „Wird geprüft…“; bei einem Ladefehler „Momentan nicht verfügbar“.
+  Anklickbar wird er nur, wenn die Serverliste Google enthält. Sichtbarkeit
+  aktiviert keine Anmeldung und umgeht keine serverseitige Prüfung.
 - Beide Anbieter verwenden Authorization Code, PKCE S256, `state`, `nonce`,
   signierte RS256-ID-Tokens und ausschließlich `openid email profile`.
   Die NextAuth-/openid-client-Bibliotheken validieren den ID-Token einschließlich
@@ -54,7 +59,7 @@ Die bestehende Datenbankkonfiguration und die Tabellen `User` und `Account`
 müssen verfügbar sein. Diese Erweiterung benötigt keine Schemaänderung und
 keinen neuen Dienst. Geheimnisse gehören nie in `NEXT_PUBLIC_*`, Git, den
 Browser oder Screenshots. Änderungen der Servervariablen erfordern einen Neustart
-der App; Buttons werden danach aus der Serverkonfiguration geladen.
+der App; die verfügbaren Anbieter werden danach aus der Serverkonfiguration geladen.
 
 ## 2. Google-App registrieren
 
@@ -81,7 +86,12 @@ GOOGLE_CLIENT_SECRET=""
 ```
 
 Die Client-ID hat Googles Endung `.apps.googleusercontent.com`. Beide Werte müssen
-vollständig gesetzt sein. Nach dem Neustart erscheint „Mit Google anmelden“.
+vollständig gesetzt sein. Zusätzlich müssen `NEXTAUTH_URL` und `NEXTAUTH_SECRET`
+die gemeinsamen Prüfungen aus Abschnitt 1 erfüllen. Nach dem Neustart wird
+„Mit Google anmelden“ anklickbar, wenn `/api/auth/providers` Google zurückliefert.
+Ohne vollständige gültige Konfiguration bleibt der sichtbare Button deaktiviert
+mit „Noch nicht eingerichtet“; es wird kein Redirect gestartet. Dies bestätigt
+noch keine erfolgreiche Anmeldung mit dem bei Google registrierten Client.
 Kein Client-Secret in die öffentliche App-Konfiguration kopieren. Es wird kein
 Offlinezugriff angefordert und keine zusätzliche Zustimmung zum Tokenrefresh
 erzwungen.
@@ -231,9 +241,14 @@ und keine lokalen Funktionstests starten. Erlaubte lokale Prüfungen sind
 Typprüfung und Produktionsbuild. End-to-End-Abnahme anschließend ausschließlich
 auf der veröffentlichten Sites-Version, mit dafür freigegebenen Testkonten:
 
-- Ohne Providerkonfiguration keine OAuthbuttons, Passwortanmeldung unverändert.
-- Nur korrekt konfigurierte Anbieter erscheinen; teilweise Konfiguration bleibt
-  deaktiviert, auch nach direktem Aufruf der Authroute.
+- Ohne Providerkonfiguration bleibt „Mit Google anmelden“ sichtbar und mit
+  „Noch nicht eingerichtet“ deaktiviert; Passwortanmeldung unverändert.
+- Nur serverseitig konfigurierte Anbieter sind anklickbar. Teilweise oder
+  ungültige Google-Konfiguration bleibt deaktiviert, auch nach direktem Aufruf
+  der Authroute; ein nicht konfigurierter OIDC-Anbieter bleibt ausgeblendet.
+- Während des Ladens und bei Ladefehlern bleibt Google deaktiviert, ohne einen
+  falschen Konfigurationsstatus anzuzeigen. Der Google-Button erscheint auch
+  bei konfiguriertem Google nur einmal.
 - Erfolgreiche Anmeldung mit bestätigter E-Mail, erneute Anmeldung desselben
   Accounts und normaler Logout.
 - Abbruch, abgelaufene/manipulierte State-/Nonce-/PKCE-Transaktion, unbestätigte
