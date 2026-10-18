@@ -1,7 +1,7 @@
 # ForgeCommunity Nutzerflüsse und nächste Schritte
 
-Stand: 18. Oktober 2026, 05:55 UTC · veröffentlichte Sites-Version **v66**  
-Quellstand: `c29d72d3cc07b2150aae03f0043adb7879c5b42e`  
+Stand: 18. Oktober 2026, 06:01 UTC · veröffentlichte Sites-Version **v67**  
+Quellstand: `21ed64d8c0589fddab72ec868d2a8f3a97270278`  
 Produkt: [ForgeCommunity](https://forge-community.dsgvision.chatgpt.site)
 
 Dieses Dokument beschreibt die veröffentlichte Sites-Variante und ihre gezielten Live-Prüfungen. Das Standardsetup mit Docker und SQLite oder PostgreSQL bleibt in der README der Hauptversion dokumentiert. Cloudflare-Einrichtung und Laufzeitgrenzen stehen separat in [CLOUDFLARE_SITES.md](CLOUDFLARE_SITES.md).
@@ -38,6 +38,7 @@ Leere Listen und eine leere Inbox beweisen keinen positiven Schreib-, Zustellung
 | Folgen | Seit v64 nativer Follow-POST mit derselben vorhandenen FOLLOW-Benachrichtigung in einem atomaren Batch; Session-/Duplikat-/Antwortvertrag sowie GET/DELETE bleiben erhalten. | Positive echte Follow-/Benachrichtigungs-/Race-Abnahme offen. Keine automatischen Wiederholungen oder lebenslange Genau-einmal-Garantie; erneutes Folgen nach Entfolgen kann eine weitere historische Benachrichtigung erzeugen. |
 | Event-RSVP | Seit v65 native Status-/Anmelde-/Wartelisten-/Abmeldepfade GET/POST/DELETE mit vollständiger FIFO-Verarbeitung und bisherigen Beförderungsbenachrichtigungen. | Positive RSVP-/FIFO-/Replay-/Abmelde-/Notice-/Parallelitätsabnahme offen. Zwei statt vier vollständige Versuche, konservativer Preflight-409 und mögliche vollständige Reparatur mit anschließendem 409 bleiben explizit. Admin-Event-PUT/DELETE bleiben callbackgebunden; keine pauschale Event-Fertigmeldung. |
 | Kanonische Kursdateien | Seit v66 native Kursdatei-GET/HEAD-Autorisierung: aktuelle Authorrechte, anonymes aktives Cover oder eingeschriebener, entsperrter referenzierender Lerninhalt mit bestehendem Revisions-/Bewertungsnachweis. | Private Dateileser und Uploads bleiben unverändert. Bildbytes, HEAD, ACL-/Widerrufs-/Gradefälle und tatsächliche Dateiexistenz/Persistenz sind nicht positiv abgenommen. Operative Vollständigkeits-/Legacygrenzen bleiben geschlossen; H5P ist separat. |
+| H5P-Auswahlliste | Seit v67 native Liste vorhandener eigener H5P-Inhalte; Gesamtliste nur mit übereinstimmendem Session- und aktuellem ADMIN-Recht. | Nur Liste, keine Freigabe von Embed, Metadaten, Tokenassets, Import oder Playback. Positive nichtleere Owner-/Admin-/Datums-/Datenschutzabnahme offen; rohe Datumssortierung und operative vollständige Legacygrenzen bleiben erhalten. |
 | Ressourcen-Vorschau | Kompakter neutraler Fallback und bestehender sicherer Quellenlink. | Fallback und Tastaturzugang zur Quelle live bestätigt. Der echte externe Metadatenabruf bleibt technisch blockiert. |
 
 Die nachfolgenden Ports erweitern die Laufzeitkompatibilität vorhandener Funktionen. Sie führen keine neue Bewertung, Missionsregel, Rangliste oder Belohnung ein.
@@ -66,7 +67,7 @@ Gast-/Loginrückkehr, vollständige Geräte-/Assistenztechnikabnahme, Benachrich
 
 ## Historische Quellenkarte der Callback-Restpfade
 
-Die [kuratierte v63-Quellenkarte](D1_CALLBACK_SOURCE_MAP_V63.md) enthält 63 statisch erreichbare Routen-/Methodenzweige plus fünf obsolete Kompatibilitätsmethoden und relative Repositoryquellen. Das sind keine 63 live beobachteten Fehler oder unabhängigen Nutzerabläufe. Basis bleibt ausdrücklich v63; Follow-POST ist darin seit v64 als portierter Einzelfix markiert. Event-RSVP GET/POST/DELETE sind zusätzlich seit v65 als portiert vermerkt; Admin-Event-PUT/DELETE bleiben getrennt callbackgebunden. Die kanonische Kursdatei-GET/HEAD-Callbackbarriere ist seit v66 als entfernt vermerkt, ohne Speicher-/Upload- oder Bildbyteabnahme. Chat, allgemeine Bildspeicherung, Kursformatierung und Übungs-Retention behalten ihre getrennten Diagnose-/Prüfgrenzen. Keine pauschale Funktionsabnahme oder künstliche Aktivität wird daraus abgeleitet.
+Die [kuratierte v63-Quellenkarte](D1_CALLBACK_SOURCE_MAP_V63.md) enthält 63 statisch erreichbare Routen-/Methodenzweige plus fünf obsolete Kompatibilitätsmethoden und relative Repositoryquellen. Das sind keine 63 live beobachteten Fehler oder unabhängigen Nutzerabläufe. Basis bleibt ausdrücklich v63; Follow-POST ist darin seit v64 als portierter Einzelfix markiert. Event-RSVP GET/POST/DELETE sind zusätzlich seit v65 als portiert vermerkt; Admin-Event-PUT/DELETE bleiben getrennt callbackgebunden. Die kanonische Kursdatei-GET/HEAD-Callbackbarriere ist seit v66 als entfernt vermerkt, ohne Speicher-/Upload- oder Bildbyteabnahme. Seit v67 ist ausschließlich die H5P-Auswahlliste zusätzlich als portiert vermerkt; Wiedergabe/Metadaten/Tokenassets/Import bleiben getrennt. Chat, allgemeine Bildspeicherung, Kursformatierung und Übungs-Retention behalten ihre getrennten Diagnose-/Prüfgrenzen. Keine pauschale Funktionsabnahme oder künstliche Aktivität wird daraus abgeleitet.
 
 ## Die nächsten drei begrenzten Pakete
 
@@ -90,6 +91,6 @@ Eine allgemeine private Inhaltsmerkliste und eine passendere allgemeine Ressourc
 
 ## Quellen und Prüfgrenze
 
-Grundlage: der oben genannte v66-Quellstand, bestätigte Auslieferungen bis v66 und die ausdrücklich abgegrenzten veröffentlichten Beobachtungen. Für diese Dokumentprüfung wurden keine Produktdaten oder Repositorydateien verändert, keine Funktionstests gestartet und keine Browseraktionen ausgeführt.
+Grundlage: der oben genannte v67-Quellstand, bestätigte Auslieferungen bis v67 und die ausdrücklich abgegrenzten veröffentlichten Beobachtungen. Für diese Dokumentprüfung wurden keine Produktdaten oder Repositorydateien verändert, keine Funktionstests gestartet und keine Browseraktionen ausgeführt.
 
 Wesentliche Quellverträge: `space-polls.ts`, `space-missions.ts`, `space-mission-bookmarks.ts`, `space-mission-invitations.ts` und ihre nativen D1-Helper unter `lib/server/`; private Mitgliedschaftsrouten; Lernpfadteilnahmeroute; `lib/server/url-security.ts`; Journey-/Verzeichnis-URLhelper und vorhandene Bearbeitungs-/Kommentaransichten. Standard-Node/Docker und Sites/D1 bleiben getrennte Laufzeitziele. Kein vollständiger Funktions-, Sicherheits- oder Barrierefreiheitsnachweis wird daraus abgeleitet.

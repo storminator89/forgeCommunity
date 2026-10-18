@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from "@/lib/sites-auth/server";
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
-import { Prisma } from '@/generated/prisma/client';
-import { hasCurrentAdminReadAccess } from '@/lib/server/read-access';
+import { listD1H5PContents } from '@/lib/server/d1-h5p-contents-read';
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -13,14 +11,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const h5pContents = await prisma.$transaction(async tx => {
-      const isAdmin = await hasCurrentAdminReadAccess(tx, session.user);
-      return tx.h5PContent.findMany({
-        where: isAdmin ? undefined : { userId: session.user.id },
-        orderBy: { createdAt: 'desc' },
-        select: { id: true, title: true, contentType: true, createdAt: true },
-      });
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    const h5pContents = await listD1H5PContents(session.user.id, session.user.role === 'ADMIN');
 
     return NextResponse.json(h5pContents.map(content => ({ ...content, embedUrl: `/h5p/embed/${content.id}` })), { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {

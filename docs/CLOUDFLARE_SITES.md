@@ -9,12 +9,12 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up the published Version 66 source
-`c29d72d3cc07b2150aae03f0043adb7879c5b42e`. Version 66 deployed successfully on
-18 October 2026 at 05:55:07 UTC. Canonical course-asset GET/HEAD authorization
-now uses native D1; private storage/uploads remain unchanged and positive byte/
-HEAD/ACL/persistence acceptance is open. Native/legacy/DDL limits remain explicit.
-Roadmap uses v66; the source map retains its historical v63 base.
+runtime data. This GitHub snapshot backs up the published Version 67 source
+`21ed64d8c0589fddab72ec868d2a8f3a97270278`. Version 67 deployed successfully on
+18 October 2026 at 06:01:13 UTC. H5P chooser LIST now uses native D1 on the
+actual released v66 asset base. Positive chooser Owner/Admin/date/privacy QA
+remains open; embed/metadata/token assets/import/playback are separate.
+Roadmap uses v67; the source map retains its historical v63 base.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -75,8 +75,8 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 66 source includes the existing bounded ports below,
-inherited from Version 65, plus native D1 course-asset reads described
+The published Version 67 source includes the existing bounded ports below,
+inherited from Version 66, plus native D1 H5P chooser list described
 below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
@@ -214,6 +214,8 @@ all-page visual coverage.
   positive published acceptance open, Admin Event PUT/DELETE unchanged
 - Native D1 canonical course-asset GET/HEAD ACL reads with unchanged private
   file reader; positive byte/HEAD/storage/ACL acceptance remains open
+- Native D1 own/current-ADMIN H5P chooser list only, with raw createdAt ordering;
+  positive published cases open, embed/metadata/tokenasset/import unchanged
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -241,7 +243,8 @@ Version 61 ports existing ADMIN discussion/reply moderation.
 Version 62 ports normal Pathway participation; Version 63 ports ADMIN Pathway
 definition Create only. Version 64 ports existing Follow POST; Version 65 ports
 RSVP GET/POST/DELETE. Version 66 ports canonical course-asset GET/HEAD ACL reads,
-not uploads/storage. Admin Event PUT/DELETE and other unported flows remain separate. The [historical v63 source map](D1_CALLBACK_SOURCE_MAP_V63.md)
+not uploads/storage. Version 67 ports H5P chooser LIST only. Embed/private metadata/
+token assets/import, Admin Event PUT/DELETE and other unported flows remain separate. The [historical v63 source map](D1_CALLBACK_SOURCE_MAP_V63.md)
 records callback-route reachability, not 63 live-reproduced bugs.
 Positive Space/Mission mutation acceptance remains open. Account/role changes
 and other mission mutation flows remain
@@ -1956,6 +1959,73 @@ overview checks. No local App/SQL/pure/date/crypto/function tests, new CI, brows
 or live-data actions by this backup. The separate v65 input clarification changes
 documentation only. User roadmap and historical source map add bounded v66 scope;
 README bytes stay unchanged. This backup updates only cloudflare-sites.
+
+## Version 67 bounded native D1 H5P chooser LIST only
+
+Version 67 adds only one typed collection-read helper and the existing GET route
+import/callback delegate, two source paths. Exact reversal reconstructs all other
+route bytes: session outside try/401, four-field response spread plus original raw
+embed URL, no-store on success and logged generic 500. Current released v66
+course-asset files are byte-identical in the actual new base. Shared access,
+H5P storage/archive/upload/embed/metadata/token assets/crypto/origins, UI/schema/
+auth/proxy/course authoring remain unchanged. This list port gives no playback,
+import, secret/token creation or private storage/byte-delivery assurance.
+
+Only session ADMIN hint AND currently stored ADMIN lists all H5P rows. All other
+cases use raw caller-owned rows, including stale/demoted/deleted ADMIN hints or
+stored ADMIN without session hint. There is NO new current-account existence,
+role/test/enrollment/ID-format/trim/readability gate. One fresh first-primary SELECT
+coherently returns authority plus complete authorized rowset. Sort is raw stored
+createdAt DESC only: no ID tie-breaker, JavaScript/ISO/normalized date sorting or
+chronology repair. Raw mixed representations/ties retain database relative order.
+
+Typed context plus all authorized metadata or no content rows on budget failure;
+strict fit/count/columns/kinds/null placement/PK/date validation never weakens to
+own-only fallback. Explicit output objects contain ONLY id/title/contentType/
+createdAt; no row spread, owner/profile/role/fence leak. The old route then adds
+exact raw /h5p/embed/${id}, without encoding/sanitization/new metadata. Empty string
+fields remain valid strings; creation title-300/mainLibrary-128 rules are not new
+read restrictions. Provider errors become a fixed safe Error without SQL/binds/
+cause before original logger. Every completeness/type/date/budget failure is the
+original generic 500; no writes, pagination, row filtering, truncation, retries,
+readback or partial response.
+
+Bounded absolute date conversion retains finite numeric zero/fractional
+milliseconds and TimeClip, date-only/minute/seconds/fractions/valid 24:00,
+Z/short/compact/colon offsets and zoneless UTC. It rejects unsupported malformed,
+relative, NUL, Julian/numeric-string or oversized legacy values for the WHOLE
+request. No universal engine-date parity, SQLite date parser/rounding/derived-ms
+gate or sort change is claimed. Only output becomes canonical ISO, including
+extended-year 27-character extreme numeric ISO.
+
+SQL is 1,886 UTF-8 bytes, two bind slots, max two builtin arguments, two compound
+arms and seven result columns. One SELECT plus valid auth maximum two = THREE
+source statements, unmeasured cost/latency. Underlying authorized-row scan is
+unbounded. Table/column/PK/FK source definitions are prerequisites; installed DDL/
+triggers/corrupt duplicates are unverified and PK violation is not repaired.
+Local ceilings: raw complete row 200,000 bytes, projected rowset AND whole final
+response 1,200,000, date text 1,024, raw caller bind strictly below 1,500,000, and
+pre-database SQL/raw-actor escaped request-wire estimate 1,200,000. Incremental
+counter includes SQL and actor plus hint/envelope; not provider/platform maximum.
+Response proof includes ID twice, raw embed prefix, full JSON escaping/commas and
+ISO27. Conservative derived content/result rows 4,686/4,687 follow byte reserves,
+not a product LIMIT. Foreign rows do not consume own-list budgets. Full rowset
+budgets avoid JSON aggregation intermediates; unsupported/oversized authorized
+legacy rows fail closed, never trim or hide oversize rows. Native limits may
+still fail the full read; none of these bounds measures network/billing/runtime.
+
+Two original independent source PASSes cover identical chooser bytes reviewed
+on the provisional v65 base. An actual independent auditor pass then verified
+the NEW released v66 base, unchanged source/patch/SQL, complete route reversal
+and protected files including BOTH asset paths. This is not a claim of a second
+repeated counter-review of the rebase. Final combined production types/build/
+static artifact/archive gates passed. Deployment succeeded on 18 October 2026
+at 06:01:13 UTC. Positive published empty/nonempty chooser, Owner/current ADMIN/
+stale-role, raw-date ordering/error/privacy cases remain OPEN. No local App/SQL/
+pure/date/crypto/function tests, new CI, browser, package/import/token/secret or
+live-data actions by this backup. Roadmap and historical v63 source map add only
+bounded v67 chooser scope; README and prior approved facts are retained. This
+backup updates only cloudflare-sites and does not touch main/default.
 
 ## Keeping the branches separate
 

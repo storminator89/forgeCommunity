@@ -11,6 +11,8 @@ Seit **v65**, Quellstand `4ec1307381f075814aff1d207bb3d79160567057`, sind zusät
 
 Seit **v66**, Quellstand `c29d72d3cc07b2150aae03f0043adb7879c5b42e`, ist zusätzlich die Callbackbarriere der kanonischen Kursdatei-GET/HEAD-Route durch [d1-course-asset-reads.ts](../lib/server/d1-course-asset-reads.ts) und die [vorhandene Route](../app/api/courses/%5BcourseId%5D/assets/%5BassetId%5D/route.ts) entfernt. Author-/anonyme aktive Cover-/berechtigte Lerninhaltsrechte bleiben getrennt. Dateispeicher, Uploads und H5P bleiben eigene Grenzen; positive Bildbyte-/HEAD-/ACL-/Persistenzabnahme ist offen. Historische v63-Base, Zählung und Methodenzeilen bleiben unverändert; dies ist keine Gesamtfertigmeldung.
 
+Seit **v67**, Quellstand `21ed64d8c0589fddab72ec868d2a8f3a97270278`, ist zusätzlich nur die H5P-Auswahlliste `GET /api/h5p/contents` über [d1-h5p-contents-read.ts](../lib/server/d1-h5p-contents-read.ts) und die [bestehende Listenroute](../app/api/h5p/contents/route.ts) nativ portiert. Embed, private Metadaten, Tokenassets, Import und Wiedergabezugriff bleiben getrennt. Positive nichtleere Owner-/Admin-/Datums-/Datenschutzabnahme bleibt offen; historische v63-Base, Zählung und Methodenzeilen werden dadurch nicht umgeschrieben.
+
 ## Befund und Zählweise
 
 Der in der Inventurbasis tatsächlich importierte Prisma-Edge-Compiler weist `$transaction(function)` mit dem D1-Adapter vor dem Callback zurück. Array-Transaktionen sind ein anderer Pfad und wurden aus dieser Callbackzählung ausgeschlossen; deren Atomizität wird hier nicht bestätigt. Die reine Quellenprüfung umfasste Transaktionsreferenzen, exportierte Routen, Hilfsaufrufe, native Delegation und vorhandene UI-Anbindung. Sie führte keine Builds, Funktions-/SQL-Tests, Browser- oder Datenaktionen aus.
