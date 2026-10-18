@@ -9,12 +9,12 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up the published Version 59 source
-`a4bad7f28bfdb78dcac9bbff962bc622e0b5e248`. Version 59 deployed successfully on
-18 October 2026 at 03:12:45 UTC. Native D1 invitation Send source, final V2, is
-live; positive Send/replay/suppression/cleanup/clock/quota/privacy/race acceptance
-remains unverified. Decision/acceptance and other callback flows remain separate.
-The curated roadmap retains its dated v44 base.
+runtime data. This GitHub snapshot backs up the published Version 60 source
+`594101c0e233891150c935f45224e125f4419641`. Version 60 deployed successfully on
+18 October 2026 at 03:38:56 UTC. Native D1 invitation Accept/Decline source,
+final V2, is live; positive decision/replay/expiry/capacity/privacy/race acceptance
+remains unverified. Account/role and other callback flows remain separate.
+The separately curated user-flow roadmap now describes the actual v60 base.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -75,8 +75,8 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 59 source includes the existing bounded ports below,
-inherited from Version 58, plus native D1 invitation Send source described
+The published Version 60 source includes the existing bounded ports below,
+inherited from Version 59, plus native D1 invitation decision source described
 below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
@@ -200,6 +200,8 @@ all-page visual coverage.
   cleanup; positive preference/noop/overflow/privacy/race acceptance remains open
 - Native D1 invitation Send with receipt/suppression/clock/privacy fences and
   atomic incoming cleanup/delivery; positive published acceptance remains open
+- Native D1 own invitation Accept/Decline with coupled participation/terminal
+  cleanup and full reader fences; positive decision/expiry/privacy/race QA open
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -222,9 +224,9 @@ Version 51 ports normal self-join/leave and scoped invitation settlement;
 Version 52 ports own contribution Add/Withdraw; Version 53 ports ADMIN
 contribution moderation; Version 54 ports own Mission bookmark PUT; Version 55
 ports PRIVATE member Add/Remove with coupled revocation.
-Version 59 ports invitation Send source, with its positive live gates open.
-Positive Space/Mission mutation acceptance remains open. Invitation decisions/
-acceptance, account/role changes and other mission mutation flows remain
+Version 59 ports Send; Version 60 ports invitation Accept/Decline source.
+Positive Space/Mission mutation acceptance remains open. Account/role changes
+and other mission mutation flows remain
 outside these ports. Other workflows may still use Prisma
 transaction patterns that D1 does not support. Do not infer full write-flow
 support from this source scope.
@@ -1380,6 +1382,65 @@ invitation, token, secret or other data action was performed. Positive Send/
 replay/suppression/cleanup/clock/quota/overflow/privacy/race acceptance remains
 open. No local App/SQL/crypto/functional execution or new CI was used. The dated
 v44 roadmap remains byte-identical; source reviews/build are not runtime proof.
+
+## Version 60 bounded native D1 invitation Accept/Decline, final V2
+
+Version 60 changes only the dedicated decision helper and decideMissionInvitation
+import/body delegate, two backend files. Current USER/private actual membership/
+open/scoped-owned invitation precedes exact terminal same-decision expected+1
+write-free replay; other cases require pending/exact revision. Initial invalid
+atomically latches terminal state and clears exact SYSTEM notices before ten-field
+scrub, then maps to generic 404 without four fence writes. Initially valid gets
+all four materialization/no-op-CAS fences and a fresh expiry sample before own
+conditional Join or notice cleanup. Late expiry retains fences, commits EXPIRED
+then maps to 404. ACCEPT uses allowDuplicate=false epoch/active/max/capacity
+semantics, never the ordinary Join wrapper. The unconditional genuine-reader
+endguard forbids any transient staged PENDING state from committing.
+
+Beyond those fences, only the target Invitation, own Participation and exact
+notices change. Reader/
+normal Join wrapper/core, Read/Send/Preference/Candidates/signing/secret/State/
+revocation/API/parser/schema/UI stay byte-identical. Seven local Participation
+references derive full hypothetical After; actual final readset uses the original
+reader, including current profiles, future-epoch content, hidden own metadata,
+peer BUILD_ON targets, progress, bookmarks/global epoch and soft-window fields.
+Existing reader invalidState, row/response budgets and manifest strictly below
+1.5 MB remain; no trimmed DTO or arbitrary malformed-legacy parity is promised.
+Derived SQL createdAtMs is bounded and raw dates separately validated, without
+an added JS-truncation/SQL-round equality barrier or reader/sort change.
+
+Malformed/relative/NUL expiresAt reaching the helper is initial-invalid/nonexpired
+and may be REVOKED, not a universal date-validation abort. Old Prisma decoder
+admission of such raw values is not fully established; no malformed live datum
+is alleged. Noninteger raw numeric dates may fail strict scalar validation.
+A profile/readset rollback crossing expiry cannot retry from time-only projection
+disappearance without changed scalar evidence: conservative availability remains.
+Only own qualified first-snapshot/applicable missing-row UNIQUE rollback plus
+changed freshly authorized facts allows at most two batch attempts. Domain
+markers map only proved SQL rollback. CAS/end-invariant/FK/other constraints,
+transport, unknown commit and successful-result decode never retry or imply
+success by readback. One first-primary session does not independently force every
+later SELECT primary; consumed facts are revalidated by the atomic preguard.
+Accept/Decline/initial-invalid batches have 15/13/5 statements, 32 helper or
+34 including unchanged auth source submissions, not measured billing/latency.
+Complete operations can exceed native limits and fail atomically.
+
+V1 is superseded solely by a 36-byte TypeScript keyof cast fixing TS7053/TS2322;
+all 154 expanded SQL texts remain unchanged. Both independent final V2 source
+and Privacy/Clock/Retry passes, production types/build and static artifact/archive
+checks passed. Deployment succeeded on 18 October 2026 at 03:38:56 UTC. Bounded
+03:39:32 UTC published reload/navigation retained session and empty notifications/
+open-Mission overview without visible error. No decision, participation, token,
+secret or data action occurred. Positive Accept/Decline/replay/initial-invalid/
+late-expiry/fence/capacity/future-epoch/privacy/race acceptance remains open.
+No local App/SQL/crypto/functional execution or new CI was used.
+
+The README's added branch-scope section and replacement USER_FLOW_ROADMAP.md
+are separately requested, privacy-reviewed user documentation, not Sites source.
+The roadmap is dated to actual v60 and distinguishes delivered code, bounded
+observations, open acceptance, remaining callback/DNS blockers and proposals.
+Existing main setup/gallery bytes stay intact; no new competitor research or
+full mission-flow acceptance is claimed.
 
 ## Keeping the branches separate
 

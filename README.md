@@ -17,6 +17,18 @@ A self-hosted home for learning communities. Bring courses, conversations,
 shared knowledge and member projects together in one app, with a primarily
 German interface.
 
+## Deployment scope
+
+This README describes the standard self-hosted app on
+[`main`](https://github.com/storminator89/forgeCommunity/tree/main), including
+Docker with SQLite or PostgreSQL.
+
+For the separate `cloudflare-sites` branch, use the
+[Cloudflare Sites setup and runtime limits](docs/CLOUDFLARE_SITES.md) and
+[user-flow status](docs/USER_FLOW_ROADMAP.md). The inherited Docker commands,
+`DATABASE_URL` setup, NextAuth configuration and local server instructions below
+are not setup instructions for that branch.
+
 [![CI](https://github.com/storminator89/forgeCommunity/actions/workflows/ci.yml/badge.svg)](https://github.com/storminator89/forgeCommunity/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 

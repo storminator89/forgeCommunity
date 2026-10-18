@@ -4,6 +4,7 @@ import { Prisma } from '@/generated/prisma/client';
 import { reportInvitationFailure } from '@/lib/server/space-mission-invitation-errors';
 import { setD1InvitationPreference } from '@/lib/server/d1-space-mission-invitation-preference';
 import { sendD1MissionInvitation } from '@/lib/server/d1-space-mission-invitation-send';
+import { decideD1MissionInvitation } from '@/lib/server/d1-space-mission-invitation-decision';
 import { assertD1MissionCandidateAuthority, listD1MissionInvitations, readD1InvitationPreference, readD1MissionCandidateSnapshot, readD1MissionInvitation, resolveD1MissionInvitationTargets } from '@/lib/server/d1-space-mission-invitation-reads';
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { DecideMissionInvitation, MissionInvitationAcknowledgment, MissionInvitationCandidates, MissionInvitationDetail,
@@ -223,43 +224,7 @@ export async function readMissionInvitation(spaceId: string, missionId: string, 
 
 export async function decideMissionInvitation(spaceId: string, missionId: string, invitationId: string, userId: string,
   input: DecideMissionInvitation) {
-  const result = await invitationTransaction(async tx => {
-    const mission = await scopedMission(spaceId, missionId, userId, tx);
-    if (mission.closedAt) throw closed();
-    const row = await tx.spaceMissionInvitation.findFirst({ where: { id: invitationId, missionId, recipientId: userId }, include: pendingInclude });
-    if (!row) throw invitationUnavailable();
-    const targetState = input.decision === 'ACCEPT' ? 'ACCEPTED' : 'DECLINED';
-    if (row.state === targetState && row.revision === input.expectedRevision + 1) {
-      return { data: { invitation: { id: row.id, state: targetState, revision: row.revision },
-        mission: await readMissionInTransaction(spaceId, missionId, userId, tx) } };
-    }
-    if (row.state !== 'PENDING' || row.revision !== input.expectedRevision) throw invitationConflict();
-    const entry = (await pendingSnapshot([row], new Date(), tx))[0];
-    if (!entry.valid) {
-      await settleMissionInvitations({ id: row.id, revision: input.expectedRevision }, entry.expired ? 'EXPIRED' : 'REVOKED', tx);
-      return { unavailable: true } as const;
-    }
-    const [senderSetting, recipientSetting, senderAccess, recipientAccess] = await Promise.all([
-      invitationSetting(row.senderId!, tx), invitationSetting(userId, tx),
-      invitationAccess(missionId, row.senderId!, tx), invitationAccess(missionId, userId, tx),
-    ]);
-    await fenceInvitationSetting(senderSetting, tx);
-    await fenceInvitationSetting(recipientSetting, tx);
-    await fenceInvitationAccess(missionId, row.senderId!, senderAccess, tx);
-    await fenceInvitationAccess(missionId, userId, recipientAccess, tx);
-    // A new clock read just before transition prevents a boundary-expired accept.
-    if (new Date().getTime() >= row.expiresAt!.getTime()) {
-      await settleMissionInvitations({ id: row.id, revision: input.expectedRevision }, 'EXPIRED', tx);
-      return { unavailable: true } as const;
-    }
-    if (input.decision === 'ACCEPT') await joinMissionInTransaction(spaceId, missionId, userId, row.recipientEpoch!, tx, false);
-    await settleMissionInvitations({ id: row.id, revision: input.expectedRevision }, targetState, tx);
-    return { data: { invitation: { id: row.id, state: targetState, revision: row.revision + 1 },
-      mission: await readMissionInTransaction(spaceId, missionId, userId, tx) } };
-  });
-  // A terminal expiry/revocation latch must commit before HTTP mapping.
-  if ('unavailable' in result) throw invitationUnavailable();
-  return result.data;
+  return decideD1MissionInvitation(spaceId, missionId, invitationId, userId, input);
 }
 
 /** Resolve at most 50 inbox targets in one protected primary SELECT. The
