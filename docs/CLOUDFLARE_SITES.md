@@ -9,12 +9,12 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up the published Version 55 source
-`4bd97dd233ccc65e0d4b813b1d3d67b7a77f62b0`. Version 55 deployed successfully on
-18 October 2026 at 02:13:33 UTC. Native D1 ADMIN PRIVATE member Add/Remove with
-coupled revocation source is live; positive Add/Remove/revocation/privacy/race
-acceptance remains unverified. Account/role/invitation-decision callbacks remain
-separate. Other ports retain prior live gates; the roadmap keeps its dated v44 base.
+runtime data. This GitHub snapshot backs up the published Version 56 source
+`f16b7f2b43613bbc53091e60021adbade3ef7a68`. Version 56 deployed successfully on
+18 October 2026 at 02:24:28 UTC. Native D1 invitation detail and notice-target
+resolver source is live; positive pending/terminal/closed/full/revocation/privacy/
+resolver acceptance remains unverified. Candidate/signing/write/global-notice
+callbacks remain separate. The curated roadmap keeps its dated v44 base.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -75,8 +75,8 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 55 source includes the existing bounded ports below,
-inherited from Version 54, plus native D1 PRIVATE member Add/Remove described
+The published Version 56 source includes the existing bounded ports below,
+inherited from Version 55, plus native D1 invitation detail/target reads described
 below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
@@ -192,6 +192,8 @@ all-page visual coverage.
   revision fences; positive stale/global-revocation/race acceptance remains open
 - Native D1 ADMIN PRIVATE member Add/Remove with coupled invitation, bookmark
   and participation revocation; positive Add/Remove/privacy/race acceptance open
+- Native D1 own invitation detail and protected notice-target resolution, keeping
+  pending/terminal/closed/privacy gates; positive published acceptance remains open
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -1228,6 +1230,37 @@ zero Spaces and no alerts, with no member or revocation test/data mutation.
 Positive Add/Remove/revocation/privacy/overflow/concurrency acceptance remains
 open. No local SQL/app/functional execution was used. The dated v44 roadmap
 remains byte-identical; full member/account revocation acceptance is not implied.
+
+## Version 56 bounded native D1 invitation detail/target reads
+
+Version 56 changes two backend files: append-only detail/target native readers
+and their facade delegates with resolver documentation. The original 12,044-byte
+reader/list/Preference GET/cursor prefix is intact, as is the facade write prefix
+and decision implementation. Current USER/private membership precedes detail;
+authorized closed Mission returns unavailable before own-invitation lookup.
+Terminal own outcomes are minimal and lazy, without pending settings/timestamps/
+profiles. Pending uses one complete current epoch/membership/expiry/setting
+predicate; capacity FULL changes canAccept only. No new signing requirement.
+
+Detail uses one bounded primary SELECT. A nonempty resolver uses one primary
+SELECT for at most 50 targets, retaining the original pre-deduplication length
+check outside the sanitized reporting boundary. It returns only effective own
+ID-based actions, without profiles, titles or capacity queries. Escaped/raw
+projection and bind budgets fail closed. No invitation, notification-read mark,
+notice transaction, preference or engagement writes are introduced. Candidate
+search, token/signing/secret configuration, all write/decision paths, APIs/DTOs/
+errors and existing Mission/member/poll ports remain byte-identical. Remaining
+global notification/account/role callbacks are not claimed repaired.
+
+Independent final review, production typechecking/build and static artifact/
+archive checks passed. Deployment succeeded on 18 October 2026 at 02:24:28 UTC.
+The bounded 02:24-02:25 UTC read regression showed zero Spaces and empty
+All/Unread notification views without alerts; Mark all was disabled. No notice
+was opened or created. This supplies no positive detail/resolver acceptance.
+No invitation, notice or other data action was performed. Positive published
+pending/terminal/closed/full/revocation/privacy/50-target acceptance remains
+open. No local SQL/app/functional execution was used. The dated v44 roadmap
+remains byte-identical; these read ports imply no write or full-flow acceptance.
 
 ## Keeping the branches separate
 

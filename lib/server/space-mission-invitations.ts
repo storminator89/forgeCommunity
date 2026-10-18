@@ -2,7 +2,7 @@ import 'server-only';
 
 import { Prisma } from '@/generated/prisma/client';
 import { reportInvitationFailure } from '@/lib/server/space-mission-invitation-errors';
-import { listD1MissionInvitations, readD1InvitationPreference } from '@/lib/server/d1-space-mission-invitation-reads';
+import { listD1MissionInvitations, readD1InvitationPreference, readD1MissionInvitation, resolveD1MissionInvitationTargets } from '@/lib/server/d1-space-mission-invitation-reads';
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { DecideMissionInvitation, MissionInvitationAcknowledgment, MissionInvitationCandidates, MissionInvitationDetail,
   MissionInvitationList, PendingMissionInvitation, SendMissionInvitation } from '@/types/space-mission-invitations';
@@ -267,17 +267,9 @@ export async function listMissionInvitations(userId: string, request: Request): 
   return listD1MissionInvitations(userId, request);
 }
 export async function readMissionInvitation(spaceId: string, missionId: string, invitationId: string, userId: string): Promise<MissionInvitationDetail> {
-  return spaceTransaction(async tx => {
-    const mission = await scopedMission(spaceId, missionId, userId, tx);
-    if (mission.closedAt) return { state: 'UNAVAILABLE', invitation: null };
-    const row = await tx.spaceMissionInvitation.findFirst({ where: { id: invitationId, missionId, recipientId: userId }, include: pendingInclude });
-    if (!row) throw invitationUnavailable();
-    if (row.state === 'ACCEPTED' || row.state === 'DECLINED') return { state: row.state,
-      invitation: { id: row.id, state: row.state, revision: row.revision } };
-    const entry = (await pendingSnapshot([row], new Date(), tx))[0];
-    return entry.valid ? { state: 'PENDING', invitation: projectPending(entry) } : { state: 'UNAVAILABLE', invitation: null };
-  });
+  return readD1MissionInvitation(spaceId, missionId, invitationId, userId);
 }
+
 export async function decideMissionInvitation(spaceId: string, missionId: string, invitationId: string, userId: string,
   input: DecideMissionInvitation) {
   const result = await invitationTransaction(async tx => {
@@ -319,22 +311,16 @@ export async function decideMissionInvitation(spaceId: string, missionId: string
   return result.data;
 }
 
-/** Inbox page is bounded at 50. SQLite real-adapter evidence measures ten
- * SELECTs (plus COMMIT) for 1/10/50 invitation targets, independent of count.
- * PostgreSQL query-count verification remains a provider acceptance gate. */
+/** Resolve at most 50 inbox targets in one protected primary SELECT. The
+ * original logging boundary still strips private failures before inbox code. */
 export async function resolveMissionInvitationTargets(ids: string[], userId: string) {
   if (ids.length > 50) throw new SpaceApiError('Zu viele Benachrichtigungen', 400);
-  return spaceTransaction(async tx => {
-    const rows = await tx.spaceMissionInvitation.findMany({ where: { ...ownPendingWhere(userId), id: { in: ids } }, include: pendingInclude });
-    const snapshot = await pendingSnapshot(rows, new Date(), tx);
-    return new Map(snapshot.filter(entry => entry.valid).map(({ row }) => [row.id, {
-      href: `/community/spaces/${encodeURIComponent(row.mission.spaceId)}/missions/${encodeURIComponent(row.missionId)}?invitation=${encodeURIComponent(row.id)}#mission-invitation`,
-      label: 'Einladung ansehen',
-    }]));
-  }).catch(error => {
+  try {
+    return await resolveD1MissionInvitationTargets(ids, userId);
+  } catch (error) {
     reportInvitationFailure('invitation-targets.resolve', error);
     // Existing inbox handlers may log failures. Strip all original private
     // diagnostics before crossing that unchanged global error boundary.
     throw new Error('MISSION_INVITATION_RESOLUTION_FAILED');
-  });
+  }
 }
