@@ -9,12 +9,12 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up the published Version 62 source
-`468ba2a2879665f36fe825f29fb83d51bdf1620b`. Version 62 deployed successfully on
-18 October 2026 at 04:15:46 UTC. Native D1 normal Pathway participation, final
-V2, is live; positive Join/Leave/private-badge/history/availability/role/race/
-privacy acceptance remains unverified. Admin Pathway definitions, account/role
-and other callback flows remain separate. The curated roadmap uses the v62 base.
+runtime data. This GitHub snapshot backs up the published Version 63 source
+`7a2909d82f1f419a8d19cea73d1395e291deb8f0`. Version 63 deployed successfully on
+18 October 2026 at 04:33:18 UTC. Native D1 ADMIN Pathway-definition Create is
+live; positive creation/replay/material/race/rollback acceptance remains open.
+Three native full attempts, unknown live DDL and the original postcommit
+availability/500 boundary remain explicit. The curated roadmap uses the v63 base.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -75,8 +75,8 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 62 source includes the existing bounded ports below,
-inherited from Version 61, plus native D1 normal Pathway participation described
+The published Version 63 source includes the existing bounded ports below,
+inherited from Version 62, plus native D1 ADMIN Pathway-definition Create described
 below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
@@ -206,6 +206,8 @@ all-page visual coverage.
   projection guards and unchanged-state write-free reads; positive live QA open
 - Native D1 normal Pathway Join/Leave with complete own private-badge
   reconciliation and retained history/tombstones; positive mutation QA open
+- Native D1 ADMIN Pathway-definition Create with immutable ordered snapshots/
+  UUID receipt and atomic sealing; positive published create/replay QA open
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -230,8 +232,8 @@ contribution moderation; Version 54 ports own Mission bookmark PUT; Version 55
 ports PRIVATE member Add/Remove with coupled revocation.
 Version 59 ports Send; Version 60 ports invitation Accept/Decline source.
 Version 61 ports existing ADMIN discussion/reply moderation.
-Version 62 ports normal Pathway participation; Admin definition authoring remains
-a separate callback, as do other unported flows.
+Version 62 ports normal Pathway participation; Version 63 ports ADMIN Pathway
+definition Create only. Other unported flows remain separate.
 Positive Space/Mission mutation acceptance remains open. Account/role changes
 and other mission mutation flows remain
 outside these ports. Other workflows may still use Prisma
@@ -1600,6 +1602,95 @@ open. No local App/SQL/function/date/crypto tests, new CI or browser work by thi
 backup. The curated user roadmap records v62 as delivered with those QA gates
 open, preserving Admin definition callback scope and prior approved facts;
 README scope/setup/gallery bytes stay unchanged.
+
+## Version 63 bounded native D1 ADMIN Pathway-definition Create
+
+Version 63 adds only one create helper and the existing admin POST import/body
+delegate, two backend files. Exact reversal reconstructs every old route byte.
+GET/definitionView, canonical 4,096-byte body/input handling, origin/session/error/
+no-store, pure validators, shared readers, rewards/schema/UI and all other APIs
+stay intact. Origin 403 then session 401 are outside the try; body/shape 400
+precedes stored-current ADMIN 403. No new ID regex/test/instructor/member gate.
+
+Global request UUID is the immutable definition receipt. Every plan/replay checks
+current stored ADMIN and exact canonical creator/title/description/badgeLabel,
+sealed presence and FULL historical ordered course-ID count/sequence before ANY
+fresh course/material eligibility. A matching receipt returns original ordered
+titles/positions/createdAt, 200, without repairing noncontiguous historical
+positions, writing the receipt, rerunning course checks or creating rewards.
+Conflicting/unsealed/foreign receipt gives 409; absent sticky receipt gives the
+existing creation-changed 409. New snapshots use positions zero through N-1.
+New-only existence of ALL input courses precedes input-order eligibility:
+truthy publication, free/null/nonpositive price, rewardEligible, truthy approval
+revision, unchanged valid-quiz-leaf and exact fingerprint checks. Earlier source
+errors precede irrelevant lower-stage payload budgets. Complete active live
+CourseContent id/course/parent/type/content/order sets retain original pure
+courseLeaves/contentQuiz/quiz-validation/approval-revision semantics for orphan,
+cycle, QUIZ/malformed quiz-like and ASSIGNMENT material. No publication DAG,
+payload normalization, reward/participation write or prefix material limit.
+Canonical sorting for retry evidence occurs only AFTER source pure eligibility.
+
+One native atomic batch guards exact current ADMIN, occupied UUID, full Course
+including title and full material; inserts unsealed header, asserts exact one;
+inserts all two-to-four child snapshots set-based, asserts exact N/full children;
+sets seal only, asserts exact one/full sealed header, then unconditional actual
+receipt/complete source-After. Missing target cannot skip assertions. Counts,
+unique IDs and scalar comparisons detect additions/deletions/archive/reparent/
+type/content/order changes without relying on live immutability triggers. Only
+LearningPathway/LearningPathwayCourse change. Full raw receipt/public DTO are
+prevalidated before mutation; actual receipt JSON is CASE-gated behind complete
+After and compared outside retry catch.
+
+The original separate postcommit Prisma availability query and definitionView
+remain unchanged. Non-NULL postread availability differs from truthy new-course
+eligibility. Read/serialization/availability can still return 500 AFTER known
+commit or receipt resolution. This is no atomic response-availability or delivery
+guarantee. There is no automatic new create; a later explicit same-UUID client
+retry can resolve the durable retained receipt.
+
+Operational availability is reduced to THREE complete native attempts versus
+the old four. Each full plan uses at most six reads/eight batch statements.
+Only own qualified first SQL-snapshot rollback plus actually changed freshly
+authorized COMPLETE consumed source manifest permits another plan; timestamps
+are excluded from change evidence. Third ordinary snapshot exhaustion gives
+generic 500 without another read. An own attributed occupied-request marker
+has separate priority after current ADMIN and ALWAYS allows exactly one sticky
+current-ADMIN/full-receipt-only read, including on final attempt three. No Course/
+material/new creation follows occupancy. Whole bounded cause-chain deny-first
+classification excludes unknown commit/network/BUSY, any constraint/trigger P2004,
+UUID/FK, CAS/end-invariant/other markers; there is no generic UNIQUE retry class.
+Malformed success decode and postcommit failures never trigger write retry or
+readback-inferred success. One first-primary handle establishes the first primary
+read; later stage reads have session consistency rather than separate primary
+force. Atomic complete preguard is authoritative before writes.
+
+Native raw-row/read budgets are 200,000/1,200,000 bytes, escaped typed manifest
+1,400,000, binding strictly below 1,500,000 and complete batch wire 8,000,000 bytes.
+Bounded absolute dates retain reviewed date-only UTC, minute precision, fractions,
+valid 24:00, +HH/+HHmm/colon offsets and finite fractional epoch milliseconds
+including zero, with raw equality preserved. No derived-ms gate, original equal
+createdAt/sealedAt or monotonic-clock guarantee. Complete material has no domain
+row cap; operational native limits can fail the whole operation. Unsupported,
+oversized/corrupt legacy values fail closed without truncation or arbitrary
+unbounded-data parity. Custom SQLite 0013 seal/retention/append-only triggers and
+CHECK installation on live D1 are unknown; generated Drizzle omits migration-only
+protections. Direct invariants do not install schema or prove live DDL.
+
+Both exact immutable source passes, including independent Receipt/Privacy/
+Authority/Retry, passed. Twelve SQL shapes have maximum 4,909 UTF-8 bytes, six
+dense bindings, function arity sixteen, two compound terms, seven result columns
+and eight batch statements. Three plans plus one sticky receipt read bound
+43 helper + two source-auth + one unchanged postread = 46 source queries;
+this is not measured runtime/billing/latency cost. Production types/build and
+static artifact/archive checks passed. Deployment succeeded on 18 October 2026
+at 04:33:18 UTC. Bounded published 04:33:34 UTC reload retained session and settled
+empty Pathway overview without error or forms/dialogs. No definition, approval,
+material/reward/participation fixture or data action occurred. Positive legitimate
+ADMIN/create/replay/conflict/material/order/final-attempt collision/trigger/race/
+rollback/postcommit-availability acceptance remains open. No local App/SQL/pure/
+date/crypto/function tests, CI or browser work by this backup. The separately
+curated roadmap updates v63 Create-delivered/QA-open scope and retains all prior
+approved facts; README scope/setup/gallery bytes remain unchanged.
 
 ## Keeping the branches separate
 

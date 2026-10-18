@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
 import { isSameOriginRequest } from '@/lib/server/auth-security';
+import { createD1LearningPathwayDefinition } from '@/lib/server/d1-learning-pathway-create';
 import { contentTransaction } from '@/app/api/courses/[courseId]/contents/content-mutations';
 import { courseApprovalFingerprint, courseHasRewardableQuiz } from '@/lib/server/rewards';
 import { LearningPathwayError, lockPathwayCourses } from '@/lib/server/learning-pathways';
@@ -86,47 +87,7 @@ export async function POST(request: Request) {
       new Set(courseIds).size !== courseIds.length) return reply({ error: 'Invalid pathway definition' }, 400);
 
     const definition = { title, description, badgeLabel, courseIds: courseIds as string[] };
-    const save = () => contentTransaction(async tx => {
-      const prior = await existingReceipt(tx, session.user.id, requestId, definition);
-      if (prior) return { pathway: prior, created: false };
-      await lockPathwayCourses(tx, definition.courseIds);
-      const courses = await tx.course.findMany({ where: { id: { in: definition.courseIds } }, select: {
-        id: true, title: true, price: true, activePublicationId: true, rewardEligible: true, rewardApprovalRevision: true,
-      } });
-      const byId = new Map(courses.map(course => [course.id, course]));
-      for (const id of definition.courseIds) {
-        const course = byId.get(id);
-        if (!course?.activePublicationId || (course.price !== null && course.price > 0) ||
-          !course.rewardEligible || !course.rewardApprovalRevision ||
-          !(await courseHasRewardableQuiz(tx, id)) ||
-          course.rewardApprovalRevision !== await courseApprovalFingerprint(tx, id)) {
-          throw new LearningPathwayError('All courses must be currently published, free, and reward-approved', 409);
-        }
-      }
-      const created = await tx.learningPathway.create({ data: {
-        id: requestId, title, description, badgeLabel, createdById: session.user.id,
-        courses: { create: definition.courseIds.map((courseId, position) => ({
-          courseId, position, title: byId.get(courseId)!.title,
-        })) },
-      } });
-      await tx.learningPathway.update({ where: { id: created.id }, data: { sealedAt: new Date() } });
-      return { pathway: await tx.learningPathway.findUniqueOrThrow({ where: { id: created.id },
-        include: { courses: { orderBy: { position: 'asc' } } } }), created: true };
-    });
-    let result;
-    try { result = await save(); }
-    catch (error) {
-      const code = error instanceof Prisma.PrismaClientKnownRequestError ? error.code : null;
-      if (code !== 'P2002' && code !== 'P2004') throw error;
-      // A concurrent insert may surface as a unique failure (PostgreSQL) or
-      // the SQLite anti-REPLACE guard. Return the committed receipt only if
-      // the authenticated administrator and exact ordered payload match.
-      result = await contentTransaction(async tx => {
-        const prior = await existingReceipt(tx, session.user.id, requestId, definition);
-        if (!prior) throw new LearningPathwayError('Pathway creation changed concurrently; retry', 409);
-        return { pathway: prior, created: false };
-      });
-    }
+    const result = await createD1LearningPathwayDefinition(session.user.id, requestId, definition);
     const live = await prisma.course.findMany({ where: { id: { in: result.pathway.courses.map(course => course.courseId) },
       activePublicationId: { not: null } }, select: { id: true } });
     const available = new Set(live.map(course => course.id));
