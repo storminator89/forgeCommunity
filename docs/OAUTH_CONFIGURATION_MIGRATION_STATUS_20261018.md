@@ -1,0 +1,11 @@
+# Sites OAuth configuration migration: 2026-10-18
+
+Sites v79 was published successfully at 17:22:10 UTC with source `9b9a56944cc8d90eb136141936eb08c719a83757` and deployment `appgdep_6ad500362cc08191b342a0011e989513`. Environment revision remains 2. The reviewed archive reused the exact v78 application bytes; only the new `0002_oauth_provider_configuration.sql` and appended migration journal differ. No further publish is part of this backup.
+
+Native read-only verification of binding `DB` confirms `OAuthProviderConfigurationSingleton` with exactly six columns: `id`, `version`, `ciphertext`, `createdAt`, `updatedAt`, `updatedById`. The first bounded row page is empty, has no additional page, and reports no omitted rows or columns. This verifies table/column presence and empty state, not a complete live PK/CHECK constraint or migration-ledger audit.
+
+The native overview exposed exactly 50 alphabetically ordered table names before and after publication. Adding the new OAuth table displaced `PracticeLearnerSession` from that displayed window even though its model projection reported no omissions. This view therefore does not establish full database inventory parity and is not evidence of a table deletion. The source contains only one strict additive CREATE and no DML, ALTER or DROP. A direct bounded native read independently confirms that PracticeLearnerSession remains present, with ten column names and an empty first page. Row values are deliberately omitted from the proof.
+
+The Google/OIDC setup page is `/admin/authentication`. No host encryption key, provider credentials, Readyflag, OAuth grant or provider activation was configured. Saving remains gated by the actual host prerequisites. The independent host-only `OAUTH_CONFIG_ENCRYPTION_KEY` and any later real provider activation remain separate owner actions.
+
+Source and archive were independently reviewed; the new production build and production `tsconfig.sites.json` typecheck exited 0. No local functional tests, new CI or direct SQL command was run. The migration was applied through exactly one authorized Sites publish. This GitHub backup contains only the new migration, journal append and this dated status note; Main/D1 stacks remain separate.
