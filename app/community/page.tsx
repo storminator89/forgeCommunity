@@ -5,7 +5,7 @@
 
 import { HeroBanner, PageContainer, CommunityLandscape } from '@/components/discovery';
 import { AppShell, AppHeader } from '@/components/app-shell';
-import { useState, useEffect, useRef, useSyncExternalStore } from 'react'
+import { useState, useEffect, useRef, useSyncExternalStore, useCallback } from 'react'
 import Link from 'next/link'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { PageState } from '@/components/page-state'
@@ -28,6 +28,8 @@ import { ContributionMilestonesCard } from '@/components/community/ContributionM
 import { PersonalProgressCard } from '@/components/community/PersonalProgressCard'
 import { FirstActionGuide } from '@/components/community/FirstActionGuide'
 import { TopicNavigation } from '@/components/community/TopicNavigation'
+import { FeedFilters } from '@/components/community/FeedFilters'
+import { communityTopicHref, EMPTY_COMMUNITY_FILTERS, matchesCommunityFilters, readCommunityFilters, writeCommunityFilters, type CommunityFilters } from '@/lib/community-filters'
 import { useCommunityFeed } from '@/hooks/useCommunityFeed'
 import { usePrivateContributions } from '@/hooks/usePrivateContributions'
 import { usePrivateRewards } from '@/hooks/usePrivateRewards'
@@ -41,13 +43,13 @@ interface LeaderboardUser {
   points: number
 }
 
-function Community({ session, topic, onSelectTopic }: { session: Session | null; topic: string | null; onSelectTopic: (topic: string | null) => void }) {
+function Community({ session, topic, filters, onSelectTopic, onSelectFilters, onClearFilters, onNavigationLock, navigationBlocked }: { session: Session | null; topic: string | null; filters: CommunityFilters; onSelectTopic: (topic: string | null) => void; onSelectFilters: (filters: CommunityFilters) => void; onClearFilters: () => void; onNavigationLock: (locked: boolean) => void; navigationBlocked: boolean }) {
   const contributions = usePrivateContributions(session?.user?.id)
   const rewards = usePrivateRewards(session?.user?.id)
   const mainRef = useRef<HTMLElement>(null)
   const feedStatusRef = useRef<HTMLParagraphElement>(null)
   const focusEndOfFeedRef = useRef(false)
-  const { posts: localPosts, setPosts: setLocalPosts, isLoading, isLoadingMore, loadError: postsLoadError, nextCursor, cancelPage, removePost, loadComments, commentsLoading, commentsError, initialLoaded, linkedTargetLoading, linkedTargetError, retryLinkedTarget, loadMore, retry: retryPosts } = useCommunityFeed(topic)
+  const { posts: localPosts, setPosts: setLocalPosts, isLoading, isLoadingMore, loadError: postsLoadError, nextCursor, cancelPage, removePost, loadComments, commentsLoading, commentsError, initialLoaded, linkedTargetLoading, linkedTargetError, retryLinkedTarget, loadMore, retry: retryPosts } = useCommunityFeed(topic, filters, session?.user?.id)
   useEffect(() => {
     if (focusEndOfFeedRef.current && !isLoadingMore && initialLoaded && !nextCursor) {
       focusEndOfFeedRef.current = false
@@ -72,6 +74,13 @@ function Community({ session, topic, onSelectTopic }: { session: Session | null;
   const mountedRef = useRef(false)
   const mutationRequestRef = useRef<AbortController | null>(null)
   const leaderboardRequestRef = useRef<AbortController | null>(null)
+  const composerOpenRef = useRef(false)
+  const setComposerOpen = (open: boolean) => {
+    composerOpenRef.current = open
+    setIsEditing(open)
+    onNavigationLock(open || !!mutationRequestRef.current)
+  }
+  const topicHref = (next: string) => communityTopicHref(next, filters)
 
   useEffect(() => {
     mountedRef.current = true
@@ -85,6 +94,7 @@ function Community({ session, topic, onSelectTopic }: { session: Session | null;
       .finally(() => { if (!controller.signal.aborted) setIsLeaderboardLoading(false) })
     return () => {
       mountedRef.current = false
+      onNavigationLock(false)
       controller.abort()
       mutationRequestRef.current?.abort()
       mutationRequestRef.current = null
@@ -117,6 +127,7 @@ function Community({ session, topic, onSelectTopic }: { session: Session | null;
     cancelPage()
     const controller = new AbortController()
     mutationRequestRef.current = controller
+    onNavigationLock(true)
     setIsMutating(true)
     return controller
   }
@@ -124,6 +135,7 @@ function Community({ session, topic, onSelectTopic }: { session: Session | null;
   const finishMutation = (controller: AbortController) => {
     if (mutationRequestRef.current !== controller || controller.signal.aborted) return
     mutationRequestRef.current = null
+    onNavigationLock(composerOpenRef.current)
     setIsMutating(false)
   }
 
@@ -150,6 +162,7 @@ function Community({ session, topic, onSelectTopic }: { session: Session | null;
       })
       if (controller.signal.aborted) return
       if (editingPost) {
+        if (!matchesCommunityFilters(response, topic, filters, session?.user?.id)) removePost(editingPost.id)
         // Keep explicitly loaded older comments when the edit response contains
         // only the bounded comment preview.
         setLocalPosts(previous => previous.flatMap(post => post.id === editingPost.id
@@ -159,7 +172,7 @@ function Community({ session, topic, onSelectTopic }: { session: Session | null;
         if (!topic || response.tags?.some(tag => tag.name === topic)) setLocalPosts(previous => mergeCommunityRows([response], previous))
         refreshActivity()
       }
-      setIsEditing(false)
+      setComposerOpen(false)
       setEditingPost(null)
       contributions.refresh()
       setNotification({ type: 'success', message: editingPost ? 'Beitrag aktualisiert!' : 'Beitrag erstellt!' })
@@ -218,11 +231,19 @@ function Community({ session, topic, onSelectTopic }: { session: Session | null;
         method: 'POST', signal: controller.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }),
       })
       if (controller.signal.aborted) return
-      setLocalPosts(previous => previous.map(post => post.id === postId ? {
+      if (filters.unanswered) {
+        const card = document.getElementById(`post-${postId}`)
+        const restoreFocus = !!card?.contains(document.activeElement)
+        // Also tombstone the row so an older overlapping detail read cannot reinsert it.
+        removePost(postId)
+        if (restoreFocus) window.requestAnimationFrame(() => {
+          if (document.activeElement === document.body || card?.contains(document.activeElement)) document.getElementById('community-feed-title')?.focus()
+        })
+      } else setLocalPosts(previous => previous.map(post => post.id === postId ? {
         ...post, comments: mergeCommunityRows([response], post.comments), commentCount: (post.commentCount ?? post.comments.length) + 1,
       } : post))
       refreshActivity()
-      setNotification({ type: 'success', message: 'Kommentar wurde hinzugefügt!' })
+      setNotification({ type: 'success', message: filters.unanswered ? 'Kommentar hinzugefügt. Der Beitrag wird im Filter „Ohne Antworten“ nicht mehr angezeigt.' : 'Kommentar wurde hinzugefügt!' })
       contributions.refresh()
     } catch (error) {
       if (!controller.signal.aborted && !isAbortError(error)) setNotification({ type: 'error', message: 'Fehler beim Hinzufügen des Kommentars.' })
@@ -284,7 +305,7 @@ function Community({ session, topic, onSelectTopic }: { session: Session | null;
 
   const openComposer = () => {
     setEditingPost(null)
-    setIsEditing(true)
+    setComposerOpen(true)
     mainRef.current?.scrollTo?.({ top: 0, behavior: getPreferredScrollBehavior() })
   }
 
@@ -342,20 +363,22 @@ function Community({ session, topic, onSelectTopic }: { session: Session | null;
                       isEditing={!!editingPost}
                       isLoading={isLoading || isMutating}
                       onCancel={() => {
-                        setIsEditing(false)
+                        setComposerOpen(false)
                         setEditingPost(null)
                       }}
                     />
                   )}
                 </AnimatePresence>
 
-                <TopicNavigation key={isEditing ? 'composing' : 'browsing'} selected={topic} onSelect={onSelectTopic} disabled={isEditing} />
+                <TopicNavigation key={isEditing ? 'composing' : 'browsing'} selected={topic} onSelect={onSelectTopic} disabled={isEditing || isMutating} topicHref={topicHref} />
+                <FeedFilters filters={filters} topic={topic} disabled={isEditing || isMutating} onChange={onSelectFilters} onClear={onClearFilters} />
+                {navigationBlocked && <p className="mt-2 text-sm text-muted-foreground" role="status">Der Filterwechsel wurde angehalten. Schließe zuerst deinen Entwurf oder warte auf die laufende Aktion.</p>}
 
                 <div className="mt-4">
                   <div className="mb-2 mt-7 flex flex-wrap items-center justify-between gap-2"><h2 id="community-feed-title" tabIndex={-1} className="text-xl font-semibold tracking-tight focus-visible:ring-2 focus-visible:ring-ring">Aktuelle Beiträge</h2><p className="text-xs tabular-nums text-muted-foreground">{feedCount}</p></div>
                   <div className="mt-4 space-y-5">
                     {linkedTargetLoading && <p className="text-sm text-muted-foreground" role="status">Verlinkter Beitrag wird geladen…</p>}
-                    {linkedTargetError && <PageState kind="error" title="Verlinkter Inhalt ist nicht verfügbar" description="Der Inhalt wurde möglicherweise gelöscht oder ist für dieses Konto nicht sichtbar." action={<Button type="button" variant="outline" onClick={() => void retryLinkedTarget()}>Verlinkten Inhalt erneut laden</Button>} />}
+                    {linkedTargetError && <PageState kind="error" title="Verlinkter Inhalt ist nicht verfügbar" description="Der Inhalt wurde möglicherweise gelöscht, ist für dieses Konto nicht sichtbar oder passt nicht zu den ausgewählten Filtern." action={<Button type="button" variant="outline" onClick={() => void retryLinkedTarget()}>Verlinkten Inhalt erneut laden</Button>} />}
                     {isLoading && localPosts.length === 0 && <PageState kind="loading" title="Beiträge werden geladen" />}
                     {postsLoadError && !isLoading && localPosts.length === 0 && <PageState kind="error" title="Beiträge konnten nicht geladen werden" description="Prüfe deine Verbindung und versuche es erneut." action={<Button type="button" variant="outline" onClick={retryPosts}>Erneut versuchen</Button>} />}
                     <AnimatePresence>
@@ -367,11 +390,14 @@ function Community({ session, topic, onSelectTopic }: { session: Session | null;
                           onLike={handleToggleLike}
                           onDelete={handleDeletePost}
                           onEdit={(post) => {
+                            if (isEditing || isMutating) return
                             setEditingPost(post)
-                            setIsEditing(true)
+                            setComposerOpen(true)
                             mainRef.current?.scrollTo?.({ top: 0, behavior: getPreferredScrollBehavior() })
                           }}
                           onSelectTopic={onSelectTopic}
+                          topicHref={topicHref}
+                          topicNavigationDisabled={isEditing || isMutating}
                           onAddComment={handleAddComment}
                           onLikeComment={handleLikeComment}
                           onSelectSolution={handleSelectSolution}
@@ -384,7 +410,7 @@ function Community({ session, topic, onSelectTopic }: { session: Session | null;
                         />
                       ))}
                     </AnimatePresence>
-                    {localPosts.length > 0 && <div className="border-t pt-5">
+                    {(localPosts.length > 0 || (initialLoaded && nextCursor)) && <div className="border-t pt-5">
                       {postsLoadError && <p className="mb-3 text-sm text-destructive" role="alert">Beiträge konnten nicht vollständig geladen werden. Deine geladenen Beiträge bleiben sichtbar.</p>}
                       {nextCursor || !initialLoaded ? <Button type="button" variant="outline" className="w-full sm:w-auto" disabled={isLoadingMore || isMutating} onClick={event => {
                         focusEndOfFeedRef.current = document.activeElement === event.currentTarget
@@ -400,10 +426,11 @@ function Community({ session, topic, onSelectTopic }: { session: Session | null;
                     {localPosts.length === 0 && !isLoading && !postsLoadError && (
                       <div className="border-t py-12 text-center" role="status">
                         <PlusCircle className="mx-auto mb-4 h-8 w-8 text-muted-foreground" aria-hidden="true" />
-                        <h3 className="text-lg font-semibold text-foreground">Keine Beiträge gefunden</h3>
-                        {topic && <p className="mt-2 text-sm text-muted-foreground">Für „{topic}“ gibt es noch keine sichtbaren Beiträge.</p>}
-                        {topic ? <Button type="button" variant="outline" className="mt-5" onClick={() => document.getElementById('community-topic-search')?.focus()}>Anderes Thema suchen</Button>
-                          : <Button type="button" variant="outline" className="mt-5" onClick={openComposer}>Beitrag schreiben</Button>}
+                        <h3 className="text-lg font-semibold text-foreground">{nextCursor ? 'Keine passenden Beiträge in der geladenen Liste' : 'Keine Beiträge gefunden'}</h3>
+                        {(topic || filters.mine || filters.unanswered) ? <>
+                          <p className="mt-2 text-sm text-muted-foreground">{nextCursor ? 'Lade weitere Beiträge oder setze die Filter zurück.' : <>Keine sichtbaren Beiträge passen zu den ausgewählten Filtern{topic ? ` im Thema „${topic}“` : ''}.</>}</p>
+                          <Button type="button" variant="outline" className="mt-5" disabled={isEditing || isMutating} onClick={onClearFilters}>Alle Filter zurücksetzen</Button>
+                        </> : <Button type="button" variant="outline" className="mt-5" onClick={openComposer}>Beitrag schreiben</Button>}
                       </div>
                     )}
                   </div>
@@ -434,32 +461,66 @@ export default function CommunityPage() {
   const { data, status } = useSession()
   const session = status === 'authenticated' ? data : null
   const signInHref = useSignInHref()
-  const topic = useSyncExternalStore(
+  const navigationLocked = useRef(false)
+  const activeNavigation = useRef<{ href: string; state: unknown } | null>(null)
+  const [navigationBlocked, setNavigationBlocked] = useState(false)
+  const setNavigationLock = useCallback((locked: boolean) => {
+    if (locked) activeNavigation.current = { href: window.location.href, state: window.history.state }
+    navigationLocked.current = locked
+    if (!locked) setNavigationBlocked(false)
+  }, [])
+  const search = useSyncExternalStore(
     callback => {
-      window.addEventListener('popstate', callback)
-      window.addEventListener('community-topic-change', callback)
-      return () => { window.removeEventListener('popstate', callback); window.removeEventListener('community-topic-change', callback) }
+      const current = () => ({ href: window.location.href, state: window.history.state })
+      if (!activeNavigation.current) activeNavigation.current = current()
+      const changed = (event: Event) => {
+        const active = activeNavigation.current!
+        const incoming = new URL(window.location.href)
+        const held = new URL(active.href)
+        if (navigationLocked.current && incoming.pathname === held.pathname && incoming.search !== held.search) {
+          // Keep the draft mounted and stop the app router from restoring the
+          // rejected query. The attempted same-page history entry is replaced.
+          event.stopImmediatePropagation()
+          window.history.replaceState(active.state, '', active.href)
+          setNavigationBlocked(true)
+          return
+        }
+        activeNavigation.current = current()
+        callback()
+      }
+      window.addEventListener('popstate', changed, true)
+      window.addEventListener('community-topic-change', changed)
+      return () => { window.removeEventListener('popstate', changed, true); window.removeEventListener('community-topic-change', changed) }
     },
-    () => new URL(window.location.href).searchParams.get('tag'),
-    () => null,
+    () => navigationLocked.current && activeNavigation.current ? new URL(activeNavigation.current.href).search : window.location.search,
+    () => '',
   )
+  const params = new URLSearchParams(search)
+  const topic = params.get('tag')
+  let filters = EMPTY_COMMUNITY_FILTERS
+  let invalidFilters = false
+  try { filters = readCommunityFilters(params) } catch { invalidFilters = true }
   const focusAfterNavigation = useRef(false)
   useEffect(() => {
     if (focusAfterNavigation.current) {
       focusAfterNavigation.current = false
       document.getElementById('community-feed-title')?.focus()
     }
-  }, [topic])
-  const selectTopic = (next: string | null) => {
-    if (next === topic) return
+  }, [topic, filters.mine, filters.unanswered, invalidFilters])
+  const selectFeed = (nextTopic: string | null, nextFilters: CommunityFilters) => {
+    if (navigationLocked.current) { setNavigationBlocked(true); return }
+    if (nextTopic === topic && nextFilters.mine === filters.mine && nextFilters.unanswered === filters.unanswered && !invalidFilters) return
     const url = new URL(window.location.href)
-    if (next) url.searchParams.set('tag', next)
+    if (nextTopic) url.searchParams.set('tag', nextTopic)
     else url.searchParams.delete('tag')
+    writeCommunityFilters(url.searchParams, nextFilters)
+    url.searchParams.delete('cursor')
     url.hash = ''
     focusAfterNavigation.current = true
     window.history.pushState(window.history.state, '', url)
     window.dispatchEvent(new Event('community-topic-change'))
   }
+  const selectTopic = (next: string | null) => selectFeed(next, filters)
 
   // The session can resolve after the page first hydrates. Do not expose an
   // interactive anonymous composer that will be remounted (and lose edits)
@@ -491,5 +552,7 @@ export default function CommunityPage() {
 
   // The posts response can include this viewer's unpublished posts and likes.
   // Reset the whole feed before a different account can see cached rows.
-  return <Community key={`${session?.user?.id ?? 'anonymous'}:${session?.user?.role ?? 'USER'}:${topic ?? ''}`} session={session} topic={topic} onSelectTopic={selectTopic} />
+  if (invalidFilters) return <AppShell><Sidebar /><main id="page-content" className="min-w-0 flex-1 p-6"><PageState kind="error" title="Ungültige Beitragsfilter" description="Öffne einen gültigen Community-Link oder setze die Filter zurück." action={<Button type="button" variant="outline" onClick={() => selectFeed(null, EMPTY_COMMUNITY_FILTERS)}>Alle Filter zurücksetzen</Button>} /></main></AppShell>
+
+  return <Community key={`${session?.user?.id ?? 'anonymous'}:${session?.user?.role ?? 'USER'}:${topic ?? ''}:${filters.mine}:${filters.unanswered}`} session={session} topic={topic} filters={filters} onSelectTopic={selectTopic} onSelectFilters={next => selectFeed(topic, next)} onClearFilters={() => selectFeed(null, EMPTY_COMMUNITY_FILTERS)} onNavigationLock={setNavigationLock} navigationBlocked={navigationBlocked} />
 }

@@ -3,6 +3,7 @@ import 'server-only';
 import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { InvalidPaginationError } from './api-input';
+import type { CommunityFilters } from '@/lib/community-filters';
 
 export const COMMUNITY_PAGE_SIZE = 50;
 export const COMMUNITY_COMMENT_PREVIEW_SIZE = 3;
@@ -11,13 +12,20 @@ export const COMMUNITY_ORDER = [{ createdAt: 'desc' }, { id: 'desc' }] satisfies
 const author = { select: { id: true, name: true, image: true } } as const;
 type CursorScope = 'posts' | 'comments';
 type CommunityCursor = { createdAt: Date; id: string };
+type PostFilterScope = CommunityFilters & { viewerId?: string };
 
-/** Carry the boundary values, rather than referencing a row which can be deleted. */
-export function encodeCommunityCursor(row: CommunityCursor, scope: CursorScope, postId?: string, tag?: string | null): string {
-  return Buffer.from(JSON.stringify({ v: 1, scope, ...(postId ? { postId } : {}), ...(tag ? { tag } : {}), createdAt: row.createdAt.toISOString(), id: row.id })).toString('base64url');
+function postCursorScope(scope: CursorScope, filters?: PostFilterScope) {
+  if (scope !== 'posts' || !filters || (!filters.mine && !filters.unanswered)) return { v: 1 };
+  if (filters.mine && !filters.viewerId) throw new InvalidPaginationError();
+  return { v: 2, mine: filters.mine, unanswered: filters.unanswered, ...(filters.mine ? { viewerId: filters.viewerId } : {}) };
 }
 
-export function readCommunityCursor(request: Request, scope: CursorScope, postId?: string, tag?: string | null): CommunityCursor | null {
+/** Carry the boundary values, rather than referencing a row which can be deleted. */
+export function encodeCommunityCursor(row: CommunityCursor, scope: CursorScope, postId?: string, tag?: string | null, filters?: PostFilterScope): string {
+  return Buffer.from(JSON.stringify({ ...postCursorScope(scope, filters), scope, ...(postId ? { postId } : {}), ...(tag ? { tag } : {}), createdAt: row.createdAt.toISOString(), id: row.id })).toString('base64url');
+}
+
+export function readCommunityCursor(request: Request, scope: CursorScope, postId?: string, tag?: string | null, filters?: PostFilterScope): CommunityCursor | null {
   const raw = new URL(request.url).searchParams.get('cursor');
   if (raw === null) return null;
   if (!raw || raw.length > 1024 || !/^[A-Za-z0-9_-]+$/.test(raw)) throw new InvalidPaginationError();
@@ -25,7 +33,11 @@ export function readCommunityCursor(request: Request, scope: CursorScope, postId
     const decoded = Buffer.from(raw, 'base64url');
     if (decoded.toString('base64url') !== raw) throw new Error('Noncanonical cursor');
     const value = JSON.parse(decoded.toString('utf8'));
-    if (!value || typeof value !== 'object' || Array.isArray(value) || value.v !== 1 || value.scope !== scope ||
+    const expected = postCursorScope(scope, filters);
+    if (!value || typeof value !== 'object' || Array.isArray(value) || value.v !== expected.v || value.scope !== scope ||
+        value.mine !== ('mine' in expected ? expected.mine : undefined) ||
+        value.unanswered !== ('unanswered' in expected ? expected.unanswered : undefined) ||
+        value.viewerId !== ('viewerId' in expected ? expected.viewerId : undefined) ||
         value.postId !== postId || value.tag !== (tag || undefined) || typeof value.id !== 'string' || !value.id || value.id.length > 256 ||
         /[\u0000-\u001f\u007f]/.test(value.id) || typeof value.createdAt !== 'string') throw new Error('Invalid cursor');
     const createdAt = new Date(value.createdAt);
@@ -116,12 +128,12 @@ export function normalizeCommunityPost(post: PostRecord, viewerId?: string, comm
   };
 }
 
-export function communityPage<T extends CommunityCursor>(rows: T[], scope: CursorScope, postId?: string, tag?: string | null, pageSize = COMMUNITY_PAGE_SIZE) {
+export function communityPage<T extends CommunityCursor>(rows: T[], scope: CursorScope, postId?: string, tag?: string | null, pageSize = COMMUNITY_PAGE_SIZE, filters?: PostFilterScope) {
   const items = rows.slice(0, pageSize);
   return {
     items,
     nextCursor: rows.length > pageSize
-      ? encodeCommunityCursor(items[items.length - 1], scope, postId, tag)
+      ? encodeCommunityCursor(items[items.length - 1], scope, postId, tag, filters)
       : null,
   };
 }
