@@ -12,6 +12,7 @@ import { MissionWeekError, parseMissionWeek, resolveMissionWeek, missionWindowSt
 import { listD1MissionModeration, listD1SpaceMissions, readD1SpaceMission } from '@/lib/server/d1-space-missions';
 import { createD1SpaceMission } from '@/lib/server/d1-space-mission-create';
 import { closeD1SpaceMission } from '@/lib/server/d1-space-mission-close';
+import { setD1MissionParticipation } from '@/lib/server/d1-space-mission-participation';
 
 export const MISSION_PARTICIPANT_LIMIT = 5;
 export const MISSION_PAGE_SIZE = 20;
@@ -209,21 +210,7 @@ export async function joinMissionInTransaction(spaceId: string, id: string, user
 }
 
 export async function setMissionParticipation(spaceId: string, id: string, userId: string, epoch: number, join: boolean) {
-  return invitationTransaction(async tx => {
-    if (join) {
-      const { mission, access } = await joinMissionInTransaction(spaceId, id, userId, epoch, tx);
-      await revokeMissionParticipationInvitations(id, userId, 'incoming', tx);
-      return projectMission(mission, userId, access, tx);
-    }
-    const access = await privateMissionAccess(spaceId, userId, tx);
-    const mission = await findMission(spaceId, id, tx);
-    const key = { missionId_userId: { missionId: id, userId } };
-    const current = await tx.spaceMissionParticipation.findUnique({ where: key });
-    if (!current || current.epoch !== epoch) throw conflict();
-    if (!current.optedOutAt) await tx.spaceMissionParticipation.update({ where: key, data: { optedOutAt: new Date() } });
-    await revokeMissionParticipationInvitations(id, userId, 'outgoing', tx);
-    return projectMission(mission, userId, access, tx);
-  });
+  return setD1MissionParticipation(spaceId, id, userId, epoch, join);
 }
 
 /** Must run inside the private Space member-removal transaction. */

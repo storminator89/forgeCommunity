@@ -9,12 +9,12 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up the published Version 50 source
-`0f210908f83725d192406414c0de830a50e4baf1`. Version 50 deployed successfully on
-18 October 2026 at 01:17:10 UTC. Native D1 Mission close and scoped cleanup source
-is live; positive Close/repeat/purge/privacy/race acceptance remains unverified.
-Mission Create and all poll ports remain unchanged, with prior positive live
-gates still open. The curated roadmap retains its 18 October 2026, 00:15 UTC v44 base.
+runtime data. This GitHub snapshot backs up the published Version 51 source
+`3805563408949cdb006726b35c36485a1695daaf`. Version 51 deployed successfully on
+18 October 2026 at 01:31:13 UTC. Native D1 normal Mission self-join/leave source
+is live; positive consent/epoch/capacity/replay/settlement/privacy/race acceptance
+remains unverified. Reader/Create/Close and poll ports remain unchanged, with
+prior positive live gates open. The roadmap retains its 18 October, 00:15 UTC v44 base.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -75,8 +75,8 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 50 source includes the existing bounded ports below,
-inherited from Version 49, plus the bounded native D1 Mission-close source described
+The published Version 51 source includes the existing bounded ports below,
+inherited from Version 50, plus normal native D1 Mission-participation source described
 below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
@@ -182,6 +182,8 @@ all-page visual coverage.
   one-open and weekly clock fences; positive Create/replay/DST/race acceptance open
 - Native D1 ADMIN Mission close and mission-scoped bookmark/invitation cleanup;
   positive Close/repeat/purge/privacy/race acceptance remains open
+- Native D1 normal Mission self-join/leave and scoped pending-invitation settlement;
+  positive consent/epoch/capacity/replay/settlement/race acceptance remains open
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -199,7 +201,8 @@ mutation flows, course Q&A creation/replies/moderation/solution writes,
 course analytics, and other Space/mission mutation flows remain unported.
 Version 34 ports ADMIN Space creation and PUBLIC own join/leave source;
 Version 36 additionally ports member discussion/reply creation; Version 49 ports
-PRIVATE ADMIN Mission creation; Version 50 ports close and scoped cleanup.
+PRIVATE ADMIN Mission creation; Version 50 ports close and scoped cleanup;
+Version 51 ports normal self-join/leave and scoped invitation settlement.
 Positive Space/Mission mutation acceptance remains open. Invitation creation/
 acceptance, private member removal and other mission mutation flows remain
 outside these ports. Other workflows may still use Prisma
@@ -1054,6 +1057,39 @@ no alerts; no Close or purge was performed. Positive Close/repeat/private/
 foreign-creator/notice-cleanup/concurrency acceptance remains open. No local
 SQL/app/functional execution or artificial engagement data was used. The dated
 v44 roadmap remains byte-identical, with prior positive live gates still open.
+
+## Version 51 bounded native D1 normal Mission participation
+
+Version 51 changes only normal setMissionParticipation delegation and its native
+helper, two backend files. Current PRIVATE access, USER/member join authority,
+consent epoch, duplicate-active replay, closed/capacity and leave precedence
+are preserved. Successful joins settle incoming pending invitations; leaves
+settle outgoing ones, including expired/invalid pending records. Notices are
+cleared before identity scrubbing, and every matching revision is checked.
+Repeated/no-op success still performs scoped settlement. No new invitation
+acceptance port: its shared transaction-local join core remains byte-identical.
+
+A local hypothetical reader view substitutes exactly seven Participation
+references to derive the complete bounded After projection, including legacy
+six-to-five leave exposure. The actual final guard uses original reader SQL.
+Stable operation time and exact pre/post fences cover consent, profiles,
+contributions and own metadata. Only the named first-guard rollback plus a
+changed freshly authorized snapshot retries; unknown commits, transport,
+UNIQUE/FK/CAS/end-invariant and malformed successful results never replay.
+Batches submit 8 statements on change, 6 on replay, at most four attempts and
+37 submitted statements including failed batches/reads. Cleanup work may grow;
+this is no provider cost or full-flow guarantee. Reader/Create/Close, other
+mutations, parsers/routes/shared/schema/UI and poll ports remain byte-identical.
+
+The initial typecheck caught a narrowing error; final V2 uses an already
+validated string key, preserving runtime semantics and every SQL byte.
+Independent final review, production typechecking/build and static artifact/
+archive checks passed. Deployment succeeded on 18 October 2026 at 01:31:13 UTC.
+At 01:31:38 UTC the directory/session read showed zero Spaces and no alerts;
+no join, leave, settlement or other data mutation was performed. Positive
+consent/epoch/capacity/replay/settlement/privacy/race acceptance remains open.
+No local SQL/app/functional execution was used. The dated v44 roadmap remains
+byte-identical and does not assert these later ports or positive live gates.
 
 ## Keeping the branches separate
 
