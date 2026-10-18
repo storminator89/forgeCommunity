@@ -12,6 +12,8 @@ Die bisherige pauschale Missions- und Umfrageblockade ist überholt: Die vorhand
 
 Der beobachtete einfache Admin-Event-Updatefehler ist seit v71 korrigiert und mit Save/Reload positiv geprüft. Der zusätzlich beobachtete PollCreate-500 ist seit v73 im gezielten Erstellen-/Reload-Fall positiv korrigiert; Vote und Moderation werden separat auf dieselbe Quellstruktur geprüft. Weitere positive Einladungs-/Fachabnahmen und der sichere Ressourcen-Metadatenport bleiben getrennte Aufgaben. Keine neuen Oberflächen, Punkte oder künstlichen Teilnehmer zum Füllen leerer Menüs.
 
+Zusätzlich wurde auf v73 eine eigene Diskussionsantwort erstellt und nach Reload erhalten, verborgen und nach Reload verborgen gesehen sowie wiederhergestellt und nach Reload sichtbar gesehen. Es blieb genau eine Antwort; die ursprüngliche Diskussion blieb unverändert. Das bestätigt nur den eigenen Admin-Antwort-/Moderationsfall, keine fremde Autorschafts- oder Rollen-ACL. Likes, Stimmen und XP wurden dabei nicht geprüft.
+
 ## Was der Status bedeutet
 
 - **Ausgeliefert:** im genannten veröffentlichten Quellstand enthalten; technische Quellprüfung und Build ersetzen keine Funktionsabnahme.

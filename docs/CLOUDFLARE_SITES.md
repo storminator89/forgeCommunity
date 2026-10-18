@@ -2246,6 +2246,13 @@ and corrective scope remain under static analysis. No retry or Vote was made;
 positive PollCreate/Vote quota/replay/privacy/concurrency QA remains separate.
 No local functional tests or new CI runs were performed.
 
+Additional targeted published observation on v73: one own discussion reply was
+created and preserved after reload, then hidden and restored with each state
+preserved after reload. Exactly one reply remained and the original discussion
+was unchanged. No likes, votes or XP action was performed. This confirms only
+this own-Admin-reply create/moderation sequence; foreign-author ACLs, role loss,
+races and general reply permissions remain unverified.
+
 ## Version 73: Create-only balanced snapshot equality
 
 Published source: `fd1e5a51afb2f3071dfb57ca6cbddc17a2e8c284`.
