@@ -13,6 +13,7 @@ import { listD1MissionModeration, listD1SpaceMissions, readD1SpaceMission } from
 import { createD1SpaceMission } from '@/lib/server/d1-space-mission-create';
 import { closeD1SpaceMission } from '@/lib/server/d1-space-mission-close';
 import { setD1MissionParticipation } from '@/lib/server/d1-space-mission-participation';
+import { contributeD1SpaceMission, withdrawD1SpaceMissionContribution } from '@/lib/server/d1-space-mission-contributions';
 
 export const MISSION_PARTICIPANT_LIMIT = 5;
 export const MISSION_PAGE_SIZE = 20;
@@ -273,47 +274,11 @@ async function requireMissionConsent(spaceId: string, id: string, userId: string
 }
 
 export async function contributeToMission(spaceId: string, id: string, userId: string, input: ReturnType<typeof parseMissionContribution>) {
-  const work = async (tx: Prisma.TransactionClient, replayOnly = false) => {
-    const access = await privateMissionAccess(spaceId, userId, tx);
-    const mission = await findMission(spaceId, id, tx);
-    await requireMissionConsent(spaceId, id, userId, input.epoch, access, tx);
-    const visible = await visibleMissionContributions(spaceId, id, tx);
-    const existing = await tx.spaceMissionContribution.findUnique({ where: { missionId_authorId_requestId: {
-      missionId: id, authorId: userId, requestId: input.requestId,
-    } }, select: { id: true, payloadDigest: true } });
-    if (existing) {
-      if (existing.payloadDigest !== input.payloadDigest) throw new SpaceApiError('Anfrage-ID wurde bereits verwendet', 409);
-      if (!visible.some(item => item.id === existing.id)) throw notFound();
-      return { item: await projectMission(mission, userId, access, tx), created: false };
-    }
-    if (mission.closedAt) throw new SpaceApiError('Mission ist geschlossen', 409);
-    if (input.kind === 'BUILD_ON' && !visible.some(item => item.id === input.targetContributionId && item.kind === 'INSIGHT' && item.authorId !== userId)) throw notFound();
-    const live = await tx.spaceMissionContribution.findFirst({ where: { missionId: id, authorId: userId, epoch: input.epoch,
-      kind: input.kind, hiddenAt: null, withdrawnAt: null }, select: { id: true } });
-    if (replayOnly || live) throw new SpaceApiError('Für diesen Schritt ist bereits ein Beitrag vorhanden', 409);
-    const attempts = await tx.spaceMissionContribution.count({ where: { missionId: id, authorId: userId, kind: input.kind } });
-    if (attempts >= MISSION_CONTRIBUTION_LIMIT) throw new SpaceApiError('Beitragslimit für diesen Schritt erreicht', 409);
-    await tx.spaceMissionContribution.create({ data: { missionId: id, authorId: userId, ...input }, select: { id: true } });
-    return { item: await projectMission(mission, userId, access, tx), created: true };
-  };
-  try { return await spaceTransaction(tx => work(tx)); }
-  catch (error) {
-    if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') throw error;
-    return spaceTransaction(tx => work(tx, true));
-  }
+  return contributeD1SpaceMission(spaceId, id, userId, input);
 }
 
 export async function withdrawMissionContribution(spaceId: string, id: string, contributionId: string, userId: string, epoch: number) {
-  return spaceTransaction(async tx => {
-    const access = await privateMissionAccess(spaceId, userId, tx);
-    const mission = await findMission(spaceId, id, tx);
-    // Leaving can hide posts, but must not prevent their later author withdrawal.
-    const row = await tx.spaceMissionContribution.findFirst({ where: { id: contributionId, missionId: id, authorId: userId, epoch },
-      select: { withdrawnAt: true } });
-    if (!row) throw notFound();
-    if (!row.withdrawnAt) await tx.spaceMissionContribution.update({ where: { id: contributionId }, data: { withdrawnAt: new Date() } });
-    return projectMission(mission, userId, access, tx);
-  });
+  return withdrawD1SpaceMissionContribution(spaceId, id, contributionId, userId, epoch);
 }
 
 export async function moderateMissionContribution(spaceId: string, id: string, contributionId: string, userId: string, hidden: boolean) {

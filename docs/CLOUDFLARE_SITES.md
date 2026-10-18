@@ -9,12 +9,12 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up the published Version 51 source
-`3805563408949cdb006726b35c36485a1695daaf`. Version 51 deployed successfully on
-18 October 2026 at 01:31:13 UTC. Native D1 normal Mission self-join/leave source
-is live; positive consent/epoch/capacity/replay/settlement/privacy/race acceptance
-remains unverified. Reader/Create/Close and poll ports remain unchanged, with
-prior positive live gates open. The roadmap retains its 18 October, 00:15 UTC v44 base.
+runtime data. This GitHub snapshot backs up the published Version 52 source
+`1cd7b06d4e2b186e124241794b6bd9a0cd055684`. Version 52 deployed successfully on
+18 October 2026 at 01:43:42 UTC. Native D1 own Mission contribution Add/Withdraw
+source is live; positive receipt/target/lifetime/historical-withdrawal/privacy/
+race acceptance remains unverified. Other ports retain their prior live gates.
+The curated roadmap retains its 18 October 2026, 00:15 UTC v44 base.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -75,8 +75,8 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 51 source includes the existing bounded ports below,
-inherited from Version 50, plus normal native D1 Mission-participation source described
+The published Version 52 source includes the existing bounded ports below,
+inherited from Version 51, plus native D1 own Mission-contribution source described
 below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
@@ -184,6 +184,8 @@ all-page visual coverage.
   positive Close/repeat/purge/privacy/race acceptance remains open
 - Native D1 normal Mission self-join/leave and scoped pending-invitation settlement;
   positive consent/epoch/capacity/replay/settlement/race acceptance remains open
+- Native D1 own Mission contribution Add/Withdraw with scoped receipt and exact
+  snapshot fences; positive target/lifetime/replay/privacy/race acceptance open
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -202,7 +204,8 @@ course analytics, and other Space/mission mutation flows remain unported.
 Version 34 ports ADMIN Space creation and PUBLIC own join/leave source;
 Version 36 additionally ports member discussion/reply creation; Version 49 ports
 PRIVATE ADMIN Mission creation; Version 50 ports close and scoped cleanup;
-Version 51 ports normal self-join/leave and scoped invitation settlement.
+Version 51 ports normal self-join/leave and scoped invitation settlement;
+Version 52 ports own contribution Add/Withdraw.
 Positive Space/Mission mutation acceptance remains open. Invitation creation/
 acceptance, private member removal and other mission mutation flows remain
 outside these ports. Other workflows may still use Prisma
@@ -1090,6 +1093,37 @@ no join, leave, settlement or other data mutation was performed. Positive
 consent/epoch/capacity/replay/settlement/privacy/race acceptance remains open.
 No local SQL/app/functional execution was used. The dated v44 roadmap remains
 byte-identical and does not assert these later ports or positive live gates.
+
+## Version 52 bounded native D1 own Mission contributions
+
+Version 52 changes only contributeToMission/withdrawMissionContribution
+delegation and their native helper, two backend files. Add preserves current
+PRIVATE access, USER/member consent, receipt/digest/visibility, closed, target,
+live-kind and lifetime precedence. Withdraw requires readable PRIVATE access
+and the exact own historical contribution/epoch, without imposing current
+join/open/learner gates. Each batch changes at most one Contribution row.
+Foreign BUILD_ON rows are never changed; dependent visibility, progress and
+own metadata are fully reprojected. No audit, notifications or reward writes.
+
+A helper-local five-reference Contribution view derives bounded hypothetical
+After; the final fence uses the genuine original actual reader. UUID/time stay
+stable. Only a named SQL-qualified first-guard rollback or exact scoped request/
+live-kind UNIQUE plus changed freshly authorized state can recover. UNIQUE
+sets sticky replay-only mode; unknown commits, global UUID/FK/CAS/end-invariant,
+transport and malformed successful results never replay. Write/replay batches
+have 4/2 statements, at most four attempts and a conservative 21 submitted
+statements including reads/failed batches. This is no provider cost guarantee.
+Reader/Create/Close/Participation, moderation, invitations, bookmarks, parser/
+sanitizer/routes/shared/schema/UI and poll ports remain byte-identical.
+
+A function-arity issue was corrected before the final source freeze; final
+static maximum arity is 28. Independent final review, production typechecking/
+build and static artifact/archive checks passed. Deployment succeeded on
+18 October 2026 at 01:43:42 UTC. The 01:44:12 UTC directory/session read showed
+zero Spaces and no alerts, with no Add/Withdraw test or other data mutation.
+Positive Add/receipt/target/lifetime/historical withdrawal/replay/privacy/race
+acceptance remains open. No local SQL/app/functional execution was used. The
+dated v44 roadmap remains byte-identical; full mission-flow QA is not implied.
 
 ## Keeping the branches separate
 
