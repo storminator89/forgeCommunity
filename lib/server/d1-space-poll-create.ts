@@ -275,9 +275,17 @@ function manifest(snapshot: Snapshot) {
 /** One bounded manifest, not one bind per legacy option. Equality uses raw
  * stored scalars (including dates), and both directions plus exact cardinality
  * prevent missing, extra, duplicate or partially matched projected rows. */
+function balancedEquality(terms: readonly string[], start = 0, end = terms.length): string {
+  if (end - start === 1) return terms[start];
+  const middle = start + Math.floor((end - start) / 2);
+  return `(${balancedEquality(terms, start, middle)} AND ${balancedEquality(terms, middle, end)})`;
+}
+
 function guardedSnapshot(db: Database, scope: Scope, time: AttemptTime, expected: string,
   includeQuotas = false, final = false) {
-  const equality = columns.map(column => `c."${column}" IS e."${column}"`).join(' AND ');
+  // Preserve all 30 NULL-safe IS leaves, but reduce their AND nesting
+  // from 29 levels in the left-associated chain to 5 in this balanced tree.
+  const equality = balancedEquality(columns.map(column => `c."${column}" IS e."${column}"`));
   return db.prepare(`WITH current AS (${snapshotSql()}), expected AS (
       SELECT ${columns.map(column => `json_extract(j.value, '$.${column}') AS "${column}"`).join(', ')} FROM json_each(?7) j
     ), matched AS (

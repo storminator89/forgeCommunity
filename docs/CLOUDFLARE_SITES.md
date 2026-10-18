@@ -9,16 +9,14 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up published Version 72 source
-`35872e677eec462e1b7b73c9eeeaf4dc25c99591`. Version 72 deployed successfully on
-18 October 2026 at 06:40:58 UTC. It refines only bounded native PollCreate
-diagnostics into fixed resource families; database logic and responses are
-unchanged. One targeted Create still failed; its fixed diagnostic family is now
-sql-limit-expression. The responsible statement and safe correction remain
-under source analysis.
-The v71 simple Event-description Save/Reload and v68 staged-editor positive
-QA are retained; broader FIFO/permissions/notices/races remain separate.
-Roadmap uses v72; the source map retains v63.
+runtime data. This GitHub snapshot backs up published Version 73 source
+`fd1e5a51afb2f3071dfb57ca6cbddc17a2e8c284`. Version 73 deployed successfully on
+18 October 2026 at 06:47:35 UTC. It balances the complete native PollCreate
+snapshot-equality AND tree after the v72 fixed sql-limit-expression diagnosis.
+All equality leaves, bidirectional set guards, quotas, ACL, bindings and writes
+remain unchanged. One legitimate published Create succeeded: exactly one Poll with two options
+and zero votes appeared, and reload preserved it without duplicates. The v71 simple Event-description Save/Reload and v68 staged-editor
+positive QA are retained. Roadmap uses v73; the source map retains v63.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -2247,6 +2245,48 @@ exposing raw provider text or attributing a statement. The precise construction
 and corrective scope remain under static analysis. No retry or Vote was made;
 positive PollCreate/Vote quota/replay/privacy/concurrency QA remains separate.
 No local functional tests or new CI runs were performed.
+
+## Version 73: Create-only balanced snapshot equality
+
+Published source: `fd1e5a51afb2f3071dfb57ca6cbddc17a2e8c284`.
+Deployment: `appgdep_6ad46b78f57c81919c7730a069b58702`, succeeded
+18 October 2026 at 06:47:35 UTC. One-source aggregate:
+`ee65568892b4457e522cc56d594a75f38b5bc7d06c481aad0331881b24e27fc5`.
+
+Only native PollCreate guardedSnapshot changes. The same 30 pure NULL-safe
+`c.column IS e.column` leaves stay in the same order and occur once per equality
+in both complete antijoins. A source-owned balanced parenthesization reduces
+AND nesting from 29 to five levels. Exact cardinality, every projected raw
+field, full manifest, quota/date/ACL checks, before/end markers, bindings,
+six-statement new/two-statement replay batches, DTO, diagnostics and retry
+decisions remain unchanged. Reversing only this helper/equality change restores
+the entire v72 source file. Vote and moderation are outside this patch.
+
+After the published fixed sql-limit-expression diagnostic, official SQLite
+parser/name-resolution sources provide a selected conservative resolver path
+of 104 against current Workerd's source-defined depth limit of 100. Balancing
+the identical leaves reduces that selected path to 32. This is source analysis,
+not a full installed-engine height measurement or proof of every possible
+planner/codegen path. It does not change permissions or drop an invariant.
+
+Main source review and a separate depth/leaf counterreview independently bound
+the same actual digest, all source/patch/proof bytes and the four actual
+equality occurrences. All 12 source-text SQL expandates were reconstructed:
+at most 14,607 bytes, 32 bindings, three builtin arguments, three compound arms
+and 42-byte GLOB patterns. The original maximum four batches of six statements,
+eight snapshot reads and source-derived authentication at most two statements
+give a conservative 34 submitted source statements, without extra queries.
+This is not measured runtime/billing. Existing operational/legacy limits,
+unknown installed DDL/triggers, unbounded quota work/timeouts and ambiguity
+restrictions remain.
+
+Final types/build, static artifacts and archive checks passed. No local
+functional/SQL/app tests or new CI runs were used. A single coordinated
+legitimate published Create clicked at 06:48:09 UTC succeeded. Readback showed
+exactly one Poll with two options and zero votes, and reload at 06:48:31 UTC
+preserved it without a partial row or duplicate. This positively confirms the
+targeted basic Create/reload flow. No Vote, quota, receipt, concurrency or
+privacy matrix result follows from this one case.
 
 ## Keeping the branches separate
 
