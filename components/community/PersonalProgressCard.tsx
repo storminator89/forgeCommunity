@@ -2,10 +2,10 @@
 
 import { useEffect, useRef } from 'react'
 import Link from 'next/link'
-import { BookOpen, Check } from 'lucide-react'
-import { SparkStaticFigure } from '@/components/spark-entry'
+import { ArrowRight, BookOpen } from 'lucide-react'
+import { ProgressSpark } from './ProgressSpark'
+import { MilestoneTrack } from './MilestoneTrack'
 import { Button } from '@/components/ui/button'
-import { useSparkVisibility } from '@/hooks/useSparkVisibility'
 import type { RewardHistoryEntry, RewardSummary } from '@/lib/rewards'
 
 interface PersonalProgressCardProps {
@@ -43,13 +43,11 @@ function historyExplanation(change: RewardHistoryEntry) {
 }
 
 export function PersonalProgressCard({ summary, loading, error, isSignedIn, role, onRefresh }: PersonalProgressCardProps) {
-  const { visible } = useSparkVisibility()
   const detailsRef = useRef<HTMLDetailsElement>(null)
   const ready = isSignedIn && !loading && !error && summary !== null
   const failed = isSignedIn && !loading && (error || summary === null)
   const completedCourses = ready ? summary.completedCourses : null
   const nextTarget = completedCourses === null ? undefined : LEARNING_TARGETS.find(target => completedCourses < target)
-  const courseNoun = nextTarget === 1 ? 'Kurs' : 'Kursen'
 
   // Reveal the existing retry control on failure without replacing its DOM node
   // or closing a disclosure the person has already opened.
@@ -57,54 +55,37 @@ export function PersonalProgressCard({ summary, loading, error, isSignedIn, role
     if (failed && detailsRef.current) detailsRef.current.open = true
   }, [failed])
 
-  return <section aria-labelledby="personal-progress-title" className="fc-surface mb-4 p-4 sm:p-5">
-    <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1.25fr)_auto] sm:items-center sm:gap-4">
-      <header className="flex min-w-0 items-center justify-between gap-3 sm:flex-col sm:items-start sm:gap-2">
-        <div className="min-w-0 [overflow-wrap:anywhere]">
-          <h2 id="personal-progress-title" className="text-base font-semibold tracking-tight">Dein Lernfortschritt</h2>
-          <p className="text-xs text-muted-foreground">Nur für dich</p>
-          <div className="mt-1" aria-busy={isSignedIn && loading}>
-            {!isSignedIn ? <p className="text-sm text-muted-foreground">Melde dich an, um deinen Lernfortschritt zu sehen.</p>
-              : loading ? <p className="text-sm text-muted-foreground" role="status">Lernfortschritt wird geladen…</p>
-              : failed ? <p className="text-sm text-destructive" role="alert">Lernfortschritt konnte nicht geladen werden.</p>
-              : completedCourses !== null && <p className={`text-base font-semibold tracking-tight ${completedCourses > 0 ? 'text-reward-ink' : 'text-foreground'}`}>
-                {completedCourses === 0 ? 'Noch kein Kurs abgeschlossen' : completedCourses === 1 ? '1 Kurs abgeschlossen' : `${completedCourses} Kurse abgeschlossen`}
-              </p>}
-          </div>
-        </div>
-        {visible && <SparkStaticFigure />}
-      </header>
-
-      {completedCourses !== null && <div className="min-w-0 [overflow-wrap:anywhere]">
-        <h3 className="text-xs font-medium text-muted-foreground">Meilensteine</h3>
-        <ol className="mt-2 grid grid-cols-3 gap-1.5" aria-label="Lernmeilensteine">
-          {LEARNING_TARGETS.map(target => {
-            const reached = completedCourses >= target
-            const isNext = nextTarget === target
-            return <li key={target} className="flex min-w-0 items-center justify-center gap-1.5">
-              <span className={`flex size-6 shrink-0 items-center justify-center rounded-full ${reached ? 'border border-reward-ink/40 bg-reward/15 text-reward-ink' : isNext ? 'border-2 border-primary text-primary' : 'border border-border text-muted-foreground'}`} aria-hidden="true">
-                {reached ? <Check className="size-3.5" strokeWidth={2.5} /> : <span className="text-xs font-medium">{target}</span>}
-              </span>
-              <span className={`text-xs font-medium ${reached ? 'text-reward-ink' : isNext ? 'text-primary' : 'text-muted-foreground'}`}>{target} {target === 1 ? 'Kurs' : 'Kurse'}<span className="sr-only">: {reached ? 'erreicht' : isNext ? 'nächster Meilenstein' : 'noch nicht erreicht'}</span></span>
-            </li>
-          })}
-        </ol>
-        {nextTarget ? <>
-          <p className="mt-2 text-xs leading-relaxed text-muted-foreground tabular-nums">{completedCourses} von {nextTarget} {courseNoun} bis zum nächsten Meilenstein</p>
-          <progress value={completedCourses} max={nextTarget}
-            aria-label={`${completedCourses} von ${nextTarget} ${courseNoun} bis zum nächsten Meilenstein`}
-            className="mt-1 block h-1.5 w-full accent-progress">{completedCourses} von {nextTarget}</progress>
-        </> : <p className="mt-2 text-xs font-medium text-reward-ink">Alle Lernmeilensteine erreicht</p>}
-      </div>}
-
-      <div className="min-w-0 sm:col-start-3">
-        <Button asChild className="w-full">
-          <Link href={!isSignedIn ? '/login?callbackUrl=%2Fcommunity' : role === 'USER' ? '/courses/journey' : '/courses'}>
-            <BookOpen className="size-4 shrink-0" aria-hidden="true" />
-            {!isSignedIn ? 'Anmelden' : role === 'USER' ? 'Mein Lernweg' : 'Kurse ansehen'}
-          </Link>
-        </Button>
+  return <section aria-labelledby="personal-progress-title" className="flex min-w-0 flex-col p-4 [overflow-wrap:anywhere] sm:p-5">
+    <header className="min-w-0">
+      <h3 id="personal-progress-title" className="flex items-center gap-2 text-base font-semibold tracking-tight"><BookOpen className="size-4 shrink-0 text-primary" aria-hidden="true" />Dein Lernweg</h3>
+      <p className="mt-1 text-xs text-muted-foreground">Bisher abgeschlossen</p>
+    </header>
+    <div className="mt-3 flex min-h-20 min-w-0 items-center justify-between gap-3" aria-busy={isSignedIn && loading}>
+      <div className="min-w-0">
+        {!isSignedIn ? <p className="text-sm text-muted-foreground">Melde dich an, um deinen Lernfortschritt zu sehen.</p>
+          : loading ? <p className="text-sm text-muted-foreground" role="status">Lernfortschritt wird geladen…</p>
+          : failed ? <p className="text-sm text-destructive" role="alert">Lernfortschritt konnte nicht geladen werden.</p>
+          : completedCourses !== null && <>
+            <p className={`text-4xl font-semibold tracking-tight tabular-nums ${completedCourses > 0 ? 'text-reward-ink' : 'text-foreground'}`}>{completedCourses}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{completedCourses === 1 ? 'unterschiedlicher Kurs' : 'unterschiedliche Kurse'}</p>
+          </>}
       </div>
+      <ProgressSpark state={completedCourses === null ? 'neutral' : completedCourses >= LEARNING_TARGETS[0] ? 'reached' : 'target'} />
+    </div>
+
+    {completedCourses !== null && <MilestoneTrack count={completedCourses} targets={LEARNING_TARGETS} tone="learning"
+      label="Lernmeilensteine" unit={target => target === 1 ? 'Kurs' : 'Kurse'}
+      remaining={count => `Noch ${count} ${count === 1 ? 'Kurs' : 'Kurse'} bis dahin`}
+      complete="Alle drei Lernmeilensteine erreicht"
+      progressDescription={nextTarget ? `${completedCourses} von ${nextTarget} ${nextTarget === 1 ? 'Kurs' : 'Kursen'} bis zum nächsten Meilenstein` : `Alle Lernmeilensteine bei 1, 3 und 5 Kursen erreicht; bisher ${completedCourses} Kurse abgeschlossen`} />}
+
+    <div className="mt-auto pt-4">
+      <Button asChild className="h-auto min-h-11 w-full whitespace-normal">
+        <Link prefetch={false} href={!isSignedIn ? '/login?callbackUrl=%2Fcommunity' : role === 'USER' ? '/courses/journey' : '/courses'}>
+          {!isSignedIn ? 'Anmelden' : role === 'USER' ? completedCourses !== null && !nextTarget ? 'Weiterlernen' : 'Mein Lernweg' : 'Kurse ansehen'}
+          <ArrowRight className="size-4 shrink-0" aria-hidden="true" />
+        </Link>
+      </Button>
     </div>
 
     {isSignedIn && <details ref={detailsRef} className="mt-2 min-w-0 border-t text-sm">
@@ -117,7 +98,7 @@ export function PersonalProgressCard({ summary, loading, error, isSignedIn, role
         <p>Kursbelohnungen sind für reguläre Mitgliedskonten ohne Teststatus vorgesehen, wenn ein Kurs eines anderen Autors aktuell vollständig abgeschlossen ist, das aktuelle Quiz bestanden wurde und eine gültige Adminfreigabe für Kursbelohnungen in der aktuellen Kursfassung vorliegt.</p>
         <p>Dein persönlicher Fortschritt bleibt auch ohne Teilnahme an der öffentlichen Rangliste sichtbar.</p>
         {ready && summary.history && summary.history.length > 0 && <div className="border-t pt-3">
-          <h3 className="text-sm font-medium text-foreground">Punkteverlauf</h3>
+          <h4 className="text-sm font-medium text-foreground">Punkteverlauf</h4>
           <ol className="mt-3 space-y-3">
             {summary.history.map((change, index) => <li key={`${change.at}-${index}`} className="text-xs leading-relaxed">
               <div className="flex flex-wrap justify-between gap-x-3 gap-y-1">
