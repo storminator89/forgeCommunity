@@ -390,6 +390,7 @@ export async function createD1SpacePoll(userId: string, spaceId: string, input: 
     try {
       results = await db.batch(statements);
     } catch (error) {
+      reportPollCreateBatchFailure(error, created, attempt + 1);
       if (!retryableRollback(error)) throw error;
       const current = await readSnapshot(db, scope, time);
       prepareSnapshot(current, scope);
@@ -411,4 +412,60 @@ export async function createD1SpacePoll(userId: string, spaceId: string, input: 
     return { item, created };
   }
   throw new SpaceApiError('Gleichzeitige Änderung. Bitte erneut versuchen.', 409);
+}
+
+/** Diagnostic categories only: never return provider messages, SQL, binds,
+ * identifiers or payloads. This classifier does not authorize any retry.
+ * Only own data properties are inspected. Cause traversal and message text
+ * use bounded heuristic prefixes; categories never prove a failing statement.
+ * Accessors and uninspectable objects fall back to a fixed unknown category. */
+function pollCreateErrorClass(error: unknown): string {
+  try {
+    const messages: string[] = [];
+    const seen = new Set<object>();
+    let current: unknown = error;
+    let remaining = 8192;
+    for (let depth = 0; depth < 6 && current !== null && current !== undefined && remaining > 0; depth++) {
+      if (typeof current === 'string') {
+        messages.push(current.slice(0, Math.min(2048, remaining)));
+        break;
+      }
+      if (typeof current !== 'object' || seen.has(current)) break;
+      seen.add(current);
+      const message = Object.getOwnPropertyDescriptor(current, 'message');
+      if (message && !Object.hasOwn(message, 'value')) return 'unknown';
+      if (typeof message?.value === 'string') {
+        const bounded = message.value.slice(0, Math.min(2048, remaining));
+        messages.push(bounded);
+        remaining -= bounded.length;
+      }
+      const cause = Object.getOwnPropertyDescriptor(current, 'cause');
+      if (cause && !Object.hasOwn(cause, 'value')) return 'unknown';
+      current = cause?.value;
+    }
+    const has = (pattern: RegExp) => messages.some(message => pattern.test(message));
+    if (has(/network|fetch failed|timeout|timed out|connection|disconnect|cancel|abort|RPC|TLS|DNS|unknown commit/i)) return 'transport';
+    const sql = has(/\b(?:D1_ERROR|D1_EXEC_ERROR|SQLITE_ERROR|SQLITE_CONSTRAINT|SQLITE_TOOBIG|SQLITE_RANGE)\b/i);
+    if (!sql) return 'unknown';
+    if (has(/D1_SPACE_POLL_CREATE_WRITE_INVARIANT/)) return 'own-write-invariant';
+    if (has(/D1_SPACE_POLL_CREATE_SNAPSHOT_CONFLICT/)) return 'own-snapshot-guard';
+    if (has(/malformed JSON|JSON path/i)) return 'sql-json';
+    if (has(/bind|parameter|SQLITE_RANGE/i)) return 'sql-binding';
+    if (has(/FOREIGN KEY constraint/i)) return 'sql-foreign-key';
+    if (has(/UNIQUE constraint|PRIMARY KEY|CHECK constraint|NOT NULL constraint|SQLITE_CONSTRAINT/i)) return 'sql-constraint';
+    if (has(/syntax|no such table|no such column|ambiguous column|misuse/i)) return 'sql-shape';
+    if (has(/too many|too (?:big|large)|SQLITE_TOOBIG|limit|quota|memory|resource/i)) return 'sql-resource';
+    return 'sql-other';
+  } catch {
+    return 'unknown';
+  }
+}
+
+function reportPollCreateBatchFailure(error: unknown, created: boolean, attempt: number) {
+  // The existing throw/retry logic below the call remains the sole decision
+  // path. Never let diagnostic handling replace the original failure.
+  try {
+    console.error('poll-create.native.batch', created ? 'plan=new' : 'plan=replay',
+      `attempt=${attempt}`, `class=${pollCreateErrorClass(error)}`);
+  } catch { /* Diagnostic sink failure cannot affect the operation. */ }
 }

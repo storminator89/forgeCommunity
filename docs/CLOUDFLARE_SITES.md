@@ -9,13 +9,14 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up published Version 68 source
-`345b5f39a70f1fc7295be921518be89697ea118b`. Version 68 deployed successfully on
-18 October 2026 at 06:11:59 UTC. The staged course TEXT editor now uses the
-existing document-change-only mode. Targeted published reload/edit/save/
-navigation/publish-gate QA passed; the saved text was never reported lost.
-H5P chooser LIST remains native from v67; embed/metadata/token assets/import/
-playback are separate. Roadmap uses v68; the source map retains v63.
+runtime data. This GitHub snapshot backs up published Version 69 source
+`ee3ab0c3b60dd984a17704f098772318845779e3`. Version 69 deployed successfully on
+18 October 2026 at 06:18:05 UTC. It adds only bounded safe PollCreate failure
+categories; SQL/ACL/quotas/retry behavior is unchanged. A targeted legitimate
+Create still returned500, now categorized sql-resource. The precise provider
+message remains unavailable. The v68 staged-editor fix and its targeted positive
+reload/edit/save/navigation/publish-gate QA are retained. H5P playback/storage
+remain separate. Roadmap uses v69; the source map retains v63.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -76,9 +77,9 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 68 source includes the existing bounded ports below,
-inherited from Version 67, plus the narrowly scoped staged TEXT editor fix
-described below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
+The published Version 69 source includes the existing bounded ports below,
+inherited from Version 68, plus safe PollCreate failure-category diagnostics.
+It does not yet claim a successful PollCreate correction. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
 - D1-backed private course creation and draft editing, authoring-list/detail
@@ -2072,6 +2073,42 @@ roadmap. Existing v66 asset and v67 chooser bytes, README, historical source map
 workflow definitions and all other export paths are retained. It writes only
 the authorized cloudflare-sites branch; concurrent main work is a separate
 operation and no global unchanged-main claim is made.
+
+## Version 69: bounded PollCreate diagnostics
+
+Published source `ee3ab0c3b60dd984a17704f098772318845779e3`, deployment
+`appgdep_6ad464907b948191a12b14652ef8e1b5`, succeeded 18 October 2026 at
+06:18:05 UTC. Exact one-source-path aggregate:
+`878d06c3408a1d7fe8580df5a688b28cb42c9bd858f5a4cd052360602a1c8179`.
+Only [native PollCreate](../lib/server/d1-space-poll-create.ts) gains one
+diagnostic call in the existing batch catch and a bounded safe classifier/
+logger appendix. Removing these reconstructs the complete prior helper bytes.
+SQL, guard markers, current ACL, quota, input/digest, DTO, atomicity and retry
+behavior are unchanged. No extra database query or mutation is added.
+
+New output contains only fixed atomic-batch stage, new/replay plan, loop attempt
+1..4 and eleven finite categories. It never emits provider Error objects,
+messages, SQL, bindings, question/options, IDs, tokens or profiles. It inspects
+only own data properties, bounds cause depth6, per-message prefix2048 and total
+prefix8192, guards cycles and swallows diagnostic-sink failures. Categories are
+bounded-prefix heuristics, not a retry decision or proof of a particular
+statement index; no unsupported index extraction was introduced.
+
+Exact independent source/privacy review and final types/build/static/archive
+checks passed. One coordinated legitimate published Create attempt returned500
+with fixed category `plan=new attempt=1 class=sql-resource`. This release is
+diagnosis only, not successful PollCreate QA. Source review then independently
+identified a78-byte internal timestamp GLOB over the documented D150-byte
+LIKE/GLOB limit in both Create and Vote. That platform conflict is consistent
+with the category; the unavailable exact provider message is not claimed.
+The equivalent42+36 split is a separate reviewed correction, not part of this
+v69 snapshot. No Vote was performed.
+
+The v68 staged-editor positive QA and v66/v67 asset/chooser source remain
+preserved. Live DDL/constraints, broader positive poll/privacy/race cases and
+private H5P storage/playback remain separate limits. No local functional tests,
+new CI, browser action or product mutation was performed by the source/backup
+work itself.
 
 ## Keeping the branches separate
 
