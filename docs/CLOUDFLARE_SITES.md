@@ -9,12 +9,12 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up the published Version 49 source
-`7c3612b94b43cc95fcb11a0a4ea4ee46c9d94567`. Version 49 deployed successfully on
-18 October 2026 at 01:06:16 UTC. Native D1 Mission creation source is live;
-positive Create/replay/weekly/DST/race acceptance remains unverified. All
-operational poll source ports remain unchanged, with positive live acceptance
-still open. The curated roadmap retains its 18 October 2026, 00:15 UTC v44 base.
+runtime data. This GitHub snapshot backs up the published Version 50 source
+`0f210908f83725d192406414c0de830a50e4baf1`. Version 50 deployed successfully on
+18 October 2026 at 01:17:10 UTC. Native D1 Mission close and scoped cleanup source
+is live; positive Close/repeat/purge/privacy/race acceptance remains unverified.
+Mission Create and all poll ports remain unchanged, with prior positive live
+gates still open. The curated roadmap retains its 18 October 2026, 00:15 UTC v44 base.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -75,8 +75,8 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 49 source includes the existing bounded ports below,
-inherited from Version 48, plus the bounded native D1 Mission-creation source described
+The published Version 50 source includes the existing bounded ports below,
+inherited from Version 49, plus the bounded native D1 Mission-close source described
 below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
@@ -180,6 +180,8 @@ all-page visual coverage.
   positive moderation/noop/race acceptance remains unverified
 - Native D1 ADMIN Mission creation in PRIVATE Spaces with scoped current replay,
   one-open and weekly clock fences; positive Create/replay/DST/race acceptance open
+- Native D1 ADMIN Mission close and mission-scoped bookmark/invitation cleanup;
+  positive Close/repeat/purge/privacy/race acceptance remains open
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -197,9 +199,10 @@ mutation flows, course Q&A creation/replies/moderation/solution writes,
 course analytics, and other Space/mission mutation flows remain unported.
 Version 34 ports ADMIN Space creation and PUBLIC own join/leave source;
 Version 36 additionally ports member discussion/reply creation; Version 49 ports
-PRIVATE ADMIN Mission creation. Positive Space/Mission
-mutation acceptance remains open. Invitations, private member
-removal and mission cleanup remain outside these ports. Other workflows may still use Prisma
+PRIVATE ADMIN Mission creation; Version 50 ports close and scoped cleanup.
+Positive Space/Mission mutation acceptance remains open. Invitation creation/
+acceptance, private member removal and other mission mutation flows remain
+outside these ports. Other workflows may still use Prisma
 transaction patterns that D1 does not support. Do not infer full write-flow
 support from this source scope.
 
@@ -1022,6 +1025,35 @@ Mission acceptance. No Mission or other engagement data was created. Positive
 Create/replay/week-rollover/DST/one-open/privacy/race acceptance remains open.
 No local SQL/app/functional execution was used. The byte-identical v44 roadmap
 retains its dated base; the source port does not establish full mission flows.
+
+## Version 50 bounded native D1 Mission close
+
+Version 50 changes only closeMission delegation and its native helper, two
+backend files. Current PRIVATE/stored ADMIN authority does not require creator
+identity or membership. First close sets its timestamp; repeat close
+retains it while still clearing all mission bookmark settings and scoped
+invitation notices, invitations, request and access rows. Notice absence is
+asserted before the invitation identity set is deleted. No participation,
+contribution, global bookmark-access epoch or invitation-attempt counter is
+changed. Exact pre/post snapshots and the bounded current detail DTO are
+fenced in the same native batch; current profile/consent projection is retained.
+Only the named SQL-qualified first-guard rollback with a changed freshly
+authorized snapshot may retry. Unknown commit/network/constraint/invariant
+failures and malformed successful results cannot replay. Existing reader,
+Create, other mutations, parsers/routes/clock/schema/UI and poll ports are
+byte-identical. This source port does not establish full mission flows.
+
+Static bounds are 10 statements for open and 8 for already-closed batches,
+at most four attempts: a conservative 45 submitted statements including all
+failed-batch statements and reads. A first-guard-abort execution count is not
+the submitted bound or a provider billing/cost claim; cleanup database work
+can grow and time out. Independent review, production typechecking/build and
+static artifact/archive checks passed. Deployment succeeded on 18 October 2026
+at 01:17:10 UTC. The 01:17:33 UTC directory/session read showed zero Spaces and
+no alerts; no Close or purge was performed. Positive Close/repeat/private/
+foreign-creator/notice-cleanup/concurrency acceptance remains open. No local
+SQL/app/functional execution or artificial engagement data was used. The dated
+v44 roadmap remains byte-identical, with prior positive live gates still open.
 
 ## Keeping the branches separate
 

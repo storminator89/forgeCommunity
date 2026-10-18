@@ -11,6 +11,7 @@ import { invitationTransaction, purgeMissionInvitations, revokeMissionParticipat
 import { MissionWeekError, parseMissionWeek, resolveMissionWeek, missionWindowState } from '@/lib/mission-week-clock';
 import { listD1MissionModeration, listD1SpaceMissions, readD1SpaceMission } from '@/lib/server/d1-space-missions';
 import { createD1SpaceMission } from '@/lib/server/d1-space-mission-create';
+import { closeD1SpaceMission } from '@/lib/server/d1-space-mission-close';
 
 export const MISSION_PARTICIPANT_LIMIT = 5;
 export const MISSION_PAGE_SIZE = 20;
@@ -180,15 +181,7 @@ export async function createMission(spaceId: string, userId: string, input: Retu
 }
 
 export async function closeMission(spaceId: string, id: string, userId: string) {
-  return invitationTransaction(async tx => {
-    const access = await privateMissionAccess(spaceId, userId, tx);
-    if (!access.canManage) throw new SpaceApiError('Nicht autorisiert', 403);
-    const previous = await findMission(spaceId, id, tx);
-    const row = previous.closedAt ? previous : await tx.spaceMission.update({ where: { id }, data: { closedAt: new Date() }, select: missionSelect });
-    await tx.spaceMissionBookmarkSetting.deleteMany({ where: { missionId: id } });
-    await purgeMissionInvitations(id, tx);
-    return projectMission(row, userId, access, tx);
-  });
+  return closeD1SpaceMission(userId, spaceId, id);
 }
 
 /** Shared transaction-local join core. Invitation acceptance forbids the normal
