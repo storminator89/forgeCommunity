@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { isSameOriginRequest, readRequestBody } from '@/lib/server/auth-security';
 import { REGISTER_AGGREGATE_RATE_LIMIT, REGISTER_RATE_LIMIT, consumeRateLimit, rateLimitHeaders } from '@/lib/server/rate-limit';
 import { MAX_AUTH_BODY_BYTES, registerAccount } from '@/lib/sites-auth/credentials';
+import { invalidateOAuthTransactions } from '@/lib/sites-auth/oauth';
 
 const schema = z.object({ name: z.string(), email: z.string(), password: z.string() });
 export async function POST(req: Request) {
@@ -21,5 +22,11 @@ export async function POST(req: Request) {
   const email = parsed.data.email.trim().toLowerCase();
   const emailLimit = consumeRateLimit(`register:email:${email}`, REGISTER_RATE_LIMIT);
   if (!emailLimit.allowed) return NextResponse.json({ message: 'Zu viele Anfragen. Bitte versuche es später erneut.' }, { status: 429, headers: rateLimitHeaders(emailLimit) });
-  return registerAccount(parsed.data, req.url);
+  const response = await registerAccount(parsed.data, req.url);
+  if (response.ok) {
+    try {
+      for (const cookie of await invalidateOAuthTransactions(req)) response.headers.append('Set-Cookie', cookie);
+    } catch { return NextResponse.json({ message: 'Das Konto wurde erstellt. Die Anmeldung konnte gerade nicht abgeschlossen werden. Bitte melde dich erneut an.' }, { status: 503, headers: { 'Cache-Control': 'no-store' } }); }
+  }
+  return response;
 }

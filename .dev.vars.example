@@ -1,0 +1,21 @@
+# Example only. Do not commit .dev.vars or real credentials.
+# Sites reads these as private Cloudflare Worker bindings, not NEXT_PUBLIC_*.
+# Credentials alone never activate login. Keep this false until the owner has
+# separately applied and verified docs/migrations/SITES_OAUTH_TRANSACTIONS.sql.
+OAUTH_TRANSACTION_MIGRATION_READY="false"
+# These four values are also needed for Google. Empty values keep it hidden.
+OAUTH_BASE_URL="https://forge-community.dsgvision.chatgpt.site"
+OAUTH_STATE_SECRET=""
+GOOGLE_CLIENT_ID=""
+GOOGLE_CLIENT_SECRET=""
+
+# Optional additional OpenID Connect identity provider, independent of Google.
+# Exact HTTPS issuer, with no query, fragment or credentials. Preserve its slash.
+OIDC_ISSUER=""
+OIDC_CLIENT_ID=""
+OIDC_CLIENT_SECRET=""
+OIDC_NAME="Single Sign-on"
+OIDC_TOKEN_AUTH_METHOD="client_secret_basic"
+# Comma-separated additional exact HTTPS origins only if discovery endpoints
+# intentionally use another trusted IdP host. Issuer origin is already allowed.
+OIDC_ALLOWED_ENDPOINT_ORIGINS=""

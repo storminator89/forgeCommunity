@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Check, LockKeyhole, UsersRound } from 'lucide-react';
 import { ForgeBrandMark } from '@/components/forge-brand-mark';
@@ -9,15 +9,59 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-type Props = { mode: 'login' | 'register'; callbackUrl?: string };
+type Props = { mode: 'login' | 'register'; callbackUrl?: string; errorCode?: string };
+type LoginProvider = { id: 'google' | 'oidc'; name: string };
+const oauthErrors: Record<string, string> = {
+  OAuthAccountNotLinked: 'Diese E-Mail-Adresse gehört schon zu einem Konto. Nutze dessen bisherige Anmeldemethode. Konten werden nicht automatisch verknüpft.',
+  OAuthVerifiedEmailRequired: 'Der Anmeldedienst muss eine bestätigte E-Mail-Adresse übermitteln.',
+  OAuthAlreadySignedIn: 'Bitte melde dich zuerst ab, um den Anmeldedienst zu wechseln.',
+  OAuthUnavailable: 'Dieser Anmeldedienst ist momentan nicht eingerichtet.',
+  OAuthCallback: 'Die Anmeldung wurde abgebrochen oder ist abgelaufen. Bitte starte sie erneut.',
+};
 
-export function AuthForm({ mode, callbackUrl = '/community' }: Props) {
+export function AuthForm({ mode, callbackUrl = '/community', errorCode }: Props) {
   const registering = mode === 'register';
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState(errorCode ? (oauthErrors[errorCode] || 'Die Anmeldung konnte nicht abgeschlossen werden.') : '');
+  const [providers, setProviders] = useState<LoginProvider[]>([]);
+  const destination = callbackUrl.length <= 1024 && /^\/(?![\\/])[^\\\u0000-\u001f\u007f]*$/.test(callbackUrl) ? callbackUrl : '/community';
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch('/api/auth/providers', { cache: 'no-store', credentials: 'same-origin', signal: controller.signal })
+      .then(async response => response.ok ? response.json() : null)
+      .then(result => {
+        if (!controller.signal.aborted && Array.isArray(result?.providers)) {
+          setProviders(result.providers.filter((item: LoginProvider) =>
+            (item?.id === 'google' || item?.id === 'oidc') && typeof item.name === 'string' && item.name.length <= 60));
+        }
+      }).catch(() => undefined);
+    return () => controller.abort();
+  }, []);
+
+  async function oauthSignIn(provider: LoginProvider) {
+    if (busy) return;
+    setError('');
+    setBusy(true);
+    try {
+      const response = await fetch(`/api/auth/oauth/${provider.id}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
+        body: JSON.stringify({ callbackUrl: destination }),
+      });
+      const result = await response.json();
+      if (!response.ok || typeof result.url !== 'string' || new URL(result.url).protocol !== 'https:') {
+        throw new Error(result.message || 'Die Anmeldung konnte nicht gestartet werden.');
+      }
+      window.location.assign(result.url);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Die Anmeldung ist momentan nicht möglich.');
+      setBusy(false);
+    }
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (busy) return;
     setError('');
     const form = new FormData(event.currentTarget);
     const password = String(form.get('password') ?? '');
@@ -33,7 +77,6 @@ export function AuthForm({ mode, callbackUrl = '/community' }: Props) {
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.message || 'Das hat nicht geklappt. Bitte versuche es erneut.');
-      const destination = callbackUrl.startsWith('/') && !callbackUrl.startsWith('//') ? callbackUrl : '/community';
       window.location.assign(destination);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Verbindung fehlgeschlagen. Bitte versuche es erneut.');
@@ -77,6 +120,10 @@ export function AuthForm({ mode, callbackUrl = '/community' }: Props) {
               {error && <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 px-3.5 py-3 text-sm text-destructive">{error}</p>}
               <Button type="submit" size="lg" disabled={busy} className="mt-2 w-full">{busy ? 'Einen Moment …' : registering ? 'Kostenlos registrieren' : 'Anmelden'}<ArrowRight className="h-4 w-4" /></Button>
             </form>
+            {providers.length > 0 && <div className="mt-5 space-y-3">
+              <div className="flex items-center gap-3 text-xs text-muted-foreground"><span className="h-px flex-1 bg-border" />oder<span className="h-px flex-1 bg-border" /></div>
+              {providers.map(provider => <Button key={provider.id} type="button" variant="outline" className="h-11 w-full" disabled={busy} onClick={() => oauthSignIn(provider)}>Mit {provider.name} anmelden</Button>)}
+            </div>}
             <p className="mt-6 text-center text-sm text-muted-foreground">{registering ? 'Schon ein Konto?' : 'Noch kein Konto?'}{' '}
               <Link href={registering ? '/login' : '/register'} className="font-semibold text-primary underline-offset-4 hover:underline">{registering ? 'Jetzt anmelden' : 'Jetzt registrieren'}</Link>
             </p>

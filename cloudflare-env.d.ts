@@ -2,6 +2,17 @@ declare namespace Cloudflare {
   interface Env {
     DB?: import('@cloudflare/workers-types').D1Database;
     BUCKET?: import('@cloudflare/workers-types').R2Bucket;
+    OAUTH_BASE_URL?: string;
+    OAUTH_TRANSACTION_MIGRATION_READY?: string;
+    OAUTH_STATE_SECRET?: string;
+    GOOGLE_CLIENT_ID?: string;
+    GOOGLE_CLIENT_SECRET?: string;
+    OIDC_ISSUER?: string;
+    OIDC_CLIENT_ID?: string;
+    OIDC_CLIENT_SECRET?: string;
+    OIDC_NAME?: string;
+    OIDC_TOKEN_AUTH_METHOD?: string;
+    OIDC_ALLOWED_ENDPOINT_ORIGINS?: string;
   }
 }
 

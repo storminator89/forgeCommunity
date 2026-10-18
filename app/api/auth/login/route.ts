@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { getClientAddress, isSameOriginRequest, normalizeEmail, readRequestBody } from '@/lib/server/auth-security';
 import { consumeRateLimit, LOGIN_AGGREGATE_RATE_LIMIT, LOGIN_RATE_LIMIT, rateLimitHeaders } from '@/lib/server/rate-limit';
 import { authenticateAccount, jsonError, MAX_AUTH_BODY_BYTES, validCredentials } from '@/lib/sites-auth/credentials';
+import { invalidateOAuthTransactions } from '@/lib/sites-auth/oauth';
 
 const schema = z.object({ email: z.string(), password: z.string() });
 export async function POST(req: Request) {
@@ -21,5 +22,11 @@ export async function POST(req: Request) {
   const email = normalizeEmail(parsed.data.email);
   const emailLimit = consumeRateLimit(`login:email:${email}`, LOGIN_RATE_LIMIT);
   if (!emailLimit.allowed) return NextResponse.json({ message: 'Zu viele Anmeldeversuche. Bitte versuche es später erneut.' }, { status: 429, headers: rateLimitHeaders(emailLimit) });
-  return authenticateAccount(email, parsed.data.password, req.url);
+  const response = await authenticateAccount(email, parsed.data.password, req.url);
+  if (response.ok) {
+    try {
+      for (const cookie of await invalidateOAuthTransactions(req)) response.headers.append('Set-Cookie', cookie);
+    } catch { return jsonError('Die Anmeldung konnte gerade nicht abgeschlossen werden.', 503); }
+  }
+  return response;
 }
