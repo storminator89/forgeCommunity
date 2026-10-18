@@ -18,6 +18,7 @@ const reviewedSqlite = [
   '0019_course_qa.sql', '0020_spaces.sql', '0021_space_report_targets.sql',
   '0022_space_mission_foundation.sql', '0023_space_mission_contributions.sql',
   '0024_event_waitlist.sql', '0025_space_polls.sql', '0026_space_mission_week.sql', '0027_space_mission_bookmarks.sql', '0028_course_qa_lesson_context.sql', '0029_space_mission_invitations.sql',
+  '0030_oauth_configuration.sql',
 ];
 const reviewedPostgresql = [
   '0001_skill_endorsements.sql', '0002_course_progress.sql', '0003_reports.sql',
@@ -31,6 +32,7 @@ const reviewedPostgresql = [
   '0018_course_qa.sql', '0019_spaces.sql', '0020_space_report_targets.sql',
   '0021_space_mission_foundation.sql', '0022_space_mission_contributions.sql',
   '0023_event_waitlist.sql', '0024_space_polls.sql', '0025_space_mission_week.sql', '0026_space_mission_bookmarks.sql', '0027_course_qa_lesson_context.sql', '0028_space_mission_invitations.sql',
+  '0029_oauth_configuration.sql',
 ];
 
 function expectedHistory(provider) {
@@ -257,7 +259,17 @@ async function inspect(query, provider) {
   let actual;
   try { actual = await query(`SELECT name, checksum FROM "${historyTable}" ORDER BY name`); }
   catch { throw new Error('Publication schema is missing or incomplete; run the reviewed database deployment on an empty database.'); }
-  if (JSON.stringify(actual) !== JSON.stringify(expectedHistory(provider))) {
+  const reviewed = expectedHistory(provider);
+  // Only this exact additive OAuth receipt is optional. All earlier required
+  // names, ordering and checksums must still match the reviewed history.
+  // A present optional receipt must have its own exact reviewed checksum too;
+  // missing/unknown/duplicate/divergent mandatory receipts never pass either
+  // complete-array comparison. No global OAuth table read belongs here.
+  const optionalOAuthReceipt = provider === 'sqlite'
+    ? '0030_oauth_configuration.sql' : '0029_oauth_configuration.sql';
+  const required = reviewed.filter(receipt => receipt.name !== optionalOAuthReceipt);
+  if (JSON.stringify(actual) !== JSON.stringify(reviewed) &&
+      JSON.stringify(actual) !== JSON.stringify(required)) {
     throw new Error('Publication migration history is missing, divergent or has changed checksums; startup refused.');
   }
   // Exact history alone cannot establish that both additive sidecars are

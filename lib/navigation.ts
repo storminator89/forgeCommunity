@@ -31,6 +31,7 @@ export const utilityNavigation = [
 export const adminNavigation = [
   { name: 'Dashboard', icon: LayoutDashboard, href: '/admin/dashboard' },
   { name: 'Benutzerverwaltung', icon: Users, href: '/admin/users' },
+  { name: 'Anmeldung & SSO', icon: Settings, href: '/admin/authentication' },
   { name: 'Lernpfade', icon: Route, href: '/admin/learning-pathways' },
 ];
 export const moderationNavigation = [

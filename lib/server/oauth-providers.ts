@@ -12,7 +12,7 @@ const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
 const emailSchema = z.string().trim().max(254).email();
 const OIDC_DISCOVERY_LIMIT = 64 * 1024;
 
-function publicHttpsUrl(value: unknown, originOnly = false): URL | null {
+export function publicHttpsUrl(value: unknown, originOnly = false): URL | null {
   if (typeof value !== 'string') return null;
   const url = configurationUrl(value, true, originOnly);
   if (!url || url.protocol !== 'https:') return null;
@@ -109,7 +109,7 @@ function boundedValue(value: string | undefined, maximum: number): string | null
   return value;
 }
 
-function configurationUrl(value: string | undefined, production: boolean, originOnly = false): URL | null {
+export function configurationUrl(value: string | undefined, production: boolean, originOnly = false): URL | null {
   if (!boundedValue(value, 2048) || value !== value?.trim() || value?.includes('\\')) return null;
   try {
     const url = new URL(value!);

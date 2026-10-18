@@ -1573,3 +1573,12 @@ model Certificate {
   @@index([courseId])
   @@index([publicationId])
 }
+
+// Singleton encrypted installation settings. Never expose encryptedPayload.
+model OAuthConfiguration {
+  id               String   @id
+  revision         Int
+  encryptedPayload String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}

@@ -5,6 +5,42 @@ separat veröffentlichte Sites-App hat eine eigene Serverimplementierung und
 eigene Laufzeitvariablen. Eine Registrierung bei Google allein ersetzt weder
 das Bereitstellen dieses Backends noch das sichere Hinterlegen der Zugangsdaten.
 
+## Vorbereitete Administration: Anmeldung & SSO
+
+Der neue Main-Quellkandidat enthält `/admin/authentication` für aktuelle ADMINs
+und die API `/api/admin/oauth-configuration`. Er ist **nicht bereitgestellt**:
+keine Main-Datenbankmigration, kein externer Schlüssel und keine echten
+Providerzugangsdaten wurden eingerichtet. Das vollständige Setup-, Sicherheits-
+und Recovery-Runbook steht unter [ADMIN-Konfiguration](OAUTH_CONFIGURATION_ADMIN.md);
+die getrennt vorzubereitende Main-Migration unter
+[Migrationsvorbereitung](OAUTH_CONFIGURATION_MIGRATION.md).
+
+Nach einer gesondert freigegebenen Bereitstellung werden Client-ID, Secret und
+OIDC-Einstellungen im geschützten ADMIN-Formular verwaltet. Der unabhängige
+Hostschlüssel `OAUTH_CONFIG_ENCRYPTION_KEY` bleibt ausschließlich im Secret-Speicher
+des Servers. Gespeicherte DB-Änderungen werden pro Request geladen und benötigen
+keinen Neustart; Hostvariablen bleiben getrennte Servervoraussetzungen. Eine
+vorhandene verschlüsselte DB-Konfiguration ersetzt die
+Provider-Umgebungsvariablen vollständig, auch bei expliziter Deaktivierung;
+bei Lesefehlern gibt es keinen stillen Rückfall. Leere Secretfelder behalten
+nur bereits in dieser DB gespeicherte Secrets. Beim ersten Speichern muss ein
+aktivierter Anbieter sein Secret frisch privat erhalten.
+
+Die folgenden Provider-Umgebungsbeispiele beschreiben den bisherigen
+Bootstrap-/Fallbackpfad **nur solange kein DB-Datensatz vorhanden ist oder die
+optionale Tabelle nachweislich fehlt**. Dieser Env-Pfad benötigt selbst keine
+neue Tabelle. Der neue ADMIN-Pfad benötigt dagegen die separat freizugebende
+additive Tabelle und den externen Schlüssel. Die neuen SQL-Dateien liegen im
+aktiven Main-Migrationsrunner und können beim später freigegebenen regulären
+Upgrade mitlaufen. Die globale Main-Readiness verlangt weder die optionale Tabelle
+noch deren Receipt; ausschließlich dieses bekannte Receipt darf fehlen oder mit
+exaktem Checksum vorhanden sein. Alle bisherigen Pflichtmigrationen bleiben streng.
+Fehlt die Tabelle, ist nur die ADMIN-Speicherfunktion gesperrt; bestehender
+Credentialslogin und gewöhnlicher Mainstart bekommen keinen neuen Schemazwang.
+Diese Vorbereitung selbst führt keinen Deploy, Start oder Datenbankbefehl aus.
+SQLite-Container wenden im bisherigen Upgradepfad beim ausdrücklich freigegebenen
+Start ausstehende Migrationen automatisch an. Die Sites-App bleibt getrennt.
+
 ## Bereits vorbereitet
 
 - Passwortanmeldung bleibt verfügbar. Die bestehenden Ratenlimits, CSRF-Prüfung,
@@ -30,8 +66,9 @@ das Bereitstellen dieses Backends noch das sichere Hinterlegen der Zugangsdaten.
   ID-Token liefern; ein beliebiges OAuth-2-Profil ohne OIDC genügt nicht.
 - Rollen kommen ausschließlich aus der lokalen Datenbank. Neue Nutzer erhalten
   deren bestehende Standardrolle `USER`.
-- Gespeichert wird nur die Identitätsverknüpfung, kein Access-, Refresh- oder
-  ID-Token des Anbieters. Bereits früher gespeicherte Tokens werden durch diese
+- Im Benutzer-Account wird nur die Identitätsverknüpfung gespeichert, kein
+  Access-, Refresh- oder ID-Token des Anbieters. Die neue installationsweite
+  Clientkonfiguration wird getrennt und verschlüsselt gespeichert. Bereits früher gespeicherte Tokens werden durch diese
   Änderung nicht gelöscht. Die Sitzung bleibt ein eigener NextAuth-JWT.
 - Gleiche E-Mail-Adressen verbinden keine Konten. Bestehende Konten müssen
   weiterhin ihre bisherige Anmeldemethode verwenden. Auch bei bereits bestehender
@@ -56,8 +93,9 @@ Den tatsächlichen Wert ausschließlich im Secret-Speicher der Laufzeitumgebung
 hinterlegen. Ein Wechsel dieses Schlüssels meldet bestehende Sitzungen ab.
 
 Die bestehende Datenbankkonfiguration und die Tabellen `User` und `Account`
-müssen verfügbar sein. Diese Erweiterung benötigt keine Schemaänderung und
-keinen neuen Dienst. Geheimnisse gehören nie in `NEXT_PUBLIC_*`, Git, den
+müssen verfügbar sein. Nur der bisherige Env-Bootstrap-/Fallbackpfad benötigt
+keine Schemaänderung und keinen neuen Dienst; der vorbereitete ADMIN-Pfad benötigt
+die oben verlinkte neue Tabelle. Geheimnisse gehören nie in `NEXT_PUBLIC_*`, Git, den
 Browser oder Screenshots. Änderungen der Servervariablen erfordern einen Neustart
 der App; die verfügbaren Anbieter werden danach aus der Serverkonfiguration geladen.
 
@@ -78,7 +116,9 @@ der App; die verfügbaren Anbieter werden danach aus der Serverkonfiguration gel
    Vor der allgemeinen Freigabe den passenden Veröffentlichungsstatus und etwaige
    von Google verlangte Prüfungen abschließen. Eine interne Workspace-Zielgruppe
    erlaubt nur Nutzer der gewählten Organisation.
-6. Client-ID und Client-Secret direkt in der Serverumgebung hinterlegen:
+6. Im künftig freigegebenen ADMIN-Pfad Client-ID und Secret privat unter
+   `/admin/authentication` hinterlegen. Nur für den bisherigen Env-Bootstrap-/
+   Fallbackpfad beide Werte direkt in der Serverumgebung hinterlegen:
 
 ```dotenv
 GOOGLE_CLIENT_ID=""
@@ -127,6 +167,11 @@ Auf der gewünschten öffentlichen Domain entsprechend:
 Wieder gilt: Die URI muss auf das tatsächlich bereitgestellte Backend zeigen.
 Die Provider-ID `oidc` und der Callbackpfad bleiben unabhängig vom Anzeigenamen.
 
+Die folgende Servervariablenform gilt für den Env-Bootstrap-/Fallbackpfad. Im
+vorbereiteten ADMIN-Formular werden dieselben Angaben privat eingegeben; neue
+Speicherungen erlauben höchstens fünf zusätzliche Origins, während ein bereits
+bestehender Main-Env-Bestand mit bis zu sechzehn Origins vollständig lesbar bleibt.
+
 ```dotenv
 OIDC_ISSUER="https://identity.example.com/realms/community"
 OIDC_CLIENT_ID=""
@@ -158,8 +203,9 @@ OIDC_ALLOWED_ENDPOINT_ORIGINS=""
 ### Vertrauens- und Netzwerkgrenze
 
 Der Issuer und `OIDC_ALLOWED_ENDPOINT_ORIGINS` sind ausschließlich private
-Betreiberkonfiguration. Sie werden nie aus Requestparametern, Loginformularen,
-Callbackantworten oder Nutzerprofilen übernommen. Die Issuerorigin ist implizit
+Betreiberkonfiguration aus dem Host-Bootstrap oder dem geschützten, validierten
+ADMIN-Konfigurationsendpoint. Sie werden nie aus Anmelde-Requestparametern,
+Loginformularen, Callbackantworten oder Nutzerprofilen übernommen. Die Issuerorigin ist implizit
 erlaubt. Weitere legitime Origins werden kommagetrennt als vollständige
 HTTPS-Origins ohne Pfad angegeben, zum Beispiel
 `https://login.example.com,https://keys.example.com`. Ungültige Einträge
@@ -218,12 +264,16 @@ Freigabe eine eigene Erweiterung der Main-Variante erforderlich.
 
 ## Konfigurationsfehler und sichere Fehlerbehandlung
 
-Beide Google-Werte leer deaktiviert Google. Alle drei erforderlichen OIDC-Werte
+Im bisherigen Env-Bootstrap-/Fallbackpfad gilt: Beide Google-Werte leer deaktiviert Google. Alle drei erforderlichen OIDC-Werte
 leer deaktiviert OIDC. Teilweise oder ungültige Werte deaktivieren nur den
 betroffenen Anbieter. Ein ungültiger gemeinsamer `NEXTAUTH_URL`/`NEXTAUTH_SECRET`
 deaktiviert beide optionalen Anbieter. Die Passwortanmeldung wird dadurch nicht
 aus der Providerliste entfernt. Serverwarnungen nennen nur fehlende
-Konfigurationskategorien, niemals eingegebene Werte.
+Konfigurationskategorien, niemals eingegebene Werte. Bei vorhandenem DB-Datensatz
+gelten ausschließlich dessen explizite Aktivierung und vollständige Konfiguration.
+Ein nicht lesbarer oder nicht entschlüsselbarer Datensatz deaktiviert optionale
+OAuth-Anbieter sicher; er wird niemals durch Env-Werte ersetzt. Die ADMIN-API
+zeigt feste Blockercodes und keine Secrets, Hashes oder Ciphertexte.
 
 Loginfehler werden über feste deutsche Texte angezeigt. Unbekannte oder mehr
 als 64 Zeichen lange Fehlercodes erzeugen nur eine allgemeine Meldung;
@@ -280,3 +330,4 @@ installierten NextAuth-v4-API; keine stille Auth.js-v5-Migration.
 Die installierten Next.js-16.3.8-Guides zu Route Handlers, Environment Variables
 und `useSearchParams` sowie der installierte NextAuth-/PrismaAdapter-Code wurden
 vor der Implementierung geprüft.
+

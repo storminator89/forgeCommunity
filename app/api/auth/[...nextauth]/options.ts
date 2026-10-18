@@ -6,7 +6,8 @@ import CredentialsProvider from 'next-auth/providers/credentials';
 import bcrypt from 'bcrypt';
 import { passwordFingerprint, samePasswordFingerprint } from '@/lib/server/account-security';
 import { safeLoginCallback } from '@/lib/auth-login';
-import { createOAuthProviders, verifiedOAuthEmail } from '@/lib/server/oauth-providers';
+import { verifiedOAuthEmail } from '@/lib/server/oauth-providers';
+import { oauthRevisionIsCurrent, type RequestOAuthConfiguration } from '@/lib/server/oauth-configuration';
 
 import prisma from '@/lib/prisma';
 import { emailEqualsInsensitive } from '@/lib/server/database-query';
@@ -40,9 +41,7 @@ function mapUserToToken(user: NonNullable<SelectedUser>) {
   };
 }
 
-const oauthConfiguration = createOAuthProviders();
 const providers: NextAuthOptions['providers'] = [
-  ...oauthConfiguration.providers,
   CredentialsProvider({
     name: 'Credentials',
     credentials: {
@@ -88,11 +87,10 @@ const providers: NextAuthOptions['providers'] = [
   }),
 ];
 
-export const oauthIssuerFor = oauthConfiguration.issuerFor;
-export async function authProvidersForRequest(provider: string): Promise<NextAuthOptions['providers']> {
+export async function authProvidersForRequest(provider: string, configuration: RequestOAuthConfiguration): Promise<NextAuthOptions['providers']> {
   return [
-    ...await oauthConfiguration.resolveProviders(provider),
-    ...providers.filter(configured => configured.id === 'credentials'),
+    ...await configuration.runtime.resolveProviders(provider),
+    ...providers,
   ];
 }
 
@@ -101,10 +99,15 @@ type SignInArguments = Parameters<NonNullable<NonNullable<NextAuthOptions['callb
 export async function authorizeSignIn(
   { account, profile }: SignInArguments,
   currentSessionUserId: string | null = null,
+  configuration?: RequestOAuthConfiguration,
 ): Promise<boolean | string> {
   if (account?.type === 'credentials' && account.provider === 'credentials' && !profile) return true;
-  if (account?.type !== 'oauth' || !oauthConfiguration.enabledIds.some(id => id === account.provider)) return false;
-  if (!oauthConfiguration.matchesIdentity(account.provider, account.providerAccountId, profile)) return false;
+  if (account?.type !== 'oauth' || !configuration || !configuration.runtime.enabledIds.some(id => id === account.provider)) return false;
+  if (!configuration.runtime.matchesIdentity(account.provider, account.providerAccountId, profile)) return false;
+  // Reject changes observed after this request's initial snapshot. NextAuth v4
+  // still finalizes later outside this guard's transaction; no atomic framework
+  // completion guarantee is claimed here.
+  if (!await oauthRevisionIsCurrent(configuration)) return false;
 
   const email = verifiedOAuthEmail(profile);
   if (!email) return '/login?error=OAuthEmailUnverified';

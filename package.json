@@ -79,6 +79,7 @@
     "framer-motion": "^13.4.0",
     "h5p-standalone": "3.8.2",
     "input-otp": "^1.5.0",
+    "jose": "6.2.12",
     "jsdom": "^30.1.1",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",

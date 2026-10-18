@@ -2,8 +2,9 @@ import NextAuth from 'next-auth';
 import { getToken } from 'next-auth/jwt';
 import { NextRequest, NextResponse } from 'next/server';
 
-import { authOptions, authorizeSignIn, authProvidersForRequest, oauthIssuerFor } from './options';
+import { authOptions, authorizeSignIn, authProvidersForRequest } from './options';
 import { safeLoginCallback } from '@/lib/auth-login';
+import { requestOAuthConfiguration } from '@/lib/server/oauth-configuration';
 import {
   getClientAddress,
   normalizeEmail,
@@ -88,12 +89,17 @@ async function handleAuth(request: NextRequest, context: AuthRouteContext, rawBo
   const { nextauth } = await context.params;
   const action = nextauth?.[0];
   const providerId = nextauth?.[1];
+  if (action === 'providers' || (action === 'signin' && !providerId)) {
+    const configuration = await requestOAuthConfiguration();
+    return NextAuth({ ...authOptions, providers: [...configuration.runtime.providers, ...authOptions.providers] })(request, context);
+  }
   const isOAuth = providerId === 'google' || providerId === 'oidc';
   if (!isOAuth || (action !== 'signin' && action !== 'callback')) {
     return handler(request, context);
   }
 
-  const issuer = oauthIssuerFor(providerId);
+  const configuration = await requestOAuthConfiguration();
+  const issuer = configuration.runtime.issuerFor(providerId);
   if (!issuer) return oauthFailure(request, 'OAuthCallback', rawBody);
   if (action === 'callback') {
     // Provider errors never reach library logs or HTML with attacker-selected
@@ -136,12 +142,12 @@ async function handleAuth(request: NextRequest, context: AuthRouteContext, rawBo
     });
     // GET /signin renders NextAuth's normal sign-in page and never exchanges
     // credentials. Only its CSRF-checked POST starts an OAuth authorization.
-    if (request.method === 'GET') return handler(request, context);
+    if (request.method === 'GET') return NextAuth({ ...authOptions, providers: [...configuration.runtime.providers, ...authOptions.providers] })(request, context);
   }
 
   let providers;
   try {
-    providers = await authProvidersForRequest(providerId);
+    providers = await authProvidersForRequest(providerId, configuration);
   } catch {
     console.error('[auth] OIDC_DISCOVERY_FAILED');
     return oauthFailure(request, 'OAuthCallback', rawBody);
@@ -164,9 +170,20 @@ async function handleAuth(request: NextRequest, context: AuthRouteContext, rawBo
   const requestHandler = NextAuth({
     ...authOptions,
     providers,
+    // Installed NextAuth v4 uses these names both for lookup and JWT salt.
+    // An outstanding flow cannot reuse state/nonce/PKCE after a saved revision.
+    cookies: {
+      ...authOptions.cookies,
+      ...Object.fromEntries([
+        ['state', 'state'], ['nonce', 'nonce'], ['pkceCodeVerifier', 'pkce.code_verifier'],
+      ].map(([key, suffix]) => [key, {
+        name: `${secureCookie ? '__Secure-' : ''}next-auth.${suffix}.oauth-${configuration.binding}`,
+        options: { httpOnly: true, sameSite: 'lax' as const, path: '/', secure: secureCookie, maxAge: 15 * 60 },
+      }])),
+    },
     callbacks: {
       ...authOptions.callbacks,
-      signIn: arguments_ => authorizeSignIn(arguments_, currentUserId),
+      signIn: arguments_ => authorizeSignIn(arguments_, currentUserId, configuration),
     },
   });
   return requestHandler(request, context);

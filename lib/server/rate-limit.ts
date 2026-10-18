@@ -7,6 +7,11 @@
  * wide security control.
  */
 
+export const ADMIN_CONFIGURATION_WRITE_RATE_LIMIT = {
+  limit: 10,
+  windowMs: 15 * 60 * 1000,
+} as const;
+
 export const LOGIN_RATE_LIMIT = {
   limit: 10,
   windowMs: 15 * 60 * 1000,
