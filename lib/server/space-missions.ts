@@ -14,6 +14,7 @@ import { createD1SpaceMission } from '@/lib/server/d1-space-mission-create';
 import { closeD1SpaceMission } from '@/lib/server/d1-space-mission-close';
 import { setD1MissionParticipation } from '@/lib/server/d1-space-mission-participation';
 import { contributeD1SpaceMission, withdrawD1SpaceMissionContribution } from '@/lib/server/d1-space-mission-contributions';
+import { moderateD1SpaceMissionContribution } from '@/lib/server/d1-space-mission-contribution-moderation';
 
 export const MISSION_PARTICIPANT_LIMIT = 5;
 export const MISSION_PAGE_SIZE = 20;
@@ -282,24 +283,7 @@ export async function withdrawMissionContribution(spaceId: string, id: string, c
 }
 
 export async function moderateMissionContribution(spaceId: string, id: string, contributionId: string, userId: string, hidden: boolean) {
-  try {
-    return await spaceTransaction(async tx => {
-      const access = await privateMissionAccess(spaceId, userId, tx);
-      if (!access.canManage) throw new SpaceApiError('Nicht autorisiert', 403);
-      const mission = await findMission(spaceId, id, tx);
-      const row = await tx.spaceMissionContribution.findFirst({ where: { id: contributionId, missionId: id }, select: { hiddenAt: true } });
-      if (!row) throw notFound();
-      if (Boolean(row.hiddenAt) !== hidden) await tx.spaceMissionContribution.update({ where: { id: contributionId }, data: { hiddenAt: hidden ? new Date() : null } });
-      // No path writes withdrawnAt=null. Restoring visibility cannot revoke the
-      // author's withdrawal or reactivate consent, an epoch or an invalid target.
-      return projectMission(mission, userId, access, tx);
-    });
-  } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-      throw new SpaceApiError('Ein neuerer Beitrag belegt diesen Schritt bereits', 409);
-    }
-    throw error;
-  }
+  return moderateD1SpaceMissionContribution(spaceId, id, contributionId, userId, hidden);
 }
 
 export async function listMissionModeration(spaceId: string, id: string, userId: string, request: Request) {
