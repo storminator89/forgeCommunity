@@ -7,6 +7,7 @@ import { parseSpaceRequestId, SPACE_ID_RE, spaceTransaction, SpaceApiError } fro
 import { sanitizeTextServer } from '@/lib/server/sanitize-html';
 import { d1SpacePoll, d1SpacePolls } from '@/lib/server/d1-space-poll-reads';
 import { createD1SpacePoll } from '@/lib/server/d1-space-poll-create';
+import { voteD1SpacePoll } from '@/lib/server/d1-space-poll-vote';
 
 export const POLL_PAGE_SIZE = 10;
 export const POLL_CHANGE_LIMIT = 100;
@@ -144,32 +145,7 @@ export async function createPoll(spaceId: string, userId: string, input: ReturnT
 }
 
 export async function votePoll(spaceId: string, id: string, userId: string, input: ReturnType<typeof parsePollVote>) {
-  return pollWrite(async tx => {
-    const access = await accessPolls(spaceId, userId, tx);
-    const poll = await findPoll(spaceId, id, access, tx);
-    if (!access.isMember) throw new SpaceApiError('Zum Abstimmen ist eine Mitgliedschaft erforderlich', 403);
-    const previous = await tx.spacePollVoteRequest.findUnique({ where: { pollId_userId_requestId: { pollId: id, userId, requestId: input.requestId } }, select: { payloadDigest: true } });
-    if (previous) {
-      if (previous.payloadDigest !== input.payloadDigest) throw new SpaceApiError('Anfrage-ID bereits verwendet', 409);
-      return projectPoll(poll, userId, access, tx);
-    }
-    if (poll.closedAt || poll.hiddenAt) throw new SpaceApiError('Diese Umfrage ist geschlossen oder ausgeblendet', 409);
-    if (!poll.options.some(option => option.id === input.optionId)) throw new SpaceApiError('Antwort gehört nicht zu dieser Umfrage', 400);
-    const key = { pollId_userId: { pollId: id, userId } };
-    const vote = await tx.spacePollVote.findUnique({ where: key, select: { revision: true } });
-    if ((vote?.revision ?? 0) !== input.expectedRevision) throw conflict();
-    const [changes, recent] = await Promise.all([
-      tx.spacePollVoteRequest.count({ where: { pollId: id, userId } }),
-      tx.spacePollVoteRequest.count({ where: { userId, createdAt: { gte: new Date(Date.now() - 60_000) } } }),
-    ]);
-    if (changes >= POLL_CHANGE_LIMIT) throw new SpaceApiError('Für diese Umfrage sind höchstens 100 gespeicherte Abstimmungen pro Person möglich.', 429);
-    if (recent >= 12) throw new SpaceApiError('Zu viele Änderungen. Bitte später erneut versuchen.', 429);
-    const data = { optionId: input.optionId, revision: input.expectedRevision + 1 };
-    await tx.spacePollVote.upsert({ where: key, update: data, create: { pollId: id, userId, ...data } });
-    await tx.spacePollVoteRequest.create({ data: { pollId: id, userId, requestId: input.requestId, payloadDigest: input.payloadDigest } });
-    // Re-read aggregate counts after the write in this same snapshot.
-    return projectPoll(await findPoll(spaceId, id, access, tx), userId, access, tx);
-  });
+  return voteD1SpacePoll(userId, spaceId, id, input);
 }
 
 export async function moderatePoll(spaceId: string, id: string, userId: string, input: ReturnType<typeof parsePollModeration>) {
