@@ -9,12 +9,12 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up the published Version 61 source
-`65374b7befcf88f05260061bc7b6bbef5b9a0d4b`. Version 61 deployed successfully on
-18 October 2026 at 03:56:00 UTC. Native D1 discussion/reply ADMIN moderation,
-final V2, is live; positive moderation/hidden-parent/noop/date/race/demotion/
-rollback acceptance remains unverified. Account/role and other callback flows
-remain separate. The separately curated user-flow roadmap describes the v61 base.
+runtime data. This GitHub snapshot backs up the published Version 62 source
+`468ba2a2879665f36fe825f29fb83d51bdf1620b`. Version 62 deployed successfully on
+18 October 2026 at 04:15:46 UTC. Native D1 normal Pathway participation, final
+V2, is live; positive Join/Leave/private-badge/history/availability/role/race/
+privacy acceptance remains unverified. Admin Pathway definitions, account/role
+and other callback flows remain separate. The curated roadmap uses the v62 base.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -75,8 +75,8 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 61 source includes the existing bounded ports below,
-inherited from Version 60, plus native D1 discussion/reply moderation described
+The published Version 62 source includes the existing bounded ports below,
+inherited from Version 61, plus native D1 normal Pathway participation described
 below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
@@ -204,6 +204,8 @@ all-page visual coverage.
   cleanup and full reader fences; positive decision/expiry/privacy/race QA open
 - Native D1 ADMIN discussion/reply hide/unhide with exact atomic snapshot/
   projection guards and unchanged-state write-free reads; positive live QA open
+- Native D1 normal Pathway Join/Leave with complete own private-badge
+  reconciliation and retained history/tombstones; positive mutation QA open
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -228,6 +230,8 @@ contribution moderation; Version 54 ports own Mission bookmark PUT; Version 55
 ports PRIVATE member Add/Remove with coupled revocation.
 Version 59 ports Send; Version 60 ports invitation Accept/Decline source.
 Version 61 ports existing ADMIN discussion/reply moderation.
+Version 62 ports normal Pathway participation; Admin definition authoring remains
+a separate callback, as do other unported flows.
 Positive Space/Mission mutation acceptance remains open. Account/role changes
 and other mission mutation flows remain
 outside these ports. Other workflows may still use Prisma
@@ -1504,6 +1508,98 @@ The user-facing roadmap is a separate curated documentation exception, updated
 to actual v61 and moderation delivered/QA-open scope. README scope/setup/gallery
 bytes and all previously approved documentation facts are preserved. No blanket
 mission/feature completion or new competitor-research claim is made.
+
+## Version 62 bounded native D1 normal Pathway participation, final V2
+
+Version 62 adds only a dedicated helper and the existing participation POST/DELETE
+route import/body delegate, two backend files. Reversing exactly those sections
+reconstructs the entire route. Origin 403 precedes session 401 outside its try;
+raw caller/requested IDs, ignored body, errors/status/no-store stay intact.
+Current stored USER and non-test checks give 403 for both methods, sealed-target
+absence 404. First/rejoin alone preserves the source-proven existing Prisma.join([])
+generic 500 on zero-course definitions, then missing Course 409 before non-NULL
+publication 409. Duplicate-active Join and every Leave bypass those availability
+checks. This retained empty-definition error is source-derived, not a new live finding.
+
+Every request reconciles ALL own private participations, including other,
+unsealed and opted-out paths, using complete raw course sets and active
+COURSE_COMPLETED ledger facts. Only Participation/Change rows are written:
+no new/recomputed course reward, enrollment, public UserBadge, progress, notice
+or certificate. First Join inserts version-zero defaults then optional private
+AWARDED version one, returning 201. Rejoin updates joinedAt/clears opt-out,
+preserving firstAward/history/version absent a badge transition, returning 200.
+Leave retains its row/tombstone/firstAward; an active private badge clears with
+opt-out and one increment plus REVOKED/OPTED_OUT event, never a second generic
+reconciliation revoke. Qualification needs current eligible User, active
+participation, at least two raw courses and every credit. There is no added
+upper-four-course, course availability or enrollment gate on reconciliation.
+Int32 MAX is legal without an increment; a planned overflow fails 500. New
+version is old+1, never history maximum. Full histories remain except appended
+events. Complete Before mismatch wins before global UUID/own pair-version
+collision checks; collisions fail closed before writes without relying on live
+UNIQUE/trigger installation.
+
+The full target DTO retains immutable ordered course snapshots, current truthy
+publication availability (NULL/empty unavailable), enrollment/active credits,
+participation dates/private badge and newest twenty target events version-DESC.
+It omits User/creator/change IDs, versions, other-user fields and public badges.
+No target participation plus unavailable maps 404 only after qualified final
+domain abort rolls back complete matched own After/events, never postcommit read.
+SQL budgets the complete typed authority, availability, own cohort, courses,
+reward semantic facts and history before private transport. Cardinality and
+bidirectional scalar-IS anti-joins compare whole raw Before/After sets through
+bounded manifests, including own additions/removals. Target insert precedes
+FK history; events use plain INSERT; exact-old-state combined updates, immediate
+changes assertions and actual complete After/Event/DTO endguard are atomic.
+A context row keeps missing-target assertions nonempty. No row-loop, prefix
+truncation, domain cohort cap or broad malformed-legacy parity is introduced.
+
+Bounded absolute DateTime conversion retains reviewed date-only UTC, ISO/UTC
+defaults, minute precision, variable fractions, valid 24:00, +HH/+HHmm/+HH:mm
+offsets and finite fractional epoch milliseconds including zero. Raw dates stay
+in scalar-IS/no-op fences. There is no unused derived-SQL-ms barrier, monotonic
+clock or equal-original-time guarantee. Complete raw SQL row/result limits are
+200,000/1,200,000 bytes; typed manifest 1,400,000 bytes, bindings strictly below
+1,500,000 bytes, with existing bounded response/date/Int/version gates. Unsupported,
+corrupt or oversized legacy inputs fail closed before writes; no partial reconcile.
+All own cohorts can grow without a domain cap and full operations can hit native
+time/DB limits and fail atomically. Live custom SQLite 0013 retention/sealing/
+append-only trigger/CHECK installation is unknown; generated Drizzle omits them.
+The helper directly preserves these invariants without any schema installation
+or live DDL claim. The pre-existing Mein Lernweg/Journey, native overview,
+Admin Pathway definitions, course rewards and all other APIs/schema/UI stay intact.
+
+At most four snapshots/four batches. Only own first-preguard SQL-qualified
+rollback plus genuinely changed freshly authorized complete snapshot permits
+retry; final proved conflict is 409 with no fifth read. Bounded whole-cause-chain
+deny-first classification excludes history/UUID/trigger P2004, any constraint/FK,
+BUSY/locked, CAS/endguard, transport/unknown commit and successful-result decode.
+Unknown commit outranks nested domain markers; no readback-success inference.
+One first-primary handle has an initial primary snapshot, then session consistency;
+later SELECTs are not separately forced primary. Atomic preguard revalidates all
+consumed facts. No request receipt/client epoch is added: delayed POST can rejoin
+and delayed DELETE opt out a currently active row. Badge-only stateVersion does
+not provide client freshness or ABA protection.
+
+Independent full aggregate counterpass bounds all seven unique SQL statements:
+15,123 maximum UTF-8 SQL bytes, highest bind slot six, arity three, snapshot/final
+columns 29/30, budget-implied transport rows at most 292 including context.
+All syntactic branches, including unreachable combinations, are bounded to
+2/4/4/6/4/6/6/8 batch statements. At most 36 helper or 38 including unchanged auth
+source submissions is a conservative bound, not runtime/billing/latency cost.
+V1 was blocked; final V2 corrects snapshot-before-collision CASE priority, two
+type-only row casts and the source-proven zero-course first/rejoin generic 500.
+No new retry class or two-to-four course cap. Exact V2 source GO, independent full
+aggregate counterpass, production types/build and static artifact/archive passed.
+Deployment succeeded on 18 October 2026 at 04:15:46 UTC. Bounded published
+04:16:04/08 UTC session reload and observed Lernpfade navigation retained empty
+Space/Pathway overviews without visible error. No Join/Leave/badge/reward/fixture
+or data action occurred. Positive first/rejoin/leave/same-state/cross-path badge/
+history/availability/role/test/race/version/rollback/privacy acceptance remains
+open. No local App/SQL/function/date/crypto tests, new CI or browser work by this
+backup. The curated user roadmap records v62 as delivered with those QA gates
+open, preserving Admin definition callback scope and prior approved facts;
+README scope/setup/gallery bytes stay unchanged.
 
 ## Keeping the branches separate
 
