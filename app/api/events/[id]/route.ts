@@ -10,7 +10,8 @@ import { sanitizeRichHtmlServer, sanitizeTextServer } from '@/lib/server/sanitiz
 import { generateICS } from '@/lib/icsGenerator';
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
 import { parseEventCapacity, ParticipationError, participationTransaction } from '@/lib/server/participation';
-import { lockEventParticipation, promoteEventWaitlist, requireEventAccount } from '@/lib/server/event-participation';
+import { lockEventParticipation, requireEventAccount } from '@/lib/server/event-participation';
+import { updateD1Event } from '@/lib/server/d1-event-update';
 
 export async function GET(
   request: Request,
@@ -66,30 +67,16 @@ export async function PUT(
 
     const { start: eventStartDateTime, end: eventEndDateTime } = parseEventSchedule({ date, startTime, endTime, timezone });
 
-    const updatedEvent = await participationTransaction(async tx => {
-      await requireEventAccount(tx, session.user.id, true);
-      const event = await lockEventParticipation(tx, params.id);
-      const capacity = maxAttendees === undefined ? event.maxAttendees : maxAttendees;
-      if (capacity !== null) {
-        const registeredCount = await tx.eventAttendee.count({ where: { eventId: params.id, status: { not: 'CANCELLED' } } });
-        if (registeredCount > capacity) throw new ParticipationError('Capacity is below current registrations', 409);
-      }
-      const updated = await tx.event.update({
-        where: { id: params.id },
-        data: {
-          title,
-          date: eventStartDateTime.toUTC().toJSDate(),
-          description,
-          location,
-          startTime: eventStartDateTime.toFormat('HH:mm'),
-          endTime: eventEndDateTime.toFormat('HH:mm'),
-          category,
-          timezone,
-          ...(maxAttendees === undefined ? {} : { maxAttendees }),
-        },
-      });
-      await promoteEventWaitlist(tx, updated);
-      return updated;
+    const updatedEvent = await updateD1Event(params.id, session.user.id, {
+      title,
+      date: eventStartDateTime.toUTC().toJSDate(),
+      description,
+      location,
+      startTime: eventStartDateTime.toFormat('HH:mm'),
+      endTime: eventEndDateTime.toFormat('HH:mm'),
+      category,
+      timezone,
+      maxAttendees,
     });
 
     const formattedZonedStartDate = DateTime.fromJSDate(updatedEvent.date, { zone: 'utc' }).setZone(updatedEvent.timezone);

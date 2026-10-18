@@ -9,14 +9,16 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up published Version 70 source
-`19431b7101384f746829bf58c5725bb64b3d69e4`. Version 70 deployed successfully on
-18 October 2026 at 06:26:12 UTC. It partitions the equivalent internal quota
-DateTime GLOB in native PollCreate/Vote into patterns within D1's50-byte limit.
-A targeted Create still returned500/sql-resource, so this source-proven conflict
-is not claimed to be the complete live cause. The precise current provider
-message remains unavailable. Safe v69 diagnostics and positive v68 staged-editor
-QA are retained. Roadmap uses v70; the source map retains v63.
+runtime data. This GitHub snapshot backs up published Version 71 source
+`c6214ec419f1cfdf0f3bd35ef62df175c4021954`. Version 71 deployed successfully on
+18 October 2026 at 06:31:19 UTC. The bounded native Admin Event PUT preserves
+the existing edit contract and complete required waitlist promotion. A targeted
+description edit on the existing own Event saved successfully and persisted
+after reload; schedule, category, Event count and RSVP count stayed unchanged.
+FIFO, limits, permissions, notices and races remain separately unverified.
+PollCreate still returns 500/sql-resource after the v70 source-proven GLOB fix;
+the precise remaining provider failure is unresolved. Positive v68 staged-editor
+QA is retained. Roadmap uses v71; the source map retains v63.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -2145,6 +2147,70 @@ All earlier source and v68 positive editor QA remain preserved. This backup
 changes only the two source paths plus guide/roadmap, retains README/historical
 source map/workflow definitions and writes only cloudflare-sites. No private
 account/Space/request/poll payload data is included.
+
+## Version 71: bounded native Admin Event PUT
+
+Published source: `c6214ec419f1cfdf0f3bd35ef62df175c4021954`.
+Deployment: `appgdep_6ad467a82808819188fe5b3f09abbaaf`, succeeded
+18 October 2026 at 06:31:19 UTC. Three-source aggregate:
+`61db7fb8d01568e05466ef94662e495ba5f54e65b1ab8fa37846c07f65a5ebf2`.
+
+This package adds `lib/server/d1-event-update.ts`, delegates only the existing
+Event PUT callback and appends pure exports after the byte-identical 49,383-byte
+RSVP module. GET/ICS, DELETE, Event collection and existing RSVP function/SQL
+bytes remain unchanged.
+
+- The existing Session-ADMIN 401, 256 KiB body envelope, sanitizer, category
+  fallback, capacity parsing, required fields and Luxon schedule order remain.
+  Current stored Account 401, current ADMIN 403, missing Event 404 and capacity
+  below all non-CANCELLED attendees 409 are rechecked. ATTENDED occupies a seat.
+- Omitted capacity preserves the old value; explicit null or empty string is
+  unlimited. An identical PUT still writes updatedAt and runs required FIFO.
+  The new effective capacity and newly parsed start govern promotion; a single
+  entry clock precedes the complete prefix read, without a later future gate.
+- Full FIFO consumes only the required prefix. Existing active tickets skip
+  without a seat or notice; repeated raw tickets promote an initially inactive
+  user only once. Existing CANCELLED attendee identity is reused, missing
+  attendees get new identities, and only actual promotions receive the original
+  deterministic `event-waitlist-` notice. There is no own join/leave or queue append.
+- One atomic batch uses exact before/after sets and immediate affected-row
+  assertions. The before-attendee cohort survives queue deletion. No prefix
+  chunks, subset success, historical-notice repair or partial response is used.
+- Each attempt creates a fresh first-primary handle for current authority.
+  The second prefix read may be causally consistent replica data; the actual
+  batch preguard authoritatively revalidates all consumed facts before any write.
+  Only a qualified own first-guard rollback plus changed fresh relevant data
+  allows one retry. Unknown commit, transport, constraints, FK, CAS/end guard
+  and malformed success never trigger automatic retry or readback inference.
+  Provider errors crossing into route logging use fixed safe errors without causes.
+- New finite schedule instants use the original Luxon/ISO output contract,
+  without a narrower legacy StoredDate parser. Stored overwritten prose and
+  dates are not new eligibility checks. The response remains the full existing
+  Event DTO with zoned times; no RSVP/private suffix metadata is returned.
+
+Both exact source reviews, final types/build, static artifacts and archive
+checks passed. Fourteen actual SQL texts were independently reconstructed:
+at most 8,629 bytes, 17 bindings, two builtin function arguments and two compound
+arms; no LIKE/GLOB literal. At most two read stages plus 12 batch statements per
+attempt, two attempts and source-derived authentication at most two statements
+give a conservative bound of 30 submitted source statements. This is not a
+measurement of billed/runtime queries. The native two-attempt ceiling is lower
+than the original four-attempt availability allowance.
+
+The local queue/attendee raw-row (200 KB), result (1.2 MB), bind (<1.5 MB),
+manifest (1.4 MB), batch-wire (8 MB) and response ceilings are operational
+fail-closed limits, not new product quotas or verified platform maxima. Event
+prose is not placed under the unrelated queue-row cap. Oversized/ambiguous
+legacy storage and unbounded work reaching a timeout can fail atomically.
+Declared PK/FK/unique constraints and custom triggers/live migrations were not
+inspected; the package makes no new queue AUTOINCREMENT insert.
+
+Targeted published QA at 06:32:24 UTC: an existing own Event description was
+edited once, Save succeeded, and reload preserved the change. Event identity,
+date/time/category, count (one Event) and RSVP count (zero) remained unchanged.
+No FIFO, capacity, ACL, notice or concurrency conclusion follows from this
+simple edit. These positive matrix cases remain open. PollCreate diagnosis and
+the still-callback-based Admin Event DELETE are separate remaining work.
 
 ## Keeping the branches separate
 

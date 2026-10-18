@@ -731,3 +731,10 @@ export async function leaveD1Event(eventId: string, userId: string): Promise<Sta
   const result = await mutate({ eventId, userId, mode: 'leave', allowWaitlist: false, now: new Date().toISOString().replace(/Z$/, '+00:00') });
   return result.state;
 }
+
+// Pure shared FIFO/transport/rollback/result primitives for native admin PUT.
+// Existing RSVP execution and SQL remain unchanged above this export list.
+export {
+  prefixCtes, noticeContent, failure, keys, integer, text, bit, status,
+  jsonBytes, boundedJson, prepare, preparedBatch, sqlRollback, committed,
+};
