@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { getReadableSpace, type SpaceAccess } from '@/lib/server/space-access';
 import { parseSpaceRequestId, SPACE_ID_RE, spaceTransaction, SpaceApiError } from '@/lib/server/space-api';
 import { sanitizeTextServer } from '@/lib/server/sanitize-html';
+import { d1SpacePoll, d1SpacePolls } from '@/lib/server/d1-space-poll-reads';
 
 export const POLL_PAGE_SIZE = 10;
 export const POLL_CHANGE_LIMIT = 100;
@@ -113,25 +114,19 @@ function readCursor(request: Request, spaceId: string): PollCursor | null {
 }
 
 export async function listPolls(spaceId: string, userId: string, request: Request) {
-  return spaceTransaction(async tx => {
-    const access = await accessPolls(spaceId, userId, tx);
-    // Validate cursor after access, so a revoked viewer learns no scope details.
-    const cursor = readCursor(request, spaceId);
-    const rows = await tx.spacePoll.findMany({ where: { spaceId, ...(access.canManage ? {} : { hiddenAt: null }),
-      ...(cursor ? { OR: [{ createdAt: { lt: cursor.createdAt } }, { createdAt: cursor.createdAt, id: { lt: cursor.id } }] } : {}) },
-      select: pollSelect, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: POLL_PAGE_SIZE + 1 });
-    const items = rows.slice(0, POLL_PAGE_SIZE);
-    const last = items[items.length - 1];
-    return { items: await Promise.all(items.map(row => projectPoll(row, userId, access, tx))),
-      nextCursor: rows.length > POLL_PAGE_SIZE ? Buffer.from(JSON.stringify({ v: 1, kind: 'polls', spaceId, id: last.id, createdAt: last.createdAt.toISOString() })).toString('base64url') : null };
-  });
+  let cursor: PollCursor | null = null;
+  let cursorError: unknown;
+  try { cursor = readCursor(request, spaceId); }
+  catch (error) { cursorError = error; }
+  // The protected statement checks live access before revealing cursor errors,
+  // and an invalid cursor suppresses all poll/option projections in SQL.
+  const page = await d1SpacePolls(userId, spaceId, cursor, cursorError === undefined);
+  if (cursorError !== undefined) throw cursorError;
+  return page;
 }
 
 export async function readPoll(spaceId: string, id: string, userId: string) {
-  return spaceTransaction(async tx => {
-    const access = await accessPolls(spaceId, userId, tx);
-    return projectPoll(await findPoll(spaceId, id, access, tx), userId, access, tx);
-  });
+  return d1SpacePoll(userId, spaceId, id);
 }
 
 /** Unique races restart the complete authorization snapshot, never a partial write. */

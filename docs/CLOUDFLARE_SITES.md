@@ -9,13 +9,12 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up the published Version 44 source
-`43ae9cc8c9136019917c4a652528949a9db64fb7`. Version 44 deployed successfully on
-18 October 2026 at 00:12:14 UTC. Member-directory query/filter/sort URL-state
-source is live. Bounded profile-return, reload and keyboard-reset acceptance
-passed; existing profile/member data and mutation behavior are unchanged.
-A separate documentation-only update refreshes the curated roadmap to its
-18 October 2026, 00:15 UTC Version 44 base, with no Sites source change.
+runtime data. This GitHub snapshot backs up the published Version 45 source
+`ac2b32f92be70c3794eb8633828702162528dfc6`. Version 45 deployed successfully on
+18 October 2026 at 00:24:44 UTC. Native D1 poll list/detail GET source is live;
+positive poll acceptance is unverified because no genuine poll is reachable.
+A directory/session read is not a poll test. Poll mutations remain unported.
+The separately curated roadmap retains its 18 October 2026, 00:15 UTC v44 base.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -76,8 +75,8 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 44 source includes the existing bounded ports below,
-inherited from Version 43, plus the member-directory URL-state source described
+The published Version 45 source includes the existing bounded ports below,
+inherited from Version 44, plus the native D1 poll list/detail GET source described
 below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
@@ -170,6 +169,9 @@ all-page visual coverage.
 - Member-directory query, skill/role filters and sort/order in local URLs, with
   native history and reset focus; profile/inspector and layout stay local,
   bounded profile-return/reload/reset acceptance passed
+- Native D1 protected poll list/detail GET with caller-only own vote, aggregate
+  option counts, typed bounded projections and 10-plus-1 keyset paging; positive
+  poll/privacy/paging acceptance unverified, Create/Vote/Moderate remain unported
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -884,6 +886,38 @@ roadmap is product documentation, not another Sites release or full runtime
 acceptance. It retains explicit write/race, private-mission/access and metadata
 blocker limits. No build, functional test or new GitHub CI run accompanies this
 documentation-only update.
+
+## Version 45 native D1 poll list/detail reads
+
+Version 45 changes two backend source files. Existing poll list/detail reads
+delegate to one protected primary D1 SELECT per request, retaining stored access
+and hidden-content boundaries, caller-only own vote, aggregate option counts,
+current DTOs and 10-plus-1 keyset pagination. Typed key/poll/option rows have
+pretransport byte budgets and strict date/key/projection checks; malformed
+cursors cannot expose content before current access is checked.
+
+No voter identities or durable receipts are selected or exposed. Aggregate
+changes in small groups can still permit inference; this is not an anonymity
+guarantee. Existing API routes, cursor parser, mutation helpers and shared
+access/read helpers are unchanged. Poll Create, Vote and Moderate still use
+legacy callback transactions and remain outside this read-only port.
+
+Independent exact-path source review, production typechecking/build and static
+artifact/archive checks passed. Deployment succeeded on 18 October 2026 at
+00:24:44 UTC. At 00:25 UTC a bounded directory/session read showed zero Spaces
+without alerts or horizontal overflow. No poll was reachable: this is explicitly
+not positive poll GET acceptance. Existing genuine poll list/detail, private,
+hidden/revocation, caller vote/count and pagination behavior remain unverified
+live. No Space, poll or vote was created to manufacture a passing fixture; no
+local SQL/application/functional execution was performed for this backup.
+
+The curated roadmap remains byte-identical to the separately reviewed v44
+edition dated 18 October 2026, 00:15 UTC. Its v44 poll-read source blocker is
+historical: v45 ports list/detail GET only, not poll creation, voting, moderation,
+or a complete Space/mission flow. Other roadmap blockers and bounded live-QA
+limits remain separate; no updated application flow is inferred from the
+retained roadmap date/base. No private content, voter/account identifiers or
+screenshots are included.
 
 ## Keeping the branches separate
 
