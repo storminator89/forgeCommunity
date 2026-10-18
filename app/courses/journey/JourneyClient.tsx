@@ -17,6 +17,7 @@ import { SparkStaticFigure } from '@/components/spark-entry';
 import { sparkVisibilitySnapshot as mascotSnapshot, useSparkVisibility } from '@/hooks/useSparkVisibility';
 import { eligibleJourneyCourses, projectJourney, type JourneyContent, type JourneyCourse, type JourneyLeaf } from './journey-progress';
 import { JourneyTrail } from './JourneyTrail';
+import { JourneyPracticeReturnCard } from './JourneyPracticeReturnCard';
 import { groupJourneyTrail, readJourneyCourses, readJourneyDetail, type JourneyProgress } from './journey-trail-data';
 import { journeyCourseHref, resolveJourneyCourseId } from './journey-course-url';
 
@@ -96,10 +97,10 @@ export default function JourneyClient() {
   </div></AppShell>;
   // A role refresh must unmount private learner state before the next account
   // or staff role can render any previous journey response.
-  return <ScopedJourney key={JSON.stringify([session.user.id, session.user.role])} />;
+  return <ScopedJourney key={JSON.stringify([session.user.id, session.user.role])} signInHref={signInHref} />;
 }
 
-function ScopedJourney() {
+function ScopedJourney({ signInHref }: { signInHref: string }) {
   const [courses, setCourses] = useState<JourneyCourse[] | null>(null);
   const [courseError, setCourseError] = useState(false);
   const [courseRetry, setCourseRetry] = useState(0);
@@ -215,6 +216,11 @@ function ScopedJourney() {
   const retryCourses = () => { detailSequence.current++; setCelebration(null); setCourses(null); setCourseError(false); setDetail({ kind: 'idle' }); setCourseRetry(value => value + 1); };
   const retryDetail = () => { if (!selectedId) return; detailSequence.current++; setCelebration(null); setDetail({ kind: 'loading', courseId: selectedId }); setDetailRetry(value => value + 1); };
 
+  const isCurrentSelection = useCallback(() => window.location.pathname === '/courses/journey' &&
+    resolveJourneyCourseId(window.location.search, courses ?? []) === selectedId, [courses, selectedId]);
+  const refreshPracticeCourse = () => { document.getElementById('journey-course-selection')?.focus(); retryDetail(); };
+  const refreshPracticeCourses = () => { document.getElementById('page-content')?.focus(); retryCourses(); };
+
   const selectedCourse = courses?.find(course => course.id === selectedId);
   const currentDetail = detail.kind !== 'idle' && detail.courseId === selectedId ? detail : null;
   const detailPending = Boolean(selectedId && (!currentDetail || currentDetail.kind === 'loading'));
@@ -258,7 +264,7 @@ function ScopedJourney() {
             <div className="mt-5 flex justify-center"><Button asChild className="h-auto min-h-11 max-w-full whitespace-normal py-2"><Link href="/courses">Kurse entdecken</Link></Button></div>
           </section>}
           {courses && courses.length > 0 && <div className="mt-3 space-y-4">
-            <section aria-label="Deine angemeldeten Kurse" className="fc-section-card flex min-w-0 flex-wrap items-center justify-between gap-3">
+            <section id="journey-course-selection" tabIndex={-1} aria-label="Deine angemeldeten Kurse" className="fc-section-card flex min-w-0 flex-wrap items-center justify-between gap-3">
               {courses.length > 1 ? <div className="min-w-0 flex-1 basis-64">
                 <label htmlFor="journey-course" className="mb-1.5 block text-sm font-medium">Kurs auswählen <span className="font-normal text-muted-foreground">({courses.length})</span></label>
                 <select id="journey-course" value={selectedId ?? ''} onChange={event => selectCourse(event.target.value)} className="h-11 w-full min-w-0 rounded-xl border bg-background px-3 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">{courses.map(course => <option key={course.id} value={course.id}>{course.title}</option>)}</select>
@@ -285,6 +291,10 @@ function ScopedJourney() {
               </div>
               <Button asChild variant={next && !complete ? 'default' : 'outline'} className="mt-4 w-full sm:w-auto"><Link href={next && !complete ? `${readerHref}?content=${encodeURIComponent(next.id)}` : awaiting && !complete ? `${readerHref}?content=${encodeURIComponent(awaiting.id)}` : readerHref}>{next && !complete ? 'Lernschritt öffnen' : awaiting && !complete ? 'Abgabe ansehen' : 'Kurs ansehen'}</Link></Button>
             </section>}
+            {currentDetail?.kind === 'ready' && selectedCourse && projection && <JourneyPracticeReturnCard
+              key={JSON.stringify([selectedCourse.id, currentDetail.progress.publicationId])}
+              courseId={selectedCourse.id} publicationId={currentDetail.progress.publicationId} signInHref={signInHref}
+              isCurrentSelection={isCurrentSelection} onRefreshCourse={refreshPracticeCourse} onRefreshCourses={refreshPracticeCourses} />}
           </div>}
 
           {mascotVisible && <div className="mt-3 border-b pb-4">
