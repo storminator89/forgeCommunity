@@ -1,10 +1,11 @@
 # Google and OpenID Connect login: Sites
 
-Status (2026-10-18): OAuth application code is prepared but remains inactive.
+Status (2026-10-18): Google/OIDC sign-in remains configuration-gated and inactive.
 No OAuth client, secret, ready flag or provider grant was configured. A separately
 authorized migration-only Sites publication succeeded as version 76 using the
-unchanged v75 application code; see the record below. OAuth still requires its
-reviewed application publication, full migration verification and private settings.
+unchanged v75 application code; see the record below. Google is visible as a
+disabled button labelled "Noch nicht eingerichtet" until configuration is complete. OAuth still requires full migration verification and
+private settings before sign-in can start.
 
 ## Two independent deployment stacks
 
@@ -43,9 +44,15 @@ the other. The Main preparation has its own version of this guide.
 
 ## Private Sites configuration
 
-Use the existing deployment's private environment configuration. This change does
-not create or alter hosting, security settings or credentials. `.dev.vars.example`
-documents the Worker binding names; it contains no real secret.
+There is no Google/OIDC setup form in ForgeCommunity's admin area. Open the
+Site in ChatGPT's Sites management, select its Settings, then the private secrets
+and environment-variable configuration. The exact control label can vary by
+client; use Sites runtime configuration, not a public app setting or a repository
+secret. `.dev.vars.example` documents the Worker binding names without secrets.
+[Official Sites settings guidance](https://help.openai.com/en/articles/20001339-creating-and-using-chatgpt-sites).
+After explicitly authorized configuration, publish the saved application version
+to apply its environment revision. Registering an app or displaying a button does
+not itself configure credentials or authorize a provider grant.
 
 The canonical DDL is `docs/migrations/SITES_OAUTH_TRANSACTIONS.sql`. Its three
 statements were added to `drizzle/0001_oauth_login_transactions.sql` with Drizzle
@@ -58,7 +65,10 @@ constraints, both index definitions and applied-migration bookkeeping.
 
 Only after that verified step set `OAUTH_TRANSACTION_MIGRATION_READY=true`. The
 runtime additionally performs a read-only table-shape check. A missing table,
-missing columns or an absent/false flag keeps all OAuth routes and buttons off.
+missing columns or an absent/false flag keeps OAuth initiation disabled. The
+Google button remains visible and disabled with "Noch nicht eingerichtet"; an
+initial provider check shows "Verfügbarkeit wird geprüft …". A failed check shows
+"Momentan nicht verfügbar" and leaves it disabled. The optional generic OIDC button appears only when configured.
 Registering a Google client alone is therefore insufficient on an unmigrated Site.
 
 Also required for Google:
@@ -70,7 +80,7 @@ Also required for Google:
 - `GOOGLE_CLIENT_SECRET`: Web application client secret
 
 The base URL must be an exact HTTPS origin. Provider discovery must also work
-before a login can start. Partial/invalid configuration exposes no provider.
+before a login can start. Partial/invalid configuration enables no provider.
 Secrets are read only on the server; the provider-list endpoint returns IDs and
 display names only. No `NEXT_PUBLIC_*` variable is used for OAuth credentials.
 
@@ -210,7 +220,7 @@ Real OAuth success cannot be claimed before the owner registers a client and
 enters credentials. After reviewed publication, functional acceptance belongs on
 the published Sites URL with an owner-approved legitimate test account.
 
-Cover configured/partial/missing provider visibility, password regression,
+Cover configured/partial/missing provider enabled states, password regression,
 Google/OIDC success, denial, expired or modified state/nonce, repeated callback,
 back/cancel/retry, email collision, issuer mismatch, unverified email, concurrent
 new-account creation, and unchanged account roles/session behavior. No provider

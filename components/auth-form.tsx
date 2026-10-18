@@ -24,23 +24,33 @@ export function AuthForm({ mode, callbackUrl = '/community', errorCode }: Props)
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(errorCode ? (oauthErrors[errorCode] || 'Die Anmeldung konnte nicht abgeschlossen werden.') : '');
   const [providers, setProviders] = useState<LoginProvider[]>([]);
+  const [providersStatus, setProvidersStatus] = useState<'loading' | 'loaded' | 'failed'>('loading');
+  const google = providers.find(provider => provider.id === 'google');
   const destination = callbackUrl.length <= 1024 && /^\/(?![\\/])[^\\\u0000-\u001f\u007f]*$/.test(callbackUrl) ? callbackUrl : '/community';
 
   useEffect(() => {
     const controller = new AbortController();
     fetch('/api/auth/providers', { cache: 'no-store', credentials: 'same-origin', signal: controller.signal })
-      .then(async response => response.ok ? response.json() : null)
+      .then(async response => {
+        if (!response.ok) throw new Error('Provider list unavailable');
+        return response.json();
+      })
       .then(result => {
-        if (!controller.signal.aborted && Array.isArray(result?.providers)) {
+        if (controller.signal.aborted) return;
+        if (!Array.isArray(result?.providers)) throw new Error('Provider list unavailable');
+        {
           setProviders(result.providers.filter((item: LoginProvider) =>
             (item?.id === 'google' || item?.id === 'oidc') && typeof item.name === 'string' && item.name.length <= 60));
+          setProvidersStatus('loaded');
         }
-      }).catch(() => undefined);
+      }).catch(() => {
+        if (!controller.signal.aborted) setProvidersStatus('failed');
+      });
     return () => controller.abort();
   }, []);
 
   async function oauthSignIn(provider: LoginProvider) {
-    if (busy) return;
+    if (busy || !providers.some(item => item.id === provider.id)) return;
     setError('');
     setBusy(true);
     try {
@@ -120,10 +130,12 @@ export function AuthForm({ mode, callbackUrl = '/community', errorCode }: Props)
               {error && <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 px-3.5 py-3 text-sm text-destructive">{error}</p>}
               <Button type="submit" size="lg" disabled={busy} className="mt-2 w-full">{busy ? 'Einen Moment …' : registering ? 'Kostenlos registrieren' : 'Anmelden'}<ArrowRight className="h-4 w-4" /></Button>
             </form>
-            {providers.length > 0 && <div className="mt-5 space-y-3">
+            <div className="mt-5 space-y-3">
               <div className="flex items-center gap-3 text-xs text-muted-foreground"><span className="h-px flex-1 bg-border" />oder<span className="h-px flex-1 bg-border" /></div>
-              {providers.map(provider => <Button key={provider.id} type="button" variant="outline" className="h-11 w-full" disabled={busy} onClick={() => oauthSignIn(provider)}>Mit {provider.name} anmelden</Button>)}
-            </div>}
+              <Button type="button" variant="outline" className="h-11 w-full" disabled={busy || !google} aria-busy={providersStatus === 'loading'} aria-describedby={!google ? 'google-login-status' : undefined} onClick={google ? () => void oauthSignIn(google) : undefined}>Mit Google anmelden</Button>
+              {!google && <p id="google-login-status" role="status" className="text-center text-xs leading-5 text-muted-foreground">{providersStatus === 'loading' ? 'Verfügbarkeit wird geprüft …' : providersStatus === 'failed' ? 'Momentan nicht verfügbar' : 'Noch nicht eingerichtet'}</p>}
+              {providers.filter(provider => provider.id !== 'google').map(provider => <Button key={provider.id} type="button" variant="outline" className="h-11 w-full" disabled={busy} onClick={() => oauthSignIn(provider)}>Mit {provider.name} anmelden</Button>)}
+            </div>
             <p className="mt-6 text-center text-sm text-muted-foreground">{registering ? 'Schon ein Konto?' : 'Noch kein Konto?'}{' '}
               <Link href={registering ? '/login' : '/register'} className="font-semibold text-primary underline-offset-4 hover:underline">{registering ? 'Jetzt anmelden' : 'Jetzt registrieren'}</Link>
             </p>

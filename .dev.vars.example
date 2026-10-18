@@ -3,7 +3,7 @@
 # Credentials alone never activate login. Keep this false until the owner has
 # separately applied and verified docs/migrations/SITES_OAUTH_TRANSACTIONS.sql.
 OAUTH_TRANSACTION_MIGRATION_READY="false"
-# These four values are also needed for Google. Empty values keep it hidden.
+# These four values are also needed for Google. Empty values keep sign-in disabled.
 OAUTH_BASE_URL="https://forge-community.dsgvision.chatgpt.site"
 OAUTH_STATE_SECRET=""
 GOOGLE_CLIENT_ID=""
