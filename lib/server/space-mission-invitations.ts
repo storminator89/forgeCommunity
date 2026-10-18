@@ -3,6 +3,7 @@ import 'server-only';
 import { Prisma } from '@/generated/prisma/client';
 import { reportInvitationFailure } from '@/lib/server/space-mission-invitation-errors';
 import { setD1InvitationPreference } from '@/lib/server/d1-space-mission-invitation-preference';
+import { sendD1MissionInvitation } from '@/lib/server/d1-space-mission-invitation-send';
 import { assertD1MissionCandidateAuthority, listD1MissionInvitations, readD1InvitationPreference, readD1MissionCandidateSnapshot, readD1MissionInvitation, resolveD1MissionInvitationTargets } from '@/lib/server/d1-space-mission-invitation-reads';
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { DecideMissionInvitation, MissionInvitationAcknowledgment, MissionInvitationCandidates, MissionInvitationDetail,
@@ -201,51 +202,11 @@ async function latchInvalidIncoming(recipientId: string, tx: Prisma.TransactionC
 
 export async function sendMissionInvitation(spaceId: string, missionId: string, userId: string,
   input: ReturnType<typeof parseInvitationSend>): Promise<MissionInvitationAcknowledgment> {
-  const acknowledgment = { requestId: input.requestId, processed: true } as const;
-  return invitationTransaction(async tx => {
-    const sender = await senderAuthority(spaceId, missionId, userId, tx);
-    if (sender.consent.epoch !== input.senderEpoch || sender.accessEpoch !== input.senderAccessEpoch) throw invitationConflict();
-    const previous = await tx.spaceMissionInvitationRequest.findUnique({ where: { missionId_senderId_requestId: { missionId, senderId: userId, requestId: input.requestId } } });
-    if (previous) {
-      if (previous.payloadDigest !== input.payloadDigest) throw new SpaceApiError('Anfrage-ID wurde bereits verwendet', 409);
-      return acknowledgment;
-    }
-    const requestCount = await tx.spaceMissionInvitationRequest.count({ where: { missionId, senderId: userId } });
-    if (requestCount >= SENDER_LIMIT || sender.mission.invitationAttemptCount >= MISSION_LIMIT) return acknowledgment;
-    const reserved = await tx.spaceMission.updateMany({ where: { id: missionId, closedAt: null,
-      invitationAttemptCount: sender.mission.invitationAttemptCount }, data: { invitationAttemptCount: { increment: 1 } } });
-    if (reserved.count !== 1) throw invitationConflict();
-    await tx.spaceMissionInvitationRequest.create({ data: { missionId, senderId: userId, requestId: input.requestId, payloadDigest: input.payloadDigest } });
-    // Fail closed uniformly before any target-dependent path if signing is unavailable.
+  return sendD1MissionInvitation(spaceId, missionId, userId, input, () => {
+    // This trusted local closure keeps the configured key out of SQL, snapshots
+    // and DTOs. The native helper asks for it only after replay/cap decisions.
     const signingSecret = secret();
-    // Resolve live same-Space target BEFORE any FK-backed target fence writes.
-    const target = input.recipientId !== userId ? await tx.user.findFirst({ where: { id: input.recipientId, role: 'USER',
-      spaceMemberships: { some: { spaceId } } }, select: { id: true } }) : null;
-    if (!target) return acknowledgment;
-    const [setting, accessEpoch, consent] = await Promise.all([invitationSetting(target.id, tx), invitationAccess(missionId, target.id, tx),
-      tx.spaceMissionParticipation.findUnique({ where: { missionId_userId: { missionId, userId: target.id } } })]);
-    await fenceInvitationSetting(sender.setting, tx);
-    await fenceInvitationAccess(missionId, userId, sender.accessEpoch, tx);
-    await fenceInvitationSetting(setting, tx);
-    await fenceInvitationAccess(missionId, target.id, accessEpoch, tx);
-    const now = new Date();
-    const valid = tokenMatches({ missionId, senderId: userId, recipientId: target.id, senderEpoch: sender.consent.epoch,
-      senderAccessEpoch: sender.accessEpoch, senderAccountEpoch: sender.setting.accountEpoch, recipientAccessEpoch: accessEpoch,
-      recipientAccountEpoch: setting.accountEpoch, recipientSettingRevision: setting.revision, recipientEpoch: consent?.epoch ?? 0,
-      validUntil: input.selection.validUntil, nonce: input.selection.nonce }, input.selection.token, now, signingSecret);
-    if (!valid || !setting.enabled || consent && !consent.optedOutAt) return acknowledgment;
-    if (await tx.spaceMissionInvitation.findUnique({ where: { missionId_recipientId: { missionId, recipientId: target.id } }, select: { id: true } })) return acknowledgment;
-    const pendingCount = await latchInvalidIncoming(target.id, tx);
-    const count = await tx.spaceMissionParticipation.count({ where: { missionId, optedOutAt: null } });
-    if (pendingCount >= PENDING_LIMIT || count >= MISSION_PARTICIPANT_LIMIT) return acknowledgment;
-    const invitation = await tx.spaceMissionInvitation.create({ data: { missionId, recipientId: target.id, senderId: userId,
-      state: 'PENDING', revision: 1, createdAt: now, expiresAt: new Date(now.getTime() + INVITATION_LIFETIME),
-      senderEpoch: sender.consent.epoch, senderAccessEpoch: sender.accessEpoch, senderAccountEpoch: sender.setting.accountEpoch,
-      recipientAccessEpoch: accessEpoch, recipientAccountEpoch: setting.accountEpoch, recipientSettingRevision: setting.revision,
-      recipientEpoch: consent?.epoch ?? 0 }, select: { id: true } });
-    await tx.notification.create({ data: { userId: target.id, type: 'SYSTEM', targetType: INVITATION_NOTICE_TYPE,
-      targetId: invitation.id, content: 'Du hast eine Einladung zu einer Space-Mission.' } });
-    return acknowledgment;
+    return (tuple, now) => tokenMatches(tuple, input.selection.token, now, signingSecret);
   });
 }
 

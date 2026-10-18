@@ -9,12 +9,12 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up the published Version 58 source
-`ed16238f2980afd9aa5a708b637233c1de22273e`. Version 58 deployed successfully on
-18 October 2026 at 02:45:47 UTC. Native D1 invitation preference toggle and
-incoming-pending cleanup source is live; positive preference/noop/revision/
-overflow/cleanup/privacy/race acceptance remains unverified. Other signing/
-write contracts remain separate; the curated roadmap retains its dated v44 base.
+runtime data. This GitHub snapshot backs up the published Version 59 source
+`a4bad7f28bfdb78dcac9bbff962bc622e0b5e248`. Version 59 deployed successfully on
+18 October 2026 at 03:12:45 UTC. Native D1 invitation Send source, final V2, is
+live; positive Send/replay/suppression/cleanup/clock/quota/privacy/race acceptance
+remains unverified. Decision/acceptance and other callback flows remain separate.
+The curated roadmap retains its dated v44 base.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -75,8 +75,8 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 58 source includes the existing bounded ports below,
-inherited from Version 57, plus native D1 invitation preference source described
+The published Version 59 source includes the existing bounded ports below,
+inherited from Version 58, plus native D1 invitation Send source described
 below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
@@ -198,6 +198,8 @@ all-page visual coverage.
   and retained signing contract; positive candidate/LIKE/privacy/latency QA open
 - Native D1 invitation preference toggle and complete incoming Pending/Notice
   cleanup; positive preference/noop/overflow/privacy/race acceptance remains open
+- Native D1 invitation Send with receipt/suppression/clock/privacy fences and
+  atomic incoming cleanup/delivery; positive published acceptance remains open
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -220,7 +222,8 @@ Version 51 ports normal self-join/leave and scoped invitation settlement;
 Version 52 ports own contribution Add/Withdraw; Version 53 ports ADMIN
 contribution moderation; Version 54 ports own Mission bookmark PUT; Version 55
 ports PRIVATE member Add/Remove with coupled revocation.
-Positive Space/Mission mutation acceptance remains open. Invitation creation/
+Version 59 ports invitation Send source, with its positive live gates open.
+Positive Space/Mission mutation acceptance remains open. Invitation decisions/
 acceptance, account/role changes and other mission mutation flows remain
 outside these ports. Other workflows may still use Prisma
 transaction patterns that D1 does not support. Do not infer full write-flow
@@ -1334,6 +1337,49 @@ opt-in/out, invitation, token or other production data action was performed.
 Positive preference/noop/revision/overflow/all-Mission-cleanup/privacy/race
 acceptance remains open. No local App/SQL/crypto/functional execution or new CI
 was used. The dated v44 roadmap remains byte-identical; full-flow QA is not implied.
+
+## Version 59 bounded native D1 invitation Send, final V2
+
+Version 59 changes only a dedicated native Send helper and sendMissionInvitation
+import/body delegation, two backend files. Current USER/private actual member/
+open/active sender consent and exact own input fences precede receipt replay;
+matching digest replay precedes caps, key and target. Fresh work reserves an
+attempt and target-free receipt. The existing trusted verifier closure keeps
+key material out of SQL/snapshots/DTOs and is requested after replay/cap gates,
+before target branches. Invalid targets remain masked; valid targets receive
+four materialized/no-op-CAS fences. Existing MAC tuple and uniform ACK remain.
+
+Eligible delivery performs complete cross-Mission incoming expiry/revocation
+cleanup, asserts matching SYSTEM notices absent before ten-field scrubbing,
+then applies caps and atomically creates the seven-day Invitation plus one
+generic Notice. Sampling classifications are revalidated at the first atomic
+preguard; no second cleanup/selection clock is imposed at commit. Numeric zero
+and supported absolute-date/fraction/offset cases retain their source contract.
+One first-primary session does not mean each later SELECT independently forces
+primary; the atomic preguard revalidates every consumed stage fact.
+
+Only qualified snapshot/clock/applicable scoped-first-create SQL rollback plus
+changed fresh authorized facts may recover. Request UNIQUE enters sticky
+receipt-only fallback. Generated clocks/IDs do not manufacture database-change
+evidence. Unknown commits, unrelated constraints/CAS/end-invariant/transport or
+malformed successful results never retry or read back as success. Up to two
+5/10/14/18-statement batches and staged reads give 45 helper/47 including auth
+source submissions, not measured runtime/billing costs. Full set-based cleanup
+is uncapped and may fail the entire batch under native resource limits.
+
+V1 typecheck TS2367 found an unreachable redundant ACK branch; V2 removes it
+with every SQL byte unchanged. Independent final V2 source review plus separate
+Privacy/Clock/Retry review passed, as did final production types/build and
+static artifact/archive checks. Native reads/candidates/preference, signing/
+secret helpers, Decide/acceptance/revocation, API/parser/schema/UI remain
+byte-identical. Deployment succeeded on 18 October 2026 at 03:12:45 UTC. The
+bounded 03:13 UTC directory/session and empty-notification read showed no alerts;
+Read all was disabled. This supplies no positive delivery/cleanup/token proof.
+No live
+invitation, token, secret or other data action was performed. Positive Send/
+replay/suppression/cleanup/clock/quota/overflow/privacy/race acceptance remains
+open. No local App/SQL/crypto/functional execution or new CI was used. The dated
+v44 roadmap remains byte-identical; source reviews/build are not runtime proof.
 
 ## Keeping the branches separate
 
