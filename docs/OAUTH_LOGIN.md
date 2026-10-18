@@ -1,9 +1,10 @@
 # Google and OpenID Connect login: Sites
 
-Status: implementation preparation. No OAuth client was registered, no secret was
-set, no provider was enabled, and no live database migration or provider grant was
-performed. A narrow SQL migration is prepared separately. Login remains hidden
-until that migration is verified and a complete private configuration is present.
+Status (2026-10-18): OAuth application code is prepared but remains inactive.
+No OAuth client, secret, ready flag or provider grant was configured. A separately
+authorized migration-only Sites publication succeeded as version 76 using the
+unchanged v75 application code; see the record below. OAuth still requires its
+reviewed application publication, full migration verification and private settings.
 
 ## Two independent deployment stacks
 
@@ -46,12 +47,14 @@ Use the existing deployment's private environment configuration. This change doe
 not create or alter hosting, security settings or credentials. `.dev.vars.example`
 documents the Worker binding names; it contains no real secret.
 
-Before activation, an authorized deployment operator must separately review,
-apply and verify `docs/migrations/SITES_OAUTH_TRANSACTIONS.sql` against the intended
-existing Sites D1 database. This file deliberately sits outside automatic drizzle
-migrations. Merely publishing the inactive code does not apply it. It creates only
-the transient Sites-owned transaction table and its indexes; it does not alter
-User, Account, Session, roles or Main's Prisma schema. Do not apply it to Main.
+The canonical DDL is `docs/migrations/SITES_OAUTH_TRANSACTIONS.sql`. Its three
+statements were added to `drizzle/0001_oauth_login_transactions.sql` with Drizzle
+statement separators and an appended journal entry for the authorized v76 publish.
+Preserve this applied migration history; do not manually replay the preparation
+file or rewrite existing entries. It only adds the transient Sites-owned table
+and indexes, without changing User, Account, Session, roles or Main's Prisma schema.
+Do not apply it to Main. Before activation, separately verify the live CHECK/PK
+constraints, both index definitions and applied-migration bookkeeping.
 
 Only after that verified step set `OAUTH_TRANSACTION_MIGRATION_READY=true`. The
 runtime additionally performs a read-only table-shape check. A missing table,
@@ -180,6 +183,24 @@ its stable `sub`. Do not manually rewrite these account IDs.
   no verifier, nonce, OAuth code, provider token or client secret. Expired rows are
   removed in bounded batches when a new attempt starts; there is no background
   grant, new persistent credential or recurring task.
+
+## Migration-only publication record
+
+- Published Sites version 76 on 2026-10-18 at 15:28 UTC, source
+  `ba1996495677302ec2abc81c0d06bb6b2e043f86`, directly based on v75 source
+  `4789bd7ff74a29b7e1e097b95e4c4bac4a469c2c`.
+- Only the new migration and journal append changed. Application code, dependency
+  lockfile, public audience, DB/BUCKET bindings and environment revision 2 remained
+  unchanged. No OAuth application code was included in that publication.
+- Live database inspection confirmed `OAuthLoginTransaction` with exactly nine
+  columns (`id`, `bindingHash`, `browserBindingHash`, `provider`, `createdAt`,
+  `expiresAt`, `consumedAt`, `finalizedAt`, `issuedSessionId`) and zero rows.
+- CHECK/PK constraints, index definitions and the ledger were not separately read
+  back. Table/column presence is not full activation verification. Google/OIDC
+  login remains disabled; no provider credentials, ready flag or grant was set.
+- If a future migration fails or has an uncertain outcome, stop and reconcile;
+  do not blindly retry, suppress collisions with IF NOT EXISTS, reset the ledger
+  or rewrite history. A failed publication can leave database additions applied.
 
 ## Review and verification before activation
 

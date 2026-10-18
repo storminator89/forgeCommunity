@@ -8,6 +8,13 @@
       "when": 1792195200000,
       "tag": "0000_forgecommunity",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792337049585,
+      "tag": "0001_oauth_login_transactions",
+      "breakpoints": true
     }
   ]
 }
