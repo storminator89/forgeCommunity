@@ -9,12 +9,12 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up the published Version 45 source
-`ac2b32f92be70c3794eb8633828702162528dfc6`. Version 45 deployed successfully on
-18 October 2026 at 00:24:44 UTC. Native D1 poll list/detail GET source is live;
-positive poll acceptance is unverified because no genuine poll is reachable.
-A directory/session read is not a poll test. Poll mutations remain unported.
-The separately curated roadmap retains its 18 October 2026, 00:15 UTC v44 base.
+runtime data. This GitHub snapshot backs up the published Version 46 source
+`d8777bf2255d63e6e08a31856c44f6b073a72a62`. Version 46 deployed successfully on
+18 October 2026 at 00:36:17 UTC. Native D1 poll creation source is live; positive
+Create/replay/quota/race acceptance remains unverified and no poll was created.
+Native reads are unchanged; Vote/Moderate remain unported. The curated roadmap
+retains its 18 October 2026, 00:15 UTC v44 base.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -75,8 +75,8 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 45 source includes the existing bounded ports below,
-inherited from Version 44, plus the native D1 poll list/detail GET source described
+The published Version 46 source includes the existing bounded ports below,
+inherited from Version 45, plus the bounded native D1 poll-creation source described
 below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
@@ -171,7 +171,9 @@ all-page visual coverage.
   bounded profile-return/reload/reset acceptance passed
 - Native D1 protected poll list/detail GET with caller-only own vote, aggregate
   option counts, typed bounded projections and 10-plus-1 keyset paging; positive
-  poll/privacy/paging acceptance unverified, Create/Vote/Moderate remain unported
+  poll/privacy/paging acceptance unverified; Vote/Moderate remain unported
+- Native D1 ADMIN poll creation with scoped receipt replay, rolling quotas and
+  atomic Poll/options/response fences; positive Create/quota/race acceptance open
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -189,7 +191,7 @@ mutation flows, course Q&A creation/replies/moderation/solution writes,
 course analytics, and other Space/mission mutation flows remain unported.
 Version 34 ports ADMIN Space creation and PUBLIC own join/leave source;
 Version 36 additionally ports member discussion/reply creation. Positive Space
-mutation acceptance remains open. Moderation, polls, invitations, private member
+mutation acceptance remains open. Poll voting/moderation, invitations, private member
 removal and mission cleanup remain outside these ports. Other workflows may still use Prisma
 transaction patterns that D1 does not support. Do not infer full write-flow
 support from this source scope.
@@ -918,6 +920,33 @@ or a complete Space/mission flow. Other roadmap blockers and bounded live-QA
 limits remain separate; no updated application flow is inferred from the
 retained roadmap date/base. No private content, voter/account identifiers or
 screenshots are included.
+
+## Version 46 bounded native D1 poll creation
+
+Version 46 changes only the createPoll delegation and its new native helper,
+two backend files. Current stored ADMIN/readable-space authority, scoped
+creator/digest receipt replay before both rolling 24-hour quotas, and creation
+of a Poll with 2-8 Options are fenced with exact atomic snapshots and bounded
+response assertions. Replay is a zero-write current projection, including
+hidden/closed state, within the scoped receipt's lifetime. There is no permanent
+deduplication or lifetime exactly-once guarantee.
+
+Only proved rollback or an exact scoped receipt conflict plus a changed fresh
+authorized snapshot can retry. Unknown commit/network, invariant, unrelated
+UUID/FK failures and postcommit transport handling cannot repeat the mutation.
+Native reads, Vote/Moderate, parsers, routes, shared helpers, schema and UI remain
+byte-identical; Vote and Moderate still require separate ports.
+
+Independent exact-path review, production typechecking/build and static artifact/
+archive checks passed. Deployment succeeded on 18 October 2026 at 00:36:17 UTC.
+At 00:36:43 UTC a directory/session read showed zero Spaces without alerts.
+No poll was created; this is explicitly not positive CreatePoll acceptance.
+Positive Create/replay/quota/concurrency/private/hidden acceptance is unverified;
+source/build checks are not a positive live write test.
+No local SQL/application/functional execution or new engagement data is part of
+this backup. Poll read/privacy/pagination acceptance also remains open.
+The refreshed v44 roadmap is retained byte-identically at its dated base; the
+new read/Create source ports do not establish a complete polling or Space flow.
 
 ## Keeping the branches separate
 

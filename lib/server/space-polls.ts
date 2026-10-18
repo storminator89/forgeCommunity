@@ -6,6 +6,7 @@ import { getReadableSpace, type SpaceAccess } from '@/lib/server/space-access';
 import { parseSpaceRequestId, SPACE_ID_RE, spaceTransaction, SpaceApiError } from '@/lib/server/space-api';
 import { sanitizeTextServer } from '@/lib/server/sanitize-html';
 import { d1SpacePoll, d1SpacePolls } from '@/lib/server/d1-space-poll-reads';
+import { createD1SpacePoll } from '@/lib/server/d1-space-poll-create';
 
 export const POLL_PAGE_SIZE = 10;
 export const POLL_CHANGE_LIMIT = 100;
@@ -139,26 +140,7 @@ async function pollWrite<T>(work: (tx: Prisma.TransactionClient) => Promise<T>) 
 }
 
 export async function createPoll(spaceId: string, userId: string, input: ReturnType<typeof parsePollInput>) {
-  return pollWrite(async tx => {
-    const access = await accessPolls(spaceId, userId, tx);
-    if (!access.canManage) throw new SpaceApiError('Nicht autorisiert', 403);
-    const previous = await tx.spacePoll.findUnique({ where: { spaceId_requestId: { spaceId, requestId: input.requestId } },
-      select: { id: true, creatorId: true, payloadDigest: true } });
-    if (previous) {
-      if (previous.creatorId !== userId || previous.payloadDigest !== input.payloadDigest) throw new SpaceApiError('Anfrage-ID bereits verwendet', 409);
-      return { item: await projectPoll(await findPoll(spaceId, previous.id, access, tx), userId, access, tx), created: false };
-    }
-    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const [spaceDaily, ownDaily] = await Promise.all([
-      tx.spacePoll.count({ where: { spaceId, createdAt: { gte: since } } }),
-      tx.spacePoll.count({ where: { creatorId: userId, createdAt: { gte: since } } }),
-    ]);
-    if (spaceDaily >= 10 || ownDaily >= 20) throw new SpaceApiError('Heute wurden bereits genügend Umfragen erstellt. Bitte später erneut versuchen.', 429);
-    const row = await tx.spacePoll.create({ data: { spaceId, creatorId: userId, question: input.question,
-      requestId: input.requestId, payloadDigest: input.payloadDigest,
-      options: { create: input.options.map((label, position) => ({ label, position })) } }, select: pollSelect });
-    return { item: await projectPoll(row, userId, access, tx), created: true };
-  });
+  return createD1SpacePoll(userId, spaceId, input);
 }
 
 export async function votePoll(spaceId: string, id: string, userId: string, input: ReturnType<typeof parsePollVote>) {
