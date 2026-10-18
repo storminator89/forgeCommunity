@@ -1,7 +1,7 @@
 # ForgeCommunity Nutzerflüsse und nächste Schritte
 
-Stand: 18. Oktober 2026, 06:18 UTC · veröffentlichte Sites-Version **v69**  
-Quellstand: `ee3ab0c3b60dd984a17704f098772318845779e3`  
+Stand: 18. Oktober 2026, 06:26 UTC · veröffentlichte Sites-Version **v70**  
+Quellstand: `19431b7101384f746829bf58c5725bb64b3d69e4`  
 Produkt: [ForgeCommunity](https://forge-community.dsgvision.chatgpt.site)
 
 Dieses Dokument beschreibt die veröffentlichte Sites-Variante und ihre gezielten Live-Prüfungen. Das Standardsetup mit Docker und SQLite oder PostgreSQL bleibt in der README der Hauptversion dokumentiert. Cloudflare-Einrichtung und Laufzeitgrenzen stehen separat in [CLOUDFLARE_SITES.md](CLOUDFLARE_SITES.md).
@@ -25,7 +25,7 @@ Leere Listen und eine leere Inbox beweisen keinen positiven Schreib-, Zustellung
 
 Der staged Lerntexteditor übernimmt seit v68 den bereits vorhandenen Schutz vor programmgesteuerten Updates ohne echte Dokumentänderung. Nach vollständigem Reload blieb der gespeicherte Text sauber; eine echte Änderung aktivierte Dirty-/Publish-Schutz; nach Save war der Zustand sauber. Text→Quiz→Text erzeugte keine falsche Navigationswarnung, und nach Reload waren Text und Publish-Freigabe erhalten. Der vorherige Ghost-Dirty war ein UI-Blocker bei erhaltenem gespeichertem Text, kein belegter Datenverlust. Die genaue lokale HTML-Byteabweichung und sämtliche HTML-Varianten sind damit nicht allgemein abgeprüft.
 
-Event-Erstellung und eigene An-/Abmeldung wurden gezielt positiv beobachtet. Admin-Event-Update schlug dagegen fehl; dieser Callbackpfad ist noch nicht korrigiert. Ein einmaliger PollCreate-Versuch schlug innerhalb des bereits nativen D1-Batches mit 500 fehl. Seit v69 liefert die unveränderte native Sendekette zusätzlich ausschließlich feste datensparsame Fehlerkategorien. Ein gezielter weiterer Create-Versuch bestätigte sql-resource. Statisch wurde anschließend ein78-Byte-Datums-GLOB über der dokumentierten50-Byte-Grenze in Create und Vote identifiziert; dessen gleichwertiger42+36-Split ist noch ein separates Paket. Die genaue ursprüngliche Providerfehlermeldung und eine positive Poll-Abnahme bleiben offen; kein Callbackgrund wird daraus abgeleitet.
+Event-Erstellung und eigene An-/Abmeldung wurden gezielt positiv beobachtet. Admin-Event-Update schlug dagegen fehl; dieser Callbackpfad ist noch nicht korrigiert. Ein einmaliger PollCreate-Versuch schlug innerhalb des bereits nativen D1-Batches mit 500 fehl. Seit v69 liefert die unveränderte native Sendekette zusätzlich ausschließlich feste datensparsame Fehlerkategorien. Ein gezielter weiterer Create-Versuch bestätigte sql-resource. Statisch wurde anschließend ein78-Byte-Datums-GLOB über der dokumentierten50-Byte-Grenze in Create und Vote identifiziert; dessen gleichwertiger42+36-Split ist seit v70 separat ausgeliefert. Ein gezielter Create danach ergab weiterhin500/sql-resource; der Plattformkonflikt ist damit nicht als gesamte Liveursache abgehakt. Vote wurde nicht live versucht. Die genaue ursprüngliche Providerfehlermeldung und eine positive Poll-Abnahme bleiben offen; kein Callbackgrund wird daraus abgeleitet.
 
 ## Ausgelieferter Funktionsstand
 
@@ -97,6 +97,6 @@ Eine allgemeine private Inhaltsmerkliste und eine passendere allgemeine Ressourc
 
 ## Quellen und Prüfgrenze
 
-Grundlage: der oben genannte v69-Quellstand, bestätigte Auslieferungen bis v69 und die ausdrücklich abgegrenzten veröffentlichten Beobachtungen. Für diese Dokumentprüfung wurden keine Produktdaten oder Repositorydateien verändert, keine Funktionstests gestartet und keine Browseraktionen ausgeführt.
+Grundlage: der oben genannte v70-Quellstand, bestätigte Auslieferungen bis v70 und die ausdrücklich abgegrenzten veröffentlichten Beobachtungen. Für diese Dokumentprüfung wurden keine Produktdaten oder Repositorydateien verändert, keine Funktionstests gestartet und keine Browseraktionen ausgeführt.
 
 Wesentliche Quellverträge: `space-polls.ts`, `space-missions.ts`, `space-mission-bookmarks.ts`, `space-mission-invitations.ts` und ihre nativen D1-Helper unter `lib/server/`; private Mitgliedschaftsrouten; Lernpfadteilnahmeroute; `lib/server/url-security.ts`; Journey-/Verzeichnis-URLhelper und vorhandene Bearbeitungs-/Kommentaransichten. Standard-Node/Docker und Sites/D1 bleiben getrennte Laufzeitziele. Kein vollständiger Funktions-, Sicherheits- oder Barrierefreiheitsnachweis wird daraus abgeleitet.

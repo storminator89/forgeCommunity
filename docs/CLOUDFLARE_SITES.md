@@ -9,14 +9,14 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up published Version 69 source
-`ee3ab0c3b60dd984a17704f098772318845779e3`. Version 69 deployed successfully on
-18 October 2026 at 06:18:05 UTC. It adds only bounded safe PollCreate failure
-categories; SQL/ACL/quotas/retry behavior is unchanged. A targeted legitimate
-Create still returned500, now categorized sql-resource. The precise provider
-message remains unavailable. The v68 staged-editor fix and its targeted positive
-reload/edit/save/navigation/publish-gate QA are retained. H5P playback/storage
-remain separate. Roadmap uses v69; the source map retains v63.
+runtime data. This GitHub snapshot backs up published Version 70 source
+`19431b7101384f746829bf58c5725bb64b3d69e4`. Version 70 deployed successfully on
+18 October 2026 at 06:26:12 UTC. It partitions the equivalent internal quota
+DateTime GLOB in native PollCreate/Vote into patterns within D1's50-byte limit.
+A targeted Create still returned500/sql-resource, so this source-proven conflict
+is not claimed to be the complete live cause. The precise current provider
+message remains unavailable. Safe v69 diagnostics and positive v68 staged-editor
+QA are retained. Roadmap uses v70; the source map retains v63.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -77,9 +77,9 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 69 source includes the existing bounded ports below,
-inherited from Version 68, plus safe PollCreate failure-category diagnostics.
-It does not yet claim a successful PollCreate correction. The earlier bounded Version 25 desktop live check does not establish complete runtime or
+The published Version 70 source includes the existing bounded ports below,
+inherited from Version 69, plus the equivalent bounded GLOB split below.
+It does not yet claim a successful PollCreate workflow. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
 - D1-backed private course creation and draft editing, authoring-list/detail
@@ -2109,6 +2109,42 @@ preserved. Live DDL/constraints, broader positive poll/privacy/race cases and
 private H5P storage/playback remain separate limits. No local functional tests,
 new CI, browser action or product mutation was performed by the source/backup
 work itself.
+
+## Version 70: equivalent PollCreate/Vote timestamp GLOB partition
+
+Published source `19431b7101384f746829bf58c5725bb64b3d69e4`, deployment
+`appgdep_6ad46677e72081918bea69db1fe48f7f`, succeeded 18 October 2026 at
+06:26:12 UTC. Exact two-source-path aggregate:
+`6177ce1a44b7d49a8ac61bd5177324471afccc1039c676d5298e1bc958971465`.
+Only [PollCreate](../lib/server/d1-space-poll-create.ts) and
+[PollVote](../lib/server/d1-space-poll-vote.ts) change the identical fixed-width
+timestamp shape check. The original78-byte GLOB exceeded the documented D1
+LIKE/GLOB50-byte pattern limit. The new checks partition raw positions1..10
+and11..19 into42-byte date and36-byte separator/time patterns. Their exact
+pattern concatenation equals the old token string, with no wildcard, input
+normalization, accepted separator or calendar-domain change. All direct pattern
+literals in both helpers are now42/36/8/25 bytes.
+
+Reversing only each split reconstructs the complete respective old file. NUL,
+numeric, calendar, fractional-second and timezone checks, quotas/ACL, bindings,
+batch topology, payload digest, own-only DTOs and retry/write semantics remain
+unchanged. v69's safe diagnostic appendix is retained. Exact independent source
+review, pattern-admission proof, types/build/static/archive checks passed. No
+local SQL/application/function tests or new CI were run.
+
+One coordinated legitimate published Create attempt still returned500 with
+`plan=new attempt=1 class=sql-resource`. Thus the78-byte pattern conflict is
+source-proven and corrected, but is NOT claimed to be the complete live cause.
+The precise current provider resource error remains unknown, and no further
+automatic/client retry follows from this backup. Vote was not performed; its
+matching conflict is source-only. Broader positive Create/Vote/replay/quota/
+privacy/concurrency checks remain open. Resource diagnosis and Admin Event PUT
+are separate in-progress packages, not silently included here.
+
+All earlier source and v68 positive editor QA remain preserved. This backup
+changes only the two source paths plus guide/roadmap, retains README/historical
+source map/workflow definitions and writes only cloudflare-sites. No private
+account/Space/request/poll payload data is included.
 
 ## Keeping the branches separate
 

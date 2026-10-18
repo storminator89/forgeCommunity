@@ -41,7 +41,8 @@ function quotaDateValid() {
       AND raw BETWEEN -${DATE_LIMIT} AND ${DATE_LIMIT}
     WHEN typeof(raw) = 'text' THEN
       instr(CAST(raw AS BLOB), x'00') = 0
-      AND substr(raw, 1, 19) GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9][ T][0-9][0-9]:[0-9][0-9]:[0-9][0-9]'
+      AND substr(raw, 1, 10) GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+      AND substr(raw, 11, 9) GLOB '[ T][0-9][0-9]:[0-9][0-9]:[0-9][0-9]'
       AND CAST(substr(raw, 6, 2) AS INTEGER) BETWEEN 1 AND 12
       AND CAST(substr(raw, 9, 2) AS INTEGER) BETWEEN 1 AND
         CASE CAST(substr(raw, 6, 2) AS INTEGER)
