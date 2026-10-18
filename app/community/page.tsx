@@ -74,15 +74,27 @@ function Community({ session, topic, filters, onSelectTopic, onSelectFilters, on
   const mutationRequestRef = useRef<AbortController | null>(null)
   const leaderboardRequestRef = useRef<AbortController | null>(null)
   const composerOpenRef = useRef(false)
+  const commentDraftsRef = useRef(new Set<symbol>())
+  const [hasCommentDraft, setHasCommentDraft] = useState(false)
+  const handleCommentDraftChange = useCallback((instance: symbol, dirty: boolean) => {
+    if (dirty) commentDraftsRef.current.add(instance)
+    else commentDraftsRef.current.delete(instance)
+    if (!mountedRef.current) return
+    const hasDrafts = commentDraftsRef.current.size > 0
+    setHasCommentDraft(hasDrafts)
+    onNavigationLock(composerOpenRef.current || !!mutationRequestRef.current || hasDrafts)
+  }, [onNavigationLock])
   const setComposerOpen = (open: boolean) => {
     composerOpenRef.current = open
     setIsEditing(open)
-    onNavigationLock(open || !!mutationRequestRef.current)
+    onNavigationLock(open || !!mutationRequestRef.current || commentDraftsRef.current.size > 0)
   }
   const topicHref = (next: string) => communityTopicHref(next, filters)
 
   useEffect(() => {
     mountedRef.current = true
+    setHasCommentDraft(commentDraftsRef.current.size > 0)
+    onNavigationLock(composerOpenRef.current || !!mutationRequestRef.current || commentDraftsRef.current.size > 0)
     const controller = new AbortController()
     leaderboardRequestRef.current = controller
     void fetchWithErrorHandling<LeaderboardUser[]>('/api/leaderboard', { signal: controller.signal })
@@ -126,7 +138,7 @@ function Community({ session, topic, filters, onSelectTopic, onSelectFilters, on
     cancelPage()
     const controller = new AbortController()
     mutationRequestRef.current = controller
-    onNavigationLock(true)
+    onNavigationLock(composerOpenRef.current || !!mutationRequestRef.current || commentDraftsRef.current.size > 0)
     setIsMutating(true)
     return controller
   }
@@ -134,7 +146,7 @@ function Community({ session, topic, filters, onSelectTopic, onSelectFilters, on
   const finishMutation = (controller: AbortController) => {
     if (mutationRequestRef.current !== controller || controller.signal.aborted) return
     mutationRequestRef.current = null
-    onNavigationLock(composerOpenRef.current)
+    onNavigationLock(composerOpenRef.current || !!mutationRequestRef.current || commentDraftsRef.current.size > 0)
     setIsMutating(false)
   }
 
@@ -371,7 +383,7 @@ function Community({ session, topic, filters, onSelectTopic, onSelectFilters, on
 
                 <TopicNavigation key={isEditing ? 'composing' : 'browsing'} selected={topic} onSelect={onSelectTopic} disabled={isEditing || isMutating} topicHref={topicHref} />
                 <FeedFilters filters={filters} topic={topic} disabled={isEditing || isMutating} onChange={onSelectFilters} onClear={onClearFilters} />
-                {navigationBlocked && <p className="mt-2 text-sm text-muted-foreground" role="status">Der Filterwechsel wurde angehalten. Schließe zuerst deinen Entwurf oder warte auf die laufende Aktion.</p>}
+                {navigationBlocked && <p className="mt-2 text-sm text-muted-foreground" role="status">{hasCommentDraft ? 'Sende oder leere deinen Kommentarentwurf, bevor du die Filter wechselst.' : 'Der Filterwechsel wurde angehalten. Schließe zuerst deinen Entwurf oder warte auf die laufende Aktion.'}</p>}
 
                 <div className="mt-4">
                   <div className="mb-2 mt-7 flex flex-wrap items-center justify-between gap-2"><h2 id="community-feed-title" tabIndex={-1} className="text-xl font-semibold tracking-tight focus-visible:ring-2 focus-visible:ring-ring">Aktuelle Beiträge</h2><p className="text-xs tabular-nums text-muted-foreground">{feedCount}</p></div>
@@ -398,6 +410,7 @@ function Community({ session, topic, filters, onSelectTopic, onSelectFilters, on
                           topicHref={topicHref}
                           topicNavigationDisabled={isEditing || isMutating}
                           onAddComment={handleAddComment}
+                          onCommentDraftChange={handleCommentDraftChange}
                           onLikeComment={handleLikeComment}
                           onSelectSolution={handleSelectSolution}
                           solutionSaving={solutionSaving === post.id}
@@ -461,7 +474,7 @@ export default function CommunityPage() {
   const activeNavigation = useRef<{ href: string; state: unknown } | null>(null)
   const [navigationBlocked, setNavigationBlocked] = useState(false)
   const setNavigationLock = useCallback((locked: boolean) => {
-    if (locked) activeNavigation.current = { href: window.location.href, state: window.history.state }
+    if (locked && !navigationLocked.current) activeNavigation.current = { href: window.location.href, state: window.history.state }
     navigationLocked.current = locked
     if (!locked) setNavigationBlocked(false)
   }, [])

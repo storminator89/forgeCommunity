@@ -43,6 +43,7 @@ interface CommentSectionProps {
   loadMoreError?: boolean
   onAddComment?: (postId: string, content: string) => Promise<void>
   onLikeComment?: (commentId: string, postId: string) => Promise<void>
+  onCommentDraftChange?: (instance: symbol, dirty: boolean) => void
 }
 
 export function CommentSection({
@@ -60,9 +61,12 @@ export function CommentSection({
   isLoadingMore = false,
   loadMoreError = false,
   onAddComment,
-  onLikeComment
+  onLikeComment,
+  onCommentDraftChange,
 }: CommentSectionProps) {
   const [newCommentContent, setNewCommentContent] = useState('')
+  const [draftInstance] = useState(() => Symbol('comment-draft'))
+  const draftDirtyRef = useRef(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const submittingRef = useRef(false)
@@ -75,6 +79,19 @@ export function CommentSection({
   const actionFocus = useCommentActionFocus(postId, currentUserId, isBusy)
   const commentsStatusRef = useRef<HTMLParagraphElement>(null)
   const focusEndOfCommentsRef = useRef(false)
+
+  // Report only a local dirty signal. Each mounted editor owns its registration,
+  // including during effect replay; the comment text stays in this component.
+  useEffect(() => {
+    onCommentDraftChange?.(draftInstance, draftDirtyRef.current)
+    return () => onCommentDraftChange?.(draftInstance, false)
+  }, [draftInstance, onCommentDraftChange])
+
+  const updateCommentContent = (content: string) => {
+    setNewCommentContent(content)
+    draftDirtyRef.current = Boolean(content.trim())
+    onCommentDraftChange?.(draftInstance, draftDirtyRef.current)
+  }
 
   useEffect(() => {
     if (focusEndOfCommentsRef.current && !hasMore && !isLoadingMore) {
@@ -103,7 +120,7 @@ export function CommentSection({
     const focus = actionFocus.begin(origin, commentInputRef.current)
     try {
       await onAddComment(postId, newCommentContent)
-      setNewCommentContent('')
+      updateCommentContent('')
     } catch (error) {
       console.error('Fehler beim Hinzufügen des Kommentars:', error)
       setSubmitError('Dein Kommentar konnte gerade nicht gesendet werden. Dein Text bleibt hier erhalten. Bitte versuche es erneut.')
@@ -142,7 +159,7 @@ export function CommentSection({
             id={inputId}
             ref={commentInputRef}
             value={newCommentContent}
-            onChange={(e) => setNewCommentContent(e.target.value)}
+            onChange={(e) => updateCommentContent(e.target.value)}
             onKeyDown={handleKeyDown}
             rows={2}
             placeholder="Dein Kommentar …"
