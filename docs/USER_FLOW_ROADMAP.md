@@ -1,7 +1,7 @@
 # ForgeCommunity Nutzerflüsse und nächste Schritte
 
-Stand: 18. Oktober 2026, 04:51 UTC · veröffentlichte Sites-Version **v64**  
-Quellstand: `f4b25418f0f52bd882cc1a4db2d1d6d2d2c02faf`  
+Stand: 18. Oktober 2026, 05:19 UTC · veröffentlichte Sites-Version **v65**  
+Quellstand: `4ec1307381f075814aff1d207bb3d79160567057`  
 Produkt: [ForgeCommunity](https://forge-community.dsgvision.chatgpt.site)
 
 Dieses Dokument beschreibt die veröffentlichte Sites-Variante und ihre gezielten Live-Prüfungen. Das Standardsetup mit Docker und SQLite oder PostgreSQL bleibt in der README der Hauptversion dokumentiert. Cloudflare-Einrichtung und Laufzeitgrenzen stehen separat in [CLOUDFLARE_SITES.md](CLOUDFLARE_SITES.md).
@@ -36,6 +36,7 @@ Leere Listen und eine leere Inbox beweisen keinen positiven Schreib-, Zustellung
 | Missionsmerker und privater Zugang | Native D1-Merker-PUT sowie private Mitgliederaufnahme/-entfernung mit gekoppeltem Einladungs-, Merker- und Teilnahmewiderruf. | Seit v54/v55 ausgeliefert. Kein allgemeiner Artikel-/Ressourcenmerker; positive private Änderungs- und Widerrufsfälle offen. |
 | Missionseinladungen | Native D1-Detail-/Benachrichtigungszielauflösung, Kandidatensuche, Empfangspräferenz, Senden und seit v60 Annehmen/Ablehnen mit gekoppelter Teilnahme, Bereinigung und Vertragsgrenzen. | Seit v56–v60 ausgeliefert. Positive Zustellung, Annahme/Ablehnung, Replay, Unterdrückung, Quoten, Ablauf, Datenschutz und Rennen offen. Kein durchgängiger Einladungsfluss live abgenommen. |
 | Folgen | Seit v64 nativer Follow-POST mit derselben vorhandenen FOLLOW-Benachrichtigung in einem atomaren Batch; Session-/Duplikat-/Antwortvertrag sowie GET/DELETE bleiben erhalten. | Positive echte Follow-/Benachrichtigungs-/Race-Abnahme offen. Keine automatischen Wiederholungen oder lebenslange Genau-einmal-Garantie; erneutes Folgen nach Entfolgen kann eine weitere historische Benachrichtigung erzeugen. |
+| Event-RSVP | Seit v65 native Status-/Anmelde-/Wartelisten-/Abmeldepfade GET/POST/DELETE mit vollständiger FIFO-Verarbeitung und bisherigen Beförderungsbenachrichtigungen. | Positive RSVP-/FIFO-/Replay-/Abmelde-/Notice-/Parallelitätsabnahme offen. Zwei statt vier vollständige Versuche, konservativer Preflight-409 und mögliche vollständige Reparatur mit anschließendem 409 bleiben explizit. Admin-Event-PUT/DELETE bleiben callbackgebunden; keine pauschale Event-Fertigmeldung. |
 | Ressourcen-Vorschau | Kompakter neutraler Fallback und bestehender sicherer Quellenlink. | Fallback und Tastaturzugang zur Quelle live bestätigt. Der echte externe Metadatenabruf bleibt technisch blockiert. |
 
 Die nachfolgenden Ports erweitern die Laufzeitkompatibilität vorhandener Funktionen. Sie führen keine neue Bewertung, Missionsregel, Rangliste oder Belohnung ein.
@@ -51,6 +52,7 @@ Die nachfolgenden Ports erweitern die Laufzeitkompatibilität vorhandener Funkti
 - **v62-Regressionsgrenze:** am 18. Oktober um 04:16 UTC blieben Session und leere Space-/Lernpfadübersichten ohne sichtbaren Fehler erhalten. Keine Teilnahme-, Abzeichen-, Belohnungs- oder Datenaktion erfolgte. Die leere Liste beweist keinen positiven Teilnahmefluss.
 - **v63-Regressionsgrenze:** am 18. Oktober um 04:33 UTC blieben Session und nach Reload vollständig geladene leere Lernpfadübersicht ohne sichtbaren Fehler erhalten. Keine Definition, Freigabe, Belohnung oder sonstige Datenaktion erfolgte; positive Admin-Erstellung bleibt ungeprüft.
 - **v64-Regressionsgrenze:** am 18. Oktober um 04:51 UTC blieben Session und fertig geladene leere Lernpfadübersicht nach Reload ohne sichtbaren Fehler erhalten. Keine Follow-, Entfolgen-, Benachrichtigungs-, Kontakt- oder sonstige Datenaktion erfolgte; dies ist keine positive Follow-Abnahme.
+- **v65-Regressionsgrenze:** am 18. Oktober um 05:19 UTC blieben Session und fertig geladene leere Lernpfadübersicht erhalten; die Eventübersicht zeigte keine sichtbaren Oktober-/kommenden Events und kein RSVP-Panel, Formular oder Dialog, ohne sichtbaren Fehler. Keine Event-/RSVP-/Benachrichtigungs-/Engagementaktion erfolgte. Dies bestätigt keinen positiven Eventstatus- oder Schreibfluss.
 - **Geschützte leere Übersichten:** begrenzte Listen-/Inbox-Regressionsprüfungen sind von den weiterhin fehlenden positiven Space-, Umfrage-, Missions- und Einladungsfällen getrennt. Keine zusätzlichen Teilnehmer, Stimmen oder Einladungen als Prüfmaterial erzeugt.
 
 Gast-/Loginrückkehr, vollständige Geräte-/Assistenztechnikabnahme, Benachrichtigungszustellung und seltene Fehlerzustände sind damit nicht allgemein bestätigt. Detaillierte Laufzeitabgrenzungen stehen im separaten Cloudflare-Guide.
@@ -63,7 +65,7 @@ Gast-/Loginrückkehr, vollständige Geräte-/Assistenztechnikabnahme, Benachrich
 
 ## Historische Quellenkarte der Callback-Restpfade
 
-Die [kuratierte v63-Quellenkarte](D1_CALLBACK_SOURCE_MAP_V63.md) enthält 63 statisch erreichbare Routen-/Methodenzweige plus fünf obsolete Kompatibilitätsmethoden und relative Repositoryquellen. Das sind keine 63 live beobachteten Fehler oder unabhängigen Nutzerabläufe. Basis bleibt ausdrücklich v63; Follow-POST ist darin seit v64 als portierter Einzelfix markiert. Chat, allgemeine Bildspeicherung, Kursformatierung und Übungs-Retention behalten ihre getrennten Diagnose-/Prüfgrenzen. Keine pauschale Funktionsabnahme oder künstliche Aktivität wird daraus abgeleitet.
+Die [kuratierte v63-Quellenkarte](D1_CALLBACK_SOURCE_MAP_V63.md) enthält 63 statisch erreichbare Routen-/Methodenzweige plus fünf obsolete Kompatibilitätsmethoden und relative Repositoryquellen. Das sind keine 63 live beobachteten Fehler oder unabhängigen Nutzerabläufe. Basis bleibt ausdrücklich v63; Follow-POST ist darin seit v64 als portierter Einzelfix markiert. Event-RSVP GET/POST/DELETE sind zusätzlich seit v65 als portiert vermerkt; Admin-Event-PUT/DELETE bleiben getrennt callbackgebunden. Chat, allgemeine Bildspeicherung, Kursformatierung und Übungs-Retention behalten ihre getrennten Diagnose-/Prüfgrenzen. Keine pauschale Funktionsabnahme oder künstliche Aktivität wird daraus abgeleitet.
 
 ## Die nächsten drei begrenzten Pakete
 
@@ -87,6 +89,6 @@ Eine allgemeine private Inhaltsmerkliste und eine passendere allgemeine Ressourc
 
 ## Quellen und Prüfgrenze
 
-Grundlage: der oben genannte v64-Quellstand, bestätigte Auslieferungen bis v64 und die ausdrücklich abgegrenzten veröffentlichten Beobachtungen. Für diese Dokumentprüfung wurden keine Produktdaten oder Repositorydateien verändert, keine Funktionstests gestartet und keine Browseraktionen ausgeführt.
+Grundlage: der oben genannte v65-Quellstand, bestätigte Auslieferungen bis v65 und die ausdrücklich abgegrenzten veröffentlichten Beobachtungen. Für diese Dokumentprüfung wurden keine Produktdaten oder Repositorydateien verändert, keine Funktionstests gestartet und keine Browseraktionen ausgeführt.
 
 Wesentliche Quellverträge: `space-polls.ts`, `space-missions.ts`, `space-mission-bookmarks.ts`, `space-mission-invitations.ts` und ihre nativen D1-Helper unter `lib/server/`; private Mitgliedschaftsrouten; Lernpfadteilnahmeroute; `lib/server/url-security.ts`; Journey-/Verzeichnis-URLhelper und vorhandene Bearbeitungs-/Kommentaransichten. Standard-Node/Docker und Sites/D1 bleiben getrennte Laufzeitziele. Kein vollständiger Funktions-, Sicherheits- oder Barrierefreiheitsnachweis wird daraus abgeleitet.

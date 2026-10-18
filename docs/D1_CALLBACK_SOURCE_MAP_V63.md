@@ -7,6 +7,8 @@ Diese kompakte, kuratierte Quellenkarte dokumentiert statisch erreichbare Aufruf
 
 Seit **v64**, Quellstand `f4b25418f0f52bd882cc1a4db2d1d6d2d2c02faf`, ist genau der frühere Follow-POST-Callback durch [d1-user-follow.ts](../lib/server/d1-user-follow.ts) und den vorhandenen [Follow-Routendelegaten](../app/api/users/%5Bid%5D/follow/route.ts) portiert. Die historische v63-Zählung bleibt unverändert. Positive Follow-/Benachrichtigungsabnahme ist weiter offen. Diese Ergänzung ist keine neue Gesamtinventur oder pauschale Fehlerfreiheitserklärung.
 
+Seit **v65**, Quellstand `4ec1307381f075814aff1d207bb3d79160567057`, sind zusätzlich Event-RSVP **GET/POST/DELETE** über [d1-event-participation.ts](../lib/server/d1-event-participation.ts) und die [bestehende Fassade](../lib/server/event-participation.ts) nativ portiert. Admin-Event-PUT/DELETE bleiben callbackgebunden. Die historischen v63-Methodenzeilen, Zählung und Base bleiben erhalten; dies ist kein Abschluss aller Events oder Callbacks. Positive RSVP-/FIFO-/Benachrichtigungsabnahme bleibt offen, Details und Retry-/DDL-/Legacygrenzen stehen im [Cloudflare-Guide](CLOUDFLARE_SITES.md).
+
 ## Befund und Zählweise
 
 Der in der Inventurbasis tatsächlich importierte Prisma-Edge-Compiler weist `$transaction(function)` mit dem D1-Adapter vor dem Callback zurück. Array-Transaktionen sind ein anderer Pfad und wurden aus dieser Callbackzählung ausgeschlossen; deren Atomizität wird hier nicht bestätigt. Die reine Quellenprüfung umfasste Transaktionsreferenzen, exportierte Routen, Hilfsaufrufe, native Delegation und vorhandene UI-Anbindung. Sie führte keine Builds, Funktions-/SQL-Tests, Browser- oder Datenaktionen aus.

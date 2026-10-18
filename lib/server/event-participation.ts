@@ -2,6 +2,7 @@ import 'server-only';
 
 import { Prisma, type AttendeeStatus } from '@/generated/prisma/client';
 import { ParticipationError, participationTransaction } from '@/lib/server/participation';
+import { readD1EventParticipation, joinD1Event, leaveD1Event } from '@/lib/server/d1-event-participation';
 
 export const EVENT_PARTICIPATION_HEADERS = { 'Cache-Control': 'private, no-store' };
 const occupied = { status: { not: 'CANCELLED' as const } };
@@ -76,54 +77,13 @@ async function ownState(tx: Prisma.TransactionClient, event: EventSettings, user
 }
 
 export async function readEventParticipation(eventId: string, userId: string) {
-  return participationTransaction(async tx => {
-    await requireEventAccount(tx, userId);
-    const event = await tx.event.findUnique({ where: { id: eventId }, select: eventSelect });
-    if (!event) throw new ParticipationError('Event not found', 404);
-    return ownState(tx, event, userId);
-  });
+  return readD1EventParticipation(eventId, userId);
 }
 
 export async function joinEvent(eventId: string, userId: string, allowWaitlist: boolean) {
-  const result = await participationTransaction(async tx => {
-    await requireEventAccount(tx, userId);
-    const event = await lockEventParticipation(tx, eventId);
-    const existing = await tx.eventAttendee.findUnique({ where: { eventId_userId: { eventId, userId } }, select: { status: true } });
-    if (existing && existing.status !== 'CANCELLED') return { state: await ownState(tx, event, userId), created: false };
-    const queued = await tx.eventWaitlist.findUnique({ where: { eventId_userId: { eventId, userId } }, select: { id: true } });
-    if (event.date <= new Date()) {
-      if (queued) return { state: await ownState(tx, event, userId), created: false };
-      throw new ParticipationError('Registration for this event has closed', 409);
-    }
-    // Old tickets have priority even if a legacy/account-deletion change freed
-    // a seat outside this service. A full legacy join commits any such repairs.
-    await promoteEventWaitlist(tx, event);
-    if (queued) return { state: await ownState(tx, event, userId), created: false };
-    const attendeeCount = await tx.eventAttendee.count({ where: { eventId, ...occupied } });
-    if (event.maxAttendees !== null && attendeeCount >= event.maxAttendees) {
-      if (!allowWaitlist) return { full: true as const };
-      await tx.eventWaitlist.create({ data: { eventId, userId } });
-    } else {
-      await tx.eventAttendee.upsert({ where: { eventId_userId: { eventId, userId } },
-        create: { eventId, userId, status: 'REGISTERED' }, update: { status: 'REGISTERED' } });
-    }
-    return { state: await ownState(tx, event, userId), created: true };
-  });
-  if ('full' in result) throw new ParticipationError('Event is full', 409);
-  return result;
+  return joinD1Event(eventId, userId, allowWaitlist);
 }
 
 export async function leaveEvent(eventId: string, userId: string) {
-  return participationTransaction(async tx => {
-    await requireEventAccount(tx, userId);
-    const event = await lockEventParticipation(tx, eventId);
-    const existing = await tx.eventAttendee.findUnique({ where: { eventId_userId: { eventId, userId } }, select: { status: true } });
-    if (existing?.status === 'ATTENDED') throw new ParticipationError('Recorded attendance cannot be cancelled', 409);
-    await tx.eventWaitlist.deleteMany({ where: { eventId, userId } });
-    if (existing && existing.status !== 'CANCELLED') {
-      await tx.eventAttendee.update({ where: { eventId_userId: { eventId, userId } }, data: { status: 'CANCELLED' } });
-    }
-    await promoteEventWaitlist(tx, event);
-    return ownState(tx, event, userId);
-  });
+  return leaveD1Event(eventId, userId);
 }

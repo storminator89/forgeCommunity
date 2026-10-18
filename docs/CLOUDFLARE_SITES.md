@@ -9,12 +9,12 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up the published Version 64 source
-`f4b25418f0f52bd882cc1a4db2d1d6d2d2c02faf`. Version 64 deployed successfully on
-18 October 2026 at 04:51:39 UTC. Existing Follow POST now uses native D1 with its
-original domain notice in one batch. Positive Follow/Notice/race acceptance is
-open; no retry or lifetime exactly-once claim. The curated roadmap uses v64;
-the separately linked callback source map keeps its historical v63 base.
+runtime data. This GitHub snapshot backs up the published Version 65 source
+`4ec1307381f075814aff1d207bb3d79160567057`. Version 65 deployed successfully on
+18 October 2026 at 05:19:23 UTC. Event RSVP GET/POST/DELETE now use native D1.
+Positive RSVP/FIFO/Notice/race acceptance remains open; Admin Event PUT/DELETE
+remain callback-bound. Reduced retries, unknown live DDL and bounded legacy
+limits remain explicit. Roadmap uses v65; the source map retains historical v63.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -75,8 +75,8 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 64 source includes the existing bounded ports below,
-inherited from Version 63, plus native D1 Follow POST described
+The published Version 65 source includes the existing bounded ports below,
+inherited from Version 64, plus native D1 Event RSVP described
 below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
@@ -210,6 +210,8 @@ all-page visual coverage.
   UUID receipt and atomic sealing; positive published create/replay QA open
 - Native D1 Follow POST with existing atomic Follow/FOLLOW-Notice semantics;
   GET/DELETE unchanged, positive published Follow/Notice acceptance open
+- Native D1 Event RSVP status/join/leave with complete FIFO/Notice semantics;
+  positive published acceptance open, Admin Event PUT/DELETE unchanged
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -235,8 +237,9 @@ ports PRIVATE member Add/Remove with coupled revocation.
 Version 59 ports Send; Version 60 ports invitation Accept/Decline source.
 Version 61 ports existing ADMIN discussion/reply moderation.
 Version 62 ports normal Pathway participation; Version 63 ports ADMIN Pathway
-definition Create only. Version 64 ports existing Follow POST; other unported
-flows remain separate. The [historical v63 source map](D1_CALLBACK_SOURCE_MAP_V63.md)
+definition Create only. Version 64 ports existing Follow POST; Version 65 ports
+RSVP GET/POST/DELETE. Admin Event PUT/DELETE and other unported flows remain
+separate. The [historical v63 source map](D1_CALLBACK_SOURCE_MAP_V63.md)
 records callback-route reachability, not 63 live-reproduced bugs.
 Positive Space/Mission mutation acceptance remains open. Account/role changes
 and other mission mutation flows remain
@@ -1766,6 +1769,108 @@ unshipped investigation-artifact links are omitted. Chat/native authoring/format
 filesystem/codec upload leads and independent retention gates remain separated.
 The curated user roadmap links the same map and updates actual v64 scope while
 retaining previous approved facts. README scope/setup/gallery bytes stay intact.
+
+## Version 65 bounded native D1 Event RSVP
+
+Version 65 adds only a dedicated helper plus one import and three facade bodies:
+readEventParticipation/joinEvent/leaveEvent. Exact reversal reconstructs the old
+facade; shared requireEventAccount/lock/promote/ownState and generic participation
+wrapper remain intact. RSVP routes/parser/headers, Event UI/list/create/ICS,
+notification target readers/auth/proxy/schema/other APIs stay byte-identical.
+Admin Event PUT/DELETE still use the original callback-bound lock/promoter.
+Current stored account absence is 401 before Event 404; no new role/test/member/
+private/preference/ID-regex or receipt gate. Existing session-outside-try and
+POST bodyless/only-waitlist 1,024-byte parsing order stay unchanged. ATTENDED
+DELETE gives 409 before cleanup; fresh closed admission 409. Only own qualified
+prewrite ID/Notice collision maps the existing concurrent-change 409; internally
+duplicate generated IDs are checked before writes, other raw failures remain 500.
+
+GET returns the same ten-field own state/booleans, aggregate counts, own ordinal,
+capacity and final closure. All non-CANCELLED statuses including ATTENDED occupy
+seats. Active attendance wins over stray own queue; WAITLISTED requires no active
+attendance. No ticket identity/time, names/email/profile or foreign attendee data
+leave the helper. GET uses one primary snapshot statement with strict decoder.
+
+FIFO has no product/prefix cap. Independent SQL earliest-inactive-ticket-per-user
+ranking derives the S-th distinct winner cutoff, or all when unlimited/underfilled.
+DELETE removes every own ticket before ranking and subtracts its cancelled seat.
+JavaScript independently consumes the entire selected prefix using an active-user
+map; later repeated-owner tickets become active skips, not extra seats/notices.
+Already-full/past promotion consumes none. Transport includes only full consumed
+prefix/caller identities and relevant attendee facts, not irrelevant suffix
+profiles/timestamps. Exact cutoff/set/multiplicity and scalar occupancy/suffix-
+count/own-position facts are guarded. Final After uses the BEFORE prefix rather
+than incorrectly recomputing an empty After prefix. No per-ticket SQL or chunks.
+
+Each native atomic batch has unconditional exact preguard, Event.updatedAt
+UPDATE/assert, optional grouped absent-attendee INSERT and existing-status UPDATE
+with assertions, complete consumed/own queue DELETE/assert, exact grouped actual
+winner Notice INSERT/assert, optional genuine caller AUTOINCREMENT queue INSERT
+as LAST DML, then unconditional actual complete After/Notice/ticket/authority/DTO
+guard. Missing joins cannot skip assertions. Existing attendee IDs/tombstones
+remain. Queue creation sets no explicit/predicted ID, MAX+1 or sequence reset;
+actual last_insert_rowid, positive Int32/global cardinality/pair/tail/time are
+checked immediately and finally. INTEGER-PK/AUTOINCREMENT/nonreuse/FK/index/trigger
+parity are unchanged source-DDL prerequisites, NOT verified installed live DDL.
+sqlite_sequence is neither read nor edited; arbitrary extra trigger effects are
+not ruled out. Only real FIFO winners get the old deterministic ticket-ID EVENT
+notice. No notice for direct/queue join, cancel or active skip; no historic Notice
+repair/delete, IGNORE/REPLACE/upsert, preferences, rewards or receipt.
+
+Three distinct source clock stages are retained: A after small context/early
+active replay; B immediately before full prefix snapshot, fixing the whole FIFO
+decision; C sampled by bounded UTC-ms strftime in final SELECT AFTER all DML,
+compared with already JavaScript-normalized Event milliseconds. No later future
+barrier: A-future/B-past may still admit directly, earlier successful action can
+return closed=true. FULL commits complete FIFO repairs and then raises 409 outside
+retry catch; it has no C/state-DTO dependency. Successful replays update Event.updatedAt.
+GET C belongs to its single snapshot SELECT. Raw dates are guarded without SQL
+date parsing/derived-julianday ordering. Bounded absolute date-only/minute/second/
+fraction/short/compact/colon-offset/SQLite-UTC and numeric zero/fraction-TimeClip
+forms remain supported. Unused historical Event/queue timestamps are not gates.
+New valid UTC+00:00 timestamps have no equal-original-clock/monotonic guarantee.
+
+At most TWO complete native attempts versus original four is an explicit
+availability reduction. Initial context-to-prefix mismatch conservatively gives
+409 without retry/mutation. Only own SQL-qualified FIRST snapshot rollback plus
+demonstrably changed freshly authorized complete relevant facts allows attempt
+two; clock/read-shape alone is insufficient. Second actual conflict 409 has no
+third read. ID/Notice collision never regenerates IDs or retries. Generic BUSY,
+UNIQUE/FK/constraint/CAS/end-invariant/timeout/transport/unknown commit/result/
+malformed success never retries or readback-infers success. Strict decoder and
+commit-then-FULL409 are outside catch. No durable receipt, historic idempotency
+or notice repair; explicit later POST after DELETE can rejoin anew.
+
+Operational limits are raw/input records 200,000 bytes, context escape reserve
+16,384, complete result 1,200,000, manifests 1,400,000 and complete wire 8,000,000;
+bindings stay below 1,500,000 and at most 100 occurrences/SQL below 100,000 bytes.
+Full FIFO work remains unbounded in rows, time and cost; native limits can fail
+the complete batch. Unsupported malformed/oversized legacy values fail closed,
+never truncate or partially reconcile. Positive Int32 ticket, supported non-NULL
+enum/capacity and bounded date domains apply, not arbitrary malformed-data parity.
+Ambiguous own/relevant duplicate attendee-pair rows or inactive own repeated-ticket
+projection fail closed; repeated foreign-owner tickets, active caller with retained
+later duplicate and DELETE-all-own tickets are handled. Irrelevant active own
+position uses internal zero/null DTO rather than becoming another legacy barrier.
+
+Both exact source passes and production types/build/static artifact/archive gates
+passed. Eighteen SQL templates/64 conservative topologies have maximum 12,795 SQL
+bytes, binds 25, arity three, compound two, context fields 14/snapshot columns 21.
+At most fourteen batch statements/two preflight reads per attempt give 32 helper
+plus unchanged auth two = 34 SOURCE statements; GET helper one/auth total three.
+These are unmeasured source bounds, not scanned/written-row, runtime/billing cost.
+Deployment succeeded on 18 October 2026 at 05:19:23 UTC. Bounded published
+05:19:58 UTC reload/navigation retained session, settled empty Pathways and Events
+overview with no visible October/upcoming events, RSVP panels/forms/dialogs or
+visible errors. No Event/RSVP/queue/cancel/promotion/Notice/contact/engagement
+fixture or data action occurred. Positive legitimate status/direct/full/waitlist/
+replay/ATTENDED/cancel/FIFO/duplicate-prefix/capacity/race/Notice/rollback/privacy/
+clock acceptance remains open. No local App/SQL/pure/date/crypto/function tests,
+new CI or browser work by this backup.
+
+Roadmap adds v65 delivered/QA-open scope; historical v63 source-map method rows,
+counts/base stay intact with only an explicit v65 RSVP annotation. No all-Events
+or all-callbacks-fixed claim. README and prior approved facts stay intact.
 
 ## Keeping the branches separate
 
