@@ -9,12 +9,12 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up the published Version 60 source
-`594101c0e233891150c935f45224e125f4419641`. Version 60 deployed successfully on
-18 October 2026 at 03:38:56 UTC. Native D1 invitation Accept/Decline source,
-final V2, is live; positive decision/replay/expiry/capacity/privacy/race acceptance
-remains unverified. Account/role and other callback flows remain separate.
-The separately curated user-flow roadmap now describes the actual v60 base.
+runtime data. This GitHub snapshot backs up the published Version 61 source
+`65374b7befcf88f05260061bc7b6bbef5b9a0d4b`. Version 61 deployed successfully on
+18 October 2026 at 03:56:00 UTC. Native D1 discussion/reply ADMIN moderation,
+final V2, is live; positive moderation/hidden-parent/noop/date/race/demotion/
+rollback acceptance remains unverified. Account/role and other callback flows
+remain separate. The separately curated user-flow roadmap describes the v61 base.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -75,8 +75,8 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 60 source includes the existing bounded ports below,
-inherited from Version 59, plus native D1 invitation decision source described
+The published Version 61 source includes the existing bounded ports below,
+inherited from Version 60, plus native D1 discussion/reply moderation described
 below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
@@ -202,6 +202,8 @@ all-page visual coverage.
   atomic incoming cleanup/delivery; positive published acceptance remains open
 - Native D1 own invitation Accept/Decline with coupled participation/terminal
   cleanup and full reader fences; positive decision/expiry/privacy/race QA open
+- Native D1 ADMIN discussion/reply hide/unhide with exact atomic snapshot/
+  projection guards and unchanged-state write-free reads; positive live QA open
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -225,6 +227,7 @@ Version 52 ports own contribution Add/Withdraw; Version 53 ports ADMIN
 contribution moderation; Version 54 ports own Mission bookmark PUT; Version 55
 ports PRIVATE member Add/Remove with coupled revocation.
 Version 59 ports Send; Version 60 ports invitation Accept/Decline source.
+Version 61 ports existing ADMIN discussion/reply moderation.
 Positive Space/Mission mutation acceptance remains open. Account/role changes
 and other mission mutation flows remain
 outside these ports. Other workflows may still use Prisma
@@ -1441,6 +1444,66 @@ The roadmap is dated to actual v60 and distinguishes delivered code, bounded
 observations, open acceptance, remaining callback/DNS blockers and proposals.
 Existing main setup/gallery bytes stay intact; no new competitor research or
 full mission-flow acceptance is claimed.
+
+## Version 61 bounded native D1 discussion/reply moderation, final V2
+
+Version 61 changes only the dedicated content-moderation helper and two existing
+moderation PATCH route imports/body delegates, three backend files. Reversing
+exactly those sections reconstructs the previous routes byte-for-byte. Stored
+ADMIN 403 precedes raw caller-ID-format/Space 404; Space dates normalize before
+the mode-specific target 404. ADMIN needs no membership or visibility-enum
+filter. Discussion/Reply scope includes its parent Space, without a hidden-parent
+or author filter. The full current-author DTO includes all visible-only replyCount
+for discussions, without request/digest/private fields. Same-state checks raw
+hiddenAt NULL presence and preserves exact hiddenAt/updatedAt with no UPDATE.
+A genuine change sets only target hiddenAt and explicit updatedAt using one
+stable operation time or NULL; no monotonic/equal-original-clock guarantee.
+There is no parent/Space bump, cascade, report, reward, audit, notice, receipt,
+revision, edit/delete feature or new moderation authority. All other source
+reads/creates, polls/missions/invitations, shared helpers, schema and UI are intact.
+
+Prevalidated full DTO, native snapshot guard/CAS/changes-one and actual final
+projection guard share one atomic batch; no partial/truncated response. Bounded
+native row/response budgets remain explicit legacy limits: unsupported/oversized
+data fail closed, without arbitrary malformed-database parity. Absolute dates
+support date-only UTC midnight, missing-zone UTC, space-to-T, +HH normalization
+and compact +HHmm, variable fractions, zoned minute precision and valid 24:00
+within finite shared JavaScript conversion. Finite numeric milliseconds,
+including fractions/zero, stay raw in snapshot/CAS; only the DTO uses TimeClip.
+Flags/counts remain integers. This adds no unused derived-SQL createdAtMs
+restriction, calendar/offset narrowing, content/author-ID regex or create sanitizer.
+Date strings are bounded to 1,024 bytes; numeric dates to finite absolute
+8,640,000,000,000,000 ms. Existing native row/response bounds apply as well.
+
+Only own SQL-qualified first-preguard rollback plus actually changed freshly
+authorized facts allows one retry, at most two snapshots/batches. A second
+proven own conflict maps to 409 without a third read. Whole-cause-chain deny-first
+classification and exact D1_/SQLITE_ allowlist exclude invariant, constraints/FK,
+unknown markers, RPC/TLS/DNS/network, unknown commit and successful-result decode;
+there is no readback-success inference. One first-primary session has an initial
+primary read and subsequent session consistency; each later SELECT is not
+independently forced primary. All consumed authority/scope/date/content/profile/
+count facts are atomically revalidated before writes.
+
+Independent exact-aggregate source bounds cover all 37 expanded SQL texts:
+7,853 maximum SQL bytes, highest slot/trimmed binds 25, arity 2, compound terms 5,
+18 snapshot/19 final columns, four discussion/five reply rows. Change/noop batches
+submit four/two statements. At most ten helper or twelve including unchanged
+auth source submissions is a conservative bound, not measured cost or latency.
+Native limits can still fail the complete operation atomically. V1 is superseded
+only by bounded local absolute DateTime normalization; all 37 SQL texts stay
+byte-identical. Final V2 source GO, independent aggregate counterpass, production
+types/build and static artifact/archive checks passed. Deployment succeeded on
+18 October 2026 at 03:56:00 UTC. Bounded published 03:56:15/27 UTC reload and
+observed navigation retained session and empty Mission/Space overviews without
+visible errors. No moderation, fixture, hide/unhide cycle or data action occurred.
+Positive ADMIN/private/hidden-parent/same-state/date/race/demotion/rollback/
+visibility acceptance remains open. No local App/SQL/function tests or new CI.
+
+The user-facing roadmap is a separate curated documentation exception, updated
+to actual v61 and moderation delivered/QA-open scope. README scope/setup/gallery
+bytes and all previously approved documentation facts are preserved. No blanket
+mission/feature completion or new competitor-research claim is made.
 
 ## Keeping the branches separate
 
