@@ -1,7 +1,7 @@
 # ForgeCommunity Nutzerflüsse und nächste Schritte
 
-Stand: 18. Oktober 2026, 06:01 UTC · veröffentlichte Sites-Version **v67**  
-Quellstand: `21ed64d8c0589fddab72ec868d2a8f3a97270278`  
+Stand: 18. Oktober 2026, 06:11 UTC · veröffentlichte Sites-Version **v68**  
+Quellstand: `345b5f39a70f1fc7295be921518be89697ea118b`  
 Produkt: [ForgeCommunity](https://forge-community.dsgvision.chatgpt.site)
 
 Dieses Dokument beschreibt die veröffentlichte Sites-Variante und ihre gezielten Live-Prüfungen. Das Standardsetup mit Docker und SQLite oder PostgreSQL bleibt in der README der Hauptversion dokumentiert. Cloudflare-Einrichtung und Laufzeitgrenzen stehen separat in [CLOUDFLARE_SITES.md](CLOUDFLARE_SITES.md).
@@ -10,7 +10,7 @@ Dieses Dokument beschreibt die veröffentlichte Sites-Variante und ihre gezielte
 
 Die bisherige pauschale Missions- und Umfrageblockade ist überholt: Die vorhandenen Umfrageoperationen und große Teile des privaten Missionsflusses haben inzwischen native D1-Pfade. Sie sind ausgeliefert, aber ihre komplexen positiven Fachfälle sind ohne passende legitime Situationen noch nicht live abgenommen. Ein fertiger durchgängiger Missions- oder Einladungsfluss wird deshalb nicht behauptet.
 
-Als nächste Schritte bleiben die positive Abnahme vorhandener Einladungsentscheidungen, passende weitere Fachabnahmen und der sichere Ressourcen-Metadatenport. Keine neuen Oberflächen, Punkte oder künstlichen Teilnehmer zum Füllen leerer Menüs.
+Vorrangig sind jetzt der beobachtete Admin-Event-Updatefehler und die gezielte Diagnose des bereits nativen PollCreate-500. Weitere positive Einladungs-/Fachabnahmen und der sichere Ressourcen-Metadatenport bleiben getrennte Aufgaben. Keine neuen Oberflächen, Punkte oder künstlichen Teilnehmer zum Füllen leerer Menüs.
 
 ## Was der Status bedeutet
 
@@ -20,6 +20,12 @@ Als nächste Schritte bleiben die positive Abnahme vorhandener Einladungsentsche
 - **Quellenblocker:** ein konkreter bestehender Aufrufpfad ist mit der eingesetzten Laufzeit inkompatibel. Das ist kein neuer beobachteter Browserfehler.
 
 Leere Listen und eine leere Inbox beweisen keinen positiven Schreib-, Zustellungs- oder Berechtigungsfluss. Die bisherigen gezielten Desktopprüfungen sind keine vollständige Barrierefreiheits-, Geräte-, Rollen-, Sicherheits- oder Parallelitätsabnahme.
+
+## Gezielte aktuelle Live-Prüfung v68
+
+Der staged Lerntexteditor übernimmt seit v68 den bereits vorhandenen Schutz vor programmgesteuerten Updates ohne echte Dokumentänderung. Nach vollständigem Reload blieb der gespeicherte Text sauber; eine echte Änderung aktivierte Dirty-/Publish-Schutz; nach Save war der Zustand sauber. Text→Quiz→Text erzeugte keine falsche Navigationswarnung, und nach Reload waren Text und Publish-Freigabe erhalten. Der vorherige Ghost-Dirty war ein UI-Blocker bei erhaltenem gespeichertem Text, kein belegter Datenverlust. Die genaue lokale HTML-Byteabweichung und sämtliche HTML-Varianten sind damit nicht allgemein abgeprüft.
+
+Event-Erstellung und eigene An-/Abmeldung wurden gezielt positiv beobachtet. Admin-Event-Update schlug dagegen fehl; dieser Callbackpfad ist noch nicht korrigiert. Ein einmaliger PollCreate-Versuch schlug innerhalb des bereits nativen D1-Batches mit 500 fehl. Die genaue Ursache bleibt offen; weder ein neuer Callbackgrund noch ein erfolgreicher Poll-Schreibfluss wird daraus abgeleitet.
 
 ## Ausgelieferter Funktionsstand
 
@@ -31,12 +37,12 @@ Leere Listen und eine leere Inbox beweisen keinen positiven Schreib-, Zustellung
 | Lesen und Bearbeiten | Richtexttypografie für Wissensartikel; breiter Projekttitel mit separater Aktionszeile; Ressourcenformular mit Öffentlichkeitshinweis; Pending-/Snapshot-/Fehlerdraftschutz für Projekt- und Ressourcenbearbeitung; vorhandener Richtexteditor und Rückkehrfokus in diesen Dialogen. | Lesen, Öffnen/Schließen, Pflichtfeldvalidierung und jeweiliger Rückkehrfokus gezielt geprüft. Keine gültigen Bearbeitungs-PUTs zur Prüfung von Pending-, Retry-, Datei- oder Kontowechselrennen ausgeführt. |
 | Projektkommentare | Schutz neuerer Eingaben bei verspätetem Erfolg; sichere explizite HTTP(S)-Textlinks; newline-erhaltender Sanitizer für neue Kommentare. | Ein freigegebener Kommentar gespeichert und nach Reload vorhanden. Vorhandener Link mit korrektem HTTPS-Ziel, Neutabhinweis, Schutzattributen und sichtbarem Tastaturfokus geprüft; das externe Ziel wurde nicht durch Linkaktivierung geöffnet. Weitertext während Pending und neue mehrzeilige Persistenz bleiben quellengeprüft. |
 | Spacebasis und Diskussionen | Space-Erstellung für PUBLIC/PRIVATE; eigene PUBLIC-Mitgliedschaft; geschützte Diskussions-/Antwortreads und -erstellung; seit v61 native ADMIN-Moderation zum Verbergen/Wiederherstellen vorhandener Diskussionen und Antworten. | Positiver Erstellen/Beitreten/Schreiben/Antworten-Fluss mit einem wirklich benötigten Space noch offen. Positive Moderation, verborgene Eltern, unveränderter Status, Datums-/Rollen-/Parallelitäts- und Rollbackfälle sind nicht live abgenommen. |
-| Umfragen | Native D1-Liste/Detail, Erstellen, eigene Stimmabgabe mit Revision/Receipts sowie Schließen und Verbergen/Wiederherstellen. | Seit v45–v48 ausgeliefert. Positive Erstellen-/Vote-/Moderations-, Quoten-, Replay-, Paging-, Datenschutz- und Parallelitätsfälle nicht live abgenommen. |
+| Umfragen | Native D1-Liste/Detail, Erstellen, eigene Stimmabgabe mit Revision/Receipts sowie Schließen und Verbergen/Wiederherstellen. | Seit v45–v48 ausgeliefert. Ein gezielter v67-Erstellversuch ergab 500 im nativen Batch; Ursache wird separat diagnostiziert. Positive Erstellen-/Vote-/Moderations-, Quoten-, Replay-, Paging-, Datenschutz- und Parallelitätsfälle bleiben offen. |
 | Private Missionen | Native D1-Erstellung mit bestehendem Wochenvertrag, Schließen mit gekoppelter Bereinigung, normale eigene Teilnahme/Verlassen, eigene Beiträge/Rücknahme und Beitragsmoderation. | Seit v49–v53 ausgeliefert. Echte Zustimmung, Kapazität, Fristen, Beitragshistorie, Zugriffsentzug und Rennen benötigen passende veröffentlichte Abnahme. |
 | Missionsmerker und privater Zugang | Native D1-Merker-PUT sowie private Mitgliederaufnahme/-entfernung mit gekoppeltem Einladungs-, Merker- und Teilnahmewiderruf. | Seit v54/v55 ausgeliefert. Kein allgemeiner Artikel-/Ressourcenmerker; positive private Änderungs- und Widerrufsfälle offen. |
 | Missionseinladungen | Native D1-Detail-/Benachrichtigungszielauflösung, Kandidatensuche, Empfangspräferenz, Senden und seit v60 Annehmen/Ablehnen mit gekoppelter Teilnahme, Bereinigung und Vertragsgrenzen. | Seit v56–v60 ausgeliefert. Positive Zustellung, Annahme/Ablehnung, Replay, Unterdrückung, Quoten, Ablauf, Datenschutz und Rennen offen. Kein durchgängiger Einladungsfluss live abgenommen. |
 | Folgen | Seit v64 nativer Follow-POST mit derselben vorhandenen FOLLOW-Benachrichtigung in einem atomaren Batch; Session-/Duplikat-/Antwortvertrag sowie GET/DELETE bleiben erhalten. | Positive echte Follow-/Benachrichtigungs-/Race-Abnahme offen. Keine automatischen Wiederholungen oder lebenslange Genau-einmal-Garantie; erneutes Folgen nach Entfolgen kann eine weitere historische Benachrichtigung erzeugen. |
-| Event-RSVP | Seit v65 native Status-/Anmelde-/Wartelisten-/Abmeldepfade GET/POST/DELETE mit vollständiger FIFO-Verarbeitung und bisherigen Beförderungsbenachrichtigungen. | Positive RSVP-/FIFO-/Replay-/Abmelde-/Notice-/Parallelitätsabnahme offen. Zwei statt vier vollständige Versuche, konservativer Preflight-409 und mögliche vollständige Reparatur mit anschließendem 409 bleiben explizit. Admin-Event-PUT/DELETE bleiben callbackgebunden; keine pauschale Event-Fertigmeldung. |
+| Event-RSVP | Seit v65 native Status-/Anmelde-/Wartelisten-/Abmeldepfade GET/POST/DELETE mit vollständiger FIFO-Verarbeitung und bisherigen Beförderungsbenachrichtigungen. | Gezielte eigene An-/Abmeldung positiv; FIFO-/Replay-/Notice-/Parallelitätsfälle weiter offen. Zwei statt vier vollständige Versuche, konservativer Preflight-409 und mögliche vollständige Reparatur mit anschließendem 409 bleiben explizit. Admin-Event-PUT/DELETE bleiben callbackgebunden; keine pauschale Event-Fertigmeldung. |
 | Kanonische Kursdateien | Seit v66 native Kursdatei-GET/HEAD-Autorisierung: aktuelle Authorrechte, anonymes aktives Cover oder eingeschriebener, entsperrter referenzierender Lerninhalt mit bestehendem Revisions-/Bewertungsnachweis. | Private Dateileser und Uploads bleiben unverändert. Bildbytes, HEAD, ACL-/Widerrufs-/Gradefälle und tatsächliche Dateiexistenz/Persistenz sind nicht positiv abgenommen. Operative Vollständigkeits-/Legacygrenzen bleiben geschlossen; H5P ist separat. |
 | H5P-Auswahlliste | Seit v67 native Liste vorhandener eigener H5P-Inhalte; Gesamtliste nur mit übereinstimmendem Session- und aktuellem ADMIN-Recht. | Nur Liste, keine Freigabe von Embed, Metadaten, Tokenassets, Import oder Playback. Positive nichtleere Owner-/Admin-/Datums-/Datenschutzabnahme offen; rohe Datumssortierung und operative vollständige Legacygrenzen bleiben erhalten. |
 | Ressourcen-Vorschau | Kompakter neutraler Fallback und bestehender sicherer Quellenlink. | Fallback und Tastaturzugang zur Quelle live bestätigt. Der echte externe Metadatenabruf bleibt technisch blockiert. |
@@ -91,6 +97,6 @@ Eine allgemeine private Inhaltsmerkliste und eine passendere allgemeine Ressourc
 
 ## Quellen und Prüfgrenze
 
-Grundlage: der oben genannte v67-Quellstand, bestätigte Auslieferungen bis v67 und die ausdrücklich abgegrenzten veröffentlichten Beobachtungen. Für diese Dokumentprüfung wurden keine Produktdaten oder Repositorydateien verändert, keine Funktionstests gestartet und keine Browseraktionen ausgeführt.
+Grundlage: der oben genannte v68-Quellstand, bestätigte Auslieferungen bis v68 und die ausdrücklich abgegrenzten veröffentlichten Beobachtungen. Für diese Dokumentprüfung wurden keine Produktdaten oder Repositorydateien verändert, keine Funktionstests gestartet und keine Browseraktionen ausgeführt.
 
 Wesentliche Quellverträge: `space-polls.ts`, `space-missions.ts`, `space-mission-bookmarks.ts`, `space-mission-invitations.ts` und ihre nativen D1-Helper unter `lib/server/`; private Mitgliedschaftsrouten; Lernpfadteilnahmeroute; `lib/server/url-security.ts`; Journey-/Verzeichnis-URLhelper und vorhandene Bearbeitungs-/Kommentaransichten. Standard-Node/Docker und Sites/D1 bleiben getrennte Laufzeitziele. Kein vollständiger Funktions-, Sicherheits- oder Barrierefreiheitsnachweis wird daraus abgeleitet.

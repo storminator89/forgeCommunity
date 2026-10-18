@@ -141,7 +141,7 @@ export function EditContentForm({ content: initialContent, onSubmit, onContentCh
               <Label id={`${fieldId}-text-label`} htmlFor={htmlMode ? `${fieldId}-html` : undefined}>Inhalt</Label>
               <div className="flex items-center gap-2"><Label htmlFor={`${fieldId}-html-mode`}>HTML</Label><Switch id={`${fieldId}-html-mode`} checked={htmlMode} onCheckedChange={setHtmlMode} /></div>
             </div>
-            {htmlMode ? <Textarea id={`${fieldId}-html`} value={draftString(content)} onChange={event => updateContent(event.target.value)} className="min-h-64 font-mono" /> : <div role="group" aria-labelledby={`${fieldId}-text-label`}><Editor content={draftString(content)} onChange={updateContent} readOnly={isSubmitting} uploadImage={onImageUpload} className={`${richTextStyles.editor} min-h-56`} /></div>}
+            {htmlMode ? <Textarea id={`${fieldId}-html`} value={draftString(content)} onChange={event => updateContent(event.target.value)} className="min-h-64 font-mono" /> : <div role="group" aria-labelledby={`${fieldId}-text-label`}><Editor content={draftString(content)} onChange={updateContent} readOnly={isSubmitting} rootDocumentChangesOnly={staged} uploadImage={onImageUpload} className={`${richTextStyles.editor} min-h-56`} /></div>}
           </div>
         ) : type === 'H5P' ? (
           <H5PSourceField id={`${fieldId}-source`} value={draftString(content)} onChange={updateContent} disabled={isSubmitting || isH5PBusy} onBusyChange={setIsH5PBusy} />

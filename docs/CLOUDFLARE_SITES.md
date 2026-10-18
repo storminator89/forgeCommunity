@@ -9,12 +9,13 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up the published Version 67 source
-`21ed64d8c0589fddab72ec868d2a8f3a97270278`. Version 67 deployed successfully on
-18 October 2026 at 06:01:13 UTC. H5P chooser LIST now uses native D1 on the
-actual released v66 asset base. Positive chooser Owner/Admin/date/privacy QA
-remains open; embed/metadata/token assets/import/playback are separate.
-Roadmap uses v67; the source map retains its historical v63 base.
+runtime data. This GitHub snapshot backs up published Version 68 source
+`345b5f39a70f1fc7295be921518be89697ea118b`. Version 68 deployed successfully on
+18 October 2026 at 06:11:59 UTC. The staged course TEXT editor now uses the
+existing document-change-only mode. Targeted published reload/edit/save/
+navigation/publish-gate QA passed; the saved text was never reported lost.
+H5P chooser LIST remains native from v67; embed/metadata/token assets/import/
+playback are separate. Roadmap uses v68; the source map retains v63.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -75,9 +76,9 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 67 source includes the existing bounded ports below,
-inherited from Version 66, plus native D1 H5P chooser list described
-below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
+The published Version 68 source includes the existing bounded ports below,
+inherited from Version 67, plus the narrowly scoped staged TEXT editor fix
+described below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
 - D1-backed private course creation and draft editing, authoring-list/detail
@@ -2026,6 +2027,51 @@ pure/date/crypto/function tests, new CI, browser, package/import/token/secret or
 live-data actions by this backup. Roadmap and historical v63 source map add only
 bounded v67 chooser scope; README and prior approved facts are retained. This
 backup updates only cloudflare-sites and does not touch main/default.
+
+## Version 68: staged course TEXT editor initialization
+
+Published source `345b5f39a70f1fc7295be921518be89697ea118b`, deployment
+`appgdep_6ad46321d85481918d34c7877e56fe3d`, succeeded 18 October 2026 at
+06:11:59 UTC. The exact one-source-path aggregate is
+`b865c223b60878dd62a6f801d05346eb05ec4c7415c179668749eddcae176c93`.
+Only [EditContentForm](../app/courses/%5BcourseId%5D/contents/EditContentForm.tsx)
+adds `rootDocumentChangesOnly={staged}` to its existing TEXT editor, a
+33-byte opt-in. The whole original file is restored by removing that prop.
+The shared Editor, dirty comparisons, save/API/sanitizer logic and HTML
+textarea are unchanged. There is no blanket dirty reset, content stripping,
+automatic discard or publish action.
+
+Source review identifies an existing trigger route: Tiptap configuration/
+controlled synchronization can emit onUpdate without a root document change,
+and browser HTML normalization can differ from sanitized saved HTML. The
+existing opt-in mode suppresses those programmatic/non-document emissions
+while genuine root docChanged inputs still reach normal dirty/save handling.
+This does not prove the exact unknown saved/local HTML byte difference of the
+observed case or universal behavior for arbitrary malformed/legacy HTML.
+
+Independent source review, exact one-path/reversal/protected-file checks,
+final types/build, static artifact and packaged-archive checks passed. No
+local function/App/SQL tests or new CI were run. In targeted published v68 QA,
+unchanged settled text reload stayed clean; a genuine edit became dirty and
+blocked publish; save returned clean; Text/Quiz/Text navigation produced no
+spurious warning; reload retained the text and restored the publish affordance.
+This verifies that bounded legitimate course flow, not all editor/HTML variants
+or actual course publication. The prior v67 symptom was a UI/publish blocker;
+saved text persisted and discarding only local state did not erase it.
+
+Separately observed live in the current testing window: event creation and own
+Join/Leave succeeded, but Admin Event PUT failed and remains a separate pending
+callback fix. A targeted PollCreate returned500 inside its already-native D1
+batch; its precise SQL/guard/constraint cause is still unknown. No change or
+callback diagnosis for that native poll path is implied by this backup. H5P
+private byte/storage/playback and broader ownership/date/privacy cases retain
+their existing limits.
+
+This backup changes only the one source path plus this guide and curated
+roadmap. Existing v66 asset and v67 chooser bytes, README, historical source map,
+workflow definitions and all other export paths are retained. It writes only
+the authorized cloudflare-sites branch; concurrent main work is a separate
+operation and no global unchanged-main claim is made.
 
 ## Keeping the branches separate
 
