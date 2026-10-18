@@ -109,6 +109,7 @@ function ResourceLibraryForViewer({ session }: { session: Session | null }) {
   const editDialogGenerationRef = useRef(0);
   const editDraftReadyRef = useRef(false);
   const editDraftRevisionRef = useRef(0);
+  const editDialogOpenerRef = useRef<HTMLButtonElement | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [displayedResources, setDisplayedResources] = useState<Resource[]>([]);
   const [loading, setLoading] = useState(true);
@@ -325,9 +326,10 @@ function ResourceLibraryForViewer({ session }: { session: Session | null }) {
     }
   };
 
-  const handleEditResource = (resource: Resource) => {
+  const handleEditResource = (resource: Resource, opener?: HTMLButtonElement | null) => {
     if (!editActiveRef.current) return;
     if (editPendingRef.current && editTargetRef.current !== resource.id) return;
+    if (opener !== undefined) editDialogOpenerRef.current = opener;
     // Reopening the same pending/failed draft must not reload older row data.
     if (!editDraftReadyRef.current || editTargetRef.current !== resource.id) {
       setEditResource({ ...resource });
@@ -507,7 +509,11 @@ function ResourceLibraryForViewer({ session }: { session: Session | null }) {
         </main>
 
         {editResource && <Dialog open={isEditDialogOpen} onOpenChange={handleEditDialogOpenChange}>
-          <DialogContent>
+          <DialogContent onCloseAutoFocus={event => {
+            event.preventDefault();
+            const target = editDialogOpenerRef.current;
+            if (editActiveRef.current && !editDialogOpenRef.current && target?.isConnected) target.focus();
+          }}>
             <DialogHeader><DialogTitle>Ressource bearbeiten</DialogTitle><DialogDescription>Titel und URL sind erforderlich.</DialogDescription></DialogHeader>
             <form onSubmit={event => { event.preventDefault(); void handleUpdateResource(); }} className="space-y-5" aria-busy={isUpdatingResource}>
               <div className="space-y-2"><Label htmlFor="edit-resource-title">Titel</Label><Input id="edit-resource-title" value={editResource.title} onChange={event => { const title = event.target.value; updateEditResourceDraft(previous => ({ ...previous, title })); }} required disabled={isUpdatingResource} /></div>
@@ -528,11 +534,12 @@ function ResourceItem({ resource, isAdmin, currentUserId, onDelete, onEdit, pend
   isAdmin: boolean;
   currentUserId?: string;
   onDelete: (id: string) => void;
-  onEdit: (resource: Resource) => void;
+  onEdit: (resource: Resource, opener: HTMLButtonElement | null) => void;
   pendingEditId?: string;
 }) {
   const [copied, setCopied] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const actionsTriggerRef = useRef<HTMLButtonElement>(null);
   const canModify = isAdmin || resource.author.id === currentUserId;
   const safeResourceUrl = getSafeNavigationUrl(resource.url);
 
@@ -567,12 +574,12 @@ function ResourceItem({ resource, isAdmin, currentUserId, onDelete, onEdit, pend
         {safeResourceUrl ? <a href={safeResourceUrl} target="_blank" rel="noopener noreferrer" className="mt-4 inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-primary hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">Quelle öffnen <ArrowUpRight className="h-4 w-4" aria-hidden="true" /></a> : <p className="mt-4 text-sm text-muted-foreground">Keine sichere Zieladresse verfügbar.</p>}
       </div>
       <DropdownMenu>
-        <DropdownMenuTrigger asChild><Button type="button" variant="ghost" size="icon" aria-label={`Aktionen für ${resource.title}`} className="shrink-0"><MoreVertical className="h-4 w-4" aria-hidden="true" /></Button></DropdownMenuTrigger>
+        <DropdownMenuTrigger asChild><Button ref={actionsTriggerRef} type="button" variant="ghost" size="icon" aria-label={`Aktionen für ${resource.title}`} className="shrink-0"><MoreVertical className="h-4 w-4" aria-hidden="true" /></Button></DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem onSelect={() => void handleCopyLink()}>{copied ? <Check className="mr-2 h-4 w-4" aria-hidden="true" /> : <Copy className="mr-2 h-4 w-4" aria-hidden="true" />}Link kopieren</DropdownMenuItem>
           <DropdownMenuItem onSelect={() => shareResource('twitter')}>Auf X teilen</DropdownMenuItem>
           <DropdownMenuItem onSelect={() => shareResource('linkedin')}>Auf LinkedIn teilen</DropdownMenuItem>
-          {canModify && <><DropdownMenuSeparator /><DropdownMenuItem disabled={Boolean(pendingEditId && pendingEditId !== resource.id)} onSelect={() => onEdit(resource)}><Edit className="mr-2 h-4 w-4" aria-hidden="true" />Bearbeiten</DropdownMenuItem><DropdownMenuItem onSelect={() => setDeleteOpen(true)} className="text-destructive focus:text-destructive focus:bg-destructive/10"><Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />Löschen</DropdownMenuItem></>}
+          {canModify && <><DropdownMenuSeparator /><DropdownMenuItem disabled={Boolean(pendingEditId && pendingEditId !== resource.id)} onSelect={() => onEdit(resource, actionsTriggerRef.current)}><Edit className="mr-2 h-4 w-4" aria-hidden="true" />Bearbeiten</DropdownMenuItem><DropdownMenuItem onSelect={() => setDeleteOpen(true)} className="text-destructive focus:text-destructive focus:bg-destructive/10"><Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />Löschen</DropdownMenuItem></>}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

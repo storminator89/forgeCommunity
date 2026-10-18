@@ -9,12 +9,11 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up the published Version 42 source
-`d8e895b70d593d6d1e94e3b21021545460225ada`. Version 42 deployed successfully on
-17 October 2026 at 23:53:06 UTC. Resource-edit pending source is live. Read-only
-opening/values/cancel passed, with dismissal focus returning to BODY as an open
-gap; positive PUT/race proof remains open. The project rich-editor/focus
-correction is not included; the Version 41 project gaps also remain open.
+runtime data. This GitHub snapshot backs up the published Version 43 source
+`08720e0dbd562ec0bfbb1dde17c4a2bab22dde3b`. Version 43 deployed successfully on
+18 October 2026 at 00:01:28 UTC. The reviewed V2 project rich-editor opt-in and
+project/resource dismissal-focus corrections are live. Bounded read-only rich-
+text and exact-opener focus acceptance passed; PUT/pending/race proof stays open.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -75,8 +74,8 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 42 source includes the existing bounded ports below,
-inherited from Version 41, plus the scoped resource-edit pending guards described
+The published Version 43 source includes the existing bounded ports below,
+inherited from Version 42, plus the opt-in project rich-editor and dialog focus source described
 below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
@@ -156,13 +155,16 @@ all-page visual coverage.
   token rejection and visible keyboard focus; stored content and sanitizer
   unchanged, bounded existing-comment link readback passed
 - Project-edit immutable submit snapshot, single-pending gate and dialog/draft
-  generation guards; source-reviewed only, with known raw-HTML description and
-  dismissal-focus gaps in the published edit form
+  generation guards; positive PUT/pending acceptance remains source-reviewed;
+  Version 43 adds the opt-in rich-editor and dismissal-focus corrections below
 - Project-comment POST selects the existing newline-preserving plain-text
   sanitizer; stored comments are not rewritten, new multiline acceptance open
 - Resource-edit immutable submission, same-frame pending gate, target/draft/
   dialog-generation guards and inline errors; source-reviewed pending handling,
   positive published PUT/race acceptance remains open
+- Project-description rich-editor opt-in with silent controlled synchronization,
+  initial/pending inert locks and root-document change checks; exact-opener
+  focus restoration for project/resource dialogs, bounded read-only acceptance passed
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -784,6 +786,45 @@ and error-path races remain source-reviewed only. A normal read or passed build
 does not establish those scenarios. No resource content was changed by
 implementation or backup. Private field contents, account/record identifiers and screenshots
 are excluded. The curated roadmap remains byte-identical at its Version 32 base.
+
+## Version 43 opt-in project rich editor and dialog dismissal focus
+
+Version 43 combines the final independently reviewed ProjectEditor V2 and the
+Resources focus patch, three frontend files in total. Superseded V1 was never
+integrated. The project description uses the existing rich editor with an
+explicit root-document-change opt-in, controlled-content synchronization without
+emitting an edit callback, and an initial/pending inert lock. Selection/focus or
+editable-configuration synchronization is not treated as a user draft change.
+Other Editor callers keep the default non-opt-in mode.
+
+The project and Resources dialogs record their actual opener and restore focus
+only if that opener is still connected, the viewer remains active and the dialog
+has not reopened. This source increment addresses the raw-HTML description and
+BODY-focus findings recorded for Versions 41/42. It does not itself establish
+successful published behavior or a full accessibility pass.
+
+Untouched description bytes are retained; genuine rich-text edits use the
+existing schema, without an arbitrary legacy-HTML roundtrip guarantee. The
+comment API, shared sanitizer, plain-text link renderer and directory URL helper
+are unchanged. There is no server-write, schema, authentication, upload,
+dependency or stored-content change in this release.
+
+Independent final V2/component and exact-union review, production typechecking/
+build and static artifact/archive checks passed. Deployment succeeded on
+18 October 2026 at 00:01:28 UTC. At 00:02 UTC bounded published read-only
+acceptance passed. Resources Cancel and Escape returned focus to the exact
+original Actions button. The project description displayed its two existing
+paragraphs as rich text rather than HTML, with initial title focus and keyboard
+Tab into the editor. Project Cancel and Escape restored focus to its Edit
+button. All values remained unchanged; no typing or PUT was performed.
+Positive project/resource PUT, pending locks, Undo/IME/paste, close/reopen and
+unmount/account races, genuine rich-text modification/new saving and legacy-
+content variants remain unverified live. This bounded readback addresses the
+checked Versions 41/42 presentation/focus findings without proving full edit
+acceptance; earlier historical checks retain their release-specific scope.
+Private descriptions, resource fields, account/record identifiers and
+screenshots are excluded. The curated roadmap stays byte-identical at its
+dated Version 32 base.
 
 ## Keeping the branches separate
 

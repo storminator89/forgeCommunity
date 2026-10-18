@@ -12,6 +12,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Editor } from "@/components/Editor";
+import postBodyStyles from "@/components/community/community-post-body.module.css";
 import { ThumbsUp, MessageSquare, ExternalLink, Edit, Trash, Share2, Calendar, User, Tag, ArrowLeft } from 'lucide-react';
 import { useSession } from '@/lib/sites-auth/react';
 import type { Session } from '@/lib/sites-auth/server';
@@ -106,6 +108,7 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
   const editDraftReady = useRef(false);
   const editDraftRevision = useRef(0);
   const editImageInput = useRef<HTMLInputElement>(null);
+  const editDialogOpener = useRef<HTMLButtonElement | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [editProjectData, setEditProjectData] = useState<{
     title: string,
@@ -481,7 +484,7 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
                     <div className="flex min-w-0 flex-wrap items-center gap-2 border-t border-border pt-4">
                       {session?.user?.id === project.author.id && (
                         <>
-                          <Button variant="outline" size="sm" className="min-h-11" onClick={handleOpenEditDialog}><Edit className="mr-2 h-4 w-4" />Bearbeiten</Button>
+                          <Button variant="outline" size="sm" className="min-h-11" onClick={event => { editDialogOpener.current = event.currentTarget; handleOpenEditDialog(); }}><Edit className="mr-2 h-4 w-4" />Bearbeiten</Button>
                           <Button variant="outline" size="sm" className="min-h-11 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={handleOpenDeleteDialog}><Trash className="mr-2 h-4 w-4" />Löschen</Button>
                         </>
                       )}
@@ -647,7 +650,12 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
 
       {/* Edit Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={handleEditDialogOpenChange}>
-        <DialogContent className="max-h-[90dvh] overflow-y-auto" aria-busy={isSavingProject}>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto" aria-busy={isSavingProject} onCloseAutoFocus={event => {
+          // This opener lives outside Radix's DialogTrigger tree.
+          event.preventDefault();
+          const target = editDialogOpener.current;
+          if (editViewActive.current && !editDialogOpen.current && target?.isConnected) target.focus();
+        }}>
           <DialogHeader>
             <DialogTitle>Projekt bearbeiten</DialogTitle>
             <DialogDescription>Titel, Beschreibung, Kategorie und Link sind erforderlich.</DialogDescription>
@@ -662,12 +670,19 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
               />
             </div>
             <div>
-              <Label htmlFor="description">Beschreibung</Label>
-              <Textarea
-                id="description"
-                value={editProjectData.description}
-                onChange={(e) => { const description = e.target.value; updateEditProjectData(prev => ({ ...prev, description })); }}
-              />
+              <p id="project-edit-description-label" className="text-sm font-medium">Beschreibung</p>
+              <div role="group" aria-labelledby="project-edit-description-label" className={`${postBodyStyles.editor} min-w-0 rounded-[10px] focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2`}>
+                <Editor
+                  content={editProjectData.description}
+                  readOnly={isSavingProject}
+                  rootDocumentChangesOnly
+                  className="min-h-[180px]"
+                  onChange={description => {
+                    if (!editViewActive.current || !editDialogOpen.current) return;
+                    updateEditProjectData(prev => ({ ...prev, description }));
+                  }}
+                />
+              </div>
             </div>
             <div>
               <Label htmlFor="category">Kategorie</Label>
