@@ -3,6 +3,7 @@ import 'server-only';
 import { Prisma } from '@/generated/prisma/client';
 import { DriverAdapterError } from '@prisma/driver-adapter-utils';
 import { SPACE_ID_RE, SpaceApiError, spaceTransaction } from '@/lib/server/space-api';
+import { setD1MissionBookmark } from '@/lib/server/d1-space-mission-bookmarks';
 
 export type OwnBookmark = { saved: boolean; revision: number; accessEpoch: number };
 export const BOOKMARK_MAX_VERSION = 2147483647;
@@ -59,34 +60,7 @@ export async function readOwnMissionBookmark(missionId: string, userId: string, 
 
 export async function setMissionBookmark(spaceId: string, missionId: string, userId: string,
   input: ReturnType<typeof parseMissionBookmark>): Promise<OwnBookmark> {
-  return bookmarkTransaction(async tx => {
-    const account = SPACE_ID_RE.test(userId) ? await tx.user.findUnique({ where: { id: userId }, select: { id: true } }) : null;
-    if (!account) throw new SpaceApiError('Nicht authentifiziert', 401);
-    const mission = await tx.spaceMission.findFirst({ where: { id: missionId, spaceId, closedAt: null,
-      space: { visibility: 'PRIVATE', members: { some: { userId } } } }, select: { id: true } });
-    if (!mission) throw notFound();
-    const access = await tx.spaceMissionBookmarkAccess.findUnique({ where: { userId }, select: { epoch: true } });
-    if ((access?.epoch ?? 0) !== input.accessEpoch) throw conflict();
-    // Materialize and write the per-user fence even at epoch zero. Competing
-    // first-save/revoke transactions therefore cannot evade the same lock/CAS.
-    if (!access) await tx.spaceMissionBookmarkAccess.create({ data: { userId, epoch: 0 } });
-    else {
-      const fence = await tx.spaceMissionBookmarkAccess.updateMany({ where: { userId, epoch: input.accessEpoch },
-        data: { epoch: input.accessEpoch } });
-      if (fence.count !== 1) throw conflict();
-    }
-    if (input.expectedRevision >= BOOKMARK_MAX_VERSION) throw conflict();
-    const data = { savedAt: input.saved ? new Date() : null, revision: input.expectedRevision + 1 };
-    if (input.expectedRevision === 0) {
-      const previous = await tx.spaceMissionBookmarkSetting.findUnique({ where: { missionId_userId: { missionId, userId } }, select: { revision: true } });
-      if (previous) throw conflict();
-      await tx.spaceMissionBookmarkSetting.create({ data: { missionId, userId, ...data } });
-    } else {
-      const result = await tx.spaceMissionBookmarkSetting.updateMany({ where: { missionId, userId, revision: input.expectedRevision }, data });
-      if (result.count !== 1) throw conflict();
-    }
-    return { saved: input.saved, revision: data.revision, accessEpoch: input.accessEpoch };
-  });
+  return setD1MissionBookmark(spaceId, missionId, userId, input);
 }
 
 /** Run inside the official private-member-removal transaction, which itself

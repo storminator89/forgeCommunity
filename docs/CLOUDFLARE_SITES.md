@@ -9,12 +9,12 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up the published Version 53 source
-`8eda4f38d1128643eff8cfb63aa3cbb8c8412be1`. Version 53 deployed successfully on
-18 October 2026 at 01:51:53 UTC. Native D1 ADMIN Mission-contribution moderation
-source is live; positive moderation/noop/history/target-visibility/privacy/race
-acceptance remains unverified. Other ports retain their prior live gates.
-The curated roadmap retains its 18 October 2026, 00:15 UTC v44 base.
+runtime data. This GitHub snapshot backs up the published Version 54 source
+`479f7c8e09554570cd878982eae2a7abdfe79b89`. Version 54 deployed successfully on
+18 October 2026 at 02:00:54 UTC. Native D1 Mission bookmark PUT source is live;
+positive Save/Unsave/stale/global-revocation/race acceptance remains unverified.
+Member/account revocation callback chains remain separately unported. Other
+ports retain prior live gates. The roadmap retains its 18 October, 00:15 UTC v44 base.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -75,8 +75,8 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 53 source includes the existing bounded ports below,
-inherited from Version 52, plus native D1 Mission-contribution moderation described
+The published Version 54 source includes the existing bounded ports below,
+inherited from Version 53, plus native D1 Mission-bookmark PUT source described
 below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
@@ -188,6 +188,8 @@ all-page visual coverage.
   snapshot fences; positive target/lifetime/replay/privacy/race acceptance open
 - Native D1 ADMIN Mission-contribution hide/unhide with same-state and historical
   live-kind rival rules; positive moderation/history/privacy/race acceptance open
+- Native D1 Mission bookmark Save/Unsave PUT with fixed access epoch and own
+  revision fences; positive stale/global-revocation/race acceptance remains open
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -208,7 +210,7 @@ Version 36 additionally ports member discussion/reply creation; Version 49 ports
 PRIVATE ADMIN Mission creation; Version 50 ports close and scoped cleanup;
 Version 51 ports normal self-join/leave and scoped invitation settlement;
 Version 52 ports own contribution Add/Withdraw; Version 53 ports ADMIN
-contribution moderation.
+contribution moderation; Version 54 ports own Mission bookmark PUT.
 Positive Space/Mission mutation acceptance remains open. Invitation creation/
 acceptance, private member removal and other mission mutation flows remain
 outside these ports. Other workflows may still use Prisma
@@ -1157,6 +1159,37 @@ no moderation or other data mutation was performed. Positive moderation/noop/
 historical-rivalry/target-visibility/privacy/concurrency acceptance remains
 open. No local SQL/app/functional execution was used. The dated v44 roadmap
 remains byte-identical; full mission-flow or historical-content QA is not implied.
+
+## Version 54 bounded native D1 Mission bookmark PUT
+
+Version 54 changes only setMissionBookmark delegation and its native helper,
+two backend files. Current live account 401 precedes open PRIVATE Mission and
+actual membership 404, for every role. Fixed client global accessEpoch and
+exact own setting absence/revision preserve stale 409 behavior. Each accepted
+PUT increments own revision, even for the same saved value; Save overwrites
+savedAt, Unsave retains a NULL tombstone. Global Access is materialized at zero
+or same-epoch CAS, never reset. No auto-advancing client versions or consent,
+participation, invitation, reward or notification writes.
+
+One bounded nine-scalar snapshot and six-statement atomic batches assert live
+authority and exact final own savedAt/revision/accessEpoch before commit. Four
+attempts submit at most a conservative 29 statements including failed batches/
+reads, without provider cost assurances. Only the named first-preguard SQL
+rollback or exact own first-create UNIQUE plus changed freshly authorized
+snapshot may recover. Unknown commits, other constraints/CAS/end-invariant,
+transport or malformed successful results never retry. Parser/OwnBookmark/
+readOwn/bookmarkTransaction/revokeSpaceMissionBookmarks remain byte-identical,
+as do all other Mission ports, APIs/reader/schema/UI and poll ports. Member/
+account revocation callback chains are unchanged and separately unported;
+this PUT port does not prove end-to-end global revocation.
+
+Independent final review, production typechecking/build and static artifact/
+archive checks passed. Deployment succeeded on 18 October 2026 at 02:00:54 UTC.
+At 02:01:12 UTC the directory/session read showed zero Spaces and no alerts;
+no bookmark or other data mutation was performed. Positive Save/Unsave/stale/
+global-revocation/concurrency acceptance remains open. No local SQL/app/
+functional execution was used. The dated v44 roadmap remains byte-identical;
+full mission-flow or member/account revocation acceptance is not implied.
 
 ## Keeping the branches separate
 
