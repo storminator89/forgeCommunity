@@ -1,7 +1,7 @@
 # ForgeCommunity Nutzerflüsse und nächste Schritte
 
-Stand: 18. Oktober 2026, 04:33 UTC · veröffentlichte Sites-Version **v63**  
-Quellstand: `7a2909d82f1f419a8d19cea73d1395e291deb8f0`  
+Stand: 18. Oktober 2026, 04:51 UTC · veröffentlichte Sites-Version **v64**  
+Quellstand: `f4b25418f0f52bd882cc1a4db2d1d6d2d2c02faf`  
 Produkt: [ForgeCommunity](https://forge-community.dsgvision.chatgpt.site)
 
 Dieses Dokument beschreibt die veröffentlichte Sites-Variante und ihre gezielten Live-Prüfungen. Das Standardsetup mit Docker und SQLite oder PostgreSQL bleibt in der README der Hauptversion dokumentiert. Cloudflare-Einrichtung und Laufzeitgrenzen stehen separat in [CLOUDFLARE_SITES.md](CLOUDFLARE_SITES.md).
@@ -35,6 +35,7 @@ Leere Listen und eine leere Inbox beweisen keinen positiven Schreib-, Zustellung
 | Private Missionen | Native D1-Erstellung mit bestehendem Wochenvertrag, Schließen mit gekoppelter Bereinigung, normale eigene Teilnahme/Verlassen, eigene Beiträge/Rücknahme und Beitragsmoderation. | Seit v49–v53 ausgeliefert. Echte Zustimmung, Kapazität, Fristen, Beitragshistorie, Zugriffsentzug und Rennen benötigen passende veröffentlichte Abnahme. |
 | Missionsmerker und privater Zugang | Native D1-Merker-PUT sowie private Mitgliederaufnahme/-entfernung mit gekoppeltem Einladungs-, Merker- und Teilnahmewiderruf. | Seit v54/v55 ausgeliefert. Kein allgemeiner Artikel-/Ressourcenmerker; positive private Änderungs- und Widerrufsfälle offen. |
 | Missionseinladungen | Native D1-Detail-/Benachrichtigungszielauflösung, Kandidatensuche, Empfangspräferenz, Senden und seit v60 Annehmen/Ablehnen mit gekoppelter Teilnahme, Bereinigung und Vertragsgrenzen. | Seit v56–v60 ausgeliefert. Positive Zustellung, Annahme/Ablehnung, Replay, Unterdrückung, Quoten, Ablauf, Datenschutz und Rennen offen. Kein durchgängiger Einladungsfluss live abgenommen. |
+| Folgen | Seit v64 nativer Follow-POST mit derselben vorhandenen FOLLOW-Benachrichtigung in einem atomaren Batch; Session-/Duplikat-/Antwortvertrag sowie GET/DELETE bleiben erhalten. | Positive echte Follow-/Benachrichtigungs-/Race-Abnahme offen. Keine automatischen Wiederholungen oder lebenslange Genau-einmal-Garantie; erneutes Folgen nach Entfolgen kann eine weitere historische Benachrichtigung erzeugen. |
 | Ressourcen-Vorschau | Kompakter neutraler Fallback und bestehender sicherer Quellenlink. | Fallback und Tastaturzugang zur Quelle live bestätigt. Der echte externe Metadatenabruf bleibt technisch blockiert. |
 
 Die nachfolgenden Ports erweitern die Laufzeitkompatibilität vorhandener Funktionen. Sie führen keine neue Bewertung, Missionsregel, Rangliste oder Belohnung ein.
@@ -49,6 +50,7 @@ Die nachfolgenden Ports erweitern die Laufzeitkompatibilität vorhandener Funkti
 - **v61-Regressionsgrenze:** am 18. Oktober um 03:56 UTC blieben Session und leere Missions-/Spaceübersichten ohne sichtbaren Fehler erhalten. Es erfolgte keine Moderation oder Datenänderung; dies ist keine positive Moderationsabnahme.
 - **v62-Regressionsgrenze:** am 18. Oktober um 04:16 UTC blieben Session und leere Space-/Lernpfadübersichten ohne sichtbaren Fehler erhalten. Keine Teilnahme-, Abzeichen-, Belohnungs- oder Datenaktion erfolgte. Die leere Liste beweist keinen positiven Teilnahmefluss.
 - **v63-Regressionsgrenze:** am 18. Oktober um 04:33 UTC blieben Session und nach Reload vollständig geladene leere Lernpfadübersicht ohne sichtbaren Fehler erhalten. Keine Definition, Freigabe, Belohnung oder sonstige Datenaktion erfolgte; positive Admin-Erstellung bleibt ungeprüft.
+- **v64-Regressionsgrenze:** am 18. Oktober um 04:51 UTC blieben Session und fertig geladene leere Lernpfadübersicht nach Reload ohne sichtbaren Fehler erhalten. Keine Follow-, Entfolgen-, Benachrichtigungs-, Kontakt- oder sonstige Datenaktion erfolgte; dies ist keine positive Follow-Abnahme.
 - **Geschützte leere Übersichten:** begrenzte Listen-/Inbox-Regressionsprüfungen sind von den weiterhin fehlenden positiven Space-, Umfrage-, Missions- und Einladungsfällen getrennt. Keine zusätzlichen Teilnehmer, Stimmen oder Einladungen als Prüfmaterial erzeugt.
 
 Gast-/Loginrückkehr, vollständige Geräte-/Assistenztechnikabnahme, Benachrichtigungszustellung und seltene Fehlerzustände sind damit nicht allgemein bestätigt. Detaillierte Laufzeitabgrenzungen stehen im separaten Cloudflare-Guide.
@@ -58,6 +60,10 @@ Gast-/Loginrückkehr, vollständige Geräte-/Assistenztechnikabnahme, Benachrich
 1. **Positive Einladungsabnahme:** Annehmen/Ablehnen ist seit v60 nativ ausgeliefert, einschließlich gekoppelter Teilnahme, Frist-/Revisions-/Zugriffskontrolle und terminaler Bereinigung. Die begrenzte veröffentlichte Regression bestätigte nur erhaltene Session und leere Benachrichtigungs-/Missionsübersichten ohne sichtbare Fehler. Positive Annahme/Ablehnung, Wiederholung, Ablauf, Kapazität, Datenschutz und Rennen bleiben ohne legitime autorisierte Einladung offen. Das ist eine Abnahmegrenze, kein weiter bestehender Decision-Callbackblocker.
 2. **Weitere Abnahmegrenzen und Restpfade:** Admin-Lernpfaddefinition-Erstellung ist seit v63 nativ ausgeliefert; die positive Fachabnahme bleibt offen. Der Create-only-Port beansprucht keine umfassende Admin-Bearbeitung. Drei vollständige native Versuche und ein dauerhafter Beleg nach beobachteter UUID-Belegung ersetzen den früheren Vier-Versuche-Pfad; Verfügbarkeits-/Antwortfehler nach Commit sind weiterhin möglich. Die normale Lernpfad-Teilnahme POST/DELETE ist seit v62 nativ ausgeliefert; positive Teilnahme-/Abzeichen-/Historienabnahme bleibt offen. Vollständiger eigener Abgleich, erhaltene Historie und Opt-out-Datensätze bleiben Teil des Vertrags. Native Ressourcen-, Datums-, Int32- und Versionsgrenzen gelten; die tatsächliche Installation zusätzlicher Datenbanktrigger wurde nicht live geprüft. Diskussions-/Antwortmoderation ist seit v61 nativ ausgeliefert; die positive Fachabnahme bleibt offen. Der Port bewahrt begrenzte native Zeilen-/Antwortbudgets und unterstützte absolute Datumsformen; beliebige fehlerhafte oder übergroße Altdaten sind nicht allgemein gleichwertig unterstützt. Auch andere Account-/Rollen-/Melde- und Kursfunktionen sind durch die genannten Ports nicht pauschal repariert. „Mein Lernweg“ ist nicht die Lernpfadteilnahme.
 3. **Ressourcen-Metadaten:** `lib/server/url-security.ts` verwendet weiterhin `lookup()` aus `dns/promises`. Die [Cloudflare-DNS-Dokumentation](https://developers.cloudflare.com/workers/runtime-apis/nodejs/dns/) führt diese Funktion als nicht implementiert. Quellenableitung: der bestehende Hostnamepfad scheitert vor dem Domainabruf und bleibt geschlossen. Der Fallback repariert den Transport nicht; eine spezielle Sperre der externen Website ist nicht belegt.
+
+## Historische Quellenkarte der Callback-Restpfade
+
+Die [kuratierte v63-Quellenkarte](D1_CALLBACK_SOURCE_MAP_V63.md) enthält 63 statisch erreichbare Routen-/Methodenzweige plus fünf obsolete Kompatibilitätsmethoden und relative Repositoryquellen. Das sind keine 63 live beobachteten Fehler oder unabhängigen Nutzerabläufe. Basis bleibt ausdrücklich v63; Follow-POST ist darin seit v64 als portierter Einzelfix markiert. Chat, allgemeine Bildspeicherung, Kursformatierung und Übungs-Retention behalten ihre getrennten Diagnose-/Prüfgrenzen. Keine pauschale Funktionsabnahme oder künstliche Aktivität wird daraus abgeleitet.
 
 ## Die nächsten drei begrenzten Pakete
 
@@ -81,6 +87,6 @@ Eine allgemeine private Inhaltsmerkliste und eine passendere allgemeine Ressourc
 
 ## Quellen und Prüfgrenze
 
-Grundlage: der oben genannte v63-Quellstand, bestätigte Auslieferungen bis v63 und die ausdrücklich abgegrenzten veröffentlichten Beobachtungen. Für diese Dokumentprüfung wurden keine Produktdaten oder Repositorydateien verändert, keine Funktionstests gestartet und keine Browseraktionen ausgeführt.
+Grundlage: der oben genannte v64-Quellstand, bestätigte Auslieferungen bis v64 und die ausdrücklich abgegrenzten veröffentlichten Beobachtungen. Für diese Dokumentprüfung wurden keine Produktdaten oder Repositorydateien verändert, keine Funktionstests gestartet und keine Browseraktionen ausgeführt.
 
 Wesentliche Quellverträge: `space-polls.ts`, `space-missions.ts`, `space-mission-bookmarks.ts`, `space-mission-invitations.ts` und ihre nativen D1-Helper unter `lib/server/`; private Mitgliedschaftsrouten; Lernpfadteilnahmeroute; `lib/server/url-security.ts`; Journey-/Verzeichnis-URLhelper und vorhandene Bearbeitungs-/Kommentaransichten. Standard-Node/Docker und Sites/D1 bleiben getrennte Laufzeitziele. Kein vollständiger Funktions-, Sicherheits- oder Barrierefreiheitsnachweis wird daraus abgeleitet.

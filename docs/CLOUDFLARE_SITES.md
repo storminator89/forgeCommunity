@@ -9,12 +9,12 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up the published Version 63 source
-`7a2909d82f1f419a8d19cea73d1395e291deb8f0`. Version 63 deployed successfully on
-18 October 2026 at 04:33:18 UTC. Native D1 ADMIN Pathway-definition Create is
-live; positive creation/replay/material/race/rollback acceptance remains open.
-Three native full attempts, unknown live DDL and the original postcommit
-availability/500 boundary remain explicit. The curated roadmap uses the v63 base.
+runtime data. This GitHub snapshot backs up the published Version 64 source
+`f4b25418f0f52bd882cc1a4db2d1d6d2d2c02faf`. Version 64 deployed successfully on
+18 October 2026 at 04:51:39 UTC. Existing Follow POST now uses native D1 with its
+original domain notice in one batch. Positive Follow/Notice/race acceptance is
+open; no retry or lifetime exactly-once claim. The curated roadmap uses v64;
+the separately linked callback source map keeps its historical v63 base.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -75,8 +75,8 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 63 source includes the existing bounded ports below,
-inherited from Version 62, plus native D1 ADMIN Pathway-definition Create described
+The published Version 64 source includes the existing bounded ports below,
+inherited from Version 63, plus native D1 Follow POST described
 below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
@@ -208,6 +208,8 @@ all-page visual coverage.
   reconciliation and retained history/tombstones; positive mutation QA open
 - Native D1 ADMIN Pathway-definition Create with immutable ordered snapshots/
   UUID receipt and atomic sealing; positive published create/replay QA open
+- Native D1 Follow POST with existing atomic Follow/FOLLOW-Notice semantics;
+  GET/DELETE unchanged, positive published Follow/Notice acceptance open
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -233,7 +235,9 @@ ports PRIVATE member Add/Remove with coupled revocation.
 Version 59 ports Send; Version 60 ports invitation Accept/Decline source.
 Version 61 ports existing ADMIN discussion/reply moderation.
 Version 62 ports normal Pathway participation; Version 63 ports ADMIN Pathway
-definition Create only. Other unported flows remain separate.
+definition Create only. Version 64 ports existing Follow POST; other unported
+flows remain separate. The [historical v63 source map](D1_CALLBACK_SOURCE_MAP_V63.md)
+records callback-route reachability, not 63 live-reproduced bugs.
 Positive Space/Mission mutation acceptance remains open. Account/role changes
 and other mission mutation flows remain
 outside these ports. Other workflows may still use Prisma
@@ -1691,6 +1695,77 @@ rollback/postcommit-availability acceptance remains open. No local App/SQL/pure/
 date/crypto/function tests, CI or browser work by this backup. The separately
 curated roadmap updates v63 Create-delivered/QA-open scope and retains all prior
 approved facts; README scope/setup/gallery bytes remain unchanged.
+
+## Version 64 bounded native D1 Follow POST
+
+Version 64 adds only a narrow helper and original POST callback replacement plus
+import, two backend files. Exact reversal reconstructs every prior route byte.
+Original params await outside try, session/self and Prisma pair-duplicate read,
+success/error interpolation, complete GET/DELETE and global proxy remain intact.
+Existing proxy origin/cookie handling is unchanged; no new handler Origin/body/
+ID-format/nonempty/role/test/preference/quota gate. Both living Users are required
+by the existing FK-connect contract. Session 401, self 400, original duplicate
+400 precede the native mutation. No profile/email/role/key data are transported.
+
+Follow and exactly the old FOLLOW Notification commit in one first-primary native
+six-statement batch. Unconditional throwing preguard fences duplicate pair, both
+Users, nullable current target-name type/budget and generated global ID collisions.
+Plain Follow INSERT, immediate changes-one/exact ID/full row/pair cardinality,
+plain Notice INSERT and changes-one/exact full new Notice precede unconditional
+actual final guard of both living Users/full Follow/Notice/current target-name
+projection. Missing rows cannot suppress assertions. Session-name notice text
+interpolation, including literal null/undefined, is passed unchanged, without
+reread/sanitize/fallback. Success retains current nullable target-name interpolation,
+including literal null. No REPLACE/upsert/IGNORE, old-notice query/repair/delete,
+counter/history/reward/receipt or newly invented engagement operation.
+
+There are NO automatic retries, preflight/helper reads, postcommit readback, UUID
+regeneration or receipts. Duplicate successful POST stays 400 without another
+Notice even if an old Notice is missing. True unfollow/refollow can create another
+historical Notice; there is no lifetime exactly-once guarantee. Follow absence
+after an ambiguous result cannot prove failure because DELETE may race while the
+Notice remains. Only own SQL-qualified firstguard markers through bounded whole-
+cause deny-first/same-detail D1_ERROR/SQLITE_ERROR classification mint original
+P2002/400 (duplicate/generated ID collision) or P2025/404 (missing User). Foreign/
+mixed/constraint/invariant/timeout/transport/unknown-commit failures stay generic
+500 without top-level Prisma code. Malformed-success decode remains outside catch,
+never retries or creates a successful receipt. A500 may follow known/uncertain
+commit; no readback-success inference or automatic reconciliation by absence.
+
+Two UUIDs and one stable valid ISO UTC+00:00 operation timestamp are chosen once.
+No stored-date parsing or original equal-clock guarantee is introduced. Raw
+row/input 200,000-byte, complete result/route-response 1,200,000-byte and complete
+SQL/bind wire 8,000,000-byte ceilings are fail-closed operational limits, not product
+name rules or platform allowances. Whole escaped result/response is bounded before
+writes; nothing is shortened/truncated. Unsupported/oversized legacy names can
+500 before writes. Live DDL/FK/index/custom-trigger installation remains unknown;
+owned exact cardinality guards do not prove arbitrary extra trigger side effects
+absent or repair historical notice consistency.
+
+Both exact source passes, including independent Privacy/Domain/NoRetry, passed.
+Six SQL shapes total 4,146 bytes, maximum 2,170; max binds 33, arity two, compound
+one, two result columns. Six helper statements plus unchanged auth two/duplicate
+read one = nine source statements, not measured runtime/billing/latency cost.
+Production types/build and static artifact/archive checks passed. Deployment
+succeeded on 18 October 2026 at 04:51:39 UTC. Bounded published 04:51:55 UTC reload
+retained session and settled empty Pathway overview without errors/forms/dialogs.
+No Follow/unfollow/Notice/contact/engagement fixture or data action occurred.
+Positive legitimate Follow+Notice/duplicate/missing/nullable-name/race/unfollow-
+refollow/rollback/privacy acceptance remains open. No local App/SQL/pure/date/
+crypto/function tests, new CI or browser work by this backup.
+
+## Historical callback source map, separately curated documentation
+
+The [v63 callback source map](D1_CALLBACK_SOURCE_MAP_V63.md) retains its exact
+historical source base and all 63 intended exposed route/method records plus five
+obsolete compatibility methods. It is a compact public documentation exception,
+not additional Sites source or a live failure log. Follow POST is specifically
+annotated as ported since v64; no wholesale completion or 63 live errors are claimed.
+Repository-relative source links are present in this backup; private paths and
+unshipped investigation-artifact links are omitted. Chat/native authoring/formatting,
+filesystem/codec upload leads and independent retention gates remain separated.
+The curated user roadmap links the same map and updates actual v64 scope while
+retaining previous approved facts. README scope/setup/gallery bytes stay intact.
 
 ## Keeping the branches separate
 

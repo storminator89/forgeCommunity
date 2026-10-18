@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getServerSession } from "@/lib/sites-auth/server";
 import { authOptions } from '@/lib/auth';
+import { createD1UserFollow } from '@/lib/server/d1-user-follow';
 
 // POST zum Folgen eines Benutzers
 export async function POST(
@@ -49,29 +50,7 @@ export async function POST(
 
     // The notification and relation commit together. The unique constraint
     // also handles two requests that both passed the existence check.
-    const follow = await prisma.$transaction(async tx => {
-      const created = await tx.follow.create({
-        data: {
-          follower: { connect: { id: followerId } },
-          following: { connect: { id: followingId } },
-        },
-        include: {
-          following: {
-            select: { name: true, email: true },
-          },
-        },
-      });
-      await tx.notification.create({
-        data: {
-          userId: followingId,
-          type: 'FOLLOW',
-          content: `${session.user.name} folgt Ihnen jetzt`,
-          targetType: 'USER',
-          targetId: followerId,
-        },
-      });
-      return created;
-    });
+    const follow = await createD1UserFollow(followerId, followingId, `${session.user.name} folgt Ihnen jetzt`);
 
     return NextResponse.json({
       success: true,
