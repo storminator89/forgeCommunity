@@ -8,6 +8,7 @@ import { sanitizeTextServer } from '@/lib/server/sanitize-html';
 import { d1SpacePoll, d1SpacePolls } from '@/lib/server/d1-space-poll-reads';
 import { createD1SpacePoll } from '@/lib/server/d1-space-poll-create';
 import { voteD1SpacePoll } from '@/lib/server/d1-space-poll-vote';
+import { moderateD1SpacePoll } from '@/lib/server/d1-space-poll-moderation';
 
 export const POLL_PAGE_SIZE = 10;
 export const POLL_CHANGE_LIMIT = 100;
@@ -149,16 +150,5 @@ export async function votePoll(spaceId: string, id: string, userId: string, inpu
 }
 
 export async function moderatePoll(spaceId: string, id: string, userId: string, input: ReturnType<typeof parsePollModeration>) {
-  return spaceTransaction(async tx => {
-    const access = await accessPolls(spaceId, userId, tx);
-    if (!access.canManage) throw new SpaceApiError('Nicht autorisiert', 403);
-    const poll = await findPoll(spaceId, id, access, tx);
-    if ('closed' in input) {
-      if (!poll.closedAt) await tx.spacePoll.update({ where: { id }, data: { closedAt: new Date() } });
-    } else if (Boolean(poll.hiddenAt) !== input.hidden) {
-      if (poll.moderationRevision !== input.expectedRevision) throw conflict();
-      await tx.spacePoll.update({ where: { id }, data: { hiddenAt: input.hidden ? new Date() : null, moderationRevision: { increment: 1 } } });
-    }
-    return projectPoll(await findPoll(spaceId, id, access, tx), userId, access, tx);
-  });
+  return moderateD1SpacePoll(userId, spaceId, id, input);
 }

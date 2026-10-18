@@ -9,12 +9,12 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up the published Version 47 source
-`d47c1b0bd422dfee30e8ebc0a5e696d7acc25047`. Version 47 deployed successfully on
-18 October 2026 at 00:43:56 UTC. Native D1 poll Vote source is live; no vote was
-cast and positive Vote/replay/quota/CAS-race acceptance remains unverified.
-Reads/Create are unchanged; Moderate remains callback-based. The curated
-roadmap retains its 18 October 2026, 00:15 UTC v44 base.
+runtime data. This GitHub snapshot backs up the published Version 48 source
+`451cc8bf294e7daddfd1f132c20ea4ccd7079eaf`. Version 48 deployed successfully on
+18 October 2026 at 00:51:46 UTC. All operational poll paths now have native D1
+source ports; positive poll-flow acceptance remains unverified. No poll data
+was created or changed for this check. The curated roadmap retains its
+18 October 2026, 00:15 UTC v44 base.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -75,8 +75,8 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 47 source includes the existing bounded ports below,
-inherited from Version 46, plus the bounded native D1 poll-Vote source described
+The published Version 48 source includes the existing bounded ports below,
+inherited from Version 47, plus the bounded native D1 poll-moderation source described
 below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
@@ -171,11 +171,13 @@ all-page visual coverage.
   bounded profile-return/reload/reset acceptance passed
 - Native D1 protected poll list/detail GET with caller-only own vote, aggregate
   option counts, typed bounded projections and 10-plus-1 keyset paging; positive
-  poll/privacy/paging acceptance unverified; Moderate remains unported
+  poll/privacy/paging acceptance unverified
 - Native D1 ADMIN poll creation with scoped receipt replay, rolling quotas and
   atomic Poll/options/response fences; positive Create/quota/race acceptance open
 - Native D1 poll Vote with scoped receipts, own-vote revision CAS and quotas;
-  positive Vote/replay/race acceptance open, Moderate remains callback-based
+  positive Vote/replay/race acceptance open
+- Native D1 ADMIN poll close/hide/unhide with exact snapshot and CAS fences;
+  positive moderation/noop/race acceptance remains unverified
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -193,7 +195,7 @@ mutation flows, course Q&A creation/replies/moderation/solution writes,
 course analytics, and other Space/mission mutation flows remain unported.
 Version 34 ports ADMIN Space creation and PUBLIC own join/leave source;
 Version 36 additionally ports member discussion/reply creation. Positive Space
-mutation acceptance remains open. Poll moderation, invitations, private member
+mutation acceptance remains open. Invitations, private member
 removal and mission cleanup remain outside these ports. Other workflows may still use Prisma
 transaction patterns that D1 does not support. Do not infer full write-flow
 support from this source scope.
@@ -968,6 +970,28 @@ alerts, explicitly not a Vote test. No vote was cast. Positive Vote/replay/quota
 CAS-race/private/hidden/closed acceptance remains unverified live. No local
 SQL/app/functional execution or artificial engagement data was used. Prior
 read/Create limits and the byte-identical dated v44 roadmap remain in force.
+
+## Version 48 bounded native D1 poll moderation
+
+Version 48 changes only moderatePoll delegation and its native helper, two
+backend files. Readable-Space 404 precedes stored ADMIN 403 and exact-poll 404.
+Close retains its first timestamp without changing the moderation revision;
+same-state hide/unhide is zero-write before revision checking, real changes
+CAS-increment once. Authority, complete bounded DTO and raw snapshots are
+fenced atomically. No reopen, receipts, quotas, rewards or new powers. Same-state
+idempotency does not promise lasting exactly-once effects. Only a proved
+preguard rollback plus a changed freshly authorized snapshot can retry;
+unknown commit/network/invariant/constraint failures cannot. Native Reads,
+Create, Vote, parsers/routes/shared/schema/UI remain byte-identical.
+
+Independent source review, production typechecking/build and static artifact/
+archive checks passed. Deployment succeeded on 18 October 2026 at 00:51:46 UTC.
+At 00:52:04 UTC the directory/session read showed zero Spaces and no alerts;
+this supplies no positive poll acceptance. No poll mutation was performed.
+Positive Admin/noop/CAS/close/hidden/private/concurrency acceptance remains
+unverified live, as do prior positive poll read/Create/Vote gates. No local
+SQL/app/functional execution or artificial engagement data was used. The
+byte-identical dated v44 roadmap describes its historical base, not v48 scope.
 
 ## Keeping the branches separate
 
