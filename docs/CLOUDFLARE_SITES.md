@@ -2335,6 +2335,12 @@ runs were used. Positive published Vote/revision/replay/quota/privacy/race QA is
 still open and must be coordinated separately; v73 basic Create success is not
 a substitute.
 
+Additional bounded published v74 QA: on the existing own Poll, Close persisted
+after reload; Hide persisted as closed and hidden; Unhide persisted as visible
+and still closed. All stages showed zero votes with voting options disabled.
+This confirms only that own-Admin moderation sequence. No Vote/revision/receipt,
+foreign-author ACL, opt-in, quota or concurrency case was exercised.
+
 ## Keeping the branches separate
 
 Keep Cloudflare-only dependencies, auth, D1 queries and deployment scaffolding
