@@ -24,8 +24,7 @@ import { PostForm } from '@/components/community/PostForm'
 import { PostCard } from '@/components/community/PostCard'
 import { LeaderboardCard } from '@/components/community/LeaderboardCard'
 import { StatsCard } from '@/components/community/StatsCard'
-import { ContributionMilestonesCard } from '@/components/community/ContributionMilestonesCard'
-import { PersonalProgressCard } from '@/components/community/PersonalProgressCard'
+import { PersonalProgressDashboard } from '@/components/community/PersonalProgressDashboard'
 import { FirstActionGuide } from '@/components/community/FirstActionGuide'
 import { TopicNavigation } from '@/components/community/TopicNavigation'
 import { FeedFilters } from '@/components/community/FeedFilters'
@@ -330,8 +329,8 @@ function Community({ session, topic, filters, onSelectTopic, onSelectFilters, on
             <div className="fc-community-layout">
               <section aria-labelledby="community-feed-title" className="min-w-0">
                 <HeroBanner title="Gemeinsam mehr erreichen." description="Stelle Fragen, teile Wissen, diskutiere Ideen und vernetze dich mit anderen Mitgliedern." className="fc-community-hero"><CommunityLandscape /></HeroBanner>
-                <PersonalProgressCard summary={rewards.summary} loading={rewards.loading} error={rewards.error}
-                  isSignedIn={!!session?.user?.id} role={session?.user?.role} onRefresh={rewards.refresh} />
+                <PersonalProgressDashboard rewards={rewards} contributions={contributions}
+                  isSignedIn={!!session?.user?.id} role={session?.user?.role} />
                 {notification && (
                   <div className={`sticky top-0 z-10 mb-3 rounded-lg border bg-card px-4 py-3 text-sm font-medium ${notification.type === 'success' ? 'border-success/30 text-success' : 'border-destructive/30 text-destructive'}`}
                     role={notification.type === 'error' ? 'alert' : 'status'}>
@@ -439,9 +438,6 @@ function Community({ session, topic, filters, onSelectTopic, onSelectFilters, on
 
 <aside aria-label="Deine Community im Überblick" className="fc-community-aside">
                 <StatsCard stats={activity} activityLoading={activityLoading} activityError={activityError} onRetryActivity={refreshActivity} isSignedIn={!!session?.user?.id} />
-                <div className="fc-surface p-5 min-w-0 [overflow-wrap:anywhere] [&_button]:h-auto [&_button]:min-h-11 [&_button]:max-w-full [&_button]:whitespace-normal">
-                  <ContributionMilestonesCard summary={contributions.summary} loading={contributions.loading} error={contributions.error} isSignedIn={!!session?.user?.id} onRefresh={contributions.refresh} />
-                </div>
                 <LeaderboardCard
                   users={leaderboardUsers}
                   isLoading={isLeaderboardLoading}
