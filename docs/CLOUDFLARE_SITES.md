@@ -9,14 +9,15 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up published Version 74 source
-`cb192d33324f933aa613e3c66c43601ff334f861`. Version 74 deployed successfully on
-18 October 2026 at 06:53:55 UTC. It separately balances the complete native
-PollVote equality guard after the analogous source depth conflict was proven.
-The v73 basic PollCreate/reload and own Admin reply moderation, v71 simple Event
-description update and v68 staged-editor positive QA remain documented. No live
-Vote outcome follows from those cases. Roadmap uses v74; the source map retains
-v63.
+runtime data. This GitHub snapshot backs up published Version 75 source
+`4789bd7ff74a29b7e1e097b95e4c4bac4a469c2c`. Version 75 deployed successfully on
+18 October 2026 at 07:02:47 UTC. It restores the existing global chat polling
+baseline in one client context, preserving current account/privacy/send/manual
+read protections. This is not closed-browser push or proof of desktop delivery.
+The inherited initial-body-fetch recovery limit is documented below. Prior
+targeted PollCreate, own moderation, Event update and staged-editor/formatting
+QA remain bounded to their observed cases. Roadmap uses v75; the source map
+retains v63.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -2340,6 +2341,75 @@ after reload; Hide persisted as closed and hidden; Unhide persisted as visible
 and still closed. All stages showed zero votes with voting options disabled.
 This confirms only that own-Admin moderation sequence. No Vote/revision/receipt,
 foreign-author ACL, opt-in, quota or concurrency case was exercised.
+
+## Version 75: restore existing chat polling baseline
+
+Published source: `4789bd7ff74a29b7e1e097b95e4c4bac4a469c2c`.
+Deployment: `appgdep_6ad46f0b2e50819195e1a22428fb6709`, succeeded
+18 October 2026 at 07:02:47 UTC. One-source aggregate:
+`af061be58abb09cc2cdb21bd5e006967f49c9562a467f60ab3057164742baf63`.
+
+Only `contexts/ChatContext.tsx` changes. Sites foreground/route-only automatic
+reads conflicted with the existing desktop-alert condition, which needs an
+unfocused open app. The patch restores the pinned main polling baseline
+`c442bb09e0e46684f19bb6d6dff061e13078111d` without importing main auth/runtime.
+
+- The complete 4,153-byte scheduler, fetchChannels and setActiveChannel match
+  that baseline. Initial role-aware channel selection is global again: ADMIN
+  auto-selects a listed public room, other users their first authorized room.
+  Background metadata never reopens a rejected room.
+- Initial selected-room body read and the existing ten-second cursor sync run
+  while unfocused, hidden or on another app route. Only the selected authorized
+  room is synchronized; this is not all-channel body subscription or
+  closed-browser push. Browser timer throttling can delay actual intervals.
+- Channel metadata retains its thirty-second visible/online scheduler,
+  single-flight behavior and backoff up to 120 seconds. Automatic body reads
+  no longer depend on the Sites foreground helper. This intentionally restores
+  the old read cadence rather than retaining the route-only read reduction.
+- All current signal/account/active-channel/403 guards and the load request
+  token remain. Account/role remount, abort controller, verified preference,
+  permission check, desktop handle cleanup, deduplication and own-message
+  suppression are unchanged. Disabled or unverified preferences cannot produce
+  desktop text; a verified missing settings row keeps the existing default.
+- Current manual older-message and markRead focus/route gates remain, as does
+  the unchanged chat page viewport/latest-persisted-message check. Automatic
+  GETs do not call markRead. No unread marker is cleared merely by polling.
+- Existing sendError, trusted error messages, PNG/private-R2 acknowledgement,
+  send/upload/auth/storage and provider projection remain byte-identical.
+  The only DELETE-related change removes the route conjunction from the
+  existing remaining-room selection after successful channel deletion; its
+  request, access and error behavior remain.
+- No permission request, preference write, service worker, new token, API,
+  backend, storage, host or security change is introduced.
+
+**Inherited baseline availability limit:** an initial body read is attempted by
+the channel/account effect. If it fails, initialLoadedChannelRef stays empty
+and the ten-second sync cannot retry that initial load. Recovery requires a
+channel change or provider remount. The former Sites foreground scheduler
+could retry an initial fetch; this optimization is deliberately not retained
+by exact baseline restoration. No claim that every availability optimization
+survived is made, and a future initial-retry improvement needs separate scope.
+
+Independent exact source/privacy reviews verified the same actual aggregate,
+patch, baseline blocks, nine complete protected current blocks and 22 unchanged
+source/schema/API files. Final types/build, static artifacts and archive checks
+passed. No local functional/app/SQL test or new CI run was performed.
+
+Positive desktop delivery, opt-out and account-switch privacy QA still needs a
+legitimate new message from another authorized account, existing stored opt-in,
+previously granted browser permission and true blur/hidden behavior. No
+permission prompt, opt-in change or fabricated message was used for this source
+proof. Bounded published read QA on v75 passed: the existing authorized channel
+loaded with three existing messages, navigation to Events and back preserved
+the same channel/messages, and no visible error occurred. No message or
+permission action was performed. This does not validate desktop background
+delivery or opt-out/account-switch cases.
+
+Additional own-course v74 published QA: saved formatting survived reload and
+preview with a bold learning goal, H2, three list items and W3C link. Rendering
+was clean without raw HTML or ghost dirty state, the quiz stayed unchanged and
+the course remained unpublished. This confirms only that targeted text-edit
+case; it is not a general course/publication/prerequisite/storage acceptance.
 
 ## Keeping the branches separate
 

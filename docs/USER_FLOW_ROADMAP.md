@@ -1,7 +1,7 @@
 # ForgeCommunity Nutzerflüsse und nächste Schritte
 
-Stand: 18. Oktober 2026, 06:53 UTC · veröffentlichte Sites-Version **v74**  
-Quellstand: `cb192d33324f933aa613e3c66c43601ff334f861`  
+Stand: 18. Oktober 2026, 07:02 UTC · veröffentlichte Sites-Version **v75**  
+Quellstand: `4789bd7ff74a29b7e1e097b95e4c4bac4a469c2c`  
 Produkt: [ForgeCommunity](https://forge-community.dsgvision.chatgpt.site)
 
 Dieses Dokument beschreibt die veröffentlichte Sites-Variante und ihre gezielten Live-Prüfungen. Das Standardsetup mit Docker und SQLite oder PostgreSQL bleibt in der README der Hauptversion dokumentiert. Cloudflare-Einrichtung und Laufzeitgrenzen stehen separat in [CLOUDFLARE_SITES.md](CLOUDFLARE_SITES.md).
@@ -15,6 +15,10 @@ Der beobachtete einfache Admin-Event-Updatefehler ist seit v71 korrigiert und mi
 Zusätzlich wurde auf v73 eine eigene Diskussionsantwort erstellt und nach Reload erhalten, verborgen und nach Reload verborgen gesehen sowie wiederhergestellt und nach Reload sichtbar gesehen. Es blieb genau eine Antwort; die ursprüngliche Diskussion blieb unverändert. Das bestätigt nur den eigenen Admin-Antwort-/Moderationsfall, keine fremde Autorschafts- oder Rollen-ACL. Likes, Stimmen und XP wurden dabei nicht geprüft.
 
 Zusätzliche v74-Prüfung an der eigenen Umfrage: Schließen blieb nach Reload geschlossen; Verbergen blieb geschlossen/verborgen; Wiederherstellen blieb sichtbar und geschlossen. Es waren durchgehend null Stimmen und deaktivierte Antwortoptionen zu sehen. Nur dieser eigene Admin-Moderationsfall ist bestätigt; eine Stimme, fremde ACL, Quoten oder Parallelität wurden nicht geprüft.
+
+Seit v75 ist außerdem nur die bestehende globale Chat-Pollingbasis restauriert: aktuelle Konto-/Opt-in-/Berechtigungs-/Send-/Upload-/Readmark-Schutzblöcke bleiben erhalten. Die vorherigen automatischen Fokus-/Chatroute-Gates blockierten die vorhandene Desktophinweisstrecke bei echter Unfokussierung. Begrenzte v75-Liveprüfung: bestehender Channel mit drei vorhandenen Nachrichten lud; Events-Navigation und Rückkehr erhielten Channel/Nachrichten ohne sichtbaren Fehler. Keine Nachricht oder Berechtigungsaktion erfolgte. Positive Zustellung mit einer echten neuen fremden Nachricht und bereits erteilter Browserberechtigung bleibt offen. Geerbte Baselinegrenze: nach fehlgeschlagenem initialem Bodyread braucht die Wiederherstellung einen Channelwechsel/Remount; der 10s-Sync wiederholt diesen Initialread nicht.
+
+Eigener Kurstext auf v74: Formatierung mit fettem Lernziel, H2, drei Listenpunkten und W3C-Link blieb nach Save/Reload/Preview erhalten, ohne sichtbares Raw-HTML oder Ghost-Dirty; Quiz unverändert und Kurs unveröffentlicht. Nur dieser gezielte Fall ist bestätigt.
 
 ## Was der Status bedeutet
 
@@ -101,6 +105,6 @@ Eine allgemeine private Inhaltsmerkliste und eine passendere allgemeine Ressourc
 
 ## Quellen und Prüfgrenze
 
-Grundlage: der oben genannte v74-Quellstand, bestätigte Auslieferungen bis v74 und die ausdrücklich abgegrenzten veröffentlichten Beobachtungen. Für diese Dokumentprüfung wurden keine Produktdaten oder Repositorydateien verändert, keine Funktionstests gestartet und keine Browseraktionen ausgeführt.
+Grundlage: der oben genannte v75-Quellstand, bestätigte Auslieferungen bis v75 und die ausdrücklich abgegrenzten veröffentlichten Beobachtungen. Für diese Dokumentprüfung wurden keine Produktdaten oder Repositorydateien verändert, keine Funktionstests gestartet und keine Browseraktionen ausgeführt.
 
 Wesentliche Quellverträge: `space-polls.ts`, `space-missions.ts`, `space-mission-bookmarks.ts`, `space-mission-invitations.ts` und ihre nativen D1-Helper unter `lib/server/`; private Mitgliedschaftsrouten; Lernpfadteilnahmeroute; `lib/server/url-security.ts`; Journey-/Verzeichnis-URLhelper und vorhandene Bearbeitungs-/Kommentaransichten. Standard-Node/Docker und Sites/D1 bleiben getrennte Laufzeitziele. Kein vollständiger Funktions-, Sicherheits- oder Barrierefreiheitsnachweis wird daraus abgeleitet.
