@@ -9,14 +9,14 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up published Version 73 source
-`fd1e5a51afb2f3071dfb57ca6cbddc17a2e8c284`. Version 73 deployed successfully on
-18 October 2026 at 06:47:35 UTC. It balances the complete native PollCreate
-snapshot-equality AND tree after the v72 fixed sql-limit-expression diagnosis.
-All equality leaves, bidirectional set guards, quotas, ACL, bindings and writes
-remain unchanged. One legitimate published Create succeeded: exactly one Poll with two options
-and zero votes appeared, and reload preserved it without duplicates. The v71 simple Event-description Save/Reload and v68 staged-editor
-positive QA are retained. Roadmap uses v73; the source map retains v63.
+runtime data. This GitHub snapshot backs up published Version 74 source
+`cb192d33324f933aa613e3c66c43601ff334f861`. Version 74 deployed successfully on
+18 October 2026 at 06:53:55 UTC. It separately balances the complete native
+PollVote equality guard after the analogous source depth conflict was proven.
+The v73 basic PollCreate/reload and own Admin reply moderation, v71 simple Event
+description update and v68 staged-editor positive QA remain documented. No live
+Vote outcome follows from those cases. Roadmap uses v74; the source map retains
+v63.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -2294,6 +2294,46 @@ exactly one Poll with two options and zero votes, and reload at 06:48:31 UTC
 preserved it without a partial row or duplicate. This positively confirms the
 targeted basic Create/reload flow. No Vote, quota, receipt, concurrency or
 privacy matrix result follows from this one case.
+
+## Version 74: Vote-only balanced snapshot equality
+
+Published source: `cb192d33324f933aa613e3c66c43601ff334f861`.
+Deployment: `appgdep_6ad46cf589a88191b9919aa46815e0d7`, succeeded
+18 October 2026 at 06:53:55 UTC. One-source aggregate:
+`5c78e8e68de7a7203a917a56cd392d98f0adb1f35ead7c94cd2d82dcbb861c4d`.
+
+The separate source comparison found 33 leaves in the same native Vote
+bidirectional snapshot-equality guard. Official SQLite parser/resolver source
+gives a selected conservative path of 113 against current Workerd's source
+depth limit of 100. This is a source-proven structure conflict, not an observed
+failed live Vote. The same source-owned parenthesization changes only AND
+nesting from 32 to six levels, reducing that selected path to 35. It is not a
+full installed-engine height measurement.
+
+Every original ordered NULL-safe IS leaf, both complete antijoins, exact
+cardinality and every raw projected field remain. No ACL, membership, hidden/
+closed, receipt/digest/replay, expected revision/CAS, cutoff/quota/date,
+counts/private DTO, marker, SQL value, binding, write, error or retry decision
+changes. Exact helper/equality reversal restores the entire v73 Vote file.
+Create and moderation are unchanged. No moderation depth defect is inferred:
+its shorter equality has a selected path below 100.
+
+Two independent exact source/depth passes validated actual source, patch,
+proofs and every guard leaf. All seven source-text SQL forms were independently
+reconstructed: at most 16,522 bytes, nine bindings, three builtin arguments,
+three compound arms and 42-byte GLOB patterns. Original maximum four attempts
+with six batch statements, eight snapshot reads and source-derived
+authentication at most two gives an unchanged conservative 34 submitted source
+statements; this is not a runtime/billing measurement. No query or guard was
+removed for the budget.
+
+Final types/build, static artifacts and archive checks passed. Existing
+operational fail-closed byte ceilings, supported DateTime/legacy domains,
+unbounded history/quota work, unknown installed DDL/triggers, timeout and
+ambiguous-commit boundaries remain. No local functional/SQL/app tests or new CI
+runs were used. Positive published Vote/revision/replay/quota/privacy/race QA is
+still open and must be coordinated separately; v73 basic Create success is not
+a substitute.
 
 ## Keeping the branches separate
 

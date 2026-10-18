@@ -1,7 +1,7 @@
 # ForgeCommunity Nutzerflüsse und nächste Schritte
 
-Stand: 18. Oktober 2026, 06:47 UTC · veröffentlichte Sites-Version **v73**  
-Quellstand: `fd1e5a51afb2f3071dfb57ca6cbddc17a2e8c284`  
+Stand: 18. Oktober 2026, 06:53 UTC · veröffentlichte Sites-Version **v74**  
+Quellstand: `cb192d33324f933aa613e3c66c43601ff334f861`  
 Produkt: [ForgeCommunity](https://forge-community.dsgvision.chatgpt.site)
 
 Dieses Dokument beschreibt die veröffentlichte Sites-Variante und ihre gezielten Live-Prüfungen. Das Standardsetup mit Docker und SQLite oder PostgreSQL bleibt in der README der Hauptversion dokumentiert. Cloudflare-Einrichtung und Laufzeitgrenzen stehen separat in [CLOUDFLARE_SITES.md](CLOUDFLARE_SITES.md).
@@ -10,7 +10,7 @@ Dieses Dokument beschreibt die veröffentlichte Sites-Variante und ihre gezielte
 
 Die bisherige pauschale Missions- und Umfrageblockade ist überholt: Die vorhandenen Umfrageoperationen und große Teile des privaten Missionsflusses haben inzwischen native D1-Pfade. Sie sind ausgeliefert, aber ihre komplexen positiven Fachfälle sind ohne passende legitime Situationen noch nicht live abgenommen. Ein fertiger durchgängiger Missions- oder Einladungsfluss wird deshalb nicht behauptet.
 
-Der beobachtete einfache Admin-Event-Updatefehler ist seit v71 korrigiert und mit Save/Reload positiv geprüft. Der zusätzlich beobachtete PollCreate-500 ist seit v73 im gezielten Erstellen-/Reload-Fall positiv korrigiert; Vote und Moderation werden separat auf dieselbe Quellstruktur geprüft. Weitere positive Einladungs-/Fachabnahmen und der sichere Ressourcen-Metadatenport bleiben getrennte Aufgaben. Keine neuen Oberflächen, Punkte oder künstlichen Teilnehmer zum Füllen leerer Menüs.
+Der beobachtete einfache Admin-Event-Updatefehler ist seit v71 korrigiert und mit Save/Reload positiv geprüft. Der zusätzlich beobachtete PollCreate-500 ist seit v73 im gezielten Erstellen-/Reload-Fall positiv korrigiert; Vote hat seit v74 eine separat geprüfte gleichartige Guard-Balancekorrektur (33 vollständige IS-Blätter, 32→6 AND-Ebenen); positive Vote-QA bleibt offen. Für Moderation wurde aus dem kürzeren Guard kein entsprechender Tiefenverstoß belegt. Weitere positive Einladungs-/Fachabnahmen und der sichere Ressourcen-Metadatenport bleiben getrennte Aufgaben. Keine neuen Oberflächen, Punkte oder künstlichen Teilnehmer zum Füllen leerer Menüs.
 
 Zusätzlich wurde auf v73 eine eigene Diskussionsantwort erstellt und nach Reload erhalten, verborgen und nach Reload verborgen gesehen sowie wiederhergestellt und nach Reload sichtbar gesehen. Es blieb genau eine Antwort; die ursprüngliche Diskussion blieb unverändert. Das bestätigt nur den eigenen Admin-Antwort-/Moderationsfall, keine fremde Autorschafts- oder Rollen-ACL. Likes, Stimmen und XP wurden dabei nicht geprüft.
 
@@ -99,6 +99,6 @@ Eine allgemeine private Inhaltsmerkliste und eine passendere allgemeine Ressourc
 
 ## Quellen und Prüfgrenze
 
-Grundlage: der oben genannte v73-Quellstand, bestätigte Auslieferungen bis v73 und die ausdrücklich abgegrenzten veröffentlichten Beobachtungen. Für diese Dokumentprüfung wurden keine Produktdaten oder Repositorydateien verändert, keine Funktionstests gestartet und keine Browseraktionen ausgeführt.
+Grundlage: der oben genannte v74-Quellstand, bestätigte Auslieferungen bis v74 und die ausdrücklich abgegrenzten veröffentlichten Beobachtungen. Für diese Dokumentprüfung wurden keine Produktdaten oder Repositorydateien verändert, keine Funktionstests gestartet und keine Browseraktionen ausgeführt.
 
 Wesentliche Quellverträge: `space-polls.ts`, `space-missions.ts`, `space-mission-bookmarks.ts`, `space-mission-invitations.ts` und ihre nativen D1-Helper unter `lib/server/`; private Mitgliedschaftsrouten; Lernpfadteilnahmeroute; `lib/server/url-security.ts`; Journey-/Verzeichnis-URLhelper und vorhandene Bearbeitungs-/Kommentaransichten. Standard-Node/Docker und Sites/D1 bleiben getrennte Laufzeitziele. Kein vollständiger Funktions-, Sicherheits- oder Barrierefreiheitsnachweis wird daraus abgeleitet.
