@@ -9,12 +9,13 @@ import { createSessionToken } from './credentials';
 import { getServerSession, sessionCookie } from './server';
 import { isPublicIdentityUrl, oauthConfiguration, safeOAuthReturnPath } from './oauth-config';
 import type { OAuthConfiguration, OAuthProvider } from './oauth-config';
+import { configurationGuard, oauthDatabase } from './oauth-configuration-store';
 
 const TRANSACTION_SECONDS = 600;
 const RESPONSE_HEADERS = { 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' };
 const COOKIE_PREFIX = '__Host-forge.oauth.';
 const BROWSER_COOKIE = `${COOKIE_PREFIX}browser`;
-type Transaction = { state: string; nonce: string; verifier: string; provider: string; issuer: string; clientId: string; returnTo: string; browserBindingHash: string };
+type Transaction = { state: string; nonce: string; verifier: string; provider: string; issuer: string; clientId: string; returnTo: string; browserBindingHash: string; configRevision: number | null; configBinding: string };
 type BoundTransaction = Transaction & { id: string; bindingHash: string; consumedAt?: number };
 
 function cookieName(provider: string) { return `${COOKIE_PREFIX}${provider}`; }
@@ -153,7 +154,8 @@ export async function beginOAuth(request: Request, providerId: string) {
     const browser = browserToken(request);
     if (!browser) return errorResponse('Die Anmeldung ist abgelaufen. Bitte lade die Seite neu.', 409);
     const browserBindingHash = await digest(browser);
-    const transaction: Transaction = { state, nonce, verifier, provider: provider.id, issuer: provider.issuer, clientId: provider.clientId, returnTo, browserBindingHash };
+    const transaction: Transaction = { state, nonce, verifier, provider: provider.id, issuer: provider.issuer, clientId: provider.clientId, returnTo, browserBindingHash,
+      configRevision: configuration.configRevision, configBinding: configuration.configBinding };
     const id = crypto.randomUUID();
     const token = await new EncryptJWT(transaction).setProtectedHeader({ alg: 'dir', enc: 'A256GCM' })
       .setIssuer(configuration.origin).setAudience(configuration.origin).setJti(id).setIssuedAt().setExpirationTime(`${TRANSACTION_SECONDS}s`)
@@ -161,18 +163,20 @@ export async function beginOAuth(request: Request, providerId: string) {
     if (transactionCookie(provider.id, token).length > 4096) throw new Error('Transaction cookie exceeds browser limit');
     if (!env.DB) throw new Error('Missing D1 binding');
     const now = Date.now();
-    await env.DB.batch([
-      env.DB.prepare(`SELECT CASE WHEN EXISTS (SELECT 1 FROM OAuthLoginTransaction WHERE id = ?
+    const db = oauthDatabase();
+    await db.batch([
+      configurationGuard(db, configuration.storage),
+      db.prepare(`SELECT CASE WHEN EXISTS (SELECT 1 FROM OAuthLoginTransaction WHERE id = ?
         AND provider = 'browser' AND bindingHash = ? AND browserBindingHash = ? AND consumedAt IS NULL AND expiresAt > ?)
         THEN 1 ELSE json('OAUTH_BROWSER_REVOKED') END AS guarded`)
         .bind(generationId(browserBindingHash), browserBindingHash, browserBindingHash, now),
       // Bounded housekeeping removes old state without retaining any long-term
       // nonce, PKCE verifier, OAuth code or provider token in the database.
-      env.DB.prepare('DELETE FROM OAuthLoginTransaction WHERE id IN (SELECT id FROM OAuthLoginTransaction WHERE expiresAt <= ? LIMIT 100)').bind(now),
-      env.DB.prepare('DELETE FROM OAuthLoginTransaction WHERE browserBindingHash = ? AND provider = ? AND finalizedAt IS NULL').bind(browserBindingHash, provider.id),
-      env.DB.prepare(`UPDATE OAuthLoginTransaction SET expiresAt = ? WHERE id = ? AND provider = 'browser' AND consumedAt IS NULL`)
+      db.prepare('DELETE FROM OAuthLoginTransaction WHERE id IN (SELECT id FROM OAuthLoginTransaction WHERE expiresAt <= ? LIMIT 100)').bind(now),
+      db.prepare('DELETE FROM OAuthLoginTransaction WHERE browserBindingHash = ? AND provider = ? AND finalizedAt IS NULL').bind(browserBindingHash, provider.id),
+      db.prepare(`UPDATE OAuthLoginTransaction SET expiresAt = ? WHERE id = ? AND provider = 'browser' AND consumedAt IS NULL`)
         .bind(now + TRANSACTION_SECONDS * 1000, generationId(browserBindingHash)),
-      env.DB.prepare('INSERT INTO OAuthLoginTransaction (id, bindingHash, browserBindingHash, provider, createdAt, expiresAt) VALUES (?, ?, ?, ?, ?, ?)')
+      db.prepare('INSERT INTO OAuthLoginTransaction (id, bindingHash, browserBindingHash, provider, createdAt, expiresAt) VALUES (?, ?, ?, ?, ?, ?)')
         .bind(id, await digest(token), browserBindingHash, provider.id, now, now + TRANSACTION_SECONDS * 1000),
     ]);
     // The transaction exists before external I/O, so a concurrent logout can
@@ -209,6 +213,7 @@ async function readTransaction(request: Request, configuration: OAuthConfigurati
     requiredClaims: ['iat', 'exp', 'jti'],
   });
   if (typeof payload.jti !== 'string' || !/^[0-9a-f-]{36}$/.test(payload.jti)) throw new Error('Invalid transaction id');
+  if (payload.configRevision !== configuration.configRevision || payload.configBinding !== configuration.configBinding) throw new Error('Changed OAuth configuration');
   if (payload.provider !== provider.id || payload.issuer !== provider.issuer || payload.clientId !== provider.clientId) throw new Error('Changed provider');
   const browser = browserToken(request);
   if (!browser || payload.browserBindingHash !== await digest(browser)) throw new Error('Changed browser generation');
@@ -237,9 +242,9 @@ async function consumeTransaction(transaction: BoundTransaction) {
 }
 
 async function finalizeOAuthSession(transaction: BoundTransaction, provider: OAuthProvider, providerAccountId: string,
-  existingAccount: { id: string; userId: string } | null, email: string, name: string | null, origin: string) {
+  existingAccount: { id: string; userId: string } | null, email: string, name: string | null, configuration: OAuthConfiguration) {
   if (!env.DB) throw new Error('Missing D1 binding');
-  const db = env.DB;
+  const db = oauthDatabase();
   const nowMs = Date.now();
   const now = new Date(nowMs).toISOString().replace(/Z$/, '+00:00');
   const userId = existingAccount?.userId || crypto.randomUUID();
@@ -250,13 +255,14 @@ async function finalizeOAuthSession(transaction: BoundTransaction, provider: OAu
   const expiresText = expires.toISOString().replace(/Z$/, '+00:00');
   // Validate/serialize all return values before committing. After batch returns,
   // do not decode result rows or retry a potentially committed operation.
-  const cookie = sessionCookie(token, origin, expires);
+  const cookie = sessionCookie(token, configuration.origin, expires);
   const transactionFence = `id = ? AND bindingHash = ? AND browserBindingHash = ? AND provider = ?
     AND consumedAt = ? AND finalizedAt IS NULL AND expiresAt > ?
     AND EXISTS (SELECT 1 FROM OAuthLoginTransaction g WHERE g.id = ? AND g.provider = 'browser' AND g.browserBindingHash = ? AND g.consumedAt IS NULL AND g.expiresAt > ?)`;
   const fenceValues = [transaction.id, transaction.bindingHash, transaction.browserBindingHash, provider.id, transaction.consumedAt!, nowMs,
     generationId(transaction.browserBindingHash), transaction.browserBindingHash, nowMs];
   const statements = [
+    configurationGuard(db, configuration.storage),
     db.prepare(`SELECT CASE WHEN EXISTS (SELECT 1 FROM OAuthLoginTransaction WHERE ${transactionFence})
       THEN 1 ELSE json('OAUTH_TRANSACTION_INVARIANT') END AS guarded`).bind(...fenceValues),
   ];
@@ -295,6 +301,9 @@ async function finalizeOAuthSession(transaction: BoundTransaction, provider: OAu
       THEN 1 ELSE json('OAUTH_FINALIZE_INVARIANT') END AS guarded`)
       .bind(transaction.id, transaction.bindingHash, transaction.browserBindingHash, provider.id, transaction.consumedAt!, nowMs, sessionId),
   );
+  // End assertion also guards config: saving while discovery/code exchange is
+  // in flight cannot issue a session under the previous provider credentials.
+  statements.push(configurationGuard(db, configuration.storage));
   // All identity, lastLogin, Session and finalization writes commit together.
   // SQL-side assertions throw and roll back the entire batch on any mismatch.
   await db.batch(statements);
@@ -373,7 +382,7 @@ export async function completeOAuth(request: Request, providerId: string) {
     let cookie: string;
     try {
       cookie = await finalizeOAuthSession(transaction, provider, providerAccountId, identity,
-        normalizeEmail(claims.email), typeof claims.name === 'string' ? claims.name.slice(0, 120) : null, configuration.origin);
+        normalizeEmail(claims.email), typeof claims.name === 'string' ? claims.name.slice(0, 120) : null, configuration);
     } catch { return callbackFailure(providerId, identity ? 'OAuthCallback' : 'OAuthAccountNotLinked', origin); }
     const response = NextResponse.redirect(new URL(transaction.returnTo, configuration.origin), 303);
     for (const [name, value] of Object.entries(RESPONSE_HEADERS)) response.headers.set(name, value);

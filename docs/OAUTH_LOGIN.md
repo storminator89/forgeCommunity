@@ -5,14 +5,19 @@ No OAuth client, secret, ready flag or provider grant was configured. A separate
 authorized migration-only Sites publication succeeded as version 76 using the
 unchanged v75 application code; see the record below. Google is visible as a
 disabled button labelled "Noch nicht eingerichtet" until configuration is complete. OAuth still requires full migration verification and
-private settings before sign-in can start.
+private settings before sign-in can start. The ADMIN interface described below
+belongs to the separately reviewed configuration candidate; this guide does not
+claim that candidate or its host prerequisites have already been published or set.
 
 ## Two independent deployment stacks
 
-- `main`: Next.js, NextAuth v4 and Prisma; settings are server environment variables
-  such as `NEXTAUTH_URL` and `NEXTAUTH_SECRET`.
+- `main`: Next.js, NextAuth v4 and Prisma; host prerequisites include server
+  environment variables such as `NEXTAUTH_URL` and `NEXTAUTH_SECRET`. Its provider
+  setup belongs to Main's separate deployment and guide.
 - `cloudflare-sites`: vinext/Workers, D1 and ForgeCommunity's existing app-owned
-  session cookie; settings below are private Worker environment bindings.
+  session cookie. Host prerequisites use private Worker environment bindings;
+  the prepared ADMIN interface manages provider credentials in an encrypted D1
+  configuration after its separate provisioning and publication.
 
 Do not copy the Sites D1 implementation into Main. Both use the fixed callback
 paths `/api/auth/callback/google` and `/api/auth/callback/oidc`; each deployment has
@@ -44,15 +49,38 @@ the other. The Main preparation has its own version of this guide.
 
 ## Private Sites configuration
 
-There is no Google/OIDC setup form in ForgeCommunity's admin area. Open the
+After the separately reviewed ADMIN configuration candidate is published,
+currently authenticated administrators can open `/admin/authentication` to manage
+Google and OIDC provider settings. See the
+[ADMIN configuration setup and security runbook](OAUTH_ADMIN_CONFIGURATION_SITES.md)
+for the separate additive migration, the new independent host-only
+`OAUTH_CONFIG_ENCRYPTION_KEY`, existing host prerequisites and verification limits.
+The form remains blocked until those prerequisites are ready. It never changes
+host keys, applies migrations or toggles the OAuth operator-ready flag. Provider
+secrets are write-only; the page never displays existing secrets. The first
+transfer from environment settings requires explicit secret re-entry.
+
+The host controls and credential variables below describe host prerequisites and
+optional legacy environment bootstrap/fallback. For those host changes, open the
 Site in ChatGPT's Sites management, select its Settings, then the private secrets
 and environment-variable configuration. The exact control label can vary by
 client; use Sites runtime configuration, not a public app setting or a repository
-secret. `.dev.vars.example` documents the Worker binding names without secrets.
+secret. `.dev.vars.example` documents the existing Worker binding names without
+secrets; the new encryption-key prerequisite is documented in the linked runbook.
 [Official Sites settings guidance](https://help.openai.com/en/articles/20001339-creating-and-using-chatgpt-sites).
-After explicitly authorized configuration, publish the saved application version
-to apply its environment revision. Registering an app or displaying a button does
-not itself configure credentials or authorize a provider grant.
+After explicitly authorized host configuration, publish the saved application
+version to apply its environment revision. ADMIN provider saves use their encrypted
+database record and do not require a new application-source publication.
+Registering an app or displaying a button does not itself configure credentials
+or authorize a provider grant.
+
+A valid encrypted database record takes precedence over environment provider
+credentials, including an explicit disabled-provider record. Environment provider
+settings remain a fallback only when the optional configuration table or its row
+is genuinely absent. An unreadable, malformed or undecryptable existing record
+fails closed; it never silently reactivates environment credentials. Deactivating
+providers means saving a disabled record, not deleting it. The runbook explains
+key loss/rotation, backup and complete-database-rollback boundaries.
 
 The canonical DDL is `docs/migrations/SITES_OAUTH_TRANSACTIONS.sql`. Its three
 statements were added to `drizzle/0001_oauth_login_transactions.sql` with Drizzle
@@ -71,17 +99,22 @@ initial provider check shows "Verfügbarkeit wird geprüft …". A failed check 
 "Momentan nicht verfügbar" and leaves it disabled. The optional generic OIDC button appears only when configured.
 Registering a Google client alone is therefore insufficient on an unmigrated Site.
 
-Also required for Google:
+Host prerequisites for both ADMIN-backed and environment-backed Google/OIDC:
 
 - `OAUTH_BASE_URL=https://forge-community.dsgvision.chatgpt.site`
 - `OAUTH_STATE_SECRET`: a fresh independent random secret of at least 32 bytes of
   entropy, generated privately, for example with `openssl rand -base64 32`
-- `GOOGLE_CLIENT_ID`: Web application client ID
-- `GOOGLE_CLIENT_SECRET`: Web application client secret
+
+For Google environment bootstrap/fallback only, also set `GOOGLE_CLIENT_ID` and
+`GOOGLE_CLIENT_SECRET` to the Web application's client ID and secret. With an
+ADMIN-managed encrypted record, enter these provider values in
+`/admin/authentication` instead; environment credentials are not automatically
+copied into that record.
 
 The base URL must be an exact HTTPS origin. Provider discovery must also work
-before a login can start. Partial/invalid configuration enables no provider.
-Secrets are read only on the server; the provider-list endpoint returns IDs and
+before a login can start. Partial/invalid provider credentials do not enable
+that provider.
+Stored provider secrets are read only on the server; the provider-list endpoint returns IDs and
 display names only. No `NEXT_PUBLIC_*` variable is used for OAuth credentials.
 
 Rotating `OAUTH_STATE_SECRET` invalidates in-progress OAuth attempts. It does not
@@ -100,7 +133,11 @@ email and the boolean claim `email_verified=true` in the ID token. Providers tha
 omit verification, use only UserInfo for email or require other algorithms need
 an explicit reviewed integration rather than weakening identity checks.
 
-Set the same `OAUTH_BASE_URL` and `OAUTH_STATE_SECRET`, plus:
+Keep the same host `OAUTH_BASE_URL` and `OAUTH_STATE_SECRET`. With the prepared
+ADMIN interface, enter the provider's issuer, client ID, secret, display name,
+token-authentication method and any allowed endpoint origins at
+`/admin/authentication`. The following variable names apply only to optional
+legacy environment bootstrap/fallback when no encrypted configuration row exists:
 
 - `OIDC_ISSUER`: the provider's exact HTTPS issuer, without query or fragment
 - `OIDC_CLIENT_ID` and `OIDC_CLIENT_SECRET`
@@ -127,7 +164,9 @@ Do not change an issuer merely to point an existing configuration at a different
 tenant. Generic account identity is `provider=oidc` plus the lowercase hexadecimal
 SHA-256 of JSON `[exactIssuer, sub]`; this prevents a new issuer with the same
 subject from taking over an older identity. Google keeps `provider=google` and
-its stable `sub`. Do not manually rewrite these account IDs.
+its stable `sub`. Do not manually rewrite these account IDs. The ADMIN API also
+refuses OIDC issuer/client-ID changes once OIDC accounts exist; such a change
+requires a separately reviewed identity migration.
 
 ## Identity and session guarantees
 

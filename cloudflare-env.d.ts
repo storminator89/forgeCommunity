@@ -5,6 +5,7 @@ declare namespace Cloudflare {
     OAUTH_BASE_URL?: string;
     OAUTH_TRANSACTION_MIGRATION_READY?: string;
     OAUTH_STATE_SECRET?: string;
+    OAUTH_CONFIG_ENCRYPTION_KEY?: string;
     GOOGLE_CLIENT_ID?: string;
     GOOGLE_CLIENT_SECRET?: string;
     OIDC_ISSUER?: string;
