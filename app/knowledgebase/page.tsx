@@ -7,7 +7,7 @@ import { HeroBanner } from '@/components/discovery';
 import { Library as PageBannerIcon } from 'lucide-react';
 import { PageState, RetryButton } from '@/components/page-state';
 import { AppShell, AppHeader } from '@/components/app-shell';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import { Sidebar } from "@/components/Sidebar";
 import { UserNav } from "@/components/user-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -19,6 +19,21 @@ import { Badge } from "@/components/ui/badge";
 
 import Image from 'next/image';
 import { sanitizeTextPreview } from '@/lib/sanitize-html';
+import { KNOWLEDGE_QUERY_LIMIT, knowledgeDirectoryHref, readKnowledgeDirectoryState, validateKnowledgeDirectoryFilters, type KnowledgeDirectoryState } from './knowledgebase-directory-url';
+
+const directoryUrlChange = 'forge-knowledge-directory-url-change';
+
+function subscribeDirectoryUrl(callback: () => void) {
+  window.addEventListener('popstate', callback);
+  window.addEventListener(directoryUrlChange, callback);
+  return () => {
+    window.removeEventListener('popstate', callback);
+    window.removeEventListener(directoryUrlChange, callback);
+  };
+}
+
+function directorySearchSnapshot() { return window.location.search; }
+function serverDirectorySearchSnapshot() { return ''; }
 
 interface Article {
   id: string;
@@ -46,9 +61,9 @@ async function loadArticles(signal: AbortSignal): Promise<Article[]> {
 }
 
 export default function KnowledgeBase() {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('All');
-  const [selectedTag, setSelectedTag] = useState('All');
+  const urlSearch = useSyncExternalStore(subscribeDirectoryUrl, directorySearchSnapshot, serverDirectorySearchSnapshot);
+  const requestedState = useMemo(() => readKnowledgeDirectoryState(urlSearch), [urlSearch]);
+  const searchRef = useRef<HTMLInputElement>(null);
   const [articles, setArticles] = useState<Article[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -90,6 +105,29 @@ export default function KnowledgeBase() {
     [articles]
   );
 
+  // Keep a shared link intact while its categories/tags are still loading.
+  // Unknown values become an unfiltered view only against a successful read.
+  const directoryState = !isLoading && !error
+    ? validateKnowledgeDirectoryFilters(requestedState, categories, tags)
+    : requestedState;
+  const { query: searchTerm, category: selectedCategory, tag: selectedTag } = directoryState;
+
+  const updateDirectoryState = (change: Partial<KnowledgeDirectoryState>, push = false) => {
+    // Read the actual URL, so rapid typing cannot be overwritten by an older
+    // router render or a just-restored history entry.
+    const next = { ...readKnowledgeDirectoryState(window.location.search), ...change };
+    const checked = !isLoading && !error ? validateKnowledgeDirectoryFilters(next, categories, tags) : next;
+    const href = knowledgeDirectoryHref(checked, window.location.hash);
+    if (href === `${window.location.pathname}${window.location.search}${window.location.hash}`) return;
+    if (push) window.history.pushState(window.history.state, '', href);
+    else window.history.replaceState(window.history.state, '', href);
+    window.dispatchEvent(new Event(directoryUrlChange));
+  };
+
+  const setSearchTerm = (query: string) => updateDirectoryState({ query });
+  const setSelectedCategory = (category: string) => updateDirectoryState({ category }, true);
+  const setSelectedTag = (tag: string) => updateDirectoryState({ tag }, true);
+
   const filteredArticles = useMemo(() =>
     articles.filter(article =>
       (selectedCategory === 'All' || article.category === selectedCategory) &&
@@ -102,7 +140,10 @@ export default function KnowledgeBase() {
   );
 
   const hasFilters = Boolean(searchTerm || selectedCategory !== 'All' || selectedTag !== 'All');
-  const clearFilters = () => { setSearchTerm(''); setSelectedCategory('All'); setSelectedTag('All'); };
+  const clearFilters = () => {
+    updateDirectoryState({ query: '', category: 'All', tag: 'All' }, true);
+    searchRef.current?.focus();
+  };
 
 
   return (
@@ -124,7 +165,7 @@ export default function KnowledgeBase() {
                 <label htmlFor="kb-search" className="mb-2 block text-sm font-medium">Artikel suchen</label>
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-                  <Input id="kb-search" type="search" placeholder="Titel, Inhalt oder Tag" value={searchTerm} onChange={event => setSearchTerm(event.target.value)} className="pl-10" />
+                  <Input ref={searchRef} id="kb-search" type="search" maxLength={KNOWLEDGE_QUERY_LIMIT} placeholder="Titel, Inhalt oder Tag" value={searchTerm} onChange={event => setSearchTerm(event.target.value)} className="pl-10" />
                 </div>
               </div>
 

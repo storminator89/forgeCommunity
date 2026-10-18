@@ -55,6 +55,17 @@ export function sanitizeTextServer(value: string | null | undefined) {
     .trim();
 }
 
+/** Strip markup while preserving authored comment line breaks. */
+export function sanitizeCommentTextServer(value: string | null | undefined) {
+  return getDOMPurify().sanitize(value ?? '', {
+    ALLOWED_TAGS: [],
+    ALLOWED_ATTR: [],
+  })
+    .replace(/\r\n?/g, '\n')
+    .replace(/[^\S\n]+/g, ' ')
+    .trim();
+}
+
 export function sanitizeHtmlPreviewServer(html: string | null | undefined, maxLength?: number) {
   const preview = sanitizeTextServer(html);
 

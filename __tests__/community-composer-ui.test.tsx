@@ -3,7 +3,7 @@ import { useSession } from 'next-auth/react'
 import Community from '@/app/community/page'
 
 jest.mock('@/components/Sidebar', () => ({ Sidebar: () => null }))
-jest.mock('@/components/user-nav', () => ({ UserNav: () => null }))
+jest.mock('@/components/user-nav', () => ({ UserNav: () => null, useSignInHref: () => '/login?callbackUrl=%2Fcommunity' }))
 jest.mock('@/components/theme-toggle', () => ({ ThemeToggle: () => null }))
 jest.mock('@/components/Editor', () => ({ Editor: () => <div role="textbox" aria-label="Text bearbeiten" /> }))
 jest.mock('next-auth/react', () => ({ useSession: jest.fn() }))

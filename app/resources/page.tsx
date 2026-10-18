@@ -7,7 +7,7 @@ import { HeroBanner, PageContainer } from '@/components/discovery';
 import { FolderOpen } from 'lucide-react';
 import { AppShell, AppHeader } from '@/components/app-shell';
 import { PageState } from '@/components/page-state';
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef, useSyncExternalStore } from 'react';
 import { Sidebar } from "@/components/Sidebar";
 import { UserNav } from "@/components/user-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -27,6 +27,21 @@ import 'react-toastify/dist/ReactToastify.css';
 import { useInView } from 'react-intersection-observer';
 import { getSafeNavigationUrl } from '@/lib/security';
 import Link from 'next/link';
+import { RESOURCE_QUERY_LIMIT, readResourceDirectoryState, resourceDirectoryHref, type ResourceDirectoryState, type ResourceSort } from './resources-directory-url';
+
+const directoryUrlChange = 'forge-resource-directory-url-change';
+
+function subscribeDirectoryUrl(callback: () => void) {
+  window.addEventListener('popstate', callback);
+  window.addEventListener(directoryUrlChange, callback);
+  return () => {
+    window.removeEventListener('popstate', callback);
+    window.removeEventListener(directoryUrlChange, callback);
+  };
+}
+
+function directorySearchSnapshot() { return window.location.search; }
+function serverDirectorySearchSnapshot() { return ''; }
 
 enum ResourceType {
   ARTICLE = 'ARTICLE',
@@ -67,8 +82,11 @@ export default function ResourceLibrary() {
 }
 
 function ResourceLibraryForViewer({ session }: { session: Session | null }) {
+  const urlSearch = useSyncExternalStore(subscribeDirectoryUrl, directorySearchSnapshot, serverDirectorySearchSnapshot);
+  const directoryState = useMemo(() => readResourceDirectoryState(urlSearch, categories, types), [urlSearch]);
+  const { query: searchTerm, category: selectedCategory, type: selectedType, sort: sortBy } = directoryState;
+  const searchRef = useRef<HTMLInputElement>(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
   const [newResource, setNewResource] = useState({
     title: '',
     type: 'ARTICLE',
@@ -76,16 +94,28 @@ function ResourceLibraryForViewer({ session }: { session: Session | null }) {
     url: '',
   });
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isAddingResource, setIsAddingResource] = useState(false);
+  const [addResourceError, setAddResourceError] = useState('');
+  const addPendingRef = useRef(false);
+  const addActiveRef = useRef(true);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editResource, setEditResource] = useState<Resource | null>(null);
+  const [isUpdatingResource, setIsUpdatingResource] = useState(false);
+  const [updateResourceError, setUpdateResourceError] = useState('');
+  const [updateResourceNotice, setUpdateResourceNotice] = useState('');
+  const editPendingRef = useRef(false);
+  const editActiveRef = useRef(false);
+  const editTargetRef = useRef<string | null>(null);
+  const editDialogOpenRef = useRef(false);
+  const editDialogGenerationRef = useRef(0);
+  const editDraftReadyRef = useRef(false);
+  const editDraftRevisionRef = useRef(0);
+  const editDialogOpenerRef = useRef<HTMLButtonElement | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [displayedResources, setDisplayedResources] = useState<Resource[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [selectedType, setSelectedType] = useState<string>('all');
-  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'title'>('newest');
   const [loadedSearchTerm, setLoadedSearchTerm] = useState<string | null>(null);
   const loadedPageRef = useRef(0);
   const generationRef = useRef(0);
@@ -93,6 +123,31 @@ function ResourceLibraryForViewer({ session }: { session: Session | null }) {
   const loadingRef = useRef(true);
   const pendingLoadRef = useRef(false);
   const loadMoreRef = useRef<() => void>(() => {});
+
+  const updateDirectoryState = (change: Partial<ResourceDirectoryState>, push = false) => {
+    // Merge into the actual URL, including immediately after typing or Back.
+    const next = { ...readResourceDirectoryState(window.location.search, categories, types), ...change };
+    const href = resourceDirectoryHref(next, categories, types, window.location.hash);
+    if (href === `${window.location.pathname}${window.location.search}${window.location.hash}`) return;
+    if (push) window.history.pushState(window.history.state, '', href);
+    else window.history.replaceState(window.history.state, '', href);
+    window.dispatchEvent(new Event(directoryUrlChange));
+  };
+
+  const setSearchTerm = (query: string) => updateDirectoryState({ query });
+  const setSelectedCategory = (category: string) => updateDirectoryState({ category }, true);
+  const setSelectedType = (type: string) => updateDirectoryState({ type }, true);
+  const setSortBy = (sort: ResourceSort) => updateDirectoryState({ sort }, true);
+
+  useEffect(() => {
+    addActiveRef.current = true;
+    return () => { addActiveRef.current = false; };
+  }, []);
+
+  useEffect(() => {
+    editActiveRef.current = true;
+    return () => { editActiveRef.current = false; };
+  }, []);
 
   const fetchResources = useCallback(async (pageNumber = 1, signal?: AbortSignal) => {
     const response = await axios.get('/api/resources', {
@@ -214,11 +269,18 @@ function ResourceLibraryForViewer({ session }: { session: Session | null }) {
   });
 
   const handleAddResource = async () => {
+    // The ref closes the same-frame double-submit gap before React renders
+    // the native disabled button. It stays pending if the dialog is closed.
+    if (!session?.user?.id || !addActiveRef.current || addPendingRef.current) return;
     if (!newResource.title || !newResource.url) {
+      setAddResourceError('Titel und URL sind erforderlich.');
       toast.error('Titel und URL sind erforderlich.');
       return;
     }
 
+    addPendingRef.current = true;
+    setIsAddingResource(true);
+    setAddResourceError('');
     try {
       const resourceToAdd = {
         title: newResource.title,
@@ -229,6 +291,9 @@ function ResourceLibraryForViewer({ session }: { session: Session | null }) {
       };
 
       const response = await axios.post('/api/resources', resourceToAdd);
+      // The keyed viewer may have unmounted after a session/account change.
+      // An old request must not announce success in the next account's view.
+      if (!addActiveRef.current) return;
       setDisplayedResources(prev => [response.data, ...prev]);
       setNewResource({
         title: '',
@@ -239,8 +304,13 @@ function ResourceLibraryForViewer({ session }: { session: Session | null }) {
       setIsDialogOpen(false);
       toast.success('Ressource erfolgreich hinzugefügt!');
     } catch (error: any) {
+      if (!addActiveRef.current) return;
       console.error('Fehler beim Hinzufügen der Ressource:', error);
+      setAddResourceError('Ressource konnte nicht hinzugefügt werden. Bitte versuche es erneut.');
       toast.error('Fehler beim Hinzufügen der Ressource.');
+    } finally {
+      addPendingRef.current = false;
+      if (addActiveRef.current) setIsAddingResource(false);
     }
   };
 
@@ -257,33 +327,93 @@ function ResourceLibraryForViewer({ session }: { session: Session | null }) {
     }
   };
 
-  const handleEditResource = (resource: Resource) => {
-    setEditResource(resource);
+  const handleEditResource = (resource: Resource, opener?: HTMLButtonElement | null) => {
+    if (!editActiveRef.current) return;
+    if (editPendingRef.current && editTargetRef.current !== resource.id) return;
+    if (opener !== undefined) editDialogOpenerRef.current = opener;
+    // Reopening the same pending/failed draft must not reload older row data.
+    if (!editDraftReadyRef.current || editTargetRef.current !== resource.id) {
+      setEditResource({ ...resource });
+      editTargetRef.current = resource.id;
+      editDraftRevisionRef.current += 1;
+      editDraftReadyRef.current = true;
+      setUpdateResourceError('');
+      setUpdateResourceNotice('');
+    }
+    editDialogGenerationRef.current += 1;
+    editDialogOpenRef.current = true;
     setIsEditDialogOpen(true);
   };
 
+  const handleEditDialogOpenChange = (open: boolean) => {
+    if (open) { if (editResource) handleEditResource(editResource); return; }
+    editDialogGenerationRef.current += 1;
+    editDialogOpenRef.current = false;
+    setIsEditDialogOpen(false);
+    if (!editPendingRef.current) {
+      editDraftReadyRef.current = false;
+      setUpdateResourceError('');
+      setUpdateResourceNotice('');
+    }
+  };
+
+  const updateEditResourceDraft = (update: (draft: Resource) => Resource) => {
+    if (editPendingRef.current) return;
+    editDraftRevisionRef.current += 1;
+    setEditResource(previous => previous ? update(previous) : previous);
+    setUpdateResourceError('');
+    setUpdateResourceNotice('');
+  };
+
   const handleUpdateResource = async () => {
+    if (!editActiveRef.current || !editDialogOpenRef.current || editPendingRef.current || !session?.user?.id || !editResource) return;
     if (!editResource?.title || !editResource?.url) {
+      setUpdateResourceError('Titel und URL sind erforderlich.');
       toast.error('Titel und URL sind erforderlich.');
       return;
     }
 
+    const submitted = { id: editResource.id, title: editResource.title, url: editResource.url };
+    const submittedRevision = editDraftRevisionRef.current;
+    const submittedGeneration = editDialogGenerationRef.current;
+    editPendingRef.current = true;
+    setIsUpdatingResource(true);
+    setUpdateResourceError('');
+    setUpdateResourceNotice('');
     try {
-      const response = await axios.put(`/api/resources/${editResource.id}`, {
-        title: editResource.title,
-        url: editResource.url,
+      const response = await axios.put(`/api/resources/${submitted.id}`, {
+        title: submitted.title,
+        url: submitted.url,
       });
 
+      if (!editActiveRef.current) return;
       setDisplayedResources(prev =>
         prev.map(resource =>
-          resource.id === editResource.id ? response.data : resource
+          resource.id === submitted.id ? response.data : resource
         )
       );
-      setIsEditDialogOpen(false);
+      const unchangedDraft = editTargetRef.current === submitted.id && editDraftRevisionRef.current === submittedRevision;
+      if (unchangedDraft && editDialogGenerationRef.current === submittedGeneration && editDialogOpenRef.current) {
+        editDraftReadyRef.current = false;
+        editDialogOpenRef.current = false;
+        setIsEditDialogOpen(false);
+      } else if (editDialogOpenRef.current && editTargetRef.current === submitted.id) {
+        setUpdateResourceNotice(unchangedDraft ? 'Änderungen gespeichert.' : 'Gespeichert. Neuere Änderungen sind noch offen.');
+      } else if (unchangedDraft) {
+        editDraftReadyRef.current = false;
+      }
       toast.success('Ressource erfolgreich aktualisiert!');
     } catch (error: any) {
+      if (!editActiveRef.current) return;
       console.error('Fehler beim Aktualisieren der Ressource:', error);
+      const serverError = error?.response?.data?.error;
+      setUpdateResourceError(typeof serverError === 'string'
+        ? serverError
+        : 'Ressource konnte nicht aktualisiert werden. Bitte versuche es erneut.');
       toast.error('Fehler beim Aktualisieren der Ressource.');
+    } finally {
+      editPendingRef.current = false;
+      if (editActiveRef.current) setIsUpdatingResource(false);
     }
   };
 
@@ -315,7 +445,11 @@ function ResourceLibraryForViewer({ session }: { session: Session | null }) {
   const isLoadingResults = loading || loadedSearchTerm !== searchTerm;
   const isFirstPageLoading = isLoadingResults && (loadedSearchTerm !== searchTerm || displayedResources.length === 0);
   const hasFilters = Boolean(searchTerm || selectedCategory !== 'all' || selectedType !== 'all');
-  const clearFilters = () => { setSearchTerm(''); setSelectedCategory('all'); setSelectedType('all'); };
+  const hasDirectoryState = hasFilters || sortBy !== 'newest';
+  const clearFilters = () => {
+    updateDirectoryState({ query: '', category: 'all', type: 'all', sort: 'newest' }, true);
+    searchRef.current?.focus();
+  };
   const retryLoad = () => { setLoading(true); setLoadError(false); setRetryKey(value => value + 1); };
 
   return (
@@ -336,26 +470,29 @@ function ResourceLibraryForViewer({ session }: { session: Session | null }) {
             {session && <div>
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogContent>
-                  <DialogHeader><DialogTitle>Neue Ressource hinzufügen</DialogTitle><DialogDescription>Titel und URL sind erforderlich.</DialogDescription></DialogHeader>
-                  <form onSubmit={event => { event.preventDefault(); void handleAddResource(); }} className="space-y-5">
-                    <div className="space-y-2"><Label htmlFor="resource-title">Titel</Label><Input id="resource-title" value={newResource.title} onChange={event => setNewResource(previous => ({ ...previous, title: event.target.value }))} placeholder="Titel der Ressource" required /></div>
+                  <DialogHeader><DialogTitle>Neue Ressource hinzufügen</DialogTitle><DialogDescription>Öffentlich, auch ohne Anmeldung. Dein Name wird angezeigt.</DialogDescription></DialogHeader>
+                  <form onSubmit={event => { event.preventDefault(); void handleAddResource(); }} className="space-y-5" aria-busy={isAddingResource}>
+                    <div className="space-y-2"><Label htmlFor="resource-title">Titel</Label><Input id="resource-title" value={newResource.title} onChange={event => setNewResource(previous => ({ ...previous, title: event.target.value }))} placeholder="Titel der Ressource" required disabled={isAddingResource} /></div>
                     <div className="grid min-w-0 gap-4 sm:grid-cols-2">
-                      <div className="min-w-0 space-y-2"><Label htmlFor="resource-type">Typ</Label><Select value={newResource.type} onValueChange={value => setNewResource(previous => ({ ...previous, type: value }))}><SelectTrigger id="resource-type"><SelectValue /></SelectTrigger><SelectContent>{types.map(type => <SelectItem key={type} value={type}>{typeLabels[type as ResourceType]}</SelectItem>)}</SelectContent></Select></div>
-                      <div className="min-w-0 space-y-2"><Label htmlFor="resource-category">Kategorie</Label><Select value={newResource.category} onValueChange={value => setNewResource(previous => ({ ...previous, category: value }))}><SelectTrigger id="resource-category"><SelectValue /></SelectTrigger><SelectContent>{categories.map(category => <SelectItem key={category} value={category}>{category}</SelectItem>)}</SelectContent></Select></div>
+                      <div className="min-w-0 space-y-2"><Label htmlFor="resource-type">Typ</Label><Select value={newResource.type} onValueChange={value => setNewResource(previous => ({ ...previous, type: value }))} disabled={isAddingResource}><SelectTrigger id="resource-type"><SelectValue /></SelectTrigger><SelectContent>{types.map(type => <SelectItem key={type} value={type}>{typeLabels[type as ResourceType]}</SelectItem>)}</SelectContent></Select></div>
+                      <div className="min-w-0 space-y-2"><Label htmlFor="resource-category">Kategorie</Label><Select value={newResource.category} onValueChange={value => setNewResource(previous => ({ ...previous, category: value }))} disabled={isAddingResource}><SelectTrigger id="resource-category"><SelectValue /></SelectTrigger><SelectContent>{categories.map(category => <SelectItem key={category} value={category}>{category}</SelectItem>)}</SelectContent></Select></div>
                     </div>
-                    <div className="space-y-2"><Label htmlFor="resource-url">URL</Label><Input id="resource-url" type="url" value={newResource.url} onChange={event => setNewResource(previous => ({ ...previous, url: event.target.value }))} placeholder="https://…" required /></div>
-                    <DialogFooter><Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Abbrechen</Button><Button type="submit">Hinzufügen</Button></DialogFooter>
+                    <div className="space-y-2"><Label htmlFor="resource-url">URL</Label><Input id="resource-url" type="url" value={newResource.url} onChange={event => setNewResource(previous => ({ ...previous, url: event.target.value }))} placeholder="https://…" required disabled={isAddingResource} /></div>
+                    {addResourceError && <p role="alert" className="text-sm text-destructive">{addResourceError}</p>}
+                    <DialogFooter><Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>{isAddingResource ? 'Schließen' : 'Abbrechen'}</Button><Button type="submit" disabled={isAddingResource}>{isAddingResource ? 'Wird hinzugefügt…' : 'Hinzufügen'}</Button></DialogFooter>
                   </form>
                 </DialogContent>
               </Dialog>
             </div>}
 
             <section aria-label="Ressourcen filtern" className="fc-filter-bar fc-filter-surface grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_12rem_10rem_10rem] lg:items-end">
-              <div className="min-w-0 sm:col-span-2 lg:col-span-1"><Label htmlFor="resource-search" className="mb-2 block">Ressourcen suchen</Label><div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" /><Input id="resource-search" type="search" value={searchTerm} onChange={event => setSearchTerm(event.target.value)} placeholder="Titel, Kategorie oder Autor" className="pl-10" /></div></div>
+              <div className="min-w-0 sm:col-span-2 lg:col-span-1"><Label htmlFor="resource-search" className="mb-2 block">Ressourcen suchen</Label><div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" /><Input ref={searchRef} id="resource-search" type="search" maxLength={RESOURCE_QUERY_LIMIT} value={searchTerm} onChange={event => setSearchTerm(event.target.value)} placeholder="Titel, Kategorie oder Autor" className="pl-10" /></div></div>
               <div className="min-w-0"><Label htmlFor="resource-filter-category" className="mb-2 block">Kategorie</Label><Select value={selectedCategory} onValueChange={setSelectedCategory}><SelectTrigger id="resource-filter-category"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Alle Kategorien</SelectItem>{categories.map(category => <SelectItem key={category} value={category}>{category}</SelectItem>)}</SelectContent></Select></div>
               <div className="min-w-0"><Label htmlFor="resource-filter-type" className="mb-2 block">Typ</Label><Select value={selectedType} onValueChange={setSelectedType}><SelectTrigger id="resource-filter-type"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Alle Typen</SelectItem>{types.map(type => <SelectItem key={type} value={type}>{typeLabels[type as ResourceType]}</SelectItem>)}</SelectContent></Select></div>
-              <div className="min-w-0"><Label htmlFor="resource-sort" className="mb-2 block">Sortieren</Label><Select value={sortBy} onValueChange={value => setSortBy(value as 'newest' | 'oldest' | 'title')}><SelectTrigger id="resource-sort"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="newest">Neueste</SelectItem><SelectItem value="oldest">Älteste</SelectItem><SelectItem value="title">Titel A–Z</SelectItem></SelectContent></Select></div>
+              <div className="min-w-0"><Label htmlFor="resource-sort" className="mb-2 block">Sortieren</Label><Select value={sortBy} onValueChange={value => setSortBy(value as ResourceSort)}><SelectTrigger id="resource-sort"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="newest">Neueste</SelectItem><SelectItem value="oldest">Älteste</SelectItem><SelectItem value="title">Titel A–Z</SelectItem></SelectContent></Select></div>
             </section>
+
+            {hasDirectoryState && <div className="pt-3"><Button type="button" variant="ghost" onClick={clearFilters} className="text-primary">Suche und Filter zurücksetzen</Button></div>}
 
             <section aria-labelledby="resource-results-title" className="pt-7">
               <div className="flex flex-wrap items-baseline justify-between gap-2 border-b pb-4"><h2 id="resource-results-title" className="text-xl font-semibold tracking-tight">Ressourcen entdecken</h2><p role="status" className="text-sm tabular-nums text-muted-foreground">{filteredAndSortedResources.length} angezeigt</p></div>
@@ -364,7 +501,7 @@ function ResourceLibraryForViewer({ session }: { session: Session | null }) {
               {isFirstPageLoading ? <div className="mt-6"><PageState kind="loading" title="Ressourcen werden geladen" /></div>
                 : loadError ? <div className="mt-6"><PageState kind="error" title="Ressourcen konnten nicht geladen werden" description="Prüfe deine Verbindung und versuche es erneut." action={<Button type="button" variant="outline" onClick={retryLoad}>Erneut versuchen</Button>} /></div>
                 : filteredAndSortedResources.length === 0 ? <div className="mt-6"><PageState title={hasMore ? 'Noch keine passenden Ressourcen geladen' : hasFilters ? 'Keine Ressourcen gefunden' : 'Noch keine Ressourcen'} description={hasMore ? 'Lade weitere Ressourcen, um nach passenden Einträgen zu suchen.' : hasFilters ? 'Versuche es mit anderen Suchbegriffen oder Filtern.' : 'Sobald Links geteilt werden, findest du sie hier.'} action={hasMore ? <Button type="button" variant="outline" onClick={loadMore} disabled={loading}>Weitere Ressourcen laden</Button> : hasFilters ? <Button type="button" variant="outline" onClick={clearFilters}>Filter zurücksetzen</Button> : session ? <Button type="button" onClick={() => setIsDialogOpen(true)}>Erste Ressource hinzufügen</Button> : undefined} /></div>
-                : <ul className="fc-entity-grid">{filteredAndSortedResources.map(resource => <ResourceItem key={resource.id} resource={resource} isAdmin={isAdmin} currentUserId={session?.user?.id} onDelete={handleDeleteResource} onEdit={handleEditResource} />)}</ul>}
+                : <ul className="fc-entity-grid">{filteredAndSortedResources.map(resource => <ResourceItem key={resource.id} resource={resource} isAdmin={isAdmin} currentUserId={session?.user?.id} onDelete={handleDeleteResource} onEdit={handleEditResource} pendingEditId={isUpdatingResource ? editResource?.id : undefined} />)}</ul>}
 
               {hasMore && filteredAndSortedResources.length > 0 && <div ref={ref} className="flex justify-center py-7"><Button type="button" variant="outline" onClick={loadMore} disabled={loading}>{loading ? 'Weitere Ressourcen werden geladen…' : 'Weitere Ressourcen laden'}</Button></div>}
               {loading && !isFirstPageLoading && <p role="status" className="pb-6 text-center text-sm text-muted-foreground">Weitere Ressourcen werden geladen…</p>}
@@ -372,13 +509,19 @@ function ResourceLibraryForViewer({ session }: { session: Session | null }) {
           </PageContainer>
         </main>
 
-        {editResource && <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent>
+        {editResource && <Dialog open={isEditDialogOpen} onOpenChange={handleEditDialogOpenChange}>
+          <DialogContent onCloseAutoFocus={event => {
+            event.preventDefault();
+            const target = editDialogOpenerRef.current;
+            if (editActiveRef.current && !editDialogOpenRef.current && target?.isConnected) target.focus();
+          }}>
             <DialogHeader><DialogTitle>Ressource bearbeiten</DialogTitle><DialogDescription>Titel und URL sind erforderlich.</DialogDescription></DialogHeader>
-            <form onSubmit={event => { event.preventDefault(); void handleUpdateResource(); }} className="space-y-5">
-              <div className="space-y-2"><Label htmlFor="edit-resource-title">Titel</Label><Input id="edit-resource-title" value={editResource.title} onChange={event => setEditResource(previous => previous ? { ...previous, title: event.target.value } : previous)} required /></div>
-              <div className="space-y-2"><Label htmlFor="edit-resource-url">URL</Label><Input id="edit-resource-url" type="url" value={editResource.url} onChange={event => setEditResource(previous => previous ? { ...previous, url: event.target.value } : previous)} required /></div>
-              <DialogFooter><Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>Abbrechen</Button><Button type="submit">Aktualisieren</Button></DialogFooter>
+            <form onSubmit={event => { event.preventDefault(); void handleUpdateResource(); }} className="space-y-5" aria-busy={isUpdatingResource}>
+              <div className="space-y-2"><Label htmlFor="edit-resource-title">Titel</Label><Input id="edit-resource-title" value={editResource.title} onChange={event => { const title = event.target.value; updateEditResourceDraft(previous => ({ ...previous, title })); }} required disabled={isUpdatingResource} /></div>
+              <div className="space-y-2"><Label htmlFor="edit-resource-url">URL</Label><Input id="edit-resource-url" type="url" value={editResource.url} onChange={event => { const url = event.target.value; updateEditResourceDraft(previous => ({ ...previous, url })); }} required disabled={isUpdatingResource} /></div>
+              {updateResourceError && <p role="alert" className="text-sm text-destructive">{updateResourceError}</p>}
+              {updateResourceNotice && <p role="status" className="text-sm text-muted-foreground">{updateResourceNotice}</p>}
+              <DialogFooter><Button type="button" variant="outline" onClick={() => handleEditDialogOpenChange(false)}>{isUpdatingResource ? 'Schließen' : 'Abbrechen'}</Button><Button type="submit" disabled={isUpdatingResource}>{isUpdatingResource ? 'Wird aktualisiert…' : 'Aktualisieren'}</Button></DialogFooter>
             </form>
           </DialogContent>
         </Dialog>}
@@ -387,15 +530,17 @@ function ResourceLibraryForViewer({ session }: { session: Session | null }) {
   );
 }
 
-function ResourceItem({ resource, isAdmin, currentUserId, onDelete, onEdit }: {
+function ResourceItem({ resource, isAdmin, currentUserId, onDelete, onEdit, pendingEditId }: {
   resource: Resource;
   isAdmin: boolean;
   currentUserId?: string;
   onDelete: (id: string) => void;
-  onEdit: (resource: Resource) => void;
+  onEdit: (resource: Resource, opener: HTMLButtonElement | null) => void;
+  pendingEditId?: string;
 }) {
   const [copied, setCopied] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const actionsTriggerRef = useRef<HTMLButtonElement>(null);
   const canModify = isAdmin || resource.author.id === currentUserId;
   const safeResourceUrl = getSafeNavigationUrl(resource.url);
 
@@ -430,12 +575,12 @@ function ResourceItem({ resource, isAdmin, currentUserId, onDelete, onEdit }: {
         {safeResourceUrl ? <a href={safeResourceUrl} target="_blank" rel="noopener noreferrer" className="mt-4 inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-primary hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">Quelle öffnen <ArrowUpRight className="h-4 w-4" aria-hidden="true" /></a> : <p className="mt-4 text-sm text-muted-foreground">Keine sichere Zieladresse verfügbar.</p>}
       </div>
       <DropdownMenu>
-        <DropdownMenuTrigger asChild><Button type="button" variant="ghost" size="icon" aria-label={`Aktionen für ${resource.title}`} className="shrink-0"><MoreVertical className="h-4 w-4" aria-hidden="true" /></Button></DropdownMenuTrigger>
+        <DropdownMenuTrigger asChild><Button ref={actionsTriggerRef} type="button" variant="ghost" size="icon" aria-label={`Aktionen für ${resource.title}`} className="shrink-0"><MoreVertical className="h-4 w-4" aria-hidden="true" /></Button></DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem onSelect={() => void handleCopyLink()}>{copied ? <Check className="mr-2 h-4 w-4" aria-hidden="true" /> : <Copy className="mr-2 h-4 w-4" aria-hidden="true" />}Link kopieren</DropdownMenuItem>
           <DropdownMenuItem onSelect={() => shareResource('twitter')}>Auf X teilen</DropdownMenuItem>
           <DropdownMenuItem onSelect={() => shareResource('linkedin')}>Auf LinkedIn teilen</DropdownMenuItem>
-          {canModify && <><DropdownMenuSeparator /><DropdownMenuItem onSelect={() => onEdit(resource)}><Edit className="mr-2 h-4 w-4" aria-hidden="true" />Bearbeiten</DropdownMenuItem><DropdownMenuItem onSelect={() => setDeleteOpen(true)} className="text-destructive focus:text-destructive focus:bg-destructive/10"><Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />Löschen</DropdownMenuItem></>}
+          {canModify && <><DropdownMenuSeparator /><DropdownMenuItem disabled={Boolean(pendingEditId && pendingEditId !== resource.id)} onSelect={() => onEdit(resource, actionsTriggerRef.current)}><Edit className="mr-2 h-4 w-4" aria-hidden="true" />Bearbeiten</DropdownMenuItem><DropdownMenuItem onSelect={() => setDeleteOpen(true)} className="text-destructive focus:text-destructive focus:bg-destructive/10"><Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />Löschen</DropdownMenuItem></>}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

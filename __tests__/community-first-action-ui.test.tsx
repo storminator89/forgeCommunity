@@ -5,7 +5,7 @@ import { registerNewMemberFirstAction } from '@/lib/new-member-first-action'
 
 jest.mock('next-auth/react', () => ({ useSession: jest.fn() }))
 jest.mock('@/components/Sidebar', () => ({ Sidebar: () => null }))
-jest.mock('@/components/user-nav', () => ({ UserNav: () => null }))
+jest.mock('@/components/user-nav', () => ({ UserNav: () => null, useSignInHref: () => '/login?callbackUrl=%2Fcommunity' }))
 jest.mock('@/components/theme-toggle', () => ({ ThemeToggle: () => null }))
 jest.mock('@/components/community/StatsCard', () => ({ StatsCard: () => null }))
 jest.mock('@/components/community/LeaderboardCard', () => ({ LeaderboardCard: () => null }))

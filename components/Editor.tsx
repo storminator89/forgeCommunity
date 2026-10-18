@@ -29,6 +29,8 @@ interface EditorProps {
   placeholder?: string
   className?: string
   readOnly?: boolean
+  // Opt in to root document edits only, excluding controlled/config updates.
+  rootDocumentChangesOnly?: boolean
   uploadImage?: (file: File) => Promise<string>
 }
 
@@ -217,8 +219,10 @@ export function Editor({
   placeholder = 'Beginnen Sie hier mit der Eingabe...',
   className = '',
   readOnly = false,
+  rootDocumentChangesOnly = false,
   uploadImage
 }: EditorProps) {
+  const [isContentInitialized, setIsContentInitialized] = useState(false)
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
@@ -243,7 +247,8 @@ export function Editor({
       Underline,
     ],
     content: content || '',
-    editable: !readOnly,
+    // Opt-in editors stay locked until controlled content has synchronized.
+    editable: rootDocumentChangesOnly ? false : !readOnly,
     editorProps: {
       attributes: {
         class: 'min-h-[150px] w-full rounded-md bg-card px-4 py-4 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-hidden disabled:cursor-not-allowed disabled:opacity-50 prose prose-sm dark:prose-invert max-w-none',
@@ -253,26 +258,37 @@ export function Editor({
         'aria-multiline': 'true',
       },
     },
-    onUpdate: ({ editor }) => {
+    onUpdate: ({ editor, transaction }) => {
+      // A focus/selection root may have an appended TrailingNode doc change.
+      if (rootDocumentChangesOnly && !transaction.docChanged) return
       onChange(editor.getHTML())
     },
   })
 
   useEffect(() => {
     if (editor && content !== editor.getHTML()) {
-      editor.commands.setContent(content || '')
+      if (rootDocumentChangesOnly) {
+        editor.commands.setContent(content || '', { emitUpdate: false })
+      } else {
+        editor.commands.setContent(content || '')
+      }
     }
-  }, [content, editor])
+  }, [content, editor, rootDocumentChangesOnly])
 
   useEffect(() => {
     if (editor) {
-      editor.setEditable(!readOnly)
+      if (rootDocumentChangesOnly) {
+        editor.setEditable(!readOnly, false)
+        setIsContentInitialized(true)
+      } else {
+        editor.setEditable(!readOnly)
+      }
     }
-  }, [readOnly, editor])
+  }, [readOnly, editor, rootDocumentChangesOnly])
 
   return (
-    <div className={`fc-editor-shell w-full ${className}`}>
-      {!readOnly && <MenuBar editor={editor} uploadImage={uploadImage} />}
+    <div className={`fc-editor-shell w-full ${className}`} inert={rootDocumentChangesOnly ? readOnly || !isContentInitialized : undefined}>
+      {!readOnly && (!rootDocumentChangesOnly || isContentInitialized) && <MenuBar editor={editor} uploadImage={uploadImage} />}
       <EditorContent editor={editor} />
     </div>
   )

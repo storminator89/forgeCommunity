@@ -7,20 +7,33 @@ import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { AppHeader, AppShell } from '@/components/app-shell';
 import { Sidebar } from '@/components/Sidebar';
-import { UserNav } from '@/components/user-nav';
+import { UserNav, useSignInHref } from '@/components/user-nav';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
 import { LoadingScreen, PageState } from '@/components/page-state';
-import { HeroBanner } from '@/components/discovery';
-import { Route } from 'lucide-react';
 import { JourneyMark } from './JourneyMark';
 import { JourneyMascot } from './JourneyMascot';
 import { SparkStaticFigure } from '@/components/spark-entry';
 import { sparkVisibilitySnapshot as mascotSnapshot, useSparkVisibility } from '@/hooks/useSparkVisibility';
 import { eligibleJourneyCourses, projectJourney, type JourneyContent, type JourneyCourse, type JourneyLeaf } from './journey-progress';
+import { JourneyTrail } from './JourneyTrail';
+import { groupJourneyTrail, readJourneyCourses, readJourneyDetail, type JourneyProgress } from './journey-trail-data';
+import { journeyCourseHref, resolveJourneyCourseId } from './journey-course-url';
 
-type Progress = { completedContentIds: string[]; complete: boolean; canTrack: boolean; publicationId: string | null };
-type Detail = { kind: 'idle' | 'loading' | 'error' } | { kind: 'ready'; courseId: string; contents: JourneyContent[]; progress: Progress };
+type Detail = { kind: 'idle' } | { kind: 'loading' | 'error'; courseId: string } | { kind: 'ready'; courseId: string; contents: JourneyContent[]; progress: JourneyProgress };
+
+function subscribeCourseSelection(callback: () => void) {
+  window.addEventListener('popstate', callback);
+  window.addEventListener('forge-journey-course-change', callback);
+  return () => {
+    window.removeEventListener('popstate', callback);
+    window.removeEventListener('forge-journey-course-change', callback);
+  };
+}
+
+function courseSelectionSnapshot() {
+  return window.location.search;
+}
 
 const motionPreferenceKey = 'forge-journey-motion-off';
 let fallbackMotionEnabled = true;
@@ -53,9 +66,9 @@ function reducedMotionSnapshot() {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
-async function readResponse<T>(response: Response): Promise<T> {
+async function readResponse(response: Response): Promise<unknown> {
   if (!response.ok) throw new Error(`Request failed (${response.status})`);
-  return response.json() as Promise<T>;
+  return response.json() as Promise<unknown>;
 }
 
 function contentLabel(type: JourneyLeaf['type']) {
@@ -70,11 +83,12 @@ function lockLabel(leaf: JourneyLeaf) {
 
 export default function JourneyClient() {
   const { data: session, status } = useSession();
+  const signInHref = useSignInHref();
   if (status === 'loading') return <LoadingScreen />;
   if (status !== 'authenticated' || !session?.user?.id) return <main className="mx-auto max-w-xl px-4 py-16">
     <h1 className="text-2xl font-semibold">Mein Lernweg</h1>
     <p className="mt-3 text-sm text-muted-foreground">Melde dich an, um deinen Lernweg zu sehen.</p>
-    <Button asChild className="mt-5"><Link href="/login?callbackUrl=%2Fcourses%2Fjourney">Zur Anmeldung</Link></Button>
+    <Button asChild className="mt-5"><Link prefetch={false} href={signInHref}>Zur Anmeldung</Link></Button>
   </main>;
   if (session.user.role !== 'USER') return <AppShell data-page-family="learning"><Sidebar /><div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
     <AppHeader><div className="app-header-row"><h1 className="app-header-title">Mein Lernweg</h1><div className="app-header-actions"><ThemeToggle /><UserNav /></div></div></AppHeader>
@@ -89,7 +103,8 @@ function ScopedJourney() {
   const [courses, setCourses] = useState<JourneyCourse[] | null>(null);
   const [courseError, setCourseError] = useState(false);
   const [courseRetry, setCourseRetry] = useState(0);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const courseSearch = useSyncExternalStore(subscribeCourseSelection, courseSelectionSnapshot, () => '');
+  const selectedId = resolveJourneyCourseId(courseSearch, courses ?? []);
   const [detail, setDetail] = useState<Detail>({ kind: 'idle' });
   const [detailRetry, setDetailRetry] = useState(0);
   const { visible: mascotVisible } = useSparkVisibility();
@@ -98,6 +113,7 @@ function ScopedJourney() {
   const [celebration, setCelebration] = useState<{ id: number; courseId: string; publicationId: string } | null>(null);
   const completionBefore = useRef(new Map<string, boolean>());
   const detailSequence = useRef(0);
+  const [chapterChoices, setChapterChoices] = useState(new Map<string, boolean>());
 
   useEffect(() => {
     // A preference change consumes the current celebration, including changes
@@ -120,15 +136,15 @@ function ScopedJourney() {
   useEffect(() => {
     const controller = new AbortController();
     void fetch('/api/courses', { cache: 'no-store', signal: controller.signal })
-      .then(response => readResponse<JourneyCourse[]>(response))
+      .then(readResponse)
+      .then(readJourneyCourses)
       .then(rows => {
         if (controller.signal.aborted) return;
         const enrolled = eligibleJourneyCourses('USER', rows);
         detailSequence.current++;
         setCourses(enrolled);
         setCourseError(false);
-        setDetail({ kind: enrolled.length ? 'loading' : 'idle' });
-        setSelectedId(current => current && enrolled.some(row => row.id === current) ? current : enrolled[0]?.id ?? null);
+        setDetail({ kind: 'idle' });
         setDetailRetry(value => value + 1);
       })
       .catch(() => { if (!controller.signal.aborted) setCourseError(true); });
@@ -136,19 +152,35 @@ function ScopedJourney() {
   }, [courseRetry]);
 
   useEffect(() => {
+    if (!courses || !selectedId || courseSearch !== window.location.search || window.location.pathname !== '/courses/journey') return;
+    // Wait for the eligible list before normalizing an absent/unknown choice.
+    // Replace the entry so the default course also survives a reader return,
+    // even if completion later changes the list's first-course ordering.
+    const href = journeyCourseHref(selectedId, window.location.hash);
+    if (href === `${window.location.pathname}${window.location.search}${window.location.hash}`) return;
+    window.history.replaceState(window.history.state, '', href);
+    window.dispatchEvent(new Event('forge-journey-course-change'));
+  }, [courses, selectedId, courseSearch]);
+
+  useEffect(() => {
     if (!selectedId) return;
     const controller = new AbortController();
     const sequence = ++detailSequence.current;
     const courseId = encodeURIComponent(selectedId);
+    setCelebration(null);
+    setDetail({ kind: 'loading', courseId: selectedId });
+    // History can change before React runs this effect's cleanup. Do not
+    // record old-course progress or a celebration for a newer URL selection.
+    const stillSelected = () => window.location.pathname === '/courses/journey' &&
+      resolveJourneyCourseId(window.location.search, courses ?? []) === selectedId;
     void Promise.all([
       fetch(`/api/courses/${courseId}/contents`, { cache: 'no-store', signal: controller.signal })
-        .then(response => readResponse<JourneyContent[]>(response)),
+        .then(readResponse),
       fetch(`/api/courses/${courseId}/progress`, { cache: 'no-store', signal: controller.signal })
-        .then(response => readResponse<Progress>(response)),
-    ]).then(([contents, progress]) => {
-      if (controller.signal.aborted || sequence !== detailSequence.current) return;
-      if (!progress.canTrack) throw new Error('Enrollment changed');
-      if (!progress.publicationId || contents.some(content => content.publicationId !== progress.publicationId)) throw new Error('Publication changed');
+        .then(readResponse),
+    ]).then(([contentsValue, progressValue]) => {
+      if (controller.signal.aborted || sequence !== detailSequence.current || !stillSelected()) return;
+      const { contents, progress } = readJourneyDetail(contentsValue, progressValue, selectedId);
       const completionKey = JSON.stringify([selectedId, progress.publicationId]);
       const before = completionBefore.current.get(completionKey);
       completionBefore.current.set(completionKey, progress.complete);
@@ -159,16 +191,19 @@ function ScopedJourney() {
       if (before === false && progress.complete && mascotSnapshot() && motionSnapshot() && !reducedMotionSnapshot()) {
         setCelebration({ id: ++nextCelebrationId, courseId: selectedId, publicationId: progress.publicationId });
       }
-    }).catch(() => { if (!controller.signal.aborted && sequence === detailSequence.current) setDetail({ kind: 'error' }); });
+    }).catch(() => { if (!controller.signal.aborted && sequence === detailSequence.current && stillSelected()) setDetail({ kind: 'error', courseId: selectedId }); });
     return () => controller.abort();
-  }, [selectedId, detailRetry]);
+  }, [selectedId, detailRetry, courses]);
 
   const selectCourse = useCallback((id: string) => {
+    if (!courses?.some(course => course.id === id) || resolveJourneyCourseId(window.location.search, courses) === id) return;
     detailSequence.current++;
     setCelebration(null);
-    setDetail({ kind: 'loading' });
-    setSelectedId(id);
-  }, []);
+    setDetail({ kind: 'loading', courseId: id });
+    setDetailRetry(value => value + 1);
+    window.history.pushState(window.history.state, '', journeyCourseHref(id, window.location.hash));
+    window.dispatchEvent(new Event('forge-journey-course-change'));
+  }, [courses]);
 
   const toggleMotion = () => {
     const next = !motionEnabled;
@@ -178,12 +213,32 @@ function ScopedJourney() {
   };
 
   const retryCourses = () => { detailSequence.current++; setCelebration(null); setCourses(null); setCourseError(false); setDetail({ kind: 'idle' }); setCourseRetry(value => value + 1); };
-  const retryDetail = () => { detailSequence.current++; setCelebration(null); setDetail({ kind: 'loading' }); setDetailRetry(value => value + 1); };
+  const retryDetail = () => { if (!selectedId) return; detailSequence.current++; setCelebration(null); setDetail({ kind: 'loading', courseId: selectedId }); setDetailRetry(value => value + 1); };
 
   const selectedCourse = courses?.find(course => course.id === selectedId);
-  const projection = detail.kind === 'ready' && detail.courseId === selectedId ? projectJourney(detail.contents, detail.progress.completedContentIds) : null;
+  const currentDetail = detail.kind !== 'idle' && detail.courseId === selectedId ? detail : null;
+  const detailPending = Boolean(selectedId && (!currentDetail || currentDetail.kind === 'loading'));
+  const projection = currentDetail?.kind === 'ready' ? projectJourney(currentDetail.contents, currentDetail.progress.completedContentIds, currentDetail.progress.awaitingGradeContentIds) : null;
+  const stationNoun = projection?.leaves.length === 1 ? 'Station' : 'Stationen';
   const next = projection?.next;
-  const complete = detail.kind === 'ready' && detail.progress.complete;
+  const awaiting = projection?.leaves.find(leaf => leaf.awaitingGrade);
+  const complete = Boolean(projection && currentDetail?.kind === 'ready' && currentDetail.progress.complete);
+  const groups = projection && currentDetail?.kind === 'ready' ? groupJourneyTrail(currentDetail.contents, projection) : [];
+  const chapterScope = currentDetail?.kind === 'ready' ? JSON.stringify([currentDetail.courseId, currentDetail.progress.publicationId]) : '';
+  const openChapters: Record<string, boolean> = Object.create(null);
+  for (const group of groups) {
+    const key = JSON.stringify([chapterScope, group.id]);
+    if (chapterChoices.has(key)) openChapters[group.id] = chapterChoices.get(key)!;
+  }
+  const toggleChapter = (id: string, open: boolean) => {
+    const key = JSON.stringify([chapterScope, id]);
+    setChapterChoices(current => {
+      if (current.get(key) === open) return current;
+      const next = new Map(current);
+      next.set(key, open);
+      return next;
+    });
+  };
   const readerHref = selectedId ? `/courses/${encodeURIComponent(selectedId)}/contents` : '/courses';
 
   return <AppShell data-page-family="learning">
@@ -191,40 +246,44 @@ function ScopedJourney() {
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <AppHeader><div className="app-header-row"><h1 className="app-header-title">Mein Lernweg</h1><div className="app-header-actions"><ThemeToggle /><UserNav /></div></div></AppHeader>
       <main id="page-content" tabIndex={-1} className="min-w-0 flex-1 overflow-y-auto">
-        <div className="fc-page-container mx-auto max-w-5xl">
-          <HeroBanner title="Schritt für Schritt weiterkommen." description="Setze deinen Lernweg fort und finde deinen nächsten verfügbaren Kursinhalt." icon={Route} />
+        <div className="mx-auto w-full max-w-5xl px-4 pb-12 pt-4 sm:px-6 sm:pt-6">
           <nav aria-label="Brotkrumen" className="text-sm text-muted-foreground"><Link href="/courses" className="inline-flex min-h-11 items-center rounded-sm underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Kurse</Link><span className="mx-2" aria-hidden="true">/</span><span aria-current="page" className="text-foreground">Mein Lernweg</span></nav>
 
           {courses === null && !courseError && <div className="mt-4"><PageState kind="loading" title="Deine Kurse werden geladen" /></div>}
           {courseError && <div className="mt-4"><PageState kind="error" title="Deine Kurse konnten nicht geladen werden" action={<Button type="button" variant="outline" onClick={retryCourses}>Erneut versuchen</Button>} /></div>}
           {courses?.length === 0 && <section className="mt-4 rounded-2xl border border-dashed bg-card px-6 py-6 text-center" role="status" aria-live="polite">
             {mascotVisible && <div className="mx-auto mb-3 w-fit"><SparkStaticFigure /></div>}
-            <h2 className="text-base font-semibold">Dein Lernweg beginnt mit einem Kurs</h2>
+            <h2 className="text-base font-semibold">Wähle deinen ersten Kurs</h2>
             <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">Hier erscheinen deine angemeldeten Kurse anderer Lehrkräfte.</p>
             <div className="mt-5 flex justify-center"><Button asChild className="h-auto min-h-11 max-w-full whitespace-normal py-2"><Link href="/courses">Kurse entdecken</Link></Button></div>
           </section>}
           {courses && courses.length > 0 && <div className="mt-3 space-y-4">
-            <section aria-label="Deine angemeldeten Kurse" className="fc-section-card min-w-0 sm:flex sm:items-center sm:justify-between sm:gap-4">
-              <label htmlFor="journey-course" className="mb-1.5 block shrink-0 text-sm font-medium sm:mb-0">Kurs auswählen <span className="font-normal text-muted-foreground">({courses.length})</span></label>
-              <select id="journey-course" aria-label="Kurs auswählen" value={selectedId ?? ''} onChange={event => selectCourse(event.target.value)} className="h-11 w-full min-w-0 rounded-xl border bg-background px-3 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:max-w-md">{courses.map(course => <option key={course.id} value={course.id}>{course.title}</option>)}</select>
+            <section aria-label="Deine angemeldeten Kurse" className="fc-section-card flex min-w-0 flex-wrap items-center justify-between gap-3">
+              {courses.length > 1 ? <div className="min-w-0 flex-1 basis-64">
+                <label htmlFor="journey-course" className="mb-1.5 block text-sm font-medium">Kurs auswählen <span className="font-normal text-muted-foreground">({courses.length})</span></label>
+                <select id="journey-course" value={selectedId ?? ''} onChange={event => selectCourse(event.target.value)} className="h-11 w-full min-w-0 rounded-xl border bg-background px-3 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">{courses.map(course => <option key={course.id} value={course.id}>{course.title}</option>)}</select>
+              </div> : <p className="text-sm font-medium">Dein angemeldeter Kurs</p>}
+              <Button type="button" variant="ghost" className="min-h-11 max-w-full aria-disabled:cursor-wait aria-disabled:text-muted-foreground"
+                aria-disabled={detailPending} onClick={() => { if (!detailPending) retryDetail(); }}>Stand aktualisieren</Button>
             </section>
 
-            {detail.kind === 'loading' && <PageState kind="loading" title="Lernschritte werden geprüft" />}
-            {detail.kind === 'error' && <PageState kind="error" title="Der Kursstand konnte nicht geladen werden" description="Vielleicht hat sich deine Anmeldung oder der Kurs geändert." action={<div className="flex flex-wrap justify-center gap-2"><Button type="button" variant="outline" onClick={retryDetail}>Erneut versuchen</Button><Button type="button" variant="ghost" onClick={retryCourses}>Kursliste aktualisieren</Button></div>} />}
-            {detail.kind === 'ready' && selectedCourse && projection && <section aria-labelledby="journey-progress-title" className="fc-section-card">
+            {detailPending && <PageState kind="loading" title="Lernschritte werden geprüft" />}
+            {currentDetail?.kind === 'error' && <PageState kind="error" title="Der Kursstand konnte nicht geladen werden" description="Vielleicht hat sich deine Anmeldung oder der Kurs geändert." action={<div className="flex flex-wrap justify-center gap-2"><Button type="button" variant="outline" onClick={retryDetail}>Erneut versuchen</Button><Button type="button" variant="ghost" onClick={retryCourses}>Kursliste aktualisieren</Button></div>} />}
+            {currentDetail?.kind === 'ready' && selectedCourse && projection && <section aria-labelledby="journey-progress-title" className="fc-section-card min-w-0">
               <h2 id="journey-progress-title" className="break-words text-xl font-semibold leading-snug tracking-tight sm:text-2xl">{selectedCourse.title}</h2>
-              <p className="mt-2 text-sm text-muted-foreground" role="status" aria-live="polite">{complete ? 'Alle aktuellen Kursinhalte bestätigt' : projection.leaves.length ? `${projection.completedCount} von ${projection.leaves.length} Inhalten aktuell bestätigt` : 'Noch keine Kursinhalte verfügbar'}</p>
+              <p className="mt-2 text-sm text-muted-foreground" role="status" aria-live="polite">{projection.leaves.length ? `${projection.completedCount} von ${projection.leaves.length} ${stationNoun} bestätigt` : 'Noch keine Stationen verfügbar'}</p>
+              {projection.leaves.length > 0 && <progress className="mt-3 block h-2 w-full accent-progress" value={projection.completedCount} max={projection.leaves.length} aria-label={`${projection.completedCount} von ${projection.leaves.length} ${stationNoun} bestätigt`}>{projection.completedCount} von {projection.leaves.length}</progress>}
               <div className="mt-4 flex items-center gap-3 border-t pt-4 sm:gap-6">
                 <div className="min-w-0 flex-1">
-                  {next && !complete ? <><p className="flex items-center gap-2 text-xs font-medium text-muted-foreground"><JourneyMark className="size-5 shrink-0 text-primary" />Als Nächstes möglich</p><h3 className="mt-2 break-words text-lg font-semibold leading-snug">{next.title}</h3><p className="mt-1 text-sm text-muted-foreground">{contentLabel(next.type)}</p></>
-                    : complete ? <p className="text-sm">Dein Kursabschluss ist aktuell bestätigt.</p>
-                      : projection.firstLocked ? <><p className="text-sm font-medium">Gerade ist kein weiterer Inhalt frei.</p><p className="mt-1 text-sm text-muted-foreground">{lockLabel(projection.firstLocked)}. Den aktuellen Stand siehst du im Kurs.</p></>
-                        : <p className="text-sm text-muted-foreground">Im Kurs findest du den aktuellen Stand.</p>}
+                  {next && !complete ? <><p className="flex items-center gap-2 text-xs font-medium text-muted-foreground"><JourneyMark className="size-5 shrink-0 text-primary" />Nächster Schritt</p><h3 className="mt-2 break-words text-lg font-semibold leading-snug">{next.title}</h3><p className="mt-1 text-sm text-muted-foreground">{contentLabel(next.type)}</p></>
+                    : complete ? <p className="text-base font-semibold text-success">{projection.leaves.length === 1 ? 'Die Station ist bestätigt.' : `Alle ${projection.leaves.length} Stationen bestätigt.`}</p>
+                      : awaiting ? <><p className="text-sm font-medium">Bewertung offen</p><h3 className="mt-2 break-words text-lg font-semibold leading-snug">{awaiting.title}</h3></>
+                        : projection.firstLocked ? <><p className="text-sm font-medium">Gerade ist kein weiterer Inhalt frei.</p><p className="mt-1 text-sm text-muted-foreground">{lockLabel(projection.firstLocked)}. Den aktuellen Stand siehst du im Kurs.</p></>
+                          : <p className="text-sm text-muted-foreground">Im Kurs findest du den aktuellen Stand.</p>}
                 </div>
-                {mascotVisible && <JourneyMascot complete={complete} celebrationId={motionEnabled && !reducedMotion && celebration?.courseId === selectedId && celebration.publicationId === detail.progress.publicationId ? celebration.id : null} ambientMotion={motionEnabled && !reducedMotion} />}
+                {mascotVisible && <JourneyMascot complete={complete} celebrationId={motionEnabled && !reducedMotion && celebration?.courseId === selectedId && celebration.publicationId === currentDetail.progress.publicationId ? celebration.id : null} ambientMotion={motionEnabled && !reducedMotion} />}
               </div>
-              <Button asChild variant={next && !complete ? 'default' : 'outline'} className="mt-4 w-full sm:w-auto"><Link href={next && !complete ? `${readerHref}?content=${encodeURIComponent(next.id)}` : readerHref}>{next && !complete ? 'Lernschritt öffnen' : 'Kurs ansehen'}</Link></Button>
-              {projection.leaves.length > 0 && <progress className="mt-5 block h-2 w-full accent-progress" value={projection.completedCount} max={projection.leaves.length} aria-label={`${projection.completedCount} von ${projection.leaves.length} Kursinhalten aktuell bestätigt`}>{projection.completedCount} von {projection.leaves.length}</progress>}
+              <Button asChild variant={next && !complete ? 'default' : 'outline'} className="mt-4 w-full sm:w-auto"><Link href={next && !complete ? `${readerHref}?content=${encodeURIComponent(next.id)}` : awaiting && !complete ? `${readerHref}?content=${encodeURIComponent(awaiting.id)}` : readerHref}>{next && !complete ? 'Lernschritt öffnen' : awaiting && !complete ? 'Abgabe ansehen' : 'Kurs ansehen'}</Link></Button>
             </section>}
           </div>}
 
@@ -233,7 +292,9 @@ function ScopedJourney() {
             {reducedMotion && <p className="mt-1 text-xs text-muted-foreground">Weniger Bewegung ist am Gerät eingestellt.</p>}
           </div>}
 
-          {detail.kind === 'ready' && projection && projection.leaves.length > 0 && <section aria-labelledby="journey-outline-title" className="mt-6"><div className="flex flex-wrap items-end justify-between gap-3 border-b pb-3"><h2 id="journey-outline-title" className="text-lg font-semibold">Nächste Stationen</h2><Button type="button" variant="ghost" size="sm" onClick={retryDetail}>Stand aktualisieren</Button></div><ol className="divide-y">{projection.leaves.filter(leaf => !leaf.completed).slice(0, 5).map((leaf, index) => <li key={leaf.id} className="flex min-w-0 items-start gap-4 py-3 text-sm"><span className="flex size-7 shrink-0 items-center justify-center rounded-full border font-medium tabular-nums" aria-hidden="true">{index + 1}</span><span className="min-w-0 flex-1"><span className="block break-words font-medium">{leaf.title}</span><span className="mt-0.5 block text-muted-foreground">{contentLabel(leaf.type)} · {leaf.locked ? lockLabel(leaf) : 'Jetzt möglich'}</span></span></li>)}</ol>{projection.leaves.every(leaf => leaf.completed) && <p className="py-4 text-sm text-muted-foreground">Alle aktuellen Inhalte bestätigt.</p>}<Link href={readerHref} className="mt-3 inline-flex min-h-11 items-center rounded-sm text-sm text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Vollständiges Inhaltsverzeichnis im Kurs</Link></section>}
+          {currentDetail?.kind === 'ready' && projection && projection.leaves.length > 0 && <JourneyTrail
+            groups={groups} nextId={next?.id ?? null} complete={complete} readerHref={readerHref}
+            openChapters={openChapters} onChapterToggle={toggleChapter} />}
 
           <p className="mt-6 text-sm leading-relaxed text-muted-foreground">Gemeinsam mit anderen lernen: <Link prefetch={false} href="/community/missions" className="inline-flex min-h-11 items-center rounded-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Space-Missionen entdecken</Link><br /><Link prefetch={false} href="/community/missions?view=saved" className="inline-flex min-h-11 items-center rounded-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Gemerkte Space-Missionen</Link></p>
         </div>

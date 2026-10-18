@@ -44,7 +44,7 @@ beforeEach(() => {
     loadOlderMessages: jest.fn(async () => {}), markRead: jest.fn(async () => {}),
     setCurrentChannel: jest.fn(), sendMessage: jest.fn(), editMessage: jest.fn(),
     createChannel: jest.fn(), deleteChannel: jest.fn(), loading: false,
-    error: null, clearError: jest.fn(),
+    error: null, sendError: null, clearError: jest.fn(),
   };
   jest.mocked(useChat).mockImplementation(() => chat);
 });

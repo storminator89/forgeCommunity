@@ -10,6 +10,7 @@ import { QuizEditor } from './QuizEditor';
 import { QuizContent } from './types';
 import { ContentTypeSelector } from './ContentTypeSelector';
 import { ContentType, EMPTY_QUIZ, draftString, getContentValidationError, serialiseContent } from './content-form-utils';
+import richTextStyles from './course-rich-text.module.css';
 
 interface ContentFormProps {
   onSubmit: (type: ContentType, content: string) => Promise<void>;
@@ -52,7 +53,7 @@ function ContentFormDraft({ onSubmit }: ContentFormProps) {
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       <ContentTypeSelector selectedType={selectedType ?? undefined} disabled={isSubmitting || isH5PBusy} onSelectType={type => { setSelectedType(type); setError(null); }} />
       {selectedType && <fieldset disabled={isSubmitting || isH5PBusy} className="min-w-0 space-y-4">
-        {selectedType === 'QUIZ' ? <QuizEditor initialContent={content as QuizContent} onSave={update} onChange={update} showSaveButton={false} disabled={isSubmitting || isH5PBusy} /> : selectedType === 'TEXT' ? <Editor content={draftString(content)} onChange={update} readOnly={isSubmitting} /> : selectedType === 'H5P' ? <H5PSourceField id="new-content-source" value={draftString(content)} onChange={update} disabled={isSubmitting || isH5PBusy} onBusyChange={setIsH5PBusy} /> : <div className="space-y-2"><Label htmlFor="new-content-source">{selectedType === 'VIDEO' ? 'Video-URL' : 'Audio-URL'}</Label><Input id="new-content-source" inputMode="url" value={draftString(content)} onChange={event => update(event.target.value)} /></div>}
+        {selectedType === 'QUIZ' ? <QuizEditor initialContent={content as QuizContent} onSave={update} onChange={update} showSaveButton={false} disabled={isSubmitting || isH5PBusy} /> : selectedType === 'TEXT' ? <Editor content={draftString(content)} onChange={update} readOnly={isSubmitting} className={richTextStyles.editor} /> : selectedType === 'H5P' ? <H5PSourceField id="new-content-source" value={draftString(content)} onChange={update} disabled={isSubmitting || isH5PBusy} onBusyChange={setIsH5PBusy} /> : <div className="space-y-2"><Label htmlFor="new-content-source">{selectedType === 'VIDEO' ? 'Video-URL' : 'Audio-URL'}</Label><Input id="new-content-source" inputMode="url" value={draftString(content)} onChange={event => update(event.target.value)} /></div>}
         <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="outline" onClick={() => { setSelectedType(null); setDrafts({}); setError(null); }}>Abbrechen</Button><Button type="submit" disabled={isSubmitting || isH5PBusy || !draftString(content).trim()}>{isSubmitting ? 'Wird gespeichert…' : 'Speichern'}</Button></div>
       </fieldset>}
     </form>

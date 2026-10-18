@@ -9,7 +9,7 @@ jest.mock('@/components/app-shell', () => ({
   AppHeader: ({ children }: { children: React.ReactNode }) => <header>{children}</header>,
 }));
 jest.mock('@/components/Sidebar', () => ({ Sidebar: () => null }));
-jest.mock('@/components/user-nav', () => ({ UserNav: () => null }));
+jest.mock('@/components/user-nav', () => ({ UserNav: () => null, useSignInHref: () => '/login?callbackUrl=%2Fcommunity' }));
 jest.mock('@/components/theme-toggle', () => ({ ThemeToggle: () => null }));
 jest.mock('@/app/courses/journey/JourneyMascot', () => ({ JourneyMascot: () => <div data-testid="journey-mascot" /> }));
 
@@ -32,6 +32,7 @@ beforeAll(() => {
 beforeEach(() => {
   jest.clearAllMocks();
   window.localStorage.clear();
+  window.history.replaceState({}, '', '/courses/journey');
   session('USER');
 });
 
@@ -49,7 +50,7 @@ it('keeps an enrolled own course out of the journey', async () => {
     { id: 'own', title: 'Eigener Kurs', isEnrolled: true, completed: false, canDelete: true },
   ]));
   render(<JourneyClient />);
-  expect(await screen.findByRole('heading', { name: 'Dein Lernweg beginnt mit einem Kurs' })).toBeVisible();
+  expect(await screen.findByRole('heading', { name: 'Wähle deinen ersten Kurs' })).toBeVisible();
   expect(global.fetch).toHaveBeenCalledTimes(1);
   expect(screen.queryByRole('link', { name: 'Lernschritt öffnen' })).not.toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'Space-Missionen entdecken' })).toHaveAttribute('href', '/community/missions');
@@ -71,11 +72,11 @@ it('recommends only a server-open step, then purges it on a role refresh', async
       { id: 'other', title: 'Anderer Kurs', isEnrolled: true, completed: false, canDelete: false },
     ]);
     if (url === '/api/courses/other/contents') return response([
-      { id: 'locked', title: 'Gesperrt', type: 'TEXT', order: 1, locked: true, publicationId: 'pub-1', subContents: [] },
-      { id: 'open', title: 'Freier Schritt', type: 'TEXT', order: 2, locked: false, publicationId: 'pub-1', subContents: [] },
+      { id: 'locked', title: 'Gesperrt', type: 'TEXT', courseId: 'other', parentId: null, releaseLocked: false, releaseOn: null, prerequisiteIds: [], missingPrerequisites: [], contentVersionToken: 'fixture-token', order: 1, locked: true, publicationId: 'pub-1', subContents: [] },
+      { id: 'open', title: 'Freier Schritt', type: 'TEXT', courseId: 'other', parentId: null, releaseLocked: false, releaseOn: null, prerequisiteIds: [], missingPrerequisites: [], contentVersionToken: 'fixture-token', order: 2, locked: false, publicationId: 'pub-1', subContents: [] },
     ]);
     if (url === '/api/courses/other/progress') return response({
-      completedContentIds: [], complete: false, canTrack: true, publicationId: 'pub-1',
+      awaitingGradeContentIds: [], completedContentIds: [], complete: false, canTrack: true, publicationId: 'pub-1',
     });
     throw new Error(`Unexpected request ${url}`);
   });
@@ -97,10 +98,10 @@ it('keeps the decorative figure hidden across visits without changing the motion
       { id: 'other', title: 'Anderer Kurs', isEnrolled: true, completed: false, canDelete: false },
     ]);
     if (url === '/api/courses/other/contents') return response([
-      { id: 'open', title: 'Freier Schritt', type: 'TEXT', order: 1, locked: false, publicationId: 'pub-1', subContents: [] },
+      { id: 'open', title: 'Freier Schritt', type: 'TEXT', courseId: 'other', parentId: null, releaseLocked: false, releaseOn: null, prerequisiteIds: [], missingPrerequisites: [], contentVersionToken: 'fixture-token', order: 1, locked: false, publicationId: 'pub-1', subContents: [] },
     ]);
     if (url === '/api/courses/other/progress') return response({
-      completedContentIds: [], complete: false, canTrack: true, publicationId: 'pub-1',
+      awaitingGradeContentIds: [], completedContentIds: [], complete: false, canTrack: true, publicationId: 'pub-1',
     });
     throw new Error(`Unexpected request ${url}`);
   });

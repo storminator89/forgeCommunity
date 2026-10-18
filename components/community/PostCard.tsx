@@ -8,9 +8,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { motion, AnimatePresence } from 'framer-motion'
 import { CommentSection } from './CommentSection'
 import { ReportControl } from './ReportControl'
+import { CommunityPostBody } from './CommunityPostBody'
 
 import { cn } from "@/lib/utils"
-import { sanitizeRichHtml } from '@/lib/sanitize-html'
 import { formatDistanceToNow } from 'date-fns'
 import { de } from 'date-fns/locale'
 
@@ -86,10 +86,10 @@ export function PostCard({
       className="group"
     >
       <Card className="overflow-hidden shadow-xs hover:shadow-md transition-all duration-300 bg-card border border-border">
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           {/* Header */}
-          <div className="flex items-start justify-between mb-4">
-            <div className="flex items-center space-x-3">
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
               <Avatar className="h-10 w-10 ring-2 ring-background">
                 <AvatarImage
                   src={post.author?.image || DEFAULT_AVATAR_URL}
@@ -97,20 +97,20 @@ export function PostCard({
                 />
                 <AvatarFallback className="bg-coral-highlight text-coral-highlight-foreground">{post.author?.name?.[0] || 'A'}</AvatarFallback>
               </Avatar>
-              <div>
-                <h3 className="font-semibold text-lg text-foreground leading-tight">
+              <div className="min-w-0">
+                <h3 className="break-words font-semibold text-base text-foreground leading-tight [overflow-wrap:anywhere]">
                   {post.author?.name || 'Anonym'}
                 </h3>
-                <span className="text-sm text-muted-foreground block">
+                <time dateTime={post.createdAt} className="mt-1 block text-xs text-muted-foreground">
                   {formatDistanceToNow(new Date(post.createdAt), { addSuffix: true, locale: de })}
-                </span>
+                </time>
               </div>
             </div>
 
             {isAuthor && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button aria-label="Beitragsaktionen" variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
+                  <Button aria-label="Beitragsaktionen" variant="ghost" size="icon" className="shrink-0 text-muted-foreground hover:text-foreground">
                     <MoreHorizontal className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -128,13 +128,8 @@ export function PostCard({
 
           {/* Content */}
           <div className="space-y-3">
-            <h2 className="text-xl font-bold text-foreground">{post.title}</h2>
-            <div className="relative">
-              <div
-                className="prose prose-sm dark:prose-invert max-w-none text-muted-foreground"
-                dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(post.content) }}
-              />
-            </div>
+            <h2 className="break-words text-xl font-semibold leading-snug text-foreground [overflow-wrap:anywhere]">{post.title}</h2>
+            <CommunityPostBody content={post.content} />
             {!!post.tags?.length && <ul className="flex flex-wrap gap-2" aria-label="Beitragsthemen">
               {post.tags.map(tag => <li key={tag.id}><a href={`/community?tag=${encodeURIComponent(tag.name)}`}
                 onClick={event => { if (onSelectTopic && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey && event.button === 0) { event.preventDefault(); onSelectTopic(tag.name) } }}
@@ -154,7 +149,7 @@ export function PostCard({
         </div>
 
         {/* Footer */}
-        <CardFooter className="px-6 py-4 bg-muted/50 flex flex-wrap items-center justify-between gap-2 border-t border-border">
+        <CardFooter className="px-4 py-2 sm:px-6 bg-muted/30 flex flex-wrap items-center justify-between gap-2 border-t border-border [&_button]:min-h-11">
           <div className="flex items-center space-x-2">
             <Button
               variant="ghost"

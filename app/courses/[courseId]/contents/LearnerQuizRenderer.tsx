@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Label } from '@/components/ui/label'
-import { parseLearnerQuizContent, parseQuizContent, type LearnerQuizContent } from './types'
+import { parseLearnerQuizContent, parseQuizContent, type LearnerQuizContent, type LatestQuizAttempt } from './types'
 
 type Grade = { score: number; passed: boolean }
 type Confidence = 'SURE' | 'SOMEWHAT_SURE' | 'UNSURE' | 'GUESSED'
@@ -53,6 +53,7 @@ function submissionId() {
 }
 
 type LearnerQuizProps = {
+  latestAttempt?: LatestQuizAttempt
   courseId: string
   contentId: string
   updatedAt: string | undefined
@@ -70,7 +71,7 @@ export function LearnerQuizRenderer(props: LearnerQuizProps) {
   return <LearnerQuizSession key={version} {...props} />
 }
 
-function LearnerQuizSession({ courseId, contentId, publicationId, contentVersionToken, content, onPassed, onReaderIssue }: LearnerQuizProps) {
+function LearnerQuizSession({ courseId, contentId, publicationId, contentVersionToken, content, onPassed, onReaderIssue, latestAttempt }: LearnerQuizProps) {
   const quiz = learnerQuiz(content)
   const prefix = useId()
   const [answers, setAnswers] = useState<Record<string, unknown>>({})
@@ -78,6 +79,7 @@ function LearnerQuizSession({ courseId, contentId, publicationId, contentVersion
   const [pending, setPending] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [result, setResult] = useState<Grade | null>(null)
+  const [repeating, setRepeating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [staleVersion, setStaleVersion] = useState(false)
   const pendingSubmission = useRef<Submission | null>(null)
@@ -96,6 +98,16 @@ function LearnerQuizSession({ courseId, contentId, publicationId, contentVersion
     return ordered
   })
   if (!quiz?.questions.length) return <p role="alert">Dieses Quiz ist noch nicht verfügbar.</p>
+  const saved = latestAttempt?.contentId === contentId && latestAttempt.publicationId === publicationId ? latestAttempt : null
+  const started = submitted || pending || Object.keys(answers).length > 0 || Object.keys(confidence).length > 0
+  if (saved && !repeating && !result && !started) return <section className="space-y-4" aria-label="Quiz">
+    <h2 className="text-lg font-semibold">Quiz</h2>
+    <div role="status" className="space-y-1">
+      <p className={saved.passed ? 'text-success' : 'text-destructive'}>Letzter Versuch: {saved.score.toFixed(1)}%. {saved.passed ? 'Bestanden!' : 'Noch nicht bestanden.'}</p>
+      <p className="text-sm text-muted-foreground"><time dateTime={saved.submittedAt}>{new Date(saved.submittedAt).toLocaleString('de-DE')}</time></p>
+    </div>
+    <Button type="button" variant="outline" onClick={() => setRepeating(true)}>Quiz wiederholen</Button>
+  </section>
 
   const setAnswer = (id: string, value: unknown) => {
     if (sending.current || pendingSubmission.current || result) return
@@ -194,6 +206,6 @@ function LearnerQuizSession({ courseId, contentId, publicationId, contentVersion
     {result && <p role="status" className={result.passed ? 'text-success' : 'text-destructive'}>Du hast {result.score.toFixed(1)}% erreicht. {result.passed ? 'Bestanden!' : 'Noch nicht bestanden.'}</p>}
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     {error && !staleVersion && <p className="text-sm text-muted-foreground">Deine Antworten sind bis zur Klärung gesperrt. Die erneute Prüfung verwendet dieselbe Abgabe.</p>}
-    <div className="flex flex-wrap gap-2">{result ? <Button type="button" variant="outline" onClick={() => { setAnswers({}); setConfidence({}); setSubmitted(false); setResult(null); setError(null); pendingSubmission.current = null }}>Quiz wiederholen</Button> : <Button type="button" disabled={!ready || pending || staleVersion || !publicationId || !contentVersionToken} onClick={() => void submit()}>{pending ? 'Wird geprüft …' : error && !staleVersion ? 'Abgabe erneut prüfen' : 'Antworten abgeben'}</Button>}{(!publicationId || !contentVersionToken) && <p className="text-sm text-muted-foreground">Bitte lade das Quiz neu, bevor du Antworten abgibst.</p>}</div>
+    <div className="flex flex-wrap gap-2">{result ? <Button type="button" variant="outline" onClick={() => { setAnswers({}); setConfidence({}); setSubmitted(false); setResult(null); setRepeating(true); setError(null); pendingSubmission.current = null }}>Quiz wiederholen</Button> : <Button type="button" disabled={!ready || pending || staleVersion || !publicationId || !contentVersionToken} onClick={() => void submit()}>{pending ? 'Wird geprüft …' : error && !staleVersion ? 'Abgabe erneut prüfen' : 'Antworten abgeben'}</Button>}{(!publicationId || !contentVersionToken) && <p className="text-sm text-muted-foreground">Bitte lade das Quiz neu, bevor du Antworten abgibst.</p>}</div>
   </section>
 }

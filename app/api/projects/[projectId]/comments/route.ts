@@ -5,7 +5,7 @@ import prisma from '@/lib/prisma'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import { readJsonObject, readPage, requestErrorResponse } from '@/lib/server/api-input'
-import { sanitizeTextServer } from '@/lib/server/sanitize-html'
+import { sanitizeCommentTextServer } from '@/lib/server/sanitize-html'
 
 export async function GET(req: NextRequest, props: { params: Promise<{ projectId: string }> }) {
   const params = await props.params;
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ projectI
   const { projectId } = params
   try {
     const { content } = await readJsonObject(req)
-    const safeContent = typeof content === 'string' ? sanitizeTextServer(content) : ''
+    const safeContent = typeof content === 'string' ? sanitizeCommentTextServer(content) : ''
     if (!safeContent) {
       return NextResponse.json({ error: 'Inhalt ist erforderlich.' }, { status: 400 })
     }

@@ -1,0 +1,208 @@
+/* Restore authored course structure without a global typography dependency. */
+.body,
+.editor :global(.tiptap) {
+  min-inline-size: 0;
+  color: hsl(var(--foreground));
+  font-size: 1rem;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+
+.body {
+  inline-size: 100%;
+  max-inline-size: 72ch;
+}
+
+.editor {
+  min-inline-size: 0;
+}
+
+.editor :global(.tiptap):focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: -2px;
+}
+
+:is(.body, .editor :global(.tiptap)) :is(p, ul, ol, blockquote, pre) {
+  margin-block: 0 1em;
+}
+
+:is(.body, .editor :global(.tiptap)) :is(h1, h2, h3, h4, h5, h6) {
+  margin-block: 1.5em .5em;
+  color: hsl(var(--foreground));
+  font-weight: 650;
+  line-height: 1.3;
+  letter-spacing: -.015em;
+  text-wrap: balance;
+}
+
+:is(.body, .editor :global(.tiptap)) h1 {
+  font-size: clamp(1.625rem, 1.4rem + 1vw, 1.875rem);
+}
+
+:is(.body, .editor :global(.tiptap)) h2 {
+  font-size: clamp(1.375rem, 1.25rem + .5vw, 1.5rem);
+}
+
+:is(.body, .editor :global(.tiptap)) h3 {
+  font-size: 1.25rem;
+}
+
+:is(.body, .editor :global(.tiptap)) h4 {
+  font-size: 1.125rem;
+}
+
+:is(.body, .editor :global(.tiptap)) h5 {
+  font-size: 1.0625rem;
+}
+
+:is(.body, .editor :global(.tiptap)) h6 {
+  font-size: 1rem;
+}
+
+:is(.body, .editor :global(.tiptap)) > :first-child,
+:is(.body, .editor :global(.tiptap)) :is(li, blockquote) > :first-child {
+  margin-block-start: 0;
+}
+
+:is(.body, .editor :global(.tiptap)) > :last-child,
+:is(.body, .editor :global(.tiptap)) :is(li, blockquote) > :last-child {
+  margin-block-end: 0;
+}
+
+:is(.body, .editor :global(.tiptap)) :is(ul, ol) {
+  padding-inline-start: 1.5em;
+  list-style-position: outside;
+}
+
+:is(.body, .editor :global(.tiptap)) ul {
+  list-style-type: disc;
+}
+
+:is(.body, .editor :global(.tiptap)) ul ul {
+  list-style-type: circle;
+}
+
+:is(.body, .editor :global(.tiptap)) ul ul ul {
+  list-style-type: square;
+}
+
+:is(.body, .editor :global(.tiptap)) ol {
+  list-style-type: decimal;
+}
+
+:is(.body, .editor :global(.tiptap)) ol ol {
+  list-style-type: lower-alpha;
+}
+
+:is(.body, .editor :global(.tiptap)) ol ol ol {
+  list-style-type: lower-roman;
+}
+
+:is(.body, .editor :global(.tiptap)) li {
+  padding-inline-start: .2em;
+  margin-block: .4em;
+}
+
+:is(.body, .editor :global(.tiptap)) li::marker {
+  color: hsl(var(--primary));
+  font-weight: 600;
+}
+
+:is(.body, .editor :global(.tiptap)) li > :is(p, ul, ol) {
+  margin-block: .4em;
+}
+
+:is(.body, .editor :global(.tiptap)) strong {
+  font-weight: 650;
+}
+
+:is(.body, .editor :global(.tiptap)) em {
+  font-style: italic;
+}
+
+:is(.body, .editor :global(.tiptap)) u {
+  text-decoration: underline;
+  text-underline-offset: .15em;
+}
+
+:is(.body, .editor :global(.tiptap)) s {
+  text-decoration: line-through;
+}
+
+:is(.body, .editor :global(.tiptap)) a {
+  color: hsl(var(--primary));
+  text-decoration: underline;
+  text-decoration-thickness: .075em;
+  text-underline-offset: .2em;
+}
+
+:is(.body, .editor :global(.tiptap)) a:hover {
+  text-decoration-thickness: .15em;
+}
+
+:is(.body, .editor :global(.tiptap)) a:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+:is(.body, .editor :global(.tiptap)) blockquote {
+  border-inline-start: 3px solid hsl(var(--primary));
+  padding-inline-start: 1em;
+  color: hsl(var(--muted-foreground));
+}
+
+:is(.body, .editor :global(.tiptap)) :is(code, pre) {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+:is(.body, .editor :global(.tiptap)) code {
+  border-radius: 4px;
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+  padding: .125em .3em;
+  font-size: .9em;
+}
+
+:is(.body, .editor :global(.tiptap)) pre {
+  max-inline-size: 100%;
+  overflow-x: auto;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius-control);
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+  padding: 1em;
+  font-size: .875em;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  tab-size: 2;
+}
+
+:is(.body, .editor :global(.tiptap)) pre code {
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  font-size: inherit;
+  white-space: inherit;
+}
+
+:is(.body, .editor :global(.tiptap)) img {
+  display: block;
+  max-inline-size: 100%;
+  block-size: auto;
+  margin-block: 1em;
+  border-radius: var(--radius-control);
+}
+
+.editor :global(.tiptap) img:global(.ProseMirror-selectednode) {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 3px;
+}
+
+:is(.body, .editor :global(.tiptap)) hr {
+  margin-block: 1.75em;
+  border: 0;
+  border-block-start: 1px solid hsl(var(--border));
+}

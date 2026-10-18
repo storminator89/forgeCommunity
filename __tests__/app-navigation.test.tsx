@@ -15,7 +15,7 @@ jest.mock('@/contexts/NotificationContext', () => ({ useNotifications: () => ({ 
 
 beforeEach(() => {
   window.localStorage.clear(); push.mockClear();
-  jest.mocked(useSession).mockReturnValue({ data: { user: { name: 'Ada', role: 'USER' } }, status: 'authenticated', update: jest.fn() } as any);
+  jest.mocked(useSession).mockReturnValue({ data: { user: { id: 'viewer', name: 'Ada', role: 'USER' } }, status: 'authenticated', update: jest.fn() } as any);
 });
 
 it('marks nested routes active without activating knowledge twice for drafts', () => {

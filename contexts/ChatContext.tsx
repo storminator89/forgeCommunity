@@ -24,10 +24,29 @@ interface ChatContextType {
   deleteChannel: (channelId: string) => Promise<void>;
   loading: boolean;
   error: string | null;
+  sendError: string | null;
   clearError: () => void;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
+
+class ChatSendError extends Error {}
+
+async function chatUploadError(response: Response): Promise<string> {
+  const body: unknown = await response.json().catch(() => null);
+  const code = body && typeof body === 'object' && 'errorCode' in body ? body.errorCode : null;
+  // Only our known codes and their expected statuses may choose user-facing
+  // text. Never surface an arbitrary server/proxy response or exception.
+  if (response.status === 413 && code === 'IMAGE_DIMENSIONS') return 'Das Bild wurde wegen seiner Abmessungen abgelehnt. Bitte wähle es erneut oder nutze ein kleineres Bild.';
+  if (response.status === 413 && code === 'IMAGE_TOO_LARGE') return 'Das Bild ist zu groß. Erlaubt sind höchstens 5 MiB. Bitte wähle ein kleineres Bild.';
+  if (response.status === 415 && code === 'IMAGE_UNSUPPORTED') return 'Das vorbereitete Bildformat wurde abgelehnt. Bitte wähle das Bild erneut, damit es als PNG vorbereitet wird.';
+  if (response.status === 422 && code === 'IMAGE_INVALID') return 'Die Bilddatei wurde als ungültig abgelehnt. Bitte wähle ein anderes Bild.';
+  if (response.status === 408 && code === 'UPLOAD_TIMEOUT') return 'Der Bildupload hat zu lange gedauert. Dein Entwurf bleibt erhalten. Bitte prüfe deine Verbindung und versuche es später erneut.';
+  if (response.status === 503 && code === 'UPLOAD_BUSY') return 'Der Bildupload ist gerade ausgelastet. Dein Entwurf bleibt erhalten. Bitte versuche es später erneut.';
+  if (response.status === 429 && code === 'UPLOAD_RATE_LIMIT') return 'Zu viele Bilduploads. Dein Entwurf bleibt erhalten. Bitte warte etwas, bevor du erneut sendest.';
+  if (response.status === 401 && code === 'UNAUTHORIZED') return 'Bitte melde dich erneut an, um das Bild zu senden. Dein Entwurf bleibt erhalten.';
+  return 'Das Bild konnte nicht hochgeladen werden. Dein Entwurf bleibt erhalten. Bitte versuche es später erneut.';
+}
 
 export function ChatProvider({ children }: { children: ReactNode }) {
   const { data, status } = useSession();
@@ -53,6 +72,7 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
   const [hasNewerMessages, setHasNewerMessages] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
   const [lastSync, setLastSync] = useState<Date>(new Date());
   const [lastSyncId, setLastSyncId] = useState<string | null>(null);
   const [isWindowFocused, setIsWindowFocused] = useState(true);
@@ -69,6 +89,7 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
   const readMarkGenerationRef = useRef(new Map<string, number>());
   const channelListEpochRef = useRef(0);
   const channelListRequestSequenceRef = useRef(0);
+  const messageLoadRequestRef = useRef<symbol | null>(null);
 
   useLayoutEffect(() => {
     // This provider is keyed by account. Cancel both upload and message requests
@@ -225,6 +246,9 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
   }, [isAdmin]);
 
   const fetchMessages = useCallback(async (channelId: string, signal?: AbortSignal) => {
+    if (signal?.aborted) return;
+    const requestToken = Symbol('chat-load');
+    messageLoadRequestRef.current = requestToken;
     try {
       initialLoadedChannelRef.current = null;
       setLoadedChannelId(null);
@@ -234,6 +258,7 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
         `/api/chat/messages?channelId=${encodeURIComponent(channelId)}&latest=true&limit=50`,
         { signal },
       );
+      if (signal?.aborted) return;
       if (response.status === 403 && activeChannelIdRef.current === channelId) {
         activeChannelIdRef.current = null;
         initialLoadedChannelRef.current = null;
@@ -291,7 +316,7 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
       setError(errorMessage);
       console.error(errorMessage);
     } finally {
-      if (activeChannelIdRef.current === channelId) {
+      if (activeChannelIdRef.current === channelId && messageLoadRequestRef.current === requestToken) {
         setLoading(false);
       }
     }
@@ -338,7 +363,7 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
   }, [currentChannel, hasOlderMessages, messages, processedMessageIds, sessionUserId]);
 
   const syncMessages = useCallback(async (signal?: AbortSignal) => {
-    if (!currentChannel || !sessionUserId || syncingRef.current || initialLoadedChannelRef.current !== currentChannel.id) return;
+    if (signal?.aborted || !currentChannel || !sessionUserId || syncingRef.current || initialLoadedChannelRef.current !== currentChannel.id) return;
 
     const channelId = currentChannel.id;
     let cursor = lastSync;
@@ -353,10 +378,12 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
       // A burst may span several 50-message pages. Drain a bounded batch now
       // instead of waiting 10 seconds per page; the next poll resumes if needed.
       for (let page = 0; page < 4; page++) {
+        if (signal?.aborted) return;
         const response = await fetch(
           `/api/chat/messages?channelId=${encodeURIComponent(channelId)}&after=${encodeURIComponent(cursor.toISOString())}${cursorId ? `&afterId=${encodeURIComponent(cursorId)}` : ''}`,
           { signal },
         );
+        if (signal?.aborted) return;
         if (response.status === 403 && activeChannelIdRef.current === channelId) {
           activeChannelIdRef.current = null;
           initialLoadedChannelRef.current = null;
@@ -607,6 +634,9 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
     const channelId = currentChannel.id;
     const tempId = `temp-${++optimisticSequenceRef.current}`;
     let imageUrl: string | undefined;
+    let messageRequestStarted = false;
+    if (sendError) setError(previous => previous === sendError ? null : previous);
+    setSendError(null);
 
     try {
       if (imageFile) {
@@ -620,11 +650,15 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
         });
 
         if (controller.signal.aborted) return false;
-        if (!uploadResponse.ok) throw new Error('Failed to upload image');
+        if (!uploadResponse.ok) throw new ChatSendError(await chatUploadError(uploadResponse));
         const uploadData = await uploadResponse.json();
         // Aborting fetch alone is insufficient if the response/body has already
         // completed. Never continue this old draft with a new account's cookie.
         if (controller.signal.aborted) return false;
+        if (typeof uploadData?.filePath !== 'string' ||
+            !/^\/api\/chat\/uploads\/chat-[0-9a-f]+-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(?:gif|jpg|png|webp)$/.test(uploadData.filePath)) {
+          throw new ChatSendError('Der Bildupload wurde nicht bestätigt. Dein Entwurf bleibt erhalten. Bitte versuche es später erneut.');
+        }
         imageUrl = uploadData.filePath;
       }
 
@@ -646,6 +680,7 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
         setMessages(prev => [...prev, optimisticMessage]);
       }
 
+      messageRequestStarted = true;
       const response = await fetch('/api/chat/messages', {
         method: 'POST',
         signal: controller.signal,
@@ -659,7 +694,11 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
       });
 
       if (controller.signal.aborted) return false;
-      if (!response.ok) throw new Error('Failed to send message');
+      if (!response.ok) {
+        if (response.status === 401) throw new ChatSendError('Bitte melde dich erneut an, um die Nachricht zu senden. Dein Entwurf bleibt erhalten.');
+        if (response.status === 403) throw new ChatSendError('Du darfst in diesem Channel gerade keine Nachrichten senden. Dein Entwurf bleibt erhalten.');
+        throw new ChatSendError('Das Senden konnte nicht bestätigt werden. Prüfe den Chat, bevor du erneut sendest. Dein Entwurf bleibt erhalten.');
+      }
 
       const actualMessage = await response.json();
       if (controller.signal.aborted) return false;
@@ -679,13 +718,17 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
         });
       }
       setError(null);
+      setSendError(null);
       return true;
     } catch (err) {
       if (controller.signal.aborted) return false;
       if (activeChannelIdRef.current === channelId) {
         setMessages(prev => prev.filter(msg => msg.id !== tempId));
       }
-      const errorMessage = err instanceof Error ? err.message : 'Error sending message';
+      const errorMessage = err instanceof ChatSendError ? err.message : messageRequestStarted
+        ? 'Das Senden konnte nicht bestätigt werden. Prüfe den Chat, bevor du erneut sendest. Dein Entwurf bleibt erhalten.'
+        : 'Das Bild konnte nicht hochgeladen werden. Bitte prüfe deine Verbindung. Dein Entwurf bleibt erhalten.';
+      setSendError(errorMessage);
       setError(errorMessage);
       console.error(errorMessage);
       return false;
@@ -790,7 +833,8 @@ function AccountChatProvider({ children, session }: { children: ReactNode; sessi
         deleteChannel,
         loading,
         error,
-        clearError: () => setError(null),
+        sendError,
+        clearError: () => { setError(null); setSendError(null); },
       }}
     >
       {children}

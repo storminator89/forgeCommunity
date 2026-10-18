@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react';
-import { CourseContent, parseQuizContent } from './types';
+import { CourseContent, parseQuizContent, type LatestQuizAttempt } from './types';
 import { Editor } from '@/components/Editor';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +18,7 @@ import { sanitizeRichHtml } from '@/lib/sanitize-html';
 import { H5PEmbed } from '@/components/h5p/H5PEmbed';
 import { LearnerAssignmentRenderer } from './LearnerAssignmentRenderer';
 import { parseAssignmentContent } from './assignment-content';
+import richTextStyles from './course-rich-text.module.css';
 
 interface ContentRendererProps {
   content: CourseContent;
@@ -28,13 +29,14 @@ interface ContentRendererProps {
   learnerRefreshKey?: number;
   onReaderIssue?: (status: number) => void;
   onQuizPassed?: () => void;
+  latestQuizAttempt?: LatestQuizAttempt;
 }
 
 export function ContentRenderer(props: ContentRendererProps) {
   return <ContentRendererState key={props.content.id} {...props} />;
 }
 
-function ContentRendererState({ content, isEditing: externalIsEditing, onSave, onEditToggle, learnerQuiz, learnerRefreshKey, onReaderIssue, onQuizPassed }: ContentRendererProps) {
+function ContentRendererState({ content, isEditing: externalIsEditing, onSave, onEditToggle, learnerQuiz, learnerRefreshKey, onReaderIssue, onQuizPassed, latestQuizAttempt }: ContentRendererProps) {
   const [internalIsEditing, setInternalIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -81,7 +83,7 @@ function ContentRendererState({ content, isEditing: externalIsEditing, onSave, o
           {quizContent || content.type === 'QUIZ' ? (
             <QuizEditor key={content.id} initialContent={quizContent ?? content.content} disabled={isSaving || !onSave} onSave={async quiz => { await handleSave(JSON.stringify(quiz)); }} />
           ) : content.type === 'TEXT' ? (
-            <Editor content={editedContent} onChange={setEditedContent} />
+            <Editor content={editedContent} onChange={setEditedContent} className={richTextStyles.editor} />
           ) : (
             <div className="space-y-2">
               <label htmlFor={`content-url-${content.id}`} className="text-sm font-medium text-muted-foreground">
@@ -128,7 +130,7 @@ function ContentRendererState({ content, isEditing: externalIsEditing, onSave, o
     );
   }
 
-  if (learnerQuiz && content.type === 'QUIZ') return <LearnerQuizRenderer key={`${content.publicationId ?? ''}:${content.contentVersionToken ?? content.updatedAt ?? ''}:${JSON.stringify(content.content)}`} courseId={content.courseId} contentId={content.id} updatedAt={content.updatedAt} publicationId={content.publicationId} contentVersionToken={content.contentVersionToken} content={content.content} onReaderIssue={onReaderIssue} onPassed={() => onQuizPassed?.()} />;
+  if (learnerQuiz && content.type === 'QUIZ') return <LearnerQuizRenderer key={`${content.publicationId ?? ''}:${content.contentVersionToken ?? content.updatedAt ?? ''}:${JSON.stringify(content.content)}`} courseId={content.courseId} contentId={content.id} updatedAt={content.updatedAt} publicationId={content.publicationId} contentVersionToken={content.contentVersionToken} content={content.content} latestAttempt={latestQuizAttempt} onReaderIssue={onReaderIssue} onPassed={() => onQuizPassed?.()} />;
   if (content.type === 'ASSIGNMENT') {
     const assignment = parseAssignmentContent(content.content);
     if (!assignment) return <p role="alert">Die Aufgabe ist ungültig.</p>;
@@ -141,9 +143,7 @@ function ContentRendererState({ content, isEditing: externalIsEditing, onSave, o
     switch (content.type) {
       case 'TEXT':
         return (
-          <div className="prose prose-sm md:prose-base dark:prose-invert max-w-none break-words [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_img]:max-w-full">
-            <div dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(content.content as string) }} />
-          </div>
+          <div className={richTextStyles.body} dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(content.content as string) }} />
         );
 
       case 'VIDEO': {

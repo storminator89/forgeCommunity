@@ -2,42 +2,35 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { render, screen, within } from '@testing-library/react'
 import { ContributionMilestonesCard } from '@/components/community/ContributionMilestonesCard'
-import { StatsCard } from '@/components/community/StatsCard'
+import { PersonalProgressCard } from '@/components/community/PersonalProgressCard'
 import { PostCard } from '@/components/community/PostCard'
 import { Progress } from '@/components/ui/progress'
 import { Button } from '@/components/ui/button'
 import type { CommunityPost } from '@/lib/community-feed'
 
+jest.mock('@/hooks/useSparkVisibility', () => ({ useSparkVisibility: () => ({ visible: false }) }))
 jest.mock('framer-motion', () => jest.requireActual('@/lib/motion'))
 jest.mock('@/components/community/ReportControl', () => ({ ReportControl: () => null }))
 
 const source = (path: string) => readFileSync(join(process.cwd(), path), 'utf8')
-const rewardProps = {
-  stats: { posts: 1, receivedLikes: 2, comments: 3 },
-  activityLoading: false,
-  activityError: false,
-  rewardsLoading: false,
-  rewardsError: false,
-  isSignedIn: true,
-}
+const rewardProps = { loading: false, error: false, isSignedIn: true, onRefresh: jest.fn() }
 
-it('distinguishes earned rewards from zero and revoked points without changing their wording', () => {
-  const view = render(<StatsCard {...rewardProps} rewards={{
+it('distinguishes earned rewards from zero and revoked points on the private progress surface', () => {
+  const view = render(<PersonalProgressCard {...rewardProps} summary={{
     points: 50, completedCourses: 1, firstCourseCompleted: true,
     history: [
       { type: 'AWARDED', reason: null, pointsDelta: 50, at: '2026-10-01', courseTitle: 'Erworbener Abschluss' },
       { type: 'REVOKED', reason: 'APPROVAL_WITHDRAWN', pointsDelta: -50, at: '2026-10-02', courseTitle: 'Geänderte Freigabe' },
     ],
   }} />)
-  expect(screen.getByText('Meine Punkte').nextElementSibling).toHaveClass('text-reward-ink')
-  expect(screen.getByText('Erreicht')).toHaveClass('text-reward-ink')
+  expect(screen.getByText('Aktive Kurspunkte:')).toHaveClass('text-reward-ink')
+  expect(screen.getByText('1 Kurs abgeschlossen')).toHaveClass('text-reward-ink')
   expect(screen.getByText('+50 Punkte')).toHaveClass('text-reward-ink')
   expect(screen.getByText('-50 Punkte')).toHaveClass('text-muted-foreground')
-  expect(screen.getByRole('progressbar', { name: 'Lernmeilenstein: 1 von 3 Kursen abgeschlossen' })).toHaveClass('accent-progress')
-
-  view.rerender(<StatsCard {...rewardProps} rewards={{ points: 0, completedCourses: 0, firstCourseCompleted: false }} />)
-  expect(screen.getByText('Meine Punkte').nextElementSibling).not.toHaveClass('text-reward-ink')
-  expect(screen.getByText('Noch nicht erreicht')).toHaveClass('text-muted-foreground')
+  expect(screen.getByRole('progressbar', { name: '1 von 3 Kursen bis zum nächsten Meilenstein' })).toHaveClass('accent-progress')
+  view.rerender(<PersonalProgressCard {...rewardProps} summary={{ points: 0, completedCourses: 0, firstCourseCompleted: false }} />)
+  expect(screen.getByText('Aktive Kurspunkte:')).not.toHaveClass('text-reward-ink')
+  expect(screen.getByText('Noch kein Kurs abgeschlossen')).toHaveClass('text-foreground')
   expect(view.container.querySelector('.text-reward-ink, .bg-reward')).toBeNull()
 })
 

@@ -11,7 +11,7 @@ jest.mock('@/components/app-shell', () => ({
   AppHeader: ({ children }: { children: React.ReactNode }) => <header>{children}</header>,
 }));
 jest.mock('@/components/Sidebar', () => ({ Sidebar: () => null }));
-jest.mock('@/components/user-nav', () => ({ UserNav: () => null }));
+jest.mock('@/components/user-nav', () => ({ UserNav: () => null, useSignInHref: () => '/login?callbackUrl=%2Fcommunity' }));
 jest.mock('@/components/theme-toggle', () => ({ ThemeToggle: () => null }));
 jest.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: jest.fn() }) }));
 jest.mock('next/image', () => ({
@@ -28,7 +28,7 @@ const course = {
   price: null, currency: null, isEnrolled: true, completed: false, canDelete: false, imageUrl: null,
 };
 const leaf = { id: 'qa-open', title: 'Route QA offener Lernschritt', type: 'TEXT', order: 2, locked: false,
-  releaseLocked: false, publicationId: 'qa-publication', subContents: [] };
+  courseId: 'qa-route-course', parentId: null, prerequisiteIds: [], missingPrerequisites: [], releaseOn: null, contentVersionToken: 'fixture-token', releaseLocked: false, publicationId: 'qa-publication', subContents: [] };
 const locked = { ...leaf, id: 'qa-locked', title: 'Route QA gesperrter Schritt', order: 1, locked: true, releaseLocked: true };
 function response(json: unknown) { return Promise.resolve({ ok: true, json: async () => json } as Response); }
 function setSession(role = 'USER') {
@@ -40,10 +40,11 @@ function comesBefore(first: Element, second: Element) {
   expect(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 }
 function journeyResponses(contents: unknown[] = [locked, leaf]) {
+  window.history.replaceState({}, '', '/courses/journey');
   global.fetch = jest.fn().mockImplementation((url: string) => {
     if (url === '/api/courses') return response([course]);
     if (url.endsWith('/contents')) return response(contents);
-    if (url.endsWith('/progress')) return response({ completedContentIds: [], complete: false, canTrack: true, publicationId: 'qa-publication' });
+    if (url.endsWith('/progress')) return response({ awaitingGradeContentIds: [], completedContentIds: [], complete: false, canTrack: true, publicationId: 'qa-publication' });
     throw new Error(`Unexpected request ${url}`);
   });
 }
@@ -159,7 +160,7 @@ it('places the selected course and unlocked next action before figure controls a
   const view = render(<JourneyClient />);
   const next = await screen.findByRole('link', { name: 'Lernschritt öffnen' });
   expect(next).toHaveAttribute('href', '/courses/qa-route-course/contents?content=qa-open');
-  comesBefore(screen.getByRole('combobox', { name: 'Kurs auswählen' }), screen.getByRole('heading', { name: course.title }));
+  comesBefore(screen.getByText('Dein angemeldeter Kurs'), screen.getByRole('heading', { name: course.title }));
   comesBefore(screen.getByRole('status'), next);
   expect(screen.queryByRole('button', { name: 'Maskottchen anzeigen' })).not.toBeInTheDocument();
   const animation = screen.getByRole('button', { name: 'Figurenanimationen an' });
@@ -168,7 +169,7 @@ it('places the selected course and unlocked next action before figure controls a
   await user.tab();
   expect(animation).toHaveFocus();
   comesBefore(next, screen.getByRole('link', { name: 'Space-Missionen entdecken' }));
-  expect(screen.getByRole('status')).toHaveTextContent('0 von 2 Inhalten aktuell bestätigt');
+  expect(screen.getByRole('status')).toHaveTextContent('0 von 2 Stationen bestätigt');
   expect(screen.getByRole('progressbar')).toHaveAttribute('value', '0');
   expect(view.container.querySelector('[data-journey-mascot]')).toBeInTheDocument();
   expect(view.container.querySelector('img[src*="forge-spark-blink"]')).toBeNull();
@@ -176,7 +177,7 @@ it('places the selected course and unlocked next action before figure controls a
 });
 
 it.each([
-  ['empty', [], 'Noch keine Kursinhalte verfügbar'],
+  ['empty', [], 'Noch keine Stationen verfügbar'],
   ['locked', [locked], 'Gerade ist kein weiterer Inhalt frei.'],
 ] as const)('keeps the %s journey truthful and leaves its controls reachable', async (_state, contents, message) => {
   const user = userEvent.setup();

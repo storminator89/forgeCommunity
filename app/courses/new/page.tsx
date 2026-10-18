@@ -3,7 +3,7 @@
 import { SurfaceCard } from '@/components/discovery';
 import { Lightbulb, FileCheck2 } from 'lucide-react';
 import { AppShell, AppHeader } from '@/components/app-shell';
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import type { Session } from 'next-auth'
@@ -19,6 +19,15 @@ import { Sidebar } from "@/components/Sidebar"
 import { UserNav } from "@/components/user-nav"
 import { ThemeToggle } from "@/components/theme-toggle"
 import Link from 'next/link'
+
+function courseCreationError(status: number) {
+  if (status === 401) return 'Deine Anmeldung ist abgelaufen. Melde dich erneut an. Deine Eingaben bleiben hier erhalten.'
+  if (status === 403) return 'Der Kursentwurf konnte mit deiner Anmeldung nicht angelegt werden. Deine Eingaben bleiben hier erhalten.'
+  if (status === 409) return 'Dieser Anlegeversuch gehört bereits zu einem anderen Entwurf. Prüfe deine Kursentwürfe, bevor du einen neuen Versuch startest.'
+  if (status === 400 || status === 413) return 'Bitte prüfe Titel, Kategorie, Zeitraum und Zahlenwerte. Deine Eingaben bleiben hier erhalten.'
+  if (status === 429) return 'Es gab gerade zu viele Anfragen. Warte einen Moment und versuche es erneut. Deine Eingaben bleiben hier erhalten.'
+  return 'Der Kursentwurf konnte gerade nicht angelegt werden. Deine Eingaben bleiben hier erhalten. Bitte versuche es erneut.'
+}
 
 export default function NewCoursePage() {
   const { data, status } = useSession()
@@ -36,16 +45,18 @@ function CourseComposer({ session }: { session: Session | null }) {
   const [maxStudents, setMaxStudents] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const submissionInFlight = useRef(false)
+  const creationRequest = useRef<{ payload: string; requestId: string } | null>(null)
 
   const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (isSubmitting) return
+    if (submissionInFlight.current) return
     setError(null)
 
     if (!session) {
-      setError('Sie müssen angemeldet sein, um einen Kurs zu erstellen.')
+      setError('Melde dich an, um einen Kursentwurf anzulegen. Deine Eingaben bleiben hier erhalten.')
       return
     }
 
@@ -54,9 +65,24 @@ function CourseComposer({ session }: { session: Session | null }) {
       return
     }
 
+    if (!title.trim() || !description.trim()) {
+      setError('Gib einen Kurstitel und eine Kategorie ein.')
+      return
+    }
+
+    submissionInFlight.current = true
     setIsSubmitting(true)
+    let navigating = false
     try {
+      const payload = JSON.stringify({ title, description, startDate: startDate?.toISOString() ?? null,
+        endDate: endDate?.toISOString() ?? null, price, currency, maxStudents })
+      // Keep the same key for an unchanged retry, including an uncertain network
+      // result. The server returns the existing draft instead of creating a copy.
+      if (creationRequest.current?.payload !== payload) {
+        creationRequest.current = { payload, requestId: crypto.randomUUID() }
+      }
       const formData = new FormData()
+      formData.append('requestId', creationRequest.current.requestId)
       formData.append('title', title)
       formData.append('description', description)
       if (startDate) formData.append('startDate', startDate.toISOString())
@@ -70,19 +96,23 @@ function CourseComposer({ session }: { session: Session | null }) {
         body: formData,
       })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Fehler beim Erstellen des Kurses')
-      }
+      const created = await response.json().catch(() => null) as { id?: unknown } | null
+      if (!response.ok) { setError(courseCreationError(response.status)); return }
 
-      const created = await response.json() as { id?: unknown }
-      if (typeof created.id !== 'string' || !created.id) throw new Error('Der Kursentwurf wurde angelegt, aber seine Kennung fehlt. Bitte öffne deinen Autorenarbeitsplatz erneut.')
+      if (typeof created?.id !== 'string' || !created.id) {
+        setError('Der Anlegeversuch konnte nicht bestätigt werden. Deine Eingaben bleiben hier erhalten. Versuche es erneut oder prüfe deine Kursentwürfe.')
+        return
+      }
       router.push(`/courses/${encodeURIComponent(created.id)}/contents`)
+      navigating = true
     } catch (error) {
       console.error('Fehler beim Erstellen des Kurses:', error)
-      setError(error instanceof Error ? error.message : 'Fehler beim Erstellen des Kurses. Bitte versuchen Sie es erneut.')
+      setError('Die Verbindung konnte nicht bestätigt werden. Deine Eingaben bleiben hier erhalten. Bitte versuche es erneut.')
     } finally {
-      setIsSubmitting(false)
+      if (!navigating) {
+        submissionInFlight.current = false
+        setIsSubmitting(false)
+      }
     }
   }
 
@@ -104,7 +134,8 @@ function CourseComposer({ session }: { session: Session | null }) {
             </div>
 
             <div className="mt-8 grid min-w-0 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_260px]">
-              <form onSubmit={handleSubmit} className="min-w-0 space-y-5" aria-label="Neuen Kurs erstellen">
+              <form onSubmit={handleSubmit} className="min-w-0 space-y-5" aria-label="Neuen Kurs erstellen" aria-busy={isSubmitting}>
+                <fieldset disabled={isSubmitting} className="min-w-0 space-y-5">
                 <section aria-labelledby="course-basics-title" className="fc-form-section space-y-5">
                   <div><h2 id="course-basics-title" className="fc-step-title text-lg font-semibold"><span aria-hidden="true">1</span>Kursdaten</h2></div>
                   <div className="space-y-2">
@@ -154,9 +185,10 @@ function CourseComposer({ session }: { session: Session | null }) {
                 <section aria-labelledby="course-image-title" className="fc-form-section space-y-2"><h2 id="course-image-title" className="fc-step-title text-lg font-semibold"><span aria-hidden="true">4</span>Kursbild</h2><p className="text-sm leading-relaxed text-muted-foreground">Ein privates Titelbild kannst du im Autorenarbeitsplatz hochladen, sobald der Kursentwurf angelegt ist.</p></section>
 
                 <div className="space-y-5 border-t pt-7">
-                  {error && <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">{error}</p>}
-                  <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"><Button asChild variant="outline"><Link href="/courses">Abbrechen</Link></Button><Button type="submit" disabled={isSubmitting} aria-busy={isSubmitting}>{isSubmitting ? 'Entwurf wird angelegt …' : 'Kursentwurf anlegen'}</Button></div>
+                  {error && <div role="alert" className="rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive"><p>{error}</p><Link href="/courses/authoring" target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex min-h-11 items-center font-semibold underline underline-offset-4">Meine Kursentwürfe prüfen<span className="sr-only"> (öffnet in neuem Tab)</span></Link></div>}
+                  <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"><Button asChild variant="outline"><Link href="/courses">Abbrechen</Link></Button><Button type="submit" disabled={isSubmitting} aria-busy={isSubmitting}>{isSubmitting ? 'Entwurf wird angelegt …' : error ? 'Erneut versuchen' : 'Kursentwurf anlegen'}</Button></div>
                 </div>
+                </fieldset>
               </form>
               <aside className="space-y-4 lg:sticky lg:top-6" aria-label="Hinweise zum Kursentwurf"><SurfaceCard className="p-5"><Lightbulb className="mb-3 h-6 w-6 text-primary" aria-hidden="true" /><h2 className="font-semibold">Ein guter Kurs beginnt mit einer Idee.</h2><p className="mt-3 text-sm leading-relaxed text-muted-foreground">Wähle einen klaren Titel und eine passende Kategorie. Inhalte und ein Titelbild ergänzt du anschließend im Autorenarbeitsplatz.</p></SurfaceCard><SurfaceCard className="p-5"><FileCheck2 className="mb-3 h-6 w-6 text-primary" aria-hidden="true" /><h2 className="font-semibold">Vom Entwurf zum Kurs</h2><ol className="mt-4 list-decimal space-y-3 pl-4 text-sm leading-relaxed text-muted-foreground"><li>Kursentwurf anlegen</li><li>Inhalte und Kursbild ergänzen</li><li>Kurs prüfen und veröffentlichen</li></ol></SurfaceCard></aside>
             </div>

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { createHash } from 'node:crypto';
+import { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../auth/[...nextauth]/options';
 import { requestWithBodyLimit, RequestBodyLimitError } from '@/lib/server/request-body';
@@ -156,6 +157,10 @@ export async function POST(request: NextRequest) {
     }
     const limitedRequest = await requestWithBodyLimit(request, MAX_MULTIPART_REQUEST_BYTES);
     const formData = await limitedRequest.formData();
+    const requestId = formData.get('requestId');
+    if (requestId !== null && (typeof requestId !== 'string' || !/^[A-Za-z0-9_-]{8,80}$/.test(requestId))) {
+      return NextResponse.json({ error: 'Invalid creation request' }, { status: 400 });
+    }
     const title = formData.get('title');
     const description = formData.get('description');
     const currency = formData.get('currency');
@@ -190,9 +195,29 @@ export async function POST(request: NextRequest) {
     if (!staged.title || !staged.description) {
       return NextResponse.json({ error: 'Invalid course fields' }, { status: 400 });
     }
-    const newCourse = await prisma.$transaction(async tx => {
+    const creationId = typeof requestId === 'string'
+      ? `course_${createHash('sha256').update(JSON.stringify([session.user.id, requestId])).digest('hex')}` : null;
+    const payload = JSON.stringify(staged);
+    const digest = publicationDigest(staged);
+    const createOrReplay = () => contentTransaction(async tx => {
+      const actor = await tx.user.findUnique({ where: { id: session.user.id }, select: { id: true } });
+      if (!actor) return { kind: 'forbidden' as const };
+      const existing = creationId ? await tx.course.findUnique({ where: { id: creationId },
+        include: { instructor: { select: { name: true } }, draft: true } }) : null;
+      if (existing) {
+        const { draft, ...course } = existing;
+        // A retry can return its exact original private draft, never overwrite
+        // changed author work or create a duplicate after an uncertain response.
+        if (course.instructorId !== session.user.id || course.activePublicationId !== null ||
+            !draft || draft.revision !== 0 || draft.payload !== payload || draft.digest !== digest ||
+            course.price !== price || course.currency !== (currency || null) || course.maxStudents !== maxStudents) {
+          return { kind: 'conflict' as const };
+        }
+        return { kind: 'created' as const, course };
+      }
       const course = await tx.course.create({
         data: {
+          ...(creationId ? { id: creationId } : {}),
           title: 'Unveröffentlichter Kurs', description: '', price,
           currency: currency || null, maxStudents,
           instructor: { connect: { id: session.user.id } },
@@ -200,9 +225,21 @@ export async function POST(request: NextRequest) {
         include: { instructor: { select: { name: true } } },
       });
       await tx.courseDraft.create({ data: { courseId: course.id, revision: 0,
-        payload: JSON.stringify(staged), digest: publicationDigest(staged), lastEditorId: session.user.id } });
-      return course;
+        payload, digest, lastEditorId: session.user.id } });
+      return { kind: 'created' as const, course };
     });
+    let created;
+    try {
+      created = await createOrReplay();
+    } catch (error) {
+      // Concurrent first requests may meet at the deterministic primary key.
+      // Re-read in a fresh transaction after the losing transaction rolled back.
+      if (!creationId || !(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') throw error;
+      created = await createOrReplay();
+    }
+    if (created.kind === 'forbidden') return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    if (created.kind === 'conflict') return NextResponse.json({ error: 'Creation request conflicts with an existing draft' }, { status: 409 });
+    const newCourse = created.course;
 
     return NextResponse.json(newCourse, { status: 201, headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {

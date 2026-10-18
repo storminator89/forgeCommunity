@@ -12,10 +12,9 @@ import { PageState } from '@/components/page-state'
 import type { Session } from 'next-auth'
 import { useSession } from 'next-auth/react'
 import { Button } from "@/components/ui/button"
-import { UserNav } from "@/components/user-nav"
+import { UserNav, useSignInHref } from "@/components/user-nav"
 import { Sidebar } from "@/components/Sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
-import { SparkEntry } from '@/components/spark-entry'
 import { PlusCircle } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -26,10 +25,12 @@ import { PostCard } from '@/components/community/PostCard'
 import { LeaderboardCard } from '@/components/community/LeaderboardCard'
 import { StatsCard } from '@/components/community/StatsCard'
 import { ContributionMilestonesCard } from '@/components/community/ContributionMilestonesCard'
+import { PersonalProgressCard } from '@/components/community/PersonalProgressCard'
 import { FirstActionGuide } from '@/components/community/FirstActionGuide'
 import { TopicNavigation } from '@/components/community/TopicNavigation'
 import { useCommunityFeed } from '@/hooks/useCommunityFeed'
 import { usePrivateContributions } from '@/hooks/usePrivateContributions'
+import { usePrivateRewards } from '@/hooks/usePrivateRewards'
 import { CommunityPost as Post, CommunityStats, fetchCommunityJson as fetchWithErrorHandling, isAbortError, mergeCommunityRows } from '@/lib/community-feed'
 import { validTopicName } from '@/lib/community-topics'
 import { getPreferredScrollBehavior } from '@/lib/scroll-behavior'
@@ -40,21 +41,9 @@ interface LeaderboardUser {
   points: number
 }
 
-interface RewardSummary {
-  points: number
-  completedCourses: number
-  firstCourseCompleted: boolean
-  history?: Array<{
-    type: 'AWARDED' | 'REVOKED' | 'REINSTATED'
-    reason: 'QUIZ_REVISED' | 'APPROVAL_WITHDRAWN' | 'LEARNING_CHANGED' | 'ACCOUNT_INELIGIBLE' | 'COURSE_REMOVED' | null
-    pointsDelta: number
-    at: string
-    courseTitle: string
-  }>
-}
-
 function Community({ session, topic, onSelectTopic }: { session: Session | null; topic: string | null; onSelectTopic: (topic: string | null) => void }) {
   const contributions = usePrivateContributions(session?.user?.id)
+  const rewards = usePrivateRewards(session?.user?.id)
   const mainRef = useRef<HTMLElement>(null)
   const feedStatusRef = useRef<HTMLParagraphElement>(null)
   const focusEndOfFeedRef = useRef(false)
@@ -78,27 +67,11 @@ function Community({ session, topic, onSelectTopic }: { session: Session | null;
   const [editingPost, setEditingPost] = useState<Post | null>(null)
   const [leaderboardUsers, setLeaderboardUsers] = useState<LeaderboardUser[]>([])
   const [isLeaderboardLoading, setIsLeaderboardLoading] = useState(true)
-  const [rewardResult, setRewardResult] = useState<{ userId: string; data: RewardSummary | null; error: boolean } | null>(null)
   const [notification, setNotification] = useState<{ type: 'success' | 'error', message: string } | null>(null)
 
   const mountedRef = useRef(false)
   const mutationRequestRef = useRef<AbortController | null>(null)
   const leaderboardRequestRef = useRef<AbortController | null>(null)
-
-  useEffect(() => {
-    const userId = session?.user?.id
-    if (!userId) return
-    const controller = new AbortController()
-    void fetchWithErrorHandling<RewardSummary>('/api/rewards/me', { signal: controller.signal })
-      .then((data: RewardSummary) => { if (!controller.signal.aborted) setRewardResult({ userId, data, error: false }) })
-      .catch((error) => { if (!controller.signal.aborted && !isAbortError(error)) setRewardResult({ userId, data: null, error: true }) })
-    return () => controller.abort()
-  }, [session?.user?.id])
-
-  const activeRewardResult = rewardResult && session?.user?.id === rewardResult.userId ? rewardResult : null
-  const rewardsLoading = !!session?.user?.id && !activeRewardResult
-  const rewards = activeRewardResult?.data ?? null
-  const rewardsError = activeRewardResult?.error ?? false
 
   useEffect(() => {
     mountedRef.current = true
@@ -336,6 +309,8 @@ function Community({ session, topic, onSelectTopic }: { session: Session | null;
             <div className="fc-community-layout">
               <section aria-labelledby="community-feed-title" className="min-w-0">
                 <HeroBanner title="Gemeinsam mehr erreichen." description="Stelle Fragen, teile Wissen, diskutiere Ideen und vernetze dich mit anderen Mitgliedern." className="fc-community-hero"><CommunityLandscape /></HeroBanner>
+                <PersonalProgressCard summary={rewards.summary} loading={rewards.loading} error={rewards.error}
+                  isSignedIn={!!session?.user?.id} role={session?.user?.role} onRefresh={rewards.refresh} />
                 {notification && (
                   <div className={`sticky top-0 z-10 mb-3 rounded-lg border bg-card px-4 py-3 text-sm font-medium ${notification.type === 'success' ? 'border-success/30 text-success' : 'border-destructive/30 text-destructive'}`}
                     role={notification.type === 'error' ? 'alert' : 'status'}>
@@ -436,11 +411,10 @@ function Community({ session, topic, onSelectTopic }: { session: Session | null;
               </section>
 
 <aside aria-label="Deine Community im Überblick" className="fc-community-aside">
-                <StatsCard stats={activity} activityLoading={activityLoading} activityError={activityError} onRetryActivity={refreshActivity} rewards={rewards} rewardsLoading={rewardsLoading} rewardsError={rewardsError} isSignedIn={!!session} />
+                <StatsCard stats={activity} activityLoading={activityLoading} activityError={activityError} onRetryActivity={refreshActivity} isSignedIn={!!session?.user?.id} />
                 <div className="fc-surface p-5 min-w-0 [overflow-wrap:anywhere] [&_button]:h-auto [&_button]:min-h-11 [&_button]:max-w-full [&_button]:whitespace-normal">
                   <ContributionMilestonesCard summary={contributions.summary} loading={contributions.loading} error={contributions.error} isSignedIn={!!session?.user?.id} onRefresh={contributions.refresh} />
                 </div>
-                {session?.user?.id && <SparkEntry />}
                 <LeaderboardCard
                   users={leaderboardUsers}
                   isLoading={isLeaderboardLoading}
@@ -459,6 +433,7 @@ function Community({ session, topic, onSelectTopic }: { session: Session | null;
 export default function CommunityPage() {
   const { data, status } = useSession()
   const session = status === 'authenticated' ? data : null
+  const signInHref = useSignInHref()
   const topic = useSyncExternalStore(
     callback => {
       window.addEventListener('popstate', callback)
@@ -496,6 +471,19 @@ export default function CommunityPage() {
         <AppHeader><div className="app-header-row"><h1 className="app-header-title">Community</h1></div></AppHeader>
         <main id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto px-4 py-8 sm:px-6 lg:px-8">
           <PageState kind="loading" title="Community wird geladen" />
+        </main>
+      </div>
+    </AppShell>
+  )
+
+  if (!session?.user?.id) return (
+    <AppShell>
+      <Sidebar />
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <AppHeader><div className="app-header-row"><h1 className="app-header-title">Community</h1><div className="app-header-actions"><ThemeToggle /><UserNav /></div></div></AppHeader>
+        <main id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto px-4 py-8 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-2xl"><PageState title="Melde dich für die Community an" description="Stelle Fragen, teile Wissen und setze deinen Lernweg fort."
+            action={<Button asChild><Link prefetch={false} href={signInHref}>Anmelden</Link></Button>} /></div>
         </main>
       </div>
     </AppShell>

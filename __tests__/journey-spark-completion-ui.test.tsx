@@ -9,7 +9,7 @@ jest.mock('@/components/app-shell', () => ({
   AppHeader: ({ children }: { children: React.ReactNode }) => <header>{children}</header>,
 }));
 jest.mock('@/components/Sidebar', () => ({ Sidebar: () => null }));
-jest.mock('@/components/user-nav', () => ({ UserNav: () => null }));
+jest.mock('@/components/user-nav', () => ({ UserNav: () => null, useSignInHref: () => '/login?callbackUrl=%2Fcommunity' }));
 jest.mock('@/components/theme-toggle', () => ({ ThemeToggle: () => null }));
 jest.mock('next/image', () => ({
   __esModule: true,
@@ -35,7 +35,7 @@ function response(json: unknown) {
   return Promise.resolve({ ok: true, json: async () => json } as Response);
 }
 function progress() {
-  return { completedContentIds: complete ? ['open'] : [], complete, canTrack: true, publicationId };
+  return { awaitingGradeContentIds: [], completedContentIds: complete ? ['open'] : [], complete, canTrack: true, publicationId };
 }
 async function refresh() {
   fireEvent.click(screen.getByRole('button', { name: 'Stand aktualisieren' }));
@@ -48,6 +48,7 @@ function changeReduced(value: boolean) {
 beforeEach(() => {
   jest.clearAllMocks();
   window.localStorage.clear();
+  window.history.replaceState({}, '', '/courses/journey');
   complete = false;
   publicationId = 'pub-1';
   reduced = false;
@@ -60,9 +61,9 @@ beforeEach(() => {
   }) });
   session();
   global.fetch = jest.fn().mockImplementation((url: string) => {
-    if (url === '/api/courses') return response(['other', 'second'].map(id => ({ id, title: `Kurs ${id}`, isEnrolled: true, canDelete: false })));
+    if (url === '/api/courses') return response(['other', 'second'].map(id => ({ id, title: `Kurs ${id}`, isEnrolled: true, completed: false, canDelete: false })));
     if (url.endsWith('/contents')) return response([
-      { id: 'open', title: 'Freier Schritt', type: 'TEXT', order: 1, locked: false, publicationId, subContents: [] },
+      { id: 'open', title: 'Freier Schritt', type: 'TEXT', courseId: url.split('/')[3], parentId: null, releaseLocked: false, releaseOn: null, prerequisiteIds: [], missingPrerequisites: [], contentVersionToken: 'fixture-token', order: 1, locked: false, publicationId, subContents: [] },
     ]);
     if (url.endsWith('/progress')) return holdProgress ? holdProgress() : response(progress());
     throw new Error(`Unexpected request ${url}`);
@@ -87,7 +88,7 @@ it.each([
   expect(view.container.querySelector(clipSelector)).toBeNull();
   complete = true;
   await refresh();
-  expect(screen.getByRole('status')).toHaveTextContent('Alle aktuellen Kursinhalte bestätigt');
+  expect(screen.getByRole('status')).toHaveTextContent('1 von 1 Station bestätigt');
   expect(Boolean(view.container.querySelector(clipSelector))).toBe(expected);
   if (hidden) expect(view.container.querySelector('[data-journey-mascot]')).toBeNull();
   // A second read of the same complete state is not another completion.
@@ -166,7 +167,7 @@ it.each(['visibility', 'motion', 'reduced', 'storage'])('consumes a celebration 
     });
   }
   expect(view.container.querySelector(clipSelector)).toBeNull();
-  expect(screen.getByRole('status')).toHaveTextContent('Alle aktuellen Kursinhalte bestätigt');
+  expect(screen.getByRole('status')).toHaveTextContent('1 von 1 Station bestätigt');
 });
 
 it('checks current preferences when a delayed completion response arrives', async () => {
@@ -197,7 +198,7 @@ it('discards a previous course completion response after a new selection settles
   await act(async () => settle(await response(progress())));
   expect(screen.getByRole('combobox', { name: 'Kurs auswählen' })).toHaveValue('second');
   expect(view.container.querySelector(clipSelector)).toBeNull();
-  expect(screen.getByRole('status')).toHaveTextContent('Alle aktuellen Kursinhalte bestätigt');
+  expect(screen.getByRole('status')).toHaveTextContent('1 von 1 Station bestätigt');
 });
 
 it('discards late responses after course selection and role/account changes', async () => {
@@ -218,5 +219,5 @@ it('discards late responses after course selection and role/account changes', as
   view.rerender(<JourneyClient />);
   await screen.findByRole('button', { name: 'Stand aktualisieren' });
   expect(view.container.querySelector(clipSelector)).toBeNull();
-  await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Alle aktuellen Kursinhalte bestätigt'));
+  await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('1 von 1 Station bestätigt'));
 });

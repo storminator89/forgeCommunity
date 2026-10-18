@@ -4,7 +4,7 @@ import type { projectReaderProgress } from '@/app/courses/[courseId]/contents/re
 
 const ready: ReturnType<typeof projectReaderProgress> = {
   state: 'ready', completedCount: 0, leaves: [], firstLocked: null,
-  next: { id: 'next', title: 'Eine lange nächste Lektion', type: 'TEXT', locked: false, completed: false },
+  next: { id: 'next', title: 'Eine lange nächste Lektion', type: 'TEXT', locked: false, completed: false, awaitingGrade: false },
 }
 const flexibleTarget = ['h-auto', 'min-h-11', 'min-w-0', 'max-w-full', 'whitespace-normal', 'px-[min(1rem,16px)]', 'py-[min(.5rem,8px)]', '[overflow-wrap:anywhere]']
 

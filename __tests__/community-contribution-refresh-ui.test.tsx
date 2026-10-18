@@ -6,7 +6,7 @@ import type { CommunityPost } from '@/lib/community-feed'
 
 jest.mock('next-auth/react', () => ({ useSession: jest.fn() }))
 jest.mock('@/components/Sidebar', () => ({ Sidebar: () => null }))
-jest.mock('@/components/user-nav', () => ({ UserNav: () => null }))
+jest.mock('@/components/user-nav', () => ({ UserNav: () => null, useSignInHref: () => '/login?callbackUrl=%2Fcommunity' }))
 jest.mock('@/components/theme-toggle', () => ({ ThemeToggle: () => null }))
 jest.mock('@/components/community/PostCard', () => ({ PostCard: ({ post, onSelectSolution, onDelete, onEdit, onAddComment, onLike, isLoading, solutionError }: {
   post: CommunityPost

@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label"
 import { Loader2 } from 'lucide-react'
 import { Editor } from "@/components/Editor"
 import { PostTopicPicker } from './PostTopicPicker'
+import postBodyStyles from './community-post-body.module.css'
 
 interface PostFormProps {
   onSubmit: (title: string, content: string, tags: string[]) => Promise<void>
@@ -49,7 +50,7 @@ export function PostForm({
           />
         </div>
 
-        <div>
+        <div className={postBodyStyles.editor}>
           <p className="mb-2 text-sm font-medium text-foreground">Inhalt</p>
           <Editor
             content={content}

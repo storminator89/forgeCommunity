@@ -10,6 +10,9 @@ import { Sidebar } from '@/components/Sidebar';
 import { UserNav } from '@/components/user-nav';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import { ForgeBrandMark } from '@/components/forge-brand-mark';
+import { useSession } from 'next-auth/react';
 
 const developer = {
   name: 'Patrick Meyhöfer',
@@ -29,11 +32,13 @@ const areas = [
 ];
 
 export default function About() {
+  const { data: session } = useSession();
+
   return (
     <AppShell data-page-family="about">
-      <Sidebar />
+      {session && <Sidebar />}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <AppHeader><div className="app-header-row"><span className="app-header-title text-sm font-semibold">Über uns</span><div className="app-header-actions"><ThemeToggle /><UserNav /></div></div></AppHeader>
+        {session ? <AppHeader><div className="app-header-row"><span className="app-header-title text-sm font-semibold">Über uns</span><div className="app-header-actions"><ThemeToggle /><UserNav /></div></div></AppHeader> : <header className="border-b bg-card px-4 py-3 sm:px-6"><div className="mx-auto flex w-full max-w-[1100px] flex-wrap items-center justify-between gap-3"><Link href="/" aria-label="ForgeCommunity Startseite" className="flex min-h-11 items-center gap-2.5 rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"><ForgeBrandMark /><span className="text-sm font-semibold">ForgeCommunity</span></Link><div className="flex items-center gap-2"><ThemeToggle /><Button asChild variant="outline" size="sm"><Link href="/login?callbackUrl=%2Fabout">Anmelden</Link></Button></div></div></header>}
         <main id="page-content" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-[1100px] px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
             <section className="fc-detail-header">

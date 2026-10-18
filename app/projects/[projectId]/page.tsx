@@ -12,6 +12,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Editor } from "@/components/Editor";
+import postBodyStyles from "@/components/community/community-post-body.module.css";
 import { ThumbsUp, MessageSquare, ExternalLink, Edit, Trash, Share2, Calendar, User, Tag, ArrowLeft } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 import type { Session } from 'next-auth';
@@ -24,6 +26,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import Image from 'next/image';
 import { sanitizeRichHtml } from '@/lib/sanitize-html';
 import { getSafeHttpUrl } from '@/lib/security';
+import { PlainTextLinks } from '@/components/plain-text-links';
 
 
 interface Tag {
@@ -81,7 +84,8 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
   const router = useRouter();
   const [project, setProject] = useState<Project | null>(null);
   const [comments, setComments] = useState<ProjectComment[]>([]);
-  const [newComment, setNewComment] = useState('');
+  const [commentDraft, setCommentDraft] = useState({ text: '', revision: 0 });
+  const newComment = commentDraft.text;
   const [isLiked, setIsLiked] = useState(false);
 
   const [isLoading, setIsLoading] = useState(true);
@@ -92,7 +96,19 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
   const [isCommenting, setIsCommenting] = useState(false);
   const likeRequest = useRef(false);
   const commentRequest = useRef(false);
+  const commentViewActive = useRef(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isSavingProject, setIsSavingProject] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editNotice, setEditNotice] = useState<string | null>(null);
+  const editRequest = useRef(false);
+  const editViewActive = useRef(false);
+  const editDialogOpen = useRef(false);
+  const editDialogGeneration = useRef(0);
+  const editDraftReady = useRef(false);
+  const editDraftRevision = useRef(0);
+  const editImageInput = useRef<HTMLInputElement>(null);
+  const editDialogOpener = useRef<HTMLButtonElement | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [editProjectData, setEditProjectData] = useState<{
     title: string,
@@ -110,6 +126,16 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
     image: null,
   });
   const safeProjectLink = project ? getSafeHttpUrl(project.link) : null;
+
+  useEffect(() => {
+    commentViewActive.current = true;
+    return () => { commentViewActive.current = false; };
+  }, []);
+
+  useEffect(() => {
+    editViewActive.current = true;
+    return () => { editViewActive.current = false; };
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -198,13 +224,14 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
   }
 
   const handleComment = async () => {
-    if (commentRequest.current) return;
+    if (!commentViewActive.current || commentRequest.current) return;
     if (!session || !project) {
       alert('Bitte melde dich an, um einen Kommentar hinzuzufügen.');
       return;
     }
 
-    if (!newComment.trim()) {
+    const submittedDraft = commentDraft;
+    if (!submittedDraft.text.trim()) {
       alert('Kommentar darf nicht leer sein.');
       return;
     }
@@ -217,7 +244,7 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ content: newComment }),
+        body: JSON.stringify({ content: submittedDraft.text }),
       });
 
       if (!res.ok) {
@@ -226,6 +253,7 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
       }
 
       const addedComment: ProjectComment = await res.json();
+      if (!commentViewActive.current) return;
 
       // Update both comments and project state
       setComments(prev => [...prev, addedComment]);
@@ -234,27 +262,60 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
         comments: [...prev.comments, addedComment]
       } : prev);
 
-      setNewComment('');
+      // Keep anything typed since this POST began, even if the person edited
+      // back to identical text. Only the submitted revision may be cleared.
+      setCommentDraft(current => current.revision === submittedDraft.revision
+        ? { text: '', revision: current.revision + 1 } : current);
     } catch (error: any) {
+      if (!commentViewActive.current) return;
       console.error('Error adding comment:', error);
       alert(error.message || 'Fehler beim Hinzufügen des Kommentars.');
     } finally {
       commentRequest.current = false;
-      setIsCommenting(false);
+      if (commentViewActive.current) setIsCommenting(false);
     }
   }
 
   const handleOpenEditDialog = () => {
     if (!project) return;
-    setEditProjectData({
-      title: project.title,
-      description: project.description,
-      category: project.category,
-      tags: project.tags.map(tag => tag.name),
-      link: project.link,
-      image: null,
-    });
+    // Pending Close/Reopen (or a failure while closed) keeps the actual draft.
+    if (!editDraftReady.current) {
+      setEditProjectData({
+        title: project.title,
+        description: project.description,
+        category: project.category,
+        tags: project.tags.map(tag => tag.name),
+        link: project.link,
+        image: null,
+      });
+      editDraftRevision.current += 1;
+      editDraftReady.current = true;
+      setEditError(null);
+      setEditNotice(null);
+    }
+    editDialogGeneration.current += 1;
+    editDialogOpen.current = true;
     setIsEditDialogOpen(true);
+  };
+
+  const handleEditDialogOpenChange = (open: boolean) => {
+    if (open) { handleOpenEditDialog(); return; }
+    editDialogGeneration.current += 1;
+    editDialogOpen.current = false;
+    setIsEditDialogOpen(false);
+    if (!editRequest.current) {
+      editDraftReady.current = false;
+      setEditError(null);
+      setEditNotice(null);
+    }
+  };
+
+  const updateEditProjectData = (update: (draft: typeof editProjectData) => typeof editProjectData) => {
+    if (editRequest.current) return;
+    editDraftRevision.current += 1;
+    setEditProjectData(update);
+    setEditError(null);
+    setEditNotice(null);
   };
 
   const handleOpenDeleteDialog = () => {
@@ -263,15 +324,23 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
   };
 
   const handleSubmitEditProject = async () => {
-    if (!project) return;
+    if (!editViewActive.current || editRequest.current || !project) return;
 
-    const { title, description, category, tags, link, image } = editProjectData;
+    const submittedDraft = { ...editProjectData, tags: [...editProjectData.tags] };
+    const submittedRevision = editDraftRevision.current;
+    const submittedGeneration = editDialogGeneration.current;
+    const targetId = project.id;
+    const { title, description, category, tags, link, image } = submittedDraft;
 
     if (!title || !description || !category || !link) {
-      alert('Bitte fülle alle erforderlichen Felder aus.');
+      setEditError('Bitte fülle alle erforderlichen Felder aus.');
       return;
     }
 
+    editRequest.current = true;
+    setIsSavingProject(true);
+    setEditError(null);
+    setEditNotice(null);
     try {
       const formData = new FormData();
       formData.append('title', title);
@@ -283,22 +352,41 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
         formData.append('image', image);
       }
 
-      const res = await fetch(`/api/projects/${project.id}`, {
+      const res = await fetch(`/api/projects/${targetId}`, {
         method: 'PUT',
         body: formData
       });
 
       if (!res.ok) {
         const errorData = await res.json();
-        throw new Error(errorData.error || 'Fehler beim Bearbeiten des Projekts.');
+        throw new Error(typeof errorData.error === 'string' ? errorData.error : 'Fehler beim Bearbeiten des Projekts.');
       }
 
       const updatedProject: Project = await res.json();
-      setProject(updatedProject);
-      setIsEditDialogOpen(false);
+      if (!editViewActive.current) return;
+      setProject(current => current?.id === targetId ? updatedProject : current);
+      const unchangedDraft = editDraftRevision.current === submittedRevision;
+      // A saved File is no longer a pending replacement. Never clear a newer one.
+      if (unchangedDraft) {
+        setEditProjectData(current => ({ ...current, image: null }));
+        if (editImageInput.current) editImageInput.current.value = '';
+      }
+      if (unchangedDraft && editDialogGeneration.current === submittedGeneration && editDialogOpen.current) {
+        editDraftReady.current = false;
+        editDialogOpen.current = false;
+        setIsEditDialogOpen(false);
+      } else if (editDialogOpen.current) {
+        setEditNotice(unchangedDraft ? 'Änderungen gespeichert.' : 'Gespeichert. Neuere Änderungen sind noch offen.');
+      } else if (unchangedDraft) {
+        editDraftReady.current = false;
+      }
     } catch (error: any) {
+      if (!editViewActive.current) return;
       console.error('Error updating project:', error);
-      alert(error.message || 'Fehler beim Aktualisieren des Projekts.');
+      setEditError(error instanceof Error ? error.message : 'Fehler beim Aktualisieren des Projekts.');
+    } finally {
+      editRequest.current = false;
+      if (editViewActive.current) setIsSavingProject(false);
     }
   };
 
@@ -365,15 +453,15 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
             {isLoading || loadedForId !== projectId ? <><h1 className="sr-only">Projekt</h1><PageState kind="loading" title="Projekt wird geladen" /></> : !project ? <><h1 className="sr-only">Projekt</h1><PageState kind="error" title="Projekt nicht verfügbar" description={loadError || 'Das Projekt konnte nicht geladen werden oder wurde entfernt.'} action={<div className="flex flex-wrap justify-center gap-2"><Button type="button" variant="outline" onClick={() => { setIsLoading(true); setRetryKey(value => value + 1); }}>Erneut versuchen</Button><Button asChild variant="outline"><Link href="/showcases">Zur Übersicht</Link></Button></div>} /></> : (
               <article className="space-y-6">
                 {/* Project Header */}
-                <div className="fc-surface p-6 sm:p-8">
+                <div className="fc-surface p-4 sm:p-6 lg:p-8">
 
-                  <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-start">
-                    <div className="min-w-0 flex-1">
-                      <h1 className="mb-4 mt-4 min-w-0 break-words text-[clamp(2rem,1.35rem+2.5vw,3.5rem)] font-semibold leading-tight tracking-[-0.045em] [overflow-wrap:anywhere]">{project.title}</h1>
-                      <div className="flex flex-wrap items-center gap-4 text-muted-foreground">
-                        <div className="flex items-center">
-                          <Calendar className="w-4 h-4 mr-2" />
-                          <span>
+                  <div className="flex min-w-0 flex-col gap-5">
+                    <div className="min-w-0">
+                      <h1 className="min-w-0 text-[clamp(1.75rem,1.25rem+1.5vw,2.5rem)] font-semibold leading-[1.15] tracking-[-0.035em] [overflow-wrap:anywhere]">{project.title}</h1>
+                      <div className="mt-4 flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
+                        <div className="flex min-w-0 items-start">
+                          <Calendar className="mr-2 mt-0.5 h-4 w-4 shrink-0" />
+                          <span className="min-w-0 [overflow-wrap:anywhere]">
                             {new Date(project.createdAt).toLocaleDateString('de-DE', {
                               year: 'numeric',
                               month: 'long',
@@ -381,29 +469,29 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
                             })}
                           </span>
                         </div>
-                        <div className="flex items-center">
-                          <User className="w-4 h-4 mr-2" />
-                          <span>{project.author?.name || 'Anonym'}</span>
+                        <div className="flex min-w-0 items-start">
+                          <User className="mr-2 mt-0.5 h-4 w-4 shrink-0" />
+                          <span className="min-w-0 [overflow-wrap:anywhere]">{project.author?.name || 'Anonym'}</span>
                         </div>
-                        <div className="flex items-center">
-                          <Tag className="w-4 h-4 mr-2" />
-                          <span>{project.category}</span>
+                        <div className="flex min-w-0 items-start">
+                          <Tag className="mr-2 mt-0.5 h-4 w-4 shrink-0" />
+                          <span className="min-w-0 [overflow-wrap:anywhere]">{project.category}</span>
                         </div>
                       </div>
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2 border-t border-border pt-4">
                       {session?.user?.id === project.author.id && (
                         <>
-                          <Button variant="outline" size="sm" onClick={handleOpenEditDialog}><Edit className="mr-2 h-4 w-4" />Bearbeiten</Button>
-                          <Button variant="outline" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={handleOpenDeleteDialog}><Trash className="mr-2 h-4 w-4" />Löschen</Button>
+                          <Button variant="outline" size="sm" className="min-h-11" onClick={event => { editDialogOpener.current = event.currentTarget; handleOpenEditDialog(); }}><Edit className="mr-2 h-4 w-4" />Bearbeiten</Button>
+                          <Button variant="outline" size="sm" className="min-h-11 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={handleOpenDeleteDialog}><Trash className="mr-2 h-4 w-4" />Löschen</Button>
                         </>
                       )}
                       <Button
                         variant="outline"
                         size="sm"
-                        className="flex items-center"
+                        className="flex min-h-11 items-center"
                         onClick={() => handleShare()}
                       >
                         <Share2 className="w-4 h-4 mr-2" />
@@ -506,7 +594,10 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
                             aria-label="Dein Kommentar zum Projekt"
                             placeholder="Teile deine Gedanken…"
                             value={newComment}
-                            onChange={(e) => setNewComment(e.target.value)}
+                            onChange={(event) => {
+                              const text = event.target.value;
+                              setCommentDraft(current => ({ text, revision: current.revision + 1 }));
+                            }}
                             className="min-h-[100px] bg-background"
                           />
                           <div className="flex justify-end">
@@ -543,7 +634,7 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
                                 </p>
                               </div>
                             </div>
-                            <p className="text-foreground break-words whitespace-pre-wrap">{comment.content}</p>
+                            <p className="text-foreground break-words whitespace-pre-wrap [overflow-wrap:anywhere]"><PlainTextLinks text={comment.content} /></p>
                           </div>
                         ))}
                         {comments.length === 0 && <p className="py-5 text-sm text-muted-foreground">Noch keine Kommentare.</p>}
@@ -558,35 +649,47 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
       </div>
 
       {/* Edit Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-h-[90dvh] overflow-y-auto">
+      <Dialog open={isEditDialogOpen} onOpenChange={handleEditDialogOpenChange}>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto" aria-busy={isSavingProject} onCloseAutoFocus={event => {
+          // This opener lives outside Radix's DialogTrigger tree.
+          event.preventDefault();
+          const target = editDialogOpener.current;
+          if (editViewActive.current && !editDialogOpen.current && target?.isConnected) target.focus();
+        }}>
           <DialogHeader>
             <DialogTitle>Projekt bearbeiten</DialogTitle>
             <DialogDescription>Titel, Beschreibung, Kategorie und Link sind erforderlich.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
+          <fieldset disabled={isSavingProject} className="min-w-0 space-y-4 border-0 p-0">
             <div>
               <Label htmlFor="title">Titel</Label>
               <Input
                 id="title"
                 value={editProjectData.title}
-                onChange={(e) => setEditProjectData(prev => ({ ...prev, title: e.target.value }))}
+                onChange={(e) => { const title = e.target.value; updateEditProjectData(prev => ({ ...prev, title })); }}
               />
             </div>
             <div>
-              <Label htmlFor="description">Beschreibung</Label>
-              <Textarea
-                id="description"
-                value={editProjectData.description}
-                onChange={(e) => setEditProjectData(prev => ({ ...prev, description: e.target.value }))}
-              />
+              <p id="project-edit-description-label" className="text-sm font-medium">Beschreibung</p>
+              <div role="group" aria-labelledby="project-edit-description-label" className={`${postBodyStyles.editor} min-w-0 rounded-[10px] focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2`}>
+                <Editor
+                  content={editProjectData.description}
+                  readOnly={isSavingProject}
+                  rootDocumentChangesOnly
+                  className="min-h-[180px]"
+                  onChange={description => {
+                    if (!editViewActive.current || !editDialogOpen.current) return;
+                    updateEditProjectData(prev => ({ ...prev, description }));
+                  }}
+                />
+              </div>
             </div>
             <div>
               <Label htmlFor="category">Kategorie</Label>
               <Input
                 id="category"
                 value={editProjectData.category}
-                onChange={(e) => setEditProjectData(prev => ({ ...prev, category: e.target.value }))}
+                onChange={(e) => { const category = e.target.value; updateEditProjectData(prev => ({ ...prev, category })); }}
               />
             </div>
             <div>
@@ -594,7 +697,7 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
               <Input
                 id="tags"
                 value={editProjectData.tags.join(', ')}
-                onChange={(e) => setEditProjectData(prev => ({ ...prev, tags: e.target.value.split(',').map(tag => tag.trim()) }))}
+                onChange={(e) => { const tags = e.target.value.split(',').map(tag => tag.trim()); updateEditProjectData(prev => ({ ...prev, tags })); }}
               />
             </div>
             <div>
@@ -602,7 +705,7 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
               <Input
                 id="link"
                 value={editProjectData.link}
-                onChange={(e) => setEditProjectData(prev => ({ ...prev, link: e.target.value }))}
+                onChange={(e) => { const link = e.target.value; updateEditProjectData(prev => ({ ...prev, link })); }}
               />
             </div>
             <div>
@@ -611,16 +714,21 @@ function ProjectDetailForViewer({ projectId, session }: { projectId: string; ses
                 id="image"
                 type="file"
                 accept="image/*"
-                onChange={(e) => setEditProjectData(prev => ({ ...prev, image: e.target.files?.[0] || null }))}
+                ref={editImageInput}
+                aria-describedby={editProjectData.image ? 'project-edit-image-name' : undefined}
+                onChange={(e) => { const image = e.target.files?.[0] || null; updateEditProjectData(prev => ({ ...prev, image })); }}
               />
+              {editProjectData.image && <p id="project-edit-image-name" className="mt-2 break-words text-sm text-muted-foreground [overflow-wrap:anywhere]">Ausgewählt: {editProjectData.image.name}</p>}
             </div>
-          </div>
+          </fieldset>
+          {editError && <p role="alert" className="text-sm text-destructive">{editError}</p>}
+          {editNotice && <p role="status" className="text-sm text-muted-foreground">{editNotice}</p>}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-              Abbrechen
+            <Button type="button" variant="outline" onClick={() => handleEditDialogOpenChange(false)}>
+              {isSavingProject ? 'Schließen' : 'Abbrechen'}
             </Button>
-            <Button onClick={handleSubmitEditProject}>
-              Speichern
+            <Button type="button" onClick={handleSubmitEditProject} disabled={isSavingProject}>
+              {isSavingProject ? 'Wird gespeichert…' : 'Speichern'}
             </Button>
           </DialogFooter>
         </DialogContent>

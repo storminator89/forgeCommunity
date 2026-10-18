@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useSession } from 'next-auth/react'
 import { StatsCard } from '@/components/community/StatsCard'
+import { PersonalProgressCard } from '@/components/community/PersonalProgressCard'
 import { LeaderboardCard } from '@/components/community/LeaderboardCard'
 import CourseClient from '@/app/courses/CourseClient'
 
@@ -12,6 +13,7 @@ jest.mock('next-auth/react', () => ({ useSession: jest.fn() }))
 jest.mock('@/components/Sidebar', () => ({ Sidebar: () => null }))
 jest.mock('@/components/user-nav', () => ({ UserNav: () => null }))
 jest.mock('@/components/theme-toggle', () => ({ ThemeToggle: () => null }))
+jest.mock('@/hooks/useSparkVisibility', () => ({ useSparkVisibility: () => ({ visible: false }) }))
 jest.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: mockToast }) }))
 
 const course = {
@@ -39,57 +41,49 @@ beforeEach(() => {
   })
 })
 
-it('shows private rewards and milestone independently of leaderboard placement', () => {
+it('shows private progress independently of public leaderboard placement', () => {
   render(<>
-    <StatsCard stats={{ posts: 1, receivedLikes: 2, comments: 3 }} rewards={{ points: 50, completedCourses: 1, firstCourseCompleted: true }} rewardsLoading={false} rewardsError={false} isSignedIn />
+    <PersonalProgressCard summary={{ points: 50, completedCourses: 1, firstCourseCompleted: true }} loading={false} error={false} isSignedIn role="USER" onRefresh={jest.fn()} />
     <LeaderboardCard users={[]} isLoading={false} />
   </>)
-  expect(screen.getByText('Meine Punkte').nextElementSibling).toHaveTextContent('50')
-  expect(screen.getByText('Meilenstein: Erster abgeschlossener Kurs').nextElementSibling).toHaveTextContent('Erreicht')
-  expect(screen.getByText('3 unterschiedliche Kurse abschließen')).toBeInTheDocument()
-  expect(screen.getByRole('progressbar', { name: 'Lernmeilenstein: 1 von 3 Kursen abgeschlossen' })).toHaveAttribute('value', '1')
+  expect(screen.getByText('Aktive Kurspunkte:')).toHaveTextContent('50')
+  expect(screen.getByRole('list', { name: 'Lernmeilensteine' })).toHaveTextContent('1 Kurs: erreicht')
+  expect(screen.getByRole('progressbar', { name: '1 von 3 Kursen bis zum nächsten Meilenstein' })).toHaveAttribute('value', '1')
   expect(screen.getByText('Noch keine öffentlichen Einträge.')).toBeInTheDocument()
-  expect(screen.getByText(/Was zählt: Ein von Admins freigegebener Kurs/)).toBeInTheDocument()
+  expect(screen.getByText('Dein persönlicher Fortschritt bleibt auch ohne Teilnahme an der öffentlichen Rangliste sichtbar.')).toBeInTheDocument()
 })
 
-it('keeps metric explanations in closed native disclosures without hiding the private rewards themselves', async () => {
+it('keeps activity and progress explanations in closed keyboard-accessible native disclosures', async () => {
   const user = userEvent.setup()
-  render(<StatsCard stats={{ posts: 1, receivedLikes: 2, comments: 3 }} rewards={{ points: 50, completedCourses: 1, firstCourseCompleted: true }} rewardsLoading={false} rewardsError={false} isSignedIn />)
-
-  const activity = screen.getByText('So wird gezählt')
-  const visibility = screen.getByLabelText('Sichtbarkeit meiner Kursbelohnungen')
+  render(<>
+    <StatsCard stats={{ posts: 1, receivedLikes: 2, comments: 3 }} isSignedIn />
+    <PersonalProgressCard summary={{ points: 50, completedCourses: 1, firstCourseCompleted: true }} loading={false} error={false} isSignedIn onRefresh={jest.fn()} />
+  </>)
+  const activity = screen.getByText('Aktivitätszahlen ansehen')
+  const points = screen.getByText('Aktive Kurspunkte:').closest('summary')!
   const activityHelp = screen.getByText('Alle deine Beiträge. Likes auf deine Beiträge, einschließlich eigener Likes. Kommentare in veröffentlichten und deinen eigenen Beiträgen.')
-  const visibilityHelp = screen.getByText('Deine Punkte und Meilensteine bleiben für dich sichtbar, auch wenn du nicht in der öffentlichen Rangliste stehst.')
-
-  for (const [summary, explanation] of [[activity, activityHelp], [visibility, visibilityHelp]]) {
+  const visibilityHelp = screen.getByText('Dein persönlicher Fortschritt bleibt auch ohne Teilnahme an der öffentlichen Rangliste sichtbar.')
+  for (const [summary, explanation] of [[activity, activityHelp], [points, visibilityHelp]]) {
     expect(summary.tagName).toBe('SUMMARY')
     expect(summary.parentElement?.tagName).toBe('DETAILS')
     expect(summary.parentElement).not.toHaveAttribute('open')
     expect(summary).toHaveClass('min-h-11', 'focus-visible:ring-2', 'focus-visible:ring-ring')
     expect(explanation).not.toBeVisible()
     await user.click(summary)
-    expect(summary.parentElement).toHaveAttribute('open')
     expect(explanation).toBeVisible()
     await user.click(summary)
     expect(explanation).not.toBeVisible()
   }
-  expect(screen.getByText('Meine Punkte').nextElementSibling).toHaveTextContent('50')
-  expect(screen.getByText('Meine Punkte').nextElementSibling).toBeVisible()
-  expect(screen.getByRole('progressbar', { name: 'Lernmeilenstein: 1 von 3 Kursen abgeschlossen' })).toBeVisible()
+  expect(screen.getByText('Aktive Kurspunkte:')).toBeVisible()
+  expect(screen.getByRole('progressbar', { name: '1 von 3 Kursen bis zum nächsten Meilenstein' })).toBeVisible()
 })
 
-it('lets metric labels and values wrap within their existing grid cells at enlarged text sizes', () => {
-  render(<StatsCard stats={{ posts: 1234567890123456, receivedLikes: 2345678901234567, comments: 3456789012345678 }}
-    rewards={{ points: 987654321012345, completedCourses: 3, firstCourseCompleted: true }}
-    rewardsLoading={false} rewardsError={false} isSignedIn />)
-
-  // DOM/class coverage is a reflow guard. The actual 320px/200% layout remains
-  // checked by the strict Spark entry browser scenario and its geometry gate.
-  for (const [label, value] of [
-    ['Beiträge', '1234567890123456'], ['Likes', '2345678901234567'], ['Kommentare', '3456789012345678'],
-    ['Meine Punkte', '987654321012345'], ['Abgeschlossene Kurse', '3'],
-    ['Meilenstein: Erster abgeschlossener Kurs', 'Erreicht'],
-  ]) {
+it('lets activity labels and values wrap while private progress uses its own surface', () => {
+  render(<>
+    <StatsCard stats={{ posts: 1234567890123456, receivedLikes: 2345678901234567, comments: 3456789012345678 }} isSignedIn />
+    <PersonalProgressCard summary={{ points: 987654321012345, completedCourses: 3, firstCourseCompleted: true }} loading={false} error={false} isSignedIn onRefresh={jest.fn()} />
+  </>)
+  for (const [label, value] of [['Beiträge', '1234567890123456'], ['Likes', '2345678901234567'], ['Kommentare', '3456789012345678']]) {
     const term = screen.getByText(label)
     const cell = term.parentElement!
     expect(term.tagName).toBe('DT')
@@ -97,35 +91,34 @@ it('lets metric labels and values wrap within their existing grid cells at enlar
     expect(term.nextElementSibling?.textContent).toBe(value)
     expect(cell).toHaveClass('min-w-0', '[overflow-wrap:anywhere]')
     expect(cell).not.toHaveClass('overflow-hidden', 'truncate')
-    expect(cell.parentElement?.tagName).toBe('DL')
   }
-  const progress = screen.getByRole('progressbar', { name: 'Lernmeilenstein: 3 von 5 Kursen abgeschlossen' })
+  expect(screen.getByText('Aktive Kurspunkte:')).toHaveTextContent('987654321012345')
+  const progress = screen.getByRole('progressbar', { name: '3 von 5 Kursen bis zum nächsten Meilenstein' })
   expect(progress).toHaveAttribute('value', '3')
   expect(progress).toHaveAttribute('max', '5')
 })
 
 it('shows reachable private learning milestones without streak pressure or public ranking', () => {
-  const view = render(<StatsCard stats={{ posts: 0, receivedLikes: 0, comments: 0 }} rewards={{ points: 0, completedCourses: 0, firstCourseCompleted: false }} rewardsLoading={false} rewardsError={false} isSignedIn />)
-  expect(screen.getByRole('progressbar', { name: 'Lernmeilenstein: 0 von 1 Kurs abgeschlossen' })).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: 'Kurse entdecken' })).toHaveAttribute('href', '/courses')
-  view.rerender(<StatsCard stats={{ posts: 0, receivedLikes: 0, comments: 0 }} rewards={{ points: 0, completedCourses: 3, firstCourseCompleted: true }} rewardsLoading={false} rewardsError={false} isSignedIn />)
-  expect(screen.getByRole('progressbar', { name: 'Lernmeilenstein: 3 von 5 Kursen abgeschlossen' })).toBeInTheDocument()
-  view.rerender(<StatsCard stats={{ posts: 0, receivedLikes: 0, comments: 0 }} rewards={{ points: 0, completedCourses: 5, firstCourseCompleted: true }} rewardsLoading={false} rewardsError={false} isSignedIn />)
-  expect(screen.getByText('Alle derzeitigen Lernmeilensteine erreicht.')).toBeInTheDocument()
+  const view = render(<PersonalProgressCard summary={{ points: 0, completedCourses: 0, firstCourseCompleted: false }} loading={false} error={false} isSignedIn role="USER" onRefresh={jest.fn()} />)
+  expect(screen.getByRole('progressbar', { name: '0 von 1 Kurs bis zum nächsten Meilenstein' })).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Mein Lernweg' })).toHaveAttribute('href', '/courses/journey')
+  view.rerender(<PersonalProgressCard summary={{ points: 0, completedCourses: 3, firstCourseCompleted: true }} loading={false} error={false} isSignedIn onRefresh={jest.fn()} />)
+  expect(screen.getByRole('progressbar', { name: '3 von 5 Kursen bis zum nächsten Meilenstein' })).toBeInTheDocument()
+  view.rerender(<PersonalProgressCard summary={{ points: 0, completedCourses: 5, firstCourseCompleted: true }} loading={false} error={false} isSignedIn onRefresh={jest.fn()} />)
+  expect(screen.getByText('Alle Lernmeilensteine erreicht')).toBeInTheDocument()
   expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
-});
+})
 
 it('explains a quiz-revision adjustment without erasing the historical milestone', () => {
-  render(<StatsCard stats={{ posts: 0, receivedLikes: 0, comments: 0 }} rewards={{
-    points: 0, completedCourses: 1, firstCourseCompleted: true,
+  render(<PersonalProgressCard summary={{ points: 0, completedCourses: 1, firstCourseCompleted: true,
     history: [{ type: 'REVOKED', reason: 'QUIZ_REVISED', pointsDelta: -50, at: '2026-10-14T10:00:00.000Z', courseTitle: 'Sicherheitskurs' }],
-  }} rewardsLoading={false} rewardsError={false} isSignedIn />)
+  }} loading={false} error={false} isSignedIn onRefresh={jest.fn()} />)
   expect(screen.getByText('Punkteverlauf')).toBeInTheDocument()
   expect(screen.getByText('Sicherheitskurs')).toBeInTheDocument()
   expect(screen.getByText(/Das Kursquiz wurde überarbeitet/)).toBeInTheDocument()
   expect(screen.getByText('-50 Punkte')).toBeInTheDocument()
-  expect(screen.getByText('Meilenstein: Erster abgeschlossener Kurs').nextElementSibling).toHaveTextContent('Erreicht')
-  expect(screen.getByText(/ausgestellte Zertifikate bleiben bestehen/)).toBeInTheDocument()
+  expect(screen.getByText('1 Kurs abgeschlossen')).toBeInTheDocument()
+  expect(screen.getByText(/Meilensteine zählen unterschiedliche Kurse/)).toHaveTextContent('bleiben bei späteren Änderungen bestehen')
 })
 
 it('only exposes course reward approval to an admin and confirms revocation', async () => {

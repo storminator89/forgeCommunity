@@ -19,6 +19,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { CourseQaIcon } from './CourseQaIcon'
 import type { CourseQaContextEntry, CourseQaLessonContext, CourseQaLessonContextPair, CourseQaScope } from '@/lib/course-qa-context-contract'
 import { LessonContextLabel, readLessonContext, readQaScope, suppressLessonContext } from './CourseQaLessonContext'
+import { isForegroundAvailable } from '@/lib/foreground-poll'
 
 type Author = { id: string; name: string }
 type Question = { id: string; title: string; body: string; createdAt: string; author: Author; answerCount?: number; acceptedAnswerId: string | null; revision: string | number | null; hidden?: boolean; lessonContext: CourseQaLessonContext }
@@ -457,7 +458,7 @@ export function CourseQaWorkspace({ courseId, sessionStatus, lessonContext = nul
     if (sessionStatus !== 'authenticated') return
     let last = 0
     const revalidate = () => {
-      if (document.visibilityState !== 'visible' || denied.current || Date.now() - last < 1000) return
+      if (!isForegroundAvailable() || denied.current || Date.now() - last < 1000) return
       last = Date.now()
       beginContextVerification()
       moreAbort.current?.abort(); detailAbort.current?.abort(); listAbort.current?.abort()

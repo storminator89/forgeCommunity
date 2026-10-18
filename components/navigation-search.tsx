@@ -7,7 +7,7 @@ import { ArrowUpRight } from 'lucide-react';
 import { NavigationArtwork } from '@/components/navigation-artwork';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { navigationItems, adminNavigation } from '@/lib/navigation';
+import { navigationItems, adminNavigation, canSeeLearnerJourney } from '@/lib/navigation';
 import { canSeeLearnerPathways } from '@/lib/pathway-visibility';
 
 export function NavigationSearch({ collapsed = false, keyboardShortcut = true, onNavigate, hideLearnerPathways = false }: { collapsed?: boolean; keyboardShortcut?: boolean; onNavigate?: () => void; hideLearnerPathways?: boolean }) {
@@ -15,8 +15,10 @@ export function NavigationSearch({ collapsed = false, keyboardShortcut = true, o
   const [query, setQuery] = useState('');
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const router = useRouter();
-  const { data: session } = useSession();
-  const learnerItems = navigationItems.filter(item => item.href !== '/courses/pathways' || (!hideLearnerPathways && canSeeLearnerPathways(session?.user?.role)));
+  const { data: session, status } = useSession();
+  const learnerItems = navigationItems.filter(item =>
+    (item.href !== '/courses/pathways' || (!hideLearnerPathways && canSeeLearnerPathways(session?.user?.role))) &&
+    (item.href !== '/courses/journey' || (status === 'authenticated' && canSeeLearnerJourney(session?.user?.role))));
   const items = session?.user?.role === 'ADMIN' ? [...learnerItems, ...adminNavigation] : learnerItems;
   const matches = items.filter(item => item.name.toLocaleLowerCase('de').includes(query.toLocaleLowerCase('de')));
 

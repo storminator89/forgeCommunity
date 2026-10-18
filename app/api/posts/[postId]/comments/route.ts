@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
-import { sanitizeTextServer } from '@/lib/server/sanitize-html'
+import { sanitizeCommentTextServer } from '@/lib/server/sanitize-html'
 import { readJsonObject, readPage, requestErrorResponse } from '@/lib/server/api-input'
 import { afterCommunityCursor, COMMUNITY_COMMENT_PREVIEW_SIZE, COMMUNITY_ORDER, COMMUNITY_PAGE_SIZE, communityCommentInclude, communityPage, isCurrentCommunityAdmin, normalizeCommunityComment, readCommunityCursor } from '@/lib/server/community-feed'
 
@@ -17,7 +17,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ postId: 
     const { content } = await readJsonObject(req)
     const { postId } = params
 
-    const sanitizedContent = typeof content === 'string' ? sanitizeTextServer(content) : ''
+    const sanitizedContent = typeof content === 'string' ? sanitizeCommentTextServer(content) : ''
     if (!sanitizedContent) {
       return NextResponse.json({ error: 'Inhalt ist erforderlich' }, { status: 400 })
     }

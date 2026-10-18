@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../../../auth/[...nextauth]/options';
 import prisma from '@/lib/prisma';
 import { readJsonObject, requestErrorResponse } from '@/lib/server/api-input';
-import { completionState, contentQuiz, courseContentRevision, isQuizLikeContent, matchesContentVersionToken, recordCourseCompletion } from '@/lib/server/course-progress';
+import { completionState, contentQuiz, courseContentRevision, isQuizLikeContent, matchesContentVersionToken, recordCourseCompletion, learnerAttemptState } from '@/lib/server/course-progress';
 import { contentTransaction } from '../contents/content-mutations';
 import { hasCurrentAdminReadAccess } from '@/lib/server/read-access';
 import { assertCurrentChapterRelease, assertCurrentPrerequisites, CoursePathError } from '@/lib/server/course-prerequisites';
@@ -24,7 +24,10 @@ export async function GET(_request: NextRequest, props: Params) {
       if (!enrollment && !isEditor) return { status: 403 as const };
       const certificate = await tx.certificate.findFirst({ where: { userId: session.user.id, courseId }, select: { id: true } });
       const progress = enrollment && course.activePublicationId ? await completionState(tx, session.user.id, courseId) : { completedContentIds: [], complete: false, canIssueCertificate: false };
-      return { status: 200 as const, payload: { ...progress, canTrack: Boolean(enrollment && course.activePublicationId),
+      const attempts = enrollment && course.activePublicationId
+        ? await learnerAttemptState(tx, session.user.id, courseId, course.activePublicationId, progress.completedContentIds)
+        : { latestQuizAttempts: [], awaitingGradeContentIds: [] };
+      return { status: 200 as const, payload: { ...progress, ...attempts, canTrack: Boolean(enrollment && course.activePublicationId),
         hasCertificate: Boolean(certificate), completedAt: enrollment?.completedAt ?? null, publicationId: course.activePublicationId } };
     });
     if (result.status !== 200) return NextResponse.json({ error: result.status === 404 ? 'Course not found' : 'Unauthorized' }, { status: result.status });

@@ -22,7 +22,7 @@ jest.mock('@/components/app-shell', () => ({
   AppHeader: ({ children }: { children: React.ReactNode }) => <header>{children}</header>,
 }));
 jest.mock('@/components/Sidebar', () => ({ Sidebar: () => null }));
-jest.mock('@/components/user-nav', () => ({ UserNav: () => null }));
+jest.mock('@/components/user-nav', () => ({ UserNav: () => null, useSignInHref: () => '/login?callbackUrl=%2Fcommunity' }));
 jest.mock('@/components/theme-toggle', () => ({ ThemeToggle: () => null }));
 let mockViewerId: string | null = 'viewer';
 jest.mock('next-auth/react', () => ({ useSession: () => ({

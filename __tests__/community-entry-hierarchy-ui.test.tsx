@@ -5,7 +5,7 @@ import type { CommunityPost } from '@/lib/community-feed'
 jest.mock('next-auth/react', () => ({ useSession: () => ({ data: { user: { id: 'ada', name: 'Ada', role: 'USER' } }, status: 'authenticated' }) }))
 jest.mock('framer-motion', () => jest.requireActual('@/lib/motion'))
 jest.mock('@/components/Sidebar', () => ({ Sidebar: () => null }))
-jest.mock('@/components/user-nav', () => ({ UserNav: () => null }))
+jest.mock('@/components/user-nav', () => ({ UserNav: () => null, useSignInHref: () => '/login?callbackUrl=%2Fcommunity' }))
 jest.mock('@/components/theme-toggle', () => ({ ThemeToggle: () => null }))
 jest.mock('@/components/community/PostCard', () => ({ PostCard: ({ post }: { post: CommunityPost }) => <article>{post.title}</article> }))
 jest.mock('@/components/community/PostForm', () => ({ PostForm: ({ onSubmit }: { onSubmit: (title: string, content: string) => Promise<void> }) =>

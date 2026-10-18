@@ -10,7 +10,7 @@ jest.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams
 jest.mock('framer-motion', () => jest.requireActual('@/lib/motion'));
 jest.mock('@/contexts/ChatContext', () => ({ useChat: jest.fn() }));
 jest.mock('@/components/Sidebar', () => ({ Sidebar: () => null }));
-jest.mock('@/components/user-nav', () => ({ UserNav: () => null }));
+jest.mock('@/components/user-nav', () => ({ UserNav: () => null, useSignInHref: () => '/login?callbackUrl=%2Fcommunity' }));
 jest.mock('@/components/theme-toggle', () => ({ ThemeToggle: () => null }));
 jest.mock('@/components/community/StatsCard', () => ({ StatsCard: () => null }));
 jest.mock('@/components/community/LeaderboardCard', () => ({ LeaderboardCard: () => null }));

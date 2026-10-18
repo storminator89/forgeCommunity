@@ -8,7 +8,7 @@ import { CommunityComment, CommunityPost } from '@/lib/community-feed'
 jest.mock('next-auth/react', () => ({ useSession: jest.fn() }))
 jest.mock('framer-motion', () => jest.requireActual('@/lib/motion'))
 jest.mock('@/components/Sidebar', () => ({ Sidebar: () => null }))
-jest.mock('@/components/user-nav', () => ({ UserNav: () => null }))
+jest.mock('@/components/user-nav', () => ({ UserNav: () => null, useSignInHref: () => '/login?callbackUrl=%2Fcommunity' }))
 jest.mock('@/components/theme-toggle', () => ({ ThemeToggle: () => null }))
 jest.mock('@/components/community/PostForm', () => ({ PostForm: () => null }))
 jest.mock('@/components/community/ReportControl', () => ({ ReportControl: () => null }))

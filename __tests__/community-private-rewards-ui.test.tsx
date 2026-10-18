@@ -5,7 +5,7 @@ import Community from '@/app/community/page'
 
 jest.mock('next-auth/react', () => ({ useSession: jest.fn() }))
 jest.mock('@/components/Sidebar', () => ({ Sidebar: () => null }))
-jest.mock('@/components/user-nav', () => ({ UserNav: () => null }))
+jest.mock('@/components/user-nav', () => ({ UserNav: () => null, useSignInHref: () => '/login?callbackUrl=%2Fcommunity' }))
 jest.mock('@/components/theme-toggle', () => ({ ThemeToggle: () => null }))
 jest.mock('@/components/community/PostCard', () => ({ PostCard: ({ post, onLike }: { post: { id: string; title: string }; onLike: (id: string) => void }) => <article>{post.title}<button onClick={() => onLike(post.id)}>Like</button></article> }))
 jest.mock('@/components/community/PostForm', () => ({ PostForm: () => null }))
@@ -39,8 +39,8 @@ beforeEach(() => {
 it('keeps private rewards visible off the public leaderboard without promising like points', async () => {
   const user = userEvent.setup()
   render(<Community />)
-  expect(await screen.findByText('Meine Punkte')).toBeInTheDocument()
-  expect(screen.getByText('Meine Punkte').nextElementSibling).toHaveTextContent('50')
+  expect(await screen.findByText('Aktive Kurspunkte:')).toBeInTheDocument()
+  expect(screen.getByText('Aktive Kurspunkte:')).toHaveTextContent('50')
   expect(screen.getByText('Noch keine öffentlichen Einträge.')).toBeInTheDocument()
   await user.click(await screen.findByRole('button', { name: 'Like' }))
   await waitFor(() => expect(global.fetch).toHaveBeenCalledWith('/api/posts/post-1/like', expect.objectContaining({ method: 'POST' })))

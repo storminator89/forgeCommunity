@@ -3,6 +3,7 @@ import { getDatabaseProvider, getPostgresqlSchema } from '@/lib/database-provide
 
 const COURSE_SQL_TABLES = {
   Course: '"Course"',
+  QuizAttempt: '"QuizAttempt"',
   AssignmentSubmission: '"AssignmentSubmission"',
   AssignmentGradeDecision: '"AssignmentGradeDecision"',
   Enrollment: '"Enrollment"',

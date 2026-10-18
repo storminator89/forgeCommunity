@@ -218,6 +218,81 @@ export async function completionState(tx: Prisma.TransactionClient, userId: stri
   return { completedContentIds, complete, canIssueCertificate };
 }
 
+/** Own read-only display state for the current published, unlocked leaf revision.
+ * Completion, grading and rewards remain the responsibility of their existing paths.
+ */
+export async function learnerAttemptState(tx: Prisma.TransactionClient, userId: string, courseId: string,
+  publicationId: string, completedContentIds: string[], now = Date.now()) {
+  const empty = { latestQuizAttempts: [] as Array<{ contentId: string; publicationId: string; score: number; passed: boolean; submittedAt: string }>,
+    awaitingGradeContentIds: [] as string[] };
+  const [course, enrollment, publication, contents] = await Promise.all([
+    tx.course.findUnique({ where: { id: courseId }, select: { activePublicationId: true } }),
+    tx.enrollment.findUnique({ where: { userId_courseId: { userId, courseId } }, select: { id: true } }),
+    tx.coursePublication.findUnique({ where: { id: publicationId }, select: { courseId: true, payload: true } }),
+    tx.courseContent.findMany({ where: { courseId, ...activeCourseContentWhere, course: publishedCourseWhere },
+      select: { id: true, courseId: true, parentId: true, type: true, content: true, order: true } }),
+  ]);
+  if (!enrollment || !course?.activePublicationId) return empty;
+  if (course.activePublicationId !== publicationId || !publication || publication.courseId !== courseId) {
+    throw new CoursePathError('Course publication is unavailable', 409);
+  }
+  const nodes = publicationPathNodes(publication.payload);
+  const projected = new Map(contents.map(row => [row.id, row]));
+  if (projected.size !== nodes.length || nodes.some(node => {
+    const row = projected.get(node.id);
+    return !row || row.parentId !== node.parentId || row.order !== node.order;
+  })) throw new CoursePathError('Published course contents do not match the active publication', 409);
+  const access = coursePathAccess(nodes, completedContentIds, now);
+  const leaves = courseLeaves(contents).filter(content => access.get(content.id)?.locked === false);
+  const quizzes = leaves.filter(content => contentQuiz(content));
+  const assignments = leaves.filter(content => content.type === 'ASSIGNMENT' && parseAssignmentContent(content.content)?.prompt.trim());
+  let latestQuizAttempts = empty.latestQuizAttempts;
+  if (quizzes.length) {
+    const currentRevisions = quizzes.map(content => Prisma.sql`(a."contentId" = ${content.id} AND a."revision" = ${courseContentRevision(content)})`);
+    const attempts = courseSqlTable('QuizAttempt');
+    // Rank in the database so a long retry history cannot inflate this read.
+    const latest = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      WITH ranked_attempts AS (
+        SELECT a."id", a."contentId", ROW_NUMBER() OVER (PARTITION BY a."contentId"
+          ORDER BY a."submittedAt" DESC, a."id" DESC) AS attempt_rank
+        FROM ${attempts} a WHERE a."userId" = ${userId} AND a."courseId" = ${courseId}
+          AND a."publicationId" = ${publicationId} AND (${Prisma.join(currentRevisions, ' OR ')})
+      )
+      SELECT "id" FROM ranked_attempts WHERE attempt_rank = 1
+    `);
+    const rows = latest.length ? await tx.quizAttempt.findMany({ where: { id: { in: latest.map(row => row.id) },
+      userId, courseId, publicationId }, orderBy: { contentId: 'asc' },
+      select: { contentId: true, publicationId: true, score: true, passed: true, submittedAt: true } }) : [];
+    latestQuizAttempts = rows.map(row => {
+      if (!Number.isFinite(row.score) || row.score < 0 || row.score > 100 || typeof row.passed !== 'boolean' ||
+          row.publicationId !== publicationId || !Number.isFinite(row.submittedAt.getTime())) {
+        throw new Error('Invalid stored quiz attempt summary');
+      }
+      return { contentId: row.contentId, publicationId, score: row.score, passed: row.passed,
+        submittedAt: row.submittedAt.toISOString() };
+    });
+  }
+  let awaitingGradeContentIds = empty.awaitingGradeContentIds;
+  if (assignments.length) {
+    const currentRevisions = assignments.map(content => Prisma.sql`(s."contentId" = ${content.id} AND s."revision" = ${courseContentRevision(content)})`);
+    const submissions = courseSqlTable('AssignmentSubmission');
+    const decisions = courseSqlTable('AssignmentGradeDecision');
+    const rows = await tx.$queryRaw<Array<{ contentId: string }>>(Prisma.sql`
+      WITH ranked_submissions AS (
+        SELECT s."id", s."contentId", ROW_NUMBER() OVER (PARTITION BY s."contentId"
+          ORDER BY s."attemptNumber" DESC) AS attempt_rank
+        FROM ${submissions} s WHERE s."userId" = ${userId} AND s."courseId" = ${courseId}
+          AND (${Prisma.join(currentRevisions, ' OR ')})
+      )
+      SELECT s."contentId" FROM ranked_submissions s WHERE s.attempt_rank = 1
+        AND NOT EXISTS (SELECT 1 FROM ${decisions} g WHERE g."submissionId" = s."id")
+      ORDER BY s."contentId"
+    `);
+    awaitingGradeContentIds = rows.map(row => row.contentId);
+  }
+  return { latestQuizAttempts, awaitingGradeContentIds };
+}
+
 export async function recordCourseCompletion(tx: Prisma.TransactionClient, userId: string, courseId: string) {
   const state = await completionState(tx, userId, courseId);
   if (state.complete) {
