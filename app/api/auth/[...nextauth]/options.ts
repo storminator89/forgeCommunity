@@ -1,10 +1,12 @@
 import { NextAuthOptions } from 'next-auth';
+import type { AdapterAccount } from 'next-auth/adapters';
 import { PrismaAdapter } from '@next-auth/prisma-adapter';
 import { Prisma } from '@prisma/client';
 import CredentialsProvider from 'next-auth/providers/credentials';
-import GoogleProvider from 'next-auth/providers/google';
 import bcrypt from 'bcrypt';
 import { passwordFingerprint, samePasswordFingerprint } from '@/lib/server/account-security';
+import { safeLoginCallback } from '@/lib/auth-login';
+import { createOAuthProviders, verifiedOAuthEmail } from '@/lib/server/oauth-providers';
 
 import prisma from '@/lib/prisma';
 import { emailEqualsInsensitive } from '@/lib/server/database-query';
@@ -38,7 +40,9 @@ function mapUserToToken(user: NonNullable<SelectedUser>) {
   };
 }
 
+const oauthConfiguration = createOAuthProviders();
 const providers: NextAuthOptions['providers'] = [
+  ...oauthConfiguration.providers,
   CredentialsProvider({
     name: 'Credentials',
     credentials: {
@@ -84,19 +88,73 @@ const providers: NextAuthOptions['providers'] = [
   }),
 ];
 
-if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-  providers.unshift(
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    })
-  );
+export const oauthIssuerFor = oauthConfiguration.issuerFor;
+export async function authProvidersForRequest(provider: string): Promise<NextAuthOptions['providers']> {
+  return [
+    ...await oauthConfiguration.resolveProviders(provider),
+    ...providers.filter(configured => configured.id === 'credentials'),
+  ];
 }
 
+type SignInArguments = Parameters<NonNullable<NonNullable<NextAuthOptions['callbacks']>['signIn']>>[0];
+
+export async function authorizeSignIn(
+  { account, profile }: SignInArguments,
+  currentSessionUserId: string | null = null,
+): Promise<boolean | string> {
+  if (account?.type === 'credentials' && account.provider === 'credentials' && !profile) return true;
+  if (account?.type !== 'oauth' || !oauthConfiguration.enabledIds.some(id => id === account.provider)) return false;
+  if (!oauthConfiguration.matchesIdentity(account.provider, account.providerAccountId, profile)) return false;
+
+  const email = verifiedOAuthEmail(profile);
+  if (!email) return '/login?error=OAuthEmailUnverified';
+
+  try {
+    const linkedAccount = await prisma.account.findUnique({
+      where: { provider_providerAccountId: {
+        provider: account.provider,
+        providerAccountId: account.providerAccountId,
+      } },
+      select: { userId: true },
+    });
+
+    // NextAuth v4 otherwise links a new OAuth account to an existing signed-in
+    // user, even with dangerous email linking disabled. Login is not a link flow.
+    if (currentSessionUserId && linkedAccount?.userId !== currentSessionUserId) {
+      return '/login?error=OAuthAccountNotLinked';
+    }
+    if (linkedAccount) return true;
+
+    // Include legacy mixed-case addresses. The default Prisma adapter's
+    // getUserByEmail lookup is case-sensitive on PostgreSQL.
+    const existingUser = await prisma.user.findFirst({
+      where: emailEqualsInsensitive(email),
+      select: { id: true },
+    });
+    return existingUser ? '/login?error=OAuthAccountNotLinked' : true;
+  } catch {
+    // No database errors, claims or provider payloads in a browser redirect.
+    console.error('[auth] OAUTH_SIGNIN_LOOKUP_FAILED');
+    return '/login?error=OAuthCallback';
+  }
+}
+
+const prismaAdapter = PrismaAdapter(prisma);
+const identityOnlyAdapter: typeof prismaAdapter = {
+  ...prismaAdapter,
+  // Sign-in needs only the identity link, never stored provider credentials.
+  linkAccount: ({ userId, type, provider, providerAccountId }: AdapterAccount) =>
+    prismaAdapter.linkAccount!({ userId, type, provider, providerAccountId }),
+};
+
 export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(prisma),
+  adapter: identityOnlyAdapter,
   providers,
   callbacks: {
+    signIn: arguments_ => authorizeSignIn(arguments_),
+    async redirect({ url, baseUrl }) {
+      return `${new URL(baseUrl).origin}${safeLoginCallback(url, baseUrl)}`;
+    },
     async jwt({ token, user, account }) {
       // `session` data on an update is client supplied. Never merge it into
       // the token: identity and authorization claims must come from Prisma.
@@ -181,6 +239,7 @@ export const authOptions: NextAuthOptions = {
   },
   pages: {
     signIn: '/login',
+    error: '/login',
   },
   session: {
     strategy: 'jwt',
@@ -191,5 +250,10 @@ export const authOptions: NextAuthOptions = {
     maxAge: 30 * 24 * 60 * 60,
   },
   secret: process.env.NEXTAUTH_SECRET,
-  debug: process.env.NODE_ENV === 'development',
+  // OAuth debug metadata may contain tokens and personal claims.
+  debug: false,
+  logger: {
+    error(code) { console.error('[auth]', /^[A-Z_]{1,80}$/.test(code) ? code : 'AUTH_ERROR'); },
+    warn(code) { console.warn('[auth]', /^[A-Z_]{1,80}$/.test(code) ? code : 'AUTH_WARNING'); },
+  },
 };

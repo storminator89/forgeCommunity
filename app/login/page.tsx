@@ -14,6 +14,7 @@ import { useClientReady } from '@/lib/use-client-ready'
 import Link from 'next/link'
 import { ArrowUpRight, Eye, EyeOff, Loader2, LogIn } from 'lucide-react'
 import { ForgeBrandMark } from '@/components/forge-brand-mark'
+import { loginErrorMessage, safeLoginCallback } from '@/lib/auth-login'
 
 function LoginContent() {
   const [email, setEmail] = useState('')
@@ -22,17 +23,18 @@ function LoginContent() {
   const [isLoading, setIsLoading] = useState(false)
   const isReady = useClientReady()
   const [showPassword, setShowPassword] = useState(false)
-  const [googleAvailable, setGoogleAvailable] = useState(false)
+  const [oauthProviders, setOAuthProviders] = useState<Array<{ id: string; name: string }>>([])
   const searchParams = useSearchParams()
   const requestedCallback = searchParams.get('callbackUrl')
-  // Accept only local paths: credentials sign-in must never redirect to an arbitrary host.
-  const callbackUrl = requestedCallback && /^\/(?![\\/])[^\\\u0000-\u001f\u007f]*$/.test(requestedCallback)
-    ? requestedCallback : '/community'
+  const callbackUrl = safeLoginCallback(requestedCallback)
+  const visibleError = error || loginErrorMessage(searchParams.get('error'))
 
   useEffect(() => {
     let active = true
     getProviders().then(providers => {
-      if (active) setGoogleAvailable(Boolean(providers?.google))
+      if (active) setOAuthProviders(Object.values(providers ?? {})
+        .filter(provider => provider.type === 'oauth')
+        .map(provider => ({ id: provider.id, name: provider.name.slice(0, 60) })))
     }).catch(() => {})
     return () => { active = false }
   }, [])
@@ -56,13 +58,14 @@ function LoginContent() {
     }
   }
 
-  const handleGoogleSignIn = async () => {
+  const handleOAuthSignIn = async (providerId: string) => {
+    if (isLoading || !oauthProviders.some(provider => provider.id === providerId)) return
     setError('')
     setIsLoading(true)
     try {
-      await signIn('google', { callbackUrl })
+      await signIn(providerId, { callbackUrl })
     } catch {
-      setError('Die Anmeldung mit Google ist momentan nicht möglich.')
+      setError('Die Anmeldung beim Anbieter ist momentan nicht möglich. Bitte versuche es erneut.')
       setIsLoading(false)
     }
   }
@@ -93,24 +96,29 @@ function LoginContent() {
             <form method="post" onSubmit={handleSubmit} className="space-y-5" aria-busy={isLoading}>
               <div className="space-y-2">
                 <Label htmlFor="email">E-Mail-Adresse</Label>
-                <Input id="email" name="email" type="email" autoComplete="username" maxLength={254} placeholder="name@example.com" value={email} onChange={event => setEmail(event.target.value)} required disabled={isLoading} className="h-11" aria-describedby={error ? 'login-error' : undefined} />
+                <Input id="email" name="email" type="email" autoComplete="username" maxLength={254} placeholder="name@example.com" value={email} onChange={event => setEmail(event.target.value)} required disabled={isLoading} className="h-11" aria-describedby={visibleError ? 'login-error' : undefined} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password">Passwort</Label>
                 <div className="relative">
-                  <Input id="password" name="password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={event => setPassword(event.target.value)} required disabled={isLoading} className="h-11 pr-14" aria-describedby={error ? 'login-error' : undefined} />
+                  <Input id="password" name="password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={event => setPassword(event.target.value)} required disabled={isLoading} className="h-11 pr-14" aria-describedby={visibleError ? 'login-error' : undefined} />
                   <Button type="button" size="icon" variant="ghost" className="absolute right-0 top-0 h-11 w-11" onClick={() => setShowPassword(value => !value)} aria-label={showPassword ? 'Passwort verbergen' : 'Passwort anzeigen'} aria-pressed={showPassword}>
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </Button>
                 </div>
               </div>
-              {error && <p id="login-error" role="alert" className="rounded-xl border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">{error}</p>}
+              {visibleError && <p id="login-error" role="alert" className="rounded-xl border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">{visibleError}</p>}
               <Button type="submit" className="h-11 w-full" disabled={isLoading || !isReady}>
                 {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : <LogIn className="mr-2 h-4 w-4" aria-hidden="true" />}
                 {isLoading ? 'Anmeldung läuft…' : 'Anmelden'}
               </Button>
             </form>
-            {googleAvailable && <><div className="flex items-center gap-3 text-xs text-muted-foreground"><span className="h-px flex-1 bg-border" />oder<span className="h-px flex-1 bg-border" /></div><Button type="button" variant="outline" className="h-11 w-full" onClick={handleGoogleSignIn} disabled={isLoading}>Mit Google anmelden</Button></>}
+            {oauthProviders.length > 0 && <>
+              <div className="flex items-center gap-3 text-xs text-muted-foreground"><span className="h-px flex-1 bg-border" />oder<span className="h-px flex-1 bg-border" /></div>
+              <div className="space-y-3">
+                {oauthProviders.map(provider => <Button key={provider.id} type="button" variant="outline" className="h-11 w-full" onClick={() => handleOAuthSignIn(provider.id)} disabled={isLoading || !isReady}>Mit {provider.name} anmelden</Button>)}
+              </div>
+            </>}
             <p className="text-sm text-muted-foreground">Noch kein Konto? <Link href="/register" className="inline-flex items-center gap-1 font-medium text-primary hover:underline">Konto erstellen <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" /></Link></p>
           </div>
         </div>
