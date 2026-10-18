@@ -10,6 +10,7 @@ import type { MissionNextAction } from '@/types/space-mission-invitations';
 import { invitationTransaction, purgeMissionInvitations, revokeMissionParticipationInvitations } from '@/lib/server/space-mission-invitation-state';
 import { MissionWeekError, parseMissionWeek, resolveMissionWeek, missionWindowState } from '@/lib/mission-week-clock';
 import { listD1MissionModeration, listD1SpaceMissions, readD1SpaceMission } from '@/lib/server/d1-space-missions';
+import { createD1SpaceMission } from '@/lib/server/d1-space-mission-create';
 
 export const MISSION_PARTICIPANT_LIMIT = 5;
 export const MISSION_PAGE_SIZE = 20;
@@ -175,37 +176,7 @@ export async function listMissions(spaceId: string, userId: string, request: Req
 }
 
 export async function createMission(spaceId: string, userId: string, input: ReturnType<typeof parseMissionInput>) {
-  const work = async (tx: Prisma.TransactionClient, replayOnly = false) => {
-    const access = await privateMissionAccess(spaceId, userId, tx);
-    if (!access.canManage) throw new SpaceApiError('Nicht autorisiert', 403);
-    const existing = await tx.spaceMission.findUnique({ where: { spaceId_requestId: { spaceId, requestId: input.requestId } },
-      select: { ...missionSelect, creatorId: true, payloadDigest: true } });
-    if (existing) {
-      if (existing.creatorId !== userId || existing.payloadDigest !== input.payloadDigest) {
-        throw new SpaceApiError('Anfrage-ID wurde bereits verwendet', 409);
-      }
-      // Replays return current visibility/consent, never a stored stale response.
-      return { item: await projectMission(existing, userId, access, tx), created: false };
-    }
-    const hasOpenMission = replayOnly || Boolean(await tx.spaceMission.findFirst({ where: { spaceId, closedAt: null }, select: { id: true } }));
-    // Each serializable retry rereads the clock after live authority, replay
-    // and open-mission reads, immediately before a possible new insert.
-    // Rollover never changes a stored window or accepts a stale insert.
-    let window: Partial<ReturnType<typeof resolveMissionWeek>> = {};
-    try { if (input.week) window = resolveMissionWeek(input.week, new Date()); }
-    catch (error) { if (error instanceof MissionWeekError) throw new SpaceApiError(error.message, 400); throw error; }
-    if (hasOpenMission) {
-      throw new SpaceApiError('In diesem Space ist bereits eine Mission offen', 409);
-    }
-    const row = await tx.spaceMission.create({ data: { spaceId, creatorId: userId, title: input.title, prompt: input.prompt,
-      requestId: input.requestId, payloadDigest: input.payloadDigest, ...window }, select: missionSelect });
-    return { item: await projectMission(row, userId, access, tx), created: true };
-  };
-  try { return await spaceTransaction(tx => work(tx)); }
-  catch (error) {
-    if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') throw error;
-    return spaceTransaction(tx => work(tx, true));
-  }
+  return createD1SpaceMission(userId, spaceId, input);
 }
 
 export async function closeMission(spaceId: string, id: string, userId: string) {

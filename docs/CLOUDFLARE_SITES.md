@@ -9,12 +9,12 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up the published Version 48 source
-`451cc8bf294e7daddfd1f132c20ea4ccd7079eaf`. Version 48 deployed successfully on
-18 October 2026 at 00:51:46 UTC. All operational poll paths now have native D1
-source ports; positive poll-flow acceptance remains unverified. No poll data
-was created or changed for this check. The curated roadmap retains its
-18 October 2026, 00:15 UTC v44 base.
+runtime data. This GitHub snapshot backs up the published Version 49 source
+`7c3612b94b43cc95fcb11a0a4ea4ee46c9d94567`. Version 49 deployed successfully on
+18 October 2026 at 01:06:16 UTC. Native D1 Mission creation source is live;
+positive Create/replay/weekly/DST/race acceptance remains unverified. All
+operational poll source ports remain unchanged, with positive live acceptance
+still open. The curated roadmap retains its 18 October 2026, 00:15 UTC v44 base.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -75,8 +75,8 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 48 source includes the existing bounded ports below,
-inherited from Version 47, plus the bounded native D1 poll-moderation source described
+The published Version 49 source includes the existing bounded ports below,
+inherited from Version 48, plus the bounded native D1 Mission-creation source described
 below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
@@ -178,6 +178,8 @@ all-page visual coverage.
   positive Vote/replay/race acceptance open
 - Native D1 ADMIN poll close/hide/unhide with exact snapshot and CAS fences;
   positive moderation/noop/race acceptance remains unverified
+- Native D1 ADMIN Mission creation in PRIVATE Spaces with scoped current replay,
+  one-open and weekly clock fences; positive Create/replay/DST/race acceptance open
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -194,7 +196,8 @@ This remains a partial adaptation. Course deletion, formative-practice
 mutation flows, course Q&A creation/replies/moderation/solution writes,
 course analytics, and other Space/mission mutation flows remain unported.
 Version 34 ports ADMIN Space creation and PUBLIC own join/leave source;
-Version 36 additionally ports member discussion/reply creation. Positive Space
+Version 36 additionally ports member discussion/reply creation; Version 49 ports
+PRIVATE ADMIN Mission creation. Positive Space/Mission
 mutation acceptance remains open. Invitations, private member
 removal and mission cleanup remain outside these ports. Other workflows may still use Prisma
 transaction patterns that D1 does not support. Do not infer full write-flow
@@ -992,6 +995,33 @@ Positive Admin/noop/CAS/close/hidden/private/concurrency acceptance remains
 unverified live, as do prior positive poll read/Create/Vote gates. No local
 SQL/app/functional execution or artificial engagement data was used. The
 byte-identical dated v44 roadmap describes its historical base, not v48 scope.
+
+## Version 49 bounded native D1 Mission creation
+
+Version 49 changes three backend files: createMission delegation, its native
+helper and append-only pure reader adapters. Original reader SQL/projector/
+read functions remain byte-identical. PRIVATE access and stored ADMIN checks,
+scoped creator/digest receipt replay, one-open state and database-clock weekly
+insertion fences share exact native-batch assertions. Replay precedes week/
+open checks and returns the complete current consent/profile/participant/
+contribution/bookmark-access projection, without creating participation,
+bookmarks, invitations or notifications. Known scoped receipt/one-open UNIQUE
+failures enter sticky replay-only fallback; no receipt cannot cause a fresh
+INSERT. Week validation precedes open conflict. Snapshot retries require a
+changed freshly authorized state; known clock rollback reevaluates ordinary
+week input. Unknown commit/network/global-ID/FK/invariant failures never retry.
+Total batch attempts are bounded to four. Other mutations, parsers, weekly
+clock, schema, routes/UI and poll ports remain unchanged.
+
+Independent source review, production typechecking/build and static artifact/
+archive checks passed. Reviewed SQL-size metadata is 15,120/17,595 bytes;
+this corrects an earlier estimate without changing source or scope digest.
+Deployment succeeded on 18 October 2026 at 01:06:16 UTC. At 01:06:34 UTC the
+directory/session read showed zero Spaces and no alerts, providing no positive
+Mission acceptance. No Mission or other engagement data was created. Positive
+Create/replay/week-rollover/DST/one-open/privacy/race acceptance remains open.
+No local SQL/app/functional execution was used. The byte-identical v44 roadmap
+retains its dated base; the source port does not establish full mission flows.
 
 ## Keeping the branches separate
 

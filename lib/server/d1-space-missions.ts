@@ -291,3 +291,22 @@ export async function listD1MissionModeration(spaceId: string, id: string, userI
     withdrawnAt: row.withdrawnAt === null || row.withdrawnAt === undefined ? null : date(row.withdrawnAt).toISOString() })),
     nextCursor: result.context.pageCount > PAGE_SIZE ? encodeCursor(rows[rows.length - 1], result.scope) : null });
 }
+
+// The native CREATE transaction reuses the exact reader SQL and projector. This
+// seam is pure: it neither opens a session nor performs a post-commit read.
+export { missionReadSql as d1MissionDetailSql };
+export type { DataRow as D1MissionDataRow };
+export function projectD1SpaceMissionDetailRows(rows: DataRow[], userId: string) {
+  const context = JSON.parse(rows.find(row => row.kind === 'context')!.data!) as Context;
+  const people = new Map(rows.filter(row => row.kind === 'person').map(row =>
+    [row.personId!, { id: row.personId!, name: row.name, image: row.image }] as const));
+  const data = <T>(kind: string, missionId?: string): T[] => rows
+    .filter(row => row.kind === kind && (missionId === undefined || row.missionId === missionId))
+    .map(row => JSON.parse(row.data!) as T);
+  const person = (id: string) => {
+    const found = people.get(id);
+    if (!found) throw new Error('Missing D1 mission person');
+    return found;
+  };
+  return boundResponse(project(data<MissionRow>('mission')[0], userId, { context, data, person, scope: '' }));
+}
