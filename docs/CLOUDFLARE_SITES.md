@@ -9,12 +9,12 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up the published Version 65 source
-`4ec1307381f075814aff1d207bb3d79160567057`. Version 65 deployed successfully on
-18 October 2026 at 05:19:23 UTC. Event RSVP GET/POST/DELETE now use native D1.
-Positive RSVP/FIFO/Notice/race acceptance remains open; Admin Event PUT/DELETE
-remain callback-bound. Reduced retries, unknown live DDL and bounded legacy
-limits remain explicit. Roadmap uses v65; the source map retains historical v63.
+runtime data. This GitHub snapshot backs up the published Version 66 source
+`c29d72d3cc07b2150aae03f0043adb7879c5b42e`. Version 66 deployed successfully on
+18 October 2026 at 05:55:07 UTC. Canonical course-asset GET/HEAD authorization
+now uses native D1; private storage/uploads remain unchanged and positive byte/
+HEAD/ACL/persistence acceptance is open. Native/legacy/DDL limits remain explicit.
+Roadmap uses v66; the source map retains its historical v63 base.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -75,8 +75,8 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 65 source includes the existing bounded ports below,
-inherited from Version 64, plus native D1 Event RSVP described
+The published Version 66 source includes the existing bounded ports below,
+inherited from Version 65, plus native D1 course-asset reads described
 below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
@@ -212,6 +212,8 @@ all-page visual coverage.
   GET/DELETE unchanged, positive published Follow/Notice acceptance open
 - Native D1 Event RSVP status/join/leave with complete FIFO/Notice semantics;
   positive published acceptance open, Admin Event PUT/DELETE unchanged
+- Native D1 canonical course-asset GET/HEAD ACL reads with unchanged private
+  file reader; positive byte/HEAD/storage/ACL acceptance remains open
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -238,8 +240,8 @@ Version 59 ports Send; Version 60 ports invitation Accept/Decline source.
 Version 61 ports existing ADMIN discussion/reply moderation.
 Version 62 ports normal Pathway participation; Version 63 ports ADMIN Pathway
 definition Create only. Version 64 ports existing Follow POST; Version 65 ports
-RSVP GET/POST/DELETE. Admin Event PUT/DELETE and other unported flows remain
-separate. The [historical v63 source map](D1_CALLBACK_SOURCE_MAP_V63.md)
+RSVP GET/POST/DELETE. Version 66 ports canonical course-asset GET/HEAD ACL reads,
+not uploads/storage. Admin Event PUT/DELETE and other unported flows remain separate. The [historical v63 source map](D1_CALLBACK_SOURCE_MAP_V63.md)
 records callback-route reachability, not 63 live-reproduced bugs.
 Positive Space/Mission mutation acceptance remains open. Account/role changes
 and other mission mutation flows remain
@@ -1845,7 +1847,10 @@ Operational limits are raw/input records 200,000 bytes, context escape reserve
 16,384, complete result 1,200,000, manifests 1,400,000 and complete wire 8,000,000;
 bindings stay below 1,500,000 and at most 100 occurrences/SQL below 100,000 bytes.
 Full FIFO work remains unbounded in rows, time and cost; native limits can fail
-the complete batch. Unsupported malformed/oversized legacy values fail closed,
+the complete batch. The unchanged v65 unconditional combined now + raw userId +
+eventId input guard rejects over 200,000 bytes even on active POST replay and
+full-event repair/commit-then-409 paths. This is an explicit conservative input/
+legacy availability ceiling; v65 V1 source GO and bytes remain unchanged. Unsupported malformed/oversized legacy values fail closed,
 never truncate or partially reconcile. Positive Int32 ticket, supported non-NULL
 enum/capacity and bounded date domains apply, not arbitrary malformed-data parity.
 Ambiguous own/relevant duplicate attendee-pair rows or inactive own repeated-ticket
@@ -1871,6 +1876,86 @@ new CI or browser work by this backup.
 Roadmap adds v65 delivered/QA-open scope; historical v63 source-map method rows,
 counts/base stay intact with only an explicit v65 RSVP annotation. No all-Events
 or all-callbacks-fixed claim. README and prior approved facts stay intact.
+
+## Version 66 bounded native D1 canonical course-asset GET/HEAD reads
+
+Version 66 adds only one read helper and canonical asset-route import/call
+replacement of its old callback/serialization-retry block, two source paths.
+Exact reversal reconstructs the original route. Session/params/path-ID envelope,
+404/catch/security/cache/GET/HEAD behavior stays intact. H5P chooser/access,
+uploads/imports, private filesystem, asset-reference parsers, path/progress/grade
+pure helpers, authoring/publication/auth/proxy/schema/UI remain byte-identical.
+No unpublished H5P change is included.
+
+Every potentially authorizing read uses a NEW first-primary session and ONE
+coherent typed SELECT. Current live actor plus Course/same-course asset: instructor
+identity or stored ADMIN gets author access without publication/enrollment/path.
+Otherwise a truthy active pointer/matching current publication and original exact
+asset-reference parsing are required. Cover takes absolute precedence, requires
+exact live image URL and is intentionally anonymous. Content needs actual actor/
+enrollment and an exact referenced published TEXT/explicit-null node with original
+outer path unlocked, including parent/container references. No session-role/test
+hint, public/member/reward/price gate or simplified ACL fallback is added.
+
+Bootstrap never authorizes. Prior confirmed content context gates transport only;
+each snapshot rechecks current authority/pointers/metadata/enrollment/material.
+A bound revision manifest must exactly match freshly computed COMPLETE current
+source manifest before its own grade bits can be used. Changed-source preparation
+can recompute at most five snapshots; no mixed-snapshot grade evidence or stale
+fallback. Unchanged publicationPathNodes/courseLeaves/assignment parser/revision/
+coursePathAccess functions retain complete current id/parent/order topology only,
+not equality of titles/types/content/course prose to publication payload. Current
+live type/body defines revisions. Nonblank assignment prompt needs latest own
+same-course/content/current-revision attemptNumber and latest decision sequence
+GRADED with score >= stored submission passingScore. No best-grade, current prompt
+threshold, publication-ID, quiz-attempt or progress-mirror shortcut. Other leaves
+use current progress revision. Inner completion then outer release/prerequisite
+passes remain separate; no shared completion hardening. Declared pair/attempt/
+decision-sequence uniqueness underpins latest-grade parity; installed live DDL/
+indexes/FK/triggers and corrupted duplicate ties remain unverified.
+
+Inner original completion clock is sampled before each SELECT, with completion
+release-independent. Outer release clock follows final coherent snapshot and
+completion before unchanged full private-file read. Final fresh SELECT linearizes
+ACL, no durable cached rights. Every future GET/HEAD freshly authorizes; no promise
+that later revocation retroactively changes an already-authorized file read.
+Original root/private/symlink/O_NOFOLLOW/MIME/stat/size/read checks stay unchanged;
+HEAD still reads the complete validated file, omitting only response body. No
+end-file release gate, R2/remote-fetch mapping, upload/token or storage change.
+Actual file existence/persistence and image-byte delivery remain separate open
+gates: removing this callback barrier does not establish functioning uploads.
+
+All denied/concurrent/provider/oversized/storage paths retain route 404, including
+the original missing-file/symlink handling. Session lookup outside try remains.
+Provider errors are sanitized before existing logging, no private SQL/material
+response. Only successful old asset bytes/type/size leave helper, never grade/
+answer/profile/raw snapshot data. No database write or DB/storage/transport-error
+retry. Planning ceiling is five fresh-primary reads, author/cover/early-deny normally
+one and ordinary content preparation three. Auth maximum two gives SEVEN source
+statements, not measured runtime/billing/network cost or preserved four retries.
+
+One 10,073-byte SQL template serves every variant; max rows 502/columns 25, binds
+nine, arity two, compound three. Existing publication 500-node/524,288-byte ceiling,
+400,000 content bytes, 786,432 complete live bytes and 524,288 raw manifest bound
+apply. Canonical manifest maximum 344,001 bytes; raw result row limit 1,945,600 and
+escaped complete response limit 8,388,608. Actor/metadata fields have operational
+1,024-byte bounds. Conservative raw-bound-values/request-wire reconstructions are
+1,059,204/6,367,345 bytes, not platform allowance or measurement. Exact full same-
+statement wire/rowset accounting avoids oversized intermediates; only valid branch
+rows are projected. No prefix response, field shortening or arbitrary malformed/
+oversized legacy parity. Author/cover avoid irrelevant topology/grade work. Full
+grade/history scan work remains unbounded in rows/time/cost; provider limits fail
+closed with the original 404 rather than a partial or weaker authorization.
+
+Both exact source GOs and production types/build/static artifact/archive checks
+passed. Deployment succeeded on 18 October 2026 at 05:55:07 UTC. Positive published
+author/private-file/anonymous-cover/enrolled-content/release/prerequisite/current-
+assignment-grade/GET/HEAD/body/header/revocation/privacy/storage acceptance is
+OPEN. No image byte, HEAD, ACL or persistence pass is inferred from session or
+overview checks. No local App/SQL/pure/date/crypto/function tests, new CI, browser
+or live-data actions by this backup. The separate v65 input clarification changes
+documentation only. User roadmap and historical source map add bounded v66 scope;
+README bytes stay unchanged. This backup updates only cloudflare-sites.
 
 ## Keeping the branches separate
 
