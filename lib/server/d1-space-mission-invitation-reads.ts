@@ -420,3 +420,235 @@ export async function resolveD1MissionInvitationTargets(ids: string[], userId: s
   nativeInvitationResponse([...targets]);
   return targets;
 }
+
+
+// Candidate reads are deliberately append-only and independent of the older
+// list/detail readers. The facade owns q parsing, the signing-key check and
+// the immutable selection-MAC tuple; neither SELECT writes defaults/fences.
+type NativeMissionCandidateAuthorityRow = {
+  live: unknown; isUser: unknown; scoped: unknown; closed: unknown; consenting: unknown;
+};
+type NativeMissionCandidateRow = NativeMissionCandidateAuthorityRow & {
+  ownFits: unknown; fits: unknown; candidateCount: unknown;
+  senderEpoch: unknown; senderAccessEpoch: unknown; senderAccountEpoch: unknown;
+  id: unknown; name: unknown; image: unknown; recipientAccessEpoch: unknown;
+  recipientAccountEpoch: unknown; recipientSettingRevision: unknown; recipientEpoch: unknown;
+};
+type NativeMissionCandidateSnapshot = {
+  senderEpoch: number; senderAccessEpoch: number; senderAccountEpoch: number;
+  candidates: Array<{ user: { id: string; name: string | null; image: string | null };
+    recipientAccessEpoch: number; recipientAccountEpoch: number; recipientSettingRevision: number; recipientEpoch: number }>;
+};
+const MAX_MISSION_CANDIDATES = 10;
+
+function nativeMissionCandidateSqlVersion(column: string, minimum = 0): string {
+  return `(typeof(${column}) = 'integer' AND ${column} BETWEEN ${minimum} AND ${MAX_VERSION})`;
+}
+function nativeMissionCandidateVersion(value: unknown, minimum = 0): number {
+  if (typeof value !== 'number' || !validVersion(value) || value < minimum) return nativeInvitationProjectionFailure();
+  return value;
+}
+function requireNativeMissionCandidateAuthority(row: NativeMissionCandidateAuthorityRow): void {
+  if (!nativeInvitationFlag(row.live)) throw new SpaceApiError('Nicht authentifiziert', 401);
+  if (!nativeInvitationFlag(row.isUser) || !nativeInvitationFlag(row.scoped)) throw invitationUnavailable();
+  if (nativeInvitationFlag(row.closed)) throw new SpaceApiError('Mission ist geschlossen', 409, 'MISSION_CLOSED');
+  if (!nativeInvitationFlag(row.consenting)) throw invitationUnavailable();
+}
+
+// No caller ID normalization or regex gate: authority uses the actual stored
+// account, requested private mission and its current, actual membership.
+const nativeMissionCandidateAuthorityCtesSql = `
+  candidateViewer AS MATERIALIZED (SELECT u."id", u."role" FROM "User" u WHERE u."id" = ?1),
+  candidateScope AS MATERIALIZED (
+    SELECT m."id", m."spaceId", m."closedAt" IS NOT NULL AS closed
+    FROM candidateViewer v CROSS JOIN "SpaceMission" m JOIN "Space" space ON space."id" = m."spaceId"
+    WHERE v."role" = 'USER' AND m."id" = ?3 AND m."spaceId" = ?2 AND space."visibility" = 'PRIVATE'
+      AND EXISTS (SELECT 1 FROM "SpaceMember" member WHERE member."spaceId" = space."id" AND member."userId" = v."id")
+  ), candidateAuthorized AS MATERIALIZED (
+    SELECT scoped."id", scoped."spaceId" FROM candidateScope scoped WHERE scoped.closed = 0
+      AND EXISTS (SELECT 1 FROM "SpaceMissionParticipation" consent
+        WHERE consent."missionId" = scoped."id" AND consent."userId" = ?1 AND consent."optedOutAt" IS NULL)
+  )`;
+const nativeMissionCandidateAuthorityFlagsSql = `
+  EXISTS (SELECT 1 FROM candidateViewer) AS live,
+  EXISTS (SELECT 1 FROM candidateViewer WHERE "role" = 'USER') AS isUser,
+  EXISTS (SELECT 1 FROM candidateScope) AS scoped,
+  COALESCE((SELECT closed FROM candidateScope), 0) AS closed,
+  EXISTS (SELECT 1 FROM candidateAuthorized) AS consenting`;
+const nativeMissionCandidateAuthoritySql = `WITH ${nativeMissionCandidateAuthorityCtesSql}
+  SELECT ${nativeMissionCandidateAuthorityFlagsSql}`;
+
+/** Authority-only primary SELECT. In particular, unavailable/closed authority
+ * cannot touch profile projections, receiving settings or signing material. */
+export async function assertD1MissionCandidateAuthority(spaceId: string, missionId: string, userId: string): Promise<void> {
+  const result = await database().prepare(nativeMissionCandidateAuthoritySql).bind(userId, spaceId, missionId)
+    .all<NativeMissionCandidateAuthorityRow>();
+  if (result.success !== true || !Array.isArray(result.results) || result.results.length !== 1) return nativeInvitationProjectionFailure();
+  requireNativeMissionCandidateAuthority(result.results[0]);
+}
+
+const nativeMissionCandidateEligibleSql = `u."id" <> ?1 AND u."role" = 'USER'
+  AND EXISTS (SELECT 1 FROM "SpaceMember" member WHERE member."spaceId" = authorized."spaceId" AND member."userId" = u."id")
+  AND NOT EXISTS (SELECT 1 FROM "SpaceMissionParticipation" consent
+    WHERE consent."missionId" = authorized."id" AND consent."userId" = u."id" AND consent."optedOutAt" IS NULL)`;
+
+/* Prisma's pinned 0edf323 contains compiler builds the UNESCAPED %q% pattern:
+ * '%' and '_' are wildcards, backslash is literal, and only ASCII case folds.
+ * Native LIKE is used lazily only when the complete UTF-8 pattern fits D1's
+ * 50-byte limit. The longer-pattern branch adapts d1-course-qa-read's greedy
+ * wildcard machine, correlated to one name and carrying indexes, never names.
+ *
+ * i/j are the next text/pattern code-point positions; star is the most recent
+ * '%' and mark its current end position. '%' records a zero-character match;
+ * literals/'_' advance both positions; a mismatch, INCLUDING exhausted pattern
+ * with remaining text, extends the last '%' by one character and retries.
+ * Accept only when BOTH positions are beyond their effective lengths. SQLite
+ * length(TEXT) ends at its first NUL, so an embedded NUL can remove the implicit
+ * trailing '%' and must not grant the old model's immediate-final-'%' shortcut.
+ * substr steps code points and SQLite lower folds ASCII only. unicode compares
+ * the resulting code points using the same sqlite3Utf8Read decoder as LIKE,
+ * including runtime-version-specific handling of Unicode noncharacters.
+ * The machine has
+ * one deterministic successor and no recursive LIMIT that could omit matches.
+ * Matching is complete under the existing database limits: no extra name-size
+ * filter/budget runs before ORDER/LIMIT 11 and eleven-match suppression. A
+ * database/timeout failure is an error, never a partial candidate result.
+ */
+const nativeMissionCandidateLongMatchSql = `EXISTS (
+  WITH RECURSIVE candidateSearchInput AS (
+    SELECT length(u."name") AS textLength, length(?4) AS patternLength
+  ), candidateSearchStates(i, j, star, mark) AS (
+    SELECT 1, 1, 0, 1
+    UNION ALL
+    SELECT
+      CASE WHEN j <= patternLength AND substr(?4, j, 1) = '%' THEN i
+        WHEN j <= patternLength AND i <= textLength
+          AND (substr(?4, j, 1) = '_' OR unicode(lower(substr(u."name", i, 1))) = unicode(lower(substr(?4, j, 1)))) THEN i + 1
+        ELSE mark + 1 END,
+      CASE WHEN j <= patternLength AND substr(?4, j, 1) = '%' THEN j + 1
+        WHEN j <= patternLength AND i <= textLength
+          AND (substr(?4, j, 1) = '_' OR unicode(lower(substr(u."name", i, 1))) = unicode(lower(substr(?4, j, 1)))) THEN j + 1
+        ELSE star + 1 END,
+      CASE WHEN j <= patternLength AND substr(?4, j, 1) = '%' THEN j ELSE star END,
+      CASE WHEN j <= patternLength AND substr(?4, j, 1) = '%' THEN i
+        WHEN j <= patternLength AND i <= textLength
+          AND (substr(?4, j, 1) = '_' OR unicode(lower(substr(u."name", i, 1))) = unicode(lower(substr(?4, j, 1)))) THEN mark
+        ELSE mark + 1 END
+    FROM candidateSearchStates CROSS JOIN candidateSearchInput
+    WHERE NOT (j > patternLength AND i > textLength) AND (
+      (j <= patternLength AND substr(?4, j, 1) = '%')
+      OR (j <= patternLength AND i <= textLength
+        AND (substr(?4, j, 1) = '_' OR unicode(lower(substr(u."name", i, 1))) = unicode(lower(substr(?4, j, 1)))))
+      OR (star > 0 AND mark <= textLength))
+  )
+  SELECT 1 FROM candidateSearchStates CROSS JOIN candidateSearchInput
+    WHERE j > patternLength AND i > textLength
+)`;
+
+const nativeMissionCandidateSnapshotSql = `WITH ${nativeMissionCandidateAuthorityCtesSql},
+  candidateOwn AS MATERIALIZED (
+    SELECT consent."epoch" AS senderEpoch,
+      CASE WHEN access."userId" IS NULL THEN 0 ELSE access."epoch" END AS senderAccessEpoch,
+      CASE WHEN setting."userId" IS NULL THEN 0 ELSE setting."accountEpoch" END AS senderAccountEpoch
+    FROM candidateAuthorized authorized JOIN "SpaceMissionParticipation" consent
+      ON consent."missionId" = authorized."id" AND consent."userId" = ?1 AND consent."optedOutAt" IS NULL
+    LEFT JOIN "SpaceMissionInvitationAccess" access ON access."missionId" = authorized."id" AND access."userId" = ?1
+    LEFT JOIN "SpaceMissionInvitationSetting" setting ON setting."userId" = ?1
+  ), candidateOwnBudget AS MATERIALIZED (
+    SELECT (COUNT(*) = 1 AND COALESCE(MIN(
+      ${nativeMissionCandidateSqlVersion('senderEpoch')}
+      AND ${nativeMissionCandidateSqlVersion('senderAccessEpoch')}
+      AND ${nativeMissionCandidateSqlVersion('senderAccountEpoch')}), 0) = 1) AS fits FROM candidateOwn
+  ), candidateSelected AS MATERIALIZED (
+    SELECT u."id" FROM "User" u CROSS JOIN candidateAuthorized authorized
+    CROSS JOIN candidateOwnBudget ownBudget
+    WHERE ownBudget.fits = 1 AND ${nativeMissionCandidateEligibleSql}
+      AND CASE WHEN u."name" IS NULL THEN 0 WHEN ?5 = 1 THEN u."name" LIKE ?4
+        ELSE ${nativeMissionCandidateLongMatchSql} END
+    ORDER BY u."name" ASC, u."id" ASC LIMIT ${MAX_MISSION_CANDIDATES + 1}
+  ), candidateCount AS MATERIALIZED (SELECT COUNT(*) AS n FROM candidateSelected),
+  candidateTuples AS MATERIALIZED (
+    SELECT selected."id",
+      CASE WHEN access."userId" IS NULL THEN 0 ELSE access."epoch" END AS recipientAccessEpoch,
+      CASE WHEN setting."userId" IS NULL THEN 0 ELSE setting."accountEpoch" END AS recipientAccountEpoch,
+      CASE WHEN setting."userId" IS NULL THEN 0 ELSE setting."revision" END AS recipientSettingRevision,
+      CASE WHEN consent."userId" IS NULL THEN 0 ELSE consent."epoch" END AS recipientEpoch
+    FROM candidateCount tally CROSS JOIN candidateSelected selected
+    LEFT JOIN "SpaceMissionInvitationAccess" access ON access."missionId" = ?3 AND access."userId" = selected."id"
+    LEFT JOIN "SpaceMissionInvitationSetting" setting ON setting."userId" = selected."id"
+    LEFT JOIN "SpaceMissionParticipation" consent ON consent."missionId" = ?3 AND consent."userId" = selected."id"
+    WHERE tally.n <= ${MAX_MISSION_CANDIDATES}
+  ), candidateMetrics AS MATERIALIZED (
+    SELECT ${bytes('tuple."id"', 'u."name"', 'u."image"')} AS rowBytes,
+      (typeof(tuple."id") = 'text' AND typeof(u."name") IN ('text', 'null') AND typeof(u."image") IN ('text', 'null')
+        AND ${nativeMissionCandidateSqlVersion('tuple.recipientAccessEpoch')}
+        AND ${nativeMissionCandidateSqlVersion('tuple.recipientAccountEpoch')}
+        AND ${nativeMissionCandidateSqlVersion('tuple.recipientSettingRevision')}
+        AND ${nativeMissionCandidateSqlVersion('tuple.recipientEpoch')}) AS validTypes
+    FROM candidateTuples tuple JOIN "User" u ON u."id" = tuple."id"
+  ), candidateBudget AS MATERIALIZED (
+    SELECT (COALESCE(MIN(validTypes), 1) = 1 AND COUNT(*) <= ${MAX_MISSION_CANDIDATES}
+      AND COALESCE(MAX(rowBytes), 0) + 4096 <= ${MAX_ROW_BYTES}
+      AND COALESCE(SUM(6 * rowBytes + 4096), 0) + 4096 <= ${MAX_RESPONSE_BYTES}) AS fits FROM candidateMetrics
+  ), candidateProjection AS MATERIALIZED (
+    SELECT tuple.*, u."name", u."image" FROM candidateBudget bounds CROSS JOIN candidateTuples tuple
+      JOIN "User" u ON u."id" = tuple."id" WHERE bounds.fits = 1
+  )
+  SELECT ${nativeMissionCandidateAuthorityFlagsSql}, ownBudget.fits AS ownFits,
+    bounds.fits, tally.n AS candidateCount,
+    own.senderEpoch, own.senderAccessEpoch, own.senderAccountEpoch,
+    projection."id", projection."name", projection."image", projection.recipientAccessEpoch,
+    projection.recipientAccountEpoch, projection.recipientSettingRevision, projection.recipientEpoch
+  FROM candidateOwnBudget ownBudget CROSS JOIN candidateBudget bounds CROSS JOIN candidateCount tally
+  LEFT JOIN candidateOwn own ON ownBudget.fits = 1
+  LEFT JOIN candidateProjection projection ON bounds.fits = 1
+  ORDER BY projection."name" ASC, projection."id" ASC`;
+
+/** Revalidates authority and reads all consumed sender/recipient fences in ONE
+ * primary SELECT. Eleven matches suppress every recipient profile/fence before
+ * projection validation; disabled receiving consent does not hide a candidate.
+ * A missing row alone means fence zero; corrupt stored NULL is never defaulted.
+ * Call only after the facade's authority, original q parser and key check. */
+export async function readD1MissionCandidateSnapshot(spaceId: string, missionId: string, userId: string,
+  q: string): Promise<NativeMissionCandidateSnapshot> {
+  const pattern = `%${q}%`;
+  const shortPattern = Buffer.byteLength(pattern, 'utf8') <= 50 ? 1 : 0;
+  const result = await database().prepare(nativeMissionCandidateSnapshotSql).bind(userId, spaceId, missionId, pattern, shortPattern)
+    .all<NativeMissionCandidateRow>();
+  if (result.success !== true || !Array.isArray(result.results) || !result.results.length) return nativeInvitationProjectionFailure();
+  const first = result.results[0];
+  requireNativeMissionCandidateAuthority(first);
+  if (!nativeInvitationFlag(first.ownFits) || !nativeInvitationFlag(first.fits)) {
+    return nativeInvitationProjectionFailure();
+  }
+  const senderEpoch = nativeMissionCandidateVersion(first.senderEpoch);
+  const senderAccessEpoch = nativeMissionCandidateVersion(first.senderAccessEpoch);
+  const senderAccountEpoch = nativeMissionCandidateVersion(first.senderAccountEpoch);
+  const count = first.candidateCount;
+  if (typeof count !== 'number' || !Number.isInteger(count) || count < 0 || count > MAX_MISSION_CANDIDATES + 1 ||
+      result.results.length !== Math.max(1, count <= MAX_MISSION_CANDIDATES ? count : 0)) return nativeInvitationProjectionFailure();
+  const candidates: NativeMissionCandidateSnapshot['candidates'] = [];
+  const ids = new Set<string>();
+  for (const row of result.results) {
+    requireNativeMissionCandidateAuthority(row);
+    if (!nativeInvitationFlag(row.ownFits) || !nativeInvitationFlag(row.fits) ||
+        row.candidateCount !== count || row.senderEpoch !== senderEpoch || row.senderAccessEpoch !== senderAccessEpoch ||
+        row.senderAccountEpoch !== senderAccountEpoch) return nativeInvitationProjectionFailure();
+    if (count === 0 || count > MAX_MISSION_CANDIDATES) {
+      if ([row.id, row.name, row.image, row.recipientAccessEpoch, row.recipientAccountEpoch,
+        row.recipientSettingRevision, row.recipientEpoch].some(value => value !== null)) return nativeInvitationProjectionFailure();
+      continue;
+    }
+    // User identities preserve personSelect's raw stored TEXT semantics; they
+    // are not space IDs and intentionally have no SPACE_ID_RE/100-byte gate.
+    const id = nativeInvitationText(row.id);
+    if (ids.has(id)) return nativeInvitationProjectionFailure();
+    ids.add(id);
+    candidates.push({ user: { id, name: nativeInvitationNullableText(row.name), image: nativeInvitationNullableText(row.image) },
+      recipientAccessEpoch: nativeMissionCandidateVersion(row.recipientAccessEpoch),
+      recipientAccountEpoch: nativeMissionCandidateVersion(row.recipientAccountEpoch),
+      recipientSettingRevision: nativeMissionCandidateVersion(row.recipientSettingRevision),
+      recipientEpoch: nativeMissionCandidateVersion(row.recipientEpoch) });
+  }
+  return nativeInvitationResponse({ senderEpoch, senderAccessEpoch, senderAccountEpoch, candidates });
+}

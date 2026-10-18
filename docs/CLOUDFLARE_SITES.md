@@ -9,12 +9,12 @@ This branch is a separate, partial adaptation for Cloudflare Workers and Sites:
 Vinext/Vite, a request-scoped Prisma D1 adapter, app-owned session cookies, and
 D1-specific SQL for selected flows. Its source snapshot starts from upstream
 `c442bb09e0e46684f19bb6d6dff061e13078111d`; it does not import Sites history or
-runtime data. This GitHub snapshot backs up the published Version 56 source
-`f16b7f2b43613bbc53091e60021adbade3ef7a68`. Version 56 deployed successfully on
-18 October 2026 at 02:24:28 UTC. Native D1 invitation detail and notice-target
-resolver source is live; positive pending/terminal/closed/full/revocation/privacy/
-resolver acceptance remains unverified. Candidate/signing/write/global-notice
-callbacks remain separate. The curated roadmap keeps its dated v44 base.
+runtime data. This GitHub snapshot backs up the published Version 57 source
+`271ab20145634328407b5c0c68ff2a54f2f7afd6`. Version 57 deployed successfully on
+18 October 2026 at 02:36:25 UTC. Native D1 invitation candidate reads, final V2,
+are live; positive candidate/LIKE/NUL/privacy/race/latency acceptance remains
+unverified. Existing signing/write/global-notice paths remain separate and
+unchanged. The curated roadmap retains its dated v44 base.
 This branch is experimental and does not claim feature parity with main.
 
 ## Requirements and setup
@@ -75,8 +75,8 @@ and the app's email/password session are separate layers.
 
 ## Current scope and limits
 
-The published Version 56 source includes the existing bounded ports below,
-inherited from Version 55, plus native D1 invitation detail/target reads described
+The published Version 57 source includes the existing bounded ports below,
+inherited from Version 56, plus native D1 invitation candidate reads described
 below. The earlier bounded Version 25 desktop live check does not establish complete runtime or
 all-page visual coverage.
 
@@ -194,6 +194,8 @@ all-page visual coverage.
   and participation revocation; positive Add/Remove/privacy/race acceptance open
 - Native D1 own invitation detail and protected notice-target resolution, keeping
   pending/terminal/closed/privacy gates; positive published acceptance remains open
+- Native D1 invitation candidate authority/snapshot reads with bounded lookahead
+  and retained signing contract; positive candidate/LIKE/privacy/latency QA open
 - Protected formative-practice learner GET snapshots using native D1 reads;
   Practice opt-in, start, answer and other mutation flows remain unported
 - Scoped course rich-text reader/editor typography and repository-owned public
@@ -1261,6 +1263,38 @@ No invitation, notice or other data action was performed. Positive published
 pending/terminal/closed/full/revocation/privacy/50-target acceptance remains
 open. No local SQL/app/functional execution was used. The dated v44 roadmap
 remains byte-identical; these read ports imply no write or full-flow acceptance.
+
+## Version 57 bounded native D1 invitation candidate reads, final V2
+
+Version 57 changes two backend files: append-only authority/candidate readers
+and invitationCandidates import/body. The existing 28,436-byte reader prefix,
+all list/preference/detail/resolver paths and other facade/pure/write/API/parser/
+DTO/schema bytes remain intact. Authority-only primary SELECT precedes the
+unchanged q parser and existing key check. A second primary SELECT revalidates
+all authority and supplies every consumed sender/recipient fence together.
+Live 401, USER/private/member 404, closed 409 then active-consent 404 precedence
+is retained, including nonnegative legacy consent epoch zero for candidates.
+
+Unescaped %q% retains wildcard %, _, literal backslash and ASCII folding.
+Native LIKE is selected only for complete patterns up to 50 UTF-8 bytes; longer
+patterns use correlated, NUL-aware code-point greedy matching without extra
+name-size filters, recursion LIMIT, partial results or retries. Final V2 fixes
+four decoder comparisons after the initial review blocker; it uses SQLite's
+same UTF-8 code-point decoder for literals. V1 is superseded. Database resource
+or timeout errors remain failures, without promising measured latency.
+
+Eleven-match lookahead suppresses recipient profiles/fences before their
+budgets are checked. No receiving-optin, prior-invite, capacity or quota filter
+is added. Existing secret lookup, selection MAC/token matcher and 13-element
+MAC tuple remain unchanged; no secret was read/logged/changed for this work.
+No persistent access, invitation or notification write is ported here.
+Independent final V2 review, production typechecking/build and static artifact/
+archive checks passed. Deployment succeeded on 18 October 2026 at 02:36:25 UTC.
+At 02:36:46 UTC the directory/session read showed zero Spaces and no alerts;
+no candidate search, live token, invitation or other data action was performed.
+Positive candidate/LIKE/NUL/privacy/race/latency acceptance remains open. No
+local App/SQL/matcher/crypto/functional execution or new CI was used. The dated
+v44 roadmap remains byte-identical; write/full-flow acceptance is not implied.
 
 ## Keeping the branches separate
 

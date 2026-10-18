@@ -2,7 +2,7 @@ import 'server-only';
 
 import { Prisma } from '@/generated/prisma/client';
 import { reportInvitationFailure } from '@/lib/server/space-mission-invitation-errors';
-import { listD1MissionInvitations, readD1InvitationPreference, readD1MissionInvitation, resolveD1MissionInvitationTargets } from '@/lib/server/d1-space-mission-invitation-reads';
+import { assertD1MissionCandidateAuthority, listD1MissionInvitations, readD1InvitationPreference, readD1MissionCandidateSnapshot, readD1MissionInvitation, resolveD1MissionInvitationTargets } from '@/lib/server/d1-space-mission-invitation-reads';
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { DecideMissionInvitation, MissionInvitationAcknowledgment, MissionInvitationCandidates, MissionInvitationDetail,
   MissionInvitationList, PendingMissionInvitation, SendMissionInvitation } from '@/types/space-mission-invitations';
@@ -121,31 +121,34 @@ export async function setInvitationPreference(userId: string, input: ReturnType<
 }
 
 export async function invitationCandidates(spaceId: string, missionId: string, userId: string, request: Request): Promise<MissionInvitationCandidates> {
-  return spaceTransaction(async tx => {
-    const sender = await senderAuthority(spaceId, missionId, userId, tx);
-    const params = new URL(request.url).searchParams;
-    if ([...params.keys()].length !== 1 || params.getAll('q').length !== 1) throw invalid();
-    const q = params.get('q')?.trim() ?? '';
-    if (q.length < 2 || q.length > 80) throw invalid();
-    const signingSecret = secret();
-    const users = await tx.user.findMany({ where: { id: { not: userId }, role: 'USER', name: { contains: q },
-      spaceMemberships: { some: { spaceId } }, spaceMissionParticipations: { none: { missionId, optedOutAt: null } } },
-      select: personSelect, orderBy: [{ name: 'asc' }, { id: 'asc' }], take: 11 });
-    const items: MissionInvitationCandidates['items'] = [];
-    // More than ten matching names require refinement, without a total count.
-    if (users.length <= 10) for (const user of users) {
-      const [setting, accessEpoch, consent] = await Promise.all([invitationSetting(user.id, tx), invitationAccess(missionId, user.id, tx),
-        tx.spaceMissionParticipation.findUnique({ where: { missionId_userId: { missionId, userId: user.id } }, select: { epoch: true } })]);
-      const validUntil = new Date(Date.now() + CANDIDATE_LIFETIME).toISOString();
-      const nonce = randomBytes(16).toString('base64url');
-      const token = selectionMac({ missionId, senderId: userId, recipientId: user.id, senderEpoch: sender.consent.epoch,
-        senderAccessEpoch: sender.accessEpoch, senderAccountEpoch: sender.setting.accountEpoch, recipientAccessEpoch: accessEpoch,
-        recipientAccountEpoch: setting.accountEpoch, recipientSettingRevision: setting.revision,
-        recipientEpoch: consent?.epoch ?? 0, validUntil, nonce }, signingSecret).toString('base64url');
-      items.push({ user, selection: { validUntil, nonce, token } });
-    }
-    return { items, senderEpoch: sender.consent.epoch, senderAccessEpoch: sender.accessEpoch };
-  });
+  // The first read preserves authority-before-input/key errors. Only the
+  // second, fully reauthorized primary snapshot supplies the signed tuples.
+  await assertD1MissionCandidateAuthority(spaceId, missionId, userId);
+  const params = new URL(request.url).searchParams;
+  if ([...params.keys()].length !== 1 || params.getAll('q').length !== 1) throw invalid();
+  const q = params.get('q')?.trim() ?? '';
+  if (q.length < 2 || q.length > 80) throw invalid();
+  const signingSecret = secret();
+  const snapshot = await readD1MissionCandidateSnapshot(spaceId, missionId, userId, q);
+  const sender = { consent: { epoch: snapshot.senderEpoch }, accessEpoch: snapshot.senderAccessEpoch,
+    setting: { accountEpoch: snapshot.senderAccountEpoch } };
+  const items: MissionInvitationCandidates['items'] = [];
+  // The native snapshot suppresses more than ten matches before any peer
+  // profile or private fence is transported. Tokens use the existing MAC.
+  for (const candidate of snapshot.candidates) {
+    const user = candidate.user;
+    const setting = { accountEpoch: candidate.recipientAccountEpoch, revision: candidate.recipientSettingRevision };
+    const accessEpoch = candidate.recipientAccessEpoch;
+    const consent = { epoch: candidate.recipientEpoch };
+    const validUntil = new Date(Date.now() + CANDIDATE_LIFETIME).toISOString();
+    const nonce = randomBytes(16).toString('base64url');
+    const token = selectionMac({ missionId, senderId: userId, recipientId: user.id, senderEpoch: sender.consent.epoch,
+      senderAccessEpoch: sender.accessEpoch, senderAccountEpoch: sender.setting.accountEpoch, recipientAccessEpoch: accessEpoch,
+      recipientAccountEpoch: setting.accountEpoch, recipientSettingRevision: setting.revision,
+      recipientEpoch: consent?.epoch ?? 0, validUntil, nonce }, signingSecret).toString('base64url');
+    items.push({ user, selection: { validUntil, nonce, token } });
+  }
+  return { items, senderEpoch: sender.consent.epoch, senderAccessEpoch: sender.accessEpoch };
 }
 
 const pendingInclude = {
