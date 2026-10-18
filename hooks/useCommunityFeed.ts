@@ -1,10 +1,18 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { CommunityPost, CommentsPage, FeedPage, fetchCommunityJson, isAbortError, mergeCommunityRows } from '@/lib/community-feed'
 
-export function useCommunityFeed(tag: string | null = null) {
-  const [posts, setPosts] = useState<CommunityPost[]>([])
+import { EMPTY_COMMUNITY_FILTERS, matchesCommunityFilters, writeCommunityFilters, type CommunityFilters } from '@/lib/community-filters'
+
+export function useCommunityFeed(tag: string | null = null, filters: CommunityFilters = EMPTY_COMMUNITY_FILTERS, viewerId?: string) {
+  const { mine, unanswered } = filters
+  const [posts, setStoredPosts] = useState<CommunityPost[]>([])
+  // Every page, detail read and local mutation must preserve the selected list.
+  const setPosts: Dispatch<SetStateAction<CommunityPost[]>> = useCallback(update => {
+    setStoredPosts(previous => (typeof update === 'function' ? update(previous) : update)
+      .filter(post => matchesCommunityFilters(post, tag, { mine, unanswered }, viewerId)))
+  }, [tag, mine, unanswered, viewerId])
   const [isLoading, setIsLoading] = useState(true)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [loadError, setLoadError] = useState(false)
@@ -32,7 +40,11 @@ export function useCommunityFeed(tag: string | null = null) {
     const controller = new AbortController()
     pageRequest.current = controller
     try {
-      const page = await fetchCommunityJson<FeedPage>(`/api/posts?feed=1${tag ? `&tag=${encodeURIComponent(tag)}` : ''}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`, { signal: controller.signal, cache: 'no-store' })
+      const params = new URLSearchParams({ feed: '1' })
+      if (tag) params.set('tag', tag)
+      if (cursor) params.set('cursor', cursor)
+      writeCommunityFilters(params, { mine, unanswered })
+      const page = await fetchCommunityJson<FeedPage>(`/api/posts?${params}`, { signal: controller.signal, cache: 'no-store' })
       if (!Array.isArray(page.posts) || !(page.nextCursor === null || typeof page.nextCursor === 'string')) throw new Error('Ungültige Antwort')
       if (controller.signal.aborted || !mounted.current || pageRequest.current !== controller) return
       setPosts(previous => mergeCommunityRows(previous, page.posts.filter(post => !deletedIds.current.has(post.id))))
@@ -47,7 +59,7 @@ export function useCommunityFeed(tag: string | null = null) {
         setIsLoadingMore(false)
       }
     }
-  }, [tag])
+  }, [tag, mine, unanswered, viewerId, setPosts])
 
   useEffect(() => { postsRef.current = posts }, [posts])
 
@@ -64,7 +76,8 @@ export function useCommunityFeed(tag: string | null = null) {
       .then(post => {
         if (!post.id || !Array.isArray(post.comments)) throw new Error('Ungültiger Beitrag')
         if (controller.signal.aborted || !mounted.current || deletedIds.current.has(post.id)) return
-        if (tag && !post.tags?.some(topic => topic.name === tag)) {
+        if (!matchesCommunityFilters(post, tag, { mine, unanswered }, viewerId)) {
+          setPosts(previous => previous.filter(row => row.id !== post.id))
           setLinkedTargetError(true)
           return
         }
@@ -90,12 +103,24 @@ export function useCommunityFeed(tag: string | null = null) {
           setLinkedTargetLoading(false)
         }
       })
-  }, [tag])
+  }, [tag, mine, unanswered, viewerId, setPosts])
 
   useEffect(() => {
     mounted.current = true
+    setStoredPosts([])
+    postsRef.current = []
+    deletedIds.current.clear()
+    setNextCursor(null)
+    setIsLoading(true)
+    setIsLoadingMore(false)
+    setLoadError(false)
+    setInitialLoaded(false)
+    setCommentsLoading({})
+    setCommentsError({})
+    setLinkedTargetLoading(!!window.location.hash)
+    setLinkedTargetError(false)
     void requestPage(null)
-    void loadLinkedTarget()
+    void loadLinkedTarget().finally(() => { if (mounted.current) setLinkedTargetLoading(false) })
     const followHash = () => {
       setLinkedTargetError(false)
       setLinkedTargetLoading(true)

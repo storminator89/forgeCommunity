@@ -11,7 +11,7 @@ import { MAX_TOPIC_LENGTH } from '@/lib/community-topics'
 
 type Topic = { id: string; name: string }
 
-export function TopicNavigation({ selected, onSelect, disabled = false }: { selected: string | null; onSelect: (topic: string | null) => void; disabled?: boolean }) {
+export function TopicNavigation({ selected, onSelect, disabled = false, topicHref }: { selected: string | null; onSelect: (topic: string | null) => void; disabled?: boolean; topicHref?: (topic: string) => string }) {
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
   const [topics, setTopics] = useState<Topic[]>([])
@@ -55,7 +55,7 @@ export function TopicNavigation({ selected, onSelect, disabled = false }: { sele
     </div>
     {selected && <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
       <p className="min-w-0 rounded-md bg-accent px-2 py-1 text-sm text-accent-foreground [overflow-wrap:anywhere]">Aktives Thema: <strong>{selected}</strong></p>
-      <Button type="button" variant="ghost" size="sm" className="h-auto min-h-11 max-w-full whitespace-normal text-left" disabled={disabled} onClick={() => choose(null)}>Alle Beiträge zeigen</Button>
+      <Button type="button" variant="ghost" size="sm" className="h-auto min-h-11 max-w-full whitespace-normal text-left" disabled={disabled} onClick={() => choose(null)}>Thema zurücksetzen</Button>
     </div>}
     {disabled && <p className="mt-2 text-sm text-muted-foreground" role="status">Schließe zuerst deinen Beitragsentwurf, bevor du das Thema wechselst.</p>}
     {open && !disabled && <div className="mt-3">
@@ -63,7 +63,7 @@ export function TopicNavigation({ selected, onSelect, disabled = false }: { sele
       {error && <div aria-live="polite" className="flex flex-wrap items-center gap-2 text-sm text-destructive">Themen konnten nicht geladen werden. <Button type="button" variant="outline" size="sm" className="h-auto min-h-11 max-w-full whitespace-normal" onClick={() => setAttempt(value => value + 1)}>Erneut versuchen</Button></div>}
       {!loading && !error && <>
         {topics.length > 0 ? <ul className="flex flex-wrap gap-2" aria-label="Gefundene Themen">
-          {topics.map(topic => <li key={topic.id} className="min-w-0 max-w-full"><a href={`/community?tag=${encodeURIComponent(topic.name)}`}
+          {topics.map(topic => <li key={topic.id} className="min-w-0 max-w-full"><a href={topicHref?.(topic.name) ?? `/community?tag=${encodeURIComponent(topic.name)}`}
             aria-current={selected === topic.name ? 'page' : undefined}
             onClick={event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey && event.button === 0) { event.preventDefault(); choose(topic.name) } }}
             className="inline-flex min-h-11 max-w-full items-center rounded-full border border-border px-3 text-sm text-foreground [overflow-wrap:anywhere] hover:border-primary hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">{topic.name}</a></li>)}

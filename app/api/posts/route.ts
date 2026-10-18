@@ -8,6 +8,7 @@ import { sanitizeRichHtmlServer, sanitizeTextServer } from '@/lib/server/sanitiz
 import { readJsonObject, readPage, requestErrorResponse } from '@/lib/server/api-input'
 import { afterCommunityCursor, COMMUNITY_ORDER, COMMUNITY_PAGE_SIZE, communityPage, communityPostInclude, communityVisibility, isCurrentCommunityAdmin, normalizeCommunityPost, readCommunityCursor } from '@/lib/server/community-feed'
 import { InvalidTopicError, parsePostTopics, readTopicFilter } from '@/lib/community-topics'
+import { InvalidCommunityFilterError, readCommunityFilters } from '@/lib/community-filters'
 
 export async function POST(req: NextRequest) {
   try {
@@ -55,13 +56,16 @@ export async function GET(req: NextRequest) {
   try {
     const feed = new URL(req.url).searchParams.get('feed') === '1'
     const tag = readTopicFilter(req)
-    const cursor = feed ? readCommunityCursor(req, 'posts', undefined, tag) : null
+    const filters = readCommunityFilters(new URL(req.url).searchParams)
     const page = feed ? { take: COMMUNITY_PAGE_SIZE + 1 } : readPage(req)
     const session = await getServerSession(authOptions)
     const userId = session?.user?.id
+    if (filters.mine && !userId) return NextResponse.json({ error: 'Bitte melde dich für deine Beiträge an' }, { status: 401, headers: { 'Cache-Control': 'private, no-store' } })
+    const filterScope = { ...filters, viewerId: userId }
+    const cursor = feed ? readCommunityCursor(req, 'posts', undefined, tag, filterScope) : null
     const isAdmin = await isCurrentCommunityAdmin(userId, session?.user?.role)
     const posts = await prisma.post.findMany({
-      where: { AND: [communityVisibility(userId, isAdmin), afterCommunityCursor(cursor), ...(tag ? [{ tags: { some: { name: tag } } }] : [])] },
+      where: { AND: [communityVisibility(userId, isAdmin), afterCommunityCursor(cursor), ...(filters.mine ? [{ authorId: userId }] : []), ...(filters.unanswered ? [{ comments: { none: {} } }] : []), ...(tag ? [{ tags: { some: { name: tag } } }] : [])] },
       ...page,
       // The feed renders discussions collapsed. Defer comment previews until
       // one is opened; detail and legacy responses keep their full contract.
@@ -69,13 +73,13 @@ export async function GET(req: NextRequest) {
       orderBy: COMMUNITY_ORDER,
     })
     if (!feed) return NextResponse.json(posts.map(post => normalizeCommunityPost(post, userId)), { headers: { 'Cache-Control': 'private, no-store' } })
-    const result = communityPage(posts, 'posts', undefined, tag)
+    const result = communityPage(posts, 'posts', undefined, tag, COMMUNITY_PAGE_SIZE, filterScope)
     return NextResponse.json({ posts: result.items.map(post => normalizeCommunityPost(post, userId, true)), nextCursor: result.nextCursor }, { headers: { 'Cache-Control': 'private, no-store' } })
   } catch (error) {
     console.error(error)
     const inputError = requestErrorResponse(error)
     if (inputError) return inputError
-    if (error instanceof InvalidTopicError) return NextResponse.json({ error: error.message }, { status: 400 })
+    if (error instanceof InvalidTopicError || error instanceof InvalidCommunityFilterError) return NextResponse.json({ error: error.message }, { status: 400 })
     return NextResponse.json({ error: 'Fehler beim Abrufen der Beiträge' }, { status: 500 })
   }
 }
