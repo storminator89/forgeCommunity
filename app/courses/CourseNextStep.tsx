@@ -4,7 +4,6 @@ import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'rea
 import Link from 'next/link';
 import { ArrowRight, BookOpen, Compass } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { ProgressSpark } from '@/components/community/ProgressSpark';
 import { eligibleJourneyCourses, projectJourney, type JourneyContent, type JourneyCourse, type JourneyLeaf } from './journey/journey-progress';
 import { groupJourneyTrail, readJourneyCourses, readJourneyDetail, type JourneyProgress } from './journey/journey-trail-data';
 import { journeyCourseHref } from './journey/journey-course-url';
@@ -14,9 +13,9 @@ type Detail = { kind: 'loading'; scope: string; courseId: string }
   | { kind: 'error'; scope: string; courseId: string; reason: 'unavailable' | 'unverified' }
   | { kind: 'ready'; scope: string; courseId: string; contents: JourneyContent[]; progress: JourneyProgress };
 
-/** Use the existing catalog read. This panel never scans courses, goals or missions. */
-export function CourseNextStep({ actorKey, courses, isLoading, loadError }: {
-  actorKey: string; courses: unknown; isLoading: boolean; loadError: boolean;
+/** Use the existing catalog read. Goal state belongs to the stable actor-keyed owner. */
+export function CourseNextStep({ actorKey, courses, isLoading, loadError, goalSummary, onProgressRefresh }: {
+  actorKey: string; courses: unknown; isLoading: boolean; loadError: boolean; goalSummary: ReactNode; onProgressRefresh: () => void;
 }) {
   const list = useMemo(() => {
     if (isLoading) return { kind: 'loading' } as const;
@@ -29,9 +28,9 @@ export function CourseNextStep({ actorKey, courses, isLoading, loadError }: {
     } catch { return { kind: 'error' } as const; }
   }, [courses, isLoading, loadError]);
 
-  if (list.kind === 'loading') return <NextStepFrame busy><p role="status" className="mt-3 text-sm text-muted-foreground">Deine Kurse werden geladen.</p></NextStepFrame>;
-  if (list.kind === 'error') return <NextStepFrame><p role="status" className="mt-3 text-sm text-muted-foreground">Dein nächster Schritt ist gerade unbekannt. Die Kursliste konnte nicht verlässlich geladen werden. Versuche es in der Kursübersicht unten erneut.</p></NextStepFrame>;
-  if (!list.selected) return <NextStepFrame>
+  if (list.kind === 'loading') return <NextStepFrame busy goalSummary={goalSummary}><p role="status" className="mt-3 text-sm text-muted-foreground">Deine Kurse werden geladen.</p></NextStepFrame>;
+  if (list.kind === 'error') return <NextStepFrame goalSummary={goalSummary}><p role="status" className="mt-3 text-sm text-muted-foreground">Dein nächster Schritt ist gerade unbekannt. Die Kursliste konnte nicht verlässlich geladen werden. Versuche es in der Kursübersicht unten erneut.</p></NextStepFrame>;
+  if (!list.selected) return <NextStepFrame goalSummary={goalSummary}>
     <h3 className="mt-3 text-lg font-semibold">{list.enrolled.length ? 'Kein offener Lernschritt ausgewählt' : 'Wähle deinen Lernkurs'}</h3>
     <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{list.enrolled.length
       ? 'Die Kursliste zeigt aktuell keinen offenen Kurs. In deinem Lernweg kannst du den aktuellen Stand eines Kurses prüfen.'
@@ -42,17 +41,17 @@ export function CourseNextStep({ actorKey, courses, isLoading, loadError }: {
   // Reset private detail synchronously on actor, role or any allowlisted list /
   // enrollment change. An old response cannot render before effect cleanup.
   const scope = JSON.stringify([actorKey, list.checked]);
-  return <SelectedNextStep key={scope} scope={scope} course={list.selected} />;
+  return <SelectedNextStep key={scope} scope={scope} course={list.selected} goalSummary={goalSummary} onProgressRefresh={onProgressRefresh} />;
 }
 
-function NextStepFrame({ children, busy = false }: { children: ReactNode; busy?: boolean }) {
+function NextStepFrame({ children, busy = false, goalSummary }: { children: ReactNode; busy?: boolean; goalSummary: ReactNode }) {
   const headingId = useId();
   return <section aria-labelledby={headingId} aria-busy={busy} className="mb-6 min-w-0 [overflow-wrap:anywhere] rounded-2xl border border-primary/20 bg-card p-5 shadow-sm sm:p-6">
     <div className="flex min-w-0 items-center gap-2 text-primary"><Compass aria-hidden="true" className="size-5 shrink-0" /><h2 id={headingId} className="text-lg font-semibold tracking-tight">Dein nächster Schritt</h2></div>
+    {goalSummary}
     {children}
     <nav aria-label="Freiwillige nächste Schritte" className="mt-4 flex min-w-0 flex-wrap items-center gap-x-5 gap-y-1 border-t pt-3">
       <span className="text-xs text-muted-foreground">Wenn du möchtest:</span>
-      <Link prefetch={false} href="/courses/goals" className={textLink}>Eigenes Lernziel planen</Link>
       <Link prefetch={false} href="/community/missions" className={textLink}>Missionen entdecken</Link>
     </nav>
   </section>;
@@ -67,7 +66,7 @@ function contentLabel(type: JourneyLeaf['type']) {
   return ({ TEXT: 'Leseinhalt', VIDEO: 'Video', AUDIO: 'Audio', H5P: 'Interaktive Übung', QUIZ: 'Quiz', ASSIGNMENT: 'Aufgabe' })[type];
 }
 
-function SelectedNextStep({ scope, course }: { scope: string; course: JourneyCourse }) {
+function SelectedNextStep({ scope, course, goalSummary, onProgressRefresh }: { scope: string; course: JourneyCourse; goalSummary: ReactNode; onProgressRefresh: () => void }) {
   const [detail, setDetail] = useState<Detail>({ kind: 'loading', scope, courseId: course.id });
   const [retry, setRetry] = useState(0);
   const sequence = useRef(0);
@@ -116,9 +115,10 @@ function SelectedNextStep({ scope, course }: { scope: string; course: JourneyCou
     sequence.current++;
     setDetail({ kind: 'loading', scope, courseId: course.id });
     setRetry(value => value + 1);
+    onProgressRefresh();
   };
 
-  return <NextStepFrame busy={busy}>
+  return <NextStepFrame busy={busy} goalSummary={goalSummary}>
     <div className="mt-3 flex min-w-0 items-start gap-4 sm:gap-6">
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium [overflow-wrap:anywhere]">{course.title}</p>
@@ -157,7 +157,6 @@ function SelectedNextStep({ scope, course }: { scope: string; course: JourneyCou
           <Button type="button" variant="ghost" className="min-h-11 max-w-full whitespace-normal text-left" aria-disabled={busy} onClick={retryDetail}>{busy ? 'Lernstand wird geprüft …' : currentDetail?.kind === 'error' ? 'Erneut prüfen' : 'Lernstand aktualisieren'}</Button>
         </div>
       </div>
-      <div className="hidden shrink-0 sm:block"><ProgressSpark state={next ? 'target' : 'neutral'} /></div>
     </div>
   </NextStepFrame>;
 }
