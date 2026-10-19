@@ -11,12 +11,11 @@ import { UserNav, useSignInHref } from '@/components/user-nav';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
 import { LoadingScreen, PageState } from '@/components/page-state';
-import { JourneyMark } from './JourneyMark';
 import { JourneyMascot } from './JourneyMascot';
 import { SparkStaticFigure } from '@/components/spark-entry';
 import { sparkVisibilitySnapshot as mascotSnapshot, useSparkVisibility } from '@/hooks/useSparkVisibility';
-import { eligibleJourneyCourses, projectJourney, type JourneyContent, type JourneyCourse, type JourneyLeaf } from './journey-progress';
-import { JourneyTrail } from './JourneyTrail';
+import { eligibleJourneyCourses, projectJourney, type JourneyContent, type JourneyCourse } from './journey-progress';
+import { JourneyWorld } from './JourneyWorld';
 import { JourneyPracticeReturnCard } from './JourneyPracticeReturnCard';
 import { groupJourneyTrail, readJourneyCourses, readJourneyDetail, type JourneyProgress } from './journey-trail-data';
 import { journeyCourseHref, resolveJourneyCourseId } from './journey-course-url';
@@ -70,16 +69,6 @@ function reducedMotionSnapshot() {
 async function readResponse(response: Response): Promise<unknown> {
   if (!response.ok) throw new Error(`Request failed (${response.status})`);
   return response.json() as Promise<unknown>;
-}
-
-function contentLabel(type: JourneyLeaf['type']) {
-  return ({ TEXT: 'Inhalt', VIDEO: 'Video', AUDIO: 'Audio', H5P: 'Übung', QUIZ: 'Quiz', ASSIGNMENT: 'Aufgabe' })[type];
-}
-
-function lockLabel(leaf: JourneyLeaf) {
-  if (leaf.releaseLocked) return 'Noch nicht freigegeben';
-  if (leaf.missingPrerequisites?.length) return 'Erst Voraussetzungen abschließen';
-  return 'Noch gesperrt';
 }
 
 export default function JourneyClient() {
@@ -225,9 +214,6 @@ function ScopedJourney({ signInHref }: { signInHref: string }) {
   const currentDetail = detail.kind !== 'idle' && detail.courseId === selectedId ? detail : null;
   const detailPending = Boolean(selectedId && (!currentDetail || currentDetail.kind === 'loading'));
   const projection = currentDetail?.kind === 'ready' ? projectJourney(currentDetail.contents, currentDetail.progress.completedContentIds, currentDetail.progress.awaitingGradeContentIds) : null;
-  const stationNoun = projection?.leaves.length === 1 ? 'Station' : 'Stationen';
-  const next = projection?.next;
-  const awaiting = projection?.leaves.find(leaf => leaf.awaitingGrade);
   const complete = Boolean(projection && currentDetail?.kind === 'ready' && currentDetail.progress.complete);
   const groups = projection && currentDetail?.kind === 'ready' ? groupJourneyTrail(currentDetail.contents, projection) : [];
   const chapterScope = currentDetail?.kind === 'ready' ? JSON.stringify([currentDetail.courseId, currentDetail.progress.publicationId]) : '';
@@ -264,7 +250,7 @@ function ScopedJourney({ signInHref }: { signInHref: string }) {
             <div className="mt-5 flex justify-center"><Button asChild className="h-auto min-h-11 max-w-full whitespace-normal py-2"><Link href="/courses">Kurse entdecken</Link></Button></div>
           </section>}
           {courses && courses.length > 0 && <div className="mt-3 space-y-4">
-            <section id="journey-course-selection" tabIndex={-1} aria-label="Deine angemeldeten Kurse" className="fc-section-card flex min-w-0 flex-wrap items-center justify-between gap-3">
+            <section id="journey-course-selection" tabIndex={-1} aria-label="Deine angemeldeten Kurse" className="flex min-w-0 flex-wrap items-center justify-between gap-3 border-b pb-3">
               {courses.length > 1 ? <div className="min-w-0 flex-1 basis-64">
                 <label htmlFor="journey-course" className="mb-1.5 block text-sm font-medium">Kurs auswählen <span className="font-normal text-muted-foreground">({courses.length})</span></label>
                 <select id="journey-course" value={selectedId ?? ''} onChange={event => selectCourse(event.target.value)} className="h-11 w-full min-w-0 rounded-xl border bg-background px-3 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">{courses.map(course => <option key={course.id} value={course.id}>{course.title}</option>)}</select>
@@ -275,22 +261,10 @@ function ScopedJourney({ signInHref }: { signInHref: string }) {
 
             {detailPending && <PageState kind="loading" title="Lernschritte werden geprüft" />}
             {currentDetail?.kind === 'error' && <PageState kind="error" title="Der Kursstand konnte nicht geladen werden" description="Vielleicht hat sich deine Anmeldung oder der Kurs geändert." action={<div className="flex flex-wrap justify-center gap-2"><Button type="button" variant="outline" onClick={retryDetail}>Erneut versuchen</Button><Button type="button" variant="ghost" onClick={retryCourses}>Kursliste aktualisieren</Button></div>} />}
-            {currentDetail?.kind === 'ready' && selectedCourse && projection && <section aria-labelledby="journey-progress-title" className="fc-section-card min-w-0">
-              <h2 id="journey-progress-title" className="break-words text-xl font-semibold leading-snug tracking-tight sm:text-2xl">{selectedCourse.title}</h2>
-              <p className="mt-2 text-sm text-muted-foreground" role="status" aria-live="polite">{projection.leaves.length ? `${projection.completedCount} von ${projection.leaves.length} ${stationNoun} bestätigt` : 'Noch keine Stationen verfügbar'}</p>
-              {projection.leaves.length > 0 && <progress className="mt-3 block h-2 w-full accent-progress" value={projection.completedCount} max={projection.leaves.length} aria-label={`${projection.completedCount} von ${projection.leaves.length} ${stationNoun} bestätigt`}>{projection.completedCount} von {projection.leaves.length}</progress>}
-              <div className="mt-4 flex items-center gap-3 border-t pt-4 sm:gap-6">
-                <div className="min-w-0 flex-1">
-                  {next && !complete ? <><p className="flex items-center gap-2 text-xs font-medium text-muted-foreground"><JourneyMark className="size-5 shrink-0 text-primary" />Nächster Schritt</p><h3 className="mt-2 break-words text-lg font-semibold leading-snug">{next.title}</h3><p className="mt-1 text-sm text-muted-foreground">{contentLabel(next.type)}</p></>
-                    : complete ? <p className="text-base font-semibold text-success">{projection.leaves.length === 1 ? 'Die Station ist bestätigt.' : `Alle ${projection.leaves.length} Stationen bestätigt.`}</p>
-                      : awaiting ? <><p className="text-sm font-medium">Bewertung offen</p><h3 className="mt-2 break-words text-lg font-semibold leading-snug">{awaiting.title}</h3></>
-                        : projection.firstLocked ? <><p className="text-sm font-medium">Gerade ist kein weiterer Inhalt frei.</p><p className="mt-1 text-sm text-muted-foreground">{lockLabel(projection.firstLocked)}. Den aktuellen Stand siehst du im Kurs.</p></>
-                          : <p className="text-sm text-muted-foreground">Im Kurs findest du den aktuellen Stand.</p>}
-                </div>
-                {mascotVisible && <JourneyMascot complete={complete} celebrationId={motionEnabled && !reducedMotion && celebration?.courseId === selectedId && celebration.publicationId === currentDetail.progress.publicationId ? celebration.id : null} ambientMotion={motionEnabled && !reducedMotion} />}
-              </div>
-              <Button asChild variant={next && !complete ? 'default' : 'outline'} className="mt-4 w-full sm:w-auto"><Link href={next && !complete ? `${readerHref}?content=${encodeURIComponent(next.id)}` : awaiting && !complete ? `${readerHref}?content=${encodeURIComponent(awaiting.id)}` : readerHref}>{next && !complete ? 'Lernschritt öffnen' : awaiting && !complete ? 'Abgabe ansehen' : 'Kurs ansehen'}</Link></Button>
-            </section>}
+            {currentDetail?.kind === 'ready' && selectedCourse && projection && <JourneyWorld
+              key={chapterScope} courseTitle={selectedCourse.title} projection={projection} groups={groups}
+              complete={complete} readerHref={readerHref} motionEnabled={motionEnabled && !reducedMotion} openChapters={openChapters} onChapterToggle={toggleChapter}
+              mascot={mascotVisible ? <JourneyMascot complete={complete} celebrationId={motionEnabled && !reducedMotion && celebration?.courseId === selectedId && celebration.publicationId === currentDetail.progress.publicationId ? celebration.id : null} ambientMotion={motionEnabled && !reducedMotion} /> : null} />}
             {currentDetail?.kind === 'ready' && selectedCourse && projection && <JourneyPracticeReturnCard
               key={JSON.stringify([selectedCourse.id, currentDetail.progress.publicationId])}
               courseId={selectedCourse.id} publicationId={currentDetail.progress.publicationId} signInHref={signInHref}
@@ -301,10 +275,6 @@ function ScopedJourney({ signInHref }: { signInHref: string }) {
             <Button type="button" variant="ghost" size="sm" className="h-auto min-h-11 max-w-full whitespace-normal py-2 [overflow-wrap:anywhere] sm:h-auto" aria-pressed={motionEnabled && !reducedMotion} onClick={toggleMotion} disabled={reducedMotion}>{reducedMotion ? 'Figurenanimationen aus' : `Figurenanimationen ${motionEnabled ? 'an' : 'aus'}`}</Button>
             {reducedMotion && <p className="mt-1 text-xs text-muted-foreground">Weniger Bewegung ist am Gerät eingestellt.</p>}
           </div>}
-
-          {currentDetail?.kind === 'ready' && projection && projection.leaves.length > 0 && <JourneyTrail
-            groups={groups} nextId={next?.id ?? null} complete={complete} readerHref={readerHref}
-            openChapters={openChapters} onChapterToggle={toggleChapter} />}
 
           <p className="mt-6 text-sm leading-relaxed text-muted-foreground">Gemeinsam mit anderen lernen: <Link prefetch={false} href="/community/missions" className="inline-flex min-h-11 items-center rounded-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Space-Missionen entdecken</Link><br /><Link prefetch={false} href="/community/missions?view=saved" className="inline-flex min-h-11 items-center rounded-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Gemerkte Space-Missionen</Link></p>
         </div>

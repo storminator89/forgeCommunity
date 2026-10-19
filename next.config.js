@@ -31,6 +31,7 @@ const securityHeaders = [
 const nextConfig = {
   // Entwicklungsmodus schneller machen
   reactStrictMode: true,
+  experimental: { webpackBuildWorker: true },
 
   // Turbopack config (leere Config um Warnung zu unterdrücken)
   turbopack: {},
