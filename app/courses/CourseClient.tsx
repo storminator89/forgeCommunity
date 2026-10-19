@@ -21,6 +21,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useToast } from '@/hooks/use-toast';
 import { canSeeLearnerPathways } from '@/lib/pathway-visibility';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { CourseNextStep } from './CourseNextStep';
+import { readJourneyCourses } from './journey/journey-trail-data';
 
 interface Course {
   id: string;
@@ -78,12 +80,23 @@ function ScopedCourseClient({ session }: { session: NonNullable<ReturnType<typeo
     const controller = new AbortController();
     const fetchCourses = async () => {
       try {
-        const response = await fetch('/api/courses', { signal: controller.signal });
+        const response = await fetch('/api/courses', { cache: 'no-store', signal: controller.signal });
         if (!response.ok) {
           throw new Error('Failed to fetch courses');
         }
-        const data = (await response.json()) as Course[];
-        if (activeRef.current && !controller.signal.aborted) setCourses(data);
+        const data: unknown = await response.json();
+        // Reject an unusable list before the existing catalog maps or renders it.
+        // The shared allowlist also protects the next-step selection metadata.
+        readJourneyCourses(data);
+        if (!Array.isArray(data) || data.some(course =>
+          typeof course.instructor !== 'string' || typeof course.duration !== 'string' || typeof course.category !== 'string' ||
+          (course.startDate !== null && typeof course.startDate !== 'string') || (course.endDate !== null && typeof course.endDate !== 'string') ||
+          typeof course.participants !== 'number' || !Number.isFinite(course.participants) ||
+          (course.maxStudents !== null && (typeof course.maxStudents !== 'number' || !Number.isFinite(course.maxStudents))) ||
+          (course.price !== null && (typeof course.price !== 'number' || !Number.isFinite(course.price))) ||
+          (course.currency !== null && typeof course.currency !== 'string') || (course.imageUrl !== null && typeof course.imageUrl !== 'string')
+        )) throw new Error('Invalid course list');
+        if (activeRef.current && !controller.signal.aborted) setCourses(data as Course[]);
       } catch (error) {
         if (activeRef.current && !controller.signal.aborted) {
           console.error('Error fetching courses:', error);
@@ -188,6 +201,7 @@ function ScopedCourseClient({ session }: { session: NonNullable<ReturnType<typeo
         <main id="page-content" tabIndex={-1} className="min-w-0 flex-1 overflow-y-auto">
           <PageContainer>
             <HeroBanner icon={GraduationCap} title="Wissen teilen. Neues lernen." description="Finde deinen nächsten Kurs und wachse mit der Community." action={creatorPerspective ? <Button asChild><Link href="/courses/new"><Plus className="h-4 w-4" aria-hidden="true" />Neuer Kurs</Link></Button> : undefined} />
+            {session.user.role === 'USER' && <CourseNextStep actorKey={JSON.stringify([session.user.id, session.user.role])} courses={courses} isLoading={isLoading} loadError={loadError} />}
             <section aria-labelledby="course-directory-title" className="min-w-0">
               <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                 <div>
