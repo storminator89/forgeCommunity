@@ -135,8 +135,11 @@ export function PracticeLearnerWorkspace({ courseId, sessionStatus }: { courseId
       submission.current.optionIndex !== optionIndex || submission.current.confidence !== code) {
       submission.current = { reservationId: pending.reservationId, optionIndex, confidence: code, id: crypto.randomUUID() }
     }
+    const submitted = submission.current
+    const submittedSessionId = state.session.id
+    const submittedOrdinal = pending.ordinal
     const result = await answerPractice(courseId, { sessionId: state.session.id, reservationId: pending.reservationId,
-      submissionId: submission.current.id, optionIndex, confidence: code }, signal)
+      submissionId: submitted.id, optionIndex, confidence: code }, signal)
     if (!mounted.current || signal?.aborted) return
     // Answer feedback and its return window must share a fresh live snapshot.
     // A completed session is no longer present in this GET; never reuse its id.
@@ -144,8 +147,17 @@ export function PracticeLearnerWorkspace({ courseId, sessionStatus }: { courseId
     if (!mounted.current || signal?.aborted) return
     if (!['ready', 'active', 'complete'].includes(fresh.status) ||
       fresh.snapshotId !== state.snapshotId || fresh.publicationId !== state.publicationId) { apply(fresh); return }
+    const sameAnswerWindow = Number.isSafeInteger(submittedOrdinal) && submittedOrdinal > 0 &&
+      result.answeredCount === submittedOrdinal && (fresh.session
+        ? fresh.session.id === submittedSessionId && fresh.session.answeredCount === result.answeredCount &&
+          (fresh.session.pending === undefined || fresh.session.pending === null)
+        : result.canContinue === false && (fresh.status === 'ready' || fresh.status === 'complete'))
     setState(fresh)
     setFeedback({ correct: result.correct, correctIndex: result.correctIndex, explanation: result.explanation,
+      submittedAnswer: sameAnswerWindow && submission.current === submitted && question?.reservationId === submitted.reservationId &&
+        Number.isSafeInteger(submitted.optionIndex) && submitted.optionIndex >= 0 &&
+        submitted.optionIndex < pending.item.options.length && submitted.optionIndex < question.options.length
+        ? { reservationId: submitted.reservationId, optionIndex: submitted.optionIndex } : undefined,
       canContinue: result.canContinue && fresh.status === 'active' && Boolean(fresh.session) && (fresh.dueCount > 0 || Boolean(fresh.session?.pending)) })
     setStage('feedback')
   })
