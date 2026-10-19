@@ -1,10 +1,10 @@
-/* Quiet case workbench. Semantic Forge tokens, restrained native controls,
-   transient route-local progress, and no earned-reward visual language. */
-.mission { width: 100%; max-width: 66rem; min-width: 0; margin: 0 auto; padding: 1.25rem 1rem 3rem; color: hsl(var(--foreground)); overflow-wrap: anywhere; }
+/* Forge question canvas, tactile native answer tiles and an in-flow feedback
+   tray. Original progress and the unscored comparison stay separate. */
+.mission { --action-edge: color-mix(in srgb, hsl(var(--primary)) 70%, black 30%); width: 100%; max-width: 66rem; min-width: 0; margin: 0 auto; padding: 1.25rem 1rem 3rem; color: hsl(var(--foreground)); overflow-wrap: anywhere; }
 .mission [hidden] { display: none !important; }
-.mission h2, .mission h3, .mission p, .mission figure { margin: 0; }
+.mission h2, .mission h3, .mission h4, .mission p, .mission figure { margin: 0; }
 .mission h2 { font-size: clamp(1.5rem, 1.15rem + 1.4vw, 2.125rem); font-weight: 750; line-height: 1.2; letter-spacing: -.025em; }
-.mission h3 { font-weight: 700; }
+.mission h3, .mission h4 { font-weight: 750; }
 .mission h2:focus, .mission h3:focus { outline: 2px solid hsl(var(--ring)); outline-offset: .35rem; border-radius: .15rem; }
 .mission svg { width: 1.125rem; height: 1.125rem; flex-shrink: 0; }
 .utilities { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; min-width: 0; margin-bottom: 1.75rem; font-size: .8125rem; color: hsl(var(--muted-foreground)); }
@@ -20,7 +20,8 @@
 .intro .introLead { max-width: 35rem; margin-top: 1.3rem; font-size: 1.125rem; line-height: 1.65; }
 .intro .persistenceNote { margin-top: 1rem; }
 .persistenceNote { color: hsl(var(--muted-foreground)); font-size: .875rem; line-height: 1.7; }
-.mission .primaryAction { min-height: 3rem; height: auto; max-width: 100%; gap: .65rem; padding-block: .75rem; white-space: normal; text-align: center; }
+.mission .primaryAction { min-height: 3.5rem; height: auto; max-width: 100%; gap: .65rem; padding: .85rem 1.75rem; border: 2px solid hsl(var(--primary)); border-radius: 1rem; box-shadow: 0 4px 0 var(--action-edge); font-size: 1rem; font-weight: 750; white-space: normal; text-align: center; translate: none; }
+.mission .primaryAction:disabled { border-color: hsl(var(--input)); box-shadow: 0 4px 0 hsl(var(--border)); }
 .intro .primaryAction { margin-top: 1.75rem; }
 .intro .introDetail { max-width: 35rem; margin-top: 1rem; color: hsl(var(--muted-foreground)); font-size: .8125rem; line-height: 1.7; }
 .introDiagram { display: flex; flex-direction: column; align-items: center; padding: 1.25rem; }
@@ -29,15 +30,15 @@
 .introDiagram > div:last-child { transform: translateX(.5rem); background: hsl(var(--accent)); color: hsl(var(--accent-foreground)); border-color: hsl(var(--primary)); }
 .introDiagram > div > svg { width: 1.5rem; height: 1.5rem; }
 .diagramLine { width: 1px; height: 1.75rem; background: hsl(var(--input)); }
-.trail { max-width: 48rem; margin: 0 auto 2rem; padding-bottom: 1.5rem; border-bottom: 1px solid hsl(var(--border)); }
+.trail { max-width: 44rem; margin: 0 auto 1.5rem; }
 .trailSummary { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .25rem 1rem; font-size: .8125rem; line-height: 1.6; }
 .trailSummary > p { font-weight: 700; }
 .trailSummary > span { color: hsl(var(--muted-foreground)); font-variant-numeric: tabular-nums; }
-.progress { display: block; width: 100%; height: .3rem; margin-top: .75rem; appearance: none; border: 0; border-radius: 1rem; overflow: hidden; color: hsl(var(--progress)); background: hsl(var(--muted)); }
+.progress { display: block; width: 100%; height: .8rem; margin-top: .6rem; appearance: none; border: 0; border-radius: 1rem; overflow: hidden; color: hsl(var(--progress)); background: hsl(var(--muted)); }
 .progress::-webkit-progress-bar { background: hsl(var(--muted)); }
 .progress::-webkit-progress-value { background: hsl(var(--progress)); }
 .progress::-moz-progress-bar { background: hsl(var(--progress)); }
-.stations { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .5rem; list-style: none; margin: 1rem 0 0; padding: 0; }
+.stations { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .5rem; list-style: none; margin: .8rem 0 0; padding: 0; }
 .stations > li { display: flex; align-items: center; gap: .4rem; min-width: 0; color: hsl(var(--muted-foreground)); font-size: .75rem; font-weight: 600; line-height: 1.45; }
 .stationMark { display: inline-flex; align-items: center; justify-content: center; width: 1.65rem; height: 1.65rem; flex-shrink: 0; border: 1px solid hsl(var(--input)); border-radius: 50%; background: hsl(var(--card)); color: hsl(var(--muted-foreground)); font-variant-numeric: tabular-nums; }
 .stationMark svg { width: .875rem; height: .875rem; }
@@ -45,23 +46,30 @@
 .stations > li[data-active="true"] .stationMark { outline: 2px solid hsl(var(--primary)); outline-offset: 3px; }
 .stations > li[data-applied="true"] .stationMark { border-color: hsl(var(--primary)); background: hsl(var(--accent)); color: hsl(var(--accent-foreground)); }
 .trail .branch { display: flex; align-items: center; gap: .5rem; margin-top: 1rem; color: hsl(var(--primary)); font-size: .8125rem; font-weight: 650; line-height: 1.6; }
-.scene { width: 100%; max-width: 43rem; min-width: 0; margin: 0 auto; }
-.sceneHeading { margin-bottom: 1.75rem; }
-.sceneHeading h2 { margin-top: .35rem; }
-.sceneHeading .situation { margin-top: 1rem; font-size: 1rem; line-height: 1.8; }
+.scene { display: flex; flex-direction: column; width: 100%; max-width: 44rem; min-width: 0; margin: 0 auto; padding: 1.5rem; border: 1px solid hsl(var(--border)); border-radius: 1.5rem; background: hsl(var(--card)); color: hsl(var(--card-foreground)); }
+.sceneHeading { min-width: 0; margin-bottom: 1.5rem; }
+.sceneHeading h2 { margin-top: .5rem; font-size: clamp(1.5rem, 1.3rem + .7vw, 1.75rem); font-weight: 800; line-height: 1.35; }
+.situationBubble { display: flex; align-items: flex-start; gap: .875rem; min-width: 0; margin-top: 1.25rem; }
+.situationBubble > [data-spark-entry] { flex: 0 0 4rem; align-self: center; }
+.situationBubble .situation { flex: 1 1 auto; min-width: 0; padding: .875rem 1rem; border: 2px solid hsl(var(--border)); border-radius: 1.125rem; background: hsl(var(--background)); font-size: 1rem; line-height: 1.7; }
 .decisionForm, .choices, .slot { min-width: 0; margin: 0; padding: 0; border: 0; }
 .choices > legend, .slot > legend, .prompt { display: block; max-width: 100%; margin: 0 0 .875rem; padding: 0; color: hsl(var(--foreground)); font-size: 1rem; font-weight: 700; line-height: 1.6; }
-.choice { display: flex; align-items: flex-start; gap: .8rem; min-width: 0; min-height: 3.5rem; margin-top: .65rem; padding: .9rem 1rem; border: 1px solid hsl(var(--input)); border-radius: .75rem; background: hsl(var(--card)); color: hsl(var(--foreground)); font-size: .9375rem; line-height: 1.65; cursor: pointer; }
+.choice { display: flex; align-items: flex-start; gap: .8rem; min-width: 0; min-height: 4rem; margin-top: .875rem; padding: 1rem; border: 2px solid hsl(var(--input)); border-radius: 1rem; box-shadow: 0 4px 0 hsl(var(--border)); background: hsl(var(--card)); color: hsl(var(--foreground)); font-size: 1.125rem; line-height: 1.55; cursor: pointer; }
 .choice:hover { border-color: hsl(var(--primary)); }
-.choice[data-selected="true"] { border-color: hsl(var(--primary)); background: hsl(var(--accent)); color: hsl(var(--accent-foreground)); box-shadow: inset 0 0 0 1px hsl(var(--primary)); }
+.choice[data-selected="true"] { border-color: hsl(var(--primary)); background: hsl(var(--accent)); color: hsl(var(--accent-foreground)); box-shadow: 0 4px 0 hsl(var(--primary) / .28); }
 .choice:focus-within { outline: 3px solid hsl(var(--ring)); outline-offset: 3px; }
 .choice input { width: 1.2rem; height: 1.2rem; flex-shrink: 0; margin: .2rem 0 0; accent-color: hsl(var(--primary)); cursor: pointer; }
 .choice input:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 3px; }
-.choice > span { min-width: 0; }
+.choice > span { flex: 1 1 auto; min-width: 0; }
+.choice .selectedCheck { visibility: hidden; width: 1.125rem; height: 1.125rem; margin-top: .25rem; }
+.choice[data-selected="true"] .selectedCheck { visibility: visible; }
+.choice[data-original="true"] { border-style: dashed; color: hsl(var(--muted-foreground)); cursor: default; box-shadow: none; }
+.originalChoice { display: block; margin-top: .35rem; font-size: .8125rem; line-height: 1.6; }
 .decisionForm .selectionStatus { min-height: 1.5rem; margin: 1rem 0 .75rem; color: hsl(var(--muted-foreground)); font-size: .8125rem; line-height: 1.6; }
 .transferSlots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; margin-top: 1rem; }
 .slot > legend { margin-bottom: .35rem; font-size: .875rem; }
-.slot .choice { min-height: 6.2rem; gap: .55rem; padding: .75rem; font-size: .875rem; }
+.slot .choice { min-height: 6.5rem; gap: .5rem; padding: .875rem .65rem; font-size: 1rem; }
+.slot .choice .selectedCheck { width: .875rem; height: .875rem; }
 .feedback { min-width: 0; margin-bottom: 1.25rem; padding: 1.25rem; border-left: 3px solid hsl(var(--info)); border-radius: 0 .75rem .75rem 0; background: hsl(var(--card)); color: hsl(var(--card-foreground)); }
 .feedback[data-correct="true"] { border-left-color: hsl(var(--success)); }
 .feedbackTitle { display: flex; align-items: center; gap: .65rem; margin-bottom: .85rem; }
@@ -74,7 +82,8 @@
 .feedback .feedbackNotice { margin-top: 1rem; color: hsl(var(--muted-foreground)); font-size: .8125rem; }
 .feedback > ul { margin: .5rem 0 0; padding-left: 1.25rem; font-size: .9375rem; line-height: 1.8; }
 .feedback > ul > li { margin-top: .5rem; }
-.scene .caseVisual { min-width: 0; margin-top: 1.5rem; border: 1px solid hsl(var(--border)); border-radius: .875rem; background: hsl(var(--card)); color: hsl(var(--card-foreground)); overflow: hidden; }
+.scene .caseVisual, .comparison .caseVisual { min-width: 0; margin-top: 1.5rem; border: 1px solid hsl(var(--border)); border-radius: .875rem; background: hsl(var(--card)); color: hsl(var(--card-foreground)); overflow: hidden; }
+.decisionForm > .caseVisual { margin: 0 0 1.5rem; }
 .caseVisual > figcaption { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .65rem; padding: .875rem 1rem; border-bottom: 1px solid hsl(var(--border)); font-size: .8125rem; font-weight: 650; line-height: 1.5; }
 .caseVisual > figcaption > span { flex: 1 1 8rem; min-width: 0; }
 .caseVisual > figcaption > small { color: hsl(var(--muted-foreground)); font-size: .75rem; font-weight: 500; }
@@ -125,6 +134,7 @@
 .recapList { list-style: none; margin: .75rem 0 0; padding: 0; }
 .recapList > li { display: flex; align-items: flex-start; gap: 1rem; padding: 1.15rem 0; border-bottom: 1px solid hsl(var(--border)); }
 .recapIcon { display: flex; align-items: center; justify-content: center; width: 2.5rem; height: 2.5rem; flex-shrink: 0; border: 1px solid hsl(var(--input)); border-radius: .75rem; color: hsl(var(--primary)); }
+.recapList > li > div { flex: 1 1 auto; min-width: 0; }
 .recapList h3 { font-size: .9375rem; line-height: 1.6; }
 .recapList p { margin-top: .15rem; color: hsl(var(--muted-foreground)); font-size: .8125rem; line-height: 1.7; }
 .recapList .recapStatus { font-weight: 650; }
@@ -133,6 +143,36 @@
 .recap .takeaway { margin-top: 1.75rem; font-size: 1.0625rem; font-weight: 650; line-height: 1.8; }
 .recap .persistenceNote { margin-top: .65rem; }
 .srOnly { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+/* Comparison is one vertically read moment, with original history attached.
+   No fixed overlays, rewards, extra progress or persistent comparison history. */
+.feedbackTray { min-width: 0; margin-top: 1.5rem; padding: 1.25rem; border: 2px solid hsl(var(--info) / .35); border-radius: 1.125rem; background: hsl(var(--destructive) / .07); color: hsl(var(--foreground)); }
+.feedbackTray[data-correct="true"] { border-color: hsl(var(--success) / .4); background: hsl(var(--success) / .09); }
+.feedbackTray .feedback { margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; color: inherit; }
+.feedbackTray .feedbackTitle { align-items: flex-start; gap: .875rem; }
+.feedbackTray .feedbackTitle > svg { width: 2rem; height: 2rem; padding: .25rem; border: 2px solid currentColor; border-radius: 50%; }
+.feedbackTray .feedbackTitle h3 { font-size: 1.375rem; font-weight: 800; line-height: 1.4; }
+.feedbackTray .feedback > p, .feedbackTray .feedback > ul { font-size: 1rem; line-height: 1.7; }
+.feedbackTray .feedback .appliedChoice, .feedbackTray .feedback .feedbackNotice { font-size: .8125rem; }
+.feedbackTray .actions { margin-top: 1.25rem; }
+.feedbackTray .primaryAction { flex: 1 1 auto; }
+.comparison { min-width: 0; margin-top: 1.5rem; }
+.comparison > h3, .comparisonResult > h3 { margin-top: .35rem; font-size: 1.375rem; line-height: 1.4; }
+.comparison .comparisonNotice { margin-top: .65rem; color: hsl(var(--muted-foreground)); font-size: .875rem; line-height: 1.7; }
+.comparisonAnswer { min-width: 0; margin-top: 1.5rem; padding-block: 1.25rem; border-block: 1px solid hsl(var(--border)); }
+.comparisonAnswer > h4 { font-size: 1rem; line-height: 1.6; }
+.comparisonAnswer > .recapStatus { margin-top: .35rem; font-size: .875rem; font-weight: 750; line-height: 1.6; }
+.comparisonAnswer > .recapDecision { margin-top: .65rem; font-size: .9375rem; line-height: 1.7; }
+.comparisonFeedback > p, .comparisonFeedback > ul { margin-top: .75rem; font-size: 1rem; line-height: 1.7; }
+.comparisonFeedback > ul { padding-left: 1.25rem; }
+.comparison .decisionForm, .comparisonResult { margin-top: 1.5rem; }
+.comparisonResult > .comparisonAnswer { margin-top: 1rem; }
+.comparison .equalRisk { margin-top: 1rem; padding: .65rem .875rem; border: 1px solid hsl(var(--input)); border-radius: .65rem; font-size: .9375rem; font-weight: 700; line-height: 1.6; }
+.mission .recapAction, .mission .returnAction, .comparison .actions > button { min-height: 2.75rem; height: auto; max-width: 100%; gap: .5rem; padding-block: .75rem; white-space: normal; line-height: 1.6; }
+.mission .recapAction { justify-content: flex-start; margin-top: .875rem; }
+.mission[data-friendly-motion="true"] .primaryAction { transition: background-color 100ms ease, border-color 100ms ease, box-shadow 100ms ease, transform 100ms ease; }
+.mission[data-friendly-motion="true"] .primaryAction:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 1px 0 var(--action-edge); }
+.mission[data-friendly-motion="false"] *, .mission[data-friendly-motion="false"] *::before, .mission[data-friendly-motion="false"] *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+.mission[data-friendly-motion="false"] button:active { transform: none !important; translate: none !important; }
 @media (min-width: 640px) {
   .mission { padding: 1.75rem 1.5rem 4rem; }
 }
@@ -144,7 +184,7 @@
   .introDiagram > div:first-child, .introDiagram > div:last-child { transform: none; }
   .diagramLine { align-self: center; width: 1rem; height: 1px; flex-shrink: 0; }
   .transferSlots { grid-template-columns: minmax(0, 1fr); gap: 1.25rem; }
-  .slot .choice { min-height: 3.5rem; padding: .875rem; }
+  .slot .choice { min-height: 4rem; padding: .875rem; }
 }
 @media (max-width: 479px) {
   .utilities { margin-bottom: 1.25rem; gap: .25rem .75rem; }
@@ -154,8 +194,13 @@
   .stations { gap: .35rem; }
   .stations > li { flex-direction: column; align-items: flex-start; gap: .5rem; font-size: .75rem; }
   .stationMark { width: 1.5rem; height: 1.5rem; font-size: .75rem; }
+  .scene { padding: 1rem; border-radius: 1.125rem; }
   .sceneHeading { margin-bottom: 1.5rem; }
-  .choice { gap: .7rem; padding: .85rem; font-size: .875rem; }
+  .choice { gap: .65rem; padding: .875rem; font-size: 1rem; }
+  .situationBubble { flex-wrap: wrap; gap: .65rem; }
+  .situationBubble .situation { flex-basis: 100%; }
+  .mission .primaryAction { width: 100%; }
+  .feedbackTray { padding: 1rem; }
   .feedback { padding: 1rem; }
   .connection { grid-template-columns: minmax(0, 1fr); gap: .5rem; }
   .connection > .connector { width: 0; height: 1rem; margin: 0 auto; border-top: 0; border-left: 2px solid hsl(var(--input)); }

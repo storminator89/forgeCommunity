@@ -1,19 +1,25 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useReducer, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useReducer, useRef, useState } from 'react';
 import type { FormEvent, RefObject } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, ArrowRight, Check, FileText, GitBranch, Info, Lock, RotateCcw, Shield, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { SparkEntry } from '@/components/spark-entry';
+import { useFriendlyMotion } from '@/components/community/FriendlyMotion';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import {
   choiceNodes, isRepair, mainStations, parentStation, transfer, transferSlots,
-  type NodeId,
+  type MainNodeId, type NodeId,
 } from './community-collaboration-content';
 import { completePlan, initialMissionState, missionReducer, recapStatus, type Answer, type AnswerMap, type MissionState } from './community-collaboration-state';
+import {
+  comparisonCanApply, comparisonMatchesAnswers, comparisonReducer, createComparisonSnapshot,
+  hasEqualAuthoredRisk, initialComparisonState, type ComparisonAnswer, type ComparisonSnapshot,
+} from './community-collaboration-comparison';
 import styles from './CommunityCollaboration.module.css';
 
 function StationTrail({ state }: { state: MissionState }) {
@@ -21,7 +27,7 @@ function StationTrail({ state }: { state: MissionState }) {
   const completed = mainStations.filter(station => state.answers[station.id]).length;
   return <div className={styles.trail}>
     <div className={styles.trailSummary}>
-      <p>Dieser Durchlauf</p><span>{completed} von 4 Hauptentscheidungen angewendet</span>
+      <p>Dieser Durchlauf</p><span><span aria-hidden="true">{completed}/4</span><span className={styles.srOnly}>{completed} von 4 Hauptentscheidungen angewendet</span></span>
     </div>
     <progress className={styles.progress} value={completed} max={4} aria-label="Angewendete Hauptentscheidungen in diesem Durchlauf" />
     <ol className={styles.stations} aria-label="Hauptentscheidungen">
@@ -120,19 +126,26 @@ function SceneVisual({ nodeId, answer }: { nodeId: NodeId; answer?: Answer }) {
   return answer ? <TransferVisual answer={answer} /> : null;
 }
 
+function AnswerFeedbackBody({ answer, showChoice = true }: { answer: Answer; showChoice?: boolean }) {
+  const feedback = answer.kind === 'choice'
+    ? choiceNodes[answer.nodeId].feedback[answer.correct ? 'correct' : 'incorrect']
+    : answer.correct ? transfer.feedback : null;
+  const selectedChoice = answer.kind === 'choice' ? choiceNodes[answer.nodeId].options.find(option => option.id === answer.choiceId) : null;
+  return <>
+    {showChoice && selectedChoice && <p className={styles.appliedChoice}><strong>Deine angewendete Entscheidung:</strong> {selectedChoice.label}</p>}
+    {selectedChoice?.consequence && <p className={styles.choiceConsequence}>{selectedChoice.consequence}</p>}
+    {feedback && <p>{feedback}</p>}
+    {answer.kind === 'transfer' && !answer.correct && <ul>{transferSlots.filter(slot => answer.plan[slot.id] !== slot.correctValue).map(slot => <li key={slot.id}><strong>{slot.label}:</strong> {slot.correction}</li>)}</ul>}
+  </>;
+}
+
 function Feedback({ state, headingRef }: { state: MissionState; headingRef: RefObject<HTMLHeadingElement | null> }) {
   const answer = state.answers[state.nodeId];
   if (!answer) return null;
   const title = answer.correct ? 'Passend gewählt' : 'Schau auf die Folge';
-  const feedback = answer.kind === 'choice'
-    ? choiceNodes[answer.nodeId].feedback[answer.correct ? 'correct' : 'incorrect']
-    : answer.correct ? transfer.feedback : null;
-  const selectedChoice = answer.kind === 'choice' ? choiceNodes[answer.nodeId].options.find(option => option.id === answer.choiceId)?.label : null;
   return <section className={styles.feedback} data-correct={answer.correct} aria-labelledby="case-feedback-title">
     <div className={styles.feedbackTitle}>{answer.correct ? <Check aria-hidden="true" /> : <Info aria-hidden="true" />}<h3 ref={headingRef} id="case-feedback-title" tabIndex={-1}>{title}</h3></div>
-    {selectedChoice && <p className={styles.appliedChoice}><strong>Deine angewendete Entscheidung:</strong> {selectedChoice}</p>}
-    {feedback && <p>{feedback}</p>}
-    {answer.kind === 'transfer' && !answer.correct && <ul>{transferSlots.filter(slot => answer.plan[slot.id] !== slot.correctValue).map(slot => <li key={slot.id}><strong>{slot.label}:</strong> {slot.correction}</li>)}</ul>}
+    <AnswerFeedbackBody answer={answer} />
     <p className={styles.feedbackNotice}>{!answer.correct && isRepair(state.nodeId) ? 'Beispiel angesehen. Danach geht es mit dem nächsten Fall weiter.' : 'Die Entscheidung ist angewendet. Weiter führt zum nächsten Schritt.'}</p>
   </section>;
 }
@@ -143,18 +156,149 @@ function answerSummary(answer?: Answer): string {
   return transferSlots.map(slot => `${slot.label}: ${slot.options.find(option => option.id === answer.plan[slot.id])?.label ?? ''}`).join(' · ');
 }
 
+function ComparisonAnswerView({ answer, title, headingId, status, repair }: {
+  answer: ComparisonAnswer; title: string; headingId: string; status?: string; repair?: Answer;
+}) {
+  return <section className={styles.comparisonAnswer} aria-labelledby={headingId}>
+    <h4 id={headingId}>{title}</h4>
+    {status && <p className={styles.recapStatus}>{status}</p>}
+    <p className={styles.recapDecision}><strong>Gewählt:</strong> {answerSummary(answer)}</p>
+    {repair && <p className={styles.recapDecision}><strong>Vertiefung:</strong> {answerSummary(repair)}</p>}
+    <div className={styles.comparisonFeedback}><AnswerFeedbackBody answer={answer} showChoice={false} /></div>
+    <SceneVisual nodeId={answer.nodeId} answer={answer} />
+  </section>;
+}
+
+function MomentComparison({ snapshot, status, repair, onReturn }: {
+  snapshot: ComparisonSnapshot; status: string; repair?: Answer; onReturn: (sessionId: number) => void;
+}) {
+  const [comparison, compare] = useReducer(comparisonReducer, snapshot, initialComparisonState);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const resultHeading = useRef<HTMLHeadingElement>(null);
+  const [announcement, setAnnouncement] = useState('');
+  const componentId = useId();
+  const prefix = `case-comparison-${componentId}-${snapshot.sessionId}`;
+  const nodeId = snapshot.nodeId;
+  const node = nodeId === 'TRANSFER' ? transfer : choiceNodes[nodeId];
+  const actionContext = { sessionId: snapshot.sessionId, nodeId, generation: comparison.generation };
+  const canApply = comparisonCanApply(comparison);
+  const selectedSlots = transferSlots.filter(slot => comparison.plan[slot.id] !== null).length;
+  const equalRisk = Boolean(comparison.alternative && hasEqualAuthoredRisk(snapshot.original, comparison.alternative));
+  const comparisonAnnouncement = comparison.phase === 'result'
+    ? `Alternative im Vergleich angewendet.${equalRisk ? ' Gleiches Risiko.' : ''} Dein Durchlauf bleibt unverändert.`
+    : 'Vergleichsentwurf bereit. Eine andere Entscheidung wird erst nach dem Anwenden verglichen.';
+
+  useEffect(() => { setAnnouncement(comparisonAnnouncement); }, [comparisonAnnouncement]);
+
+  useLayoutEffect(() => {
+    // This component only mounts after an explicit recap action, never on load.
+    if (comparison.phase === 'result') resultHeading.current?.focus();
+    else heading.current?.focus();
+  }, [comparison.phase]);
+
+  const applyComparison = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    compare({ ...actionContext, type: 'apply' });
+  };
+  const draftNotice = nodeId === 'TRANSFER'
+    ? `${selectedSlots} von 3 Feldern ausgewählt. ${canApply ? 'Anderer Plan. Noch nicht geprüft.' : 'Ändere mindestens ein Feld gegenüber deinem Durchlauf.'}`
+    : canApply ? 'Andere Entscheidung ausgewählt. Noch nicht angewendet.' : 'Wähle eine andere Entscheidung als in deinem Durchlauf.';
+
+  return <section className={styles.comparison} aria-labelledby={`${prefix}-title`}>
+    <p className={styles.eyebrow}>{mainStations.find(station => station.id === nodeId)?.recap}</p>
+    <h3 ref={heading} id={`${prefix}-title`} tabIndex={-1}>Vergleich zu deinem Durchlauf</h3>
+    <p className={styles.comparisonNotice}>Ein Experiment ohne Wertung. Dein Durchlauf bleibt unverändert.</p>
+    <div className={styles.situationBubble}><SparkEntry /><p className={styles.situation}>{node.situation}</p></div>
+    <ComparisonAnswerView answer={snapshot.original} title="Im ursprünglichen Durchlauf" headingId={`${prefix}-original`} status={status} repair={repair} />
+
+    {comparison.phase === 'draft' ? <form className={styles.decisionForm} onSubmit={applyComparison} aria-label="Alternative für den Vergleich">
+      {nodeId === 'TRANSFER' ? <>
+        <h4 className={styles.prompt}>{transfer.prompt}</h4>
+        <p className={styles.comparisonNotice}>Dein ursprünglicher Plan ist als unverbindlicher Entwurf vorausgefüllt.</p>
+        <div className={styles.transferSlots}>
+          {transferSlots.map(slot => <fieldset className={styles.slot} key={slot.id}>
+            <legend>{slot.label}</legend>
+            {slot.options.map(option => <label className={styles.choice} data-selected={comparison.plan[slot.id] === option.id} htmlFor={`${prefix}-${slot.id}-${option.id}`} key={option.id}>
+              <input id={`${prefix}-${slot.id}-${option.id}`} type="radio" name={`${prefix}-${slot.id}`} value={option.id}
+                checked={comparison.plan[slot.id] === option.id}
+                onChange={() => compare({ ...actionContext, type: 'select-transfer', slotId: slot.id, value: option.id })} />
+              <span>{option.label}</span><Check className={styles.selectedCheck} aria-hidden="true" />
+            </label>)}
+          </fieldset>)}
+        </div>
+      </> : <fieldset className={styles.choices}>
+        <legend>{choiceNodes[nodeId].prompt}</legend>
+        {choiceNodes[nodeId].options.map(option => {
+          const original = snapshot.original.kind === 'choice' && option.id === snapshot.original.choiceId;
+          return <label className={styles.choice} data-selected={comparison.selection === option.id} data-original={original} htmlFor={`${prefix}-${option.id}`} key={option.id}>
+            <input id={`${prefix}-${option.id}`} type="radio" name={`${prefix}-choice`} value={option.id} disabled={original}
+              checked={comparison.selection === option.id}
+              onChange={() => compare({ ...actionContext, type: 'select-choice', choiceId: option.id })} />
+            <span>{option.label}{original && <small className={styles.originalChoice}>Im Durchlauf gewählt</small>}</span><Check className={styles.selectedCheck} aria-hidden="true" />
+          </label>;
+        })}
+      </fieldset>}
+      <p className={styles.selectionStatus} id={`${prefix}-selection`}>{draftNotice}</p>
+      <Button type="submit" className={styles.primaryAction} disabled={!canApply} aria-describedby={`${prefix}-selection`}>
+        {nodeId === 'TRANSFER' ? 'Alternativen Plan prüfen' : 'Alternative anwenden'}<ArrowRight aria-hidden="true" />
+      </Button>
+    </form> : comparison.alternative && <section className={styles.comparisonResult} aria-labelledby={`${prefix}-result`}>
+      <h3 id={`${prefix}-result`} ref={resultHeading} tabIndex={-1}>Alternative im Vergleich</h3>
+      <p className={styles.comparisonNotice}>Nur im Vergleich angewendet. Der ursprüngliche Rückblick bleibt gleich.</p>
+      {equalRisk && <p className={styles.equalRisk}>Gleiches Risiko</p>}
+      <ComparisonAnswerView answer={comparison.alternative} title="Im Vergleich ausprobiert" headingId={`${prefix}-alternative`} />
+      <div className={styles.actions}><Button type="button" variant="outline" onClick={() => compare({ ...actionContext, type: 'another-alternative' })}>Andere Alternative</Button></div>
+    </section>}
+    <p className={styles.srOnly} role="status" aria-live="polite" aria-atomic="true">{announcement}</p>
+    <div className={styles.actions}><Button type="button" variant="outline" className={styles.returnAction} onClick={() => onReturn(snapshot.sessionId)}><ArrowLeft aria-hidden="true" />Zurück zum Überblick</Button></div>
+  </section>;
+}
+
 function Recap({ answers }: { answers: AnswerMap }) {
+  // Sandbox selection lives only inside the recap. Original restart/history and
+  // actor-keyed unmounts discard it without touching the mission reducer.
+  const [selected, setSelected] = useState<ComparisonSnapshot | null>(null);
+  const session = useRef(0);
+  const actionRefs = useRef<Partial<Record<MainNodeId, HTMLButtonElement | null>>>({});
+  const previous = useRef<ComparisonSnapshot | null>(null);
+  const active = selected && comparisonMatchesAnswers(selected, answers) ? selected : null;
+
+  useEffect(() => {
+    if (selected && !active) setSelected(current => current === selected ? null : current);
+  }, [selected, active]);
+  useLayoutEffect(() => {
+    const prior = previous.current;
+    previous.current = active;
+    if (prior && !active) actionRefs.current[prior.nodeId]?.focus();
+  }, [active]);
+
+  const openComparison = (nodeId: MainNodeId) => {
+    const snapshot = createComparisonSnapshot(answers, nodeId, ++session.current);
+    if (snapshot) setSelected(current => current === null ? snapshot : current);
+  };
+  const returnToOverview = (sessionId: number) => setSelected(current => current?.sessionId === sessionId ? null : current);
+
+  if (active) {
+    const repair = active.nodeId === 'SHARE' ? answers.SHARE_REPAIR : active.nodeId === 'VERIFY' ? answers.VERIFY_REPAIR : undefined;
+    return <MomentComparison key={active.sessionId} snapshot={active} status={recapStatus(active.nodeId, answers)} repair={repair} onReturn={returnToOverview} />;
+  }
   return <>
     <p className={styles.eyebrow}>Rückblick auf diesen Durchlauf</p>
     <ol className={styles.recapList}>
       {mainStations.map(station => {
         const status = recapStatus(station.id, answers);
+        const original = answers[station.id];
         const repair = station.id === 'SHARE' ? answers.SHARE_REPAIR : station.id === 'VERIFY' ? answers.VERIFY_REPAIR : undefined;
         return <li key={station.id}>
           <span className={styles.recapIcon} aria-hidden="true">{status === 'Passend gewählt' ? <Check /> : status === 'Mit Anleitung geübt' ? <GitBranch /> : <Info />}</span>
           <div><h3>{station.recap}</h3><p className={styles.recapStatus}>{status}</p>
-            <p className={styles.recapDecision}><strong>Gewählt:</strong> {answerSummary(answers[station.id])}</p>
+            <p className={styles.recapDecision}><strong>Gewählt:</strong> {answerSummary(original)}</p>
             {repair && <p className={styles.recapDecision}><strong>Vertiefung:</strong> {answerSummary(repair)}</p>}
+            {original && <Button type="button" variant="outline" className={styles.recapAction}
+              ref={element => { actionRefs.current[station.id] = element; }} onClick={() => openComparison(station.id)}
+              aria-label={`${original.correct ? 'Andere Entscheidung vergleichen' : 'Diesen Moment reparieren'}: ${station.recap}`}>
+              {original.correct ? 'Andere Entscheidung vergleichen' : 'Diesen Moment reparieren'}<ArrowRight aria-hidden="true" />
+            </Button>}
           </div>
         </li>;
       })}
@@ -166,6 +310,7 @@ function Recap({ answers }: { answers: AnswerMap }) {
 
 export function CommunityCollaborationMission() {
   const [state, dispatch] = useReducer(missionReducer, undefined, initialMissionState);
+  const { enabled: friendlyMotionEnabled } = useFriendlyMotion();
   const [restartOpen, setRestartOpen] = useState(false);
   const questionHeading = useRef<HTMLHeadingElement>(null);
   const feedbackHeading = useRef<HTMLHeadingElement>(null);
@@ -208,7 +353,7 @@ export function CommunityCollaborationMission() {
   const apply = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); dispatch({ type: 'apply', nodeId: state.nodeId }); };
   const feedbackAnnouncement = answer ? (answer.correct ? 'Entscheidung angewendet. Passend gewählt.' : 'Entscheidung angewendet. Eine Erklärung und ein Beispiel sind verfügbar.') : '';
 
-  return <div className={styles.mission}>
+  return <div className={styles.mission} data-friendly-motion={friendlyMotionEnabled}>
     <div className={styles.utilities}>
       <Link href="/courses" prefetch={false}><ArrowLeft aria-hidden="true" />Zu den Kursen</Link>
       <span>Freiwillige Fallmission</span>
@@ -245,45 +390,47 @@ export function CommunityCollaborationMission() {
     </section> : state.stage === 'recap' ? <section className={styles.recap} aria-labelledby="mission-recap-title">
       <h2 ref={recapHeading} id="mission-recap-title" tabIndex={-1}>Deine Entscheidungen im Überblick</h2>
       <Recap answers={state.answers} />
-      <div className={styles.actions}><Button type="button" className={styles.primaryAction} onClick={restart}><RotateCcw aria-hidden="true" />Nochmal ausprobieren</Button><Button asChild variant="outline"><Link href="/courses" prefetch={false}>Zu den Kursen</Link></Button></div>
+      <div className={styles.actions}><Button type="button" className={styles.primaryAction} onClick={restart}><RotateCcw aria-hidden="true" />Gesamten Durchlauf neu starten</Button><Button asChild variant="outline"><Link href="/courses" prefetch={false}>Zu den Kursen</Link></Button></div>
     </section> : <>
       <StationTrail state={state} />
       <section className={styles.scene} aria-labelledby="mission-question-title">
         <div className={styles.sceneHeading}>
-          <p className={styles.eyebrow}>{isRepair(state.nodeId) ? 'Vertiefung' : `Hauptentscheidung ${mainIndex + 1}`}</p>
-          <h2 ref={questionHeading} id="mission-question-title" tabIndex={-1}>{node.title}</h2>
-          <p className={styles.situation}>{node.situation}</p>
+          <p className={styles.eyebrow}>{isRepair(state.nodeId) ? 'Vertiefung' : `Hauptentscheidung ${mainIndex + 1}`} · {node.title}</p>
+          <h2 ref={questionHeading} id="mission-question-title" tabIndex={-1}>{node.prompt}</h2>
+          <div className={styles.situationBubble}><SparkEntry /><p className={styles.situation}>{node.situation}</p></div>
         </div>
         {state.stage === 'question' ? <>
           <form key={state.nodeId} onSubmit={apply} className={styles.decisionForm}>
+            <SceneVisual nodeId={state.nodeId} />
             {state.nodeId === 'TRANSFER' ? <>
-              <h3 className={styles.prompt}>{transfer.prompt}</h3>
+              <h3 className={styles.srOnly}>{transfer.prompt}</h3>
               <div className={styles.transferSlots}>
                 {transferSlots.map(slot => <fieldset key={slot.id} className={styles.slot}>
                   <legend>{slot.label}</legend>
                   {slot.options.map(option => <label className={styles.choice} data-selected={state.transferPlan[slot.id] === option.id} key={option.id}>
                     <input type="radio" name={`transfer-${slot.id}`} value={option.id} checked={state.transferPlan[slot.id] === option.id}
                       onChange={() => dispatch({ type: 'select-transfer', slotId: slot.id, value: option.id })} />
-                    <span>{option.label}</span>
+                    <span>{option.label}</span><Check className={styles.selectedCheck} aria-hidden="true" />
                   </label>)}
                 </fieldset>)}
               </div>
             </> : <fieldset className={styles.choices}>
-              <legend>{choiceNodes[state.nodeId].prompt}</legend>
+              <legend className={styles.srOnly}>{choiceNodes[state.nodeId].prompt}</legend>
               {choiceNodes[state.nodeId].options.map(option => <label className={styles.choice} data-selected={state.selection === option.id} key={option.id}>
                 <input type="radio" name={`choice-${state.nodeId}`} value={option.id} checked={state.selection === option.id}
                   onChange={() => { if (state.nodeId !== 'TRANSFER') dispatch({ type: 'select-choice', nodeId: state.nodeId, choiceId: option.id }); }} />
-                <span>{option.label}</span>
+                <span>{option.label}</span><Check className={styles.selectedCheck} aria-hidden="true" />
               </label>)}
             </fieldset>}
             <p className={styles.selectionStatus} id="case-selection-status">{state.nodeId === 'TRANSFER' ? `${selectedTransferSlots} von 3 Feldern ausgewählt. Noch nicht geprüft.` : canApply ? 'Ausgewählt. Noch nicht angewendet.' : 'Wähle eine Entscheidung.'}</p>
-            <Button type="submit" className={styles.primaryAction} disabled={!canApply} aria-describedby="case-selection-status">{state.nodeId === 'TRANSFER' ? 'Plan prüfen' : 'Entscheidung anwenden'}<ArrowRight aria-hidden="true" /></Button>
+            <Button type="submit" className={styles.primaryAction} disabled={!canApply} aria-describedby="case-selection-status">{state.nodeId === 'TRANSFER' ? 'Plan prüfen' : 'Prüfen'}<ArrowRight aria-hidden="true" /></Button>
           </form>
-          <SceneVisual nodeId={state.nodeId} />
         </> : <>
-          <Feedback state={state} headingRef={feedbackHeading} />
           <SceneVisual nodeId={state.nodeId} answer={answer} />
-          <div className={styles.actions}><Button type="button" className={styles.primaryAction} onClick={() => dispatch({ type: 'continue', nodeId: state.nodeId })}>{state.nodeId === 'TRANSFER' ? 'Zum Überblick' : 'Weiter'}<ArrowRight aria-hidden="true" /></Button></div>
+          <div className={styles.feedbackTray} data-correct={answer?.correct}>
+            <Feedback state={state} headingRef={feedbackHeading} />
+            <div className={styles.actions}><Button type="button" className={styles.primaryAction} onClick={() => dispatch({ type: 'continue', nodeId: state.nodeId })}>{state.nodeId === 'TRANSFER' ? 'Zum Überblick' : 'Weiter'}<ArrowRight aria-hidden="true" /></Button></div>
+          </div>
         </>}
         <p className={styles.simulationNote}>Nur Simulation. Es wird nichts gepostet, versendet oder freigegeben.</p>
       </section>
