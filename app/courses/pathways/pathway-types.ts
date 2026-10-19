@@ -39,7 +39,7 @@ export function pathwayStatus(pathway: MemberPathway) {
   if (participation.optedOutAt) return 'Teilnahme beendet';
   if (participation.badgeActive) return 'Abzeichen aktiv';
   if (latestRelevantRevocation(pathway)) return 'Erneute Bestätigung nötig';
-  if (pathway.creditedCount >= pathway.requiredCount) return 'Bestätigung wird geprüft';
+  if (pathway.creditedCount >= pathway.requiredCount) return 'Abzeichen derzeit nicht aktiv';
   return 'In Arbeit';
 }
 
