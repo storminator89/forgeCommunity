@@ -46,6 +46,10 @@ interface Course {
   imageUrl: string | null;
 }
 
+// This component belongs only to app/courses/page.tsx. SPA rendering can precede
+// the browser's history commit, so the source URL is not a stable route owner.
+const catalogPathname = '/courses';
+
 // Next's native-history adapter must see an external call to notify its
 // search hooks. It restores its own __NA/tree metadata before the write.
 // Vinext's distinct metadata and all unrelated caller fields remain intact.
@@ -86,7 +90,6 @@ function ScopedCourseClient({ session }: { session: NonNullable<ReturnType<typeo
   const { toast } = useToast();
   const activeRef = useRef(true);
   const searchRef = useRef<HTMLInputElement>(null);
-  const catalogPathRef = useRef(typeof window === 'undefined' ? null : window.location.pathname);
   const ownedUrlRef = useRef<{ href: string; categoryKey: string } | null>(null);
   const pendingPopstateSyncRef = useRef(false);
   // All authenticated accounts can create courses. The role only changes
@@ -101,7 +104,7 @@ function ScopedCourseClient({ session }: { session: NonNullable<ReturnType<typeo
 
   useEffect(() => {
     const restoreFilters = () => {
-      if (window.location.pathname !== catalogPathRef.current) return;
+      if (window.location.pathname !== catalogPathname) return;
       ownedUrlRef.current = null;
       const restored = readCourseCatalogFilters(window.location.search, categories);
       setFilters(restored);
@@ -124,7 +127,7 @@ function ScopedCourseClient({ session }: { session: NonNullable<ReturnType<typeo
     // whose ambiguous lookup token was deliberately omitted from the URL.
     if (ownedUrlRef.current?.href !== window.location.href || ownedUrlRef.current.categoryKey !== categoryKey) restoreFilters();
     const restoreOnPopstate = () => {
-      if (window.location.pathname !== catalogPathRef.current) return;
+      if (window.location.pathname !== catalogPathname) return;
       // Keep this pending through loading/errors until restoration is safe.
       pendingPopstateSyncRef.current = true;
       restoreFilters();
@@ -134,7 +137,7 @@ function ScopedCourseClient({ session }: { session: NonNullable<ReturnType<typeo
   }, [categories, categoryKey, isLoading, loadError, navigationSearch]);
 
   const changeFilters = (next: CourseCatalogFilters, mode: 'push' | 'replace' = 'push') => {
-    if (!catalogUiReady || window.location.pathname !== catalogPathRef.current) return;
+    if (!catalogUiReady || window.location.pathname !== catalogPathname) return;
     setFilters(next);
     const href = courseCatalogHref(window.location.href, next, categories);
     if (href === `${window.location.pathname}${window.location.search}${window.location.hash}`) return;
@@ -210,7 +213,7 @@ function ScopedCourseClient({ session }: { session: NonNullable<ReturnType<typeo
   const hasFilters = Boolean(searchTerm) || categoryFilter !== 'Alle' || mineOnly;
   const hasEnrollments = courses.some(course => course.isEnrolled === true);
   const resetFilters = () => {
-    if (!catalogUiReady || window.location.pathname !== catalogPathRef.current) return;
+    if (!catalogUiReady || window.location.pathname !== catalogPathname) return;
     changeFilters({ q: '', category: 'Alle', mine: false });
     // The reset button can disappear with the empty state. Keep keyboard
     // focus on the search control instead of leaving it on the document body.
