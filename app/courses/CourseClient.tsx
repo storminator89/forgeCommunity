@@ -322,7 +322,7 @@ function ScopedCourseClient({ session }: { session: NonNullable<ReturnType<typeo
                 </DropdownMenu>
               </nav>
               <p className="mt-4 border-t pt-3 text-sm leading-relaxed text-muted-foreground">
-                <Link href="/courses/scenarios/community-collaboration" prefetch={false} className="inline-flex min-h-11 items-center rounded-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Fallmission: Sicher zusammenarbeiten</Link>
+                <Link href="/courses/scenarios" prefetch={false} className="inline-flex min-h-11 items-center rounded-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Fallmission wählen</Link>
                 <span className="block">Freiwillig. Durchlauf wird nicht gespeichert.</span>
               </p>
               <div className="mt-5">
