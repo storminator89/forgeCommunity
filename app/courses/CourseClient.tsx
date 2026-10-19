@@ -88,6 +88,7 @@ function ScopedCourseClient({ session }: { session: NonNullable<ReturnType<typeo
   const searchRef = useRef<HTMLInputElement>(null);
   const catalogPathRef = useRef(typeof window === 'undefined' ? null : window.location.pathname);
   const ownedUrlRef = useRef<{ href: string; categoryKey: string } | null>(null);
+  const pendingPopstateSyncRef = useRef(false);
   // All authenticated accounts can create courses. The role only changes
   // the suggested next step; it is not an additional authorization rule.
   const creatorPerspective = session.user.role === 'ADMIN' || session.user.role === 'INSTRUCTOR';
@@ -108,7 +109,10 @@ function ScopedCourseClient({ session }: { session: NonNullable<ReturnType<typeo
       // Never turn a loading/error response into an enrollment-empty state.
       if (!isLoading && !loadError) {
         const href = courseCatalogHref(window.location.href, restored, categories);
-        if (href !== `${window.location.pathname}${window.location.search}${window.location.hash}`) {
+        if (pendingPopstateSyncRef.current || href !== `${window.location.pathname}${window.location.search}${window.location.hash}`) {
+          // A retained router snapshot can skip updating its search cache on
+          // Back/Forward. Refresh it once, after full category validation.
+          pendingPopstateSyncRef.current = false;
           ownedUrlRef.current = { href: new URL(href, window.location.href).href, categoryKey };
           window.history.replaceState(externalCatalogHistoryState(), '', href);
         }
@@ -119,8 +123,14 @@ function ScopedCourseClient({ session }: { session: NonNullable<ReturnType<typeo
     // An echo of our own history write must retain an exact local category
     // whose ambiguous lookup token was deliberately omitted from the URL.
     if (ownedUrlRef.current?.href !== window.location.href || ownedUrlRef.current.categoryKey !== categoryKey) restoreFilters();
-    window.addEventListener('popstate', restoreFilters);
-    return () => window.removeEventListener('popstate', restoreFilters);
+    const restoreOnPopstate = () => {
+      if (window.location.pathname !== catalogPathRef.current) return;
+      // Keep this pending through loading/errors until restoration is safe.
+      pendingPopstateSyncRef.current = true;
+      restoreFilters();
+    };
+    window.addEventListener('popstate', restoreOnPopstate);
+    return () => window.removeEventListener('popstate', restoreOnPopstate);
   }, [categories, categoryKey, isLoading, loadError, navigationSearch]);
 
   const changeFilters = (next: CourseCatalogFilters, mode: 'push' | 'replace' = 'push') => {
