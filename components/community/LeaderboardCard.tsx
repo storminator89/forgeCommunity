@@ -1,5 +1,6 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Button } from "@/components/ui/button"
 import Link from "next/link"
 
 interface LeaderboardUser {
@@ -8,19 +9,32 @@ interface LeaderboardUser {
   points: number
 }
 
+export type LeaderboardState =
+  | { status: 'loading' }
+  | { status: 'error'; isRetrying: boolean }
+  | { status: 'success'; users: LeaderboardUser[] }
+
 interface LeaderboardCardProps {
   users: LeaderboardUser[]
   isLoading: boolean
+  error?: { isRetrying: boolean; onRetry: () => void }
 }
 
-export function LeaderboardCard({ users, isLoading }: LeaderboardCardProps) {
+export function LeaderboardCard({ users, isLoading, error }: LeaderboardCardProps) {
   return (
     <section aria-labelledby="community-leaderboard-title" className="border-t pt-5">
       <h2 id="community-leaderboard-title" className="text-base font-semibold tracking-tight">Rangliste</h2>
       <p className="mt-1 text-sm text-muted-foreground">Nur Mitglieder, die der öffentlichen Rangliste zugestimmt haben, erscheinen hier.</p>
       <div className="mt-4">
-        {isLoading ? (
-          <div className="space-y-4" role="status" aria-label="Rangliste wird geladen">
+        {error ? (
+          <div className="space-y-3">
+            <p role="alert" className="text-sm text-destructive">Die Rangliste konnte nicht geladen werden. Bitte versuche es erneut.</p>
+            <Button type="button" variant="outline" aria-disabled={error.isRetrying} onClick={() => { if (!error.isRetrying) error.onRetry() }}>
+              {error.isRetrying ? 'Erneuter Versuch läuft…' : 'Rangliste erneut laden'}
+            </Button>
+          </div>
+        ) : isLoading ? (
+          <div className="space-y-4" aria-hidden="true">
             {Array.from({ length: 5 }).map((_, index) => (
               <div key={index} className="flex items-center gap-3">
                 <Skeleton className="h-9 w-9 shrink-0 rounded-full" />
@@ -46,6 +60,11 @@ export function LeaderboardCard({ users, isLoading }: LeaderboardCardProps) {
             ))}
           </ol>
         ) : <p className="text-sm text-muted-foreground">Noch keine öffentlichen Einträge.</p>}
+        <p role="status" aria-live="polite" className="sr-only">
+          {error ? error.isRetrying ? 'Rangliste wird erneut geladen.' : 'Rangliste konnte nicht geladen werden. Erneut laden ist verfügbar.'
+            : isLoading ? 'Rangliste wird geladen.'
+              : users.length ? `Rangliste geladen. Öffentliche Einträge: ${users.length}.` : 'Rangliste geladen. Keine öffentlichen Einträge.'}
+        </p>
         <p className="mt-4 text-xs text-muted-foreground">Was zählt: Ein von Admins freigegebener Kurs mit gespeichertem gültigem Quiz und bestandenem Versuch für die aktuelle Kursversion. Beiträge, Kommentare und Likes bringen keine Punkte.</p>
         <Link href="/settings" className="mt-2 inline-block text-sm text-primary underline-offset-4 hover:underline">Sichtbarkeit in den Einstellungen ändern</Link>
       </div>

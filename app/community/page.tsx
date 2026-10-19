@@ -22,7 +22,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 // Import our new components
 import { PostForm } from '@/components/community/PostForm'
 import { PostCard } from '@/components/community/PostCard'
-import { LeaderboardCard } from '@/components/community/LeaderboardCard'
+import { LeaderboardCard, type LeaderboardState } from '@/components/community/LeaderboardCard'
 import { StatsCard } from '@/components/community/StatsCard'
 import { PersonalProgressDashboard } from '@/components/community/PersonalProgressDashboard'
 import { FirstActionGuide } from '@/components/community/FirstActionGuide'
@@ -40,6 +40,13 @@ interface LeaderboardUser {
   name: string
   image: string | null
   points: number
+}
+
+function isLeaderboardUsers(data: unknown): data is LeaderboardUser[] {
+  return Array.isArray(data) && data.length <= 10 && data.every(user =>
+    user !== null && typeof user === 'object' && typeof user.name === 'string' &&
+    (user.image === null || typeof user.image === 'string') &&
+    Number.isSafeInteger(user.points) && user.points >= 0)
 }
 
 function Community({ session, topic, filters, onSelectTopic, onSelectFilters, onClearFilters, onNavigationLock, navigationBlocked }: { session: Session | null; topic: string | null; filters: CommunityFilters; onSelectTopic: (topic: string | null) => void; onSelectFilters: (filters: CommunityFilters) => void; onClearFilters: () => void; onNavigationLock: (locked: boolean) => void; navigationBlocked: boolean }) {
@@ -66,8 +73,7 @@ function Community({ session, topic, filters, onSelectTopic, onSelectFilters, on
   const [activityRefresh, setActivityRefresh] = useState(0)
   const [isEditing, setIsEditing] = useState(false)
   const [editingPost, setEditingPost] = useState<Post | null>(null)
-  const [leaderboardUsers, setLeaderboardUsers] = useState<LeaderboardUser[]>([])
-  const [isLeaderboardLoading, setIsLeaderboardLoading] = useState(true)
+  const [leaderboardState, setLeaderboardState] = useState<LeaderboardState>({ status: 'loading' })
   const [notification, setNotification] = useState<{ type: 'success' | 'error', message: string } | null>(null)
 
   const mountedRef = useRef(false)
@@ -95,22 +101,43 @@ function Community({ session, topic, filters, onSelectTopic, onSelectFilters, on
     mountedRef.current = true
     setHasCommentDraft(commentDraftsRef.current.size > 0)
     onNavigationLock(composerOpenRef.current || !!mutationRequestRef.current || commentDraftsRef.current.size > 0)
-    const controller = new AbortController()
-    leaderboardRequestRef.current = controller
-    void fetchWithErrorHandling<LeaderboardUser[]>('/api/leaderboard', { signal: controller.signal })
-      .then(data => { if (!controller.signal.aborted) setLeaderboardUsers(data) })
-      .catch(error => {
-        if (!controller.signal.aborted && !isAbortError(error)) setNotification({ type: 'error', message: 'Fehler beim Laden des Leaderboards.' })
-      })
-      .finally(() => { if (!controller.signal.aborted) setIsLeaderboardLoading(false) })
     return () => {
       mountedRef.current = false
       onNavigationLock(false)
-      controller.abort()
       mutationRequestRef.current?.abort()
       mutationRequestRef.current = null
     }
   }, [])
+
+  const loadLeaderboard = useCallback(async () => {
+    // Lock synchronously: repeated clicks before React renders share one read.
+    if (!mountedRef.current || leaderboardRequestRef.current) return
+    const controller = new AbortController()
+    leaderboardRequestRef.current = controller
+    setLeaderboardState(previous => previous.status === 'error'
+      ? { status: 'error', isRetrying: true }
+      : { status: 'loading' })
+    const isCurrent = () => mountedRef.current && leaderboardRequestRef.current === controller && !controller.signal.aborted
+    try {
+      const data = await fetchWithErrorHandling<unknown>('/api/leaderboard', { signal: controller.signal, cache: 'no-store' })
+      if (!isLeaderboardUsers(data)) throw new Error('Ungültige Rangliste')
+      if (isCurrent()) setLeaderboardState({ status: 'success', users: data.map(({ name, image, points }) => ({ name, image, points })) })
+    } catch {
+      if (isCurrent()) setLeaderboardState({ status: 'error', isRetrying: false })
+    } finally {
+      if (leaderboardRequestRef.current === controller) leaderboardRequestRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadLeaderboard()
+    return () => {
+      // The existing viewer/role key and session-loading gate unmount this
+      // account's view. Never let an obsolete read update a replacement view.
+      leaderboardRequestRef.current?.abort()
+      leaderboardRequestRef.current = null
+    }
+  }, [loadLeaderboard])
 
   useEffect(() => {
     if (!session?.user?.id) return
@@ -452,8 +479,9 @@ function Community({ session, topic, filters, onSelectTopic, onSelectFilters, on
 <aside aria-label="Deine Community im Überblick" className="fc-community-aside">
                 <StatsCard stats={activity} activityLoading={activityLoading} activityError={activityError} onRetryActivity={refreshActivity} isSignedIn={!!session?.user?.id} />
                 <LeaderboardCard
-                  users={leaderboardUsers}
-                  isLoading={isLeaderboardLoading}
+                  users={leaderboardState.status === 'success' ? leaderboardState.users : []}
+                  isLoading={leaderboardState.status === 'loading'}
+                  error={leaderboardState.status === 'error' ? { isRetrying: leaderboardState.isRetrying, onRetry: () => { void loadLeaderboard() } } : undefined}
                 />
               </aside>
             </div>
