@@ -28,6 +28,7 @@ export type LearnerFeedback = {
   correctIndex?: number
   explanation?: string
   canContinue?: boolean
+  submittedAnswer?: { reservationId: string; optionIndex: number }
 }
 export type LearnerStage = 'loading' | 'error' | 'forbidden' | 'unpublished' | 'archived' | 'off' | 'available' | 'paused' | 'idle' | 'question' | 'feedback' | 'done' | 'unavailable'
 
@@ -114,12 +115,28 @@ function PracticeQuestion({ question, busy, onAnswer }: { question: LearnerQuest
 function PracticeFeedback({ feedback, question, busy, onNext, availabilityState }: { feedback: LearnerFeedback; question: LearnerQuestion; busy: boolean; onNext?: () => void; availabilityState?: PracticeLearnerState | null }) {
   const heading = useRef<HTMLHeadingElement>(null)
   useEffect(() => { heading.current?.focus() }, [question.reservationId])
-  const correctOption = typeof feedback.correctIndex === 'number' ? question.options[feedback.correctIndex] : undefined
+  const correctOption = typeof feedback.correctIndex === 'number' && Number.isSafeInteger(feedback.correctIndex) &&
+    feedback.correctIndex >= 0 && feedback.correctIndex < question.options.length ? question.options[feedback.correctIndex] : undefined
+  const submittedIndex = feedback.submittedAnswer?.reservationId === question.reservationId ? feedback.submittedAnswer.optionIndex : undefined
+  const submittedOption = typeof submittedIndex === 'number' && Number.isSafeInteger(submittedIndex) &&
+    submittedIndex >= 0 && submittedIndex < question.options.length ? question.options[submittedIndex] : undefined
+  const canCompare = submittedOption !== undefined && feedback.correct === (submittedIndex === feedback.correctIndex)
   return <div className="space-y-5" role="status" aria-live="polite">
     <p className="text-sm font-medium text-muted-foreground [overflow-wrap:anywhere]">{question.objectiveTitle || 'Rückmeldung zur Frage'}</p>
     <h2 ref={heading} tabIndex={-1} className="text-xl font-semibold tracking-tight outline-none sm:text-2xl">{feedback.correct ? 'Diese Antwort passt.' : 'Eine andere Antwort war vorgesehen.'}</h2>
     <p className="text-base leading-relaxed [overflow-wrap:anywhere]">{question.prompt}</p>
-    {correctOption && <p className="border-l-2 border-border pl-4 text-base leading-relaxed [overflow-wrap:anywhere]">Vorgesehene Antwort: {correctOption}</p>}
+    {correctOption !== undefined && (canCompare
+      ? <dl className="space-y-3 border-l-2 border-border pl-4 text-base leading-relaxed">
+        <div className="min-w-0">
+          <dt className="text-sm font-medium text-muted-foreground">Deine Antwort</dt>
+          <dd className="[overflow-wrap:anywhere]">{submittedOption}</dd>
+        </div>
+        <div className="min-w-0">
+          <dt className="text-sm font-medium text-muted-foreground">Vorgesehen</dt>
+          <dd className="[overflow-wrap:anywhere]">{correctOption}</dd>
+        </div>
+      </dl>
+      : <p className="border-l-2 border-border pl-4 text-base leading-relaxed [overflow-wrap:anywhere]">Vorgesehene Antwort: {correctOption}</p>)}
     {feedback.explanation && <p className="text-base leading-relaxed [overflow-wrap:anywhere]">{feedback.explanation}</p>}
     <div className="space-y-3 border-t pt-5">
       <div className="text-sm text-muted-foreground"><PracticeAvailabilityNotice state={availabilityState} /></div>
