@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/sites-auth/server';
 import prisma from '@/lib/prisma';
+import { readPrivateRewardHistory } from '@/lib/server/reward-history';
 import { authOptions } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
@@ -14,23 +15,13 @@ export async function GET() {
     const [ledger, completedCourses, changes] = await Promise.all([
       prisma.rewardLedger.aggregate({ where: { userId: user.id, revokedAt: null }, _sum: { points: true } }),
       prisma.courseCompletionRecord.count({ where: { userId: user.id } }),
-      prisma.rewardLedgerChange.findMany({
-        where: { ledger: { userId: user.id } },
-        orderBy: [{ createdAt: 'desc' }, { version: 'desc' }, { id: 'desc' }], take: 10,
-        select: { type: true, reason: true, pointsDelta: true, createdAt: true, ledger: { select: { courseTitle: true } } },
-      }),
+      readPrivateRewardHistory(user.id),
     ]);
     return NextResponse.json({
       points: ledger._sum.points ?? 0,
       completedCourses,
       firstCourseCompleted: completedCourses > 0,
-      history: changes.map(change => ({
-        type: change.type,
-        reason: change.reason,
-        pointsDelta: change.pointsDelta,
-        at: change.createdAt,
-        courseTitle: change.ledger.courseTitle,
-      })),
+      history: changes,
     }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     console.error('Failed to fetch private rewards', error);

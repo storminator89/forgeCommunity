@@ -4,7 +4,13 @@ export type RewardHistoryEntry = {
   pointsDelta: number
   at: string
   courseTitle: string
+  /** Opaque immutable event identity; absent on older private responses. */
+  eventKey?: string
+  /** Confirmed against this event's current ledger version in one read. */
+  activeAward?: boolean
 }
+
+export type CourseRewardMoment = { eventKey: string; points: 50 }
 
 /** Active ledger points and historical course completions are independent totals. */
 export type RewardSummary = {
@@ -26,13 +32,20 @@ function isNonnegativeSafeInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
 }
 
-function isRewardHistoryEntry(value: unknown): value is RewardHistoryEntry {
-  return isRecord(value) &&
+export function isRewardHistoryEntry(value: unknown): value is RewardHistoryEntry {
+  if (!(isRecord(value) &&
     typeof value.type === 'string' && REWARD_CHANGE_TYPES.has(value.type) &&
     (value.reason === null || (typeof value.reason === 'string' && REWARD_CHANGE_REASONS.has(value.reason))) &&
     typeof value.pointsDelta === 'number' && Number.isSafeInteger(value.pointsDelta) &&
     typeof value.at === 'string' && ISO_TIMESTAMP.test(value.at) && Number.isFinite(Date.parse(value.at)) &&
-    typeof value.courseTitle === 'string'
+    typeof value.courseTitle === 'string')) return false
+
+  if ('eventKey' in value || 'activeAward' in value) {
+    if (typeof value.eventKey !== 'string' || !/^[a-f0-9]{64}$/.test(value.eventKey) ||
+      typeof value.activeAward !== 'boolean') return false
+    if (value.activeAward && (value.type !== 'AWARDED' || value.reason !== null || value.pointsDelta !== 50)) return false
+  }
+  return true
 }
 
 export function isRewardSummary(value: unknown): value is RewardSummary {
@@ -44,8 +57,13 @@ export function isRewardSummary(value: unknown): value is RewardSummary {
 
   if ('history' in value) {
     if (!Array.isArray(value.history) || value.history.length > 10) return false
+    const keys = new Set<string>()
     for (const entry of value.history) {
       if (!isRewardHistoryEntry(entry)) return false
+      if (entry.eventKey) {
+        if (keys.has(entry.eventKey)) return false
+        keys.add(entry.eventKey)
+      }
     }
   }
   return true
