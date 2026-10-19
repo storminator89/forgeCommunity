@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { ProgressSpark } from '@/components/community/ProgressSpark';
 import { CourseNextStep } from './CourseNextStep';
 import { learningGoalDeadline, readLearningGoal, type LearningGoalView } from './goals/learning-goal-view';
+import { LearningGoalTrail } from './goals/LearningGoalTrail';
 
 type GoalState = { kind: 'loading' } | { kind: 'error' } | { kind: 'ready'; goal: LearningGoalView | null };
 const textLink = 'inline-flex min-h-11 items-center rounded-sm text-sm text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring';
@@ -130,6 +131,7 @@ export function CourseGoalSummary({ actorKey, learner, courses, isLoading, loadE
             {goal.status === 'achieved' ? 'Ziel erreicht. Gut gemacht!' : goal.status === 'paused' ? 'Pausiert. Bestätigtes Lernen zählt weiterhin.' : goal.status === 'ended' ? 'Zeitraum beendet. Neue Abschlüsse zählen hierfür nicht mehr.' : 'Ein Schritt nach dem anderen.'}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">{goal.pausedAt ? 'Vorläufig bis' : 'Bis'} einschließlich {learningGoalDeadline(goal)} ({goal.timezone}).</p>
+          <LearningGoalTrail goal={goal} />
           <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
             <Button type="button" variant="ghost" className="h-auto min-h-11 max-w-full whitespace-normal px-0 text-left" onClick={refreshGoal} disabled={starting}>Zielstand aktualisieren</Button>
             <Link prefetch={false} href="/courses/goals" className={textLink}>{goal.status === 'ended' ? 'Ziel beenden oder neu wählen' : 'Ziel verwalten'}</Link>
