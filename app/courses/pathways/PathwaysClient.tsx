@@ -23,6 +23,10 @@ function dateLabel(iso: string) {
   return Number.isNaN(date.getTime()) ? '' : new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium' }).format(date);
 }
 
+function hasCurrentPathwayProgress(pathway: MemberPathway) {
+  return !pathway.unavailable && Boolean(pathway.participation && !pathway.participation.optedOutAt);
+}
+
 function PathwaysAccessDenied() {
   return <AppShell data-page-family="learning">
     <Sidebar hideLearnerPathways />
@@ -162,6 +166,8 @@ function ScopedPathways({ pathwayId }: { pathwayId?: string }) {
 
   const selected = pathwayId ? pathways?.find(pathway => pathway.id === pathwayId) : null;
   const joined = selected?.participation && !selected.participation.optedOutAt;
+  const showSelectedProgress = selected ? hasCurrentPathwayProgress(selected) : false;
+  const selectedBadgeActive = Boolean(showSelectedProgress && selected?.participation?.badgeActive);
   const latestRevocation = selected ? latestRelevantRevocation(selected) : null;
   const needsRevalidation = Boolean(selected && joined && !selected.participation?.badgeActive && latestRevocation);
 
@@ -191,30 +197,49 @@ function ScopedPathways({ pathwayId }: { pathwayId?: string }) {
           {error && <div className="mt-6"><p role="alert" className="text-sm text-destructive">{error}</p><Button type="button" variant="outline" className="mt-3" onClick={() => void load()}>Erneut laden</Button></div>}
           {pathways === null && !error && <div className="mt-7"><PageState kind="loading" title="Lernpfade werden geladen" /></div>}
           {pathways !== null && !pathwayId && <section aria-labelledby="pathway-list-title" className="mt-8">
-            <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2"><h3 id="pathway-list-title" className="text-xl font-semibold tracking-tight">Verfügbare Lernpfade</h3><p className="text-sm text-muted-foreground">{pathways.length} {pathways.length === 1 ? 'Lernpfad' : 'Lernpfade'}</p></div>
+            <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2"><h3 id="pathway-list-title" className="text-xl font-semibold tracking-tight">Private Lernpfade</h3><p className="text-sm text-muted-foreground">{pathways.length} {pathways.length === 1 ? 'Lernpfad' : 'Lernpfade'}</p></div>
             {pathways.length === 0 ? <PageState title="Noch keine Lernpfade verfügbar" description="Schau später noch einmal vorbei. Deine Kurse bleiben wie gewohnt verfügbar." action={<Button asChild variant="outline"><Link href="/courses">Kurse ansehen</Link></Button>} />
-              : <ol className="fc-entity-list">{pathways.map((pathway, index) => <li key={pathway.id} className="min-w-0">
-                <Link href={`/courses/pathways/${encodeURIComponent(pathway.id)}`} className="fc-entity-card group grid min-h-32 min-w-0 gap-3 focus-visible:rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:grid-cols-[3rem_minmax(0,1fr)_auto] sm:items-start sm:gap-5">
-                  <span className="hidden pt-0.5 text-xl font-semibold tabular-nums text-muted-foreground sm:block" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
-                  <span className="min-w-0"><span className="block break-words text-lg font-semibold tracking-tight group-hover:underline">{pathway.title}</span><span className="mt-1 block max-w-[65ch] text-sm leading-relaxed text-muted-foreground">{pathway.description}</span><span className="mt-3 block text-xs font-medium text-foreground">{pathwayStatus(pathway)} · {pathway.requiredCount} Kurse</span></span>
-                  <span className="flex items-center gap-2 text-sm font-medium text-primary sm:mt-1">Details ansehen <ArrowRight className="h-4 w-4" aria-hidden="true" /></span>
-                </Link>
-              </li>)}</ol>}
+              : <ol className="fc-entity-list">{pathways.map((pathway, index) => {
+                const showCurrentProgress = hasCurrentPathwayProgress(pathway);
+                const firstAwardedAt = pathway.participation?.badgeFirstAwardedAt;
+                return <li key={pathway.id} className="min-w-0">
+                  <Link href={`/courses/pathways/${encodeURIComponent(pathway.id)}`} aria-label={`Pfadstand ansehen: ${pathway.title}`} aria-describedby={`pathway-recognition-${index} pathway-state-${index}`} className="fc-entity-card group grid min-h-32 min-w-0 gap-3 focus-visible:rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:grid-cols-[3rem_minmax(0,1fr)_auto] sm:items-start sm:gap-5">
+                    <span className="hidden pt-0.5 text-xl font-semibold tabular-nums text-muted-foreground sm:block" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
+                    <span className="min-w-0">
+                      <span className="block break-words text-lg font-semibold tracking-tight group-hover:underline">{pathway.title}</span>
+                      <span className="mt-1 block max-w-[65ch] text-sm leading-relaxed text-muted-foreground">{pathway.description}</span>
+                      <span id={`pathway-recognition-${index}`} className="mt-3 block text-sm"><span className="text-muted-foreground">Privates Abzeichen: </span><span className="break-words font-semibold">{pathway.badgeLabel}</span></span>
+                      <span id={`pathway-state-${index}`} className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium"><span className="rounded-full border border-border bg-muted px-2.5 py-1">{pathwayStatus(pathway)}</span><span className="text-muted-foreground">{pathway.requiredCount} Kurse</span></span>
+                      {showCurrentProgress && <span className="mt-3 block max-w-md">
+                        <span className="block text-sm tabular-nums text-muted-foreground">{pathway.creditedCount} von {pathway.requiredCount} Kursen aktuell bestätigt</span>
+                        <progress className="mt-2 block h-2 w-full accent-progress" value={Math.min(pathway.creditedCount, pathway.requiredCount)} max={pathway.requiredCount || 1} aria-label={`Aktuell bestätigte Kurse im Lernpfad ${pathway.title}`} aria-valuetext={`${pathway.creditedCount} von ${pathway.requiredCount} Kursen aktuell bestätigt`}>{pathway.creditedCount} von {pathway.requiredCount}</progress>
+                      </span>}
+                      {firstAwardedAt && <span className="mt-3 block text-xs text-muted-foreground">Erstmals aktiv am <time dateTime={firstAwardedAt}>{dateLabel(firstAwardedAt)}</time></span>}
+                    </span>
+                    <span className="flex items-center gap-2 whitespace-nowrap text-sm font-medium text-primary sm:mt-1">Pfadstand ansehen <ArrowRight className="h-4 w-4" aria-hidden="true" /></span>
+                  </Link>
+                </li>;
+              })}</ol>}
             <p className="mt-6 text-sm leading-relaxed text-muted-foreground">Ein Abzeichen hier ist eine private Anerkennung deiner aktuell bestätigten Kursabschlüsse. Es ist kein Zertifikat und wird nicht im Profil oder in Ranglisten angezeigt.</p>
           </section>}
           {pathways !== null && pathwayId && !selected && <div className="mt-8"><PageState kind="empty" title="Lernpfad nicht gefunden" description="Dieser Lernpfad ist nicht verfügbar." action={<Button asChild variant="outline"><Link href="/courses/pathways">Alle Lernpfade ansehen</Link></Button>} /></div>}
           {selected && <div className="mt-8 grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,18rem)] lg:gap-12">
             <div className="min-w-0">
               <section aria-labelledby="pathway-progress-title" className="fc-section-card">
-                <div className="flex flex-col gap-2 border-b pb-5 sm:flex-row sm:items-end sm:justify-between"><div><h3 id="pathway-progress-title" ref={statusRef} tabIndex={-1} className="mt-1 text-xl font-semibold focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">{pathwayStatus(selected)}</h3></div><p className="text-sm tabular-nums text-muted-foreground">{selected.creditedCount} von {selected.requiredCount} Kursen aktuell bestätigt</p></div>
-                <progress className="mt-5 h-3 w-full accent-progress" value={Math.min(selected.creditedCount, selected.requiredCount)} max={selected.requiredCount || 1} aria-label={`Lernpfad: ${selected.creditedCount} von ${selected.requiredCount} Kursen aktuell bestätigt`}>{selected.creditedCount} von {selected.requiredCount}</progress>
+                <div className="flex flex-col gap-2 border-b pb-5 sm:flex-row sm:items-end sm:justify-between"><div><h3 id="pathway-progress-title" ref={statusRef} tabIndex={-1} className="mt-1 text-xl font-semibold focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">{pathwayStatus(selected)}</h3></div>{showSelectedProgress && <p className="text-sm tabular-nums text-muted-foreground">{selected.creditedCount} von {selected.requiredCount} Kursen aktuell bestätigt</p>}</div>
+                {showSelectedProgress && <progress className="mt-5 h-3 w-full accent-progress" value={Math.min(selected.creditedCount, selected.requiredCount)} max={selected.requiredCount || 1} aria-label={`Aktuell bestätigte Kurse im Lernpfad ${selected.title}`} aria-valuetext={`${selected.creditedCount} von ${selected.requiredCount} Kursen aktuell bestätigt`}>{selected.creditedCount} von {selected.requiredCount}</progress>}
+                <div className={`mt-5 min-w-0 border-l-2 px-4 py-3 ${selectedBadgeActive ? 'border-reward-foreground bg-reward text-reward-foreground' : 'border-border bg-muted/50'}`}>
+                  <p className="text-sm">Privates Abzeichen</p><p className="mt-1 break-words font-semibold">{selected.badgeLabel}</p>
+                  <p className="mt-1 text-sm font-medium">{selectedBadgeActive ? 'Aktuell aktiv' : 'Aktuell nicht aktiv'}</p>
+                  {selected.participation?.badgeFirstAwardedAt && <p className="mt-2 text-sm">Erstmals aktiv am <time dateTime={selected.participation.badgeFirstAwardedAt}>{dateLabel(selected.participation.badgeFirstAwardedAt)}</time></p>}
+                  <p className="mt-2 text-sm leading-relaxed">Nur für dich sichtbar. Kein Zertifikat.</p>
+                </div>
                 {needsRevalidation && <div role="status" className="mt-5 border-l-2 border-destructive bg-muted/50 px-4 py-3"><p className="font-medium">Abzeichen derzeit nicht aktiv</p><p className="mt-1 text-sm leading-relaxed text-muted-foreground">{pathwayReason(latestRevocation?.reason ?? null)} Wenn die Voraussetzungen wieder erfüllt sind, kann es erneut aktiv werden. <Button type="button" variant="link" className="h-auto p-0 align-baseline" onClick={() => void load()}>Stand erneut prüfen</Button></p></div>}
-                {joined && selected.participation?.badgeActive && <div className="mt-5 border-l-2 border-reward-foreground bg-reward px-4 py-3 text-reward-foreground"><p className="font-medium">Privates Abzeichen aktiv: {selected.badgeLabel}</p><p className="mt-1 text-sm leading-relaxed">Diese Anerkennung ist nur in deinem Lernpfad sichtbar. Sie ist kein Zertifikat.</p></div>}
-                {!joined && <div className="mt-5 border-l-2 border-border bg-muted/50 px-4 py-3"><p className="text-sm leading-relaxed">Du kannst diesen Weg freiwillig beginnen. Erst mit deiner Teilnahme wird ein privates Pfad-Abzeichen für dich geführt. Du kannst jederzeit wieder aussteigen.</p></div>}
+                {!showSelectedProgress && <p className="mt-4 text-sm leading-relaxed text-muted-foreground">{selected.unavailable ? 'Der Pfad ist derzeit nicht verfügbar. Dein Verlauf und deine Kursabschlüsse bleiben erhalten.' : selected.participation?.optedOutAt ? 'Deine Teilnahme ist beendet. Dein Verlauf und deine Kursabschlüsse bleiben erhalten.' : 'Die private Teilnahme ist freiwillig. Erst mit ihr wird hier dein aktueller Pfadstand angezeigt. Bisherige Kursabschlüsse bleiben erhalten.'}</p>}
               </section>
               <section aria-labelledby="pathway-courses-title" className="fc-section-card mt-5"><div className="border-b pb-4"><h3 id="pathway-courses-title" className="mt-1 text-xl font-semibold">Kurse in diesem Lernpfad</h3></div>
                 <ol className="divide-y">{[...selected.courses].sort((a, b) => a.order - b.order).map((course, index) => <li key={course.courseId} className="grid min-w-0 grid-cols-[2rem_minmax(0,1fr)] gap-3 py-5 sm:grid-cols-[3rem_minmax(0,1fr)_auto] sm:gap-5">
-                  <span className="pt-0.5 text-lg font-semibold tabular-nums text-muted-foreground" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span><div className="min-w-0"><h4 className="break-words font-semibold">{course.title}</h4><p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">{!course.available ? <><BookOpen className="h-4 w-4" aria-hidden="true" /> Kurs nicht mehr verfügbar</> : course.creditActive ? <><Check className="h-4 w-4 text-primary" aria-hidden="true" /> Aktuell bestätigt</> : <><BookOpen className="h-4 w-4" aria-hidden="true" /> Noch nicht bestätigt</>}</p>{courseError?.courseId === course.courseId && <p role="alert" className="mt-2 text-sm text-destructive">{courseError.message}</p>}</div>{course.available && (course.isEnrolled ? <Link href={`/courses/${encodeURIComponent(course.courseId)}/contents`} className="col-start-2 flex min-h-11 items-center gap-1 self-start rounded-sm text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:col-start-3">Kurs öffnen <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link> : <Button type="button" variant="outline" className="col-start-2 min-h-11 self-start sm:col-start-3" aria-label={`Kurs beitreten: ${course.title}`} disabled={joiningCourseId !== null} onClick={() => void joinCourse(course.courseId)}>{joiningCourseId === course.courseId ? 'Beitritt läuft…' : 'Kurs beitreten'}</Button>)}
+                  <span className="pt-0.5 text-lg font-semibold tabular-nums text-muted-foreground" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span><div className="min-w-0"><h4 className="break-words font-semibold">{course.title}</h4>{(!course.available || showSelectedProgress) && <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">{!course.available ? <><BookOpen className="h-4 w-4" aria-hidden="true" /> Kurs nicht mehr verfügbar</> : course.creditActive ? <><Check className="h-4 w-4 text-primary" aria-hidden="true" /> Aktuell bestätigt</> : <><BookOpen className="h-4 w-4" aria-hidden="true" /> Aktuell nicht bestätigt</>}</p>}{courseError?.courseId === course.courseId && <p role="alert" className="mt-2 text-sm text-destructive">{courseError.message}</p>}</div>{course.available && (course.isEnrolled ? <Link href={`/courses/${encodeURIComponent(course.courseId)}/contents`} className="col-start-2 flex min-h-11 items-center gap-1 self-start rounded-sm text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:col-start-3">Kurs öffnen <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link> : <Button type="button" variant="outline" className="col-start-2 min-h-11 self-start sm:col-start-3" aria-label={`Kurs beitreten: ${course.title}`} disabled={joiningCourseId !== null} onClick={() => void joinCourse(course.courseId)}>{joiningCourseId === course.courseId ? 'Beitritt läuft…' : 'Kurs beitreten'}</Button>)}
                 </li>)}</ol>
                 {selected.courses.some(course => !course.available) && <p role="status" className="mt-4 border-l-2 border-destructive bg-muted/50 px-4 py-3 text-sm leading-relaxed">Ein Kurs dieses Lernpfads ist nicht mehr verfügbar. Sein früherer Stand bleibt sichtbar, aber das Pfad-Abzeichen kann derzeit nicht neu aktiviert werden.</p>}
                 <p className="mt-4 text-sm leading-relaxed text-muted-foreground">Die Reihenfolge ist eine Empfehlung. Auch bereits bestätigte Abschlüsse zählen, sofern sie noch aktuell sind. Ändert sich eine Kursfreigabe oder ein Abschluss, kann der Stand sinken und ein Abzeichen vorübergehend entfallen.</p>
