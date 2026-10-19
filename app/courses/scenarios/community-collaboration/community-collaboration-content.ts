@@ -5,7 +5,7 @@ export type NodeId = ChoiceNodeId | 'TRANSFER';
 export type MainNodeId = 'SHARE' | 'VERIFY' | 'ACCESS' | 'TRANSFER';
 export type RepairNodeId = 'SHARE_REPAIR' | 'VERIFY_REPAIR';
 
-export type Choice = { id: string; label: string; correct: boolean };
+export type Choice = { id: string; label: string; correct: boolean; consequence?: string };
 export type ChoiceNode = {
   id: ChoiceNodeId;
   title: string;
@@ -28,9 +28,9 @@ export const choiceNodes: Record<ChoiceNodeId, ChoiceNode> = {
     situation: 'Du brauchst Hilfe zu einer Kursaufgabe. Dein Screenshot enthält auch eine private Nachricht und eine E-Mail-Adresse.',
     prompt: 'Was gehört in deine öffentliche Frage?',
     options: [
-      { id: 'share_minimal', label: 'Nur Aufgabenstelle und Frage, ohne private Nachricht oder Kontaktangaben.', correct: true },
-      { id: 'share_raw', label: 'Der ganze Screenshot. So ist der Zusammenhang vollständig.', correct: false },
-      { id: 'share_closed', label: 'Der Screenshot in einer kleineren Gruppe. Dann ist er privat genug.', correct: false },
+      { id: 'share_minimal', label: 'Nur Aufgabenstelle und Frage, ohne private Nachricht oder Kontaktangaben.', correct: true, consequence: 'In dieser Simulation würde die öffentliche Frage nur Aufgabenstelle und Frage enthalten.' },
+      { id: 'share_raw', label: 'Der ganze Screenshot. So ist der Zusammenhang vollständig.', correct: false, consequence: 'In dieser Simulation würde der ganze Screenshot mit privater Nachricht und E-Mail-Adresse in der öffentlichen Frage stehen.' },
+      { id: 'share_closed', label: 'Der Screenshot in einer kleineren Gruppe. Dann ist er privat genug.', correct: false, consequence: 'In dieser Simulation würde der Screenshot mit privater Nachricht und E-Mail-Adresse in einer kleineren Gruppe geteilt.' },
     ],
     feedback: {
       correct: 'Die Frage bleibt verständlich. Private Details bleiben draußen.',
@@ -56,9 +56,9 @@ export const choiceNodes: Record<ChoiceNodeId, ChoiceNode> = {
     situation: 'Eine unerwartete Nachricht behauptet, vom Support zu sein. Zur Hilfe sollst du dein Passwort oder einen Anmeldecode schicken.',
     prompt: 'Was tust du zuerst?',
     options: [
-      { id: 'verify_code', label: 'Nur den Einmalcode schicken. Das Passwort bleibt ja geheim.', correct: false },
-      { id: 'verify_official', label: 'Nichts schicken. Plattform selbst öffnen und den offiziellen Hilfsweg prüfen.', correct: true },
-      { id: 'verify_link', label: 'Den Link aus der Nachricht öffnen und dort die Zugangsdaten eingeben.', correct: false },
+      { id: 'verify_code', label: 'Nur den Einmalcode schicken. Das Passwort bleibt ja geheim.', correct: false, consequence: 'In dieser Simulation würdest du den Einmalcode an die Person aus der unerwarteten Nachricht schicken.' },
+      { id: 'verify_official', label: 'Nichts schicken. Plattform selbst öffnen und den offiziellen Hilfsweg prüfen.', correct: true, consequence: 'In dieser Simulation würdest du nichts schicken und den Hilfsweg auf der selbst geöffneten Plattform prüfen.' },
+      { id: 'verify_link', label: 'Den Link aus der Nachricht öffnen und dort die Zugangsdaten eingeben.', correct: false, consequence: 'In dieser Simulation würdest du Zugangsdaten auf der Seite aus dem Nachrichtenlink eingeben.' },
     ],
     feedback: {
       correct: 'Du prüfst den Hilfsweg unabhängig. Deine Anmeldung bleibt bei dir.',
