@@ -1,14 +1,14 @@
 import { LockKeyhole } from 'lucide-react'
 import { PersonalProgressCard } from './PersonalProgressCard'
 import { ContributionMilestonesCard } from './ContributionMilestonesCard'
-import type { RewardSummary } from '@/lib/rewards'
+import type { CourseRewardMoment, RewardSummary } from '@/lib/rewards'
 import type { ContributionSummary } from '@/lib/contributions'
 
 type ReadState<T> = { summary: T | null; loading: boolean; error: boolean; refresh: () => void }
 
 /** Compose the page's existing private reads; no additional requests or cache. */
 export function PersonalProgressDashboard({ rewards, contributions, isSignedIn, role }: {
-  rewards: ReadState<RewardSummary>
+  rewards: ReadState<RewardSummary> & { rewardMoment?: CourseRewardMoment | null }
   contributions: ReadState<ContributionSummary>
   isSignedIn: boolean
   role?: string | null
@@ -20,7 +20,7 @@ export function PersonalProgressDashboard({ rewards, contributions, isSignedIn, 
     </header>
     <div className="grid min-w-0 divide-y divide-border sm:grid-cols-2 sm:divide-x sm:divide-y-0">
       <PersonalProgressCard summary={rewards.summary} loading={rewards.loading} error={rewards.error}
-        isSignedIn={isSignedIn} role={role} onRefresh={rewards.refresh} />
+        isSignedIn={isSignedIn} role={role} onRefresh={rewards.refresh} rewardMoment={rewards.rewardMoment} />
       <ContributionMilestonesCard summary={contributions.summary} loading={contributions.loading} error={contributions.error}
         isSignedIn={isSignedIn} onRefresh={contributions.refresh} />
     </div>
