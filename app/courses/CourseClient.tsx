@@ -4,9 +4,9 @@ import { PageState, LoadingScreen, RetryButton } from '@/components/page-state';
 import { HeroBanner, PageContainer } from '@/components/discovery';
 import { GraduationCap } from 'lucide-react';
 import { AppShell, AppHeader } from '@/components/app-shell';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useSession } from '@/lib/sites-auth/react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,7 @@ import { canSeeLearnerPathways } from '@/lib/pathway-visibility';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { CourseNextStep } from './CourseNextStep';
 import { readJourneyCourses } from './journey/journey-trail-data';
+import { COURSE_SEARCH_LIMIT, courseCatalogHref, readCourseCatalogFilters, type CourseCatalogFilters } from './course-catalog-filters';
 
 interface Course {
   id: string;
@@ -45,6 +46,18 @@ interface Course {
   imageUrl: string | null;
 }
 
+// Next's native-history adapter must see an external call to notify its
+// search hooks. It restores its own __NA/tree metadata before the write.
+// Vinext's distinct metadata and all unrelated caller fields remain intact.
+function externalCatalogHistoryState() {
+  const state: Record<string, unknown> = { ...window.history.state };
+  if (state.__NA === true && '__PRIVATE_NEXTJS_INTERNALS_TREE' in state) {
+    delete state.__NA;
+    delete state._N;
+  }
+  return state;
+}
+
 export default function CourseClient() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -59,8 +72,10 @@ export default function CourseClient() {
 }
 
 function ScopedCourseClient({ session }: { session: NonNullable<ReturnType<typeof useSession>['data']> }) {
-  const [searchTerm, setSearchTerm] = useState<string>('');
-  const [categoryFilter, setCategoryFilter] = useState<string>('Alle');
+  const [filters, setFilters] = useState<CourseCatalogFilters>({ q: '', category: 'Alle', mine: false });
+  const [filterUiReady, setFilterUiReady] = useState(false);
+  const navigationSearch = useSearchParams().toString();
+  const { q: searchTerm, category: categoryFilter } = filters;
   const [courses, setCourses] = useState<Course[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [loadError, setLoadError] = useState(false);
@@ -71,9 +86,54 @@ function ScopedCourseClient({ session }: { session: NonNullable<ReturnType<typeo
   const { toast } = useToast();
   const activeRef = useRef(true);
   const searchRef = useRef<HTMLInputElement>(null);
+  const catalogPathRef = useRef(typeof window === 'undefined' ? null : window.location.pathname);
+  const ownedUrlRef = useRef<{ href: string; categoryKey: string } | null>(null);
   // All authenticated accounts can create courses. The role only changes
   // the suggested next step; it is not an additional authorization rule.
   const creatorPerspective = session.user.role === 'ADMIN' || session.user.role === 'INSTRUCTOR';
+  const categoryKey = JSON.stringify(Array.from(new Set(courses.map(course => course.category).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'de')));
+  // Enrollment/progress mutations do not change category membership or reset
+  // an exact local selection whose ambiguous token was deliberately omitted.
+  const categories = useMemo(() => JSON.parse(categoryKey) as string[], [categoryKey]);
+  const mineOnly = filters.mine;
+  const catalogUiReady = !isLoading && !loadError && filterUiReady;
+
+  useEffect(() => {
+    const restoreFilters = () => {
+      if (window.location.pathname !== catalogPathRef.current) return;
+      ownedUrlRef.current = null;
+      const restored = readCourseCatalogFilters(window.location.search, categories);
+      setFilters(restored);
+      // Only a successful full catalog can validate category lookup tokens.
+      // Never turn a loading/error response into an enrollment-empty state.
+      if (!isLoading && !loadError) {
+        const href = courseCatalogHref(window.location.href, restored, categories);
+        if (href !== `${window.location.pathname}${window.location.search}${window.location.hash}`) {
+          ownedUrlRef.current = { href: new URL(href, window.location.href).href, categoryKey };
+          window.history.replaceState(externalCatalogHistoryState(), '', href);
+        }
+        setFilterUiReady(true);
+      }
+    };
+    // Framework query changes include same-route Sidebar/Link navigation.
+    // An echo of our own history write must retain an exact local category
+    // whose ambiguous lookup token was deliberately omitted from the URL.
+    if (ownedUrlRef.current?.href !== window.location.href || ownedUrlRef.current.categoryKey !== categoryKey) restoreFilters();
+    window.addEventListener('popstate', restoreFilters);
+    return () => window.removeEventListener('popstate', restoreFilters);
+  }, [categories, categoryKey, isLoading, loadError, navigationSearch]);
+
+  const changeFilters = (next: CourseCatalogFilters, mode: 'push' | 'replace' = 'push') => {
+    if (!catalogUiReady || window.location.pathname !== catalogPathRef.current) return;
+    setFilters(next);
+    const href = courseCatalogHref(window.location.href, next, categories);
+    if (href === `${window.location.pathname}${window.location.search}${window.location.hash}`) return;
+    // Native same-document history keeps search typing local: no navigation,
+    // catalog refetch or next-step detail selection change.
+    ownedUrlRef.current = { href: new URL(href, window.location.href).href, categoryKey };
+    if (mode === 'replace') window.history.replaceState(externalCatalogHistoryState(), '', href);
+    else window.history.pushState(externalCatalogHistoryState(), '', href);
+  };
 
   useEffect(() => {
     activeRef.current = true;
@@ -131,16 +191,17 @@ function ScopedCourseClient({ session }: { session: NonNullable<ReturnType<typeo
     }
   };
 
-  const categories = Array.from(new Set(courses.map(course => course.category).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'de'));
   const query = searchTerm.trim().toLocaleLowerCase('de');
   const filteredCourses = courses.filter(course =>
     (course.title.toLocaleLowerCase('de').includes(query) || course.instructor.toLocaleLowerCase('de').includes(query)) &&
-    (categoryFilter === 'Alle' || course.category === categoryFilter)
+    (categoryFilter === 'Alle' || course.category === categoryFilter) &&
+    (!mineOnly || course.isEnrolled === true)
   );
-  const hasFilters = Boolean(searchTerm) || categoryFilter !== 'Alle';
+  const hasFilters = Boolean(searchTerm) || categoryFilter !== 'Alle' || mineOnly;
+  const hasEnrollments = courses.some(course => course.isEnrolled === true);
   const resetFilters = () => {
-    setSearchTerm('');
-    setCategoryFilter('Alle');
+    if (!catalogUiReady || window.location.pathname !== catalogPathRef.current) return;
+    changeFilters({ q: '', category: 'Alle', mine: false });
     // The reset button can disappear with the empty state. Keep keyboard
     // focus on the search control instead of leaving it on the document body.
     searchRef.current?.focus();
@@ -206,24 +267,28 @@ function ScopedCourseClient({ session }: { session: NonNullable<ReturnType<typeo
               <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                   <h2 id="course-directory-title" className="text-xl font-semibold tracking-tight">Kursübersicht</h2>
-                  {!isLoading && !loadError && <p role="status" aria-live="polite" className="mt-1 text-sm text-muted-foreground">{filteredCourses.length} {filteredCourses.length === 1 ? 'Kurs' : 'Kurse'} {hasFilters ? 'gefunden' : 'verfügbar'}</p>}
+                  {catalogUiReady && <p role="status" aria-live="polite" className="mt-1 text-sm text-muted-foreground">{filteredCourses.length} {filteredCourses.length === 1 ? 'Kurs' : 'Kurse'} {hasFilters ? 'gefunden' : 'verfügbar'}</p>}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  {hasFilters && filteredCourses.length > 0 && <Button type="button" variant="ghost" onClick={resetFilters}>Filter zurücksetzen</Button>}
+                  {catalogUiReady && hasFilters && filteredCourses.length > 0 && <Button type="button" variant="ghost" onClick={resetFilters}>Filter zurücksetzen</Button>}
 
                 </div>
+              </div>
+              <div role="group" aria-label="Kursauswahl" className="mt-4 flex flex-wrap gap-2">
+                <Button type="button" variant={mineOnly ? 'outline' : 'default'} aria-pressed={!mineOnly} disabled={!catalogUiReady} className="min-h-11" onClick={() => changeFilters({ ...filters, mine: false })}>Alle Kurse</Button>
+                <Button type="button" variant={mineOnly ? 'default' : 'outline'} aria-pressed={mineOnly} disabled={!catalogUiReady} className="min-h-11" onClick={() => changeFilters({ ...filters, mine: true })}>Meine Kurse</Button>
               </div>
               <div className="fc-filter-bar fc-filter-surface mt-4 grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_220px] sm:items-end">
                 <div className="min-w-0">
                   <label htmlFor="course-search" className="mb-1.5 block text-sm font-medium">Kurse suchen</label>
                   <div className="relative">
                     <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input ref={searchRef} id="course-search" aria-label="Suche nach Kursen oder Dozenten" type="search" placeholder="Titel oder Lehrkraft" value={searchTerm} onChange={event => setSearchTerm(event.target.value)} className="pl-10" />
+                    <Input ref={searchRef} id="course-search" aria-label="Suche nach Kursen oder Dozenten" type="search" placeholder="Titel oder Lehrkraft" value={searchTerm} disabled={!catalogUiReady} maxLength={COURSE_SEARCH_LIMIT} onChange={event => changeFilters({ ...filters, q: event.target.value }, 'replace')} className="pl-10" />
                   </div>
                 </div>
                 <div className="min-w-0">
                   <label id="course-category-label" className="mb-1.5 block text-sm font-medium">Kategorie</label>
-                  <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                  <Select value={categoryFilter} disabled={!catalogUiReady} onValueChange={category => changeFilters({ ...filters, category })}>
                     <SelectTrigger aria-label="Kategorie wählen" aria-labelledby="course-category-label" className="h-11 w-full rounded-xl"><SelectValue placeholder="Kategorie wählen" /></SelectTrigger>
                     <SelectContent><SelectItem value="Alle">Alle Kategorien</SelectItem>{categories.map(category => <SelectItem key={category} value={category}>{category}</SelectItem>)}</SelectContent>
                   </Select>
@@ -244,26 +309,28 @@ function ScopedCourseClient({ session }: { session: NonNullable<ReturnType<typeo
                 </DropdownMenu>
               </nav>
               <div className="mt-5">
-                {isLoading && <PageState kind="loading" title="Kurse werden geladen" />}
+                {!loadError && (isLoading || !filterUiReady) && <PageState kind="loading" title="Kurse werden geladen" />}
                 {loadError && <PageState kind="error" title="Kurse konnten nicht geladen werden" description="Prüfe deine Verbindung und versuche es erneut." action={<RetryButton onClick={() => window.location.reload()} />} />}
-                {!isLoading && !loadError && filteredCourses.length === 0 && <PageState
-                  title={courses.length === 0 ? 'Noch keine Kurse' : 'Keine Kurse gefunden'}
-                  description={courses.length === 0
+                {catalogUiReady && filteredCourses.length === 0 && <PageState
+                  title={mineOnly && !hasEnrollments ? 'Noch keine Kursanmeldung' : courses.length === 0 ? 'Noch keine Kurse' : 'Keine Kurse gefunden'}
+                  description={mineOnly
+                    ? hasEnrollments ? 'Ändere deine Suche oder setze die Filter zurück.' : 'Du bist aktuell zu keinem Kurs angemeldet.'
+                    : courses.length === 0
                     ? creatorPerspective
                       ? 'Erstelle den ersten Kurs und teile dein Wissen mit der Community.'
                       : 'Hier sind aktuell keine Kurse verfügbar. Tausche dich in der Community aus oder sieh in der Veranstaltungsübersicht nach.'
                     : 'Versuche andere Suchbegriffe oder setze die Filter zurück.'}
                   action={<div className="flex w-full flex-col items-center justify-center gap-3 sm:flex-row sm:flex-wrap">
-                    {courses.length === 0 && (creatorPerspective
+                    {!mineOnly && courses.length === 0 && (creatorPerspective
                       ? <Button asChild><Link href="/courses/new">Kurs erstellen</Link></Button>
                       : <>
                         <Button asChild><Link href="/community">Zur Community</Link></Button>
                         <Button asChild variant="outline"><Link href="/events">Veranstaltungen ansehen</Link></Button>
                       </>)}
-                    {hasFilters && <Button type="button" variant="outline" onClick={resetFilters}>Filter zurücksetzen</Button>}
+                    {hasFilters && <Button type="button" variant="outline" onClick={resetFilters}>{mineOnly && !hasEnrollments ? 'Alle Kurse ansehen' : 'Filter zurücksetzen'}</Button>}
                   </div>}
                 />}
-                {!isLoading && !loadError && filteredCourses.length > 0 && <div className="fc-entity-list" role="list" aria-label="Kurse">
+                {catalogUiReady && filteredCourses.length > 0 && <div className="fc-entity-list" role="list" aria-label="Kurse">
                   {filteredCourses.map(course => <CourseRow key={course.id} course={course}
                     onDelete={() => void handleDeleteCourse(course.id)} deleting={deletingCourseId === course.id}
                     onJoin={() => void changeEnrollment(course)} onLeave={() => void changeEnrollment(course, true)} pending={pendingCourseId === course.id}
