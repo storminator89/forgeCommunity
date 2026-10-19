@@ -11,17 +11,8 @@ import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { LoadingScreen } from '@/components/page-state';
 import { canSeeLearnerPathways } from '@/lib/pathway-visibility';
-
-type LearningGoal = {
-  targetLeaves: number;
-  durationDays: number;
-  timezone: string;
-  startedAt: string;
-  endsAt: string;
-  pausedAt: string | null;
-  completedLeaves: number;
-  status: 'active' | 'paused' | 'achieved' | 'ended';
-};
+import { readLearningGoal, type LearningGoalView } from './learning-goal-view';
+import { LearningGoalTrail } from './LearningGoalTrail';
 
 export default function CourseGoalsClient() {
   const { data: session, status } = useSession();
@@ -35,7 +26,7 @@ export default function CourseGoalsClient() {
 }
 
 function ScopedCourseGoals({ canSeePathways }: { canSeePathways: boolean }) {
-  const [goal, setGoal] = useState<LearningGoal | null | undefined>(undefined);
+  const [goal, setGoal] = useState<LearningGoalView | null | undefined>(undefined);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [pending, setPending] = useState(false);
@@ -57,11 +48,13 @@ function ScopedCourseGoals({ canSeePathways }: { canSeePathways: boolean }) {
 
   async function loadGoal(controller?: AbortController) {
     const sequence = ++readSequence.current;
+    setGoal(undefined);
+    setNotice('');
     setError('');
     try {
       const response = await fetch('/api/learning-goals/me', { cache: 'no-store', signal: controller?.signal });
       if (!response.ok) throw new Error();
-      const result = await response.json() as { goal: LearningGoal | null };
+      const result = { goal: readLearningGoal(await response.json()) };
       if (mounted.current && !controller?.signal.aborted && sequence === readSequence.current) setGoal(result.goal);
     } catch {
       if (mounted.current && !controller?.signal.aborted && sequence === readSequence.current) setError('Dein Lernziel konnte nicht geladen werden.');
@@ -81,7 +74,7 @@ function ScopedCourseGoals({ canSeePathways }: { canSeePathways: boolean }) {
         ...(body ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}),
       });
       if (!response.ok) throw new Error();
-      const result = await response.json() as { goal: LearningGoal | null };
+      const result = { goal: readLearningGoal(await response.json()) };
       if (!mounted.current) return;
       setGoal(result.goal);
       setNotice(method === 'POST' ? 'Dein privates Lernziel wurde gestartet.'
@@ -147,6 +140,7 @@ function ScopedCourseGoals({ canSeePathways }: { canSeePathways: boolean }) {
               <progress className="mt-3 h-3 w-full accent-progress" value={Math.min(goal.completedLeaves, goal.targetLeaves)} max={goal.targetLeaves} aria-label={`Lernziel: ${goal.completedLeaves} von ${goal.targetLeaves} ${goalNoun} abgeschlossen`}>{goal.completedLeaves} von {goal.targetLeaves}</progress>
               <p className="mt-3 text-sm text-muted-foreground">{goal.status === 'paused' ? `Vorläufig bis einschließlich ${dueDate} (${goal.timezone}). Das Enddatum verschiebt sich für jeden pausierten Kalendertag; bestätigtes Lernen zählt auch während der Pause.` : `Bis einschließlich ${dueDate} (${goal.timezone}).`}</p>
               <p className="mt-2 text-xs text-muted-foreground">Wenn ein Kursinhalt geändert oder entfernt wird, kann der Zähler sinken. Das ist keine Strafe; dein bisheriges Lernen bleibt wertvoll.</p>
+              <LearningGoalTrail goal={goal} />
               {goal.status === 'ended' && <p className="mt-3 text-sm">Du kannst dieses Ziel beenden und jederzeit ein neues wählen.</p>}
               <div className="mt-5 flex flex-wrap gap-3">
                 <Button asChild variant="outline"><Link href="/courses">Kurse entdecken</Link></Button>
