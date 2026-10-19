@@ -218,3 +218,44 @@
   .mission *, .mission *::before, .mission *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
   .mission button:active { transform: none !important; translate: none !important; }
 }
+/* Two authored topics, one native navigation target per tactile card. */
+.selector { max-width: 54rem; margin: 0 auto; padding-top: .5rem; }
+.selector .selectorLead { margin-top: .75rem; color: hsl(var(--muted-foreground)); font-size: 1rem; line-height: 1.7; }
+.missionChoices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.5rem; margin-top: 1.75rem; }
+.missionCard { display: flex; flex-direction: column; min-width: 0; padding: 1.5rem; border: 2px solid hsl(var(--input)); border-radius: 1.25rem; box-shadow: 0 4px 0 hsl(var(--border)); background: hsl(var(--card)); color: hsl(var(--foreground)); text-decoration: none; }
+.missionCard:hover { border-color: hsl(var(--primary)); }
+.missionCard:focus-visible { outline: 3px solid hsl(var(--ring)); outline-offset: 5px; }
+.missionCard h3 { margin-top: .35rem; font-size: 1.5rem; line-height: 1.3; letter-spacing: -.02em; }
+.missionCard .missionCardSummary { margin-top: .75rem; font-size: .9375rem; line-height: 1.7; }
+.missionCardMeta { display: block; margin-top: 1rem; margin-bottom: 1.25rem; color: hsl(var(--muted-foreground)); font-size: .8125rem; line-height: 1.6; }
+.missionCardAction { display: flex; align-items: center; justify-content: center; gap: .65rem; min-height: 3.25rem; margin-top: auto; padding: .75rem 1rem; border: 2px solid hsl(var(--primary)); border-radius: .875rem; box-shadow: 0 4px 0 var(--action-edge); background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); font-size: 1rem; font-weight: 750; }
+.missionCardVisual { display: flex; align-items: center; justify-content: center; gap: .75rem; min-width: 0; min-height: 5rem; margin-bottom: 1.25rem; padding: .75rem; border-radius: .875rem; background: hsl(var(--accent)); color: hsl(var(--accent-foreground)); }
+.missionCardVisual > svg { width: 2.5rem; height: 2.5rem; flex: 0 1 2.5rem; }
+.cardBridge, .cardDisconnected { width: 2rem; height: 0; border-top: 2px solid currentColor; }
+.cardDisconnected { border-top-style: dashed; opacity: .7; }
+.selector .selectorNote { margin-top: 1.75rem; color: hsl(var(--muted-foreground)); font-size: .875rem; line-height: 1.7; }
+.incidentVisual { display: flex; align-items: center; gap: .875rem; min-width: 0; min-height: 5rem; padding: 1rem; font-size: .9375rem; line-height: 1.7; }
+.incidentVisual > svg { width: 2rem; height: 2rem; }
+.incidentVisual[data-risk="true"] { border-bottom: 2px dashed hsl(var(--input)); }
+.sources { max-width: 44rem; margin: 1.75rem auto 0; color: hsl(var(--muted-foreground)); font-size: .8125rem; line-height: 1.7; }
+.sources > summary { min-height: 2.75rem; padding-block: .75rem; cursor: pointer; }
+.sources > summary:focus-visible, .sources a:focus-visible { outline: 3px solid hsl(var(--ring)); outline-offset: 3px; border-radius: .15rem; }
+.sources ul { margin: .5rem 0 0; padding-left: 1.25rem; }
+.sources a { display: inline-block; min-height: 2.75rem; padding-block: .65rem; color: hsl(var(--primary)); text-underline-offset: .25em; }
+@media (max-width: 639px) {
+  .missionChoices { grid-template-columns: minmax(0, 1fr); gap: 1.5rem; }
+  .missionCard { padding: 1.25rem; }
+  .missionCard h3 { font-size: 1.375rem; }
+}
+
+.deviceConnection { display: flex; align-items: center; gap: .75rem; min-width: 0; padding: 1.25rem 1rem 0; color: hsl(var(--muted-foreground)); }
+.deviceConnection > span:not(.networkLink) { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: .5rem; min-width: 0; padding: .75rem; border: 1px solid hsl(var(--input)); border-radius: .65rem; font-size: .8125rem; line-height: 1.6; }
+.networkLink { flex: 1 1 1rem; min-width: .75rem; height: 2px; background: currentColor; }
+.deviceConnection[data-isolated="true"] .networkLink { background: linear-gradient(to right, currentColor 0 32%, transparent 32% 68%, currentColor 68% 100%); }
+
+.recapList .recapConsequence { margin-top: .65rem; color: hsl(var(--foreground)); font-size: .875rem; line-height: 1.7; }
+.recapConsequences { margin: .65rem 0 0; padding-left: 1.25rem; font-size: .875rem; line-height: 1.7; }
+.recapConsequences > li { margin-top: .35rem; }
+.recapDetails { margin-top: .65rem; }
+.recapDetails > summary { width: fit-content; min-height: 2.75rem; padding-block: .65rem; color: hsl(var(--primary)); font-size: .875rem; line-height: 1.6; cursor: pointer; }
+.recapDetails > summary:focus-visible { outline: 3px solid hsl(var(--ring)); outline-offset: 3px; border-radius: .15rem; }
