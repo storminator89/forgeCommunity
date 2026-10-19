@@ -2,7 +2,7 @@
 
 /* Friendly mission workbench. Motion follows confirmed server changes only. */
 
-import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { ArrowRight, CalendarDays, Check, Lightbulb, LockKeyhole, MessageCircle, Users } from 'lucide-react';
 import { FriendlyMotionToggle, useFriendlyMotion } from '@/components/community/FriendlyMotion';
@@ -27,6 +27,8 @@ import { apiSpaceUrl, isSpaceAbort, spaceUrl, SpaceHttpError, type SpaceSummary 
 import { isOwnBookmark, missionAccessDenied, missionApiUrl, missionBookmarkPrivacy, missionPrivacy, missionWeekDates, missionWindowLabel, type MissionContribution, type OwnBookmark, type SpaceMission } from './mission-api';
 
 type Snapshot = { space: SpaceSummary; mission: SpaceMission };
+type BuildOnHandoff = { scope: string; epoch: number; targetId: string };
+type BuildOnFocus = BuildOnHandoff & { origin: Element | null };
 
 export function SpaceMissionDetail({ spaceId, missionId, viewerId, invitationId }: { spaceId: string; missionId: string; viewerId: string; invitationId?: string }) {
   const base = missionApiUrl(spaceId, missionId);
@@ -50,6 +52,13 @@ export function SpaceMissionDetail({ spaceId, missionId, viewerId, invitationId 
   const [kind, setKind] = useState<MissionContribution['kind']>('INSIGHT');
   const [content, setContent] = useState('');
   const [targetId, setTargetId] = useState('');
+  const [buildOnDraftNotice, setBuildOnDraftNotice] = useState<BuildOnHandoff | null>(null);
+  const buildOnNoticeId = useId();
+  const contentRef = useRef<HTMLTextAreaElement>(null);
+  const buildOnFocusRef = useRef<BuildOnFocus | null>(null);
+  const buildOnHandoffReadyRef = useRef(false);
+  const buildOnScope = JSON.stringify([viewerId, spaceId, missionId]);
+  const clearBuildOnHandoff = useCallback(() => { buildOnFocusRef.current = null; setBuildOnDraftNotice(null); }, []);
   const contentId = useId(); const targetLabelId = useId(); const privacyId = useId(); const feedbackId = useId();
   const beginRead = useSpaceListGeneration();
   const actionRef = useRef(false);
@@ -59,6 +68,7 @@ export function SpaceMissionDetail({ spaceId, missionId, viewerId, invitationId 
   const requestIdRef = useRef<{ payload: string; id: string } | null>(null);
   const participationRef = useRef<{ epoch: number; active: boolean } | null>(null);
   const { request: accessRequest, invalidate, accessLost } = useSpaceAccess(() => {
+    buildOnHandoffReadyRef.current = false; clearBuildOnHandoff();
     setSnapshot(null); setContent(''); setTargetId(''); setKind('INSIGHT');
     requestIdRef.current = null; participationRef.current = null; bookmarkComposerRef.current = false;
   });
@@ -69,6 +79,7 @@ export function SpaceMissionDetail({ spaceId, missionId, viewerId, invitationId 
 
   useEffect(() => { aliveRef.current = true; return () => { aliveRef.current = false; }; }, []);
   const load = useCallback(async (preserveReplay = false, preserveComposer = false) => {
+    buildOnHandoffReadyRef.current = false; clearBuildOnHandoff();
     const read = beginRead();
     setSnapshot(null); setLoading(true); setError('');
     if (bookmarkActionRef.current) { bookmarkActionRef.current = false; actionRef.current = false; setBookmarkPending(false); }
@@ -104,7 +115,7 @@ export function SpaceMissionDetail({ spaceId, missionId, viewerId, invitationId 
       }
       return false;
     } finally { if (read.isCurrent()) setLoading(false); }
-  }, [base, spaceId, missionId, viewerId, beginRead, request, invalidate]);
+  }, [base, spaceId, missionId, viewerId, beginRead, request, invalidate, clearBuildOnHandoff]);
 
   useEffect(() => {
     let active = true;
@@ -129,6 +140,76 @@ export function SpaceMissionDetail({ spaceId, missionId, viewerId, invitationId 
       restoreBookmarkFocus(bookmarkButtonRef.current);
     }
   }, [loading, bookmarkPending, snapshot, restoreBookmarkFocus]);
+
+  function isBuildOnRecommendation(expectedTargetId: string) {
+    // Both actionRef writers also set busy or bookmarkPending in the same event.
+    if (!snapshot || loading || busy || bookmarkPending || accessLost) return false;
+    const { space, mission } = snapshot;
+    return space.id === spaceId && mission.spaceId === spaceId && mission.id === missionId
+      && space.isMember && space.canWrite !== false && mission.participation.active && !mission.closedAt
+      && mission.myNextAction?.kind === 'BUILD_ON' && mission.myNextAction.targetContributionId === expectedTargetId
+      && mission.contributions.some(item => item.id === expectedTargetId && item.kind === 'INSIGHT' && item.author.id !== viewerId)
+      && !mission.ownContributions.some(item => item.kind === 'BUILD_ON' && !item.hidden);
+  }
+
+  function canPrepareBuildOn(expectedTargetId: string) {
+    return isBuildOnRecommendation(expectedTargetId) && !actionRef.current && aliveRef.current
+      && participationRef.current?.epoch === snapshot?.mission.participation.epoch && participationRef.current?.active === true;
+  }
+
+  const recommendedBuildOnTargetId = snapshot?.mission.myNextAction?.kind === 'BUILD_ON'
+    && isBuildOnRecommendation(snapshot.mission.myNextAction.targetContributionId) ? snapshot.mission.myNextAction.targetContributionId : null;
+  const showBuildOnDraftNotice = buildOnDraftNotice !== null && buildOnDraftNotice.scope === buildOnScope
+    && buildOnDraftNotice.epoch === snapshot?.mission.participation.epoch && buildOnDraftNotice.targetId === recommendedBuildOnTargetId;
+
+  useLayoutEffect(() => {
+    buildOnHandoffReadyRef.current = recommendedBuildOnTargetId !== null;
+    // Consume once, before checking the current commit. A later render cannot retry focus.
+    const pending = buildOnFocusRef.current;
+    buildOnFocusRef.current = null;
+    if (!pending || pending.scope !== buildOnScope || pending.epoch !== snapshot?.mission.participation.epoch
+      || pending.targetId !== recommendedBuildOnTargetId || !canPrepareBuildOn(pending.targetId)
+      || kind !== 'BUILD_ON' || targetId !== pending.targetId || !document.hasFocus()
+      || document.visibilityState === 'hidden' || document.activeElement !== pending.origin) return;
+    contentRef.current?.focus();
+  });
+
+  useEffect(() => {
+    const cancelPendingFocus = () => { buildOnFocusRef.current = null; };
+    const leaveWindow = () => { buildOnHandoffReadyRef.current = false; clearBuildOnHandoff(); };
+    const visibilityChanged = () => { if (document.visibilityState === 'hidden') leaveWindow(); };
+    document.addEventListener('focusin', cancelPendingFocus);
+    document.addEventListener('focusout', cancelPendingFocus);
+    window.addEventListener('blur', leaveWindow);
+    document.addEventListener('visibilitychange', visibilityChanged);
+    return () => {
+      buildOnHandoffReadyRef.current = false; buildOnFocusRef.current = null;
+      document.removeEventListener('focusin', cancelPendingFocus);
+      document.removeEventListener('focusout', cancelPendingFocus);
+      window.removeEventListener('blur', leaveWindow);
+      document.removeEventListener('visibilitychange', visibilityChanged);
+    };
+  }, [clearBuildOnHandoff]);
+
+  function prepareBuildOn(expectedTargetId: string) {
+    const mission = snapshot?.mission;
+    if (!mission || !buildOnHandoffReadyRef.current || !canPrepareBuildOn(expectedTargetId)
+      || !document.hasFocus() || document.visibilityState === 'hidden') return;
+    clearBuildOnHandoff();
+    const sameChoice = kind === 'BUILD_ON' && targetId === expectedTargetId;
+    if (content.trim() !== '' && !sameChoice) {
+      setBuildOnDraftNotice({ scope: buildOnScope, epoch: mission.participation.epoch, targetId: expectedTargetId });
+      (contentRef.current ?? contributionTargetRef.current)?.focus();
+      return;
+    }
+    if (sameChoice) { (contentRef.current ?? contributionTargetRef.current)?.focus(); return; }
+    // Only transfer the already visible recommendation. Keep even whitespace untouched.
+    setKind('BUILD_ON'); setTargetId(expectedTargetId);
+    if (contentRef.current) contentRef.current.focus();
+    else buildOnFocusRef.current = {
+      scope: buildOnScope, epoch: mission.participation.epoch, targetId: expectedTargetId, origin: document.activeElement,
+    };
+  }
 
   async function toggleBookmark() {
     const mission = snapshot?.mission;
@@ -235,7 +316,7 @@ export function SpaceMissionDetail({ spaceId, missionId, viewerId, invitationId 
       </div>
     </div>}
 
-    {invitationId && <MissionInvitationDecision viewerId={viewerId} spaceId={spaceId} missionId={missionId} invitationId={invitationId} onMission={updated => { if (updated.id === missionId && updated.spaceId === spaceId) { participationRef.current = updated.participation; setSnapshot({ space, mission: updated }); setContent(''); setTargetId(''); setKind('INSIGHT'); } }} />}
+    {invitationId && <MissionInvitationDecision viewerId={viewerId} spaceId={spaceId} missionId={missionId} invitationId={invitationId} onMission={updated => { if (updated.id === missionId && updated.spaceId === spaceId) { buildOnHandoffReadyRef.current = false; clearBuildOnHandoff(); participationRef.current = updated.participation; setSnapshot({ space, mission: updated }); setContent(''); setTargetId(''); setKind('INSIGHT'); } }} />}
     {nextStep && <section className={invitationStyles.region} data-invitation-region="next-action" aria-labelledby="mission-next-action">
       <h2 id="mission-next-action" tabIndex={-1}>Dein nächster Schritt</h2>
       {nextStep.href ? <a className={invitationStyles.link} href={nextStep.href}>{nextStep.text}</a> : <p>{nextStep.text}</p>}
@@ -277,6 +358,7 @@ export function SpaceMissionDetail({ spaceId, missionId, viewerId, invitationId 
             {target && <p className="mt-2 text-sm text-muted-foreground">Baut auf <a href={`#mission-contribution-${target.id}`} className="rounded-sm text-foreground underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-ring">{target.author.name || 'Mitglied'}s Erkenntnis</a> auf.</p>}
             <p className="mt-3 whitespace-pre-wrap break-words text-base leading-relaxed">{item.content}</p>
             <div className="mt-3 flex flex-wrap items-start gap-2">
+              {recommendedBuildOnTargetId === item.id && <Button type="button" variant="outline" size="sm" className="h-auto min-h-11 max-w-full whitespace-normal" onClick={() => prepareBuildOn(item.id)}>Darauf aufbauen</Button>}
               {item.canWithdraw && <SpaceMissionConfirm label="Beitrag zurückziehen" description="Dieser Beitrag wird für Mitglieder verborgen und nicht mehr mitgezählt. Darauf aufbauende Beiträge werden ebenfalls nicht mehr angezeigt oder gezählt. Admins können den Inhalt zur Moderation aufbewahren." onConfirm={() => void mutate(`${base}/contributions/${encodeURIComponent(item.id)}`, 'DELETE', { epoch: mission.participation.epoch }, 'Dein Beitrag ist zurückgezogen und wird nicht mehr mitgezählt.')} />}
               <ReportControl targetType="SPACE_MISSION_CONTRIBUTION" targetId={item.id} request={request} />
               {mission.canManage && <Button type="button" variant="outline" onClick={() => void mutate(`${base}/contributions/${encodeURIComponent(item.id)}/moderation`, 'PATCH', { hidden: true }, 'Der Beitrag ist ausgeblendet.')}>Ausblenden</Button>}
@@ -292,10 +374,11 @@ export function SpaceMissionDetail({ spaceId, missionId, viewerId, invitationId 
         {mayPost && <form onSubmit={contribute} aria-describedby={privacyId} className={`${styles.surface} ${styles.form} space-y-4`}>
           <h3 id="mission-contributions-composer" ref={contributionTargetRef} tabIndex={-1} className={`${styles.taskTarget} text-base font-semibold`}>Dein Beitrag</h3>
           <p className="text-xs leading-relaxed text-muted-foreground">Im privaten Space sichtbar. In kleinen Gruppen können Änderungen einzelne Personen erkennen lassen.</p>
-          <fieldset><legend className="mb-2 text-sm font-medium">Was möchtest du teilen?</legend><div className={styles.kindChoices}><label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm"><input type="radio" name="mission-kind" checked={kind === 'INSIGHT'} onChange={() => { setKind('INSIGHT'); setContent(''); setTargetId(''); }} disabled={ownInsight} className="h-4 w-4 accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" />Eine Erkenntnis{ownInsight ? ' (geteilt)' : ''}</label><label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm"><input type="radio" name="mission-kind" checked={kind === 'BUILD_ON'} onChange={() => { setKind('BUILD_ON'); setContent(''); setTargetId(''); }} disabled={ownBuildOn || targets.length === 0} className="h-4 w-4 accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" />Darauf aufbauen{ownBuildOn ? ' (geteilt)' : ''}</label></div></fieldset>
+          {showBuildOnDraftNotice && <p id={buildOnNoticeId} role="status" className="text-sm text-muted-foreground">Deinen Entwurf erst teilen oder leeren.</p>}
+          <fieldset><legend className="mb-2 text-sm font-medium">Was möchtest du teilen?</legend><div className={styles.kindChoices}><label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm"><input type="radio" name="mission-kind" checked={kind === 'INSIGHT'} onChange={() => { clearBuildOnHandoff(); setKind('INSIGHT'); setContent(''); setTargetId(''); }} disabled={ownInsight} className="h-4 w-4 accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" />Eine Erkenntnis{ownInsight ? ' (geteilt)' : ''}</label><label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm"><input type="radio" name="mission-kind" checked={kind === 'BUILD_ON'} onChange={() => { clearBuildOnHandoff(); setKind('BUILD_ON'); setContent(''); setTargetId(''); }} disabled={ownBuildOn || targets.length === 0} className="h-4 w-4 accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" />Darauf aufbauen{ownBuildOn ? ' (geteilt)' : ''}</label></div></fieldset>
           {!targets.length && !ownBuildOn && <p className="text-sm text-muted-foreground">Aufbauen ist möglich, sobald eine andere teilnehmende Person eine Erkenntnis teilt.</p>}
-          {kind === 'BUILD_ON' && <fieldset aria-labelledby={targetLabelId}><legend id={targetLabelId} className="mb-2 text-sm font-medium">Auf welche Erkenntnis?</legend><div className="space-y-2">{targets.map(target => <label key={target.id} className="flex min-h-11 min-w-0 cursor-pointer items-start gap-3 rounded-xl border p-3 text-sm"><input type="radio" name="mission-target" value={target.id} checked={targetId === target.id} onChange={() => setTargetId(target.id)} required className="mt-1 h-4 w-4 shrink-0 accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" /><span className="min-w-0 whitespace-pre-wrap break-words"><span className="font-medium">{target.author.name || 'Mitglied'}: </span>{target.content}</span></label>)}</div></fieldset>}
-          {availableKind && <><div className="space-y-2"><label htmlFor={contentId} className="text-sm font-medium">{kind === 'INSIGHT' ? 'Deine Erkenntnis' : 'Dein weiterführender Gedanke'}</label><Textarea id={contentId} value={content} onChange={event => setContent(event.target.value)} minLength={10} maxLength={2000} required aria-required="true" rows={4} /></div><Button type="submit" disabled={kind === 'BUILD_ON' && !targetId}><ArrowRight size={16} aria-hidden="true" />Im Space teilen</Button></>}
+          {kind === 'BUILD_ON' && <fieldset aria-labelledby={targetLabelId}><legend id={targetLabelId} className="mb-2 text-sm font-medium">Auf welche Erkenntnis?</legend><div className="space-y-2">{targets.map(target => <label key={target.id} className="flex min-h-11 min-w-0 cursor-pointer items-start gap-3 rounded-xl border p-3 text-sm"><input type="radio" name="mission-target" value={target.id} checked={targetId === target.id} onChange={() => { clearBuildOnHandoff(); setTargetId(target.id); }} required className="mt-1 h-4 w-4 shrink-0 accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" /><span className="min-w-0 whitespace-pre-wrap break-words"><span className="font-medium">{target.author.name || 'Mitglied'}: </span>{target.content}</span></label>)}</div></fieldset>}
+          {availableKind && <><div className="space-y-2"><label htmlFor={contentId} className="text-sm font-medium">{kind === 'INSIGHT' ? 'Deine Erkenntnis' : 'Dein weiterführender Gedanke'}</label><Textarea ref={contentRef} id={contentId} value={content} aria-describedby={showBuildOnDraftNotice ? buildOnNoticeId : undefined} onChange={event => { clearBuildOnHandoff(); setContent(event.target.value); }} minLength={10} maxLength={2000} required aria-required="true" rows={4} /></div><Button type="submit" disabled={kind === 'BUILD_ON' && !targetId}><ArrowRight size={16} aria-hidden="true" />Im Space teilen</Button></>}
           {!availableKind && <p className="text-sm text-muted-foreground">Wähle die andere Beitragsart, um weiterzumachen.</p>}
         </form>}
       </section>
