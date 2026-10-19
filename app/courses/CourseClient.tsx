@@ -321,6 +321,10 @@ function ScopedCourseClient({ session }: { session: NonNullable<ReturnType<typeo
                   </DropdownMenuContent>
                 </DropdownMenu>
               </nav>
+              <p className="mt-4 border-t pt-3 text-sm leading-relaxed text-muted-foreground">
+                <Link href="/courses/scenarios/community-collaboration" prefetch={false} className="inline-flex min-h-11 items-center rounded-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">Fallmission: Sicher zusammenarbeiten</Link>
+                <span className="block">Freiwillig. Durchlauf wird nicht gespeichert.</span>
+              </p>
               <div className="mt-5">
                 {!loadError && (isLoading || !filterUiReady) && <PageState kind="loading" title="Kurse werden geladen" />}
                 {loadError && <PageState kind="error" title="Kurse konnten nicht geladen werden" description="Prüfe deine Verbindung und versuche es erneut." action={<RetryButton onClick={() => window.location.reload()} />} />}
