@@ -21,7 +21,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useToast } from '@/hooks/use-toast';
 import { canSeeLearnerPathways } from '@/lib/pathway-visibility';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { CourseNextStep } from './CourseNextStep';
+import { CourseGoalSummary } from './CourseGoalSummary';
 import { readJourneyCourses } from './journey/journey-trail-data';
 import { COURSE_SEARCH_LIMIT, courseCatalogHref, readCourseCatalogFilters, type CourseCatalogFilters } from './course-catalog-filters';
 
@@ -272,7 +272,7 @@ function ScopedCourseClient({ session }: { session: NonNullable<ReturnType<typeo
         <main id="page-content" tabIndex={-1} className="min-w-0 flex-1 overflow-y-auto">
           <PageContainer>
             <HeroBanner icon={GraduationCap} title="Wissen teilen. Neues lernen." description="Finde deinen nächsten Kurs und wachse mit der Community." action={creatorPerspective ? <Button asChild><Link href="/courses/new"><Plus className="h-4 w-4" aria-hidden="true" />Neuer Kurs</Link></Button> : undefined} />
-            {session.user.role === 'USER' && <CourseNextStep actorKey={JSON.stringify([session.user.id, session.user.role])} courses={courses} isLoading={isLoading} loadError={loadError} />}
+            <CourseGoalSummary key={JSON.stringify([session.user.id, session.user.role])} actorKey={JSON.stringify([session.user.id, session.user.role])} learner={session.user.role === 'USER'} courses={courses} isLoading={isLoading} loadError={loadError} />
             <section aria-labelledby="course-directory-title" className="min-w-0">
               <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                 <div>
