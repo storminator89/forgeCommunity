@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
 
 export type SparkClipName = 'idle' | 'blink' | 'thinking' | 'answer' | 'positive' | 'retry';
-export type SparkReaction = { id: string; kind: 'answer' | 'positive' | 'retry' };
+export type SparkReaction = { id: string; kind: 'thinking' | 'answer' | 'positive' | 'retry' };
 export type SparkAtlas = {
   /** Same-origin static WebP atlas containing genuine Blender-rendered poses. */
   source: string;
