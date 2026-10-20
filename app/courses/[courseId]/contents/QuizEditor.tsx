@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { PlusCircle, Trash2, GripVertical, Eye, ArrowUpDown, ArrowUp, ArrowDown, CheckSquare, Square, Copy } from 'lucide-react';
+import { PlusCircle, Trash2, GripVertical, Eye, ArrowUp, ArrowDown, CheckSquare, Square, Copy } from 'lucide-react';
 import {
   QuizContent,
   QuizQuestion,
@@ -28,6 +28,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { createQuizQuestion as createEmptyQuestion, duplicateQuizQuestion, getQuizAuthoringReadiness, QUIZ_QUESTION_TYPES as QUESTION_TYPES, quizQuestionTypeLabel } from './quiz-authoring';
 import { QuizAuthorPreview } from './QuizAuthorPreview';
 import { QuestionBankPanel } from './QuestionBankPanel';
+import styles from './QuizStage.module.css';
 
 interface QuizEditorProps {
   initialContent?: QuizContent | string;
@@ -71,19 +72,36 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
   const pendingFocus = useRef<string | null>(null);
   const readiness = getQuizAuthoringReadiness(draft());
 
+  const selectedQuestionId = questions.some(question => question.id === activeQuestionId) ? activeQuestionId : questions[0]?.id ?? null;
   const focusQuestion = useCallback((id: string) => {
+    // Select first. The requested question's field is mounted only after this commit.
+    pendingFocus.current = id;
     setActiveQuestionId(id);
     const field = document.getElementById(`${formId}-question-${id}`);
-    field?.focus();
-    field?.scrollIntoView?.({ block: 'nearest' });
+    if (field) {
+      pendingFocus.current = null;
+      field.focus();
+      field.scrollIntoView?.({ block: 'nearest' });
+    }
   }, [formId]);
   useEffect(() => {
     const id = pendingFocus.current;
     if (!id) return;
+    if (id === '__add-question__') {
+      pendingFocus.current = null;
+      document.getElementById(`${formId}-add-question`)?.focus();
+      return;
+    }
+    if (selectedQuestionId !== id) {
+      setActiveQuestionId(id);
+      return;
+    }
+    const field = document.getElementById(`${formId}-question-${id}`);
+    if (!field) return;
     pendingFocus.current = null;
-    if (id === '__add-question__') document.getElementById(`${formId}-add-question`)?.focus();
-    else focusQuestion(id);
-  }, [questions, formId, focusQuestion]);
+    field.focus();
+    field.scrollIntoView?.({ block: 'nearest' });
+  }, [questions, selectedQuestionId, activeQuestionId, formId]);
 
   const moveQuestion = (fromIndex: number, toIndex: number) => {
     if (disabled || isSaving) return;
@@ -323,127 +341,63 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
   if (!initialQuiz) return <Alert variant="destructive"><AlertDescription>Die gespeicherten Quizdaten konnten nicht gelesen werden. Der vorhandene Inhalt bleibt erhalten.</AlertDescription></Alert>;
 
   return (
-    <fieldset disabled={disabled || isSaving} className="min-w-0 space-y-4">
+    <fieldset disabled={disabled || isSaving} className={`${styles.builder} min-w-0 space-y-4`}>
       <legend className="sr-only">Quiz bearbeiten</legend>
       <Tabs defaultValue="edit" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="edit">Bearbeiten</TabsTrigger>
-          <TabsTrigger value="preview">Vorschau</TabsTrigger>
+          <TabsTrigger value="edit">Aufbauen</TabsTrigger>
+          <TabsTrigger value="preview">Durchspielen</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="edit">
-          <section className="mb-6 space-y-3 border-b pb-5" aria-label="Quizprüfung">
-            <div className="flex flex-wrap items-baseline justify-between gap-2"><h3 className="text-lg font-semibold">Quiz aufbauen</h3><p className="text-sm text-muted-foreground">{questions.length} {questions.length === 1 ? 'Frage' : 'Fragen'}</p></div>
-            <p className="text-sm leading-relaxed text-muted-foreground">Gespeicherte Änderungen bleiben privat, bis du den Kurs ausdrücklich veröffentlichst.</p>
-            <p className="text-sm">Jede Frage zählt gleich viel. Eine mehrteilige Antwort zählt nur, wenn alle Teile richtig sind.</p>
-            {readiness.requiredCorrectCount !== null && <p className="text-sm font-medium">Zum Bestehen nötig: {readiness.requiredCorrectCount} von {questions.length} Fragen richtig.</p>}
-            {Number(passingScore) === 0 && passingScore.trim() && <p className="text-sm text-muted-foreground">Bei 0% Bestehensgrenze kann eine vollständige Abgabe auch ohne richtige Antwort bestehen.</p>}
-            {readiness.issues.length ? <div className="space-y-2 rounded-lg border border-input p-3">
-              <p className="text-sm font-medium">{readiness.issues.length} {readiness.issues.length === 1 ? 'Punkt' : 'Punkte'} prüfen</p>
-              <ul className="space-y-2 text-sm">{readiness.issues.map(issue => <li key={issue.id} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-                <span className="min-w-0 flex-1 basis-40 break-words [overflow-wrap:anywhere]">{issue.message}</span>
-                {issue.questionId && <Button type="button" size="sm" variant="ghost" aria-label={issue.message} onClick={() => focusQuestion(issue.questionId!)}>Frage prüfen</Button>}
-              </li>)}</ul>
-            </div> : <p className="text-sm text-muted-foreground">Alle Fragen sind vollständig ausgefüllt.</p>}
-          </section>
-          {questions.length > 0 && <nav aria-label="Fragenübersicht" className="mb-6 space-y-2"><h3 className="text-sm font-semibold">Fragenübersicht</h3><ol className="max-h-64 divide-y overflow-y-auto rounded-lg border">{questions.map((question, index) => {
-            const hasIssue = readiness.issues.some(issue => issue.questionId === question.id);
-            return <li key={question.id}><button type="button" aria-label={`Zu Frage ${index + 1}: ${question.question || 'Fragetext fehlt'}`} aria-current={activeQuestionId === question.id ? 'true' : undefined} className={cn('flex min-h-11 w-full min-w-0 items-start gap-3 px-3 py-2 text-left text-sm hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:bg-accent', activeQuestionId === question.id && 'bg-muted')} onClick={() => focusQuestion(question.id)}><span className="shrink-0 tabular-nums">{index + 1}.</span><span className="min-w-0 flex-1"><span className="block truncate font-medium">{question.question || 'Fragetext fehlt'}</span><span className="block text-muted-foreground">{quizQuestionTypeLabel(question.type)} · {hasIssue ? 'Prüfen' : 'Vollständig'}</span></span></button></li>;
-          })}</ol></nav>}
-          <Card className="mb-6 rounded-none border-0 border-b bg-transparent shadow-none">
-            <CardHeader className="px-0 pt-0">
-              <CardTitle className="flex items-center gap-2">
-                <ArrowUpDown className="h-5 w-5" />
-                Quiz Einstellungen
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4 px-0">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <Label htmlFor={`${formId}-shuffle`} className="font-medium">Fragen mischen</Label>
-                <Switch
-                  id={`${formId}-shuffle`}
-                  checked={shuffleQuestions}
-                  onCheckedChange={setShuffleQuestions}
-                />
-              </div>
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <Label htmlFor={`${formId}-passing-score`} className="font-medium">Bestehensgrenze (%)</Label>
-                <Input
-                  id={`${formId}-passing-score`}
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={passingScore}
-                  onChange={(e) => setPassingScore(e.target.value)}
-                  className="w-full sm:w-24"
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          <div className="mb-6 flex min-w-0 flex-wrap items-end gap-3">
-            <div className="min-w-0 flex-1 basis-44 space-y-2"><Label htmlFor={`${formId}-new-type`}>Neue Frage als</Label><select id={`${formId}-new-type`} value={newQuestionType} onChange={event => setNewQuestionType(event.target.value as QuestionType)} className="h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">{QUESTION_TYPES.map(type => <option key={type.value} value={type.value}>{type.label}</option>)}</select></div>
+        <TabsContent value="edit" className="min-w-0">
+          <header className={styles.builderHeader}>
+            <h3 className="text-lg font-bold">Quiz aufbauen</h3>
+            <p className="text-sm text-muted-foreground">{questions.length} {questions.length === 1 ? 'Frage' : 'Fragen'} · privater Entwurf</p>
+          </header>
+          <div className={styles.addQuestion}>
+            <div className="min-w-0 flex-1 basis-44 space-y-2"><Label htmlFor={`${formId}-new-type`}>Fragetyp hinzufügen</Label><select id={`${formId}-new-type`} value={newQuestionType} onChange={event => setNewQuestionType(event.target.value as QuestionType)} className="h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">{QUESTION_TYPES.map(type => <option key={type.value} value={type.value}>{type.label}</option>)}</select></div>
             <Button id={`${formId}-add-question`} type="button" onClick={addQuestion} variant="outline" className="min-h-11"><PlusCircle className="mr-2 h-4 w-4" />Neue Frage</Button>
           </div>
-          <QuestionBankPanel activeQuestion={questions.find(question => question.id === activeQuestionId) ?? null} onInsert={insertBankQuestion} />
           <p role="status" className="sr-only">{statusMessage}</p>
           {removedQuestion && <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg bg-muted p-3 text-sm"><span>Frage aus dem Entwurf entfernt.</span><Button type="button" variant="ghost" size="sm" onClick={restoreQuestion}>Rückgängig</Button></div>}
-          <div className="space-y-6">
-            {questions.map((question, questionIndex) => (
+          <div className={styles.workspace}>
+            {questions.length > 0 && <nav aria-label="Fragenübersicht" className={styles.rail}>
+              <h4 className="mb-2 text-sm font-semibold">Deine Fragen</h4>
+              <ol className={styles.railList}>{questions.map((question, index) => {
+                const hasIssue = readiness.issues.some(issue => issue.questionId === question.id);
+                return <li key={question.id} className={cn(styles.railItem, selectedQuestionId === question.id && styles.railItemActive, draggedQuestionIndex === index && 'opacity-50', draggedQuestionIndex !== null && dragOverQuestionIndex === index && 'border-dashed border-primary')} draggable={!disabled && !isSaving} onDragStart={event => handleDragStart(event, index)} onDragOver={event => handleDragOver(event, index)} onDrop={event => handleDrop(event, index)} onDragEnd={handleDragEnd}>
+                  <button type="button" aria-label={`Frage ${index + 1} bearbeiten: ${question.question || 'Fragetext fehlt'}`} aria-current={selectedQuestionId === question.id ? 'step' : undefined} className={styles.railButton} onClick={() => focusQuestion(question.id)}>
+                    <span className={styles.railOrder}>{index + 1}</span>
+                    <span className={styles.railCopy}><span className={styles.railTitle}>{question.question || 'Fragetext fehlt'}</span><span className={styles.railMeta}>{quizQuestionTypeLabel(question.type)} · {hasIssue ? 'Prüfen' : 'Vollständig'}</span></span>
+                  </button>
+                  <div className={styles.railMove}>
+                    <Button type="button" variant="ghost" size="icon" className="min-h-11 min-w-11" disabled={index === 0} aria-label={`Frage ${index + 1} nach oben verschieben`} onClick={() => moveQuestionUp(index)}><ArrowUp className="h-3.5 w-3.5" /></Button>
+                    <Button type="button" variant="ghost" size="icon" className="min-h-11 min-w-11" disabled={index === questions.length - 1} aria-label={`Frage ${index + 1} nach unten verschieben`} onClick={() => moveQuestionDown(index)}><ArrowDown className="h-3.5 w-3.5" /></Button>
+                  </div>
+                </li>;
+              })}</ol>
+            </nav>}
+          <div className={styles.editorPane}>
+            {questions.map((question, questionIndex) => question.id === selectedQuestionId ? (
               <Card
                 key={question.id}
                 className={cn(
-                  "relative rounded-none border-0 border-t bg-transparent shadow-none",
+                  styles.editorCard,
                   draggedQuestionIndex === questionIndex && "opacity-50",
                   draggedQuestionIndex !== null && dragOverQuestionIndex === questionIndex && "border-primary border-dashed"
                 )}
                 onDragOver={(e) => handleDragOver(e, questionIndex)}
                 onDrop={(e) => handleDrop(e, questionIndex)}
                 onDragEnd={handleDragEnd}
-                onFocusCapture={() => setActiveQuestionId(question.id)}
               >
-                <div className="flex flex-wrap justify-end gap-1 pt-4">
-                  <Button type="button" variant="ghost" size="icon" aria-label={`Frage ${questionIndex + 1} duplizieren`} onClick={() => duplicateQuestion(questionIndex)}><Copy className="h-4 w-4" /></Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Frage ${questionIndex + 1} nach oben verschieben`}
-                    onClick={() => moveQuestionUp(questionIndex)}
-                    disabled={questionIndex === 0}
-                    className="hover:bg-accent"
-                  >
-                    <ArrowUp className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Frage ${questionIndex + 1} nach unten verschieben`}
-                    onClick={() => moveQuestionDown(questionIndex)}
-                    disabled={questionIndex === questions.length - 1}
-                    className="hover:bg-accent"
-                  >
-                    <ArrowDown className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Frage ${questionIndex + 1} löschen`}
-                    onClick={() => removeQuestion(questionIndex)}
-                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-
-                <CardHeader className="cursor-move select-none px-0" draggable={!disabled && !isSaving} onDragStart={(event) => handleDragStart(event, questionIndex)}>
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2 bg-muted rounded-lg px-3 py-1">
-                      <GripVertical className="h-5 w-5 text-muted-foreground" />
-                      <CardTitle>Frage {questionIndex + 1}</CardTitle>
-                    </div>
+                <CardHeader className="mb-4 flex-row flex-wrap items-center justify-between gap-2 p-0">
+                  <div className="flex cursor-move items-center gap-2" draggable={!disabled && !isSaving} onDragStart={event => handleDragStart(event, questionIndex)}>
+                    <GripVertical className="h-4 w-4 text-muted-foreground" />
+                    <CardTitle>Frage {questionIndex + 1}</CardTitle>
+                  </div>
+                  <div className="flex gap-1">
+                    <Button type="button" variant="ghost" size="icon" aria-label={`Frage ${questionIndex + 1} duplizieren`} onClick={() => duplicateQuestion(questionIndex)}><Copy className="h-4 w-4" /></Button>
+                    <Button type="button" variant="ghost" size="icon" aria-label={`Frage ${questionIndex + 1} löschen`} onClick={() => removeQuestion(questionIndex)} className="text-destructive hover:bg-destructive/10 hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
                   </div>
                 </CardHeader>
 
@@ -609,7 +563,7 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
                       <Label className="text-base font-medium">Antwortmöglichkeiten</Label>
                       {question.options.map((option, optionIndex) => (
                         <div key={optionIndex} className="flex items-center gap-3">
-                          <div className="min-w-0 flex-1 flex items-center gap-3">
+                          <div className={styles.optionEditor}>
                             <div className="bg-muted rounded-full px-2 py-1 text-sm font-medium text-muted-foreground">
                               {String.fromCharCode(65 + optionIndex)}
                             </div>
@@ -619,7 +573,7 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
                               onChange={(e) => updateOption(questionIndex, optionIndex, e.target.value)}
                               placeholder={`Option ${optionIndex + 1}`}
                               className={cn(
-                                "min-w-0 flex-1",
+                                styles.optionInput,
                                 isCorrectAnswer(questionIndex, optionIndex) && "border-primary ring-1 ring-primary"
                               )}
                             />
@@ -671,8 +625,8 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
                     </div>
                   )}
 
-                  <div className="space-y-2">
-                    <Label className="text-base font-medium">Erklärung (optional)</Label>
+                  <details className={styles.disclosure}>
+                    <summary>Erklärung (optional)</summary>
                     <Textarea
                       aria-label={`Erklärung für Frage ${questionIndex + 1}`}
                       value={question.explanation ?? ''}
@@ -680,12 +634,36 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
                       placeholder="Antwort erläutern"
                       className="min-h-[100px] resize-y"
                     />
-                  </div>
+                  </details>
                 </CardContent>
               </Card>
-            ))}
+            ) : null)}
           </div>
-
+            <aside className={styles.previewPane} aria-label="Vorschau der aktiven Frage">
+              <h4 className={styles.previewHeading}>So sieht deine Frage aus</h4>
+              <QuizAuthorPreview content={draft()} disabled={disabled || isSaving} activeQuestionId={selectedQuestionId} singleQuestion />
+            </aside>
+          </div>
+          {!questions.length && <p className="my-4 text-sm text-muted-foreground">Wähle einen Fragetyp und füge deine erste Frage hinzu.</p>}
+          <details className={styles.disclosure}>
+            <summary>Fragenpool</summary>
+            <QuestionBankPanel activeQuestion={questions.find(question => question.id === selectedQuestionId) ?? null} onInsert={insertBankQuestion} />
+          </details>
+          <details className={styles.disclosure}>
+            <summary>Quiz-Einstellungen</summary>
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-4"><Label htmlFor={`${formId}-shuffle`}>Fragen mischen</Label><Switch id={`${formId}-shuffle`} checked={shuffleQuestions} onCheckedChange={setShuffleQuestions} /></div>
+              <div className="flex flex-wrap items-center justify-between gap-4"><Label htmlFor={`${formId}-passing-score`}>Bestehensgrenze (%)</Label><Input id={`${formId}-passing-score`} type="number" min="0" max="100" value={passingScore} onChange={event => setPassingScore(event.target.value)} className="w-24" /></div>
+              <p className="text-sm text-muted-foreground">Jede Frage zählt gleich viel. Mehrteilige Antworten müssen vollständig richtig sein.</p>
+              {readiness.requiredCorrectCount !== null && <p className="text-sm">Zum Bestehen nötig: {readiness.requiredCorrectCount} von {questions.length} Fragen richtig.</p>}
+              {Number(passingScore) === 0 && passingScore.trim() && <p className="text-sm text-muted-foreground">Bei 0% kann eine vollständige Abgabe auch ohne richtige Antwort bestehen.</p>}
+              <p className="text-sm text-muted-foreground">Änderungen bleiben privat, bis du den Kurs ausdrücklich veröffentlichst.</p>
+            </div>
+          </details>
+          {readiness.issues.length ? <details className={styles.disclosure}>
+            <summary>{readiness.issues.length} {readiness.issues.length === 1 ? 'Punkt' : 'Punkte'} vor dem Speichern prüfen</summary>
+            <ul className="space-y-2 text-sm">{readiness.issues.map(issue => <li key={issue.id} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1"><span className="min-w-0 flex-1 basis-40 break-words [overflow-wrap:anywhere]">{issue.message}</span>{issue.questionId && <Button type="button" size="sm" variant="ghost" aria-label={issue.message} onClick={() => focusQuestion(issue.questionId!)}>Frage prüfen</Button>}</li>)}</ul>
+          </details> : <p className="py-3 text-sm text-muted-foreground">Alle Fragen vollständig ausgefüllt.</p>}
         </TabsContent>
 
         <TabsContent value="preview">
