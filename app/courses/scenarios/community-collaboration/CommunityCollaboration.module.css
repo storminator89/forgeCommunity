@@ -79,9 +79,13 @@
 .feedback > p { margin-top: .75rem; font-size: .9375rem; line-height: 1.8; }
 .feedback .appliedChoice { color: hsl(var(--muted-foreground)); font-size: .8125rem; }
 .appliedChoice > strong { color: hsl(var(--foreground)); font-weight: 650; }
-.feedback .feedbackNotice { margin-top: 1rem; color: hsl(var(--muted-foreground)); font-size: .8125rem; }
 .feedback > ul { margin: .5rem 0 0; padding-left: 1.25rem; font-size: .9375rem; line-height: 1.8; }
 .feedback > ul > li { margin-top: .5rem; }
+.feedbackCorrection { display: block; margin-top: .25rem; }
+.feedbackReason { margin-top: .5rem; }
+.feedbackReason > summary { width: fit-content; max-width: 100%; min-height: 2.75rem; padding-block: .65rem; color: hsl(var(--primary)); font-size: .875rem; font-weight: 650; line-height: 1.6; cursor: pointer; }
+.feedbackReason > summary:focus-visible { outline: 3px solid hsl(var(--ring)); outline-offset: 3px; border-radius: .15rem; }
+.feedbackReason > p { margin-top: .25rem; font-size: .9375rem; line-height: 1.7; }
 .scene .caseVisual, .comparison .caseVisual { min-width: 0; margin-top: 1.5rem; border: 1px solid hsl(var(--border)); border-radius: .875rem; background: hsl(var(--card)); color: hsl(var(--card-foreground)); overflow: hidden; }
 .decisionForm > .caseVisual { margin: 0 0 1.5rem; }
 .caseVisual > figcaption { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .65rem; padding: .875rem 1rem; border-bottom: 1px solid hsl(var(--border)); font-size: .8125rem; font-weight: 650; line-height: 1.5; }
@@ -152,7 +156,7 @@
 .feedbackTray .feedbackTitle > svg { width: 2rem; height: 2rem; padding: .25rem; border: 2px solid currentColor; border-radius: 50%; }
 .feedbackTray .feedbackTitle h3 { font-size: 1.375rem; font-weight: 800; line-height: 1.4; }
 .feedbackTray .feedback > p, .feedbackTray .feedback > ul { font-size: 1rem; line-height: 1.7; }
-.feedbackTray .feedback .appliedChoice, .feedbackTray .feedback .feedbackNotice { font-size: .8125rem; }
+.feedbackTray .feedback .appliedChoice { font-size: .8125rem; }
 .feedbackTray .actions { margin-top: 1.25rem; }
 .feedbackTray .primaryAction { flex: 1 1 auto; }
 .comparison { min-width: 0; margin-top: 1.5rem; }

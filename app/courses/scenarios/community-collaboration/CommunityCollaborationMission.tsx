@@ -177,14 +177,41 @@ function createDecisionMission(missionId: MissionId) {
     </>;
   }
 
+  function CompactAnswerFeedback({ answer }: { answer: Answer }) {
+    const feedback = answer.kind === 'choice'
+      ? choiceNodes[answer.nodeId].feedback[answer.correct ? 'correct' : 'incorrect']
+      : answer.correct ? transfer.feedback : null;
+    const selectedChoice = answer.kind === 'choice' ? choiceNodes[answer.nodeId].options.find(option => option.id === answer.choiceId) : null;
+    const dimensions = answer.kind === 'transfer' ? transferSlots.map(slot => ({
+      id: slot.id,
+      label: slot.label,
+      consequence: slot.options.find(option => option.id === answer.plan[slot.id])?.consequence,
+      correction: answer.plan[slot.id] !== slot.correctValue ? slot.correction : null,
+    })) : [];
+    const hasConsequence = Boolean(selectedChoice?.consequence || dimensions.some(dimension => dimension.consequence));
+
+    return <>
+      {selectedChoice?.consequence && <p className={styles.choiceConsequence}>{selectedChoice.consequence}</p>}
+      {dimensions.some(dimension => dimension.consequence || dimension.correction) && <ul>{dimensions.map(dimension =>
+        dimension.consequence || dimension.correction ? <li key={dimension.id}>
+          <strong>{dimension.label}:</strong> {dimension.consequence ?? dimension.correction}
+          {dimension.consequence && dimension.correction && <span className={styles.feedbackCorrection}>{dimension.correction}</span>}
+        </li> : null,
+      )}</ul>}
+      {feedback && (hasConsequence ? <details className={styles.feedbackReason}>
+        <summary>Warum?</summary>
+        <p>{feedback}</p>
+      </details> : <p>{feedback}</p>)}
+    </>;
+  }
+
   function Feedback({ state, headingRef }: { state: MissionState; headingRef: RefObject<HTMLHeadingElement | null> }) {
     const answer = state.answers[state.nodeId];
     if (!answer) return null;
     const title = answer.correct ? 'Passend gewählt' : 'Schau auf die Folge';
     return <section className={styles.feedback} data-correct={answer.correct} aria-labelledby="case-feedback-title">
       <div className={styles.feedbackTitle}>{answer.correct ? <Check aria-hidden="true" /> : <Info aria-hidden="true" />}<h3 ref={headingRef} id="case-feedback-title" tabIndex={-1}>{title}</h3></div>
-      <AnswerFeedbackBody answer={answer} />
-      <p className={styles.feedbackNotice}>{!answer.correct && isRepair(state.nodeId) ? 'Beispiel angesehen. Danach geht es mit dem nächsten Fall weiter.' : 'Die Entscheidung ist angewendet. Weiter führt zum nächsten Schritt.'}</p>
+      <CompactAnswerFeedback answer={answer} />
     </section>;
   }
 
