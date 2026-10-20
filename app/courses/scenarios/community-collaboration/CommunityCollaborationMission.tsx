@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { ArrowLeft, ArrowRight, Check, FileText, GitBranch, Info, Lock, RotateCcw, Shield, Users, Laptop, Phone, Unplug, Network } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SparkEntry } from '@/components/spark-entry';
+import { useSparkLearningReaction, type SparkLearningEvent } from '@/hooks/useSparkLearningReaction';
 import { useFriendlyMotion } from '@/components/community/FriendlyMotion';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
@@ -384,6 +385,25 @@ function createDecisionMission(missionId: MissionId) {
 
   function DecisionMission() {
     const [state, dispatch] = useReducer(missionReducer, undefined, initialMissionState);
+    const { reaction, createEvent, showReaction, clearReaction } = useSparkLearningReaction();
+    const previousState = useRef(state);
+    const applyIntent = useRef<{ runId: number; nodeId: NodeId; event: SparkLearningEvent } | null>(null);
+    useLayoutEffect(() => {
+      const previous = previousState.current;
+      previousState.current = state;
+      if (previous === state) return;
+      const intent = applyIntent.current;
+      applyIntent.current = null;
+      const applied = state.answers[state.nodeId];
+      // Only an accepted question -> feedback reducer transition supplies an
+      // authored verdict. Selection, repair entry, recap and comparison do not.
+      if (intent && previous.stage === 'question' && state.stage === 'feedback' &&
+        previous.runId === state.runId && previous.nodeId === state.nodeId &&
+        intent.runId === state.runId && intent.nodeId === state.nodeId &&
+        applied && applied !== previous.answers[state.nodeId]) {
+        showReaction(applied.correct ? 'positive' : 'retry', intent.event);
+      } else clearReaction();
+    }, [state, showReaction, clearReaction]);
     const actionContext = { missionKey: mission.key, runId: state.runId };
     const currentRun = useRef(state.runId);
     useLayoutEffect(() => { currentRun.current = state.runId; }, [state.runId]);
@@ -399,7 +419,7 @@ function createDecisionMission(missionId: MissionId) {
     useEffect(() => {
       // A browser-history return or bfcache restore starts a new transient run.
       // No answer or scenario state is written into history or any storage.
-      const reset = () => { focusIntro.current = true; restartingDialog.current = true; setRestartOpen(false); dispatch({ missionKey: mission.key, runId: currentRun.current, type: 'restart' }); };
+      const reset = () => { clearReaction(); applyIntent.current = null; focusIntro.current = true; restartingDialog.current = true; setRestartOpen(false); dispatch({ missionKey: mission.key, runId: currentRun.current, type: 'restart' }); };
       const onPageShow = (event: PageTransitionEvent) => { if (event.persisted) reset(); };
       window.addEventListener('popstate', reset);
       window.addEventListener('pagehide', reset);
@@ -409,7 +429,7 @@ function createDecisionMission(missionId: MissionId) {
         window.removeEventListener('pagehide', reset);
         window.removeEventListener('pageshow', onPageShow);
       };
-    }, []);
+    }, [clearReaction]);
 
     useLayoutEffect(() => {
       if (state.stage === 'question') questionHeading.current?.focus();
@@ -421,20 +441,29 @@ function createDecisionMission(missionId: MissionId) {
       }
     }, [state.stage, state.nodeId]);
 
-    const restart = () => { focusIntro.current = true; restartingDialog.current = true; setRestartOpen(false); dispatch({ ...actionContext, type: 'restart' }); };
+    const restart = () => { clearReaction(); applyIntent.current = null; focusIntro.current = true; restartingDialog.current = true; setRestartOpen(false); dispatch({ ...actionContext, type: 'restart' }); };
     const answer = state.stage === 'feedback' ? state.answers[state.nodeId] : undefined;
     const node = state.nodeId === 'TRANSFER' ? transfer : choiceNodes[state.nodeId];
     const canApply = state.nodeId === 'TRANSFER' ? Boolean(completePlan(state.transferPlan)) : Boolean(state.selection);
     const selectedTransferSlots = transferSlots.filter(slot => state.transferPlan[slot.id] !== null).length;
     const mainIndex = mainStations.findIndex(station => station.id === parentStation(state.nodeId));
-    const apply = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); dispatch({ ...actionContext, type: 'apply', nodeId: state.nodeId }); };
+    const apply = (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      clearReaction();
+      // Keep the first queued intent: a duplicate handler cannot replace its
+      // epoch after an off/on pair before the accepted state commits.
+      if (state.stage === 'question' && canApply && !applyIntent.current) {
+        applyIntent.current = { runId: state.runId, nodeId: state.nodeId, event: createEvent() };
+      }
+      dispatch({ ...actionContext, type: 'apply', nodeId: state.nodeId });
+    };
     const feedbackAnnouncement = answer ? (answer.correct ? 'Entscheidung angewendet. Passend gewählt.' : 'Entscheidung angewendet. Eine Erklärung und ein Beispiel sind verfügbar.') : '';
 
     return <div className={styles.mission} data-friendly-motion={friendlyMotionEnabled}>
       <div className={styles.utilities}>
         <Link href="/courses/scenarios" prefetch={false}><ArrowLeft aria-hidden="true" />Fall wählen</Link>
         <span>Freiwillige Fallmission</span>
-        {state.stage !== 'intro' && state.stage !== 'recap' && <AlertDialog open={restartOpen} onOpenChange={open => { if (open) restartingDialog.current = false; setRestartOpen(open); }}>
+        {state.stage !== 'intro' && state.stage !== 'recap' && <AlertDialog open={restartOpen} onOpenChange={open => { if (open) { clearReaction(); restartingDialog.current = false; } setRestartOpen(open); }}>
           <AlertDialogTrigger asChild><Button type="button" variant="ghost" className={styles.restart}><RotateCcw aria-hidden="true" />Neu starten</Button></AlertDialogTrigger>
           <AlertDialogContent onCloseAutoFocus={event => {
             if (restartingDialog.current) {
@@ -474,7 +503,7 @@ function createDecisionMission(missionId: MissionId) {
           <div className={styles.sceneHeading}>
             <p className={styles.eyebrow}>{isRepair(state.nodeId) ? 'Vertiefung' : `Hauptentscheidung ${mainIndex + 1}`} · {node.title}</p>
             <h2 ref={questionHeading} id="mission-question-title" tabIndex={-1}>{node.prompt}</h2>
-            <div className={styles.situationBubble}><SparkEntry /><p className={styles.situation}>{node.situation}</p></div>
+            <div className={styles.situationBubble}><SparkEntry reaction={reaction} /><p className={styles.situation}>{node.situation}</p></div>
           </div>
           {state.stage === 'question' ? <>
             <form key={state.nodeId} onSubmit={apply} className={styles.decisionForm}>
@@ -506,7 +535,7 @@ function createDecisionMission(missionId: MissionId) {
             <SceneVisual nodeId={state.nodeId} answer={answer} />
             <div className={styles.feedbackTray} data-correct={answer?.correct}>
               <Feedback state={state} headingRef={feedbackHeading} />
-              <div className={styles.actions}><Button type="button" className={styles.primaryAction} onClick={() => dispatch({ ...actionContext, type: 'continue', nodeId: state.nodeId })}>{state.nodeId === 'TRANSFER' ? 'Zum Überblick' : 'Weiter'}<ArrowRight aria-hidden="true" /></Button></div>
+              <div className={styles.actions}><Button type="button" className={styles.primaryAction} onClick={() => { clearReaction(); dispatch({ ...actionContext, type: 'continue', nodeId: state.nodeId }); }}>{state.nodeId === 'TRANSFER' ? 'Zum Überblick' : 'Weiter'}<ArrowRight aria-hidden="true" /></Button></div>
             </div>
           </>}
           <p className={styles.simulationNote}>{mission.simulationNote}</p>
