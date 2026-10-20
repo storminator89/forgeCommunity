@@ -47,6 +47,9 @@ export function QuizStage({ question, answer, onAnswerChange, questionNumber, to
   const prefix = useId();
   const headingId = promptId ?? `${prefix}-prompt`;
   const values = Array.isArray(answer) ? answer : [];
+  const hasMixedImages = (question.type === 'SINGLE_CHOICE' || question.type === 'MULTIPLE_CHOICE') &&
+    question.options.some((_, index) => Boolean(question.optionImages?.[index])) &&
+    question.options.some((_, index) => !question.optionImages?.[index]);
   const setPart = (index: number, value: string) => {
     const next = [...values];
     next[index] = value;
@@ -70,14 +73,13 @@ export function QuizStage({ question, answer, onAnswerChange, questionNumber, to
       <legend className="sr-only">Antwort zu Frage {questionNumber}</legend>
       <h3 id={headingId} tabIndex={-1} className={styles.prompt}>{question.question || 'Fragetext fehlt'}</h3>
       <p id={`${prefix}-hint`} className={styles.hint}>{hint}</p>
-      {(question.type === 'SINGLE_CHOICE' || question.type === 'MULTIPLE_CHOICE' || question.type === 'TRUE_FALSE') && <div className={`${styles.choices} ${question.optionImages?.some(Boolean) ? styles.imageChoices : ''}`} role="group" aria-describedby={`${prefix}-hint`}>
+      {(question.type === 'SINGLE_CHOICE' || question.type === 'MULTIPLE_CHOICE' || question.type === 'TRUE_FALSE') && <div className={`${styles.choices} ${hasMixedImages ? styles.mixedChoices : question.optionImages?.some(Boolean) ? styles.imageChoices : ''}`} role="group" aria-describedby={`${prefix}-hint`}>
         {question.options.map((option, index) => {
           const selected = values.includes(index);
           const image = question.type !== 'TRUE_FALSE' ? question.optionImages?.[index] : null;
           return <div key={index} className={styles.choiceItem}>
-            <label className={`${styles.choice} ${question.optionImages?.some(Boolean) ? styles.imageChoice : ''} ${selected ? styles.choiceSelected : ''}`}>
+            <label className={`${styles.choice} ${image ? styles.imageChoice : ''} ${selected ? styles.choiceSelected : ''}`}>
               {image && <AnswerImage key={image.src} image={image} />}
-              {!image && question.optionImages?.some(Boolean) && <span className={styles.textOnlyStage} aria-hidden="true">{String.fromCharCode(65 + index)}</span>}
               <span className={styles.choiceCaption}>
                 <input type={question.type === 'MULTIPLE_CHOICE' ? 'checkbox' : 'radio'} name={`${prefix}-answer`} value={index} checked={selected} className={styles.choiceControl} onChange={event => {
                   if (question.type !== 'MULTIPLE_CHOICE') onAnswerChange([index]);
