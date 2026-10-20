@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useId, useLayoutEffect, useReducer, useRef, useState } from 'react';
-import type { FormEvent, RefObject } from 'react';
+import type { FormEvent, KeyboardEvent, MouseEvent, RefObject } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, ArrowRight, Check, FileText, GitBranch, Info, Lock, RotateCcw, Shield, Users, Laptop, Phone, Unplug, Network } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SparkEntry } from '@/components/spark-entry';
+import type { SparkReaction } from '@/components/SparkCharacter';
 import { useSparkLearningReaction, type SparkLearningEvent } from '@/hooks/useSparkLearningReaction';
 import { useFriendlyMotion } from '@/components/community/FriendlyMotion';
 import {
@@ -206,12 +207,12 @@ function createDecisionMission(missionId: MissionId) {
     </>;
   }
 
-  function Feedback({ state, headingRef }: { state: MissionState; headingRef: RefObject<HTMLHeadingElement | null> }) {
+  function Feedback({ state, headingRef, reaction }: { state: MissionState; headingRef: RefObject<HTMLHeadingElement | null>; reaction: SparkReaction | null }) {
     const answer = state.answers[state.nodeId];
     if (!answer) return null;
     const title = answer.correct ? 'Passend gewählt' : 'Schau auf die Folge';
     return <section className={styles.feedback} data-correct={answer.correct} aria-labelledby="case-feedback-title">
-      <div className={styles.feedbackTitle}>{answer.correct ? <Check aria-hidden="true" /> : <Info aria-hidden="true" />}<h3 ref={headingRef} id="case-feedback-title" tabIndex={-1}>{title}</h3></div>
+      <div className={styles.feedbackTitle}>{answer.correct ? <Check aria-hidden="true" /> : <Info aria-hidden="true" />}<h3 ref={headingRef} id="case-feedback-title" tabIndex={-1}>{title}</h3><SparkEntry reaction={reaction} /></div>
       <CompactAnswerFeedback answer={answer} />
     </section>;
   }
@@ -388,6 +389,7 @@ function createDecisionMission(missionId: MissionId) {
     const { reaction, createEvent, showReaction, clearReaction } = useSparkLearningReaction();
     const previousState = useRef(state);
     const applyIntent = useRef<{ runId: number; nodeId: NodeId; event: SparkLearningEvent } | null>(null);
+    const applyPointer = useRef<{ runId: number; nodeId: NodeId; timeStamp: number; x: number; y: number } | null>(null);
     useLayoutEffect(() => {
       const previous = previousState.current;
       previousState.current = state;
@@ -419,7 +421,7 @@ function createDecisionMission(missionId: MissionId) {
     useEffect(() => {
       // A browser-history return or bfcache restore starts a new transient run.
       // No answer or scenario state is written into history or any storage.
-      const reset = () => { clearReaction(); applyIntent.current = null; focusIntro.current = true; restartingDialog.current = true; setRestartOpen(false); dispatch({ missionKey: mission.key, runId: currentRun.current, type: 'restart' }); };
+      const reset = () => { clearReaction(); applyIntent.current = null; applyPointer.current = null; focusIntro.current = true; restartingDialog.current = true; setRestartOpen(false); dispatch({ missionKey: mission.key, runId: currentRun.current, type: 'restart' }); };
       const onPageShow = (event: PageTransitionEvent) => { if (event.persisted) reset(); };
       window.addEventListener('popstate', reset);
       window.addEventListener('pagehide', reset);
@@ -441,12 +443,42 @@ function createDecisionMission(missionId: MissionId) {
       }
     }, [state.stage, state.nodeId]);
 
-    const restart = () => { clearReaction(); applyIntent.current = null; focusIntro.current = true; restartingDialog.current = true; setRestartOpen(false); dispatch({ ...actionContext, type: 'restart' }); };
+    const restart = () => { clearReaction(); applyIntent.current = null; applyPointer.current = null; focusIntro.current = true; restartingDialog.current = true; setRestartOpen(false); dispatch({ ...actionContext, type: 'restart' }); };
     const answer = state.stage === 'feedback' ? state.answers[state.nodeId] : undefined;
     const node = state.nodeId === 'TRANSFER' ? transfer : choiceNodes[state.nodeId];
     const canApply = state.nodeId === 'TRANSFER' ? Boolean(completePlan(state.transferPlan)) : Boolean(state.selection);
     const selectedTransferSlots = transferSlots.filter(slot => state.transferPlan[slot.id] !== null).length;
     const mainIndex = mainStations.findIndex(station => station.id === parentStation(state.nodeId));
+    const isPointerClick = (event: MouseEvent<HTMLButtonElement>) => event.detail > 0 ||
+      ('pointerType' in event.nativeEvent && typeof event.nativeEvent.pointerType === 'string' && event.nativeEvent.pointerType !== '');
+    const rememberApplyPointer = (event: MouseEvent<HTMLButtonElement>) => {
+      if (applyIntent.current) return;
+      applyPointer.current = isPointerClick(event)
+        ? { runId: state.runId, nodeId: state.nodeId, timeStamp: event.timeStamp, x: event.clientX, y: event.clientY }
+        : null;
+    };
+    const preventRepeatedActivation = (event: KeyboardEvent<HTMLElement>) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      // A held activation key is one intent; a fresh press remains immediate.
+      if (event.repeat) event.preventDefault();
+      else applyPointer.current = null;
+    };
+    const continueMission = (event: MouseEvent<HTMLButtonElement>) => {
+      const pointer = applyPointer.current;
+      const elapsed = pointer ? event.timeStamp - pointer.timeStamp : -1;
+      // Replaced DOM targets can reset the native click count. Also recognise
+      // a brief, stationary mouse/pen/touch burst, but not a new keyboard/AT
+      // activation or a deliberately moved pointer. Never disable the control.
+      if (pointer && pointer.runId === state.runId && pointer.nodeId === state.nodeId && isPointerClick(event) &&
+        (event.detail > 1 || (elapsed >= 0 && elapsed < 500 && Math.abs(event.clientX - pointer.x) <= 24 && Math.abs(event.clientY - pointer.y) <= 24))) {
+        event.preventDefault();
+        applyPointer.current = { ...pointer, timeStamp: event.timeStamp };
+        return;
+      }
+      applyPointer.current = null;
+      clearReaction();
+      dispatch({ ...actionContext, type: 'continue', nodeId: state.nodeId });
+    };
     const apply = (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
       clearReaction();
@@ -503,10 +535,10 @@ function createDecisionMission(missionId: MissionId) {
           <div className={styles.sceneHeading}>
             <p className={styles.eyebrow}>{isRepair(state.nodeId) ? 'Vertiefung' : `Hauptentscheidung ${mainIndex + 1}`} · {node.title}</p>
             <h2 ref={questionHeading} id="mission-question-title" tabIndex={-1}>{node.prompt}</h2>
-            <div className={styles.situationBubble}><SparkEntry reaction={reaction} /><p className={styles.situation}>{node.situation}</p></div>
+            <div className={styles.situationBubble}>{state.stage === 'question' && <SparkEntry />}<p className={styles.situation}>{node.situation}</p></div>
           </div>
           {state.stage === 'question' ? <>
-            <form key={state.nodeId} onSubmit={apply} className={styles.decisionForm}>
+            <form key={state.nodeId} onSubmit={apply} onKeyDownCapture={preventRepeatedActivation} className={styles.decisionForm}>
               <SceneVisual nodeId={state.nodeId} />
               {state.nodeId === 'TRANSFER' ? <>
                 <h3 className={styles.srOnly}>{transfer.prompt}</h3>
@@ -529,13 +561,13 @@ function createDecisionMission(missionId: MissionId) {
                 </label>)}
               </fieldset>}
               <p className={styles.selectionStatus} id="case-selection-status">{state.nodeId === 'TRANSFER' ? `${selectedTransferSlots} von 3 Feldern ausgewählt. Noch nicht geprüft.` : canApply ? 'Ausgewählt. Noch nicht angewendet.' : 'Wähle eine Entscheidung.'}</p>
-              <Button type="submit" className={styles.primaryAction} disabled={!canApply} aria-describedby="case-selection-status">{state.nodeId === 'TRANSFER' ? 'Plan prüfen' : 'Prüfen'}<ArrowRight aria-hidden="true" /></Button>
+              <Button type="submit" className={styles.primaryAction} disabled={!canApply} onClick={rememberApplyPointer} aria-describedby="case-selection-status">{state.nodeId === 'TRANSFER' ? 'Plan prüfen' : 'Prüfen'}<ArrowRight aria-hidden="true" /></Button>
             </form>
           </> : <>
             <SceneVisual nodeId={state.nodeId} answer={answer} />
             <div className={styles.feedbackTray} data-correct={answer?.correct}>
-              <Feedback state={state} headingRef={feedbackHeading} />
-              <div className={styles.actions}><Button type="button" className={styles.primaryAction} onClick={() => { clearReaction(); dispatch({ ...actionContext, type: 'continue', nodeId: state.nodeId }); }}>{state.nodeId === 'TRANSFER' ? 'Zum Überblick' : 'Weiter'}<ArrowRight aria-hidden="true" /></Button></div>
+              <Feedback state={state} headingRef={feedbackHeading} reaction={reaction} />
+              <div className={styles.actions}><Button type="button" className={styles.primaryAction} onClick={continueMission} onKeyDownCapture={preventRepeatedActivation}>{state.nodeId === 'TRANSFER' ? 'Zum Überblick' : 'Weiter'}<ArrowRight aria-hidden="true" /></Button></div>
             </div>
           </>}
           <p className={styles.simulationNote}>{mission.simulationNote}</p>

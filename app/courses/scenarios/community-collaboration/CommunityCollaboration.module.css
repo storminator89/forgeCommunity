@@ -153,8 +153,9 @@
 .feedbackTray[data-correct="true"] { border-color: hsl(var(--success) / .4); background: hsl(var(--success) / .09); }
 .feedbackTray .feedback { margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; color: inherit; }
 .feedbackTray .feedbackTitle { align-items: flex-start; gap: .875rem; }
-.feedbackTray .feedbackTitle > svg { width: 2rem; height: 2rem; padding: .25rem; border: 2px solid currentColor; border-radius: 50%; }
-.feedbackTray .feedbackTitle h3 { font-size: 1.375rem; font-weight: 800; line-height: 1.4; }
+.feedbackTray .feedbackTitle > svg { flex-shrink: 0; width: 2rem; height: 2rem; padding: .25rem; border: 2px solid currentColor; border-radius: 50%; }
+.feedbackTray .feedbackTitle h3 { flex: 1 1 auto; min-width: 0; font-size: 1.375rem; font-weight: 800; line-height: 1.4; }
+.feedbackTray .feedbackTitle > [data-spark-entry] { flex: 0 0 4rem; }
 .feedbackTray .feedback > p, .feedbackTray .feedback > ul { font-size: 1rem; line-height: 1.7; }
 .feedbackTray .feedback .appliedChoice { font-size: .8125rem; }
 .feedbackTray .actions { margin-top: 1.25rem; }
