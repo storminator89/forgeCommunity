@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { d1ListBankQuestions, d1BankQuestionHistory, d1BankQuestionRevision } from '@/lib/server/d1-question-bank-read';
+
 import { checkQuizMediaQuestionPoolInput } from '@/lib/quiz-media-compatibility';
 
 import { Prisma } from '@/generated/prisma/client';
@@ -67,26 +69,7 @@ async function assertBankAccount(tx: Prisma.TransactionClient, ownerId: string):
 
 export async function listBankQuestions(ownerId: string, cursor?: string | null) {
   if (cursor && !validId(cursor)) throw new QuestionBankError('Ungültiger Listencursor.');
-  return prisma.$transaction(async tx => {
-    await assertBankAccount(tx, ownerId);
-    if (cursor) {
-      const cursorItem = await tx.questionBankItem.findFirst({ where: { id: cursor, ownerId }, select: { id: true } });
-      if (!cursorItem) throw new QuestionBankError('Ungültiger Listencursor.');
-    }
-    const rows = await tx.questionBankItem.findMany({ where: { ownerId },
-      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }], take: 51,
-      ...(cursor && { cursor: { id: cursor }, skip: 1 }),
-      select: { id: true, latestRevision: true, updatedAt: true,
-        revisions: { orderBy: { revision: 'desc' }, take: 1, select: { questionJson: true } } } });
-    const items = rows.slice(0, 50);
-    // The listing deliberately omits grading keys. Full revisions use a
-    // separately authenticated owner-only endpoint.
-    return { questions: items.map(item => {
-      const question = JSON.parse(item.revisions[0].questionJson) as QuizQuestion;
-      return { id: item.id, latestRevision: item.latestRevision, updatedAt: item.updatedAt,
-        question: question.question, type: question.type };
-    }), nextCursor: rows.length > 50 ? items.at(-1)!.id : null };
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  return d1ListBankQuestions(ownerId, cursor || null);
 }
 
 export async function createBankQuestion(ownerId: string, value: unknown) {
@@ -102,25 +85,12 @@ export async function createBankQuestion(ownerId: string, value: unknown) {
 
 export async function getBankQuestionHistory(ownerId: string, itemId: string) {
   if (!validId(itemId)) throw new QuestionBankError('Frage nicht gefunden.', 404);
-  return prisma.$transaction(async tx => {
-    await assertBankAccount(tx, ownerId);
-    const item = await tx.questionBankItem.findFirst({ where: { id: itemId, ownerId },
-      select: { id: true, latestRevision: true, revisions: { orderBy: { revision: 'desc' }, take: 100,
-        select: { revision: true, createdAt: true } } } });
-    if (!item) throw new QuestionBankError('Frage nicht gefunden.', 404);
-    return item;
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  return d1BankQuestionHistory(ownerId, itemId);
 }
 
 export async function getBankQuestionRevision(ownerId: string, itemId: string, revision: number) {
   if (!validId(itemId) || !validRevision(revision)) throw new QuestionBankError('Frage nicht gefunden.', 404);
-  return prisma.$transaction(async tx => {
-    await assertBankAccount(tx, ownerId);
-    const row = await tx.questionBankRevision.findFirst({ where: { itemId, revision, item: { ownerId } },
-      select: { revision: true, questionJson: true, createdAt: true } });
-    if (!row) throw new QuestionBankError('Frage nicht gefunden.', 404);
-    return { revision: row.revision, question: JSON.parse(row.questionJson) as QuizQuestion, createdAt: row.createdAt };
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  return d1BankQuestionRevision(ownerId, itemId, revision);
 }
 
 export async function reviseBankQuestion(ownerId: string, itemId: string, expectedRevision: unknown, value: unknown) {
