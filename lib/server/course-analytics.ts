@@ -1,8 +1,7 @@
 import 'server-only';
 
-import { Prisma } from '@/generated/prisma/client';
-import prisma from '@/lib/prisma';
-import { assignmentPassedContentIds, assignmentSubmittedUserIds, contentQuiz, courseContentRevision, courseLeaves } from '@/lib/server/course-progress';
+import { d1AnalyticsSnapshot } from '@/lib/server/d1-course-analytics-read';
+import { contentQuiz, courseContentRevision, courseLeaves } from '@/lib/server/course-progress';
 import { CoursePathError, prepareCoursePath, publicationPathNodes } from '@/lib/server/course-path';
 
 export const ANALYTICS_PAGE_SIZE = 25;
@@ -58,28 +57,12 @@ type Snapshot = {
   learners: LearnerRow[];
 };
 
-async function readSnapshot(tx: Prisma.TransactionClient, courseId: string, actor: Actor): Promise<Snapshot> {
-  const [course, account] = await Promise.all([
-    tx.course.findUnique({ where: { id: courseId }, select: { id: true, title: true, instructorId: true, activePublicationId: true } }),
-    tx.user.findUnique({ where: { id: actor.id }, select: { role: true } }),
-  ]);
-  if (!course) throw new AnalyticsError('Kurs nicht gefunden.', 404);
-  if (!account || (course.instructorId !== actor.id && (actor.role !== 'ADMIN' || account.role !== 'ADMIN'))) {
-    throw new AnalyticsError('Kein Zugriff auf die Kursanalyse.', 403);
-  }
-
-  const enrollments = await tx.enrollment.findMany({ where: { courseId }, orderBy: [{ enrolledAt: 'desc' }, { id: 'desc' }],
-    take: ANALYTICS_MAX_COHORT + 1,
-    select: { id: true, userId: true, enrolledAt: true, completedAt: true, user: { select: { name: true } } } });
-  if (enrollments.length > ANALYTICS_MAX_COHORT) throw new AnalyticsError('Der Kurs hat zu viele Einschreibungen für diese Ansicht. Es wurden keine Teilzahlen angezeigt.', 413);
-
-  const publication = course.activePublicationId ? await tx.coursePublication.findUnique({ where: { id: course.activePublicationId },
-    select: { courseId: true, payload: true } }) : null;
+async function readSnapshot(courseId: string, actor: Actor): Promise<Snapshot> {
+  const { course, publication, contents, enrollments, progress, assignmentPasses, assignmentActivity, attempts, certificates } =
+    await d1AnalyticsSnapshot(courseId, actor);
   if (course.activePublicationId && (!publication || publication.courseId !== courseId)) {
     throw new CoursePathError('Course publication is unavailable', 409);
   }
-  const contents = course.activePublicationId ? await tx.courseContent.findMany({ where: { courseId, archivedAt: null },
-    select: { id: true, courseId: true, parentId: true, title: true, type: true, content: true, order: true }, take: 501 }) : [];
   const pathNodes = publication ? publicationPathNodes(publication.payload) : [];
   const projected = new Map(contents.map(content => [content.id, content]));
   if (projected.size !== pathNodes.length || pathNodes.some(node => {
@@ -94,11 +77,6 @@ async function readSnapshot(tx: Prisma.TransactionClient, courseId: string, acto
   const quizIds = new Set(quizLeaves.map(content => content.id));
   const assignmentLeaves = leaves.filter(content => content.type === 'ASSIGNMENT');
   const assignmentIds = new Set(assignmentLeaves.map(content => content.id));
-  const userIds = enrollments.map(enrollment => enrollment.userId);
-  const progress = userIds.length && leaves.length ? await tx.courseContentProgress.findMany({
-    where: { courseId, userId: { in: userIds }, contentId: { in: leaves.map(content => content.id) } },
-    select: { userId: true, contentId: true, revision: true }, take: MAX_PROGRESS_ROWS + 1,
-  }) : [];
   if (progress.length > MAX_PROGRESS_ROWS) throw new AnalyticsError('Zu viele Fortschrittsdaten für eine verlässliche Analyse.', 413);
   const validProgress = new Map<string, Set<string>>();
   for (const item of progress) {
@@ -108,10 +86,6 @@ async function readSnapshot(tx: Prisma.TransactionClient, courseId: string, acto
     set.add(item.contentId);
     validProgress.set(item.userId, set);
   }
-  const [assignmentPasses, assignmentActivity] = await Promise.all([
-    assignmentPassedContentIds(tx, courseId, assignmentLeaves, userIds),
-    assignmentSubmittedUserIds(tx, courseId, assignmentLeaves, userIds),
-  ]);
   for (const item of assignmentPasses) {
     const set = validProgress.get(item.userId) ?? new Set<string>();
     set.add(item.contentId);
@@ -119,11 +93,6 @@ async function readSnapshot(tx: Prisma.TransactionClient, courseId: string, acto
   }
   const submittedAssignmentUsers = new Set(assignmentActivity);
 
-  const attempts = userIds.length && quizIds.size ? await tx.quizAttempt.findMany({
-    where: { courseId, userId: { in: userIds }, contentId: { in: [...quizIds] } },
-    orderBy: [{ submittedAt: 'desc' }, { id: 'desc' }], take: MAX_ATTEMPT_ROWS + 1,
-    select: { userId: true, contentId: true, revision: true, score: true, passed: true, submittedAt: true },
-  }) : [];
   if (attempts.length > MAX_ATTEMPT_ROWS) throw new AnalyticsError('Zu viele Quizversuche für eine verlässliche Analyse.', 413);
   type Attempt = (typeof attempts)[number];
   const attemptsByLearner = new Map<string, Attempt[]>();
@@ -137,8 +106,6 @@ async function readSnapshot(tx: Prisma.TransactionClient, courseId: string, acto
     if (!byQuiz.has(item.userId)) byQuiz.set(item.userId, item);
     latestByQuiz.set(item.contentId, byQuiz);
   }
-  const certificates = userIds.length ? await tx.certificate.groupBy({ by: ['userId'], where: { courseId, userId: { in: userIds } },
-    _min: { issuedAt: true } }) : [];
   const issuedAt = new Map(certificates.map(row => [row.userId, row._min.issuedAt]));
 
   const learners: LearnerRow[] = enrollments.map(enrollment => {
@@ -181,17 +148,7 @@ async function readSnapshot(tx: Prisma.TransactionClient, courseId: string, acto
 }
 
 export async function courseAnalytics(courseId: string, actor: Actor, query: AnalyticsQuery, exportAll = false) {
-  let snapshot: Snapshot | undefined;
-  for (let attempt = 0; attempt < 4; attempt++) {
-    try {
-      snapshot = await prisma.$transaction(tx => readSnapshot(tx, courseId, actor),
-        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 20_000 });
-      break;
-    } catch (error) {
-      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2034' || attempt === 3) throw error;
-    }
-  }
-  if (!snapshot) throw new AnalyticsError('Kursanalyse konnte nicht geladen werden.', 500);
+  const snapshot = await readSnapshot(courseId, actor);
   const needle = query.search.toLocaleLowerCase('de');
   const filtered = snapshot.learners.filter(row => (!needle || row.displayName.toLocaleLowerCase('de').includes(needle)) &&
     (query.status === 'all' || (query.status === 'needs-quiz-review' ? row.quizNeedsReview > 0 : row.currentStatus === query.status)));
