@@ -2,9 +2,10 @@ import 'server-only';
 
 import { env } from 'cloudflare:workers';
 import { PracticeError } from '@/lib/server/formative-practice';
-import { isPracticeRetentionHealthy, projectPracticeSelection, PRACTICE_SESSION_LIMIT } from '@/lib/formative-practice-availability';
+import { practiceObjectiveOf, samePracticeObjective, type PracticeObjective, isPracticeRetentionHealthy, projectPracticeSelection, PRACTICE_SESSION_LIMIT } from '@/lib/formative-practice-availability';
 
 type SnapshotItem = {
+  objective?: PracticeObjective;
   itemId: string; itemRevision: number; objectiveTitle: string;
   prompt: string; options: string[]; correctIndex: number; explanation: string;
 };
@@ -17,6 +18,8 @@ const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
 const MAX_DATE_MS = 8640000000000000;
 
 type Row = {
+  previousItemId: string | null; previousItemRevision: number | null; previousCorrect: number | null;
+  previousConfidence: string | null; previousOptionIndex: number | null;
   kind: 'context' | 'schedule' | 'recent' | 'sessionItem' | 'pending';
   courseExists: number | null; accountExists: number | null; enrolled: number | null;
   hasPublication: number | null; hasSnapshot: number | null; everPublished: number | null;
@@ -35,7 +38,8 @@ const columns: Column[] = ['courseExists', 'accountExists', 'enrolled', 'hasPubl
   'publicationId', 'snapshotId', 'itemCount', 'optedIn', 'paused', 'nowMs', 'retentionAtMs',
   'metadataOversize', 'poolOversize', 'poolInvalid', 'contextOversize', 'oversize', 'scheduleOverflow',
   'sessionItemsOverflow', 'sessionClockInvalid', 'sessionId', 'answeredCount', 'pendingReservationId',
-  'pendingExists', 'pendingInPool', 'id', 'itemId', 'itemRevision', 'dueAtMs', 'shownAtMs', 'ordinal', 'payload'];
+  'pendingExists', 'pendingInPool', 'id', 'itemId', 'itemRevision', 'dueAtMs', 'shownAtMs', 'ordinal', 'payload',
+  'previousItemId', 'previousItemRevision', 'previousCorrect', 'previousConfidence', 'previousOptionIndex'];
 function selectRow(kind: Row['kind'], fields: Partial<Record<Column, string>>) {
   return `SELECT '${kind}' AS kind, ${columns.map(key => `${fields[key] ?? 'NULL'} AS "${key}"`).join(', ')}`;
 }
@@ -156,6 +160,23 @@ const snapshotSql = `WITH
       EXISTS (SELECT 1 FROM pool_items p WHERE p.itemId = r.itemId AND p.itemRevision = r.itemRevision) AS inPool
     FROM current_session s JOIN PracticeLearnerReservation r
       ON r.id = s.pendingReservationId AND r.sessionId = s.id
+  ), previous_answer_page AS MATERIALIZED (
+    -- At most two rows: ambiguity omits the optional explanation. The exact
+    -- predecessor is scoped to this current, authorized, pinned session.
+    SELECT r.itemId,
+      CASE WHEN typeof(r.itemRevision) = 'integer' AND r.itemRevision BETWEEN 1 AND 9007199254740991 THEN r.itemRevision END AS itemRevision,
+      CASE WHEN typeof(a.correct) = 'integer' AND a.correct IN (0, 1) THEN a.correct END AS correct,
+      a.confidence,
+      CASE WHEN typeof(a.optionIndex) = 'integer' AND a.optionIndex BETWEEN 0 AND 7 THEN a.optionIndex END AS optionIndex
+    FROM pending_proof p JOIN current_session s ON s.id = p.sessionId
+    JOIN PracticeLearnerReservation r ON r.sessionId = s.id AND r.ordinal = p.ordinal - 1
+    JOIN PracticeLearnerAnswer a ON a.reservationId = r.id
+    WHERE p.inPool AND p.ordinal = s.answeredCount + 1 AND p.ordinal BETWEEN 2 AND ${PRACTICE_SESSION_LIMIT}
+    ORDER BY r.id, a.id LIMIT 2
+  ), pending_context AS MATERIALIZED (
+    SELECT p.*, a.itemId AS previousItemId, a.itemRevision AS previousItemRevision,
+      a.correct AS previousCorrect, a.confidence AS previousConfidence, a.optionIndex AS previousOptionIndex
+    FROM pending_proof p LEFT JOIN previous_answer_page a ON (SELECT COUNT(*) FROM previous_answer_page) = 1
   ), context_cost AS MATERIALIZED (
     SELECT ${rowCost(['g.publicationId', 'g.snapshotId', 'p.payload', 's.id', 's.pendingReservationId'])},
       (${fieldsOversize(['g.publicationId', 'g.snapshotId', 's.id', 's.pendingReservationId'])}) AS fieldOversize
@@ -165,8 +186,8 @@ const snapshotSql = `WITH
     UNION ALL SELECT ${rowCost(['itemId'])}, (${fieldsOversize(['itemId'])}) FROM schedule_page
     UNION ALL SELECT ${rowCost(['itemId'])}, (${fieldsOversize(['itemId'])}) FROM recent_page
     UNION ALL SELECT ${rowCost(['itemId'])}, (${fieldsOversize(['itemId'])}) FROM session_item_page
-    UNION ALL SELECT ${rowCost(['id', 'sessionId', 'itemId'])}, (${fieldsOversize(['id', 'sessionId', 'itemId'])})
-      FROM pending_proof WHERE inPool
+    UNION ALL SELECT ${rowCost(['id', 'sessionId', 'itemId', 'previousItemId', 'previousConfidence'])}, (${fieldsOversize(['id', 'sessionId', 'itemId', 'previousItemId', 'previousConfidence'])})
+      FROM pending_context WHERE inPool
   ), budget AS MATERIALIZED (
     SELECT (${fieldsOversize(['g.publicationId', 'g.snapshotId'])}) AS metadataOversize,
       (g.enabled AND g.payloadBytes > ${MAX_POOL_BYTES}) AS poolOversize,
@@ -207,12 +228,15 @@ const snapshotSql = `WITH
   UNION ALL ${selectRow('sessionItem', { itemId: 's.itemId' })}
     FROM session_item_page s, budget b WHERE NOT b.poolOversize AND NOT b.poolInvalid AND NOT b.oversize
       AND NOT b.scheduleOverflow AND NOT b.sessionItemsOverflow
-  UNION ALL ${selectRow('pending', { id: 'p.id', sessionId: 'p.sessionId', ordinal: 'p.ordinal', itemId: 'p.itemId', itemRevision: 'p.itemRevision' })}
-    FROM pending_proof p, budget b WHERE p.inPool AND NOT b.poolOversize AND NOT b.poolInvalid AND NOT b.oversize
+  UNION ALL ${selectRow('pending', { id: 'p.id', sessionId: 'p.sessionId', ordinal: 'p.ordinal', itemId: 'p.itemId', itemRevision: 'p.itemRevision',
+    previousItemId: 'p.previousItemId', previousItemRevision: 'p.previousItemRevision', previousCorrect: 'p.previousCorrect',
+    previousConfidence: 'p.previousConfidence', previousOptionIndex: 'p.previousOptionIndex' })}
+    FROM pending_context p, budget b WHERE p.inPool AND NOT b.poolOversize AND NOT b.poolInvalid AND NOT b.oversize
       AND NOT b.scheduleOverflow AND NOT b.sessionItemsOverflow`;
 
 // Deliberately copied from the mutation module. Its immutable pool validation
-// and explicit public-item allowlist remain identical without changing POSTs.
+// and explicit public-item allowlist remain identical. Optional objective
+// metadata is normalized identically for both private paths.
 function itemsOf(snapshot: Snapshot): SnapshotItem[] {
   let payload: unknown;
   try { payload = JSON.parse(snapshot.payload); } catch { throw new PracticeError('Übungspool ist beschädigt.', 409); }
@@ -233,7 +257,7 @@ function itemsOf(snapshot: Snapshot): SnapshotItem[] {
         !Number.isSafeInteger(item.correctIndex) || item.correctIndex < 0 || item.correctIndex >= item.options.length ||
         seen.has(item.itemId)) throw new PracticeError('Übungspool ist beschädigt.', 409);
     seen.add(item.itemId);
-    return item;
+    return { ...item, objective: practiceObjectiveOf(value as { objectiveId?: unknown; objectiveRevision?: unknown }) };
   });
 }
 
@@ -305,7 +329,7 @@ export async function d1ReadLearnerPractice(courseId: string, userId: string) {
   if (context.sessionId !== null) {
     const sessionId = storedId(context.sessionId);
     const answeredCount = integer(context.answeredCount);
-    let pending: { reservationId: string; ordinal: number; item: ReturnType<typeof publicItem> } | undefined;
+    let pending: { reservationId: string; ordinal: number; item: ReturnType<typeof publicItem>; questionContext?: 'sameObjectiveAfterConfidentError' } | undefined;
     if (context.pendingReservationId !== null) {
       if (!context.pendingExists) throw new PracticeError('Sitzungsreservierung ist beschädigt.', 409);
       if (!context.pendingInPool) throw new PracticeError('Übungsrevision ist nicht mehr in der Veröffentlichung.', 409);
@@ -315,7 +339,19 @@ export async function d1ReadLearnerPractice(courseId: string, userId: string) {
       }
       const item = items.find(candidate => candidate.itemId === reservation.itemId && candidate.itemRevision === reservation.itemRevision);
       if (!item) throw new PracticeError('Übungsrevision ist nicht mehr in der Veröffentlichung.', 409);
-      pending = { reservationId: storedId(reservation.id), ordinal: integer(reservation.ordinal, 1), item: publicItem(item) };
+      const previous = items.find(candidate => candidate.itemId === reservation.previousItemId
+        && candidate.itemRevision === reservation.previousItemRevision);
+      const previousOption = reservation.previousOptionIndex;
+      // This proves a relationship, not the historical algorithm's reason.
+      // No raw confidence, objective ID, previous answer or key leaves GET.
+      const sameObjectiveAfterConfidentError = reservation.ordinal === answeredCount + 1
+        && typeof reservation.ordinal === 'number' && reservation.ordinal >= 2 && reservation.ordinal <= PRACTICE_SESSION_LIMIT
+        && previous && previous.itemId !== item.itemId && samePracticeObjective(previous.objective, item.objective)
+        && reservation.previousCorrect === 0 && reservation.previousConfidence === 'SURE'
+        && typeof previousOption === 'number' && Number.isSafeInteger(previousOption)
+        && previousOption >= 0 && previousOption < previous.options.length && previousOption !== previous.correctIndex;
+      pending = { reservationId: storedId(reservation.id), ordinal: integer(reservation.ordinal, 1), item: publicItem(item),
+        ...(sameObjectiveAfterConfidentError && { questionContext: 'sameObjectiveAfterConfidentError' as const }) };
     }
     const remaining = Math.max(0, PRACTICE_SESSION_LIMIT - answeredCount - (pending ? 1 : 0));
     const dueCount = Math.min(remaining, selection.candidates.length);

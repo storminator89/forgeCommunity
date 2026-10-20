@@ -5,6 +5,7 @@ export type PracticeLearnerStatus = 'off' | 'unpublished' | 'archived' | 'availa
 export type PracticePending = {
   reservationId: string
   ordinal: number
+  questionContext?: 'sameObjectiveAfterConfidentError'
   item: { itemId: string; itemRevision: number; objectiveTitle: string; prompt: string; options: string[] }
 }
 export type PracticeLearnerState = {

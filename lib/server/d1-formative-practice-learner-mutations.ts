@@ -4,13 +4,13 @@ import { env } from 'cloudflare:workers';
 import { createHash, randomUUID } from 'node:crypto';
 import type { D1PreparedStatement, D1Result } from '@cloudflare/workers-types';
 import { PracticeError } from '@/lib/server/formative-practice';
-import { isPracticeRetentionHealthy, practiceReviewIntervalMs, projectPracticeSelection, PRACTICE_SESSION_LIMIT } from '@/lib/formative-practice-availability';
+import { choosePracticeCandidate, practiceObjectiveOf, type PracticeObjective, isPracticeRetentionHealthy, practiceReviewIntervalMs, projectPracticeSelection, PRACTICE_SESSION_LIMIT } from '@/lib/formative-practice-availability';
 
 type Value = string | number | null;
 type Row = Record<string, Value>;
 type Kind = 'text' | 'nullableText' | 'number' | 'date' | 'nullableDate';
 type Fields = Record<string, Kind>;
-type Item = { itemId: string; itemRevision: number; objectiveTitle: string; prompt: string; options: string[]; correctIndex: number; explanation: string };
+type Item = { objective?: PracticeObjective; itemId: string; itemRevision: number; objectiveTitle: string; prompt: string; options: string[]; correctIndex: number; explanation: string };
 type Pool = { id: string; coursePublicationId: string; itemCount: number; payload: string; items: Item[] };
 type Fact = { sql: string; args: Value[]; data: string };
 function database() {
@@ -262,7 +262,7 @@ function itemsOf(value: Pool): Item[] {
         item.options.some(option => typeof option !== 'string') || !Number.isSafeInteger(item.correctIndex) || item.correctIndex < 0 ||
         item.correctIndex >= item.options.length || seen.has(item.itemId)) fail('Übungspool ist beschädigt.');
     seen.add(item.itemId);
-    return item;
+    return { ...item, objective: practiceObjectiveOf(candidate as { objectiveId?: unknown; objectiveRevision?: unknown }) };
   });
 }
 async function retention(s: Scope) {
@@ -342,7 +342,7 @@ async function evidence(s: Scope, row: Row, items: Item[]) {
   }
   const count = integer(row.answeredCount, 0, PRACTICE_SESSION_LIMIT);
   if (answers.length !== count || reservations.length !== count + (row.pendingReservationId === null ? 0 : 1)) fail();
-  return reservations;
+  return { reservations, answersByReservation: answered };
 }
 async function selection(s: Scope, value: Pool, reservations: Row[]) {
   const schedules = await fact(s, `SELECT x.* FROM PracticeLearnerSchedule x WHERE ${own} AND snapshotId =
@@ -378,7 +378,9 @@ function changeSession(s: Scope, row: Row, pending: string | null, count: number
 }
 async function reserve(s: Scope, value: Pool, row: Row, fresh = false) {
   s.sessionId = text(row.id);
-  const reservations = fresh ? [] : await evidence(s, row, value.items);
+  const { reservations, answersByReservation } = fresh
+    ? { reservations: [] as Row[], answersByReservation: new Map<string, Row>() }
+    : await evidence(s, row, value.items);
   const count = integer(row.answeredCount, 0, PRACTICE_SESSION_LIMIT);
   if (row.pendingReservationId !== null) {
     const reservation = reservations.find(candidate => candidate.id === row.pendingReservationId);
@@ -388,7 +390,20 @@ async function reserve(s: Scope, value: Pool, row: Row, fresh = false) {
     return commit(s, { sessionId: s.sessionId, answeredCount: count, pending: { reservationId: text(reservation.id), ordinal: count + 1, item: publicItem(item) }, complete: false });
   }
   let item: Item | undefined;
-  if (count < PRACTICE_SESSION_LIMIT) item = projectPracticeSelection(await selection(s, value, reservations)).candidates[0];
+  if (count < PRACTICE_SESSION_LIMIT) {
+    const candidates = projectPracticeSelection(await selection(s, value, reservations)).candidates;
+    // evidence has validated contiguous ordinals, answer presence and snapshot
+    // item revisions. Its existing transaction facts fence this priority too.
+    const previousReservation = reservations.find(candidate => candidate.ordinal === count);
+    const previousAnswer = previousReservation && answersByReservation.get(text(previousReservation.id));
+    const previousItem = previousReservation && value.items.find(candidate => candidate.itemId === previousReservation.itemId
+      && candidate.itemRevision === previousReservation.itemRevision);
+    const validPrevious = previousAnswer && previousItem
+      && integer(previousAnswer.optionIndex, 0, 7) < previousItem.options.length
+      && boolean(previousAnswer.correct) === (previousAnswer.optionIndex === previousItem.correctIndex);
+    item = choosePracticeCandidate(candidates, validPrevious && previousAnswer && previousItem
+      ? { item: previousItem, correct: boolean(previousAnswer.correct), confidence: nullableText(previousAnswer.confidence) } : undefined);
+  }
   if (!item) {
     changeSession(s, row, null, count, 'COMPLETE');
     activeAfter(s);
@@ -511,7 +526,7 @@ export async function answerLearnerPractice(courseId: string, userId: string, bo
   const row = await session(s);
   if (row.status !== 'ACTIVE' || row.snapshotId !== value.id) fail('Sitzung ist veraltet.');
   if (row.pendingReservationId !== reservationId) fail('Reservierung ist nicht mehr aktuell.');
-  const reservations = await evidence(s, row, value.items);
+  const { reservations } = await evidence(s, row, value.items);
   const reservation = reservations.find(candidate => candidate.id === reservationId);
   const item = reservation && value.items.find(candidate => candidate.itemId === reservation.itemId && candidate.itemRevision === reservation.itemRevision);
   if (!reservation || !item || reservation.ordinal !== integer(row.answeredCount, 0, PRACTICE_SESSION_LIMIT) + 1) fail('Frage wurde bereits beantwortet oder ist beschädigt.');

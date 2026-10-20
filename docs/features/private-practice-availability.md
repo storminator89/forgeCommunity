@@ -28,6 +28,33 @@ Use the installed Inter hierarchy and the app's petrol action/focus tokens, quie
 
 Review of the initial plan removed a separate dashboard/card and a raw “next due” label: both would obscure the existing voluntary course-local flow and the unchanged anti-repeat rule.
 
+## Bounded objective-aware ordering
+
+After the immediately preceding committed answer in the current session is wrong with confidence `SURE`, the selector prefers the first already-eligible different item with the same `objectiveId` and `objectiveRevision` in that exact immutable snapshot. Eligibility and its existing dueAt/itemId order are unchanged. The preferred subset keeps that order; no matching candidate means the ordinary first candidate. Other confidence values, null and correct answers do not trigger priority. No cross-session queue or objective mastery model is stored.
+
+Legacy missing/invalid objective metadata is unknown, never inferred from titles or coerced from string revisions. It receives ordinary selection. All item/grading checks remain fail-closed. Current authors still validate immutable objective references strictly. Recent-two inclusive 24-hour exclusions, all current-session item exclusions, revision checks and the ten-answer cap are unchanged. A due date of five minutes is not a promise of availability after five minutes. The effective estimate may change with later reservations, the published pool or access/service state; refresh remains server-owned.
+
+The private GET adds only an optional `questionContext: sameObjectiveAfterConfidentError` on the pending question. One bounded predecessor proof within the existing read snapshot checks the exact preceding ordinal, committed false/SURE answer and both pinned item/objective revisions. Ambiguous or invalid optional proof omits context. This is a factual relationship, not a claim about the algorithm that originally selected an old pending question. Reload does not reserve or write anything. Objective identifiers, previous answer choices and keys are not added to the browser DTO; no trainer or analytics endpoint changes.
+
+Different item IDs are not evidence of independent scenarios or delayed transfer. The copy says only “andere Frage zum selben Lernziel”. Answer feedback/replay DTOs remain unchanged in this slice; no stale receipt is used to promise currently available alternatives. The next available question can address a different objective. No person diagnosis, Area9 parity, validated calibration or mastery claim is made. Session completion explicitly is not proof of all-objective mastery.
+
+### Required content and release gates
+
+Before release, authorized authors must inventory DISTINCT item IDs per `(snapshotId, objectiveId, objectiveRevision)` in the intended published pool, and review at least two curated variants for each intended remediation objective. Two IDs are only a structural minimum: independently review reasoning/scenario, answer key and explanation. One item or unknown metadata is a coverage gap, not successful remediation. No live coverage count is claimed by this draft. No automatic generated questions, schema migration, historical snapshot rewrite, learner identity or enrollment creation is authorized.
+
 ## Verification scope
 
-Focused pure clock, real SQLite API, and component regressions cover review intervals, one/two/larger pools, inclusive repeat boundaries, session caps/exclusions, read-only GET, stale/future heartbeat, closure replay/races, live publication failures, refresh and abort behavior. The existing PostgreSQL learner HTTP smoke is extended for effective return metadata, no-read writes, close authorization/replay, and retention outages. A companion genuine disposable browser journey exercises opt-in, answer, waiting, keyboard refresh, reload, fixture-window advancement, explicit reopen, outage recovery, and enrollment revocation; it captures desktop/320px in both themes. Browser/PG execution and original-pixel review belong to the central exact-tree CI gate and are not implied by source tests alone.
+Earlier local pure-clock/SQLite/component/PG/CI plans are historical documentation, not current permission or current evidence. All new functional acceptance is exclusively on the exact published Sites version with Cloudflare D1. Builds and typechecks establish compilation only. No local functional tests, new GitHub CI runs, timestamp advancement or fabricated learner roles are permitted.
+
+Published acceptance must record version, deployment, source commit and a genuinely authorized enrolled USER. If access/content prerequisites are absent, mark BLOCKED, not PASS. Independent exact-patch review and authorized publication are required before these cases can run:
+
+1. Wrong+SURE A, eligible same-objective B and earlier-due unrelated C: explicit next selects B; A never repeats. Verify stable dueAt/itemId ordering inside the matching subset.
+2. Wrong with each other confidence/null and correct+SURE retain ordinary ordering. Missing metadata, same title/different ID, different objective revision or snapshot never establish a match.
+3. Pools of one/two/three, future-due/recent-two/already-shown alternatives: retain exclusions and ordinary fallback or clean completion. Do not invent a return time or a coverage claim.
+4. Pending reload returns exactly the same reservation and truthful optional context. Old pending reservations may receive context only if the relationship is proved. GET/refresh is read-only.
+5. Ten-answer bound, explicit close, two-tab next/next and answer/next, exact-body replay, mismatched replay, lost-response recovery: preserve one active session, exact-once answer/reservation, counts and CAS. Never retry an unknown write blindly.
+6. Authorized pause/opt-out/revocation/republish, retention failure, foreign IDs and post-completion replay: preserve existing fail-closed access and immutable feedback, no stale session revival. Mark scenarios lacking permission untested.
+7. Actual effective return windows, including inclusive 24h where feasible, observed without manipulating D1 dates. Source reasoning alone is not runtime verification.
+8. Desktop/320px, keyboard and both themes; no forced confidence, false diagnosis/mastery, score/XP/certificate change or private practice data in trainer/analytics outputs.
+
+Keep static review, compiler results, observed published results and blocked/unexecuted cases separate. This bounded immediate-predecessor priority can postpone other due items within a ten-answer session; it is not a claim of optimal fairness or pedagogy. Rollback removes code only; no data repair is necessary.

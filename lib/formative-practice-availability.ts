@@ -34,6 +34,31 @@ export function projectPracticeSelection<T extends Item>({ items, states, recent
   return { candidates, nextAvailableAt: next === null ? null : new Date(next) };
 }
 
+/** Optional legacy snapshot metadata. Never infer identity from a title or coerce revisions. */
+export type PracticeObjective = { objectiveId: string; objectiveRevision: number };
+export function practiceObjectiveOf(value: { objectiveId?: unknown; objectiveRevision?: unknown }): PracticeObjective | undefined {
+  return typeof value.objectiveId === 'string' && /^[A-Za-z0-9_-]{8,100}$/.test(value.objectiveId)
+    && typeof value.objectiveRevision === 'number' && Number.isSafeInteger(value.objectiveRevision) && value.objectiveRevision >= 1
+    ? { objectiveId: value.objectiveId, objectiveRevision: value.objectiveRevision } : undefined;
+}
+export function samePracticeObjective(a: PracticeObjective | undefined, b: PracticeObjective | undefined) {
+  return !!a && !!b && a.objectiveId === b.objectiveId && a.objectiveRevision === b.objectiveRevision;
+}
+
+/** Ordering only, within ONE immutable snapshot. The caller supplies the existing
+ * eligible/sorted candidates and the immediately preceding committed answer.
+ * Never widens eligibility or persists a repair queue across sessions. */
+export function choosePracticeCandidate<T extends Item & { objective?: PracticeObjective }>(
+  candidates: T[], previous?: { item: T; correct: boolean; confidence: string | null },
+): T | undefined {
+  if (previous?.correct === false && previous.confidence === 'SURE' && previous.item.objective) {
+    const alternative = candidates.find(item => item.itemId !== previous.item.itemId
+      && samePracticeObjective(item.objective, previous.item.objective));
+    if (alternative) return alternative;
+  }
+  return candidates[0];
+}
+
 export function isPracticeRetentionHealthy(lastSuccessAt: Date | null | undefined, now: Date) {
   const latest = lastSuccessAt?.getTime();
   return latest !== undefined && Number.isFinite(latest) && latest >= now.getTime() - 45 * 60_000 && latest <= now.getTime() + 5 * 60_000;

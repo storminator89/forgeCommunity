@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { listObjectivesNative, objectiveNative, listItemsNative, itemNative, itemRevisionNative } from '@/lib/server/d1-formative-practice-pool-read';
+
 import { Prisma } from '@/generated/prisma/client';
 import prisma from '@/lib/prisma';
 import { parseQuizContent } from '@/app/courses/[courseId]/contents/types';
@@ -35,11 +37,6 @@ function decodePoolCursor(value: string | null): PoolCursor | null {
 
 function encodePoolCursor(row: PoolCursor) {
   return Buffer.from(JSON.stringify([row.updatedAt.toISOString(), row.id])).toString('base64url');
-}
-
-function olderThan(cursor: PoolCursor | null) {
-  return cursor ? { OR: [{ updatedAt: { lt: cursor.updatedAt } },
-    { updatedAt: cursor.updatedAt, id: { lt: cursor.id } }] } : {};
 }
 
 function boundedText(value: unknown, max: number, field: string, required = true): string {
@@ -127,13 +124,9 @@ async function assertCourseAuthor(tx: Prisma.TransactionClient, courseId: string
 
 export async function listPracticeObjectives(actor: PracticeActor, cursorValue: string | null = null) {
   const cursor = decodePoolCursor(cursorValue);
-  return transaction(async tx => {
-    await assertAuthor(tx, actor);
-    const rows = await tx.practiceObjective.findMany({ where: { ownerId: actor.id, ...olderThan(cursor) }, orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }], take: POOL_PAGE_SIZE + 1,
-      select: { id: true, title: true, description: true, revision: true, updatedAt: true } });
-    const objectives = rows.slice(0, POOL_PAGE_SIZE);
-    return { objectives, nextCursor: rows.length > POOL_PAGE_SIZE ? encodePoolCursor(objectives[objectives.length - 1]) : null };
-  });
+  const rows = await listObjectivesNative(actor.id, cursor);
+  const objectives = rows.slice(0, POOL_PAGE_SIZE);
+  return { objectives, nextCursor: rows.length > POOL_PAGE_SIZE ? encodePoolCursor(objectives[objectives.length - 1]) : null };
 }
 
 export async function createPracticeObjective(actor: PracticeActor, input: unknown) {
@@ -147,13 +140,7 @@ export async function createPracticeObjective(actor: PracticeActor, input: unkno
 
 export async function getPracticeObjective(actor: PracticeActor, objectiveId: string) {
   if (!privateId(objectiveId)) throw new PracticeError('Lernziel nicht gefunden.', 404);
-  return transaction(async tx => {
-    await assertAuthor(tx, actor);
-    const row = await tx.practiceObjective.findFirst({ where: { id: objectiveId, ownerId: actor.id },
-      select: { id: true, title: true, description: true, revision: true, updatedAt: true } });
-    if (!row) throw new PracticeError('Lernziel nicht gefunden.', 404);
-    return row;
-  });
+  return objectiveNative(actor.id, objectiveId);
 }
 
 export async function revisePracticeObjective(actor: PracticeActor, objectiveId: string, expectedRevision: unknown, input: unknown) {
@@ -170,18 +157,11 @@ export async function revisePracticeObjective(actor: PracticeActor, objectiveId:
 export async function listPracticeItems(actor: PracticeActor, objectiveId: string, cursorValue: string | null = null) {
   if (!privateId(objectiveId)) throw new PracticeError('Lernziel nicht gefunden.', 404);
   const cursor = decodePoolCursor(cursorValue);
-  return transaction(async tx => {
-    await assertAuthor(tx, actor);
-    const objective = await tx.practiceObjective.findFirst({ where: { id: objectiveId, ownerId: actor.id }, select: { id: true } });
-    if (!objective) throw new PracticeError('Lernziel nicht gefunden.', 404);
-    const rows = await tx.practiceItem.findMany({ where: { ownerId: actor.id, objectiveId, ...olderThan(cursor) }, orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }], take: POOL_PAGE_SIZE + 1,
-      select: { id: true, objectiveId: true, latestRevision: true, updatedAt: true,
-        revisions: { orderBy: { revision: 'desc' }, take: 1, select: { payload: true } } } });
-    const items = rows.slice(0, POOL_PAGE_SIZE);
-    return { items: items.map(item => ({ id: item.id, objectiveId: item.objectiveId, latestRevision: item.latestRevision,
-      updatedAt: item.updatedAt, prompt: parseChoice(item.revisions[0].payload).prompt })),
-      nextCursor: rows.length > POOL_PAGE_SIZE ? encodePoolCursor(items[items.length - 1]) : null };
-  });
+  const rows = await listItemsNative(actor.id, objectiveId, cursor);
+  const items = rows.slice(0, POOL_PAGE_SIZE);
+  return { items: items.map(item => ({ id: item.id, objectiveId: item.objectiveId,
+    latestRevision: item.latestRevision, updatedAt: item.updatedAt, prompt: parseChoice(item.payload).prompt })),
+    nextCursor: rows.length > POOL_PAGE_SIZE ? encodePoolCursor(items[items.length - 1]) : null };
 }
 
 export async function createPracticeItem(actor: PracticeActor, objectiveId: string, input: unknown) {
@@ -192,27 +172,15 @@ export async function createPracticeItem(actor: PracticeActor, objectiveId: stri
 
 export async function getPracticeItem(actor: PracticeActor, itemId: string) {
   if (!privateId(itemId)) throw new PracticeError('Übungsfrage nicht gefunden.', 404);
-  return transaction(async tx => {
-    await assertAuthor(tx, actor);
-    const row = await tx.practiceItem.findFirst({ where: { id: itemId, ownerId: actor.id }, select: {
-      id: true, objectiveId: true, latestRevision: true, updatedAt: true,
-      revisions: { orderBy: { revision: 'desc' }, take: 1, select: { payload: true } },
-    } });
-    if (!row) throw new PracticeError('Übungsfrage nicht gefunden.', 404);
-    return { id: row.id, objectiveId: row.objectiveId, latestRevision: row.latestRevision,
-      updatedAt: row.updatedAt, prompt: parseChoice(row.revisions[0].payload).prompt };
-  });
+  const row = await itemNative(actor.id, itemId);
+  return { id: row.id, objectiveId: row.objectiveId, latestRevision: row.latestRevision,
+    updatedAt: row.updatedAt, prompt: parseChoice(row.payload).prompt };
 }
 
 export async function getPracticeItemRevision(actor: PracticeActor, itemId: string, itemRevision: number) {
   if (!privateId(itemId) || !revision(itemRevision)) throw new PracticeError('Übungsfrage nicht gefunden.', 404);
-  return transaction(async tx => {
-    await assertAuthor(tx, actor);
-    const row = await tx.practiceItemRevision.findFirst({ where: { itemId, revision: itemRevision, item: { ownerId: actor.id } },
-      select: { itemId: true, revision: true, payload: true, createdAt: true } });
-    if (!row) throw new PracticeError('Übungsfrage nicht gefunden.', 404);
-    return { itemId: row.itemId, revision: row.revision, choice: parseChoice(row.payload), createdAt: row.createdAt };
-  });
+  const row = await itemRevisionNative(actor.id, itemId, itemRevision);
+  return { itemId: row.itemId, revision: row.revision, choice: parseChoice(row.payload), createdAt: row.createdAt };
 }
 
 export async function revisePracticeItem(actor: PracticeActor, itemId: string, expectedRevision: unknown, input: unknown) {

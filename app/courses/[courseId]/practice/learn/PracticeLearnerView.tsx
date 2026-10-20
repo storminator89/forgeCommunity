@@ -22,6 +22,7 @@ export type LearnerQuestion = {
   prompt: string
   options: string[]
   objectiveTitle?: string
+  questionContext?: 'sameObjectiveAfterConfidentError'
 }
 export type LearnerFeedback = {
   correct: boolean
@@ -83,6 +84,7 @@ function PracticeQuestion({ question, busy, onAnswer }: { question: LearnerQuest
   }
   return <form onSubmit={submit} className="space-y-7" aria-busy={busy}>
     {question.objectiveTitle && <p className="text-sm font-medium text-muted-foreground [overflow-wrap:anywhere]">{question.objectiveTitle}</p>}
+    {question.questionContext === 'sameObjectiveAfterConfidentError' && <p className="text-sm leading-relaxed text-muted-foreground">Diese andere Frage gehört zum selben Lernziel. Deine vorige Antwort war nicht richtig, obwohl du sicher warst. Mit der neuen Frage kannst du dein Verständnis weiter prüfen.</p>}
     <fieldset className="space-y-4" disabled={busy}>
       <legend ref={heading} tabIndex={-1} className="text-xl font-semibold leading-snug tracking-tight outline-none [overflow-wrap:anywhere] sm:text-2xl">{question.prompt}</legend>
       <div className="space-y-2 pt-2">
@@ -197,12 +199,13 @@ export function PracticeLearnerView({ courseId, stage, question, feedback, error
               {dataStage === 'idle' && <StateSection title="Bereit für eine Frage?" action={<Button type="button" className="min-h-11" disabled={busy} onClick={onNext}>{busy ? 'Frage wird geladen …' : nextLabel ?? 'Erste Frage öffnen'}</Button>}>
                 <PracticeAvailabilityNotice state={availabilityState} /><p>Eine Frage wird erst ausgewählt, wenn du sie ausdrücklich öffnest.</p>
               </StateSection>}
-              {dataStage === 'done' && <StateSection title="Gerade keine weitere Frage fällig"
+              {dataStage === 'done' && <StateSection title="Für jetzt beendet"
                 action={<div className="flex flex-wrap gap-3">
                   {canCloseSession && <Button type="button" className="h-auto min-h-11 min-w-0 max-w-full whitespace-normal [overflow-wrap:anywhere]" disabled={busy} onClick={onNext}>{busy ? 'Sitzung wird abgeschlossen …' : 'Sitzung abschließen'}</Button>}
                   <Button type="button" variant="outline" className="h-auto min-h-11 min-w-0 max-w-full whitespace-normal [overflow-wrap:anywhere]" disabled={busy} onClick={onRefresh}>{busy ? 'Wird geprüft …' : 'Stand aktualisieren'}</Button>
                 </div>}>
                 <PracticeAvailabilityNotice state={availabilityState} />
+                <p>Das ist kein Nachweis, dass du alle Lernziele beherrschst.</p>
                 <p>Du öffnest jede Frage selbst. Privates Üben bleibt eingeschaltet, bis du es pausierst.</p>
               </StateSection>}
               {dataStage === 'question' && question && <PracticeQuestion key={question.reservationId} question={question} busy={busy} onAnswer={onAnswer} />}

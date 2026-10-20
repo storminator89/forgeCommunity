@@ -21,7 +21,8 @@ function errorMessage(cause: unknown) {
 function questionFrom(state: PracticeLearnerState): LearnerQuestion | null {
   const pending = state.session?.pending
   return pending ? { reservationId: pending.reservationId, prompt: pending.item.prompt,
-    options: pending.item.options, objectiveTitle: pending.item.objectiveTitle } : null
+    options: pending.item.options, objectiveTitle: pending.item.objectiveTitle,
+    questionContext: pending.questionContext === 'sameObjectiveAfterConfidentError' ? pending.questionContext : undefined } : null
 }
 
 function stageFrom(state: PracticeLearnerState): LearnerStage {

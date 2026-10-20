@@ -15,8 +15,9 @@ export function PracticeAvailabilityNotice({ state }: { state: PracticeLearnerSt
   if (state.status === 'unavailable') return <p>Privates Üben ist vorübergehend nicht verfügbar. Bitte prüfe den Stand später erneut.</p>
   const label = practiceReturnLabel(state.nextAvailableAt)
   return <>
-    {state.availability === 'sessionComplete' && <p>Schließe diese Sitzung bewusst ab, bevor du eine neue Frage öffnest.</p>}
+    {state.availability === 'sessionComplete' && <p>Schließe diese Sitzung bewusst ab. Ein möglicher Rückkehrzeitpunkt gilt für eine neue Sitzung.</p>}
     {label ? <p>Voraussichtlich wieder ab <time dateTime={state.nextAvailableAt!}>{label}</time> (deine Ortszeit).</p>
-      : state.status === 'complete' && <p>Gerade ist kein nächster Übungszeitpunkt verfügbar.</p>}
+      : (state.availability === 'waiting' || state.availability === 'sessionComplete') && <p>Derzeit lässt sich kein nächster Zeitpunkt anzeigen. Prüfe den Stand später erneut.</p>}
+    {(state.availability === 'waiting' || state.availability === 'sessionComplete') && <p>Fällig heißt nicht sofort verfügbar: In dieser Sitzung gezeigte Fragen werden nicht wiederholt. Die zuletzt geöffneten Fragen können zusätzlich gesperrt sein.</p>}
   </>
 }
