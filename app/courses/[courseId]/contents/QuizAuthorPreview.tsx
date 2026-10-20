@@ -6,19 +6,30 @@ import { getQuizAuthoringReadiness } from './quiz-authoring';
 import { QuizStage, isQuizQuestionAnswered } from './QuizStage';
 import type { LearnerQuizQuestion, QuizQuestion } from './types';
 import styles from './QuizStage.module.css';
+import { hasQuizOptionImagesField, projectQuizOptionImagesForLearner } from '@/lib/quiz-media-contract';
 
 export interface QuizAuthorPreviewProps {
   content: unknown;
+  courseId: string;
   disabled?: boolean;
   activeQuestionId?: string | null;
   singleQuestion?: boolean;
 }
 
 /** An explicit boundary: no solution, explanation, or private metadata reaches the stage. */
-function publicAuthorQuestion(question: QuizQuestion): LearnerQuizQuestion {
+function publicAuthorQuestion(question: QuizQuestion, courseId: string): LearnerQuizQuestion | null {
   const base = { id: question.id, question: question.question };
   switch (question.type) {
-    case 'SINGLE_CHOICE': case 'MULTIPLE_CHOICE': case 'TRUE_FALSE': return { ...base, type: question.type, options: [...question.options] };
+    case 'SINGLE_CHOICE': case 'MULTIPLE_CHOICE': {
+      if (!hasQuizOptionImagesField(question)) return { ...base, type: question.type, options: [...question.options] };
+      // Local incomplete captions remain visibly incomplete in rehearsal; this
+      // temporary validation input never reaches storage or the returned caption.
+      const validationInput = { ...question, options: question.options.map((option, index) => option.trim() ? option : `local-missing-caption-${index}`) };
+      const media = projectQuizOptionImagesForLearner(validationInput, courseId);
+      if (!media.ok) return null;
+      return { ...base, type: question.type, options: [...question.options], ...(media.value && { optionImages: media.value }) };
+    }
+    case 'TRUE_FALSE': return { ...base, type: question.type, options: [...question.options] };
     case 'MATCHING': return { ...base, type: 'MATCHING', pairs: question.pairs.map(pair => ({ left: pair.left })) };
     case 'FILL_BLANKS': return { ...base, type: 'FILL_BLANKS', text: question.text, blankCount: question.answers.length };
     case 'TEXT_INPUT': return { ...base, type: 'TEXT_INPUT' };
@@ -30,8 +41,8 @@ export function QuizAuthorPreview(props: QuizAuthorPreviewProps) {
   return <QuizAuthorPreviewState key={JSON.stringify(props.content)} {...props} />;
 }
 
-function QuizAuthorPreviewState({ content, disabled = false, activeQuestionId, singleQuestion = false }: QuizAuthorPreviewProps) {
-  const readiness = getQuizAuthoringReadiness(content);
+function QuizAuthorPreviewState({ content, courseId, disabled = false, activeQuestionId, singleQuestion = false }: QuizAuthorPreviewProps) {
+  const readiness = getQuizAuthoringReadiness(content, undefined, courseId);
   const prefix = useId();
   const pendingNavigationFocus = useRef(false);
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
@@ -56,7 +67,8 @@ function QuizAuthorPreviewState({ content, disabled = false, activeQuestionId, s
   if (!readiness.quiz) return <p role="alert" className="text-sm text-destructive">Die Quizdaten können nicht angezeigt werden. Der gespeicherte Inhalt bleibt erhalten.</p>;
   const index = singleQuestion ? Math.max(0, questions.findIndex(question => question.id === activeQuestionId)) : Math.min(questionIndex, Math.max(0, questions.length - 1));
   const authorQuestion = questions[index];
-  const publicQuestions = questions.map(publicAuthorQuestion);
+  const publicQuestions = questions.map(item => publicAuthorQuestion(item, courseId)).filter((item): item is LearnerQuizQuestion => item !== null);
+  if (publicQuestions.length !== questions.length) return <p role="alert" className="text-sm text-destructive">Prüfe die Bilddetails im Editor. Die Vorschau zeigt keine unvollständig geprüften Antwortbilder.</p>;
   const question = publicQuestions[index];
   const goToQuestion = (nextIndex: number) => {
     pendingNavigationFocus.current = true;

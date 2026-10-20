@@ -1,3 +1,4 @@
+import { quizEditorDraft } from './content-form-utils';
 import { getQuizValidationError, parseQuizContent, type QuestionType, type QuizContent, type QuizQuestion } from './types';
 
 /** Author-only diagnostics. This never changes save or server grading rules. */
@@ -59,13 +60,14 @@ export function duplicateQuizQuestion(question: QuizQuestion, existingIds: Itera
 }
 
 /** Accepts stored string/object quizzes and temporarily incomplete editor drafts. */
-export function getQuizAuthoringReadiness(value: unknown, contentId?: string): QuizAuthoringReadiness {
-  let quiz = parseQuizContent(value);
+export function getQuizAuthoringReadiness(value: unknown, contentId?: string, courseId?: string): QuizAuthoringReadiness {
+  let quiz = parseQuizContent(value, courseId);
+  if (!quiz && value && typeof value === 'object' && !Array.isArray(value)) quiz = quizEditorDraft(value as QuizContent, courseId);
   // A temporarily blank number field is NaN in the local editor, not malformed persisted JSON.
   if (!quiz && value && typeof value === 'object' && !Array.isArray(value)) {
     const source = value as Record<string, unknown>;
     if (typeof source.passingScore === 'number' && !Number.isFinite(source.passingScore)) {
-      const parsed = parseQuizContent({ ...source, passingScore: 70 });
+      const parsed = parseQuizContent({ ...source, passingScore: 70 }, courseId);
       if (parsed) quiz = { ...parsed, passingScore: source.passingScore };
     }
   }
@@ -85,7 +87,7 @@ export function getQuizAuthoringReadiness(value: unknown, contentId?: string): Q
   if (!quiz.questions.length) issues.push(finding('empty', 'Füge mindestens eine Frage hinzu.'));
   for (const [questionIndex, question] of quiz.questions.entries()) {
     // Reuse the authoritative validation, one actionable finding per question.
-    const error = getQuizValidationError({ questions: [question], passingScore: 70 });
+    const error = getQuizValidationError({ questions: [question], passingScore: 70 }, courseId);
     if (error) issues.push({
       ...finding('question-invalid', error.replace(/^Frage 1: /, `Frage ${questionIndex + 1}: `)),
       id: `${scope}:question:${question.id}`, questionId: question.id, questionIndex,

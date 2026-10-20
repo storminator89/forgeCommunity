@@ -92,15 +92,15 @@ export function getCourseReadiness(contents: CourseContent[]): CourseReadiness {
       const issue = getAssignmentValidationError(item.content)
       if (issue) add('invalid-source', issue)
     } else if (quizLike) {
-      const quiz = parseQuizContent(item.content)
-      const issue = quiz ? getQuizValidationError(quiz) : 'Die Quizdaten sind ungültig.'
+      const quiz = parseQuizContent(item.content, item.courseId)
+      const issue = quiz ? getQuizValidationError(quiz, item.courseId) : 'Die Quizdaten sind ungültig.'
       if (issue) add('invalid-quiz', issue)
     } else {
       const value = typeof item.content === 'string' ? item.content : ''
       if (!value.trim() || (item.type === 'TEXT' && !hasCourseTextContent(value))) {
         add('empty-content', item.type === 'TEXT' ? 'Dieses Thema enthält noch keinen Lerninhalt.' : 'Ergänze eine Quelle für diesen Medieninhalt.')
       } else {
-        const issue = getContentValidationError(item.type, value)
+        const issue = getContentValidationError(item.type, value, item.courseId)
         if (issue) add('invalid-source', issue)
       }
     }

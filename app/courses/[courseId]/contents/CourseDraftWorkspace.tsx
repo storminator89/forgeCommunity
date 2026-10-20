@@ -44,12 +44,12 @@ function metadata(payload: AuthorPayload): Metadata {
 function isoDate(value: string): string | null { return value ? `${value}T00:00:00.000Z` : null }
 function dateInput(value: string | null): string { return value?.slice(0, 10) ?? '' }
 
-function sameBody(a: string, b: string): boolean {
+function sameBody(a: string, b: string, courseId: string): boolean {
   if (a === b) return true
   const emptyHtml = (value: string) => !value.replace(/<(?:\/?p|br)\b[^>]*>/gi, '').replace(/&nbsp;|\u00a0/g, ' ').trim()
   if (emptyHtml(a) && emptyHtml(b)) return true
-  const qa = parseQuizContent(a)
-  const qb = parseQuizContent(b)
+  const qa = parseQuizContent(a, courseId)
+  const qb = parseQuizContent(b, courseId)
   return Boolean(qa && qb && JSON.stringify(qa) === JSON.stringify(qb))
 }
 
@@ -59,7 +59,7 @@ function contentString(content: CourseContent['content']): string {
 
 function editorDirty(saved: CourseContent | null, local: CourseContent | null): boolean {
   if (!saved || !local || saved.id !== local.id) return false
-  return saved.title !== local.title || saved.type !== local.type || !sameBody(contentString(saved.content), contentString(local.content))
+  return saved.title !== local.title || saved.type !== local.type || !sameBody(contentString(saved.content), contentString(local.content), saved.courseId)
 }
 
 export function CourseDraftWorkspace({ courseId, initialState, onLiveMode, canAuthorPractice = false }: { courseId: string; initialState: AuthorState; onLiveMode: () => void; canAuthorPractice?: boolean }) {
@@ -67,6 +67,7 @@ export function CourseDraftWorkspace({ courseId, initialState, onLiveMode, canAu
   const [state, setState] = useState(initialState)
   const [meta, setMeta] = useState<Metadata>(() => metadata(initialState.draft.payload))
   const [selectedId, setSelectedId] = useState<string | null>(() => new URLSearchParams(typeof location === 'undefined' ? '' : location.search).get('content'))
+  const [localMediaPending, setLocalMediaPending] = useState(false)
   const [localContent, setLocalContent] = useState<CourseContent | null>(null)
   const [releaseBuffer, setReleaseBuffer] = useState<{ id: string; value: string } | null>(null)
   const [editorVersion, setEditorVersion] = useState(0)
@@ -103,7 +104,7 @@ export function CourseDraftWorkspace({ courseId, initialState, onLiveMode, canAu
   const metadataChanged = JSON.stringify(meta) !== JSON.stringify(metadata(state.draft.payload))
   const releaseValue = releaseBuffer?.id === selected?.id ? releaseBuffer?.value ?? '' : selected?.releaseOn ?? ''
   const releaseChanged = Boolean(selected && releaseValue !== (selected.releaseOn ?? ''))
-  const hasLocalChanges = draftChanged || metadataChanged || releaseChanged
+  const hasLocalChanges = draftChanged || metadataChanged || releaseChanged || localMediaPending
   let releaseRoot = selected
   while (releaseRoot?.parentId) releaseRoot = findContent(tree, releaseRoot.parentId)
 
@@ -157,7 +158,7 @@ export function CourseDraftWorkspace({ courseId, initialState, onLiveMode, canAu
     if (original.title !== updated.title) patch.title = updated.title
     if (original.type !== updated.type && !(original.type === null && updated.type === 'TEXT' && original.content === updated.content)) patch.type = updated.type
     const nextContent = typeof updated.content === 'string' ? updated.content : JSON.stringify(updated.content)
-    if (!sameBody(original.content, nextContent)) patch.content = nextContent
+    if (!sameBody(original.content, nextContent, courseId)) patch.content = nextContent
     if (!Object.keys(patch).length) { setLocalContent(null); setEditorVersion(value => value + 1); return }
     await mutate({ kind: 'updateNode', id: updated.id, patch }, true)
     setNotice({ kind: 'success', text: 'Entwurf gespeichert. Für Lernende noch nicht sichtbar.' })
@@ -230,7 +231,7 @@ export function CourseDraftWorkspace({ courseId, initialState, onLiveMode, canAu
 
   const requestNavigation = (action: () => void, includeMetadata = false) => {
     if (busyRef.current) return
-    if (draftChanged || releaseChanged || (includeMetadata && metadataChanged)) setPendingNavigation(() => action)
+    if (draftChanged || releaseChanged || localMediaPending || (includeMetadata && metadataChanged)) setPendingNavigation(() => action)
     else action()
   }
 
@@ -262,14 +263,14 @@ export function CourseDraftWorkspace({ courseId, initialState, onLiveMode, canAu
       if (destination.origin !== location.origin || destination.href === location.href) return
       event.preventDefault(); event.stopPropagation()
       const navigate = () => router.push(destination.pathname + destination.search + destination.hash)
-      if (draftChanged || metadataChanged || releaseChanged) setPendingNavigation(() => navigate)
+      if (draftChanged || metadataChanged || releaseChanged || localMediaPending) setPendingNavigation(() => navigate)
       else navigate()
     }
     window.addEventListener('beforeunload', beforeUnload)
     window.addEventListener('popstate', popState)
     document.addEventListener('click', interceptLink, true)
     return () => { window.removeEventListener('beforeunload', beforeUnload); window.removeEventListener('popstate', popState); document.removeEventListener('click', interceptLink, true) }
-  }, [hasLocalChanges, draftChanged, metadataChanged, releaseChanged, router])
+  }, [hasLocalChanges, draftChanged, metadataChanged, releaseChanged, localMediaPending, router])
 
   useEffect(() => {
     if (!resizing) return
@@ -347,8 +348,8 @@ export function CourseDraftWorkspace({ courseId, initialState, onLiveMode, canAu
     } catch (error) { showError(error, 'Der aktuelle Entwurf konnte nicht geladen werden.') }
   }
 
-  const uploadImage = async (file: File) => {
-    const result = await uploadDraftImage(courseId, file)
+  const uploadImage = async (file: File, signal?: AbortSignal) => {
+    const result = await uploadDraftImage(courseId, file, signal)
     return result.url
   }
 
@@ -374,13 +375,13 @@ export function CourseDraftWorkspace({ courseId, initialState, onLiveMode, canAu
             <section className="min-w-0 flex-1 md:overflow-y-auto" aria-label={selected ? 'Kursinhalt bearbeiten' : 'Kursdaten bearbeiten'}>
               <div className="mx-auto w-full max-w-4xl p-4 sm:p-6 lg:p-8">
                 <Button type="button" variant="outline" size="sm" className="mb-5" aria-label={topicsOpen ? 'Kursstruktur schließen' : 'Kursstruktur öffnen'} aria-expanded={topicsOpen} aria-controls="draft-course-navigation" onClick={() => setTopicsOpen(value => !value)}>{topicsOpen ? <ChevronLeft className="mr-2 h-4 w-4" /> : <ChevronRight className="mr-2 h-4 w-4" />}{topicsOpen ? 'Kursstruktur schließen' : 'Kursstruktur öffnen'}</Button>
-                {selected ? <><div className="mb-6 border-b pb-5"><p className="mb-2 break-words text-sm text-muted-foreground">{parentIds(tree, selected.id).reverse().map(id => findContent(tree, id)?.title).filter(Boolean).join(' / ') || 'Kursinhalt'}</p><h2 className="break-words text-2xl font-semibold tracking-tight [overflow-wrap:anywhere]">{selected.title || 'Inhalt ohne Titel'}</h2></div><div className="rounded-xl border bg-card p-4 sm:p-6"><EditContentForm key={`${selected.id}:${editorVersion}`} content={selected} staged saveState={draftChanged ? 'dirty' : 'saved'} saveMessage="Für Lernende noch nicht sichtbar. Veröffentliche den gespeicherten Entwurf später ausdrücklich." onImageUpload={uploadImage} onContentChange={change => setLocalContent(previous => ({ ...(previous?.id === selected.id ? previous : selected), ...change }))} onSubmit={saveContent} onCancel={() => requestNavigation(() => { setLocalContent(null); setReleaseBuffer(null); setEditorVersion(value => value + 1) })} />{releaseRoot && <CourseChapterReleaseEditor root={releaseRoot} selected={selected} value={releaseValue} busy={busy || draftChanged} onChange={value => setReleaseBuffer({ id: selected.id, value })} onSave={() => void saveRelease()} onRootSelect={() => selectContent(releaseRoot!.id)} />}<CoursePrerequisitesEditor contents={tree} selected={selected} busy={busy || draftChanged} onChange={ids => setPrerequisites(selected.id, ids)} /></div></> : <>
+                {selected ? <><div className="mb-6 border-b pb-5"><p className="mb-2 break-words text-sm text-muted-foreground">{parentIds(tree, selected.id).reverse().map(id => findContent(tree, id)?.title).filter(Boolean).join(' / ') || 'Kursinhalt'}</p><h2 className="break-words text-2xl font-semibold tracking-tight [overflow-wrap:anywhere]">{selected.title || 'Inhalt ohne Titel'}</h2></div><div className="rounded-xl border bg-card p-4 sm:p-6"><EditContentForm disabled={busy} key={`${selected.id}:${editorVersion}`} content={selected} staged onLocalMediaChange={setLocalMediaPending} saveState={draftChanged ? 'dirty' : 'saved'} saveMessage="Für Lernende noch nicht sichtbar. Veröffentliche den gespeicherten Entwurf später ausdrücklich." onImageUpload={uploadImage} onContentChange={change => setLocalContent(previous => ({ ...(previous?.id === selected.id ? previous : selected), ...change }))} onSubmit={saveContent} onCancel={() => requestNavigation(() => { setLocalContent(null); setReleaseBuffer(null); setEditorVersion(value => value + 1) })} />{releaseRoot && <CourseChapterReleaseEditor root={releaseRoot} selected={selected} value={releaseValue} busy={busy || draftChanged || localMediaPending} onChange={value => setReleaseBuffer({ id: selected.id, value })} onSave={() => void saveRelease()} onRootSelect={() => selectContent(releaseRoot!.id)} />}<CoursePrerequisitesEditor contents={tree} selected={selected} busy={busy || draftChanged || localMediaPending} onChange={ids => setPrerequisites(selected.id, ids)} /></div></> : <>
                   <div className="mb-7 border-b pb-5"><h2 className="text-2xl font-semibold tracking-tight">Kursdaten</h2><p className="mt-2 text-sm leading-relaxed text-muted-foreground">Änderungen am Entwurf werden erst nach einer ausdrücklichen Veröffentlichung für Lernende sichtbar.</p></div>
                   <form onSubmit={event => { event.preventDefault(); void saveMetadata() }} className="fc-section-card space-y-6" aria-label="Kursdaten bearbeiten" aria-busy={busy}>
                     <div className="space-y-2"><Label htmlFor="draft-course-title">Kurstitel</Label><Input id="draft-course-title" value={meta.title} maxLength={300} disabled={busy} onChange={event => setMeta(value => ({ ...value, title: event.target.value }))} /></div>
                     <div className="space-y-2"><Label htmlFor="draft-course-description">Kurskategorie</Label><Input id="draft-course-description" value={meta.description} disabled={busy} onChange={event => setMeta(value => ({ ...value, description: event.target.value }))} /></div>
                     <div className="grid min-w-0 gap-4 sm:grid-cols-2"><div className="min-w-0 space-y-2"><Label htmlFor="draft-course-start">Startdatum</Label><Input id="draft-course-start" type="date" value={dateInput(meta.startDate)} disabled={busy} onChange={event => setMeta(value => ({ ...value, startDate: isoDate(event.target.value) }))} /></div><div className="min-w-0 space-y-2"><Label htmlFor="draft-course-end">Enddatum</Label><Input id="draft-course-end" type="date" value={dateInput(meta.endDate)} disabled={busy} onChange={event => setMeta(value => ({ ...value, endDate: isoDate(event.target.value) }))} /></div></div>
-                    <div className="space-y-2"><Label htmlFor="draft-course-image-url">Titelbild-URL</Label><Input id="draft-course-image-url" value={meta.imageUrl ?? ''} disabled={busy} onChange={event => setMeta(value => ({ ...value, imageUrl: event.target.value || null }))} placeholder="Bild hochladen oder URL eintragen" /><Label htmlFor="draft-course-image-upload" className="block">Neues privates Bild hochladen</Label><Input id="draft-course-image-upload" type="file" accept="image/jpeg,image/png,image/gif,image/webp" disabled={busy} onChange={event => { const file = event.target.files?.[0]; if (file) void uploadImage(file).then(url => setMeta(value => ({ ...value, imageUrl: url }))).catch(error => showError(error, 'Das Bild konnte nicht hochgeladen werden.')) }} />{meta.imageUrl?.startsWith(`/api/courses/${encodeURIComponent(courseId)}/assets/`) && <div className="w-full max-w-xs overflow-hidden rounded-lg border bg-muted/30 p-2">{/* Authenticated draft assets must bypass Next's image optimizer cache. */}
+                    <div className="space-y-2"><Label htmlFor="draft-course-image-url">Titelbild-URL</Label><Input id="draft-course-image-url" value={meta.imageUrl ?? ''} disabled={busy} onChange={event => setMeta(value => ({ ...value, imageUrl: event.target.value || null }))} placeholder="Bild hochladen oder URL eintragen" /><Label htmlFor="draft-course-image-upload" className="block">Neues privates Bild hochladen</Label><Input id="draft-course-image-upload" type="file" accept="image/jpeg,image/png" disabled={busy} onChange={event => { const file = event.target.files?.[0]; if (file) void uploadImage(file).then(url => setMeta(value => ({ ...value, imageUrl: url }))).catch(error => showError(error, 'Das Bild konnte nicht hochgeladen werden.')) }} />{meta.imageUrl?.startsWith(`/api/courses/${encodeURIComponent(courseId)}/assets/`) && <div className="w-full max-w-xs overflow-hidden rounded-lg border bg-muted/30 p-2">{/* Authenticated draft assets must bypass Next's image optimizer cache. */}
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={meta.imageUrl} alt="Titelbild im privaten Entwurf" className="max-h-48 w-full object-contain" /></div>}<p className="text-sm text-muted-foreground">Neue Uploads bleiben geschützt, bis sie veröffentlicht werden. Bereits öffentliche oder externe Bild-URLs bleiben über ihre bisherigen Adressen erreichbar. Hochladen allein speichert den Entwurf noch nicht.</p></div>
                     <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4"><span role="status" className="text-sm text-muted-foreground">{metadataChanged ? 'Ungespeicherte Änderungen' : 'Entwurf gespeichert'}</span><Button type="submit" disabled={busy || !metadataChanged}>{busy ? 'Wird gespeichert …' : 'Entwurf speichern'}</Button></div>
@@ -400,6 +401,6 @@ export function CourseDraftWorkspace({ courseId, initialState, onLiveMode, canAu
     <Dialog open={historyOpen} onOpenChange={open => { if (!busyRef.current) setHistoryOpen(open) }}><DialogContent className="max-h-[90dvh] max-w-xl overflow-y-auto"><DialogHeader><DialogTitle>Veröffentlichte Versionen</DialogTitle><DialogDescription>Eine frühere Version wird als neuer privater Entwurf kopiert. Bestehende Lernaktivitäten und Zertifikate bleiben bestehen.</DialogDescription></DialogHeader>{historyBusy ? <p role="status">Versionen werden geladen …</p> : historyRows.length ? <ol className="divide-y border-y">{historyRows.map(row => <li key={row.id} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><p className="font-medium">Version {row.sequence}</p><p className="text-sm text-muted-foreground">{new Date(row.recordedAt).toLocaleString('de-DE')}</p></div><Button variant="outline" size="sm" disabled={busy || hasLocalChanges} onClick={() => setRestoreId(row.id)}><RotateCcw className="mr-2 h-4 w-4" />Als Entwurf wiederherstellen</Button></li>)}</ol> : <p className="text-sm text-muted-foreground">Noch keine Veröffentlichung vorhanden.</p>}{hasLocalChanges && <p className="text-sm text-muted-foreground">Speichere oder verwirf deine lokalen Änderungen vor dem Wiederherstellen.</p>}<DialogFooter><Button variant="outline" onClick={() => setHistoryOpen(false)}>Schließen</Button></DialogFooter></DialogContent></Dialog>
     <AlertDialog open={Boolean(restoreId)} onOpenChange={open => { if (!open && !busyRef.current) setRestoreId(null) }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Version als Entwurf wiederherstellen?</AlertDialogTitle><AlertDialogDescription>Der aktuelle private Entwurf wird durch eine Kopie dieser Version ersetzt. Der veröffentlichte Kurs bleibt unverändert, bis du den neuen Entwurf ausdrücklich veröffentlichst.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={busy}>Abbrechen</AlertDialogCancel><AlertDialogAction disabled={busy || hasLocalChanges} onClick={event => { event.preventDefault(); void restore() }}>Als Entwurf wiederherstellen</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
     <AlertDialog open={discardOpen} onOpenChange={open => { if (!busyRef.current) setDiscardOpen(open) }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Entwurf verwerfen?</AlertDialogTitle><AlertDialogDescription>{state.activePublication ? 'Der private Entwurf wird auf die veröffentlichte Fassung zurückgesetzt. Der Kurs und seine bisherigen Veröffentlichungen werden nicht gelöscht.' : 'Der private Entwurf samt Kursdaten und Inhalten wird geleert. Der Kurs bleibt bestehen und kann neu bearbeitet werden.'}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={busy}>Weiter bearbeiten</AlertDialogCancel><AlertDialogAction disabled={busy} onClick={event => { event.preventDefault(); void discard() }}>Entwurf verwerfen</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
-    <AlertDialog open={Boolean(pendingNavigation)} onOpenChange={open => { if (!open) setPendingNavigation(null) }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Ungespeicherte Änderungen</AlertDialogTitle><AlertDialogDescription>Wenn du fortfährst, gehen deine lokalen Änderungen verloren. Der gespeicherte private Entwurf bleibt erhalten.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Weiter bearbeiten</AlertDialogCancel><AlertDialogAction onClick={() => { const action = pendingNavigation; setPendingNavigation(null); setLocalContent(null); setReleaseBuffer(null); setMeta(metadata(state.draft.payload)); action?.() }}>Lokale Änderungen verwerfen</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+    <AlertDialog open={Boolean(pendingNavigation)} onOpenChange={open => { if (!open) setPendingNavigation(null) }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Ungespeicherte Änderungen</AlertDialogTitle><AlertDialogDescription>Wenn du fortfährst, gehen deine lokalen Änderungen verloren. Der gespeicherte private Entwurf bleibt erhalten.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Weiter bearbeiten</AlertDialogCancel><AlertDialogAction onClick={() => { const action = pendingNavigation; setPendingNavigation(null); setLocalContent(null); setReleaseBuffer(null); setMeta(metadata(state.draft.payload)); setLocalMediaPending(false); setEditorVersion(value => value + 1); action?.() }}>Lokale Änderungen verwerfen</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
   </AppShell>
 }

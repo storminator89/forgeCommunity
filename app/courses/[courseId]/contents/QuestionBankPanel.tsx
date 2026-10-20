@@ -23,7 +23,7 @@ const endpoint = '/api/courses/questions';
 
 export function QuestionBankPanel({ activeQuestion, onInsert }: {
   activeQuestion: QuizQuestion | null;
-  onInsert: (question: QuizQuestion) => void;
+  onInsert: (question: QuizQuestion) => boolean | void;
 }) {
   const id = useId();
   const [open, setOpen] = useState(false);
@@ -113,7 +113,8 @@ export function QuestionBankPanel({ activeQuestion, onInsert }: {
     void run(async () => {
       const result = await bankResponse<{ question: QuizQuestion }>(
         `${endpoint}/${encodeURIComponent(selectedId)}/revisions/${encodeURIComponent(selectedRevision)}`);
-      onInsert(result.question);
+      const inserted = onInsert(result.question);
+      if (inserted === false) { setNotice('Die Pool-Frage wurde nicht eingefügt. Warte das Speichern ab und wähle die gewünschte Frage danach erneut.'); return; }
       setNotice('Frage als Kopie in dieses Quiz eingefügt. Speichere anschließend den Kursentwurf.');
     });
   };

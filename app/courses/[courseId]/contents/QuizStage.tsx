@@ -1,8 +1,20 @@
 'use client';
 
-import { useId, type ReactNode } from 'react';
+import { useId, useState, type ReactNode } from 'react';
+import { isQuizImageAttributionSourceUrl, type LearnerQuizOptionImage } from '@/lib/quiz-media-contract';
 import type { LearnerQuizQuestion } from './types';
 import styles from './QuizStage.module.css';
+
+/** The same image surface is used by learners and author rehearsal. */
+function AnswerImage({ image }: { image: LearnerQuizOptionImage }) {
+  const [failed, setFailed] = useState(false);
+  return <span className={styles.answerImageStage}>
+    {failed ? <span className={styles.answerImageFallback} role="img" aria-label={`Bild nicht verfügbar. ${image.alt}`}><span aria-hidden="true">Bild nicht verfügbar</span><span aria-hidden="true">{image.alt}</span></span>
+      // Protected course assets must never enter the public image optimizer.
+      // eslint-disable-next-line @next/next/no-img-element
+      : <img src={image.src} alt={image.alt} className={styles.answerImage} loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={() => setFailed(true)} />}
+  </span>;
+}
 
 export function isQuizQuestionAnswered(question: LearnerQuizQuestion, answer: unknown): boolean {
   switch (question.type) {
@@ -58,17 +70,30 @@ export function QuizStage({ question, answer, onAnswerChange, questionNumber, to
       <legend className="sr-only">Antwort zu Frage {questionNumber}</legend>
       <h3 id={headingId} tabIndex={-1} className={styles.prompt}>{question.question || 'Fragetext fehlt'}</h3>
       <p id={`${prefix}-hint`} className={styles.hint}>{hint}</p>
-      {(question.type === 'SINGLE_CHOICE' || question.type === 'MULTIPLE_CHOICE' || question.type === 'TRUE_FALSE') && <div className={styles.choices} role="group" aria-describedby={`${prefix}-hint`}>
+      {(question.type === 'SINGLE_CHOICE' || question.type === 'MULTIPLE_CHOICE' || question.type === 'TRUE_FALSE') && <div className={`${styles.choices} ${question.optionImages?.some(Boolean) ? styles.imageChoices : ''}`} role="group" aria-describedby={`${prefix}-hint`}>
         {question.options.map((option, index) => {
           const selected = values.includes(index);
-          return <label key={index} className={`${styles.choice} ${selected ? styles.choiceSelected : ''}`}>
-            <input type={question.type === 'MULTIPLE_CHOICE' ? 'checkbox' : 'radio'} name={`${prefix}-answer`} value={index} checked={selected} className={styles.choiceControl} onChange={event => {
-              if (question.type !== 'MULTIPLE_CHOICE') onAnswerChange([index]);
-              else onAnswerChange(event.target.checked ? [...values.filter(value => value !== index), index].sort((a, b) => Number(a) - Number(b)) : values.filter(value => value !== index));
-            }} />
-            <span className={styles.choiceLetter} aria-hidden="true">{String.fromCharCode(65 + index)}</span>
-            <span className={styles.choiceText}>{option || `Antwort ${index + 1} fehlt`}</span>
-          </label>;
+          const image = question.type !== 'TRUE_FALSE' ? question.optionImages?.[index] : null;
+          return <div key={index} className={styles.choiceItem}>
+            <label className={`${styles.choice} ${question.optionImages?.some(Boolean) ? styles.imageChoice : ''} ${selected ? styles.choiceSelected : ''}`}>
+              {image && <AnswerImage key={image.src} image={image} />}
+              {!image && question.optionImages?.some(Boolean) && <span className={styles.textOnlyStage} aria-hidden="true">{String.fromCharCode(65 + index)}</span>}
+              <span className={styles.choiceCaption}>
+                <input type={question.type === 'MULTIPLE_CHOICE' ? 'checkbox' : 'radio'} name={`${prefix}-answer`} value={index} checked={selected} className={styles.choiceControl} onChange={event => {
+                  if (question.type !== 'MULTIPLE_CHOICE') onAnswerChange([index]);
+                  else onAnswerChange(event.target.checked ? [...values.filter(value => value !== index), index].sort((a, b) => Number(a) - Number(b)) : values.filter(value => value !== index));
+                }} />
+                <span className={styles.choiceLetter} aria-hidden="true">{selected ? '✓' : String.fromCharCode(65 + index)}</span>
+                <span className={styles.choiceText}>{option || `Antwort ${index + 1} fehlt`}</span>
+              </span>
+            </label>
+            {image?.attribution && <p className={styles.imageCredit}>
+              {image.attribution.sourceUrl && isQuizImageAttributionSourceUrl(image.attribution.sourceUrl)
+                ? <a href={image.attribution.sourceUrl} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer">{image.attribution.text}<span className="sr-only"> (öffnet in einem neuen Tab)</span></a>
+                : <span>{image.attribution.text}</span>}
+              {image.attribution.licenseLabel && <span> · {image.attribution.licenseLabel}</span>}
+            </p>}
+          </div>;
         })}
       </div>}
       {question.type === 'TEXT_INPUT' && <label className={styles.part}><span>Deine Antwort</span><input className={styles.textInput} value={typeof answer === 'string' ? answer : ''} maxLength={1000} onChange={event => onAnswerChange(event.target.value)} aria-describedby={`${prefix}-hint`} /></label>}

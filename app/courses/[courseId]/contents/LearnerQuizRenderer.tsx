@@ -4,6 +4,8 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { QuizStage, isQuizQuestionAnswered } from './QuizStage'
 import styles from './QuizStage.module.css'
+import { parseLearnerQuizOptionImages, projectQuizOptionImagesForLearner } from '@/lib/quiz-media-contract'
+import { QUIZ_MEDIA_CAPABILITY, QUIZ_MEDIA_CAPABILITY_HEADER } from '@/lib/quiz-media-compatibility'
 import { parseLearnerQuizContent, parseQuizContent, type LearnerQuizContent, type LearnerQuizQuestion, type LatestQuizAttempt } from './types'
 
 type Grade = { score: number; passed: boolean }
@@ -23,8 +25,8 @@ const confidenceOptions: { value: ConfidenceChoice; label: string }[] = [
   { value: 'NONE', label: 'Keine Angabe' },
 ]
 
-function learnerQuiz(value: unknown): LearnerQuizContent | null {
-  const publicQuiz = parseLearnerQuizContent(value)
+function learnerQuiz(value: unknown, courseId: string): LearnerQuizContent | null {
+  const publicQuiz = parseLearnerQuizContent(value, courseId)
   if (publicQuiz) return {
     shuffleQuestions: publicQuiz.shuffleQuestions,
     passingScore: publicQuiz.passingScore,
@@ -32,7 +34,12 @@ function learnerQuiz(value: unknown): LearnerQuizContent | null {
     questions: publicQuiz.questions.map((question): LearnerQuizQuestion => {
       const base = { id: question.id, question: question.question }
       switch (question.type) {
-        case 'SINGLE_CHOICE': case 'MULTIPLE_CHOICE': case 'TRUE_FALSE': return { ...base, type: question.type, options: [...question.options] }
+        case 'SINGLE_CHOICE': case 'MULTIPLE_CHOICE': {
+          const media = parseLearnerQuizOptionImages(question, courseId)
+          if (!media.ok) throw new Error('Die Bilddetails dieser Frage sind ungültig.')
+          return { ...base, type: question.type, options: [...question.options], ...(media.value && { optionImages: media.value }) }
+        }
+        case 'TRUE_FALSE': return { ...base, type: question.type, options: [...question.options] }
         case 'MATCHING': return { ...base, type: 'MATCHING', pairs: question.pairs.map(pair => ({ left: pair.left })) }
         case 'FILL_BLANKS': return { ...base, type: 'FILL_BLANKS', text: question.text, blankCount: question.blankCount }
         case 'TEXT_INPUT': return { ...base, type: 'TEXT_INPUT' }
@@ -40,7 +47,7 @@ function learnerQuiz(value: unknown): LearnerQuizContent | null {
     }),
   }
   // Course editors may also be enrolled. Strip their editor-only answer key.
-  const full = parseQuizContent(value)
+  const full = parseQuizContent(value, courseId)
   if (!full) return null
   return {
     shuffleQuestions: full.shuffleQuestions ?? false,
@@ -48,7 +55,12 @@ function learnerQuiz(value: unknown): LearnerQuizContent | null {
     questions: full.questions.map((question): LearnerQuizQuestion => {
       const base = { id: question.id, question: question.question }
       switch (question.type) {
-        case 'SINGLE_CHOICE': case 'MULTIPLE_CHOICE': case 'TRUE_FALSE': return { ...base, type: question.type, options: [...question.options] }
+        case 'SINGLE_CHOICE': case 'MULTIPLE_CHOICE': {
+          const media = projectQuizOptionImagesForLearner(question, courseId)
+          if (!media.ok) throw new Error('Die Bilddetails dieser Frage sind ungültig.')
+          return { ...base, type: question.type, options: [...question.options], ...(media.value && { optionImages: media.value }) }
+        }
+        case 'TRUE_FALSE': return { ...base, type: question.type, options: [...question.options] }
         case 'MATCHING': return { ...base, type: 'MATCHING', pairs: question.pairs.map(pair => ({ left: pair.left })) }
         case 'FILL_BLANKS': return { ...base, type: 'FILL_BLANKS', text: question.text, blankCount: question.answers.length }
         case 'TEXT_INPUT': return { ...base, type: 'TEXT_INPUT' }
@@ -82,7 +94,7 @@ export function LearnerQuizRenderer(props: LearnerQuizProps) {
 }
 
 function LearnerQuizSession({ courseId, contentId, publicationId, contentVersionToken, content, onPassed, onReaderIssue, latestAttempt }: LearnerQuizProps) {
-  const quiz = learnerQuiz(content)
+  const quiz = learnerQuiz(content, courseId)
   const prefix = useId()
   const [answers, setAnswers] = useState<Record<string, unknown>>({})
   const [confidence, setConfidence] = useState<Record<string, ConfidenceChoice>>({})
@@ -171,13 +183,15 @@ function LearnerQuizSession({ courseId, contentId, publicationId, contentVersion
     pendingSubmission.current = submission
     try {
       const response = await fetch(`/api/courses/${encodeURIComponent(courseId)}/contents/${encodeURIComponent(contentId)}/attempts`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json', [QUIZ_MEDIA_CAPABILITY_HEADER]: QUIZ_MEDIA_CAPABILITY },
         body: JSON.stringify({ ...submission, publicationId, contentVersionToken }),
       })
       if (!response.ok) {
         if (active.current) onReaderIssue?.(response.status)
         if (response.status === 409 || response.status === 412) {
           if (active.current) setStaleVersion(true)
+          const failure = await response.json().catch(() => null) as { code?: unknown } | null
+          if (failure?.code === 'QUIZ_MEDIA_REFRESH_REQUIRED') throw new Error('Dieses Quiz enthält Antwortbilder. Deine Antworten bleiben sichtbar. Bitte lade den Kurs neu, bevor du erneut abgibst.')
           throw new Error('Dieses Quiz wurde geändert. Deine Antworten sind hier noch sichtbar. Bitte lade den Kurs neu, bevor du erneut abgibst.')
         }
         if (response.status === 429) throw new Error('Bitte sieh dir die Inhalte noch einmal an und versuche es später erneut.')

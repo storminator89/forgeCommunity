@@ -1,3 +1,4 @@
+import { checkQuizMediaNewLearnerAttempt, QUIZ_MEDIA_CAPABILITY_HEADER } from '@/lib/quiz-media-compatibility';
 import { createHash } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
@@ -11,7 +12,7 @@ import { contentTransaction } from '../../content-mutations';
 import { assertCurrentPrerequisites, CoursePathError } from '@/lib/server/course-prerequisites';
 
 type Params = { params: Promise<{ courseId: string; contentId: string }> };
-type AttemptOutcome = { status: number; score?: number; passed?: boolean; retryAfterSeconds?: number; error?: string };
+type AttemptOutcome = { status: number; score?: number; passed?: boolean; retryAfterSeconds?: number; error?: string; code?: string };
 
 export async function POST(request: NextRequest, props: Params) {
   const { courseId, contentId } = await props.params;
@@ -61,6 +62,8 @@ export async function POST(request: NextRequest, props: Params) {
       if (!quiz || getQuizValidationError(quiz)) return { status: 409, error: 'Quiz is not ready' };
       if (!matchesContentVersionToken(body.contentVersionToken, course.activePublicationId, content)) return { status: 409, error: 'Quiz changed; reload before submitting' };
       await assertCurrentPrerequisites(tx, userId, courseId, contentId, course.activePublicationId);
+      const mediaGate = checkQuizMediaNewLearnerAttempt(courseId, request.headers.get(QUIZ_MEDIA_CAPABILITY_HEADER), content.content);
+      if (!mediaGate.ok) return { status: mediaGate.error.status, error: mediaGate.error.message, code: mediaGate.error.code };
       const revision = courseContentRevision(content);
       const now = new Date();
       const windowStart = new Date(now.getTime() - 60 * 60 * 1000);
@@ -115,7 +118,7 @@ export async function POST(request: NextRequest, props: Params) {
     }
     if (outcome.status === 200) return NextResponse.json({ score: outcome.score, passed: outcome.passed });
     if (outcome.status === 429) return NextResponse.json({ error: outcome.error, retryAfterSeconds: outcome.retryAfterSeconds }, { status: 429, headers: { 'Retry-After': String(outcome.retryAfterSeconds) } });
-    return NextResponse.json({ error: outcome.error }, { status: outcome.status });
+    return NextResponse.json({ error: outcome.error, ...(outcome.code ? { code: outcome.code } : {}) }, { status: outcome.status, headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     if (error instanceof CoursePathError) return NextResponse.json({ error: error.message }, { status: error.status });
     if (error instanceof InvalidQuizAnswersError) return NextResponse.json({ error: error.message }, { status: 400 });

@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { checkQuizMediaQuestionPoolInput } from '@/lib/quiz-media-compatibility';
+
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { getQuizValidationError, parseQuizContent, type QuizQuestion } from '@/app/courses/[courseId]/contents/types';
@@ -19,6 +21,8 @@ function validRevision(value: unknown): value is number {
 /** Ignore untrusted extra JSON fields and persist only the quiz grading contract. */
 export function bankQuestionFromInput(value: unknown): QuizQuestion {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new QuestionBankError('Ungültige Frage.');
+  const mediaGate = checkQuizMediaQuestionPoolInput(value);
+  if (!mediaGate.ok) throw new QuestionBankError(mediaGate.error.message, mediaGate.error.status);
   const input = value as Record<string, unknown>;
   if (typeof input.type !== 'string' || typeof input.question !== 'string' || input.question.length > 3000 ||
       (input.explanation !== undefined && (typeof input.explanation !== 'string' || input.explanation.length > 3000))) {

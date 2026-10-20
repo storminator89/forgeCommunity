@@ -1,4 +1,7 @@
 import type { CourseContent } from './types'
+import { QUIZ_MEDIA_CAPABILITY, QUIZ_MEDIA_CAPABILITY_HEADER } from '@/lib/quiz-media-compatibility'
+import { parseCanonicalQuizOptionAssetUrl } from '@/lib/quiz-media-contract'
+import { prepareCourseOptionImage } from '@/lib/course-option-image-prepare'
 
 /** Private author DTO. The published learner projection is deliberately separate. */
 export interface AuthorNode {
@@ -56,12 +59,16 @@ export type AuthorOperation =
   | { kind: 'deleteNode'; id: string }
 
 export class AuthoringError extends Error {
-  constructor(message: string, public status: number) { super(message); this.name = 'AuthoringError' }
+  constructor(message: string, public status: number, public errorCode?: string) { super(message); this.name = 'AuthoringError' }
 }
 
 export async function authorResponse<T>(response: Response, fallback: string): Promise<T> {
   if (!response.ok) {
-    const body = await response.json().catch(() => null) as { error?: unknown } | null
+    const body = await response.json().catch(() => null) as { error?: unknown; code?: unknown; errorCode?: unknown } | null
+    if (body?.errorCode === 'UPLOAD_UNCERTAIN') throw new AuthoringError('Der Upload konnte nicht sicher bestätigt werden. Ein privates Bild kann bereits vorhanden sein, wurde aber hier nicht angehängt. Es wird nicht automatisch erneut hochgeladen.', response.status, 'UPLOAD_UNCERTAIN')
+    if (body?.code === 'QUIZ_MEDIA_REFRESH_REQUIRED' && typeof body.error === 'string') {
+      throw new AuthoringError(body.error, response.status)
+    }
     const defaultMessage: Record<number, string> = {
       401: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.',
       403: 'Du hast keine Berechtigung für diesen Kursentwurf.',
@@ -80,50 +87,61 @@ export function authorUrl(courseId: string, suffix = ''): string {
 }
 
 export async function getAuthorState(courseId: string, signal?: AbortSignal): Promise<AuthorState> {
-  return authorResponse<AuthorState>(await fetch(authorUrl(courseId), { cache: 'no-store', signal }), 'Der Entwurf konnte nicht geladen werden.')
+  return authorResponse<AuthorState>(await fetch(authorUrl(courseId), { cache: 'no-store', signal, headers: { [QUIZ_MEDIA_CAPABILITY_HEADER]: QUIZ_MEDIA_CAPABILITY } }), 'Der Entwurf konnte nicht geladen werden.')
 }
 
 export async function patchAuthorState(courseId: string, expectedRevision: number, operation: AuthorOperation): Promise<AuthorState> {
   return authorResponse<AuthorState>(await fetch(authorUrl(courseId), {
-    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, cache: 'no-store',
+    method: 'PATCH', headers: { 'Content-Type': 'application/json', [QUIZ_MEDIA_CAPABILITY_HEADER]: QUIZ_MEDIA_CAPABILITY }, cache: 'no-store',
     body: JSON.stringify({ expectedRevision, operation }),
   }), 'Der Entwurf konnte nicht gespeichert werden. Deine lokalen Änderungen bleiben erhalten.')
 }
 
 export async function discardAuthorDraft(courseId: string, expectedRevision: number): Promise<AuthorState> {
   return authorResponse<AuthorState>(await fetch(authorUrl(courseId), {
-    method: 'DELETE', headers: { 'Content-Type': 'application/json' }, cache: 'no-store', body: JSON.stringify({ expectedRevision }),
+    method: 'DELETE', headers: { 'Content-Type': 'application/json', [QUIZ_MEDIA_CAPABILITY_HEADER]: QUIZ_MEDIA_CAPABILITY }, cache: 'no-store', body: JSON.stringify({ expectedRevision }),
   }), 'Der Entwurf konnte nicht verworfen werden.')
 }
 
 export async function getPublicationReview(courseId: string, draft: AuthorDraft, active: ActivePublication | null): Promise<PublicationReview> {
   const query = new URLSearchParams({ expectedRevision: String(draft.revision), expectedActivePublicationId: active?.id ?? 'null' })
-  return authorResponse<PublicationReview>(await fetch(authorUrl(courseId, `/review?${query}`), { cache: 'no-store' }), 'Die Veröffentlichungsprüfung ist fehlgeschlagen.')
+  return authorResponse<PublicationReview>(await fetch(authorUrl(courseId, `/review?${query}`), { cache: 'no-store', headers: { [QUIZ_MEDIA_CAPABILITY_HEADER]: QUIZ_MEDIA_CAPABILITY } }), 'Die Veröffentlichungsprüfung ist fehlgeschlagen.')
 }
 
 export async function publishAuthorDraft(courseId: string, draft: AuthorDraft, active: ActivePublication | null, requestId: string): Promise<{ publication: ActivePublication; unchanged: boolean }> {
   return authorResponse(await fetch(authorUrl(courseId, '/publish'), {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, cache: 'no-store',
+    method: 'POST', headers: { 'Content-Type': 'application/json', [QUIZ_MEDIA_CAPABILITY_HEADER]: QUIZ_MEDIA_CAPABILITY }, cache: 'no-store',
     body: JSON.stringify({ expectedRevision: draft.revision, expectedActivePublicationId: active?.id ?? null, requestId }),
   }), 'Die Veröffentlichung konnte nicht abgeschlossen werden. Prüfe den Stand, bevor du es erneut versuchst.')
 }
 
 export async function getPublicationHistory(courseId: string): Promise<PublicationRecord[]> {
-  const result = await authorResponse<{ publications: PublicationRecord[] }>(await fetch(authorUrl(courseId, '/history'), { cache: 'no-store' }), 'Der Versionsverlauf konnte nicht geladen werden.')
+  const result = await authorResponse<{ publications: PublicationRecord[] }>(await fetch(authorUrl(courseId, '/history'), { cache: 'no-store', headers: { [QUIZ_MEDIA_CAPABILITY_HEADER]: QUIZ_MEDIA_CAPABILITY } }), 'Der Versionsverlauf konnte nicht geladen werden.')
   return result.publications
 }
 
 export async function restorePublication(courseId: string, publicationId: string, expectedRevision: number): Promise<AuthorState> {
   return authorResponse<AuthorState>(await fetch(authorUrl(courseId, '/restore'), {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, cache: 'no-store',
+    method: 'POST', headers: { 'Content-Type': 'application/json', [QUIZ_MEDIA_CAPABILITY_HEADER]: QUIZ_MEDIA_CAPABILITY }, cache: 'no-store',
     body: JSON.stringify({ publicationId, expectedRevision }),
   }), 'Die Version konnte nicht als Entwurf wiederhergestellt werden.')
 }
 
-export async function uploadDraftImage(courseId: string, file: File): Promise<{ id: string; url: string; mimeType: string; size: number }> {
+/** A single POST only. An ambiguous network outcome is never automatically retried. */
+export async function uploadDraftImage(courseId: string, file: File, signal?: AbortSignal): Promise<{ id: string; url: string; mimeType: string; size: number }> {
+  if (signal?.aborted) throw new DOMException('Upload abgebrochen.', 'AbortError')
+  const prepared = await prepareCourseOptionImage(file)
+  if (signal?.aborted) throw new DOMException('Upload abgebrochen.', 'AbortError')
   const data = new FormData()
-  data.append('file', file)
-  return authorResponse(await fetch(authorUrl(courseId, '/assets'), { method: 'POST', body: data }), 'Das Bild konnte nicht hochgeladen werden.')
+  data.append('file', prepared)
+  const result = await authorResponse<{ id: string; url: string; mimeType: string; size: number }>(await fetch(authorUrl(courseId, '/assets'), {
+    method: 'POST', body: data, signal, cache: 'no-store', headers: { [QUIZ_MEDIA_CAPABILITY_HEADER]: QUIZ_MEDIA_CAPABILITY },
+  }), 'Der Upload wurde nicht bestätigt. Es wird nicht automatisch erneut hochgeladen. Prüfe den Stand oder wähle die Datei bewusst erneut.')
+  const canonical = parseCanonicalQuizOptionAssetUrl(result?.url, courseId)
+  if (!canonical.ok || canonical.value.assetId !== result.id || result.mimeType !== 'image/png' || !Number.isInteger(result.size) || result.size < 1 || result.size > 5 * 1024 * 1024) {
+    throw new Error('Die Upload-Antwort ist ungültig. Das private Bild wurde nicht angehängt.')
+  }
+  return { id: result.id, url: canonical.value.src, mimeType: result.mimeType, size: result.size }
 }
 
 /** Keep flat DTO bytes and nullable legacy types untouched until a node is edited. */

@@ -1,7 +1,7 @@
 'use client';
 
 import { H5PSourceField } from '@/components/h5p/H5PSourceField';
-import { useId, useRef, useState } from 'react';
+import { useCallback, useId, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -24,10 +24,12 @@ interface EditContentFormProps {
   saveState?: 'saved' | 'dirty';
   saveMessage?: string;
   staged?: boolean;
-  onImageUpload?: (file: File) => Promise<string>;
+  disabled?: boolean;
+  onImageUpload?: (file: File, signal?: AbortSignal) => Promise<string>;
+  onLocalMediaChange?: (blocked: boolean) => void;
 }
 
-export function EditContentForm({ content: initialContent, onSubmit, onContentChange, onCancel, saveState, saveMessage, staged = false, onImageUpload }: EditContentFormProps) {
+export function EditContentForm({ content: initialContent, onSubmit, onContentChange, onCancel, saveState, saveMessage, staged = false, disabled = false, onImageUpload, onLocalMediaChange }: EditContentFormProps) {
   const fieldId = useId();
   const initialType = inferContentType(initialContent);
   const [title, setTitle] = useState(initialContent.title);
@@ -40,8 +42,11 @@ export function EditContentForm({ content: initialContent, onSubmit, onContentCh
   const [htmlMode, setHtmlMode] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isH5PBusy, setIsH5PBusy] = useState(false);
+  const [isQuizMediaBlocked, setIsQuizMediaBlocked] = useState(false);
+  const handleImageStateChange = useCallback((blocked: boolean) => { setIsQuizMediaBlocked(blocked); onLocalMediaChange?.(blocked); }, [onLocalMediaChange]);
   const [error, setError] = useState<string | null>(null);
   const saving = useRef(false);
+  const blocked = disabled || isSubmitting || isH5PBusy;
   const typeDrafts = useRef<Partial<Record<ContentType, CourseContent['content']>>>({ [initialType]: initialContent.content });
 
   const updateContent = (value: CourseContent['content']) => {
@@ -70,12 +75,13 @@ export function EditContentForm({ content: initialContent, onSubmit, onContentCh
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (saving.current || isH5PBusy) return;
+    if (disabled || saving.current || isH5PBusy) return;
+    if (isQuizMediaBlocked) { setError('Schließe die Bilddetails ab oder entferne unfertige Bildanhänge, bevor du speicherst.'); return; }
     const score = Number(assignmentScore);
     const assignmentDraft = { prompt: assignmentPrompt, passingScore: score };
     const validationError = type === 'ASSIGNMENT' && (!Number.isInteger(score) || score < 1 || score > 100)
       ? 'Die Bestehensgrenze muss zwischen 1 und 100 % liegen.'
-      : staged ? null : !title.trim() ? 'Gib einen Titel ein.' : getContentValidationError(type, type === 'ASSIGNMENT' ? JSON.stringify(assignmentDraft) : content);
+      : staged ? null : !title.trim() ? 'Gib einen Titel ein.' : getContentValidationError(type, type === 'ASSIGNMENT' ? JSON.stringify(assignmentDraft) : content, initialContent.courseId);
     if (validationError) { setError(validationError); return; }
     saving.current = true;
     setIsSubmitting(true);
@@ -90,27 +96,27 @@ export function EditContentForm({ content: initialContent, onSubmit, onContentCh
     }
   };
 
-  const quiz = type === 'QUIZ' ? quizEditorDraft(content) : null;
-  const dirty = localAssignmentDirty || (saveState ? saveState === 'dirty' : editableSignature({ ...initialContent, title, type, content }) !== editableSignature(initialContent));
-  const stateLabel = isSubmitting ? 'Änderungen werden gespeichert …' : error ? 'Speichern nicht abgeschlossen' : dirty ? 'Lokal ungespeichert' : 'Gespeicherter Inhalt';
+  const quiz = type === 'QUIZ' ? quizEditorDraft(content, initialContent.courseId) : null;
+  const dirty = isQuizMediaBlocked || localAssignmentDirty || (saveState ? saveState === 'dirty' : editableSignature({ ...initialContent, title, type, content }) !== editableSignature(initialContent));
+  const stateLabel = isQuizMediaBlocked ? 'Bilddetails noch nicht speicherbar' : isSubmitting ? 'Änderungen werden gespeichert …' : error ? 'Speichern nicht abgeschlossen' : dirty ? 'Lokal ungespeichert' : 'Gespeicherter Inhalt';
   return (
-    <form onSubmit={handleSubmit} className="space-y-5" aria-label="Inhalt bearbeiten" aria-busy={isSubmitting || isH5PBusy}>
+    <form onSubmit={handleSubmit} className="space-y-5" aria-label="Inhalt bearbeiten" aria-busy={blocked}>
       <div className="flex flex-wrap items-baseline justify-between gap-2 border-b pb-3">
         <p className="text-sm font-medium">Inhalt ausarbeiten</p>
         <p role="status" aria-live="polite" className="text-xs text-muted-foreground">{stateLabel}</p>
       </div>
       {error && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{error}</p>}
-      <fieldset disabled={isSubmitting || isH5PBusy} className="space-y-5 min-w-0">
+      <fieldset disabled={blocked} className="space-y-5 min-w-0">
         <div className="space-y-2">
           <Label htmlFor={`${fieldId}-title`}>Titel</Label>
           <Input id={`${fieldId}-title`} value={title} required={!staged} maxLength={300} onChange={event => { setTitle(event.target.value); onContentChange({ title: event.target.value }); setError(null); }} />
         </div>
         <div className="space-y-2">
           <Label>Inhaltstyp</Label>
-          <ContentTypeSelector selectedType={type} onSelectType={selectType} disabled={isSubmitting || isH5PBusy} />
+          <ContentTypeSelector selectedType={type} onSelectType={selectType} disabled={blocked} />
         </div>
         {type === 'QUIZ' ? quiz ? (
-          <QuizEditor key={`${initialContent.id}-${type}`} initialContent={quiz} onSave={(value: QuizContent) => updateContent(value)} onChange={updateContent} showSaveButton={false} disabled={isSubmitting || isH5PBusy} />
+          <QuizEditor courseId={initialContent.courseId} onImageUpload={onImageUpload} onImageStateChange={handleImageStateChange} key={`${initialContent.id}-${type}`} initialContent={quiz} onSave={(value: QuizContent) => updateContent(value)} onChange={updateContent} showSaveButton={false} disabled={blocked} />
         ) : (
           <div className="space-y-2">
             <p role="alert" className="text-sm text-destructive">Die gespeicherten Quiz-Daten sind ungültig. Der ursprüngliche Inhalt bleibt erhalten.</p>
@@ -141,10 +147,10 @@ export function EditContentForm({ content: initialContent, onSubmit, onContentCh
               <Label id={`${fieldId}-text-label`} htmlFor={htmlMode ? `${fieldId}-html` : undefined}>Inhalt</Label>
               <div className="flex items-center gap-2"><Label htmlFor={`${fieldId}-html-mode`}>HTML</Label><Switch id={`${fieldId}-html-mode`} checked={htmlMode} onCheckedChange={setHtmlMode} /></div>
             </div>
-            {htmlMode ? <Textarea id={`${fieldId}-html`} value={draftString(content)} onChange={event => updateContent(event.target.value)} className="min-h-64 font-mono" /> : <div role="group" aria-labelledby={`${fieldId}-text-label`}><Editor content={draftString(content)} onChange={updateContent} readOnly={isSubmitting} rootDocumentChangesOnly={staged} uploadImage={onImageUpload} className={`${richTextStyles.editor} min-h-56`} /></div>}
+            {htmlMode ? <Textarea id={`${fieldId}-html`} value={draftString(content)} onChange={event => updateContent(event.target.value)} className="min-h-64 font-mono" /> : <div role="group" aria-labelledby={`${fieldId}-text-label`}><Editor content={draftString(content)} onChange={updateContent} readOnly={blocked} rootDocumentChangesOnly={staged} uploadImage={onImageUpload} className={`${richTextStyles.editor} min-h-56`} /></div>}
           </div>
         ) : type === 'H5P' ? (
-          <H5PSourceField id={`${fieldId}-source`} value={draftString(content)} onChange={updateContent} disabled={isSubmitting || isH5PBusy} onBusyChange={setIsH5PBusy} />
+          <H5PSourceField id={`${fieldId}-source`} value={draftString(content)} onChange={updateContent} disabled={blocked} onBusyChange={setIsH5PBusy} />
         ) : (
           <div className="space-y-2">
             <Label htmlFor={`${fieldId}-source`}>{type === 'VIDEO' ? 'Video-URL' : 'Audio-URL'}</Label>
@@ -154,9 +160,9 @@ export function EditContentForm({ content: initialContent, onSubmit, onContentCh
         )}
       </fieldset>
       <div className="sticky bottom-0 z-10 space-y-3 border-t bg-card py-4">
-        <p className="text-xs text-muted-foreground">{saveMessage || (staged ? 'Für Lernende noch nicht sichtbar.' : 'Änderungen werden nach dem Speichern für eingeschriebene Lernende sichtbar.')}</p>
-        <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="outline" disabled={isSubmitting || isH5PBusy} onClick={onCancel}>Abbrechen</Button>
-        <Button type="submit" disabled={isSubmitting || isH5PBusy || (!staged && !title.trim())}>{isSubmitting ? 'Wird gespeichert…' : staged ? 'Entwurf speichern' : 'Speichern'}</Button></div>
+        <p className="text-xs text-muted-foreground">{isQuizMediaBlocked ? 'Unfertige Bildanhänge bleiben nur hier. Ergänze die Details oder entferne sie, bevor du speicherst.' : saveMessage || (staged ? 'Für Lernende noch nicht sichtbar.' : 'Änderungen werden nach dem Speichern für eingeschriebene Lernende sichtbar.')}</p>
+        <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="outline" disabled={blocked} onClick={onCancel}>Abbrechen</Button>
+        <Button type="submit" disabled={blocked || isQuizMediaBlocked || (!staged && !title.trim())}>{isSubmitting ? 'Wird gespeichert…' : staged ? 'Entwurf speichern' : 'Speichern'}</Button></div>
       </div>
     </form>
   );

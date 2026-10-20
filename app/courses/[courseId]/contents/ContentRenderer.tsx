@@ -74,14 +74,14 @@ function ContentRendererState({ content, isEditing: externalIsEditing, onSave, o
     }
   };
 
-  const quizContent = (content.type === 'TEXT' || content.type === 'QUIZ') ? parseQuizContent(content.content) : null;
+  const quizContent = (content.type === 'TEXT' || content.type === 'QUIZ') ? parseQuizContent(content.content, content.courseId) : null;
 
   if (isEditing) {
     return (
       <Card className="p-6 shadow-none">
         <div className="space-y-6">
           {quizContent || content.type === 'QUIZ' ? (
-            <QuizEditor key={content.id} initialContent={quizContent ?? content.content} disabled={isSaving || !onSave} onSave={async quiz => { await handleSave(JSON.stringify(quiz)); }} />
+            <QuizEditor courseId={content.courseId} key={content.id} initialContent={quizContent ?? content.content} disabled={isSaving || !onSave} onSave={async quiz => { await handleSave(JSON.stringify(quiz)); }} />
           ) : content.type === 'TEXT' ? (
             <Editor content={editedContent} onChange={setEditedContent} className={richTextStyles.editor} />
           ) : (

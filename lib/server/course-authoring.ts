@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { checkQuizMediaAuthorMutation, checkQuizMediaAuthorSnapshot, type QuizMediaGateResult } from '@/lib/quiz-media-compatibility';
+
 import { createHash, randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
@@ -31,7 +33,11 @@ const MAX_NODES = 500;
 const MAX_PAYLOAD_BYTES = 512 * 1024;
 
 export class AuthoringError extends Error {
-  constructor(message: string, public readonly status = 400) { super(message); }
+  constructor(message: string, public readonly status = 400, public readonly code?: string) { super(message); }
+}
+
+function assertQuizMediaCompatibility(result: QuizMediaGateResult): void {
+  if (!result.ok) throw new AuthoringError(result.error.message, result.error.status, result.error.code);
 }
 
 /** Bind a saved payload to an immutable publication without normalizing body bytes. */
@@ -346,8 +352,7 @@ async function checkReferences(tx: Prisma.TransactionClient, courseId: string, a
     const rows = await tx.courseContent.findMany({ where: { id: { in: ids } }, select: { id: true, courseId: true } });
     if (rows.some(row => row.courseId !== courseId)) throw new AuthoringError('Inhalt-ID gehört zu einem anderen Kurs.', 409);
   }
-  const oldAssets = new Set(previous ? extractCourseAssetUrls(previous) : []);
-  for (const url of extractCourseAssetUrls(payload)) if (!oldAssets.has(url)) await assertCanReferenceCourseAsset(tx, courseId, actor.id, url);
+  for (const url of extractCourseAssetUrls(payload, courseId)) await assertCanReferenceCourseAsset(tx, courseId, actor.id, url);
   const oldNodes = new Map(previous?.contents.map(node => [node.id, node]));
   for (const node of payload.contents) if (node.type === 'H5P' && node.content) {
     const old = oldNodes.get(node.id);
@@ -357,7 +362,7 @@ async function checkReferences(tx: Prisma.TransactionClient, courseId: string, a
   }
 }
 
-export async function mutateDraft(courseId: string, actor: Author, expected: unknown, operationInput: unknown, origin?: string) {
+export async function mutateDraft(courseId: string, actor: Author, expected: unknown, operationInput: unknown, origin?: string, mediaCapability?: string | null) {
   const expectedRevision = requireRevision(expected);
   const operation = operationFromUnknown(operationInput);
   return authoringTransaction(async tx => {
@@ -366,6 +371,7 @@ export async function mutateDraft(courseId: string, actor: Author, expected: unk
     if (draft.revision !== expectedRevision) throw new AuthoringError('Entwurf wurde zwischenzeitlich geändert. Bitte neu laden.', 412);
     const current = parsePayload(draft.payload);
     const payload = applyOperation(current, operation);
+    assertQuizMediaCompatibility(checkQuizMediaAuthorMutation(courseId, mediaCapability, current.contents, payload.contents));
     await checkReferences(tx, courseId, actor, payload, origin, current);
     const json = payloadJson(payload);
     const updated = await tx.courseDraft.update({ where: { courseId }, data: {
@@ -375,7 +381,7 @@ export async function mutateDraft(courseId: string, actor: Author, expected: unk
   });
 }
 
-export async function discardDraft(courseId: string, actor: Author, expected: unknown) {
+export async function discardDraft(courseId: string, actor: Author, expected: unknown, mediaCapability?: string | null) {
   const expectedRevision = requireRevision(expected);
   return authoringTransaction(async tx => {
     const course = await authorize(tx, courseId, actor);
@@ -389,6 +395,7 @@ export async function discardDraft(courseId: string, actor: Author, expected: un
     } else {
       reset = { schemaVersion: 1, title: '', description: '', startDate: null, endDate: null, imageUrl: null, contents: [] };
     }
+    assertQuizMediaCompatibility(checkQuizMediaAuthorSnapshot(courseId, mediaCapability, parsePayload(draft.payload).contents, reset.contents));
     const updated = await tx.courseDraft.update({ where: { courseId }, data: {
       revision: { increment: 1 }, payload: payloadJson(reset), digest: publicationDigest(reset),
       basePublicationId: course.activePublicationId, lastEditorId: actor.id,
@@ -406,7 +413,7 @@ export async function listHistory(courseId: string, actor: Author) {
   });
 }
 
-export async function restoreDraft(courseId: string, actor: Author, expected: unknown, publicationId: unknown) {
+export async function restoreDraft(courseId: string, actor: Author, expected: unknown, publicationId: unknown, mediaCapability?: string | null) {
   const expectedRevision = requireRevision(expected);
   if (!validId(publicationId)) throw new AuthoringError('Ungültige Veröffentlichungs-ID.');
   return authoringTransaction(async tx => {
@@ -416,6 +423,7 @@ export async function restoreDraft(courseId: string, actor: Author, expected: un
     const publication = await tx.coursePublication.findUnique({ where: { id: publicationId } });
     if (!publication || publication.courseId !== courseId) throw new AuthoringError('Veröffentlichung nicht gefunden.', 404);
     const payload = parsePayload(publication.payload);
+    assertQuizMediaCompatibility(checkQuizMediaAuthorSnapshot(courseId, mediaCapability, parsePayload(draft.payload).contents, payload.contents));
     const updated = await tx.courseDraft.update({ where: { courseId }, data: {
       revision: { increment: 1 }, payload: payloadJson(payload), digest: publication.digest,
       basePublicationId: publication.id, lastEditorId: actor.id,
@@ -486,17 +494,18 @@ function impact(oldPayload: CoursePayload | null, payload: CoursePayload, enroll
   return { added, removed, changed, renamedOrReordered, prerequisitesChanged, releaseScheduleChanged, enrolledLearners, completionMayChange, rewardsMayChange, issuedCertificatesStayValid: true as const };
 }
 
-async function reviewed(tx: Prisma.TransactionClient, courseId: string, actor: Author, expectedRevision: number, expectedActive: string | null, origin?: string) {
+async function reviewed(tx: Prisma.TransactionClient, courseId: string, actor: Author, expectedRevision: number, expectedActive: string | null, origin?: string, mediaCapability?: string | null) {
   const course = await authorize(tx, courseId, actor);
   const draft = await ensureDraft(tx, course);
   if (draft.revision !== expectedRevision || course.activePublicationId !== expectedActive) throw new AuthoringError('Entwurf oder Veröffentlichung wurde geändert. Bitte neu laden.', 412);
   const payload = parsePayload(draft.payload);
-  const blockers = publicationBlockers(payload);
-  try { await checkReferences(tx, courseId, actor, payload, origin); }
-  catch (error) { blockers.push(error instanceof Error ? error.message : 'Eine Datei ist nicht verfügbar.'); }
   const active = course.activePublicationId ? await tx.coursePublication.findUnique({ where: { id: course.activePublicationId } }) : null;
   if (course.activePublicationId && (!active || active.courseId !== courseId)) throw new AuthoringError('Kursveröffentlichung ist beschädigt.', 409);
   const oldPayload = active ? parsePayload(active.payload) : null;
+  assertQuizMediaCompatibility(checkQuizMediaAuthorSnapshot(courseId, mediaCapability, oldPayload?.contents ?? [], payload.contents));
+  const blockers = publicationBlockers(payload);
+  try { await checkReferences(tx, courseId, actor, payload, origin); }
+  catch (error) { blockers.push(error instanceof Error ? error.message : 'Eine Datei ist nicht verfügbar.'); }
   const enrolledLearners = await tx.enrollment.count({ where: { courseId } });
   return { course, draft, payload, active, ready: blockers.length === 0, blockers,
     impact: impact(oldPayload, payload, enrolledLearners), revision: draft.revision, digest: draft.digest,
@@ -510,11 +519,11 @@ function expectedActiveId(value: unknown): string | null {
   return value;
 }
 
-export async function reviewPublication(courseId: string, actor: Author, expected: unknown, activeId: unknown, origin?: string) {
+export async function reviewPublication(courseId: string, actor: Author, expected: unknown, activeId: unknown, origin?: string, mediaCapability?: string | null) {
   const expectedRevision = requireRevision(expected);
   const expectedActive = expectedActiveId(activeId);
   return authoringTransaction(async tx => {
-    const { ready, blockers, impact: changes, revision, digest, activePublicationId } = await reviewed(tx, courseId, actor, expectedRevision, expectedActive, origin);
+    const { ready, blockers, impact: changes, revision, digest, activePublicationId } = await reviewed(tx, courseId, actor, expectedRevision, expectedActive, origin, mediaCapability);
     return { ready, blockers, impact: changes, revision, digest, activePublicationId };
   });
 }
@@ -557,7 +566,7 @@ async function materialize(tx: Prisma.TransactionClient, courseId: string, paylo
   } });
 }
 
-export async function publishDraft(courseId: string, actor: Author, expected: unknown, activeId: unknown, requestId: unknown, origin?: string) {
+export async function publishDraft(courseId: string, actor: Author, expected: unknown, activeId: unknown, requestId: unknown, origin?: string, mediaCapability?: string | null) {
   const expectedRevision = requireRevision(expected);
   const expectedActive = expectedActiveId(activeId);
   if (!validId(requestId)) throw new AuthoringError('Ungültige Anforderungs-ID.');
@@ -573,7 +582,7 @@ export async function publishDraft(courseId: string, actor: Author, expected: un
       return { publication: { id: publication.id, sequence: publication.sequence, digest: publication.digest },
         unchanged: publication.id === expectedActive };
     }
-    const state = await reviewed(tx, courseId, actor, expectedRevision, expectedActive, origin);
+    const state = await reviewed(tx, courseId, actor, expectedRevision, expectedActive, origin, mediaCapability);
     if (!state.ready) throw new AuthoringError(`Veröffentlichung blockiert: ${state.blockers.join(' ')}`, 409);
     if (state.active?.digest === state.draft.digest) {
       await tx.publicationRequest.create({ data: { courseId, requestId, actorId: actor.id,
