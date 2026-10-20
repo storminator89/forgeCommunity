@@ -92,11 +92,16 @@
 .imageChoices { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
 .imageChoice { flex: 1; flex-direction: column; align-items: stretch; padding: .625rem; gap: .75rem; }
 .imageChoice .choiceCaption { padding: .25rem; }
-.answerImageStage, .textOnlyStage { display: grid; place-items: center; aspect-ratio: 4 / 3; width: 100%; min-width: 0; overflow: hidden; border-radius: .625rem; background: hsl(var(--muted)); }
+.answerImageStage { display: grid; place-items: center; aspect-ratio: 4 / 3; width: 100%; min-width: 0; overflow: hidden; border-radius: .625rem; background: hsl(var(--muted)); }
 .answerImage { width: 100%; height: 100%; max-height: 20rem; object-fit: contain; }
 .answerImageFallback { display: grid; align-content: center; gap: .5rem; width: 100%; height: 100%; padding: .75rem; font-size: .8125rem; line-height: 1.5; overflow-wrap: anywhere; text-align: center; }
 .answerImageFallback > span:first-child { font-weight: 700; }
-.textOnlyStage { color: hsl(var(--muted-foreground)); font-size: 2rem; font-weight: 750; }
+/* Mixed sets remain in authored order without blank image slots or stretched text rows. */
+.mixedChoices { grid-template-columns: minmax(0, 1fr); align-items: start; }
+.mixedChoices .answerImageStage { aspect-ratio: auto; height: clamp(8rem, 35cqi, 12rem); }
+/* A failed image must expose the complete authored alternative text, even at narrow widths. */
+.mixedChoices .answerImageStage:has(.answerImageFallback) { height: auto; min-height: clamp(8rem, 35cqi, 12rem); }
+.mixedChoices .answerImageFallback { height: auto; }
 .imageCredit { min-width: 0; padding: .5rem .25rem 0; color: hsl(var(--muted-foreground)); font-size: .75rem; line-height: 1.5; overflow-wrap: anywhere; }
 .imageCredit a { display: inline-flex; align-items: center; min-height: 2.75rem; text-decoration: underline; text-underline-offset: .15em; }
 .imageCredit a:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 3px; }
