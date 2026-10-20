@@ -9,7 +9,7 @@ const privateHeaders = { 'Cache-Control': 'private, no-store' };
 
 export function authoringFailure(error: unknown) {
   if (error instanceof AuthoringError || error instanceof CourseAssetError || error instanceof H5PValidationError || error instanceof ContentMutationError) {
-    return NextResponse.json({ error: error.message }, { status: error.status, headers: privateHeaders });
+    return NextResponse.json({ error: error.message, ...(error instanceof AuthoringError && error.code ? { code: error.code } : {}) }, { status: error.status, headers: privateHeaders });
   }
   const inputError = requestErrorResponse(error);
   if (inputError) return inputError;

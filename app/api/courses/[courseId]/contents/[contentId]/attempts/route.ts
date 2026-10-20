@@ -1,3 +1,4 @@
+import { checkQuizMediaNewLearnerAttempt, QUIZ_MEDIA_CAPABILITY_HEADER } from '@/lib/quiz-media-compatibility';
 import { createHash, randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/sites-auth/server';
@@ -56,6 +57,9 @@ export async function POST(request: NextRequest, props: Params) {
       if (!matchesD1CourseContentVersionToken(body.contentVersionToken, body.publicationId, content.id)) throw new CoursePathError('Quiz changed; reload before submitting', 409);
       const now = new Date();
       assertD1ContentAccess(snapshot, contentId, true, now.getTime());
+      const mediaGate = checkQuizMediaNewLearnerAttempt(courseId, request.headers.get(QUIZ_MEDIA_CAPABILITY_HEADER), content.content);
+      if (!mediaGate.ok) return NextResponse.json({ error: mediaGate.error.message, code: mediaGate.error.code },
+        { status: mediaGate.error.status, headers: { 'Cache-Control': 'private, no-store' } });
       const recentFailures = snapshot.recentFailures.map(row => d1LearningDate(row.submittedAt).getTime())
         .filter(time => time >= now.getTime() - 60 * 60 * 1000);
       if (recentFailures.length >= 5) {

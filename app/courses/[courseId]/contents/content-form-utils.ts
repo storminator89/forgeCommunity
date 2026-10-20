@@ -7,15 +7,29 @@ export const EMPTY_QUIZ: QuizContent = { questions: [], shuffleQuestions: false,
 
 export const draftString = (value: CourseContent['content']): string => typeof value === 'string' ? value : JSON.stringify(value);
 export const inferContentType = (content: CourseContent): ContentType =>
-  content.type === 'TEXT' && parseQuizContent(content.content) ? 'QUIZ' : content.type;
+  content.type === 'TEXT' && parseQuizContent(content.content, content.courseId) ? 'QUIZ' : content.type;
 
 /** Keep a temporarily empty numeric field editable; validate it only on submit. */
-export function quizEditorDraft(value: CourseContent['content']): QuizContent | null {
-  if (typeof value !== 'string' && typeof value.passingScore === 'number' && !Number.isFinite(value.passingScore)) {
-    const parsed = parseQuizContent({ ...value, passingScore: 70 });
-    return parsed ? { ...parsed, passingScore: value.passingScore } : null;
-  }
-  return parseQuizContent(value);
+export function quizEditorDraft(value: CourseContent['content'], courseId?: string): QuizContent | null {
+  const parsed = parseQuizContent(value, courseId);
+  if (parsed || typeof value === 'string') return parsed;
+  // Only already-local object drafts get incomplete caption/number support.
+  // Never repair persisted strings or media metadata. The temporary placeholders
+  // prove the rest of the structure, then are replaced with the exact user text.
+  const source = value as QuizContent;
+  if (!Array.isArray(source.questions)) return null;
+  const passingScore = typeof source.passingScore === 'number' && !Number.isFinite(source.passingScore) ? 70 : source.passingScore;
+  const questions = source.questions.map(question => {
+    if ((question.type !== 'SINGLE_CHOICE' && question.type !== 'MULTIPLE_CHOICE') || !question.optionImages || !Array.isArray(question.options) || !question.options.every(option => typeof option === 'string')) return question;
+    return { ...question, options: question.options.map((option, index) => option.trim() ? option : `local-missing-caption-${index}`) };
+  });
+  const checked = parseQuizContent({ ...source, passingScore, questions }, courseId);
+  if (!checked) return null;
+  return { ...checked, passingScore: source.passingScore, questions: checked.questions.map((question, index) => {
+    const original = source.questions[index];
+    return (question.type === 'SINGLE_CHOICE' || question.type === 'MULTIPLE_CHOICE') && (original.type === 'SINGLE_CHOICE' || original.type === 'MULTIPLE_CHOICE')
+      ? { ...question, options: [...original.options] } : question;
+  }) };
 }
 
 /** Legacy iframe snippets contribute only their source, never executable markup. */
@@ -42,12 +56,12 @@ export function getH5PEmbedUrl(value: unknown): string | null {
   return local ? `/h5p/embed/${local[1]}` : null;
 }
 
-export function getContentValidationError(type: ContentType, value: CourseContent['content']): string | null {
+export function getContentValidationError(type: ContentType, value: CourseContent['content'], courseId?: string): string | null {
   const text = draftString(value).trim();
   if (type === 'ASSIGNMENT') return getAssignmentValidationError(value);
   if (type === 'QUIZ') {
-    const quiz = quizEditorDraft(value);
-    return quiz ? getQuizValidationError(quiz) : 'Die Quiz-Daten sind ungültig. Bitte korrigiere sie, bevor du speicherst.';
+    const quiz = quizEditorDraft(value, courseId);
+    return quiz ? getQuizValidationError(quiz, courseId) : 'Die Quiz-Daten sind ungültig. Bitte korrigiere sie, bevor du speicherst.';
   }
   // Empty topics/lessons may be saved while their content is still being prepared.
   if (!text) return null;

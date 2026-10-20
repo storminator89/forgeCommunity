@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { hasQuizOptionImagesField, projectQuizOptionImagesForLearner, type LearnerQuizOptionImages } from '@/lib/quiz-media-contract';
+
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { Prisma } from '@/generated/prisma/client';
 import { getQuizValidationError, parseQuizContent, type QuizContent, type QuizQuestion } from '@/app/courses/[courseId]/contents/types';
@@ -36,8 +38,11 @@ export function matchesContentVersionToken(token: unknown, publicationId: string
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
-export function contentQuiz(content: Pick<ProgressContent, 'type' | 'content'>): QuizContent | null {
-  return (!content.type || content.type === 'TEXT' || content.type === 'QUIZ') ? parseQuizContent(content.content) : null;
+export function contentQuiz(content: Pick<ProgressContent, 'type' | 'content'> & Partial<Pick<ProgressContent, 'courseId'>>): QuizContent | null {
+  // Nonempty real context is strict. Legacy internal classification stubs may
+  // omit it; the parser's clearly named fallback is structural only.
+  return (!content.type || content.type === 'TEXT' || content.type === 'QUIZ')
+    ? parseQuizContent(content.content, content.courseId || undefined) : null;
 }
 
 /** Malformed legacy quiz JSON must fail closed, not become ordinary self-attested text. */
@@ -65,7 +70,7 @@ export function courseLeaves(contents: ProgressContent[]): ProgressContent[] {
 }
 
 /** Learners receive a strict allowlist, never the persisted quiz JSON. */
-export function publicQuiz(quiz: QuizContent) {
+export function publicQuiz(quiz: QuizContent, expectedCourseId?: string) {
   return {
     shuffleQuestions: quiz.shuffleQuestions ?? false,
     passingScore: quiz.passingScore ?? 70,
@@ -74,7 +79,17 @@ export function publicQuiz(quiz: QuizContent) {
       switch (question.type) {
         case 'SINGLE_CHOICE':
         case 'MULTIPLE_CHOICE':
-        case 'TRUE_FALSE': return { ...base, options: [...question.options] };
+        case 'TRUE_FALSE': {
+          let optionImages: LearnerQuizOptionImages | undefined;
+          if (hasQuizOptionImagesField(question)) {
+            // Public projection NEVER infers its authorization context from src.
+            if (!expectedCourseId) throw new CoursePathError('Quiz media requires course context', 409);
+            const media = projectQuizOptionImagesForLearner(question, expectedCourseId);
+            if (!media.ok) throw new CoursePathError('Quiz image data is not ready', 409);
+            optionImages = media.value;
+          }
+          return { ...base, options: [...question.options], ...(optionImages !== undefined && { optionImages }) };
+        }
         case 'MATCHING': return { ...base, pairs: question.pairs.map(pair => ({ left: pair.left })) };
         case 'FILL_BLANKS': return { ...base, text: question.text, blankCount: question.answers.length };
         case 'TEXT_INPUT': return base;
@@ -85,7 +100,7 @@ export function publicQuiz(quiz: QuizContent) {
 
 export function publicCourseContent<T extends ProgressContent>(content: T): T {
   const quiz = contentQuiz(content);
-  if (quiz) return { ...content, type: 'QUIZ', content: JSON.stringify(publicQuiz(quiz)) };
+  if (quiz) return { ...content, type: 'QUIZ', content: JSON.stringify(publicQuiz(quiz, content.courseId)) };
   if (isQuizLikeContent(content)) return { ...content, type: 'QUIZ', content: JSON.stringify({ questions: [], shuffleQuestions: false, passingScore: 70 }) };
   return content;
 }

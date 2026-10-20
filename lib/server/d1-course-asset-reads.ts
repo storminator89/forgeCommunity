@@ -2,7 +2,8 @@ import 'server-only';
 
 import { env } from 'cloudflare:workers';
 import { parseAssignmentContent } from '@/app/courses/[courseId]/contents/assignment-content';
-import { activeAssetContentIds, activeAssetReference, courseAssetUrl, readCourseAsset } from '@/lib/server/course-assets';
+import { activeAssetContentIds, activeAssetReference, courseAssetUrl } from '@/lib/server/course-assets';
+import { getCourseImage, type CourseImageRowMetadata } from '@/lib/server/course-image-r2';
 import { courseContentRevision, courseLeaves, type ProgressContent } from '@/lib/server/course-progress';
 import { coursePathAccess, publicationPathNodes } from '@/lib/server/course-path';
 
@@ -24,14 +25,14 @@ type Row = {
   kind: 'metadata' | 'publication' | 'content';
   actorExists: number | null; role: string | null; courseExists: number | null; instructorId: string | null;
   activePublicationId: string | null; imageUrl: string | null; assetExists: number | null;
-  assetCourseId: string | null; storageKey: string | null; contentType: string | null; byteSize: number | null;
+  assetId: string | null; assetCourseId: string | null; storageKey: string | null; contentType: string | null; byteSize: number | null;
   enrolled: number | null; learningReady: number | null; contentCount: number | null; oversize: number | null;
   id: string | null; parentId: string | null; type: string | null; content: string | null; order: number | null;
   progressRevision: string | null; assignmentPassed: number | null; payload: string | null; payloadCourseId: string | null;
 };
 type Column = Exclude<keyof Row, 'kind'>;
 const columns: Column[] = ['actorExists', 'role', 'courseExists', 'instructorId', 'activePublicationId', 'imageUrl',
-  'assetExists', 'assetCourseId', 'storageKey', 'contentType', 'byteSize', 'enrolled', 'learningReady', 'contentCount',
+  'assetExists', 'assetId', 'assetCourseId', 'storageKey', 'contentType', 'byteSize', 'enrolled', 'learningReady', 'contentCount',
   'oversize', 'id', 'parentId', 'type', 'content', 'order', 'progressRevision', 'assignmentPassed', 'payload', 'payloadCourseId'];
 function selectRow(kind: Row['kind'], fields: Partial<Record<Column, string>>) {
   return `SELECT '${kind}' AS kind, ${columns.map(key => `${fields[key] ?? 'NULL'} AS "${key}"`).join(', ')}`;
@@ -60,7 +61,7 @@ const snapshotSql = `WITH
   asset_row AS (SELECT id, courseId, storageKey, contentType, byteSize FROM CourseAsset WHERE id = ?3),
   base AS MATERIALIZED (
     SELECT v.id IS NOT NULL AS actorExists, v.role, c.id IS NOT NULL AS courseExists, c.instructorId,
-      c.activePublicationId, c.imageUrl, a.id IS NOT NULL AS assetExists, a.courseId AS assetCourseId,
+      c.activePublicationId, c.imageUrl, a.id IS NOT NULL AS assetExists, a.id AS assetId, a.courseId AS assetCourseId,
       a.storageKey, a.contentType, a.byteSize,
       (v.id IS NOT NULL AND (c.instructorId = ?1 OR v.role = 'ADMIN')) AS canAuthor,
       (c.id IS NOT NULL AND a.id IS NOT NULL AND a.courseId = c.id) AS sameCourseAsset
@@ -79,7 +80,8 @@ const snapshotSql = `WITH
     SELECT CASE WHEN
       (m.actorExists AND (typeof(m.role) <> 'text' OR length(CAST(m.role AS BLOB)) > 128))
       OR (m.courseExists AND (typeof(m.instructorId) <> 'text' OR length(CAST(m.instructorId AS BLOB)) > 1024))
-      OR (m.assetExists AND (typeof(m.assetCourseId) <> 'text' OR length(CAST(m.assetCourseId AS BLOB)) > 100
+      OR (m.assetExists AND (typeof(m.assetId) <> 'text' OR length(CAST(m.assetId AS BLOB)) > 80
+        OR typeof(m.assetCourseId) <> 'text' OR length(CAST(m.assetCourseId AS BLOB)) > 100
         OR typeof(m.storageKey) <> 'text' OR length(CAST(m.storageKey AS BLOB)) > 128
         OR typeof(m.contentType) <> 'text' OR length(CAST(m.contentType AS BLOB)) > 128 OR typeof(m.byteSize) <> 'integer'))
       OR (m.selectedPublicationId IS NOT NULL AND (typeof(m.selectedPublicationId) <> 'text'
@@ -88,7 +90,7 @@ const snapshotSql = `WITH
         OR length(CAST(m.selectedImageUrl AS BLOB)) > 8192))
       THEN ${MAX_RESPONSE_BYTES + 1}
       ELSE ${wireCost(['m.role', 'm.instructorId', 'm.selectedPublicationId', 'm.selectedImageUrl',
-        'm.assetCourseId', 'm.storageKey', 'm.contentType'])} END AS wireBytes FROM metadata_source m
+        'm.assetId', 'm.assetCourseId', 'm.storageKey', 'm.contentType'])} END AS wireBytes FROM metadata_source m
   ), publication_cost AS MATERIALIZED (
     SELECT CASE WHEN typeof(p.id) <> 'text' OR length(CAST(p.id AS BLOB)) > 100
       OR typeof(p.courseId) <> 'text' OR length(CAST(p.courseId AS BLOB)) > 100
@@ -101,7 +103,7 @@ const snapshotSql = `WITH
       ((SELECT wireBytes FROM metadata_cost) > ${MAX_RESPONSE_BYTES}
         OR COALESCE((SELECT wireBytes FROM publication_cost), 0) > ${MAX_RESPONSE_BYTES}
         OR (SELECT 2048 + ${rawCost(['m.role', 'm.instructorId', 'm.selectedPublicationId', 'm.selectedImageUrl',
-          'm.assetCourseId', 'm.storageKey', 'm.contentType'])} FROM metadata_source m) > ${MAX_ROW_BYTES}
+          'm.assetId', 'm.assetCourseId', 'm.storageKey', 'm.contentType'])} FROM metadata_source m) > ${MAX_ROW_BYTES}
         OR COALESCE((SELECT 2048 + ${rawCost(['p.id', 'p.courseId', 'p.payload'])} FROM publication_source p), 0) > ${MAX_ROW_BYTES}) AS oversize
   ), learning_context AS MATERIALIZED (
     SELECT m.* FROM metadata_source m JOIN publication_source p ON p.id = m.selectedPublicationId
@@ -139,7 +141,8 @@ const snapshotSql = `WITH
     actorExists: 'CASE WHEN NOT b.oversize THEN m.actorExists END', role: 'CASE WHEN NOT b.oversize THEN m.role END',
     courseExists: 'CASE WHEN NOT b.oversize THEN m.courseExists END', instructorId: 'CASE WHEN NOT b.oversize THEN m.instructorId END',
     activePublicationId: 'CASE WHEN NOT b.oversize THEN m.selectedPublicationId END', imageUrl: 'CASE WHEN NOT b.oversize THEN m.selectedImageUrl END',
-    assetExists: 'CASE WHEN NOT b.oversize THEN m.assetExists END', assetCourseId: 'CASE WHEN NOT b.oversize THEN m.assetCourseId END',
+    assetExists: 'CASE WHEN NOT b.oversize THEN m.assetExists END', assetId: 'CASE WHEN NOT b.oversize THEN m.assetId END',
+    assetCourseId: 'CASE WHEN NOT b.oversize THEN m.assetCourseId END',
     storageKey: 'CASE WHEN NOT b.oversize THEN m.storageKey END', contentType: 'CASE WHEN NOT b.oversize THEN m.contentType END',
     byteSize: 'CASE WHEN NOT b.oversize THEN m.byteSize END', enrolled: 'CASE WHEN NOT b.oversize THEN m.enrolled END',
     learningReady: 'EXISTS (SELECT 1 FROM learning_context)', contentCount: 'b.contentCount', oversize: 'b.oversize',
@@ -162,7 +165,7 @@ const snapshotSql = `WITH
 
 type Context = { publicationId: string; payload: string; imageUrl: string | null; instructorId: string; role: string };
 type Content = ProgressContent & { order: number; progressRevision: string | null; assignmentPassed: number };
-type Asset = { storageKey: string; contentType: string; byteSize: number };
+type Asset = CourseImageRowMetadata;
 
 function storedString(value: unknown): string {
   if (typeof value !== 'string') throw new Error('Invalid course asset snapshot');
@@ -172,9 +175,9 @@ function flag(value: unknown): number {
   if (value !== 0 && value !== 1) throw new Error('Invalid course asset snapshot');
   return value;
 }
-function assetMetadata(row: Row): Asset {
-  if (!Number.isSafeInteger(row.byteSize)) throw new Error('Invalid course asset snapshot');
-  return { storageKey: storedString(row.storageKey), contentType: storedString(row.contentType), byteSize: row.byteSize! };
+function assetMetadata(row: Row, courseId: string, assetId: string): Asset {
+  if (row.assetId !== assetId || row.assetCourseId !== courseId || !Number.isSafeInteger(row.byteSize)) throw new Error('Invalid course asset snapshot');
+  return { id: storedString(row.assetId), courseId: storedString(row.assetCourseId), storageKey: storedString(row.storageKey), contentType: storedString(row.contentType), byteSize: row.byteSize! };
 }
 function contentRow(row: Row, courseId: string): Content {
   if ((row.parentId !== null && typeof row.parentId !== 'string') || (row.type !== null && typeof row.type !== 'string') ||
@@ -190,10 +193,12 @@ function revisionManifest(contents: Content[]) {
   if (Buffer.byteLength(manifest, 'utf8') > MAX_MANIFEST_BYTES) throw new Error('Course asset manifest exceeds read budget');
   return manifest;
 }
-async function loadBytes(asset: Asset) {
-  // Keep the private root, symlink, O_NOFOLLOW, MIME, size and full-file checks.
-  const bytes = await readCourseAsset(asset);
-  return { bytes, contentType: asset.contentType, byteSize: asset.byteSize };
+async function loadBytes(courseId: string, assetId: string, asset: Asset) {
+  // These identities and row fields come from the final fresh-primary ACL
+  // snapshot. The R2 reader verifies the private derived key, exact scope,
+  // immutable identity, MIME, size and canonical bytes; it grants no authority.
+  // A missing new-prefix object is not evidence of a legacy filesystem asset.
+  return getCourseImage(courseId, assetId, asset);
 }
 
 /** Each GET/HEAD reauthorizes. Only the final single, fresh-primary SELECT is
@@ -233,10 +238,10 @@ export async function loadD1CourseAsset(actorId: string | null, courseId: string
     const metadata = metadataRows[0];
     if (flag(metadata.oversize)) throw new Error('Course asset snapshot exceeds read budget');
     if (!flag(metadata.courseExists) || !flag(metadata.assetExists) || metadata.assetCourseId !== courseId) return null;
-    const asset = assetMetadata(metadata);
+    const asset = assetMetadata(metadata, courseId, assetId);
     const actorExists = flag(metadata.actorExists) === 1;
     const instructorId = storedString(metadata.instructorId);
-    if (actorExists && (instructorId === rawActorId || metadata.role === 'ADMIN')) return loadBytes(asset);
+    if (actorExists && (instructorId === rawActorId || metadata.role === 'ADMIN')) return loadBytes(courseId, assetId, asset);
     if (!metadata.activePublicationId) return null;
     const publication = publicationRows[0];
     if (!publication || publication.id !== metadata.activePublicationId || publication.payloadCourseId !== courseId) return null;
@@ -248,7 +253,7 @@ export async function loadD1CourseAsset(actorId: string | null, courseId: string
     if (!reference) return null;
     // Cover precedence is absolute, including when that asset is also inline.
     // This anonymous branch consumes no path, topology, progress or grade proof.
-    if (reference === 'cover') return metadata.imageUrl === url ? loadBytes(asset) : null;
+    if (reference === 'cover') return metadata.imageUrl === url ? loadBytes(courseId, assetId, asset) : null;
     if (!actorExists || !rawActorId || !flag(metadata.enrolled)) return null;
     const nodes = publicationPathNodes(payload);
     const nextContext: Context = { publicationId: metadata.activePublicationId, payload,
@@ -284,9 +289,10 @@ export async function loadD1CourseAsset(actorId: string | null, courseId: string
     const access = coursePathAccess(nodes, completedContentIds);
     const referencedIds = activeAssetContentIds(parsed, url);
     // Referencing published parents/containers are eligible too; only the
-    // completion evidence is leaf-based. Keep the existing exact TEXT/null parser.
+    // completion evidence is leaf-based. Reference classification remains in
+    // the separately reviewed course-assets helper, never in the byte adapter.
     if (!referencedIds.some(id => access.get(id)?.locked === false)) return null;
-    return loadBytes(asset);
+    return loadBytes(courseId, assetId, asset);
   }
   throw new Error('Course asset changed during snapshot preparation');
 }

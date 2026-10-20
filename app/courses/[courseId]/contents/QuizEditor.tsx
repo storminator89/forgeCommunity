@@ -29,9 +29,15 @@ import { createQuizQuestion as createEmptyQuestion, duplicateQuizQuestion, getQu
 import { QuizAuthorPreview } from './QuizAuthorPreview';
 import { QuestionBankPanel } from './QuestionBankPanel';
 import styles from './QuizStage.module.css';
+import { getPendingQuizOptionImageReadiness, parseCanonicalQuizOptionAssetUrl, parseQuizOptionImages, type PendingQuizOptionImage } from '@/lib/quiz-media-contract';
+import { appendQuizOption, removeQuizOption, moveQuizOption, replaceQuizOptionCaption, replaceQuizOptionImage, removeQuizOptionImage, type QuizOptionImageState, type QuizOptionImageStateResult } from '@/lib/quiz-option-image-state';
+import { prepareCourseOptionImage } from '@/lib/course-option-image-prepare';
 
 interface QuizEditorProps {
   initialContent?: QuizContent | string;
+  courseId?: string;
+  onImageUpload?: (file: File, signal?: AbortSignal) => Promise<string>;
+  onImageStateChange?: (blocked: boolean) => void;
   onSave: (content: QuizContent) => void | Promise<void>;
   onChange?: (content: QuizContent) => void;
   showSaveButton?: boolean;
@@ -44,14 +50,25 @@ const isFillBlanksQuestion = (q: QuizQuestion): q is FillBlanksQuizQuestion => q
 const isChoiceQuestion = (q: QuizQuestion): q is ChoiceQuizQuestion =>
   q.type === 'SINGLE_CHOICE' || q.type === 'MULTIPLE_CHOICE' || q.type === 'TRUE_FALSE';
 
-export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = true, disabled = false }: QuizEditorProps) {
-  const [initialQuiz] = useState(() => initialContent === undefined ? { questions: [], shuffleQuestions: false, passingScore: 70 } as QuizContent : quizEditorDraft(initialContent));
-  const [questions, setQuestions] = useState<QuizQuestion[]>(initialQuiz?.questions ?? []);
+export function QuizEditor({ initialContent, courseId, onImageUpload, onImageStateChange, onSave, onChange, showSaveButton = true, disabled = false }: QuizEditorProps) {
+  const [initialQuiz] = useState(() => initialContent === undefined ? { questions: [], shuffleQuestions: false, passingScore: 70 } as QuizContent : quizEditorDraft(initialContent, courseId));
+  const [questions, setQuestionsState] = useState<QuizQuestion[]>(initialQuiz?.questions ?? []);
+  const questionsRef = useRef(questions);
+  questionsRef.current = questions;
+  const setQuestions = (update: React.SetStateAction<QuizQuestion[]>) => setQuestionsState(previous => {
+    const next = typeof update === 'function' ? update(previous) : update;
+    questionsRef.current = next;
+    return next;
+  });
   const [shuffleQuestions, setShuffleQuestions] = useState(initialQuiz?.shuffleQuestions ?? false);
   const [passingScore, setPassingScore] = useState(() => Number.isFinite(initialQuiz?.passingScore ?? 70) ? String(initialQuiz?.passingScore ?? 70) : '');
   const [validationError, setValidationError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const questionTypesRef = useRef(new Map<string, QuizQuestion>());
+  const inputBlockedRef = useRef(disabled || isSaving);
+  inputBlockedRef.current = disabled || isSaving;
+  const editorMounted = useRef(true);
+  useEffect(() => { editorMounted.current = true; return () => { editorMounted.current = false; }; }, []);
   const formId = useId();
   const draft = (): QuizContent => ({ ...initialQuiz, questions, shuffleQuestions, passingScore: passingScore.trim() ? Number(passingScore) : NaN });
   const lastNotifiedDraft = useRef(JSON.stringify(draft()));
@@ -70,7 +87,130 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
   const [statusMessage, setStatusMessage] = useState('');
   const [removedQuestion, setRemovedQuestion] = useState<{ question: QuizQuestion; index: number } | null>(null);
   const pendingFocus = useRef<string | null>(null);
-  const readiness = getQuizAuthoringReadiness(draft());
+  const baseReadiness = getQuizAuthoringReadiness(draft(), undefined, courseId);
+  const slotIds = useRef(new Map<string, string[]>());
+  const attachmentGeneration = useRef(0);
+  type Attachment = { questionId: string; slotId: string; generation: number; details: PendingQuizOptionImage; controller: AbortController; previewUrl?: string; error?: string };
+  const attachments = useRef(new Map<string, Attachment>());
+  const [mediaRevision, setMediaRevision] = useState(0);
+  const mediaChanged = () => setMediaRevision(value => value + 1);
+  const slotsFor = (question: ChoiceQuizQuestion): string[] => {
+    let slots = slotIds.current.get(question.id);
+    if (!slots || slots.length !== question.options.length) {
+      slots = question.options.map(() => globalThis.crypto?.randomUUID?.() ?? `slot-${++attachmentGeneration.current}-${Date.now()}`);
+      slotIds.current.set(question.id, slots);
+    }
+    return slots;
+  };
+  const releaseAttachment = (slotId: string) => {
+    const attachment = attachments.current.get(slotId);
+    if (!attachment) return;
+    attachment.controller.abort();
+    if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
+    attachments.current.delete(slotId);
+  };
+  const invalidateQuestionMedia = (questionId: string, resetSlots = false) => {
+    for (const [slotId, attachment] of attachments.current) if (attachment.questionId === questionId) releaseAttachment(slotId);
+    if (resetSlots) slotIds.current.delete(questionId);
+    mediaChanged();
+  };
+  const currentAttachment = (attachment: Attachment) => attachments.current.get(attachment.slotId)?.generation === attachment.generation;
+  const hasPendingMedia = attachments.current.size > 0;
+  const invalidPersistedMedia = questions.some(question => 'optionImages' in question && !parseQuizOptionImages(question, courseId ?? '').ok);
+  const mediaBlocked = hasPendingMedia || invalidPersistedMedia;
+  const pendingFindings = Array.from(attachments.current.values()).map(attachment => ({ id: `pending-image-${attachment.slotId}`, kind: 'question-invalid' as const, severity: 'error' as const, questionId: attachment.questionId, message: `Frage ${questions.findIndex(question => question.id === attachment.questionId) + 1}: Schließe die Bilddetails ab oder entferne den unfertigen Bildanhang.` }));
+  const readiness = hasPendingMedia ? { ...baseReadiness, ready: false, issues: [...baseReadiness.issues, ...pendingFindings] } : baseReadiness;
+  const imageStateCallback = useRef(onImageStateChange);
+  imageStateCallback.current = onImageStateChange;
+  useEffect(() => { imageStateCallback.current?.(mediaBlocked); }, [mediaBlocked]);
+  useEffect(() => () => {
+    for (const attachment of attachments.current.values()) {
+      attachment.controller.abort();
+      if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
+    }
+    attachments.current.clear();
+    imageStateCallback.current?.(false);
+  }, []);
+  // Read the mutable attachment registry only through a render revision. It is
+  // local-only and never reaches onChange, persistence or learner projection.
+  void mediaRevision;
+  const choiceState = (question: ChoiceQuizQuestion): QuizOptionImageState => ({ options: question.options, correctAnswers: question.correctAnswers, ...(question.optionImages && { optionImages: question.optionImages }) });
+  const applyChoiceState = (question: ChoiceQuizQuestion, result: QuizOptionImageStateResult): ChoiceQuizQuestion => {
+    if (!result.ok) return question;
+    const { optionImages: _previousImages, ...rest } = question;
+    return { ...rest, options: [...result.value.options], correctAnswers: [...result.value.correctAnswers], ...(result.value.optionImages && { optionImages: result.value.optionImages }) };
+  };
+  const commitReadyAttachment = (attachment: Attachment) => {
+    if (!courseId || !currentAttachment(attachment)) return;
+    const readiness = getPendingQuizOptionImageReadiness(attachment.details, courseId);
+    if (!readiness.ready) { mediaChanged(); return; }
+    const liveQuestion = questionsRef.current.find(item => item.id === attachment.questionId);
+    const index = slotIds.current.get(attachment.questionId)?.indexOf(attachment.slotId) ?? -1;
+    if (!liveQuestion || !isChoiceQuestion(liveQuestion) || liveQuestion.type === 'TRUE_FALSE' || index < 0) return;
+    setQuestions(previous => previous.map(question => question.id === attachment.questionId && isChoiceQuestion(question) && question.type !== 'TRUE_FALSE'
+      ? applyChoiceState(question, replaceQuizOptionImage(choiceState(question), index, readiness.image)) : question));
+    releaseAttachment(attachment.slotId);
+    mediaChanged();
+  };
+  const startImageUpload = async (questionId: string, optionIndex: number, file: File) => {
+    const question = questionsRef.current.find(item => item.id === questionId);
+    if (!question || !isChoiceQuestion(question) || question.type === 'TRUE_FALSE' || !courseId || !onImageUpload || disabled || isSaving) return;
+    const slotId = slotsFor(question)[optionIndex];
+    if (!slotId) return;
+    releaseAttachment(slotId);
+    const attachment: Attachment = { questionId, slotId, generation: ++attachmentGeneration.current, controller: new AbortController(), details: { kind: 'LOCAL_PENDING_IMAGE', upload: { status: 'PENDING' }, alt: '', rights: { basis: null } } };
+    attachments.current.set(slotId, attachment);
+    mediaChanged();
+    try {
+      const prepared = await prepareCourseOptionImage(file);
+      if (!currentAttachment(attachment)) return;
+      attachment.previewUrl = URL.createObjectURL(prepared);
+      mediaChanged();
+      const src = await onImageUpload(prepared, attachment.controller.signal);
+      if (!currentAttachment(attachment)) return;
+      const canonical = parseCanonicalQuizOptionAssetUrl(src, courseId);
+      if (!canonical.ok) throw new Error('Die Upload-Antwort gehört nicht zu diesem Kurs. Das Bild wurde nicht angehängt.');
+      attachment.details = { ...attachment.details, upload: { status: 'UPLOADED', src: canonical.value.src } };
+      if (attachment.previewUrl) { URL.revokeObjectURL(attachment.previewUrl); delete attachment.previewUrl; }
+      commitReadyAttachment(attachment);
+    } catch (failure) {
+      if (!currentAttachment(attachment)) return;
+      attachment.details = { ...attachment.details, upload: { status: 'FAILED' } };
+      attachment.error = failure instanceof Error ? failure.message : 'Der Upload wurde nicht abgeschlossen. Es wurde kein Bild angehängt.';
+      mediaChanged();
+    }
+  };
+  const updateImageDetails = (question: ChoiceQuizQuestion, optionIndex: number, field: 'alt' | 'basis' | 'attribution' | 'sourceUrl' | 'licenseLabel', value: string) => {
+    if (inputBlockedRef.current || !editorMounted.current) return;
+    const slotId = slotsFor(question)[optionIndex];
+    let attachment = attachments.current.get(slotId);
+    const image = question.optionImages?.[optionIndex];
+    if (!attachment && image) {
+      attachment = { questionId: question.id, slotId, generation: ++attachmentGeneration.current, controller: new AbortController(), details: { kind: 'LOCAL_PENDING_IMAGE', upload: { status: 'UPLOADED', src: image.src }, alt: image.alt, rights: { ...image.rights } } };
+      attachments.current.set(slotId, attachment);
+    }
+    if (!attachment) return;
+    if (field === 'alt') attachment.details = { ...attachment.details, alt: value };
+    else {
+      const rights = { ...attachment.details.rights };
+      if (field === 'basis') rights.basis = value === 'OWN' || value === 'PERMISSION_OR_LICENSE' ? value : null;
+      else if (value) rights[field] = value;
+      else delete rights[field];
+      attachment.details = { ...attachment.details, rights };
+    }
+    commitReadyAttachment(attachment);
+  };
+  const imageDetailMessage = (details: PendingQuizOptionImage): string | null => {
+    const result = getPendingQuizOptionImageReadiness(details, courseId ?? '');
+    if (result.ready) return null;
+    const messages: Partial<Record<typeof result.error.code, string>> = {
+      UPLOAD_PENDING: 'Bild wird vorbereitet und privat hochgeladen…', UPLOAD_FAILED: 'Upload nicht abgeschlossen. Wähle die Datei erneut oder entferne den Anhang.',
+      INVALID_ALT: 'Beschreibe die für diese Aufgabe wichtigen Bildinformationen (max. 300 Zeichen).', INVALID_RIGHTS: 'Wähle die Grundlage für deine Bildrechte.',
+      INVALID_ATTRIBUTION: 'Gib den erforderlichen Bildnachweis an (max. 300 Zeichen).', INVALID_LICENSE_LABEL: 'Gib die Lizenz oder erteilte Erlaubnis an (max. 120 Zeichen).',
+      INVALID_SOURCE_URL: 'Die Quelle muss eine öffentliche HTTPS-Adresse ohne Anmeldung, Abfrage oder Anker sein.',
+    };
+    return messages[result.error.code] ?? 'Prüfe die Bilddetails. Der unfertige Anhang wird noch nicht gespeichert.';
+  };
 
   const selectedQuestionId = questions.some(question => question.id === activeQuestionId) ? activeQuestionId : questions[0]?.id ?? null;
   const focusQuestion = useCallback((id: string) => {
@@ -136,6 +276,7 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
   };
 
   const addQuestion = () => {
+    if (inputBlockedRef.current || !editorMounted.current) return;
     const question = createEmptyQuestion(newQuestionType);
     pendingFocus.current = question.id;
     setQuestions([...questions, question]);
@@ -143,6 +284,8 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
   };
 
   const removeQuestion = (index: number) => {
+    if (inputBlockedRef.current || !editorMounted.current) return;
+    invalidateQuestionMedia(questions[index].id, true);
     setRemovedQuestion({ question: questions[index], index });
     pendingFocus.current = questions[index + 1]?.id ?? questions[index - 1]?.id ?? '__add-question__';
     setQuestions(questions.filter((_, i) => i !== index));
@@ -150,7 +293,9 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
   };
 
   const restoreQuestion = () => {
+    if (inputBlockedRef.current || !editorMounted.current) return;
     if (!removedQuestion) return;
+    invalidateQuestionMedia(removedQuestion.question.id, true);
     const next = [...questions];
     next.splice(Math.min(removedQuestion.index, next.length), 0, removedQuestion.question);
     pendingFocus.current = removedQuestion.question.id;
@@ -160,6 +305,7 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
   };
 
   const duplicateQuestion = (index: number) => {
+    if (inputBlockedRef.current || !editorMounted.current) return;
     const copy = duplicateQuizQuestion(questions[index], questions.map(question => question.id));
     const next = [...questions];
     next.splice(index + 1, 0, copy);
@@ -169,15 +315,21 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
   };
 
   const insertBankQuestion = (source: QuizQuestion) => {
+    // A pending pool read may finish after the enclosing save disabled us.
+    if (inputBlockedRef.current || !editorMounted.current) return false;
+    if ('optionImages' in source) { setValidationError('Bildfragen aus dem Pool können nicht kursübergreifend eingefügt werden. Dupliziere Bildfragen nur innerhalb dieses Kurses.'); return false; }
     // A bank revision is read only by its owner. The quiz persists a complete,
     // independent question snapshot with a fresh local ID, never a bank link.
     const copy = duplicateQuizQuestion(source, questions.map(question => question.id));
     pendingFocus.current = copy.id;
     setQuestions(previous => [...previous, copy]);
     setStatusMessage(`Pool-Frage als Frage ${questions.length + 1} eingefügt.`);
+    return true;
   };
 
   const updateQuestion = (questionIndex: number, field: string, value: any) => {
+    if (inputBlockedRef.current || !editorMounted.current) return;
+    if (field === 'type' && questions[questionIndex]?.type !== value) invalidateQuestionMedia(questions[questionIndex].id, true);
     setQuestions(questions.map((q, i) => {
       if (i !== questionIndex) return q;
 
@@ -207,6 +359,7 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
   };
 
   const toggleCorrectAnswer = (questionIndex: number, optionIndex: number) => {
+    if (inputBlockedRef.current || !editorMounted.current) return;
     setQuestions(previous => previous.map((question, index) => {
       if (index !== questionIndex || !isChoiceQuestion(question)) return question;
       const correctAnswers = question.type !== 'MULTIPLE_CHOICE' ? [optionIndex]
@@ -223,19 +376,48 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
   };
 
   const addOption = (questionIndex: number) => {
-    setQuestions(previous => previous.map((question, index) => index === questionIndex && isChoiceQuestion(question) && question.type !== 'TRUE_FALSE' && question.options.length < 6
-      ? { ...question, options: [...question.options, ''] } : question));
+    if (inputBlockedRef.current || !editorMounted.current) return;
+    const question = questions[questionIndex];
+    if (!question || !isChoiceQuestion(question) || question.type === 'TRUE_FALSE' || question.options.length >= 6) return;
+    slotsFor(question).push(globalThis.crypto?.randomUUID?.() ?? `slot-${++attachmentGeneration.current}`);
+    setQuestions(previous => previous.map(item => item.id === question.id && isChoiceQuestion(item) ? applyChoiceState(item, appendQuizOption(choiceState(item))) : item));
   };
 
   const removeOption = (questionIndex: number, optionIndex: number) => {
-    setQuestions(previous => previous.map((question, index) => index === questionIndex && isChoiceQuestion(question) && question.type !== 'TRUE_FALSE' && question.options.length > 2
-      ? { ...question, options: question.options.filter((_, option) => option !== optionIndex), correctAnswers: question.correctAnswers.filter(answer => answer !== optionIndex).map(answer => answer > optionIndex ? answer - 1 : answer) } : question));
+    if (inputBlockedRef.current || !editorMounted.current) return;
+    const question = questions[questionIndex];
+    if (!question || !isChoiceQuestion(question) || question.type === 'TRUE_FALSE' || question.options.length <= 2) return;
+    // Invalidate first, before React commits shifted indexes. Abort alone is not
+    // sufficient: deleting each generation makes a late completion harmless.
+    invalidateQuestionMedia(question.id);
+    slotsFor(question).splice(optionIndex, 1);
+    setQuestions(previous => previous.map(item => item.id === question.id && isChoiceQuestion(item) ? applyChoiceState(item, removeQuizOption(choiceState(item), optionIndex)) : item));
+  };
+
+  const moveOption = (questionIndex: number, fromIndex: number, toIndex: number) => {
+    if (inputBlockedRef.current || !editorMounted.current) return;
+    const question = questions[questionIndex];
+    if (!question || !isChoiceQuestion(question) || question.type === 'TRUE_FALSE' || toIndex < 0 || toIndex >= question.options.length) return;
+    invalidateQuestionMedia(question.id);
+    const slots = slotsFor(question);
+    const [slot] = slots.splice(fromIndex, 1);
+    slots.splice(toIndex, 0, slot);
+    setQuestions(previous => previous.map(item => item.id === question.id && isChoiceQuestion(item) ? applyChoiceState(item, moveQuizOption(choiceState(item), fromIndex, toIndex)) : item));
   };
 
   const updateOption = (questionIndex: number, optionIndex: number, value: string) => {
+    if (inputBlockedRef.current || !editorMounted.current) return;
     setQuestions(previous => previous.map((question, index) => index === questionIndex && isChoiceQuestion(question)
-      ? { ...question, options: question.options.map((option, optionNumber) => optionNumber === optionIndex ? value : option) } : question));
+      ? applyChoiceState(question, replaceQuizOptionCaption(choiceState(question), optionIndex, value)) : question));
   };
+
+  const removeImage = (question: ChoiceQuizQuestion, optionIndex: number) => {
+    if (inputBlockedRef.current || !editorMounted.current) return;
+    releaseAttachment(slotsFor(question)[optionIndex]);
+    setQuestions(previous => previous.map(item => item.id === question.id && isChoiceQuestion(item) ? applyChoiceState(item, removeQuizOptionImage(choiceState(item), optionIndex)) : item));
+    mediaChanged();
+  };
+
 
   const moveQuestionUp = (index: number) => {
     if (index > 0) {
@@ -252,7 +434,7 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
   const handleSave = async () => {
     if (isSaving || disabled) return;
     const content = draft();
-    const error = getQuizValidationError(content);
+    const error = mediaBlocked ? 'Schließe die Bilddetails ab oder entferne den unfertigen Bildanhang.' : getQuizValidationError(content, courseId);
     setValidationError(error);
     if (error) return;
     setIsSaving(true);
@@ -262,6 +444,7 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
   };
 
   const updateMatchingPair = (questionIndex: number, pairIndex: number, side: 'left' | 'right', value: string) => {
+    if (inputBlockedRef.current || !editorMounted.current) return;
     setQuestions(questions.map((q, i) => {
       if (i !== questionIndex || !isMatchingQuestion(q)) return q;
       const newPairs = [...q.pairs];
@@ -277,6 +460,7 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
   };
 
   const addMatchingPair = (questionIndex: number) => {
+    if (inputBlockedRef.current || !editorMounted.current) return;
     setQuestions(questions.map((q, i) => {
       if (i !== questionIndex || !isMatchingQuestion(q)) return q;
       return {
@@ -287,6 +471,7 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
   };
 
   const removeMatchingPair = (questionIndex: number, pairIndex: number) => {
+    if (inputBlockedRef.current || !editorMounted.current) return;
     setQuestions(questions.map((q, i) => {
       if (i !== questionIndex || !isMatchingQuestion(q)) return q;
       return {
@@ -297,6 +482,7 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
   };
 
   const updateTextInputAnswer = (questionIndex: number, value: string) => {
+    if (inputBlockedRef.current || !editorMounted.current) return;
     setQuestions(questions.map((q, i) => {
       if (i !== questionIndex || !isTextInputQuestion(q)) return q;
       return {
@@ -307,6 +493,7 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
   };
 
   const updateFillBlanksAnswer = (questionIndex: number, answerIndex: number, value: string) => {
+    if (inputBlockedRef.current || !editorMounted.current) return;
     setQuestions(questions.map((q, i) => {
       if (i !== questionIndex || !isFillBlanksQuestion(q)) return q;
       const newAnswers = [...q.answers];
@@ -319,6 +506,7 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
   };
 
   const addFillBlanksAnswer = (questionIndex: number) => {
+    if (inputBlockedRef.current || !editorMounted.current) return;
     setQuestions(questions.map((q, i) => {
       if (i !== questionIndex || !isFillBlanksQuestion(q)) return q;
       return {
@@ -329,6 +517,7 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
   };
 
   const removeFillBlanksAnswer = (questionIndex: number, answerIndex: number) => {
+    if (inputBlockedRef.current || !editorMounted.current) return;
     setQuestions(questions.map((q, i) => {
       if (i !== questionIndex || !isFillBlanksQuestion(q)) return q;
       return {
@@ -416,6 +605,7 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
                   <div className="space-y-3">
                     <Label className="text-base font-medium">Fragetyp</Label>
                     <Select
+                      disabled={disabled || isSaving}
                       value={question.type}
                       onValueChange={(value) => updateQuestion(questionIndex, 'type', value)}
                     >
@@ -561,8 +751,13 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
                   {(question.type === 'SINGLE_CHOICE' || question.type === 'MULTIPLE_CHOICE' || question.type === 'TRUE_FALSE') && (
                     <div className="space-y-3">
                       <Label className="text-base font-medium">Antwortmöglichkeiten</Label>
-                      {question.options.map((option, optionIndex) => (
-                        <div key={optionIndex} className="flex items-center gap-3">
+                      {question.options.map((option, optionIndex) => {
+                        const slotId = slotsFor(question)[optionIndex];
+                        const attachment = attachments.current.get(slotId);
+                        const image = question.optionImages?.[optionIndex];
+                        const details: PendingQuizOptionImage | null = attachment?.details ?? (image ? { kind: 'LOCAL_PENDING_IMAGE', upload: { status: 'UPLOADED', src: image.src }, alt: image.alt, rights: { ...image.rights } } : null);
+                        const imageSrc = attachment?.previewUrl ?? (details?.upload.status === 'UPLOADED' ? details.upload.src : image?.src);
+                        return <div key={slotId} className={styles.imageEditorCard}>
                           <div className={styles.optionEditor}>
                             <div className="bg-muted rounded-full px-2 py-1 text-sm font-medium text-muted-foreground">
                               {String.fromCharCode(65 + optionIndex)}
@@ -608,8 +803,44 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
                               </Button>
                             )}
                           </div>
-                        </div>
-                      ))}
+                          {question.type !== 'TRUE_FALSE' && <>
+                            <div className={styles.optionMove} aria-label={`Reihenfolge von Option ${optionIndex + 1}`}>
+                              <Button type="button" size="sm" variant="ghost" className="min-h-11" disabled={optionIndex === 0} aria-label={`Option ${optionIndex + 1} nach oben verschieben`} onClick={() => moveOption(questionIndex, optionIndex, optionIndex - 1)}><ArrowUp className="mr-1 h-4 w-4" />Nach oben</Button>
+                              <Button type="button" size="sm" variant="ghost" className="min-h-11" disabled={optionIndex === question.options.length - 1} aria-label={`Option ${optionIndex + 1} nach unten verschieben`} onClick={() => moveOption(questionIndex, optionIndex, optionIndex + 1)}><ArrowDown className="mr-1 h-4 w-4" />Nach unten</Button>
+                            </div>
+                            {courseId && onImageUpload && <div className={styles.imageAttachment}>
+                              {imageSrc && <div className={styles.authorImageStage}>{/* Authenticated author bytes bypass public optimizers. */}
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={imageSrc} alt={details?.alt || 'Lokale Bildvorschau, Bildbeschreibung noch ausfüllen'} className={styles.answerImage} referrerPolicy="no-referrer" />
+                              </div>}
+                              <Label htmlFor={`${formId}-image-${slotId}`} className="block text-sm font-medium">{image || attachment ? 'Anderes Bild wählen' : 'Bild zur Antwort hinzufügen'}</Label>
+                              <Input id={`${formId}-image-${slotId}`} className="min-h-11" type="file" accept="image/jpeg,image/png" onChange={event => {
+                                const file = event.target.files?.[0];
+                                event.target.value = '';
+                                if (file) void startImageUpload(question.id, optionIndex, file);
+                              }} />
+                              <p className="text-xs text-muted-foreground">JPEG oder statisches PNG, höchstens 5 MiB. Wird als privates Kursbild vorbereitet.</p>
+                              {details && <details className={styles.imageDetails} open={Boolean(attachment)}>
+                                <summary>Bilddetails {attachment ? 'prüfen' : 'bearbeiten'}</summary>
+                                <div className="space-y-3">
+                                  <div className="space-y-1"><Label htmlFor={`${formId}-alt-${slotId}`}>Bildbeschreibung für diese Aufgabe</Label><Textarea id={`${formId}-alt-${slotId}`} maxLength={300} value={details.alt} onChange={event => updateImageDetails(question, optionIndex, 'alt', event.target.value)} placeholder="Beschreibe die entscheidenden sichtbaren Informationen." className="min-h-24" /></div>
+                                  <p className="text-xs text-muted-foreground">Bildbeschreibung, Kurztext und Bildnachweis sind für Lernende sichtbar. Keine Lösungshinweise oder privaten Angaben eintragen.</p>
+                                  <div className="space-y-1"><Label htmlFor={`${formId}-rights-${slotId}`}>Bildrechte</Label><select id={`${formId}-rights-${slotId}`} value={details.rights.basis ?? ''} onChange={event => updateImageDetails(question, optionIndex, 'basis', event.target.value)} className="min-h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-2 focus-visible:outline-ring"><option value="">Bitte auswählen</option><option value="OWN">Eigenes Bild, ich habe die erforderlichen Rechte</option><option value="PERMISSION_OR_LICENSE">Erlaubnis oder passende Lizenz liegt vor</option></select></div>
+                                  <div className="space-y-1"><Label htmlFor={`${formId}-credit-${slotId}`}>Bildnachweis{details.rights.basis === 'PERMISSION_OR_LICENSE' ? ' (erforderlich)' : ' (optional)'}</Label><Input id={`${formId}-credit-${slotId}`} maxLength={300} value={details.rights.attribution ?? ''} onChange={event => updateImageDetails(question, optionIndex, 'attribution', event.target.value)} /></div>
+                                  <div className="space-y-1"><Label htmlFor={`${formId}-license-${slotId}`}>Lizenz oder Erlaubnis{details.rights.basis === 'PERMISSION_OR_LICENSE' ? ' (erforderlich)' : ' (optional)'}</Label><Input id={`${formId}-license-${slotId}`} maxLength={120} value={details.rights.licenseLabel ?? ''} onChange={event => updateImageDetails(question, optionIndex, 'licenseLabel', event.target.value)} /></div>
+                                  <div className="space-y-1"><Label htmlFor={`${formId}-source-${slotId}`}>Öffentliche Quellenadresse (optional)</Label><Input id={`${formId}-source-${slotId}`} inputMode="url" maxLength={2048} value={details.rights.sourceUrl ?? ''} onChange={event => updateImageDetails(question, optionIndex, 'sourceUrl', event.target.value)} placeholder="https://…" /></div>
+                                  <p className="text-xs text-muted-foreground">Deine Angabe dokumentiert die Rechtebasis, ersetzt aber keine rechtliche Prüfung.</p>
+                                </div>
+                              </details>}
+                              {attachment && <p role={attachment.details.upload.status === 'PENDING' ? 'status' : 'alert'} className="text-sm text-muted-foreground">{attachment.error || imageDetailMessage(attachment.details)}</p>}
+                              {(image || attachment) && <div className="flex flex-wrap gap-2">
+                                {attachment && image && <Button type="button" variant="outline" size="sm" className="min-h-11" onClick={() => { releaseAttachment(slotId); mediaChanged(); }}>Bildänderung abbrechen</Button>}
+                                <Button type="button" variant="ghost" size="sm" className="min-h-11 text-destructive" onClick={() => removeImage(question, optionIndex)}>{image ? 'Bild entfernen' : 'Unfertigen Anhang entfernen'}</Button>
+                              </div>}
+                            </div>}
+                          </>}
+                        </div>;
+                      })}
                       {question.options.length < 6 && question.type !== 'TRUE_FALSE' && (
                         <Button
                           type="button"
@@ -641,13 +872,14 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
           </div>
             <aside className={styles.previewPane} aria-label="Vorschau der aktiven Frage">
               <h4 className={styles.previewHeading}>So sieht deine Frage aus</h4>
-              <QuizAuthorPreview content={draft()} disabled={disabled || isSaving} activeQuestionId={selectedQuestionId} singleQuestion />
+              <QuizAuthorPreview courseId={courseId ?? ''} content={draft()} disabled={disabled || isSaving} activeQuestionId={selectedQuestionId} singleQuestion />
             </aside>
           </div>
           {!questions.length && <p className="my-4 text-sm text-muted-foreground">Wähle einen Fragetyp und füge deine erste Frage hinzu.</p>}
           <details className={styles.disclosure}>
             <summary>Fragenpool</summary>
-            <QuestionBankPanel activeQuestion={questions.find(question => question.id === selectedQuestionId) ?? null} onInsert={insertBankQuestion} />
+            {questions.some(question => question.id === selectedQuestionId && ('optionImages' in question || Array.from(attachments.current.values()).some(item => item.questionId === question.id))) && <p className="mb-3 text-sm text-muted-foreground">Bildfragen bleiben in diesem Kurs. Du kannst sie hier duplizieren; Speichern und neue Versionen im kursübergreifenden Fragenpool sind für Bildfragen nicht verfügbar.</p>}
+            <QuestionBankPanel activeQuestion={questions.find(question => question.id === selectedQuestionId && !('optionImages' in question) && !Array.from(attachments.current.values()).some(item => item.questionId === question.id)) ?? null} onInsert={insertBankQuestion} />
           </details>
           <details className={styles.disclosure}>
             <summary>Quiz-Einstellungen</summary>
@@ -671,7 +903,7 @@ export function QuizEditor({ initialContent, onSave, onChange, showSaveButton = 
             <CardHeader className="px-0">
               <CardTitle className="flex items-center gap-2"><Eye className="h-5 w-5" />Quiz Vorschau</CardTitle>
             </CardHeader>
-            <CardContent className="px-0"><QuizAuthorPreview content={draft()} disabled={disabled || isSaving} /></CardContent>
+            <CardContent className="px-0"><QuizAuthorPreview courseId={courseId ?? ''} content={draft()} disabled={disabled || isSaving} /></CardContent>
           </Card>
         </TabsContent>
       </Tabs>

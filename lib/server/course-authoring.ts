@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { checkQuizMediaAuthorMutation, checkQuizMediaAuthorSnapshot, type QuizMediaGateResult } from '@/lib/quiz-media-compatibility';
+
 import { createHash, randomUUID } from 'node:crypto';
 import { getQuizValidationError } from '@/app/courses/[courseId]/contents/types';
 import { getAssignmentValidationError } from '@/app/courses/[courseId]/contents/assignment-content';
@@ -33,7 +35,11 @@ const MAX_NODES = 500;
 const MAX_PAYLOAD_BYTES = 512 * 1024;
 
 export class AuthoringError extends Error {
-  constructor(message: string, public readonly status = 400) { super(message); }
+  constructor(message: string, public readonly status = 400, public readonly code?: string) { super(message); }
+}
+
+function assertQuizMediaCompatibility(result: QuizMediaGateResult): void {
+  if (!result.ok) throw new AuthoringError(result.error.message, result.error.status, result.error.code);
 }
 
 /** Bind a saved payload to an immutable publication without normalizing body bytes. */
@@ -297,8 +303,7 @@ async function currentD1AuthorState(courseId: string, actor: Author) {
 }
 
 function d1References(courseId: string, payload: CoursePayload, origin?: string, previous?: CoursePayload): D1CourseReferences {
-  const oldAssets = new Set(previous ? extractCourseAssetUrls(previous) : []);
-  const assetIds = extractCourseAssetUrls(payload).filter(url => !oldAssets.has(url)).map(url => {
+  const assetIds = extractCourseAssetUrls(payload, courseId).map(url => {
     const asset = parseCourseAssetUrl(url)!;
     if (asset.courseId !== courseId) throw new CourseAssetError('Kursdatei gehört zu einem anderen Kurs.', 403);
     return asset.assetId;
@@ -326,13 +331,14 @@ function draftChanged(): never {
 
 const noReferences: D1CourseReferences = { contentIds: [], assetIds: [], h5pIds: [] };
 
-export async function mutateDraft(courseId: string, actor: Author, expected: unknown, operationInput: unknown, origin?: string) {
+export async function mutateDraft(courseId: string, actor: Author, expected: unknown, operationInput: unknown, origin?: string, mediaCapability?: string | null) {
   const expectedRevision = requireRevision(expected);
   const operation = operationFromUnknown(operationInput);
   const state = await currentD1AuthorState(courseId, actor);
   if (state.revision !== expectedRevision) draftChanged();
   const current = parsePayload(state.payload!);
   const payload = applyOperation(current, operation);
+  assertQuizMediaCompatibility(checkQuizMediaAuthorMutation(courseId, mediaCapability, current.contents, payload.contents));
   const references = d1References(courseId, payload, origin, current);
   const checked = await readD1AuthorReferences(courseId, actor, state, references);
   if (!checked) draftChanged();
@@ -343,12 +349,13 @@ export async function mutateDraft(courseId: string, actor: Author, expected: unk
   return d1DraftDto(updated);
 }
 
-export async function discardDraft(courseId: string, actor: Author, expected: unknown) {
+export async function discardDraft(courseId: string, actor: Author, expected: unknown, mediaCapability?: string | null) {
   const expectedRevision = requireRevision(expected);
   const state = await currentD1AuthorState(courseId, actor);
   if (state.revision !== expectedRevision) draftChanged();
   const reset: CoursePayload = state.activePublicationId ? parsePayload(state.publicationPayload!)
     : { schemaVersion: 1, title: '', description: '', startDate: null, endDate: null, imageUrl: null, contents: [] };
+  assertQuizMediaCompatibility(checkQuizMediaAuthorSnapshot(courseId, mediaCapability, parsePayload(state.payload!).contents, reset.contents));
   const updated = await writeD1CourseDraft(courseId, actor, state, {
     payload: payloadJson(reset), digest: publicationDigest(reset), basePublicationId: state.activePublicationId,
   }, noReferences);
@@ -362,7 +369,7 @@ export async function listHistory(courseId: string, actor: Author) {
   return { publications: publications.map(row => ({ ...row, recordedAt: new Date(row.recordedAt) })) };
 }
 
-export async function restoreDraft(courseId: string, actor: Author, expected: unknown, publicationId: unknown) {
+export async function restoreDraft(courseId: string, actor: Author, expected: unknown, publicationId: unknown, mediaCapability?: string | null) {
   const expectedRevision = requireRevision(expected);
   if (!validId(publicationId)) throw new AuthoringError('Ungültige Veröffentlichungs-ID.');
   const state = await currentD1AuthorState(courseId, actor);
@@ -370,6 +377,7 @@ export async function restoreDraft(courseId: string, actor: Author, expected: un
   const publication = await readD1RestorePublication(courseId, actor, publicationId);
   if (!publication) throw new AuthoringError('Veröffentlichung nicht gefunden.', 404);
   const payload = parsePayload(publication.payload);
+  assertQuizMediaCompatibility(checkQuizMediaAuthorSnapshot(courseId, mediaCapability, parsePayload(state.payload!).contents, payload.contents));
   const updated = await writeD1CourseDraft(courseId, actor, state, {
     payload: payloadJson(payload), digest: publication.digest, basePublicationId: publication.id,
   }, noReferences);
@@ -446,10 +454,12 @@ function expectedActiveId(value: unknown): string | null {
   return value;
 }
 
-async function reviewedD1(courseId: string, actor: Author, expectedRevision: number, expectedActive: string | null, origin?: string) {
+async function reviewedD1(courseId: string, actor: Author, expectedRevision: number, expectedActive: string | null, origin?: string, mediaCapability?: string | null) {
   const state = await currentD1AuthorState(courseId, actor);
   if (state.revision !== expectedRevision || state.activePublicationId !== expectedActive) draftChanged();
   const payload = parsePayload(state.payload!);
+  const activeMediaContents = state.publicationId ? parsePayload(state.publicationPayload!).contents : [];
+  assertQuizMediaCompatibility(checkQuizMediaAuthorSnapshot(courseId, mediaCapability, activeMediaContents, payload.contents));
   const blockers = publicationBlockers(payload);
   let references = noReferences;
   try { references = d1References(courseId, payload, origin); }
@@ -466,11 +476,11 @@ async function reviewedD1(courseId: string, actor: Author, expectedRevision: num
     activePublicationId: state.activePublicationId };
 }
 
-export async function reviewPublication(courseId: string, actor: Author, expected: unknown, activeId: unknown, origin?: string) {
+export async function reviewPublication(courseId: string, actor: Author, expected: unknown, activeId: unknown, origin?: string, mediaCapability?: string | null) {
   const expectedRevision = requireRevision(expected);
   const expectedActive = expectedActiveId(activeId);
   const { ready, blockers, impact: changes, revision, digest, activePublicationId } =
-    await reviewedD1(courseId, actor, expectedRevision, expectedActive, origin);
+    await reviewedD1(courseId, actor, expectedRevision, expectedActive, origin, mediaCapability);
   return { ready, blockers, impact: changes, revision, digest, activePublicationId };
 }
 
@@ -487,7 +497,7 @@ function publicationReceiptResult(courseId: string, actor: Author, requestDigest
     unchanged: receipt.publicationId === expectedActive };
 }
 
-export async function publishDraft(courseId: string, actor: Author, expected: unknown, activeId: unknown, requestId: unknown, origin?: string) {
+export async function publishDraft(courseId: string, actor: Author, expected: unknown, activeId: unknown, requestId: unknown, origin?: string, mediaCapability?: string | null) {
   const expectedRevision = requireRevision(expected);
   const expectedActive = expectedActiveId(activeId);
   if (!validId(requestId)) throw new AuthoringError('Ungültige Anforderungs-ID.');
@@ -496,7 +506,7 @@ export async function publishDraft(courseId: string, actor: Author, expected: un
   if (replay) return publicationReceiptResult(courseId, actor, requestDigest, expectedActive, replay);
   let receipt: D1PublicationReceipt | null;
   try {
-    const reviewed = await reviewedD1(courseId, actor, expectedRevision, expectedActive, origin);
+    const reviewed = await reviewedD1(courseId, actor, expectedRevision, expectedActive, origin, mediaCapability);
     if (!reviewed.ready) throw new AuthoringError(`Veröffentlichung blockiert: ${reviewed.blockers.join(' ')}`, 409);
     const previousContents = reviewed.active ? parsePayload(reviewed.active.payload).contents.map(asPublishedNode) : [];
     const currentContents = reviewed.payload.contents.map(asPublishedNode);

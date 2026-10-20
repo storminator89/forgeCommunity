@@ -18,7 +18,7 @@ export interface CoursePathEntry {
 function quizLike(content: CourseContent): boolean {
   if (content.type === 'QUIZ') return true;
   if (content.type !== 'TEXT') return false;
-  if (parseQuizContent(content.content)) return true;
+  if (parseQuizContent(content.content, content.courseId)) return true;
   if (typeof content.content !== 'string') return true;
   try {
     const value = JSON.parse(content.content) as unknown;
@@ -43,7 +43,7 @@ export function getCoursePathEntries(contents: CourseContent[]): CoursePathEntry
     const isQuiz = quizLike(current.content);
     const findings: CoursePathEntry['findings'] = [];
     if (isQuiz && !isLeaf) findings.push({ id: `${current.content.id}:non-leaf-quiz`, kind: 'non-leaf-quiz', severity: 'warning', contentId: current.content.id, message: 'Dieses Quiz hat Unterthemen. Nur Quiz ohne Unterthemen können abgegeben werden.' });
-    if (isQuiz) findings.push(...getQuizAuthoringReadiness(current.content.content, current.content.id).issues.map(issue => ({ ...issue, contentId: current.content.id })));
+    if (isQuiz) findings.push(...getQuizAuthoringReadiness(current.content.content, current.content.id, current.content.courseId).issues.map(issue => ({ ...issue, contentId: current.content.id })));
     else if (isLeaf && typeof current.content.content === 'string' && !current.content.content.trim()) findings.push({ id: `${current.content.id}:empty-content`, kind: 'empty-content', severity: 'warning', contentId: current.content.id, message: 'Für diesen Inhalt ist noch kein Material hinterlegt.' });
     entries.push({ ...current, isLeaf, isQuiz, findings });
     for (let index = children.length - 1; index >= 0; index--) stack.push({ content: children[index], path: `${current.path}.${index + 1}`, depth: current.depth + 1 });

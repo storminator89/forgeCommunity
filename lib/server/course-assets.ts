@@ -1,5 +1,9 @@
 import 'server-only';
 
+import { hasQuizOptionImagesField, enumerateQuizOptionImageReferences, parseCanonicalQuizOptionAssetUrl } from '@/lib/quiz-media-contract';
+import { isQuizLikeBodyForMediaPolicy } from '@/lib/quiz-media-structure';
+import { parseQuizContent, getQuizValidationError } from '@/app/courses/[courseId]/contents/types';
+
 import { constants } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { lstat, mkdir, open, realpath, rm, writeFile } from 'node:fs/promises';
@@ -73,38 +77,63 @@ function textAssetUrls(value: unknown) {
   return urls;
 }
 
-/** Enumerates local course assets from the saved payload, including HTML images. */
-export function extractCourseAssetUrls(payload: unknown) {
+/** A quiz is classified before any HTML scan. This helper never infers the
+ * expected course for references from author-controlled JSON. */
+function quizAssetUrls(node: { type: unknown; content: unknown }, expectedCourseId?: string, requireReady = false): string[] {
+  const quiz = parseQuizContent(node.content, expectedCourseId);
+  if (!quiz || (requireReady && getQuizValidationError(quiz, expectedCourseId))) throw new CourseAssetError('Ungültige Quiz-Bilddaten.');
+  const sources: string[] = [];
+  for (const question of quiz.questions) {
+    if (!hasQuizOptionImagesField(question)) continue;
+    if (!expectedCourseId) throw new CourseAssetError('Kurskontext für Quizbilder fehlt.');
+    const references = enumerateQuizOptionImageReferences(question, expectedCourseId);
+    if (!references.ok) throw new CourseAssetError('Ungültige Quiz-Bilddaten.');
+    for (const reference of references.value) sources.push(reference.src);
+  }
+  return sources;
+}
+
+/** Enumerates cover/ordinary content plus narrowly typed quiz image refs.
+ * Every actual authoring caller supplies its authorized course ID. */
+export function extractCourseAssetUrls(payload: unknown, expectedCourseId?: string) {
   if (!payload || typeof payload !== 'object') return [];
   const draft = payload as { imageUrl?: unknown; contents?: unknown };
   const sources = textAssetUrls(draft.imageUrl);
   if (Array.isArray(draft.contents)) {
     for (const node of draft.contents) {
-      if (node && typeof node === 'object') sources.push(...textAssetUrls((node as { content?: unknown }).content));
+      if (!node || typeof node !== 'object') continue;
+      const item = node as { type?: unknown; content?: unknown };
+      if (isQuizLikeBodyForMediaPolicy({ type: item.type, content: item.content })) {
+        // A malformed quiz-like body fails structural writes, never HTML fallback.
+        sources.push(...quizAssetUrls({ type: item.type, content: item.content }, expectedCourseId));
+      } else sources.push(...textAssetUrls(item.content));
     }
   }
   const found = new Set<string>();
-  for (const source of sources) {
-    if (parseCourseAssetUrl(source)) found.add(source.trim());
-  }
+  for (const source of sources) if (parseCourseAssetUrl(source)) found.add(source.trim());
   return [...found];
 }
 
 export function activeAssetContentIds(payload: unknown, url: string): string[] {
   if (!payload || typeof payload !== 'object') return [];
+  let requested: ReturnType<typeof parseCourseAssetUrl>;
+  try { requested = parseCourseAssetUrl(url); } catch { return []; }
+  if (!requested || !parseCanonicalQuizOptionAssetUrl(url, requested.courseId).ok) return [];
   const publication = payload as { contents?: unknown };
   if (!Array.isArray(publication.contents)) return [];
   const ids: string[] = [];
   for (const node of publication.contents) {
     if (!node || typeof node !== 'object') continue;
     const item = node as { id?: unknown; type?: unknown; content?: unknown };
-    if (typeof item.id !== 'string' || (item.type !== 'TEXT' && item.type !== null)) continue;
-    // Quiz JSON can contain private answer text and must never grant access.
-    if (typeof item.content === 'string' && item.content.trimStart().startsWith('{')) {
+    if (typeof item.id !== 'string' || (item.type !== 'TEXT' && item.type !== null && item.type !== 'QUIZ')) continue;
+    if (isQuizLikeBodyForMediaPolicy({ type: item.type, content: item.content })) {
+      // Only a complete valid PUBLISHED quiz can expose its typed public refs.
+      // An invalid quiz, hidden solution, unknown field, draft or history grants
+      // nothing. The caller still applies active-publication and path authority.
       try {
-        const parsed = JSON.parse(item.content) as unknown;
-        if (parsed && typeof parsed === 'object' && 'questions' in parsed) continue;
-      } catch { /* Malformed legacy text follows the existing text policy. */ }
+        if (quizAssetUrls({ type: item.type, content: item.content }, requested.courseId, true).includes(url)) ids.push(item.id);
+      } catch { /* Fail closed: absolutely no fallback to HTML scanning. */ }
+      continue;
     }
     if (textAssetUrls(item.content).some(value => value.trim() === url)) ids.push(item.id);
   }

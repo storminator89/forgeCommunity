@@ -1,3 +1,6 @@
+import { hasQuizOptionImagesField, parseQuizOptionImages, parseLearnerQuizOptionImages, type QuizOptionImages, type LearnerQuizOptionImages } from '@/lib/quiz-media-contract';
+import { inferQuizMediaCourseIdForStructuralValidationOnly } from '@/lib/quiz-media-structure';
+
 export type QuestionType = 'SINGLE_CHOICE' | 'MULTIPLE_CHOICE' | 'TRUE_FALSE' | 'TEXT_INPUT' | 'MATCHING' | 'FILL_BLANKS';
 
 export interface BaseQuizQuestion {
@@ -11,6 +14,7 @@ export interface ChoiceQuizQuestion extends BaseQuizQuestion {
   type: 'SINGLE_CHOICE' | 'MULTIPLE_CHOICE' | 'TRUE_FALSE';
   options: string[];
   correctAnswers: number[];
+  optionImages?: QuizOptionImages;
 }
 
 export interface TextInputQuizQuestion extends BaseQuizQuestion {
@@ -62,7 +66,7 @@ export interface CourseContent {
 }
 
 export type LearnerQuizQuestion =
-  | { id: string; type: 'SINGLE_CHOICE' | 'MULTIPLE_CHOICE' | 'TRUE_FALSE'; question: string; options: string[] }
+  | { id: string; type: 'SINGLE_CHOICE' | 'MULTIPLE_CHOICE' | 'TRUE_FALSE'; question: string; options: string[]; optionImages?: LearnerQuizOptionImages }
   | { id: string; type: 'TEXT_INPUT'; question: string }
   | { id: string; type: 'MATCHING'; question: string; pairs: Array<{ left: string }> }
   | { id: string; type: 'FILL_BLANKS'; question: string; text: string; blankCount: number };
@@ -92,7 +96,7 @@ export interface CourseProgressSnapshot {
   latestQuizAttempts?: LatestQuizAttempt[];
 }
 
-export function parseLearnerQuizContent(value: unknown): LearnerQuizContent | null {
+export function parseLearnerQuizContent(value: unknown, expectedCourseId?: string): LearnerQuizContent | null {
   if (typeof value === 'string') {
     try { value = JSON.parse(value); } catch { return null; }
   }
@@ -101,9 +105,16 @@ export function parseLearnerQuizContent(value: unknown): LearnerQuizContent | nu
   if (!Array.isArray(source.questions) || !source.questions.length ||
       typeof source.shuffleQuestions !== 'boolean' || typeof source.passingScore !== 'number') return null;
   const ids = new Set<string>();
+  let structuralMediaCourseId = expectedCourseId;
   for (const item of source.questions) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
     const question = item as Record<string, unknown>;
+    if (hasQuizOptionImagesField(question)) {
+      // Missing context is structural classification only, never asset authority.
+      const mediaCourseId = structuralMediaCourseId ?? inferQuizMediaCourseIdForStructuralValidationOnly(question);
+      if (!mediaCourseId || !parseLearnerQuizOptionImages(question, mediaCourseId).ok) return null;
+      structuralMediaCourseId = mediaCourseId;
+    }
     if (typeof question.id !== 'string' || !question.id || ids.has(question.id) || typeof question.question !== 'string') return null;
     ids.add(question.id);
     if (question.type === 'SINGLE_CHOICE' || question.type === 'MULTIPLE_CHOICE' || question.type === 'TRUE_FALSE') {
@@ -118,7 +129,7 @@ export function parseLearnerQuizContent(value: unknown): LearnerQuizContent | nu
 }
 
 /** Read current and legacy persisted quizzes without discarding malformed content. */
-export function parseQuizContent(value: unknown): QuizContent | null {
+export function parseQuizContent(value: unknown, expectedCourseId?: string): QuizContent | null {
   if (typeof value === 'string') {
     try { value = JSON.parse(value); } catch { return null; }
   }
@@ -129,10 +140,22 @@ export function parseQuizContent(value: unknown): QuizContent | null {
   if (source.passingScore !== undefined && (typeof source.passingScore !== 'number' || !Number.isFinite(source.passingScore))) return null;
 
   const ids = new Set<string>();
+  let structuralMediaCourseId = expectedCourseId;
   const questions: QuizQuestion[] = [];
   for (const [index, entry] of source.questions.entries()) {
     if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return null;
     const question = entry as Record<string, unknown>;
+    let optionImages: QuizOptionImages | undefined;
+    if (hasQuizOptionImagesField(question)) {
+      // This fallback preserves legacy context-free classification/readiness.
+      // It MUST NOT authorize public projection, mutation or image access.
+      const mediaCourseId = structuralMediaCourseId ?? inferQuizMediaCourseIdForStructuralValidationOnly(question);
+      if (!mediaCourseId) return null;
+      const media = parseQuizOptionImages(question, mediaCourseId);
+      if (!media.ok) return null;
+      optionImages = media.value;
+      structuralMediaCourseId = mediaCourseId;
+    }
     if (typeof question.question !== 'string') return null;
     if (question.explanation !== undefined && typeof question.explanation !== 'string') return null;
     const type = question.type ?? 'SINGLE_CHOICE';
@@ -144,7 +167,8 @@ export function parseQuizContent(value: unknown): QuizContent | null {
       if (!Array.isArray(question.options) || !question.options.every(option => typeof option === 'string')) return null;
       const correctAnswers = question.correctAnswers ?? (typeof question.correctAnswer === 'number' ? [question.correctAnswer] : []);
       if (!Array.isArray(correctAnswers) || !correctAnswers.every(answer => typeof answer === 'number' && Number.isInteger(answer))) return null;
-      questions.push({ ...base, options: [...question.options], correctAnswers: [...correctAnswers] } as ChoiceQuizQuestion);
+      questions.push({ ...base, options: [...question.options], correctAnswers: [...correctAnswers],
+        ...(optionImages !== undefined && { optionImages }) } as ChoiceQuizQuestion);
     } else if (type === 'TEXT_INPUT') {
       if (typeof question.correctAnswer !== 'string' || (question.caseSensitive !== undefined && typeof question.caseSensitive !== 'boolean')) return null;
       questions.push({ ...base, correctAnswer: question.correctAnswer, caseSensitive: question.caseSensitive ?? false } as TextInputQuizQuestion);
@@ -160,11 +184,17 @@ export function parseQuizContent(value: unknown): QuizContent | null {
 }
 
 /** A draft may be incomplete; explicit publication/save must have usable answers. */
-export function getQuizValidationError(content: QuizContent): string | null {
+export function getQuizValidationError(content: QuizContent, expectedCourseId?: string): string | null {
   if (!Number.isFinite(content.passingScore ?? 70) || (content.passingScore ?? 70) < 0 || (content.passingScore ?? 70) > 100) return 'Die Bestehensgrenze muss zwischen 0 und 100 liegen.';
   if (!content.questions.length) return 'Füge mindestens eine Frage hinzu.';
+  let structuralMediaCourseId = expectedCourseId;
   for (const [index, question] of content.questions.entries()) {
     const prefix = `Frage ${index + 1}: `;
+    if (hasQuizOptionImagesField(question)) {
+      const mediaCourseId = structuralMediaCourseId ?? inferQuizMediaCourseIdForStructuralValidationOnly(question);
+      if (!mediaCourseId || !parseQuizOptionImages(question, mediaCourseId).ok) return `${prefix}Prüfe Antwortbilder, Alternativtext und Bildrechte.`;
+      structuralMediaCourseId = mediaCourseId;
+    }
     if (!question.question.trim()) return `${prefix}Der Fragetext fehlt.`;
     if (question.type === 'SINGLE_CHOICE' || question.type === 'MULTIPLE_CHOICE' || question.type === 'TRUE_FALSE') {
       if (question.options.length < 2 || question.options.some(option => !option.trim())) return `${prefix}Fülle mindestens zwei Antwortmöglichkeiten aus.`;

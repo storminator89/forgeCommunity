@@ -1,3 +1,4 @@
+import { QUIZ_MEDIA_CAPABILITY_HEADER } from '@/lib/quiz-media-compatibility';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/sites-auth/server';
 import { authOptions } from '@/lib/auth';
@@ -14,7 +15,7 @@ export async function GET(request: NextRequest, context: Context) {
     const active = request.nextUrl.searchParams.get('expectedActivePublicationId');
     const result = await reviewPublication(courseId, session.user,
       revision === null ? undefined : Number(revision), active === null ? undefined : active === 'null' ? null : active,
-      request.nextUrl.origin);
+      request.nextUrl.origin, request.headers.get(QUIZ_MEDIA_CAPABILITY_HEADER));
     return NextResponse.json(result, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) { return authoringFailure(error); }
 }

@@ -1,3 +1,4 @@
+import { QUIZ_MEDIA_CAPABILITY_HEADER } from '@/lib/quiz-media-compatibility';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/sites-auth/server';
 import { authOptions } from '@/lib/auth';
@@ -13,7 +14,7 @@ export async function POST(request: NextRequest, context: Context) {
     const { courseId } = await context.params;
     const body = await readJsonObject(request, 4 * 1024);
     const result = await publishDraft(courseId, session.user, body.expectedRevision,
-      body.expectedActivePublicationId, body.requestId, request.nextUrl.origin);
+      body.expectedActivePublicationId, body.requestId, request.nextUrl.origin, request.headers.get(QUIZ_MEDIA_CAPABILITY_HEADER));
     return NextResponse.json(result, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) { return authoringFailure(error); }
 }

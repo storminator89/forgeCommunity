@@ -16,6 +16,7 @@ import {
   getQuizValidationError
 } from './types';
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { hasQuizOptionImagesField } from '@/lib/quiz-media-contract';
 
 const isTextInputQuestion = (q: QuizQuestion): q is TextInputQuizQuestion => q.type === 'TEXT_INPUT';
 const isChoiceQuestion = (q: QuizQuestion): q is ChoiceQuizQuestion =>
@@ -42,6 +43,7 @@ export function QuizRenderer({ content }: QuizRendererProps) {
   const parsed = parseQuizContent(content);
   if (!parsed) return <Alert variant="destructive"><AlertDescription>Die Quizdaten konnten nicht gelesen werden.</AlertDescription></Alert>;
   if (!parsed.questions.length) return <Card><CardHeader><CardTitle>Quiz</CardTitle></CardHeader><CardContent>Dieses Quiz enthält noch keine Fragen.</CardContent></Card>;
+  if (parsed.questions.some(hasQuizOptionImagesField)) return <Alert><AlertDescription>Dieses Quiz enthält Antwortbilder. Öffne die aktuelle Kursansicht, um es vollständig zu bearbeiten oder als eingeschriebene Person abzugeben. Diese ältere Vorschau bietet dafür keine Abgabe an.</AlertDescription></Alert>;
   const error = getQuizValidationError(parsed);
   if (error) return <Alert><AlertDescription>Dieses Quiz ist noch nicht vollständig. {error}</AlertDescription></Alert>;
   return <QuizRendererState key={JSON.stringify(parsed)} content={parsed} />;
