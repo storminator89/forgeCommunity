@@ -12,7 +12,8 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
 import { LoadingScreen, PageState } from '@/components/page-state';
 import { JourneyMascot } from './JourneyMascot';
-import { SparkStaticFigure } from '@/components/spark-entry';
+import { SparkEntryFigure } from '@/components/spark-entry';
+import { journeyMotionSnapshot as motionSnapshot, setJourneyMotionEnabled, sparkMotionSnapshot, useJourneyMotion } from '@/hooks/useSparkMotion';
 import { sparkVisibilitySnapshot as mascotSnapshot, useSparkVisibility } from '@/hooks/useSparkVisibility';
 import { eligibleJourneyCourses, projectJourney, type JourneyContent, type JourneyCourse } from './journey-progress';
 import { JourneyWorld } from './JourneyWorld';
@@ -35,26 +36,8 @@ function courseSelectionSnapshot() {
   return window.location.search;
 }
 
-const motionPreferenceKey = 'forge-journey-motion-off';
-let fallbackMotionEnabled = true;
-// Document-local only: no account, course or time information is sent in the
-// playback URL. Keep it outside the learner scope so role/navigation remounts
-// cannot accidentally reuse an ended native image resource in this document.
+// Document-local token for a genuinely new completion, never historical state.
 let nextCelebrationId = 0;
-
-function subscribeMotion(callback: () => void) {
-  window.addEventListener('storage', callback);
-  window.addEventListener('forge-journey-motion-change', callback);
-  return () => {
-    window.removeEventListener('storage', callback);
-    window.removeEventListener('forge-journey-motion-change', callback);
-  };
-}
-
-function motionSnapshot() {
-  try { return window.localStorage.getItem(motionPreferenceKey) !== 'true'; }
-  catch { return fallbackMotionEnabled; }
-}
 
 function subscribeReducedMotion(callback: () => void) {
   const media = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -98,26 +81,32 @@ function ScopedJourney({ signInHref }: { signInHref: string }) {
   const [detail, setDetail] = useState<Detail>({ kind: 'idle' });
   const [detailRetry, setDetailRetry] = useState(0);
   const { visible: mascotVisible } = useSparkVisibility();
-  const motionEnabled = useSyncExternalStore(subscribeMotion, motionSnapshot, () => false);
+  const motionEnabled = useJourneyMotion();
   const reducedMotion = useSyncExternalStore(subscribeReducedMotion, reducedMotionSnapshot, () => true);
   const [celebration, setCelebration] = useState<{ id: number; courseId: string; publicationId: string } | null>(null);
   const completionBefore = useRef(new Map<string, boolean>());
   const detailSequence = useRef(0);
+  const preferenceEpoch = useRef(0);
   const [chapterChoices, setChapterChoices] = useState(new Map<string, boolean>());
 
   useEffect(() => {
     // A preference change consumes the current celebration, including changes
     // from another tab or the operating system. Re-enabling motion never
     // replays an earlier completion.
-    const cancel = () => setCelebration(null);
+    const cancel = () => {
+      preferenceEpoch.current++;
+      setCelebration(null);
+    };
     const media = window.matchMedia('(prefers-reduced-motion: reduce)');
     window.addEventListener('storage', cancel);
     window.addEventListener('forge-journey-motion-change', cancel);
+    window.addEventListener('forge-community-motion-change', cancel);
     window.addEventListener('forge-journey-mascot-visibility-change', cancel);
     media.addEventListener('change', cancel);
     return () => {
       window.removeEventListener('storage', cancel);
       window.removeEventListener('forge-journey-motion-change', cancel);
+      window.removeEventListener('forge-community-motion-change', cancel);
       window.removeEventListener('forge-journey-mascot-visibility-change', cancel);
       media.removeEventListener('change', cancel);
     };
@@ -156,6 +145,7 @@ function ScopedJourney({ signInHref }: { signInHref: string }) {
     if (!selectedId) return;
     const controller = new AbortController();
     const sequence = ++detailSequence.current;
+    const requestedPreferenceEpoch = preferenceEpoch.current;
     const courseId = encodeURIComponent(selectedId);
     setCelebration(null);
     setDetail({ kind: 'loading', courseId: selectedId });
@@ -178,7 +168,7 @@ function ScopedJourney({ signInHref }: { signInHref: string }) {
       // Read the current preferences when the response settles, rather than
       // capturing the values from before a slow request. An initially complete
       // course (or a new publication) is never a new completion event.
-      if (before === false && progress.complete && mascotSnapshot() && motionSnapshot() && !reducedMotionSnapshot()) {
+      if (before === false && progress.complete && requestedPreferenceEpoch === preferenceEpoch.current && mascotSnapshot() && sparkMotionSnapshot() && !reducedMotionSnapshot()) {
         setCelebration({ id: ++nextCelebrationId, courseId: selectedId, publicationId: progress.publicationId });
       }
     }).catch(() => { if (!controller.signal.aborted && sequence === detailSequence.current && stillSelected()) setDetail({ kind: 'error', courseId: selectedId }); });
@@ -195,12 +185,7 @@ function ScopedJourney({ signInHref }: { signInHref: string }) {
     window.dispatchEvent(new Event('forge-journey-course-change'));
   }, [courses]);
 
-  const toggleMotion = () => {
-    const next = !motionEnabled;
-    fallbackMotionEnabled = next;
-    try { window.localStorage.setItem(motionPreferenceKey, String(!next)); } catch { /* Memory preference still works. */ }
-    window.dispatchEvent(new Event('forge-journey-motion-change'));
-  };
+  const toggleMotion = () => setJourneyMotionEnabled(!motionSnapshot());
 
   const retryCourses = () => { detailSequence.current++; setCelebration(null); setCourses(null); setCourseError(false); setDetail({ kind: 'idle' }); setCourseRetry(value => value + 1); };
   const retryDetail = () => { if (!selectedId) return; detailSequence.current++; setCelebration(null); setDetail({ kind: 'loading', courseId: selectedId }); setDetailRetry(value => value + 1); };
@@ -244,7 +229,7 @@ function ScopedJourney({ signInHref }: { signInHref: string }) {
           {courses === null && !courseError && <div className="mt-4"><PageState kind="loading" title="Deine Kurse werden geladen" /></div>}
           {courseError && <div className="mt-4"><PageState kind="error" title="Deine Kurse konnten nicht geladen werden" action={<Button type="button" variant="outline" onClick={retryCourses}>Erneut versuchen</Button>} /></div>}
           {courses?.length === 0 && <section className="mt-4 rounded-2xl border border-dashed bg-card px-6 py-6 text-center" role="status" aria-live="polite">
-            {mascotVisible && <div className="mx-auto mb-3 w-fit"><SparkStaticFigure /></div>}
+            {mascotVisible && <div className="mx-auto mb-3 w-fit"><SparkEntryFigure /></div>}
             <h2 className="text-base font-semibold">Wähle deinen ersten Kurs</h2>
             <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">Hier erscheinen deine angemeldeten Kurse anderer Lehrkräfte.</p>
             <div className="mt-5 flex justify-center"><Button asChild className="h-auto min-h-11 max-w-full whitespace-normal py-2"><Link href="/courses">Kurse entdecken</Link></Button></div>

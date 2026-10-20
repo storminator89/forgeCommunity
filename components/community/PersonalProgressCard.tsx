@@ -1,9 +1,6 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { useReducedMotion } from 'framer-motion'
-import { useSparkVisibility } from '@/hooks/useSparkVisibility'
-import { useFriendlyMotion } from './FriendlyMotion'
 import Link from 'next/link'
 import { ArrowRight, BookOpen } from 'lucide-react'
 import { ProgressSpark } from './ProgressSpark'
@@ -46,29 +43,8 @@ function historyExplanation(change: RewardHistoryEntry) {
     : 'Kursbelohnung erworben.'
 }
 
-/** A new event mounts once; later preference changes can only stop it. */
-function RewardSpark({ state, animate }: { state: 'neutral' | 'target' | 'reached'; animate: boolean }) {
-  const elementRef = useRef<HTMLSpanElement>(null)
-  const consumed = useRef(false)
-  useEffect(() => {
-    if (consumed.current) return
-    consumed.current = true
-    if (!animate) return
-    const animation = elementRef.current?.animate?.([
-      { transform: 'translateY(0) scale(1)' },
-      { transform: 'translateY(-3px) scale(1.08)', offset: 0.45 },
-      { transform: 'translateY(0) scale(1)' },
-    ], { duration: 850, easing: 'ease-out' })
-    return () => animation?.cancel()
-  }, [animate])
-  return <span ref={elementRef} className="block shrink-0"><ProgressSpark state={state} /></span>
-}
-
 export function PersonalProgressCard({ summary, loading, error, isSignedIn, role, onRefresh, rewardMoment }: PersonalProgressCardProps) {
   const detailsRef = useRef<HTMLDetailsElement>(null)
-  const { visible: sparkVisible } = useSparkVisibility()
-  const { enabled: friendlyMotionEnabled } = useFriendlyMotion()
-  const reducedMotion = useReducedMotion()
   const ready = isSignedIn && !loading && !error && summary !== null
   const failed = isSignedIn && !loading && (error || summary === null)
   const completedCourses = ready ? summary.completedCourses : null
@@ -95,9 +71,9 @@ export function PersonalProgressCard({ summary, loading, error, isSignedIn, role
             <p className="mt-1 text-xs text-muted-foreground">{completedCourses === 1 ? 'unterschiedlicher Kurs' : 'unterschiedliche Kurse'}</p>
           </>}
       </div>
-      <RewardSpark key={ready && rewardMoment ? rewardMoment.eventKey : 'idle'}
+      <ProgressSpark
         state={completedCourses === null ? 'neutral' : completedCourses >= LEARNING_TARGETS[0] ? 'reached' : 'target'}
-        animate={ready && !!rewardMoment && sparkVisible && friendlyMotionEnabled && reducedMotion === false} />
+        reaction={ready && rewardMoment ? { id: `reward:${rewardMoment.eventKey}`, kind: 'positive' } : null} />
     </div>
 
     <p role="status" aria-live="polite" aria-atomic="true" className="text-sm font-medium text-reward-ink">

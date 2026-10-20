@@ -1,23 +1,26 @@
 'use client';
 
-import { useState } from 'react';
-import Image from 'next/image';
+import { SparkCharacter } from '@/components/SparkCharacter';
 import { useSparkVisibility } from '@/hooks/useSparkVisibility';
+import { useSparkMotion } from '@/hooks/useSparkMotion';
+import { SPARK_CLIPS, SPARK_REST } from '@/lib/spark-character-clips';
 
-/** The existing resting Blender render. Entry points never request a clip. */
-export function SparkStaticFigure() {
-  const [failed, setFailed] = useState(false);
+/** Quiet articulated idle, including genuine eye blinks. */
+export function SparkEntryFigure() {
+  const { visible } = useSparkVisibility();
+  const motionEnabled = useSparkMotion();
+  if (!visible) return null;
   return <span aria-hidden="true" className="block size-[64px] shrink-0" data-spark-entry-figure="">
-    {!failed && <Image src="/images/forge-spark-preview.webp" width={64} height={64} alt=""
-      unoptimized className="block size-[64px] object-contain" onError={() => setFailed(true)} />}
+    <SparkCharacter visible={visible} motionEnabled={motionEnabled} clips={SPARK_CLIPS}
+      staticSource={SPARK_REST} size="100%" />
   </span>;
 }
 
-/** A quiet decorative entry figure. Visibility is controlled in Settings. */
+/** Decorative only. Existing Settings visibility and both motion choices apply. */
 export function SparkEntry({ className = '' }: { className?: string }) {
   const { visible } = useSparkVisibility();
   if (!visible) return null;
   return <div className={`flex min-h-[64px] min-w-0 items-center ${className}`} data-spark-entry="">
-    <SparkStaticFigure />
+    <SparkEntryFigure />
   </div>;
 }
