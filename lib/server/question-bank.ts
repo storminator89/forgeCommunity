@@ -4,8 +4,7 @@ import { d1ListBankQuestions, d1BankQuestionHistory, d1BankQuestionRevision } fr
 
 import { checkQuizMediaQuestionPoolInput } from '@/lib/quiz-media-compatibility';
 
-import { Prisma } from '@/generated/prisma/client';
-import prisma from '@/lib/prisma';
+import { d1CreateBankQuestion, d1ReviseBankQuestion } from '@/lib/server/d1-question-bank-write';
 import { getQuizValidationError, parseQuizContent, type QuizQuestion } from '@/app/courses/[courseId]/contents/types';
 
 export class QuestionBankError extends Error {
@@ -62,11 +61,6 @@ export function bankQuestionFromInput(value: unknown): QuizQuestion {
   return question;
 }
 
-async function assertBankAccount(tx: Prisma.TransactionClient, ownerId: string): Promise<void> {
-  const account = await tx.user.findUnique({ where: { id: ownerId }, select: { id: true } });
-  if (!account) throw new QuestionBankError('Kein Zugriff auf den Fragenpool.', 403);
-}
-
 export async function listBankQuestions(ownerId: string, cursor?: string | null) {
   if (cursor && !validId(cursor)) throw new QuestionBankError('Ungültiger Listencursor.');
   return d1ListBankQuestions(ownerId, cursor || null);
@@ -74,13 +68,7 @@ export async function listBankQuestions(ownerId: string, cursor?: string | null)
 
 export async function createBankQuestion(ownerId: string, value: unknown) {
   const question = bankQuestionFromInput(value);
-  return prisma.$transaction(async tx => {
-    await assertBankAccount(tx, ownerId);
-    const item = await tx.questionBankItem.create({ data: { ownerId, latestRevision: 1,
-      revisions: { create: { revision: 1, questionJson: JSON.stringify(question) } } },
-      select: { id: true, latestRevision: true } });
-    return item;
-  });
+  return d1CreateBankQuestion(ownerId, JSON.stringify(question));
 }
 
 export async function getBankQuestionHistory(ownerId: string, itemId: string) {
@@ -97,23 +85,5 @@ export async function reviseBankQuestion(ownerId: string, itemId: string, expect
   if (!validId(itemId)) throw new QuestionBankError('Frage nicht gefunden.', 404);
   if (!validRevision(expectedRevision)) throw new QuestionBankError('Erwartete Version fehlt.', 428);
   const question = bankQuestionFromInput(value);
-  try {
-    return await prisma.$transaction(async tx => {
-      await assertBankAccount(tx, ownerId);
-      const item = await tx.questionBankItem.findFirst({ where: { id: itemId, ownerId }, select: { latestRevision: true } });
-      if (!item) throw new QuestionBankError('Frage nicht gefunden.', 404);
-      if (item.latestRevision !== expectedRevision) throw new QuestionBankError('Frage wurde zwischenzeitlich geändert. Bitte neu laden.', 409);
-      const updated = await tx.questionBankItem.updateMany({ where: { id: itemId, ownerId, latestRevision: expectedRevision },
-        data: { latestRevision: { increment: 1 } } });
-      if (updated.count !== 1) throw new QuestionBankError('Frage wurde zwischenzeitlich geändert. Bitte neu laden.', 409);
-      const revision = expectedRevision + 1;
-      await tx.questionBankRevision.create({ data: { itemId, revision, questionJson: JSON.stringify(question) } });
-      return { id: itemId, latestRevision: revision };
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
-  } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && (error.code === 'P2002' || error.code === 'P2034')) {
-      throw new QuestionBankError('Frage wurde zwischenzeitlich geändert. Bitte neu laden.', 409);
-    }
-    throw error;
-  }
+  return d1ReviseBankQuestion(ownerId, itemId, expectedRevision, JSON.stringify(question));
 }
