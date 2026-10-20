@@ -31,15 +31,17 @@ export function usePrivateRewards(userId: string | undefined) {
       setResult(current => current ? { ...current, rewardMoment: null } : null)
     }
     const storageChanged = (event: StorageEvent) => {
-      if (event.key === null || event.key === 'forge-community-motion-off' || event.key === 'forge-journey-mascot-hidden') consume()
+      if (event.key === null || event.key === 'forge-community-motion-off' || event.key === 'forge-journey-motion-off' || event.key === 'forge-journey-mascot-hidden') consume()
     }
     const media = window.matchMedia?.('(prefers-reduced-motion: reduce)')
     window.addEventListener('forge-community-motion-change', consume)
+    window.addEventListener('forge-journey-motion-change', consume)
     window.addEventListener('forge-journey-mascot-visibility-change', consume)
     window.addEventListener('storage', storageChanged)
     media?.addEventListener('change', consume)
     return () => {
       window.removeEventListener('forge-community-motion-change', consume)
+      window.removeEventListener('forge-journey-motion-change', consume)
       window.removeEventListener('forge-journey-mascot-visibility-change', consume)
       window.removeEventListener('storage', storageChanged)
       media?.removeEventListener('change', consume)

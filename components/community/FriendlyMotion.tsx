@@ -1,47 +1,28 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useSyncExternalStore } from 'react';
+import { communityMotionSnapshot, setCommunityMotionEnabled, useCommunityMotion } from '@/hooks/useSparkMotion';
 import { Pause, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-const preferenceKey = 'forge-community-motion-off';
-const preferenceEvent = 'forge-community-motion-change';
-let documentMotionOff = false;
-type MotionState = { ready: boolean; off: boolean; systemReduced: boolean };
+function subscribeReducedMotion(callback: () => void) {
+  const media = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+  media?.addEventListener('change', callback);
+  return () => media?.removeEventListener('change', callback);
+}
 
-/** A device-local opt-out. Effects stay off until both preferences are known. */
+function reducedMotionSnapshot() {
+  return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? true;
+}
+
+/** Keep the original browser preference shared with every Spark placement. */
 export function useFriendlyMotion(): { enabled: boolean; toggle: () => void; systemReduced: boolean } {
-  const [state, setState] = useState<MotionState>({ ready: false, off: false, systemReduced: false });
-
-  useEffect(() => {
-    const media = window.matchMedia?.('(prefers-reduced-motion: reduce)');
-    const read = (event?: Event) => {
-      let off = documentMotionOff;
-      try { off = window.localStorage.getItem(preferenceKey) === 'true'; } catch { /* Retain the document-local choice. */ }
-      if (event instanceof CustomEvent && typeof event.detail === 'boolean') off = event.detail;
-      documentMotionOff = off;
-      setState({ ready: true, off, systemReduced: media?.matches ?? true });
-    };
-    read();
-    media?.addEventListener('change', read);
-    window.addEventListener('storage', read);
-    window.addEventListener(preferenceEvent, read);
-    return () => {
-      media?.removeEventListener('change', read);
-      window.removeEventListener('storage', read);
-      window.removeEventListener(preferenceEvent, read);
-    };
-  }, []);
-
+  const enabled = useCommunityMotion();
+  const systemReduced = useSyncExternalStore(subscribeReducedMotion, reducedMotionSnapshot, () => true);
   const toggle = useCallback(() => {
-    if (!state.ready || state.systemReduced) return;
-    const off = !state.off;
-    documentMotionOff = off;
-    try { window.localStorage.setItem(preferenceKey, String(off)); } catch { /* Same-page sync still works. */ }
-    window.dispatchEvent(new CustomEvent(preferenceEvent, { detail: off }));
-  }, [state.ready, state.systemReduced, state.off]);
-
-  return { enabled: state.ready && !state.off && !state.systemReduced, toggle, systemReduced: state.systemReduced };
+    if (!systemReduced) setCommunityMotionEnabled(!communityMotionSnapshot());
+  }, [systemReduced]);
+  return { enabled: enabled && !systemReduced, toggle, systemReduced };
 }
 
 export function FriendlyMotionToggle({ className }: { className?: string }) {
