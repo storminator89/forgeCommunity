@@ -99,6 +99,8 @@
 /* Mixed sets remain in authored order without blank image slots or stretched text rows. */
 .mixedChoices { grid-template-columns: minmax(0, 1fr); align-items: start; }
 .mixedChoices .answerImageStage { aspect-ratio: auto; height: clamp(8rem, 35cqi, 12rem); }
+/* Definite image height avoids an intrinsic grid row exceeding the clipped stage. */
+.mixedChoices .answerImage { height: clamp(8rem, 35cqi, 12rem); min-width: 0; min-height: 0; }
 /* A failed image must expose the complete authored alternative text, even at narrow widths. */
 .mixedChoices .answerImageStage:has(.answerImageFallback) { height: auto; min-height: clamp(8rem, 35cqi, 12rem); }
 .mixedChoices .answerImageFallback { height: auto; }
