@@ -257,6 +257,33 @@
 .networkLink { flex: 1 1 1rem; min-width: .75rem; height: 2px; background: currentColor; }
 .deviceConnection[data-isolated="true"] .networkLink { background: linear-gradient(to right, currentColor 0 32%, transparent 32% 68%, currentColor 68% 100%); }
 
+/* Unanswered, non-interactive case facts stay close to the answer tiles.
+   Applied outcomes, feedback, recap and comparison keep their existing layout. */
+.decisionForm > .caseVisual { margin-bottom: 1rem; }
+.decisionForm > .caseVisual > figcaption { padding: .625rem .875rem; }
+.decisionForm > .caseVisual .document { padding: .5rem .875rem; }
+.decisionForm > .caseVisual .documentRow { flex-wrap: nowrap; min-height: 2.5rem; padding: .375rem 0; font-size: 1rem; }
+.decisionForm > .caseVisual .documentRow > span:not(.lineMark) { flex: 1 1 auto; min-width: 0; }
+.decisionForm > .caseVisual .lineMark { flex-shrink: 0; }
+.decisionForm > .caseVisual .connection > span:not(.connector), .decisionForm > .caseVisual .evidence > span, .decisionForm > .caseVisual .assignmentPreview > span { font-size: 1rem; }
+.decisionForm > .caseVisual .deviceConnection { padding: .5rem .875rem 0; }
+.decisionForm > .caseVisual .deviceConnection > span:not(.networkLink) { padding: .375rem .625rem; font-size: 1rem; }
+.decisionForm > .caseVisual .incidentVisual { min-height: 3.5rem; padding: .5rem .875rem; font-size: 1rem; }
+.decisionForm > .caseVisual .incidentVisual > svg { width: 1.5rem; height: 1.5rem; }
+.decisionForm > .caseVisual .visualNote { margin: 0 .875rem .75rem; font-size: 1rem; }
+@media (min-width: 640px) {
+  .decisionForm > .caseVisual .document { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: .875rem; }
+  .decisionForm > .caseVisual .documentRow { min-height: 2.875rem; }
+  .decisionForm > .caseVisual .documentRow:nth-last-child(-n + 2) { border-bottom: 0; }
+}
+@media (max-width: 479px) {
+  /* Keep Spark visible inline, without the unanswered screen's extra row. */
+  .scene:has(> .decisionForm) .situationBubble { flex-wrap: nowrap; gap: .5rem; }
+  .scene:has(> .decisionForm) .situationBubble > [data-spark-entry] { flex-basis: 2.5rem; min-height: 2.5rem; align-self: flex-start; margin-top: .5rem; }
+  .scene:has(> .decisionForm) [data-spark-entry-figure], .scene:has(> .decisionForm) [data-spark-entry-figure] > img { width: 2.5rem; height: 2.5rem; }
+  .scene:has(> .decisionForm) .situationBubble .situation { flex-basis: auto; padding: .625rem .75rem; }
+}
+
 .recapList .recapConsequence { margin-top: .65rem; color: hsl(var(--foreground)); font-size: .875rem; line-height: 1.7; }
 .recapConsequences { margin: .65rem 0 0; padding-left: 1.25rem; font-size: .875rem; line-height: 1.7; }
 .recapConsequences > li { margin-top: .35rem; }
