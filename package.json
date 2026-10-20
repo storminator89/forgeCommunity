@@ -11,7 +11,7 @@
     "test:next-eslint-fork": "node --test scripts/check-next-eslint-chain.node-tests.js && node scripts/check-next-eslint-chain.js --installed && node scripts/check-next-eslint-fork.js",
     "postinstall": "npm run db:generate",
     "db:schema:sqlite": "node scripts/generate-sqlite-schema.mjs",
-    "db:generate": "node scripts/generate-sqlite-schema.mjs && node scripts/sites-prisma-generate.mjs && prisma migrate diff --from-empty --to-schema prisma/schema.sqlite.prisma --script > drizzle/0000_forgecommunity.sql && node scripts/write-d1-journal.mjs",
+    "db:generate": "node scripts/generate-sqlite-schema.mjs && node scripts/sites-prisma-generate.mjs && node scripts/write-d1-journal.mjs",
     "db:deploy": "node scripts/db-deploy.mjs",
     "db:publication:ready": "node scripts/assert-course-publication-ready.mjs",
     "db:seed": "ts-node --project prisma/tsconfig.seed.json prisma/seed.ts",
